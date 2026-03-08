@@ -34,5 +34,7 @@
 
 ## Coolify uptime monitoring
 - Runbook: `infra/COOLIFY_UPTIME_MONITORING.md`
-- Script:
+- Scripts:
   - `infra/coolify/uptime_probe.sh`
+  - `infra/coolify/install_uptime_cron.sh`
+  - `infra/coolify/verify_uptime_alerts.sh`
