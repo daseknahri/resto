@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
+import { initSentry } from "./lib/sentry";
 import "./styles/tailwind.css";
 
 const normalizeDevHost = () => {
@@ -24,4 +25,5 @@ normalizeDevHost();
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);
+initSentry(app);
 app.mount("#app");

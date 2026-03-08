@@ -37,6 +37,22 @@ Copy values from `coolify.env.example` and replace secrets.
 
 This enables structured JSON logs for request traces and provisioning actions, which makes Coolify log streams easier to ship to monitoring tools.
 
+### Sentry (optional but recommended)
+
+- Backend:
+  - `DJANGO_SENTRY_DSN`
+  - `DJANGO_SENTRY_ENVIRONMENT` (for example `production`)
+  - `DJANGO_SENTRY_RELEASE` (for example commit SHA)
+  - `DJANGO_SENTRY_TRACES_SAMPLE_RATE` (start with `0`)
+  - `DJANGO_SENTRY_SEND_PII` (`False` by default)
+- Frontend:
+  - `VITE_SENTRY_DSN`
+  - `VITE_SENTRY_ENVIRONMENT`
+  - `VITE_SENTRY_RELEASE`
+  - `VITE_SENTRY_TRACES_SAMPLE_RATE` (start with `0`)
+
+Sentry remains disabled until DSN values are provided.
+
 ## Notes
 
 - The current `/platform` stack is a placeholder scaffold. Do not use it for the live product.

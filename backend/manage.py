@@ -6,6 +6,13 @@ import sys
 def main() -> None:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     try:
+        from config.sentry import init_sentry
+
+        init_sentry()
+    except Exception:
+        # Never block management commands if observability wiring fails.
+        pass
+    try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
         raise ImportError(
