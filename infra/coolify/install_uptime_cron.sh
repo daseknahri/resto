@@ -14,6 +14,7 @@ Options:
   --runner-path <path>        Generated runner script path (default: /usr/local/bin/resto-uptime-run.sh)
   --webhook-env-file <path>   Env file used by runner for webhook URL (default: /etc/default/resto-uptime)
   --webhook-url <url>         Webhook URL to write into env file
+  --alert-format <name>       Alert payload format: generic|slack|discord
   --interval <cron_expr>      Cron schedule (default: */5 * * * *)
   --log-file <path>           Cron output log file (default: /var/log/resto-uptime.log)
   --cooldown-minutes <n>      Repeated down-alert cooldown in minutes (default: 20)
@@ -38,6 +39,7 @@ LOG_FILE="/var/log/resto-uptime.log"
 COOLDOWN_MINUTES="20"
 STATE_FILE="/var/tmp/kepoli-uptime.state"
 WEBHOOK_URL="${UPTIME_ALERT_WEBHOOK:-}"
+ALERT_FORMAT="${UPTIME_ALERT_FORMAT:-}"
 REMOVE=0
 DRY_RUN=0
 CHECKS=()
@@ -58,6 +60,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --webhook-url)
       WEBHOOK_URL="${2:-}"
+      shift 2
+      ;;
+    --alert-format)
+      ALERT_FORMAT="${2:-}"
       shift 2
       ;;
     --interval)
@@ -108,6 +114,18 @@ if [[ ${#CHECKS[@]} -eq 0 ]]; then
   )
 fi
 
+if [[ -n "$ALERT_FORMAT" ]]; then
+  case "${ALERT_FORMAT,,}" in
+    generic|slack|discord)
+      ALERT_FORMAT="${ALERT_FORMAT,,}"
+      ;;
+    *)
+      echo "Invalid --alert-format: $ALERT_FORMAT (expected: generic|slack|discord)" >&2
+      exit 2
+      ;;
+  esac
+fi
+
 PROBE_SCRIPT="${REPO_DIR%/}/infra/coolify/uptime_probe.sh"
 if [[ "$REMOVE" -eq 0 && ! -f "$PROBE_SCRIPT" ]]; then
   echo "Probe script not found: $PROBE_SCRIPT" >&2
@@ -133,13 +151,17 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
   mkdir -p "$runner_dir"
 fi
 
-if [[ -n "$WEBHOOK_URL" ]]; then
+if [[ -n "$WEBHOOK_URL" || -n "$ALERT_FORMAT" ]]; then
   webhook_env_dir="$(dirname "$WEBHOOK_ENV_FILE")"
   if [[ "$DRY_RUN" -eq 0 ]]; then
     mkdir -p "$webhook_env_dir"
-    {
-      echo "UPTIME_ALERT_WEBHOOK=$WEBHOOK_URL"
-    } > "$WEBHOOK_ENV_FILE"
+    : > "$WEBHOOK_ENV_FILE"
+    if [[ -n "$WEBHOOK_URL" ]]; then
+      echo "UPTIME_ALERT_WEBHOOK=$WEBHOOK_URL" >> "$WEBHOOK_ENV_FILE"
+    fi
+    if [[ -n "$ALERT_FORMAT" ]]; then
+      echo "UPTIME_ALERT_FORMAT=$ALERT_FORMAT" >> "$WEBHOOK_ENV_FILE"
+    fi
     chmod 600 "$WEBHOOK_ENV_FILE"
   fi
 fi
@@ -176,14 +198,17 @@ new_cron="$(printf '%s\n%s\n' "$filtered_cron" "$CRON_LINE" | sed '/^[[:space:]]
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[dry-run] cron line:"
   echo "$CRON_LINE"
-  if [[ -n "$WEBHOOK_URL" ]]; then
+  if [[ -n "$WEBHOOK_URL" || -n "$ALERT_FORMAT" ]]; then
     echo "[dry-run] webhook env file: $WEBHOOK_ENV_FILE"
   fi
 else
   printf '%s\n' "$new_cron" | crontab -
   echo "Installed uptime cron:"
   echo "$CRON_LINE"
-  if [[ -n "$WEBHOOK_URL" ]]; then
-    echo "Webhook saved in: $WEBHOOK_ENV_FILE"
+  if [[ -n "$WEBHOOK_URL" || -n "$ALERT_FORMAT" ]]; then
+    echo "Alert settings saved in: $WEBHOOK_ENV_FILE"
+    if [[ -n "$ALERT_FORMAT" ]]; then
+      echo "Alert format: $ALERT_FORMAT"
+    fi
   fi
 fi

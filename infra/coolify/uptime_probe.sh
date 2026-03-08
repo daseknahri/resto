@@ -19,6 +19,7 @@ Options:
   --timeout-seconds <n>       HTTP timeout per check (default: 8)
   --max-time-seconds <n>      Max transfer time per check (default: 12)
   --alert-webhook <url>       Webhook URL for alert payload (Slack/Discord/custom)
+  --alert-format <name>       Alert payload format: generic|slack|discord (default: generic)
   --cooldown-minutes <n>      Minimum minutes between repeated down alerts (default: 20)
   --state-file <path>         State file path (default: /var/tmp/kepoli-uptime.state)
   --dry-run                   Print result, do not send webhook
@@ -30,6 +31,7 @@ CHECKS=()
 TIMEOUT_SECONDS=8
 MAX_TIME_SECONDS=12
 ALERT_WEBHOOK="${UPTIME_ALERT_WEBHOOK:-}"
+ALERT_FORMAT="${UPTIME_ALERT_FORMAT:-generic}"
 COOLDOWN_MINUTES=20
 STATE_FILE="/var/tmp/kepoli-uptime.state"
 DRY_RUN=0
@@ -50,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --alert-webhook)
       ALERT_WEBHOOK="${2:-}"
+      shift 2
+      ;;
+    --alert-format)
+      ALERT_FORMAT="${2:-generic}"
       shift 2
       ;;
     --cooldown-minutes)
@@ -87,6 +93,16 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+case "${ALERT_FORMAT,,}" in
+  generic|slack|discord)
+    ALERT_FORMAT="${ALERT_FORMAT,,}"
+    ;;
+  *)
+    echo "Invalid --alert-format: $ALERT_FORMAT (expected: generic|slack|discord)" >&2
+    exit 2
+    ;;
+esac
+
 json_escape() {
   local raw="$1"
   raw="${raw//\\/\\\\}"
@@ -94,6 +110,39 @@ json_escape() {
   raw="${raw//$'\n'/\\n}"
   raw="${raw//$'\r'/}"
   printf "%s" "$raw"
+}
+
+build_alert_payload() {
+  local kind="$1"
+  local ts="$2"
+  local details="$3"
+  local title
+  if [[ "$kind" == "down" ]]; then
+    title="[KEPOLI][DOWN] Uptime probe failed"
+  else
+    title="[KEPOLI][RECOVERED] Uptime checks recovered"
+  fi
+
+  case "$ALERT_FORMAT" in
+    slack)
+      printf '{"text":"%s\nTime: %s\nDetails: %s"}' \
+        "$(json_escape "$title")" \
+        "$(json_escape "$ts")" \
+        "$(json_escape "$details")"
+      ;;
+    discord)
+      printf '{"content":"%s\nTime: %s\nDetails: %s"}' \
+        "$(json_escape "$title")" \
+        "$(json_escape "$ts")" \
+        "$(json_escape "$details")"
+      ;;
+    *)
+      printf '{"event":"uptime_%s","timestamp":"%s","message":"%s"}' \
+        "$kind" \
+        "$ts" \
+        "$(json_escape "$details")"
+      ;;
+  esac
 }
 
 STATE_STATUS="unknown"
@@ -170,13 +219,14 @@ fi
 
 if [[ "$SHOULD_ALERT" -eq 1 && -n "$ALERT_WEBHOOK" ]]; then
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "[dry-run] alert webhook would be sent ($ALERT_KIND)."
+    echo "[dry-run] alert webhook would be sent ($ALERT_KIND, format=$ALERT_FORMAT)."
   else
     if [[ "$HAS_FAILURE" -eq 1 ]]; then
-      body="$(printf '{"event":"uptime_%s","timestamp":"%s","message":"%s"}' "$ALERT_KIND" "$timestamp" "$(json_escape "$(printf '%s; ' "${FAIL_LINES[@]}")")")"
+      details="$(printf '%s; ' "${FAIL_LINES[@]}")"
     else
-      body="$(printf '{"event":"uptime_%s","timestamp":"%s","message":"all checks recovered"}' "$ALERT_KIND" "$timestamp")"
+      details="all checks recovered"
     fi
+    body="$(build_alert_payload "$ALERT_KIND" "$timestamp" "$details")"
     curl -sS -X POST -H "Content-Type: application/json" --data "$body" "$ALERT_WEBHOOK" >/dev/null || true
   fi
 fi

@@ -106,6 +106,7 @@
 - [ ] Tune throttle-to-Sentry alert threshold (`DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS`) after first week of production traffic.
 - [x] Add uptime monitoring and alerts for API/frontend.
 - [x] Add host-level uptime automation scripts (cron installer + down/recovered drill runner) for Coolify operations.
+- [x] Add alert payload format support for webhook providers (generic/slack/discord) in uptime tooling.
 - [ ] Configure production alert webhook destination and verify down/recovered notifications.
 - [x] Add DB backup/restore routine and test restore procedure.
 - [ ] Execute and document first production restore drill result (timestamp, backup file, endpoints verified).

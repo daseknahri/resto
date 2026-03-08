@@ -13,6 +13,7 @@ Usage:
 Options:
   --repo-dir <path>           Repo root path (default: /opt/resto)
   --webhook-url <url>         Webhook URL for real alert delivery
+  --alert-format <name>       Alert payload format: generic|slack|discord
   --cooldown-minutes <n>      Cooldown passed to probe (default: 0 for drill)
   --state-file <path>         Temp state file path (default: /tmp/kepoli-uptime-drill.state)
   --check <url|code>          Healthy check spec (repeatable)
@@ -28,6 +29,7 @@ EOF
 
 REPO_DIR="/opt/resto"
 WEBHOOK_URL="${UPTIME_ALERT_WEBHOOK:-}"
+ALERT_FORMAT="${UPTIME_ALERT_FORMAT:-generic}"
 COOLDOWN_MINUTES="0"
 STATE_FILE="/tmp/kepoli-uptime-drill.state"
 FAILURE_CHECK=""
@@ -42,6 +44,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --webhook-url)
       WEBHOOK_URL="${2:-}"
+      shift 2
+      ;;
+    --alert-format)
+      ALERT_FORMAT="${2:-generic}"
       shift 2
       ;;
     --cooldown-minutes)
@@ -76,6 +82,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "${ALERT_FORMAT,,}" in
+  generic|slack|discord)
+    ALERT_FORMAT="${ALERT_FORMAT,,}"
+    ;;
+  *)
+    echo "Invalid --alert-format: $ALERT_FORMAT (expected: generic|slack|discord)" >&2
+    exit 2
+    ;;
+esac
+
 if [[ ${#CHECKS[@]} -eq 0 ]]; then
   CHECKS=(
     "https://kepoli.com/health|200"
@@ -100,7 +116,7 @@ cleanup() {
 trap cleanup EXIT
 rm -f "$STATE_FILE"
 
-common_args=(--cooldown-minutes "$COOLDOWN_MINUTES" --state-file "$STATE_FILE")
+common_args=(--cooldown-minutes "$COOLDOWN_MINUTES" --state-file "$STATE_FILE" --alert-format "$ALERT_FORMAT")
 if [[ "$DRY_RUN" -eq 1 ]]; then
   common_args+=(--dry-run)
 elif [[ -n "$WEBHOOK_URL" ]]; then

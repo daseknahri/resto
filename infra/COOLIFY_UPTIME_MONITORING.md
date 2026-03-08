@@ -41,6 +41,7 @@ Set webhook URL (Slack/Discord/custom endpoint):
 
 ```bash
 export UPTIME_ALERT_WEBHOOK="https://example-webhook-url"
+export UPTIME_ALERT_FORMAT="generic" # or slack / discord
 ```
 
 Then run:
@@ -70,7 +71,8 @@ Install with webhook:
 
 ```bash
 sudo /bin/bash /opt/resto/infra/coolify/install_uptime_cron.sh \
-  --webhook-url "https://example-webhook-url"
+  --webhook-url "https://example-webhook-url" \
+  --alert-format "discord"
 ```
 
 Verify:
@@ -91,7 +93,8 @@ Run the dedicated drill script (safe temp state file):
 
 ```bash
 sudo /bin/bash /opt/resto/infra/coolify/verify_uptime_alerts.sh \
-  --webhook-url "https://example-webhook-url"
+  --webhook-url "https://example-webhook-url" \
+  --alert-format "discord"
 ```
 
 Dry-run without webhook delivery:
