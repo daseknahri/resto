@@ -39,6 +39,8 @@ def serialize_user_session(user):
             "id": tenant.id,
             "slug": tenant.slug,
             "name": tenant.name,
+            "is_active": tenant.is_active,
+            "lifecycle_status": getattr(tenant, "lifecycle_status", "active"),
         }
         if tenant
         else None,
@@ -100,6 +102,17 @@ class SessionView(APIView):
     def get(self, request):
         if not request.user or not request.user.is_authenticated:
             return Response({"authenticated": False, "user": None}, status=status.HTTP_200_OK)
+        tenant = getattr(request.user, "tenant", None)
+        if tenant is not None and not getattr(tenant, "is_active", True):
+            logout(request)
+            return Response(
+                {
+                    "authenticated": False,
+                    "user": None,
+                    "detail": f"Tenant is {getattr(tenant, 'lifecycle_status', 'suspended')}. Contact support.",
+                },
+                status=status.HTTP_200_OK,
+            )
         return Response({"authenticated": True, "user": serialize_user_session(request.user)}, status=status.HTTP_200_OK)
 
 

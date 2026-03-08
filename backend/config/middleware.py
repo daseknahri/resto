@@ -86,6 +86,15 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
             )
 
         tenant.domain_url = hostname
+        if not getattr(tenant, "is_active", True):
+            status_code = 200 if request.method == "OPTIONS" else 423
+            return self._not_found_response(
+                request,
+                detail="Tenant is inactive. Contact support to reactivate your account.",
+                code="tenant_inactive",
+                host=hostname,
+                status_code=status_code,
+            )
         request.tenant = tenant
         connection.set_tenant(request.tenant)
         self.setup_url_routing(request)

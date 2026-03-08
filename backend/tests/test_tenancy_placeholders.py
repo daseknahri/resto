@@ -153,3 +153,34 @@ class TenantAwareMiddlewareTests(SimpleTestCase):
         connection.set_schema_to_public.assert_called_once()
         connection.set_tenant.assert_called_once_with(tenant)
         setup_url_routing.assert_called_once_with(request)
+
+    @patch("config.middleware.connection")
+    @patch.object(TenantAwareMainMiddleware, "setup_url_routing")
+    @patch.object(TenantAwareMainMiddleware, "get_tenant")
+    @patch("config.middleware.get_tenant_domain_model")
+    def test_inactive_tenant_returns_json_423(
+        self,
+        get_domain_model,
+        get_tenant,
+        setup_url_routing,
+        connection,
+    ):
+        get_domain_model.return_value = DummyDomainModel
+        tenant = SimpleNamespace(id=42, slug="demo", domain_url="", is_active=False, lifecycle_status="suspended")
+        get_tenant.return_value = tenant
+
+        request = self.factory.get(
+            "/api/meta/",
+            HTTP_HOST="demo.localhost:8000",
+            HTTP_ORIGIN="http://demo.localhost:5173",
+        )
+
+        response = self.middleware.process_request(request)
+
+        self.assertEqual(response.status_code, 423)
+        payload = json.loads(response.content)
+        self.assertEqual(payload["code"], "tenant_inactive")
+        self.assertEqual(payload["host"], "demo.localhost")
+        self.assertEqual(response["Access-Control-Allow-Origin"], "http://demo.localhost:5173")
+        setup_url_routing.assert_not_called()
+        connection.set_schema_to_public.assert_called_once()

@@ -19,6 +19,8 @@ class IsTenantEditor(BasePermission):
             return False
         if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
             return True
+        if not getattr(tenant, "is_active", True):
+            return False
         if getattr(user, "tenant_id", None) != tenant.id:
             return False
         return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}

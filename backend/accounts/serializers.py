@@ -55,6 +55,9 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid credentials")
         if not user.is_active:
             raise serializers.ValidationError("Account is inactive")
+        if getattr(user, "tenant_id", None) and not getattr(getattr(user, "tenant", None), "is_active", True):
+            lifecycle = getattr(getattr(user, "tenant", None), "lifecycle_status", "suspended")
+            raise serializers.ValidationError(f"Tenant is {lifecycle}. Contact support.")
 
         attrs["user"] = user
         return attrs

@@ -110,6 +110,76 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
+          <p class="text-sm text-slate-300">Tenant lifecycle controls</p>
+          <h2 class="text-xl font-semibold">Suspend, reactivate, cancel</h2>
+        </div>
+        <div class="ui-scroll-row">
+          <label class="text-xs text-slate-400">
+            Page size
+            <select v-model.number="tenantPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
+              <option :value="10">10</option>
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+            </select>
+          </label>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasPrev" @click="changeTenantPage(tenantPage - 1)">
+            Prev
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasNext" @click="changeTenantPage(tenantPage + 1)">
+            Next
+          </button>
+          <button @click="fetchTenants(tenantPage)" class="ui-btn-outline px-3 py-1.5 text-xs">Refresh tenants</button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500">Page {{ tenantPage }} / {{ tenantTotalPages }} • total tenants: {{ tenantTotal }}</p>
+      <p v-if="tenantsLoading" class="text-sm text-slate-400">Loading tenants...</p>
+      <p v-else-if="!tenants.length" class="text-sm text-slate-400">No tenant records found.</p>
+      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article
+          v-for="tenant in tenants"
+          :key="`tenant-${tenant.id}`"
+          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-semibold text-slate-100">{{ tenant.name }}</p>
+            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="tenantLifecycleStatusClass(tenant.lifecycle_status)">
+              {{ tenant.lifecycle_status }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Slug: {{ tenant.slug }} | Plan: {{ tenant.plan_name }}</p>
+          <p class="text-xs text-slate-500">Domain: {{ tenant.primary_domain || "-" }}</p>
+          <p class="text-xs text-slate-500">Owner: {{ tenant.owner_username || "-" }}</p>
+          <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">Cancel reason: {{ tenant.canceled_reason }}</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              class="rounded-full border border-amber-400/70 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-50"
+              :disabled="tenant.lifecycle_status !== 'active' || !!tenantLifecycleLoading[tenant.id]"
+              @click="applyTenantLifecycle(tenant, 'suspend')"
+            >
+              Suspend
+            </button>
+            <button
+              class="rounded-full border border-emerald-400/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-50"
+              :disabled="tenant.lifecycle_status === 'active' || !!tenantLifecycleLoading[tenant.id]"
+              @click="applyTenantLifecycle(tenant, 'reactivate')"
+            >
+              Reactivate
+            </button>
+            <button
+              class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-50"
+              :disabled="tenant.lifecycle_status === 'canceled' || !!tenantLifecycleLoading[tenant.id]"
+              @click="applyTenantLifecycle(tenant, 'cancel')"
+            >
+              Cancel
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ui-panel p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
           <p class="text-sm text-slate-300">Reservation follow-up SLA</p>
           <h2 class="text-xl font-semibold">Overdue reservation alerts</h2>
         </div>
@@ -500,6 +570,15 @@ const domainSuffix = ref("localhost");
 const upgradeRequests = ref([]);
 const upgradeLoading = ref(false);
 const decisionLoading = ref({});
+const tenants = ref([]);
+const tenantsLoading = ref(false);
+const tenantPage = ref(1);
+const tenantPageSize = ref(25);
+const tenantTotal = ref(0);
+const tenantTotalPages = ref(1);
+const tenantHasNext = ref(false);
+const tenantHasPrev = ref(false);
+const tenantLifecycleLoading = ref({});
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
 const alertState = ref("all");
@@ -640,6 +719,89 @@ const fetchLeads = async () => {
     toast.show(msg, "error");
   } finally {
     leadsLoading.value = false;
+  }
+};
+
+const fetchTenants = async (page = tenantPage.value) => {
+  const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
+  tenantsLoading.value = true;
+  try {
+    const res = await adminApi.get("/admin-tenants/", {
+      params: {
+        page: requestedPage,
+        page_size: tenantPageSize.value,
+      },
+    });
+    const payload = res?.data;
+    if (Array.isArray(payload)) {
+      tenants.value = payload;
+      tenantPage.value = 1;
+      tenantTotal.value = payload.length;
+      tenantTotalPages.value = 1;
+      tenantHasNext.value = false;
+      tenantHasPrev.value = false;
+      return;
+    }
+    tenants.value = Array.isArray(payload?.results) ? payload.results : [];
+    const pagination = payload?.pagination || {};
+    tenantPage.value = Number.parseInt(pagination.page, 10) || requestedPage;
+    tenantTotal.value = Number.parseInt(pagination.total, 10) || 0;
+    tenantTotalPages.value = Number.parseInt(pagination.total_pages, 10) || 1;
+    tenantHasNext.value = Boolean(pagination.has_next);
+    tenantHasPrev.value = Boolean(pagination.has_prev);
+  } catch (err) {
+    const msg = parseApiError(err, "Unable to load tenants");
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    tenantsLoading.value = false;
+  }
+};
+
+const changeTenantPage = async (nextPage) => {
+  const page = Number.parseInt(nextPage, 10);
+  if (!Number.isFinite(page) || page < 1 || page > tenantTotalPages.value) return;
+  await fetchTenants(page);
+};
+
+const tenantLifecycleStatusClass = (status) => {
+  if (status === "active") return "bg-emerald-500/20 text-emerald-200";
+  if (status === "suspended") return "bg-amber-500/20 text-amber-200";
+  if (status === "canceled") return "bg-rose-500/20 text-rose-200";
+  return "bg-slate-700/60 text-slate-300";
+};
+
+const applyTenantLifecycle = async (tenant, action) => {
+  if (!tenant?.id || !action) return;
+  let reason = "";
+  if (action === "cancel") {
+    const value = window.prompt("Cancellation reason (required)", "");
+    if (value === null) return;
+    reason = value.trim();
+    if (!reason) {
+      toast.show("Cancellation reason is required", "error");
+      return;
+    }
+  } else if (action === "suspend") {
+    reason = (window.prompt("Suspend reason (optional)", "") || "").trim();
+  }
+
+  tenantLifecycleLoading.value = { ...tenantLifecycleLoading.value, [tenant.id]: true };
+  try {
+    const res = await adminApi.put(`/admin-tenants/${tenant.id}/lifecycle/`, {
+      action,
+      reason,
+    });
+    const msg = res?.data?.detail || `Tenant ${action}d`;
+    toast.show(msg, "success");
+    await fetchTenants(tenantPage.value);
+    fetchAuditLogs(auditPage.value);
+  } catch (err) {
+    const msg = parseApiError(err, "Unable to update tenant lifecycle");
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    tenantLifecycleLoading.value = { ...tenantLifecycleLoading.value, [tenant.id]: false };
   }
 };
 
@@ -914,6 +1076,7 @@ const upgradeStatusClass = (status) => {
 
 const refreshAll = () => {
   fetchLeads();
+  fetchTenants();
   fetchReservationAlerts();
   fetchUpgradeRequests();
   fetchJobs();
@@ -929,5 +1092,9 @@ watch(domainSuffix, () => {
 
 watch(auditPageSize, () => {
   fetchAuditLogs(1);
+});
+
+watch(tenantPageSize, () => {
+  fetchTenants(1);
 });
 </script>

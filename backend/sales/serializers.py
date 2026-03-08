@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from tenancy.models import Plan
+from tenancy.models import Plan, Tenant
 from tenancy.tiering import (
     canonical_plan_code,
     external_plan_code,
@@ -304,6 +304,61 @@ class AdminAuditLogSerializer(serializers.ModelSerializer):
             "metadata",
             "created_at",
         ]
+
+
+class AdminTenantSerializer(serializers.ModelSerializer):
+    owner_username = serializers.CharField(source="owner.username", read_only=True)
+    plan_code = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+    primary_domain = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tenant
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "schema_name",
+            "is_active",
+            "lifecycle_status",
+            "suspended_at",
+            "canceled_at",
+            "canceled_reason",
+            "owner_username",
+            "plan_code",
+            "plan_name",
+            "primary_domain",
+        ]
+
+    def get_plan_code(self, obj):
+        return external_plan_code(getattr(getattr(obj, "plan", None), "code", ""))
+
+    def get_plan_name(self, obj):
+        plan = getattr(obj, "plan", None)
+        return plan_display_name(getattr(plan, "code", ""), fallback=getattr(plan, "name", ""))
+
+    def get_primary_domain(self, obj):
+        domains = getattr(obj, "domains", None)
+        if domains is None:
+            return ""
+        primary = domains.filter(is_primary=True).first()
+        if primary:
+            return getattr(primary, "domain", "") or ""
+        fallback = domains.order_by("id").first()
+        return getattr(fallback, "domain", "") if fallback else ""
+
+
+class TenantLifecycleUpdateSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("suspend", "reactivate", "cancel"))
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate(self, attrs):
+        action = attrs.get("action")
+        reason = (attrs.get("reason") or "").strip()
+        if action == "cancel" and not reason:
+            raise serializers.ValidationError({"reason": "Cancel action requires a reason."})
+        attrs["reason"] = reason
+        return attrs
 
 
 class TierUpgradeRequestSerializer(serializers.ModelSerializer):

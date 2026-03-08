@@ -21,6 +21,7 @@ from .audit import log_admin_action
 from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, ReservationTimelineEvent, TierUpgradeRequest
 from .permissions import IsPlatformAdmin, IsTenantEditor
 from .serializers import (
+    AdminTenantSerializer,
     AdminAuditLogSerializer,
     LeadSerializer,
     OwnerReservationBulkReminderSerializer,
@@ -34,6 +35,7 @@ from .serializers import (
     OwnerReservationUpdateSerializer,
     ProvisioningJobSerializer,
     TierUpgradeDecisionSerializer,
+    TenantLifecycleUpdateSerializer,
     TierUpgradeTargetSerializer,
     TierUpgradeRequestCreateSerializer,
     TierUpgradeRequestSerializer,
@@ -71,6 +73,8 @@ DEFAULT_OWNER_RESERVATION_PAGE_SIZE = 20
 MAX_OWNER_RESERVATION_PAGE_SIZE = 100
 DEFAULT_ADMIN_AUDIT_PAGE_SIZE = 50
 MAX_ADMIN_AUDIT_PAGE_SIZE = 200
+DEFAULT_ADMIN_TENANT_PAGE_SIZE = 25
+MAX_ADMIN_TENANT_PAGE_SIZE = 200
 
 
 def _parse_iso_date(value: str):
@@ -396,6 +400,135 @@ class AdminAuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
                 },
             }
         )
+
+
+class AdminTenantListView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request):
+        status_filter = (request.query_params.get("status") or "").strip().lower()
+        if status_filter and status_filter not in {
+            Tenant.LifecycleStatus.ACTIVE,
+            Tenant.LifecycleStatus.SUSPENDED,
+            Tenant.LifecycleStatus.CANCELED,
+        }:
+            return Response({"detail": "Invalid status filter."}, status=status.HTTP_400_BAD_REQUEST)
+
+        search = (request.query_params.get("q") or "").strip()
+        page = _parse_positive_int(
+            request.query_params.get("page"),
+            default=1,
+            min_value=1,
+        )
+        page_size = _parse_positive_int(
+            request.query_params.get("page_size"),
+            default=DEFAULT_ADMIN_TENANT_PAGE_SIZE,
+            min_value=1,
+            max_value=MAX_ADMIN_TENANT_PAGE_SIZE,
+        )
+
+        with schema_context(get_public_schema_name()):
+            queryset = Tenant.objects.select_related("plan", "owner").prefetch_related("domains").order_by("slug")
+            queryset = queryset.exclude(schema_name=get_public_schema_name())
+            if status_filter:
+                queryset = queryset.filter(lifecycle_status=status_filter)
+            if search:
+                term = search[:120]
+                queryset = queryset.filter(
+                    Q(name__icontains=term)
+                    | Q(slug__icontains=term)
+                    | Q(schema_name__icontains=term)
+                    | Q(owner__username__icontains=term)
+                    | Q(domains__domain__icontains=term)
+                ).distinct()
+
+            total = queryset.count()
+            total_pages = max(1, ceil(total / page_size)) if total else 1
+            if page > total_pages:
+                page = total_pages
+            offset = (page - 1) * page_size
+            rows = queryset[offset : offset + page_size]
+            data = AdminTenantSerializer(rows, many=True).data
+
+        return Response(
+            {
+                "results": data,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                },
+            }
+        )
+
+
+class AdminTenantLifecycleView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def put(self, request, tenant_id):
+        serializer = TenantLifecycleUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
+        reason = serializer.validated_data.get("reason", "")
+
+        with schema_context(get_public_schema_name()):
+            tenant = get_object_or_404(Tenant.objects.select_related("plan", "owner").prefetch_related("domains"), pk=tenant_id)
+            if getattr(tenant, "schema_name", "") == get_public_schema_name():
+                return Response({"detail": "Public tenant lifecycle cannot be changed."}, status=status.HTTP_400_BAD_REQUEST)
+
+            update_fields = []
+            now = timezone.now()
+            if action == "suspend":
+                if tenant.lifecycle_status == Tenant.LifecycleStatus.CANCELED:
+                    return Response(
+                        {"detail": "Canceled tenant cannot be suspended. Reactivate first if needed."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                tenant.is_active = False
+                tenant.lifecycle_status = Tenant.LifecycleStatus.SUSPENDED
+                tenant.suspended_at = now
+                update_fields = ["is_active", "lifecycle_status", "suspended_at"]
+                detail = "Tenant suspended."
+                audit_action = AdminAuditLog.Actions.TENANT_DEACTIVATED
+            elif action == "reactivate":
+                tenant.is_active = True
+                tenant.lifecycle_status = Tenant.LifecycleStatus.ACTIVE
+                tenant.suspended_at = None
+                tenant.canceled_at = None
+                tenant.canceled_reason = ""
+                update_fields = ["is_active", "lifecycle_status", "suspended_at", "canceled_at", "canceled_reason"]
+                detail = "Tenant reactivated."
+                audit_action = AdminAuditLog.Actions.TENANT_REACTIVATED
+            else:
+                tenant.is_active = False
+                tenant.lifecycle_status = Tenant.LifecycleStatus.CANCELED
+                tenant.canceled_at = now
+                tenant.canceled_reason = reason
+                tenant.suspended_at = None
+                update_fields = ["is_active", "lifecycle_status", "canceled_at", "canceled_reason", "suspended_at"]
+                detail = "Tenant canceled."
+                audit_action = AdminAuditLog.Actions.TENANT_DEACTIVATED
+
+            tenant.save(update_fields=update_fields)
+            log_admin_action(
+                action=audit_action,
+                request=request,
+                actor=request.user,
+                tenant=tenant,
+                target_repr=f"tenant:{tenant.slug}",
+                metadata={
+                    "tenant_name": tenant.name,
+                    "lifecycle_action": action,
+                    "lifecycle_status": tenant.lifecycle_status,
+                    "reason": reason,
+                },
+            )
+            payload = AdminTenantSerializer(tenant).data
+
+        return Response({"detail": detail, "tenant": payload}, status=status.HTTP_200_OK)
 
 
 class LeadProvisionPreviewView(APIView):

@@ -28,6 +28,8 @@ from menu.views import (
 )
 from sales.views import (
     AdminReservationAlertsView,
+    AdminTenantLifecycleView,
+    AdminTenantListView,
     AdminTierUpgradeRequestDecisionView,
     AdminTierUpgradeRequestListView,
     AdminAuditLogViewSet,
@@ -83,6 +85,8 @@ urlpatterns = [
     path("api/lead-resend-activation/<int:lead_id>/", LeadResendActivationView.as_view(), name="lead-resend-activation"),
     path("api/lead-onboarding-package/<int:lead_id>/", LeadOnboardingPackageView.as_view(), name="lead-onboarding-package"),
     path("api/admin-reservation-alerts/", AdminReservationAlertsView.as_view(), name="admin-reservation-alerts"),
+    path("api/admin-tenants/", AdminTenantListView.as_view(), name="admin-tenants"),
+    path("api/admin-tenants/<int:tenant_id>/lifecycle/", AdminTenantLifecycleView.as_view(), name="admin-tenant-lifecycle"),
     path("api/owner/reservations/", OwnerReservationListView.as_view(), name="owner-reservations"),
     path("api/owner/reservations/export/", OwnerReservationExportView.as_view(), name="owner-reservations-export"),
     path("api/owner/reservations/bulk-reminder/", OwnerReservationBulkReminderView.as_view(), name="owner-reservations-bulk-reminder"),

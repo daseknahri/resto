@@ -29,6 +29,11 @@ class FeatureFlag(models.Model):
 
 
 class Tenant(TenantMixin):
+    class LifecycleStatus(models.TextChoices):
+        ACTIVE = "active", "Active"
+        SUSPENDED = "suspended", "Suspended"
+        CANCELED = "canceled", "Canceled"
+
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="tenants")
@@ -40,6 +45,15 @@ class Tenant(TenantMixin):
         related_name="owned_tenants",
     )
     is_active = models.BooleanField(default=True)
+    lifecycle_status = models.CharField(
+        max_length=16,
+        choices=LifecycleStatus.choices,
+        default=LifecycleStatus.ACTIVE,
+        db_index=True,
+    )
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    canceled_at = models.DateTimeField(null=True, blank=True)
+    canceled_reason = models.CharField(max_length=255, blank=True)
 
     auto_create_schema = True
 
