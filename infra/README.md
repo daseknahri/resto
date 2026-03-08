@@ -31,3 +31,8 @@
 - Scripts:
   - `infra/coolify/backup_postgres.sh`
   - `infra/coolify/restore_postgres.sh`
+
+## Coolify uptime monitoring
+- Runbook: `infra/COOLIFY_UPTIME_MONITORING.md`
+- Script:
+  - `infra/coolify/uptime_probe.sh`

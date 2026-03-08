@@ -102,8 +102,9 @@
 ### 1. Observability and Reliability
 - [x] Add structured logging for backend API and provisioning jobs.
 - [x] Add Sentry (backend + frontend) with environment tagging.
-- [ ] Configure production DSN values and verify first captured backend/frontend error event.
-- [ ] Add uptime monitoring and alerts for API/frontend.
+- [x] Configure production DSN values and verify first captured backend/frontend error event.
+- [x] Add uptime monitoring and alerts for API/frontend.
+- [ ] Configure production alert webhook destination and verify down/recovered notifications.
 - [x] Add DB backup/restore routine and test restore procedure.
 - [ ] Execute and document first production restore drill result (timestamp, backup file, endpoints verified).
 - [ ] Move media uploads from local disk to object storage (S3-compatible) with signed URLs and lifecycle policy.
