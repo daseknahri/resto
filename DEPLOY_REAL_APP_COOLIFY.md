@@ -43,3 +43,4 @@ This enables structured JSON logs for request traces and provisioning actions, w
 - This real stack serves the actual app under `frontend/` and `backend/`.
 - Add wildcard DNS `*.kepoli.com` later when tenant subdomains are enabled in production.
 - If you switch an existing Coolify resource from the placeholder stack to this real stack, the old `postgres_data` volume may keep previous credentials. In that case, either reuse the original database password or delete the old Postgres volume and redeploy before first production launch.
+- Database backup + restore drill: `infra/COOLIFY_DB_BACKUP_RUNBOOK.md`.

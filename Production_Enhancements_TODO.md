@@ -103,7 +103,8 @@
 - [x] Add structured logging for backend API and provisioning jobs.
 - [ ] Add Sentry (backend + frontend) with environment tagging.
 - [ ] Add uptime monitoring and alerts for API/frontend.
-- [ ] Add DB backup/restore routine and test restore procedure.
+- [x] Add DB backup/restore routine and test restore procedure.
+- [ ] Execute and document first production restore drill result (timestamp, backup file, endpoints verified).
 - [ ] Move media uploads from local disk to object storage (S3-compatible) with signed URLs and lifecycle policy.
 - [ ] Add retention policy + pagination for admin audit logs to avoid unbounded growth.
 - [x] Replace third-party QR image dependency with first-party generated QR assets (local in-app QR generation for print cards).

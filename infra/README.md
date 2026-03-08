@@ -25,3 +25,9 @@
 
 ## Deployment runbook
 - See: `infra/DEPLOYMENT_RUNBOOK.md`
+
+## Coolify DB backup/restore
+- Runbook: `infra/COOLIFY_DB_BACKUP_RUNBOOK.md`
+- Scripts:
+  - `infra/coolify/backup_postgres.sh`
+  - `infra/coolify/restore_postgres.sh`
