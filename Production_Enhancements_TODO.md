@@ -186,7 +186,7 @@
 - [x] Add customer-flow UI regression tests for 4-page routing (`/menu`, `/browse`, `/cart`, `/reserve`) and table-context carryover from `/t/:slug`.
 - [x] Implement executable customer-flow smoke script (`infra/customer_flow_smoke.ps1`) and document run command in `infra/README.md`.
 - [x] Harden customer-flow smoke to discover a test dish robustly (category scan + `/api/dishes/` fallback) so QA is stable with uneven seed data.
-- [ ] Reduce frontend main bundle size (currently >500KB warning) via route-level code splitting/lazy loading for admin/owner-heavy modules.
+- [x] Reduce frontend main bundle size (currently >500KB warning) via route-level code splitting/lazy loading for admin/owner-heavy modules.
 
 ## Phase 3 - Revenue and Plan Expansion
 

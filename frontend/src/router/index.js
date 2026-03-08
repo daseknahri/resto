@@ -1,32 +1,37 @@
 import { createRouter, createWebHistory } from "vue-router";
-import LandingLayout from "../layouts/LandingLayout.vue";
-import CustomerLayout from "../layouts/CustomerLayout.vue";
-import OwnerLayout from "../layouts/OwnerLayout.vue";
-import Home from "../pages/Home.vue";
-import CustomerLeadPage from "../pages/CustomerLeadPage.vue";
-import Menu from "../pages/Menu.vue";
-import CategoryPage from "../pages/CategoryPage.vue";
-import DishPage from "../pages/DishPage.vue";
-import Cart from "../pages/Cart.vue";
-import ReservationPage from "../pages/ReservationPage.vue";
-import LeadCapture from "../pages/LeadCapture.vue";
-import OwnerHome from "../pages/OwnerHome.vue";
-import OwnerTables from "../pages/OwnerTables.vue";
-import OwnerLaunchSuccess from "../pages/OwnerLaunchSuccess.vue";
-import OwnerReservations from "../pages/OwnerReservations.vue";
-import AdminConsole from "../pages/AdminConsole.vue";
-import Activate from "../pages/Activate.vue";
-import ForgotPassword from "../pages/ForgotPassword.vue";
-import ResetPassword from "../pages/ResetPassword.vue";
-import SignIn from "../pages/SignIn.vue";
-import Unauthorized from "../pages/Unauthorized.vue";
-import PrivacyPolicy from "../pages/PrivacyPolicy.vue";
-import TermsOfService from "../pages/TermsOfService.vue";
-import ContactPage from "../pages/ContactPage.vue";
-import Wizard from "../onboarding/Wizard.vue";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
+
+const LandingLayout = () => import("../layouts/LandingLayout.vue");
+const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
+const OwnerLayout = () => import("../layouts/OwnerLayout.vue");
+
+const Home = () => import("../pages/Home.vue");
+const CustomerLeadPage = () => import("../pages/CustomerLeadPage.vue");
+const Menu = () => import("../pages/Menu.vue");
+const CategoryPage = () => import("../pages/CategoryPage.vue");
+const DishPage = () => import("../pages/DishPage.vue");
+const Cart = () => import("../pages/Cart.vue");
+const ReservationPage = () => import("../pages/ReservationPage.vue");
+const LeadCapture = () => import("../pages/LeadCapture.vue");
+
+const OwnerHome = () => import("../pages/OwnerHome.vue");
+const OwnerTables = () => import("../pages/OwnerTables.vue");
+const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
+const OwnerReservations = () => import("../pages/OwnerReservations.vue");
+
+const AdminConsole = () => import("../pages/AdminConsole.vue");
+const Activate = () => import("../pages/Activate.vue");
+const ForgotPassword = () => import("../pages/ForgotPassword.vue");
+const ResetPassword = () => import("../pages/ResetPassword.vue");
+const SignIn = () => import("../pages/SignIn.vue");
+const Unauthorized = () => import("../pages/Unauthorized.vue");
+
+const PrivacyPolicy = () => import("../pages/PrivacyPolicy.vue");
+const TermsOfService = () => import("../pages/TermsOfService.vue");
+const ContactPage = () => import("../pages/ContactPage.vue");
+const Wizard = () => import("../onboarding/Wizard.vue");
 
 const routes = [
   {
