@@ -1,10 +1,10 @@
-﻿# Local setup quicksteps
+# Local setup quicksteps
 
 ## Backend
 1) `cd backend`
 2) `python -m venv .venv && .\.venv\Scripts\activate`
 3) `pip install -r requirements.txt`
-4) Set up Postgres locally and export `DATABASE_URL` or edit `.env`
+4) Copy `backend/.env.example` to `backend/.env`, then adjust values for your machine
 5) `python manage.py makemigrations accounts tenancy menu`
 6) `python manage.py migrate_schemas --shared`
 7) `python manage.py migrate_schemas --tenant`
@@ -17,7 +17,8 @@
 ## Frontend
 1) `cd frontend`
 2) `npm install`
-3) `npm run dev`
+3) Optional: copy `frontend/.env.example` to `frontend/.env`
+4) `npm run dev`
 
 ## One-Command Local Run (Windows)
 - Start backend + frontend in separate PowerShell windows:
@@ -88,6 +89,3 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
 - Pre-release smoke test script: `infra/pre_release_smoke.ps1`
 - Deployment + rollback guide: `infra/DEPLOYMENT_RUNBOOK.md`
 - Analytics retention cleanup (scheduled): `cd backend && .\.venv\Scripts\python.exe manage.py prune_analytics_events --days 90`
-
-
-

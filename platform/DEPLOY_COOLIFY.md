@@ -68,6 +68,8 @@ REDIS_URL=redis://redis:6379
 DATABASE_URL=postgresql://platform_user:replace_with_strong_password@postgres:5432/platform
 ```
 
+The same example block is committed in [platform/.env.example](/c:/Users/user/resto/platform/.env.example). Do not rely on a repository `.env` file in Coolify; set these values in the Coolify UI.
+
 ## Exact Coolify setup flow
 
 1. Push this repository to GitHub.

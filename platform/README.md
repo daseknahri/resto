@@ -15,7 +15,7 @@ platform/
     redis/
   docker-compose.yml
   docker-compose.local.yml
-  .env
+  .env.example
   README.md
 ```
 
@@ -79,7 +79,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml down -v
 
 ## Environment variables
 
-Example values are included in `./.env`.
+Example values are included in `./.env.example`.
 
 Important variables:
 
