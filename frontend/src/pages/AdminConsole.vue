@@ -357,8 +357,35 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">Security audit log</h2>
-        <button @click="fetchAuditLogs" class="ui-btn-outline px-4 py-2 text-sm">Refresh</button>
+        <div class="ui-scroll-row">
+          <label class="text-xs text-slate-400">
+            Page size
+            <select v-model.number="auditPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
+              <option :value="25">25</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
+          </label>
+          <button
+            class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50"
+            :disabled="!auditHasPrev"
+            @click="changeAuditPage(auditPage - 1)"
+          >
+            Prev
+          </button>
+          <button
+            class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50"
+            :disabled="!auditHasNext"
+            @click="changeAuditPage(auditPage + 1)"
+          >
+            Next
+          </button>
+          <button @click="fetchAuditLogs(auditPage)" class="ui-btn-outline px-4 py-2 text-sm">Refresh</button>
+        </div>
       </div>
+      <p class="text-xs text-slate-500">
+        Page {{ auditPage }} / {{ auditTotalPages }} • total entries: {{ auditTotal }}
+      </p>
       <p v-if="auditLoading" class="text-sm text-slate-400">Loading audit logs...</p>
       <div class="space-y-2 md:hidden">
         <article
@@ -488,6 +515,12 @@ const alertThresholds = ref({
 const toast = useToastStore();
 const lastProvision = ref(null);
 const auditLogs = ref([]);
+const auditPage = ref(1);
+const auditPageSize = ref(50);
+const auditTotal = ref(0);
+const auditTotalPages = ref(1);
+const auditHasNext = ref(false);
+const auditHasPrev = ref(false);
 const parseApiError = (err, fallback) => {
   const data = err?.response?.data;
   if (typeof data?.detail === "string") return data.detail;
@@ -550,11 +583,34 @@ const fetchUpgradeRequests = async () => {
   }
 };
 
-const fetchAuditLogs = async () => {
+const fetchAuditLogs = async (page = auditPage.value) => {
+  const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
   auditLoading.value = true;
   try {
-    const res = await adminApi.get("/admin-audit-logs/");
-    auditLogs.value = Array.isArray(res.data) ? res.data.slice(0, 100) : [];
+    const res = await adminApi.get("/admin-audit-logs/", {
+      params: {
+        page: requestedPage,
+        page_size: auditPageSize.value,
+      },
+    });
+    const payload = res?.data;
+    if (Array.isArray(payload)) {
+      auditLogs.value = payload.slice(0, auditPageSize.value);
+      auditPage.value = 1;
+      auditTotal.value = payload.length;
+      auditTotalPages.value = 1;
+      auditHasNext.value = false;
+      auditHasPrev.value = false;
+      return;
+    }
+
+    auditLogs.value = Array.isArray(payload?.results) ? payload.results : [];
+    const pagination = payload?.pagination || {};
+    auditPage.value = Number.parseInt(pagination.page, 10) || requestedPage;
+    auditTotal.value = Number.parseInt(pagination.total, 10) || 0;
+    auditTotalPages.value = Number.parseInt(pagination.total_pages, 10) || 1;
+    auditHasNext.value = Boolean(pagination.has_next);
+    auditHasPrev.value = Boolean(pagination.has_prev);
   } catch (err) {
     const msg = parseApiError(err, "Unable to load audit logs");
     error.value = msg;
@@ -562,6 +618,12 @@ const fetchAuditLogs = async () => {
   } finally {
     auditLoading.value = false;
   }
+};
+
+const changeAuditPage = async (nextPage) => {
+  const page = Number.parseInt(nextPage, 10);
+  if (!Number.isFinite(page) || page < 1 || page > auditTotalPages.value) return;
+  await fetchAuditLogs(page);
 };
 
 const fetchLeads = async () => {
@@ -863,5 +925,9 @@ onMounted(refreshAll);
 watch(domainSuffix, () => {
   if (!leads.value.length) return;
   Promise.all(leads.value.map((lead) => checkPreview(lead, false)));
+});
+
+watch(auditPageSize, () => {
+  fetchAuditLogs(1);
 });
 </script>

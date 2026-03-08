@@ -111,7 +111,7 @@
 - [x] Add DB backup/restore routine and test restore procedure.
 - [ ] Execute and document first production restore drill result (timestamp, backup file, endpoints verified).
 - [ ] Move media uploads from local disk to object storage (S3-compatible) with signed URLs and lifecycle policy.
-- [ ] Add retention policy + pagination for admin audit logs to avoid unbounded growth.
+- [x] Add retention policy + pagination for admin audit logs to avoid unbounded growth.
 - [x] Replace third-party QR image dependency with first-party generated QR assets (local in-app QR generation for print cards).
 - [x] Add backend-side QR rendering endpoints for non-JS fallback (`/api/tables/qr-export/` ZIP/PDF + `/api/tables/<id>/qr-image/` PNG).
 - [x] Add PDF generation for table-card print packs (A4-ready export from backend via `format=pdf`).
@@ -186,6 +186,7 @@
 - [x] Add customer-flow UI regression tests for 4-page routing (`/menu`, `/browse`, `/cart`, `/reserve`) and table-context carryover from `/t/:slug`.
 - [x] Implement executable customer-flow smoke script (`infra/customer_flow_smoke.ps1`) and document run command in `infra/README.md`.
 - [x] Harden customer-flow smoke to discover a test dish robustly (category scan + `/api/dishes/` fallback) so QA is stable with uneven seed data.
+- [ ] Reduce frontend main bundle size (currently >500KB warning) via route-level code splitting/lazy loading for admin/owner-heavy modules.
 
 ## Phase 3 - Revenue and Plan Expansion
 

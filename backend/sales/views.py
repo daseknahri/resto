@@ -69,6 +69,8 @@ OWNER_REMINDER_STATUSES = {
 }
 DEFAULT_OWNER_RESERVATION_PAGE_SIZE = 20
 MAX_OWNER_RESERVATION_PAGE_SIZE = 100
+DEFAULT_ADMIN_AUDIT_PAGE_SIZE = 50
+MAX_ADMIN_AUDIT_PAGE_SIZE = 200
 
 
 def _parse_iso_date(value: str):
@@ -339,6 +341,61 @@ class AdminAuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = AdminAuditLog.objects.select_related("actor", "tenant", "lead").order_by("-created_at")
     serializer_class = AdminAuditLogSerializer
     permission_classes = [IsPlatformAdmin]
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        action_filter = (request.query_params.get("action") or "").strip().lower()
+        if action_filter:
+            queryset = queryset.filter(action=action_filter)
+
+        tenant_slug = (request.query_params.get("tenant") or "").strip().lower()
+        if tenant_slug:
+            queryset = queryset.filter(tenant__slug=tenant_slug)
+
+        search = (request.query_params.get("q") or "").strip()
+        if search:
+            term = search[:120]
+            queryset = queryset.filter(
+                Q(action__icontains=term)
+                | Q(target_repr__icontains=term)
+                | Q(actor__username__icontains=term)
+                | Q(tenant__slug__icontains=term)
+                | Q(lead__name__icontains=term)
+            )
+
+        page_size = _parse_positive_int(
+            request.query_params.get("page_size"),
+            default=DEFAULT_ADMIN_AUDIT_PAGE_SIZE,
+            min_value=1,
+            max_value=MAX_ADMIN_AUDIT_PAGE_SIZE,
+        )
+        page = _parse_positive_int(
+            request.query_params.get("page"),
+            default=1,
+            min_value=1,
+        )
+
+        total = queryset.count()
+        total_pages = max(1, ceil(total / page_size)) if total else 1
+        if page > total_pages:
+            page = total_pages
+
+        offset = (page - 1) * page_size
+        rows = queryset[offset : offset + page_size]
+        data = self.get_serializer(rows, many=True).data
+        return Response(
+            {
+                "results": data,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                },
+            }
+        )
 
 
 class LeadProvisionPreviewView(APIView):

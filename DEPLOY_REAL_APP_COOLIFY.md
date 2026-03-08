@@ -34,8 +34,13 @@ Copy values from `coolify.env.example` and replace secrets.
 - `DJANGO_REQUEST_LOG_LEVEL=INFO`
 - `DJANGO_PROVISIONING_LOG_LEVEL=INFO`
 - `DJANGO_SECURITY_LOG_LEVEL=WARNING`
+- `ADMIN_AUDIT_RETENTION_DAYS=180`
 
 This enables structured JSON logs for request traces and provisioning actions, which makes Coolify log streams easier to ship to monitoring tools.
+
+For audit-log retention, run periodically (for example daily via Coolify scheduled task):
+
+- `python manage.py prune_admin_audit_logs --days 180`
 
 ### Sentry (optional but recommended)
 
