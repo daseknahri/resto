@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 
 import dj_database_url
@@ -18,10 +18,10 @@ def parse_bool_env(var_name: str, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
 allowed_hosts = set(parse_csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost"))
-# Keep local wildcard host support available for tenant subdomains in dev.
 allowed_hosts.update({"localhost", "127.0.0.1", ".localhost"})
 ALLOWED_HOSTS = sorted(allowed_hosts)
 
@@ -68,6 +68,7 @@ MIDDLEWARE = [
     "config.middleware.TenantAwareMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -107,9 +108,13 @@ cors_origins = set(
 )
 cors_origins.update({"http://localhost:5173", "http://127.0.0.1:5173"})
 CORS_ALLOWED_ORIGINS = sorted(cors_origins)
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://[a-z0-9-]+\.localhost:5173$",
-]
+cors_origin_regexes = set(
+    parse_csv_env(
+        "DJANGO_CORS_ALLOWED_ORIGIN_REGEXES",
+        r"^http://[a-z0-9-]+\.localhost:5173$",
+    )
+)
+CORS_ALLOWED_ORIGIN_REGEXES = sorted(cors_origin_regexes)
 CORS_ALLOW_CREDENTIALS = True
 
 TEMPLATES = [
@@ -138,6 +143,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
@@ -153,9 +159,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-#
-# Email delivery (use SMTP/API gateway in production).
-#
 EMAIL_BACKEND = os.getenv(
     "DJANGO_EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
@@ -170,9 +173,6 @@ EMAIL_USE_TLS = parse_bool_env("DJANGO_EMAIL_USE_TLS", False)
 EMAIL_USE_SSL = parse_bool_env("DJANGO_EMAIL_USE_SSL", False)
 EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "10"))
 
-#
-# Session/cookie security. In production set secure cookies and proper domains.
-#
 SESSION_COOKIE_SECURE = parse_bool_env("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = parse_bool_env("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_HTTPONLY = parse_bool_env("DJANGO_SESSION_COOKIE_HTTPONLY", True)
@@ -181,10 +181,10 @@ SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_DOMAIN = os.getenv("DJANGO_SESSION_COOKIE_DOMAIN") or None
 CSRF_COOKIE_DOMAIN = os.getenv("DJANGO_CSRF_COOKIE_DOMAIN") or None
+USE_X_FORWARDED_HOST = parse_bool_env("DJANGO_USE_X_FORWARDED_HOST", not DEBUG)
+if parse_bool_env("DJANGO_SECURE_PROXY_SSL_HEADER", not DEBUG):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-#
-# Security monitoring logs (throttle blocks and other security events).
-#
 SECURITY_LOG_LEVEL = os.getenv("DJANGO_SECURITY_LOG_LEVEL", "WARNING")
 SECURITY_LOG_FILE = os.getenv("DJANGO_SECURITY_LOG_FILE", "")
 
