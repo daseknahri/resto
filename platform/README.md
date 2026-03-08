@@ -1,6 +1,6 @@
 # Platform Monorepo
 
-Production-ready Docker monorepo scaffold for a SaaS platform designed to run as a Compose stack on Coolify with Traefik routing.
+Production-ready Docker monorepo scaffold for a SaaS platform designed to run on Coolify as a Docker Compose application.
 
 ## Structure
 
@@ -14,15 +14,16 @@ platform/
     postgres/
     redis/
   docker-compose.yml
+  docker-compose.local.yml
   .env
   README.md
 ```
 
 ## Services
 
-- `frontend`: customer-facing web app on `http://localhost:3000`
-- `api`: backend API on `http://localhost:4000`
-- `admin`: internal admin dashboard service on internal port `4100`
+- `frontend`: customer-facing web app listening on container port `3000`
+- `api`: backend API listening on container port `4000`
+- `admin`: admin dashboard listening on container port `4100`
 - `postgres`: PostgreSQL 16 with persisted data
 - `redis`: Redis 7 with persisted data
 
@@ -33,27 +34,47 @@ platform/
 - Health checks for every HTTP service plus PostgreSQL and Redis
 - Restart policies enabled with `unless-stopped`
 - Named persistent volumes for PostgreSQL and Redis
-- Traefik labels for `frontend` and `api`
-- Coolify-friendly routing through environment-driven domains
+- Internal service networking through Compose service discovery
+- Coolify-friendly deployment without hardcoded host port bindings
 - `TRUST_PROXY` support for reverse-proxy deployments
 
-## Run locally
+## Coolify deployment mode
+
+Use `platform/docker-compose.yml` in Coolify.
+
+This file is production-first:
+
+- no host `ports` bindings
+- no hardcoded Docker network names
+- no custom Traefik labels in the repository
+
+Coolify should manage the public proxy and service routing.
+
+## Local Docker run
+
+Use the local override when you want direct access on your machine:
 
 ```bash
 cd platform
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
 ```
+
+That publishes:
+
+- `frontend` on `http://localhost:3000`
+- `api` on `http://localhost:4000`
+- `admin` on `http://localhost:4100`
 
 Stop the stack:
 
 ```bash
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.local.yml down
 ```
 
 Stop and remove volumes:
 
 ```bash
-docker compose down -v
+docker compose -f docker-compose.yml -f docker-compose.local.yml down -v
 ```
 
 ## Environment variables
@@ -65,33 +86,18 @@ Important variables:
 - `APP_ENV`
 - `TRUST_PROXY`
 - `LOG_LEVEL`
-- `FRONTEND_PORT`
-- `API_PORT`
-- `ADMIN_PORT`
-- `FRONTEND_DOMAIN`
-- `API_DOMAIN`
-- `ADMIN_DOMAIN`
-- `TRAEFIK_ENTRYPOINTS`
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
 - `REDIS_URL`
 
-## Coolify notes
-
-- Deploy the `platform/` directory as a Docker Compose application.
-- Expose `frontend` publicly on port `3000` and point `FRONTEND_DOMAIN` to it.
-- Expose `api` publicly on port `4000` and point `API_DOMAIN` to it.
-- Route `admin` through `ADMIN_DOMAIN` if you want the dashboard publicly reachable.
-- Keep `admin`, `postgres`, and `redis` on internal Docker networking unless you explicitly need external access.
-- Coolify can read the Traefik labels from [docker-compose.yml](/c:/Users/user/resto/platform/docker-compose.yml) for host-based routing.
-- Set real domains, credentials, and secrets before deployment.
-- Replace the default credentials in `./.env` before production use.
-- Exact deployment steps are documented in [DEPLOY_COOLIFY.md](/c:/Users/user/resto/platform/DEPLOY_COOLIFY.md).
-
 ## Health endpoints
 
 - Frontend: `GET /health`
 - API: `GET /health`
 - Admin: `GET /health`
+
+## Deployment guide
+
+Use [DEPLOY_COOLIFY.md](/c:/Users/user/resto/platform/DEPLOY_COOLIFY.md) for the exact Coolify flow.

@@ -15,23 +15,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT}:3000"
+    expose:
+      - "3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 10s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.platform-frontend.rule=Host(`${FRONTEND_DOMAIN}`)
-      - traefik.http.routers.platform-frontend.entrypoints=${TRAEFIK_ENTRYPOINTS}
-      - traefik.http.routers.platform-frontend.tls=true
-      - traefik.http.services.platform-frontend.loadbalancer.server.port=3000
-      - traefik.docker.network=platform-network
-    networks:
-      - platform-network
 
   api:
     build:
@@ -56,8 +47,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${API_PORT}:4000"
     expose:
       - "4000"
     healthcheck:
@@ -66,15 +55,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.platform-api.rule=Host(`${API_DOMAIN}`)
-      - traefik.http.routers.platform-api.entrypoints=${TRAEFIK_ENTRYPOINTS}
-      - traefik.http.routers.platform-api.tls=true
-      - traefik.http.services.platform-api.loadbalancer.server.port=4000
-      - traefik.docker.network=platform-network
-    networks:
-      - platform-network
 
   admin:
     build:
@@ -100,15 +80,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.platform-admin.rule=Host(`${ADMIN_DOMAIN}`)
-      - traefik.http.routers.platform-admin.entrypoints=${TRAEFIK_ENTRYPOINTS}
-      - traefik.http.routers.platform-admin.tls=true
-      - traefik.http.services.platform-admin.loadbalancer.server.port=4100
-      - traefik.docker.network=platform-network
-    networks:
-      - platform-network
 
   postgres:
     image: postgres:16-alpine
@@ -129,8 +100,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - platform-network
 
   redis:
     image: redis:7-alpine
@@ -147,16 +116,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - platform-network
-
-networks:
-  platform-network:
-    name: platform-network
-    driver: bridge
 
 volumes:
   postgres_data:
-    name: platform_postgres_data
   redis_data:
-    name: platform_redis_data
