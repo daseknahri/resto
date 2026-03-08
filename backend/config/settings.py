@@ -73,6 +73,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.RequestLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -187,6 +188,10 @@ if parse_bool_env("DJANGO_SECURE_PROXY_SSL_HEADER", not DEBUG):
 
 SECURITY_LOG_LEVEL = os.getenv("DJANGO_SECURITY_LOG_LEVEL", "WARNING")
 SECURITY_LOG_FILE = os.getenv("DJANGO_SECURITY_LOG_FILE", "")
+LOG_FORMAT = os.getenv("DJANGO_LOG_FORMAT", "text").strip().lower()
+REQUEST_LOG_LEVEL = os.getenv("DJANGO_REQUEST_LOG_LEVEL", "INFO").strip().upper()
+PROVISIONING_LOG_LEVEL = os.getenv("DJANGO_PROVISIONING_LOG_LEVEL", "INFO").strip().upper()
+ACTIVE_LOG_FORMATTER = "json" if LOG_FORMAT == "json" else "standard"
 
 LOGGING = {
     "version": 1,
@@ -194,18 +199,31 @@ LOGGING = {
     "formatters": {
         "standard": {
             "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
-        }
+        },
+        "json": {
+            "()": "config.logging_utils.JsonFormatter",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "standard",
+            "formatter": ACTIVE_LOG_FORMATTER,
         },
     },
     "loggers": {
         "security.throttle": {
             "handlers": ["console"],
             "level": SECURITY_LOG_LEVEL,
+            "propagate": False,
+        },
+        "app.request": {
+            "handlers": ["console"],
+            "level": REQUEST_LOG_LEVEL,
+            "propagate": False,
+        },
+        "sales.provisioning": {
+            "handlers": ["console"],
+            "level": PROVISIONING_LOG_LEVEL,
             "propagate": False,
         },
     },
@@ -217,6 +235,8 @@ if SECURITY_LOG_FILE:
         "filename": SECURITY_LOG_FILE,
         "maxBytes": 5 * 1024 * 1024,
         "backupCount": 5,
-        "formatter": "standard",
+        "formatter": ACTIVE_LOG_FORMATTER,
     }
     LOGGING["loggers"]["security.throttle"]["handlers"].append("security_file")
+    LOGGING["loggers"]["app.request"]["handlers"].append("security_file")
+    LOGGING["loggers"]["sales.provisioning"]["handlers"].append("security_file")

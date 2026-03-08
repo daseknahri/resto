@@ -28,8 +28,18 @@ Use this stack to deploy the actual Django + Vue restaurant SaaS.
 
 Copy values from `coolify.env.example` and replace secrets.
 
+### Logging defaults (recommended)
+
+- `DJANGO_LOG_FORMAT=json`
+- `DJANGO_REQUEST_LOG_LEVEL=INFO`
+- `DJANGO_PROVISIONING_LOG_LEVEL=INFO`
+- `DJANGO_SECURITY_LOG_LEVEL=WARNING`
+
+This enables structured JSON logs for request traces and provisioning actions, which makes Coolify log streams easier to ship to monitoring tools.
+
 ## Notes
 
 - The current `/platform` stack is a placeholder scaffold. Do not use it for the live product.
 - This real stack serves the actual app under `frontend/` and `backend/`.
 - Add wildcard DNS `*.kepoli.com` later when tenant subdomains are enabled in production.
+- If you switch an existing Coolify resource from the placeholder stack to this real stack, the old `postgres_data` volume may keep previous credentials. In that case, either reuse the original database password or delete the old Postgres volume and redeploy before first production launch.

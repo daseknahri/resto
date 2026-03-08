@@ -20,6 +20,7 @@ from .messaging import (
 from .models import ActivationToken, Lead, ProvisioningJob, Subscription, TierUpgradeRequest
 
 logger = logging.getLogger(__name__)
+provisioning_logger = logging.getLogger("sales.provisioning")
 SLUG_MAX_LENGTH = 50
 
 
@@ -74,6 +75,12 @@ def mask_secret(secret: str, keep_start: int = 6, keep_end: int = 4) -> str:
     if len(secret) <= keep_start + keep_end:
         return "*" * len(secret)
     return f"{secret[:keep_start]}...{secret[-keep_end:]}"
+
+
+def _log_provisioning_event(event: str, **fields):
+    payload = {"event": event}
+    payload.update(fields)
+    provisioning_logger.info(event, extra={"structured": payload})
 
 
 def issue_activation(tenant, user, phone: str = ""):
@@ -161,6 +168,13 @@ def preview_lead_provision(lead: Lead, domain_suffix: str = "localhost", request
 def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug: str | None = None) -> ProvisionResult:
     """Provision tenant, domain, owner, subscription for a lead."""
     User = get_user_model()
+    _log_provisioning_event(
+        "lead_provision_start",
+        lead_id=lead.id,
+        lead_status=lead.status,
+        requested_slug=(requested_slug or "").strip().lower() or None,
+        domain_suffix=normalize_domain_suffix(domain_suffix),
+    )
 
     # Tenant/domain writes are shared-data writes and must run in the public schema.
     with schema_context(get_public_schema_name()):
@@ -171,12 +185,20 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
                 tenant__isnull=False,
             ).exists()
             if already_live:
+                _log_provisioning_event("lead_provision_blocked", lead_id=lead.id, reason="already_provisioned")
                 raise ValueError("Lead already provisioned. Use resend activation or package actions instead.")
 
             plan = lead.plan
             if plan is None:
+                _log_provisioning_event("lead_provision_blocked", lead_id=lead.id, reason="plan_missing")
                 raise ValueError("Lead has no plan selected. Assign a plan before provisioning.")
             if not getattr(plan, "is_active", True):
+                _log_provisioning_event(
+                    "lead_provision_blocked",
+                    lead_id=lead.id,
+                    reason="plan_inactive",
+                    plan_code=getattr(plan, "code", ""),
+                )
                 raise ValueError(
                     f"Plan '{external_plan_code(plan.code)}' is not launched yet. Keep lead on waitlist or activate the plan first."
                 )
@@ -185,6 +207,13 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             domain_name = preview["resolved_domain"]
 
             if Tenant.objects.filter(slug=slug).exists() or Domain.objects.filter(domain=domain_name).exists():
+                _log_provisioning_event(
+                    "lead_provision_blocked",
+                    lead_id=lead.id,
+                    reason="slug_or_domain_taken",
+                    slug=slug,
+                    domain=domain_name,
+                )
                 raise ValueError("Tenant slug/domain is no longer available. Please retry provisioning.")
 
             tenant = Tenant.objects.create(
@@ -228,6 +257,17 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
             lead.save(update_fields=["status", "onboarded_at", "updated_at"])
 
             logger.info("Provisioned tenant %s for lead %s", tenant.slug, lead.id)
+            _log_provisioning_event(
+                "lead_provision_success",
+                lead_id=lead.id,
+                tenant_id=tenant.id,
+                tenant_slug=tenant.slug,
+                schema_name=tenant.schema_name,
+                domain=domain_name,
+                plan_code=getattr(plan, "code", ""),
+                owner_user_id=getattr(user, "id", None),
+                provisioning_job_id=job.id,
+            )
 
     return ProvisionResult(
         tenant=tenant,
@@ -258,6 +298,13 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
             latest_job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
+            _log_provisioning_event(
+                "lead_activation_resent",
+                lead_id=lead.id,
+                tenant_id=getattr(tenant, "id", None),
+                tenant_slug=getattr(tenant, "slug", ""),
+                provisioning_job_id=getattr(latest_job, "id", None),
+            )
 
     return ActivationResendResult(
         tenant=tenant,
@@ -337,6 +384,14 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
             latest_job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
+            _log_provisioning_event(
+                "lead_onboarding_package_prepared",
+                lead_id=lead.id,
+                tenant_id=getattr(tenant, "id", None),
+                tenant_slug=getattr(tenant, "slug", ""),
+                refreshed_token=bool(refresh_token),
+                provisioning_job_id=getattr(latest_job, "id", None),
+            )
 
     return OnboardingPackageResult(
         tenant=tenant,

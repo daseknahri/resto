@@ -100,7 +100,7 @@
 ## Phase 2 - Early Post-Launch Hardening (After First Sales)
 
 ### 1. Observability and Reliability
-- [ ] Add structured logging for backend API and provisioning jobs.
+- [x] Add structured logging for backend API and provisioning jobs.
 - [ ] Add Sentry (backend + frontend) with environment tagging.
 - [ ] Add uptime monitoring and alerts for API/frontend.
 - [ ] Add DB backup/restore routine and test restore procedure.
