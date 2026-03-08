@@ -1,0 +1,457 @@
+<template>
+  <div class="space-y-4 px-4 py-4 pb-28 sm:pb-8 ui-safe-bottom">
+
+    <div v-if="menu.loading" class="space-y-3" role="status" aria-live="polite">
+      <div class="h-64 animate-pulse rounded-3xl bg-slate-800/60"></div>
+      <div class="h-32 animate-pulse rounded-3xl bg-slate-800/60"></div>
+      <p class="text-sm text-slate-400">Loading dish...</p>
+    </div>
+
+    <div v-else-if="!dish" class="ui-panel p-6" role="alert">
+      <p class="text-lg font-semibold text-slate-100">Dish not found</p>
+      <p class="text-sm text-slate-400">It may be unpublished or moved. Browse other categories.</p>
+    </div>
+
+    <div v-else class="ui-glass ui-reveal overflow-hidden shadow-2xl shadow-black/40">
+      <div class="relative h-[34vh] min-h-[210px] max-h-[320px] w-full sm:h-72">
+        <img :src="dish.image_url || placeholder" :alt="dish.name" class="h-full w-full object-cover" loading="lazy" referrerpolicy="no-referrer" />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
+        <div class="absolute bottom-3 left-3 right-3 space-y-2.5 md:bottom-4 md:left-4 md:right-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/90">{{ categoryName }}</span>
+            <span
+              v-if="isBrowseOnlyPlan"
+              class="rounded-full bg-sky-400/90 px-3 py-1 text-[11px] font-semibold text-sky-950 shadow"
+            >
+              Menu only
+            </span>
+            <span v-else-if="!cart.canCheckout" class="rounded-full bg-amber-400/90 px-3 py-1 text-[11px] font-semibold text-amber-950 shadow">WhatsApp</span>
+          </div>
+
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div class="min-w-0 space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h1 class="ui-display text-xl font-semibold text-white drop-shadow sm:text-2xl">{{ dish.name }}</h1>
+                <span v-if="dish.is_vegan" class="rounded-full bg-emerald-400/90 px-2 py-1 text-[11px] font-semibold text-emerald-950">Vegan</span>
+                <span v-if="dish.is_spicy" class="rounded-full bg-rose-400/90 px-2 py-1 text-[11px] font-semibold text-rose-950">Spicy</span>
+              </div>
+            </div>
+            <span class="rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-slate-900 shadow">{{ formatPrice(dish.price, dish.currency) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-5 p-4 sm:p-6">
+        <p class="leading-relaxed text-slate-200">{{ dish.description || "No description yet." }}</p>
+
+        <div v-if="dish.options?.length" class="space-y-2">
+          <p class="text-sm text-slate-300">Options</p>
+          <ul class="grid gap-2 sm:grid-cols-2 text-sm">
+            <li
+              v-for="opt in dish.options"
+              :key="opt.id"
+              class="rounded-xl border bg-slate-900/60 px-3 py-2 transition-colors"
+              :class="
+                isOptionSelected(opt.id)
+                  ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/10'
+                  : 'border-slate-800 hover:border-[var(--color-secondary)]/50'
+              "
+            >
+              <label class="flex w-full items-center gap-2">
+                <input
+                  type="checkbox"
+                  :value="opt.id"
+                  v-model="selectedOptionIds"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="font-semibold text-slate-100">{{ opt.name }}</p>
+                  <p v-if="opt.is_required" class="text-[11px] text-amber-300">Required</p>
+                </div>
+                <span class="text-slate-300">+{{ formatPrice(opt.price_delta, dish.currency) }}</span>
+              </label>
+            </li>
+          </ul>
+          <p v-if="hasRequiredMissing" class="text-xs text-amber-300">Select all required options before adding.</p>
+        </div>
+
+        <div class="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
+            Qty
+            <span class="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 p-1">
+              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" @click="decrementQty" aria-label="Decrease quantity">-</button>
+              <input v-model.number="qty" type="number" min="1" max="99" class="w-12 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
+              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" @click="incrementQty" aria-label="Increase quantity">+</button>
+            </span>
+          </label>
+          <button
+            class="ui-btn-primary w-full justify-center sm:w-auto"
+            :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
+            :disabled="orderingDisabled"
+            @click="addToCart"
+            @keydown.enter.prevent="addToCart"
+            @keydown.space.prevent="addToCart"
+          >
+            {{ isBrowseOnlyPlan ? "Browse-only plan" : cart.canCheckout || cart.canWhatsapp ? "Add to cart" : "Add (contact to order)" }}
+          </button>
+          <button
+            v-if="cart.canWhatsapp"
+            class="ui-btn-outline w-full justify-center sm:w-auto"
+            :disabled="!canWhatsappShare || !isRestaurantOpen"
+            :class="!canWhatsappShare || !isRestaurantOpen ? 'cursor-not-allowed opacity-50' : ''"
+            @click="canWhatsappShare ? shareWhatsapp() : null"
+            @keydown.enter.prevent="canWhatsappShare ? shareWhatsapp() : null"
+            @keydown.space.prevent="canWhatsappShare ? shareWhatsapp() : null"
+          >
+            {{ !isRestaurantOpen ? "Restaurant closed" : canWhatsappShare ? "Share via WhatsApp" : "Add restaurant phone to enable" }}
+          </button>
+        </div>
+
+        <p v-if="!isRestaurantOpen" class="text-sm text-amber-300">Restaurant is currently closed. Ordering actions are disabled.</p>
+        <p v-if="isBrowseOnlyPlan" class="text-sm text-sky-300">Ordering is disabled for this tenant plan. Cart actions are unavailable.</p>
+        <p v-else-if="!cart.canCheckout && cart.canWhatsapp" class="text-sm text-slate-400">WhatsApp ordering enabled. Checkout is disabled on this tier.</p>
+
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
+          <div class="flex items-center justify-between">
+            <span>Base ({{ qty }}x)</span>
+            <span class="text-slate-100">{{ formatPrice(baseTotal, dish.currency) }}</span>
+          </div>
+          <div class="mt-1 flex items-center justify-between">
+            <span>Options ({{ selectedOptionObjects.length }})</span>
+            <span class="text-slate-100">{{ formatPrice(extrasTotal, dish.currency) }}</span>
+          </div>
+          <div class="mt-2 flex items-center justify-between font-semibold text-[var(--color-secondary)]">
+            <span>Total</span>
+            <span class="text-lg">{{ formatPrice(totalWithOptions, dish.currency) }}</span>
+          </div>
+        </div>
+
+        <div class="grid gap-2 sm:flex sm:flex-wrap">
+          <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copySummary">Copy order summary</button>
+          <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyLink">Copy link</button>
+          <button
+            class="ui-btn-outline w-full justify-center sm:w-auto"
+            @click="resetOptions"
+            :disabled="!selectedOptionIds.length"
+            :class="!selectedOptionIds.length ? 'cursor-not-allowed opacity-50' : ''"
+          >
+            Clear options
+          </button>
+          <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="scrollToTop" aria-label="Back to top">Back to top</button>
+        </div>
+        <p v-if="copyStatus" class="text-xs text-slate-400" role="status" aria-live="polite">{{ copyStatus }}</p>
+
+        <div v-if="similarDishes.length || menu.loading" class="space-y-2 pt-1" ref="similarVis.target">
+          <p class="text-sm text-slate-300">Similar dishes</p>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div v-if="menu.loading && !similarVis.isVisible" v-for="n in 3" :key="'sk-' + n" class="h-32 animate-pulse rounded-2xl bg-slate-800/50"></div>
+            <RouterLink
+              v-if="similarVis.isVisible"
+              v-for="(item, index) in similarDishes"
+              :key="item.slug"
+              :to="{ name: 'dish', params: { category: props.category, dish: item.slug } }"
+              class="group ui-surface-lift ui-reveal overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
+              :style="{ '--ui-delay': `${100 + index * 45}ms` }"
+            >
+              <div class="relative h-24 w-full overflow-hidden">
+                <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" />
+                <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent"></div>
+              </div>
+              <div class="space-y-1 p-3">
+                <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
+                <p class="line-clamp-2 text-xs text-slate-400">{{ item.description }}</p>
+                <div class="flex items-center justify-between text-sm">
+                  <p class="font-semibold text-[var(--color-secondary)]">{{ formatPrice(item.price, item.currency) }}</p>
+                  <span v-if="item.is_spicy || item.is_vegan" class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/80">
+                    {{ item.is_spicy ? "Spicy" : "" }}{{ item.is_spicy && item.is_vegan ? " / " : "" }}{{ item.is_vegan ? "Vegan" : "" }}
+                  </span>
+                </div>
+              </div>
+            </RouterLink>
+          </div>
+          <p v-if="!menu.loading && !similarDishes.length" class="text-xs text-slate-500">No similar dishes yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="dish"
+      class="fixed bottom-20 left-3 right-3 z-20 flex items-center justify-between rounded-2xl border border-slate-800/80 bg-slate-900/90 px-4 py-3 backdrop-blur sm:hidden"
+    >
+      <div class="min-w-0">
+        <p class="truncate text-sm text-slate-200">{{ dish.name }}</p>
+        <p class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatPrice(totalWithOptions, dish.currency) }}</p>
+      </div>
+      <button
+        class="ui-btn-primary px-4 py-2"
+        :disabled="orderingDisabled"
+        :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
+        @click="addToCart"
+        @keydown.enter.prevent="addToCart"
+        @keydown.space.prevent="addToCart"
+      >
+        {{ isBrowseOnlyPlan ? "View only" : "Add" }}
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, ref, watch, watchEffect } from "vue";
+import { useRoute } from "vue-router";
+import { useMenuStore } from "../stores/menu";
+import { useCartStore } from "../stores/cart";
+import { useToastStore } from "../stores/toast";
+import { useTenantStore } from "../stores/tenant";
+import { useVisibility } from "../composables/useVisibility";
+import { trackEvent } from "../lib/analytics";
+
+const props = defineProps({ category: String, dish: String });
+
+const route = useRoute();
+const menu = useMenuStore();
+const cart = useCartStore();
+const tenant = useTenantStore();
+const toast = useToastStore();
+const similarVis = useVisibility();
+const qty = ref(1);
+const selectedOptionIds = ref([]);
+const whatsappPhone = (import.meta.env.VITE_CONTACT_PHONE || "").replace(/[^\d+]/g, "");
+const copyStatus = ref("");
+
+const dishes = computed(() => menu.dishes[props.category] || []);
+const dish = computed(() => dishes.value.find((d) => d.slug === props.dish));
+const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80";
+const categoryName = computed(() => menu.categories.find((c) => c.slug === props.category)?.name || props.category);
+const similarDishes = computed(() =>
+  dishes.value
+    .filter((d) => d.slug !== props.dish)
+    .sort((a, b) => (a.price || 0) - (b.price || 0))
+    .slice(0, 3)
+);
+const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
+const isRestaurantOpen = computed(() => tenant.meta?.profile?.is_open !== false);
+const shareUrl = computed(() => {
+  if (typeof window === "undefined") return route.fullPath;
+  return `${window.location.origin}${route.fullPath}`;
+});
+
+const formatPrice = (value, currency) => new Intl.NumberFormat("en", { style: "currency", currency: currency || "USD" }).format(value || 0);
+const prefMotionReduce =
+  typeof window !== "undefined" &&
+  window.matchMedia &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const selectedOptionObjects = computed(() => {
+  if (!dish.value?.options) return [];
+  const byId = new Map(dish.value.options.map((o) => [o.id, o]));
+  return selectedOptionIds.value.map((id) => byId.get(id)).filter(Boolean);
+});
+
+const selectedOptionNote = computed(() => {
+  if (!selectedOptionObjects.value.length || !dish.value) return "";
+  const bits = selectedOptionObjects.value.map((opt) => `${opt.name} (+${formatPrice(opt.price_delta, dish.value.currency)})`);
+  return `Options: ${bits.join(", ")}`;
+});
+
+const selectedOptionIdsSorted = computed(() =>
+  [...selectedOptionIds.value].map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0).sort((a, b) => a - b)
+);
+
+const unitOptionTotal = computed(() => selectedOptionObjects.value.reduce((sum, opt) => sum + Number(opt.price_delta || 0), 0));
+
+const unitPriceWithOptions = computed(() => {
+  if (!dish.value) return 0;
+  return (Number(dish.value.price) || 0) + unitOptionTotal.value;
+});
+
+const baseTotal = computed(() => {
+  if (!dish.value) return 0;
+  const unit = Number(dish.value.price) || 0;
+  return unit * (qty.value || 1);
+});
+
+const extrasTotal = computed(() => {
+  return unitOptionTotal.value * (qty.value || 1);
+});
+
+const totalWithOptions = computed(() => {
+  if (!dish.value) return 0;
+  return baseTotal.value + extrasTotal.value;
+});
+
+const hasRequiredMissing = computed(() =>
+  dish.value?.options?.some((opt) => opt.is_required && !selectedOptionIds.value.includes(opt.id)) || false
+);
+
+const orderingDisabled = computed(() => hasRequiredMissing.value || !isRestaurantOpen.value || isBrowseOnlyPlan.value);
+
+const canWhatsappShare = computed(() => !!whatsappPhone && cart.canWhatsapp && !hasRequiredMissing.value);
+const isOptionSelected = (optionId) => selectedOptionIds.value.includes(optionId);
+
+const normalizeQty = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(99, Math.max(1, Math.round(parsed)));
+};
+
+const incrementQty = () => {
+  qty.value = normalizeQty((qty.value || 1) + 1);
+};
+
+const decrementQty = () => {
+  qty.value = normalizeQty((qty.value || 1) - 1);
+};
+
+const addToCart = () => {
+  if (!isRestaurantOpen.value) {
+    toast.show("Restaurant is currently closed", "error");
+    return;
+  }
+  if (isBrowseOnlyPlan.value) {
+    toast.show("Ordering is disabled for this tenant plan.", "info");
+    return;
+  }
+  if (!dish.value) return;
+  if (hasRequiredMissing.value) {
+    toast.show("Select required options first", "error");
+    return;
+  }
+  const quantity = qty.value && qty.value > 0 ? qty.value : 1;
+  const optionSig = selectedOptionIdsSorted.value.join(",");
+  cart.add({
+    key: `${dish.value.slug}::${optionSig}`,
+    slug: dish.value.slug,
+    name: dish.value.name,
+    price: Number(unitPriceWithOptions.value),
+    currency: dish.value.currency,
+    qty: quantity,
+    note: selectedOptionNote.value,
+    option_ids: selectedOptionIdsSorted.value,
+    option_labels: selectedOptionObjects.value.map((opt) => opt.name),
+  });
+  toast.show("Added to cart", "success");
+};
+
+const shareWhatsapp = () => {
+  if (!isRestaurantOpen.value) {
+    toast.show("Restaurant is currently closed", "error");
+    return;
+  }
+  if (!dish.value) return;
+  if (!whatsappPhone) {
+    toast.show("Add a restaurant WhatsApp number to enable sharing", "error");
+    return;
+  }
+  const lines = [
+    "Hello, I'd like to order:",
+    `- ${qty.value} x ${dish.value.name} (${formatPrice(totalWithOptions.value, dish.value.currency)})`,
+    ...selectedOptionObjects.value.map((opt) => `  - ${opt.name} (+${formatPrice(opt.price_delta, dish.value.currency)})`),
+  ];
+  const msg = encodeURIComponent(lines.join("\n"));
+  trackEvent("order_handoff_click", {
+    source: "dish_quick_share",
+    category_slug: props.category,
+    dish_slug: dish.value.slug,
+    metadata: { qty: qty.value },
+  });
+  window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, "_blank", "noopener,noreferrer");
+  toast.show("Opening WhatsApp...", "info");
+};
+
+const summaryText = computed(() => {
+  if (!dish.value) return "";
+  const parts = [
+    `${qty.value} x ${dish.value.name} (${formatPrice(totalWithOptions.value, dish.value.currency)})`,
+    ...selectedOptionObjects.value.map((opt) => `- ${opt.name} (+${formatPrice(opt.price_delta, dish.value.currency)})`),
+  ];
+  return parts.join("\n");
+});
+
+const copySummary = async () => {
+  if (!summaryText.value) return;
+  try {
+    await navigator.clipboard.writeText(summaryText.value);
+    copyStatus.value = "Summary copied";
+    toast.show("Summary copied to clipboard", "success");
+  } catch (e) {
+    copyStatus.value = "Copy failed";
+    toast.show("Copy failed", "error");
+  }
+  setTimeout(() => (copyStatus.value = ""), 2000);
+};
+
+const copyLink = async () => {
+  if (!shareUrl.value) return;
+  try {
+    await navigator.clipboard.writeText(shareUrl.value);
+    toast.show("Link copied", "success");
+  } catch (e) {
+    toast.show("Copy failed", "error");
+  }
+};
+
+const resetOptions = () => {
+  selectedOptionIds.value = [];
+  if (dish.value?.options?.length) {
+    dish.value.options.forEach((opt) => {
+      if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) {
+        selectedOptionIds.value.push(opt.id);
+      }
+    });
+  }
+};
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: prefMotionReduce ? "auto" : "smooth" });
+};
+
+watch(
+  () => dish.value?.id,
+  () => {
+    qty.value = 1;
+    selectedOptionIds.value = [];
+  }
+);
+
+watch(
+  () => dish.value?.slug,
+  (slug) => {
+    if (!slug) return;
+    trackEvent(
+      "dish_view",
+      { source: "customer_dish", category_slug: props.category, dish_slug: slug },
+      { onceKey: `dish:${slug}` }
+    );
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.category,
+  (slug) => {
+    if (slug) {
+      if (!menu.categories.length) menu.fetchCategories();
+      menu.fetchDishesByCategory(slug);
+    }
+  },
+  { flush: "post" }
+);
+
+onMounted(() => {
+  if (!tenant.meta) tenant.fetchMeta();
+  if (!menu.categories.length) menu.fetchCategories();
+  if (!menu.dishes[props.category]) menu.fetchDishesByCategory(props.category);
+});
+
+watchEffect(() => {
+  qty.value = normalizeQty(qty.value);
+  if (dish.value?.options?.length) {
+    dish.value.options.forEach((opt) => {
+      if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) {
+        selectedOptionIds.value.push(opt.id);
+      }
+    });
+  }
+});
+</script>

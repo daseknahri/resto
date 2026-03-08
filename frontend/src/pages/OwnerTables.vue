@@ -1,0 +1,707 @@
+<template>
+  <section class="space-y-6 ui-safe-bottom pb-24 sm:pb-0">
+    <header class="no-print ui-panel p-5 ui-fade-up">
+      <p class="ui-kicker">Owner workspace</p>
+      <h2 class="ui-display text-3xl font-semibold text-white">Tables and QR links</h2>
+      <p class="mt-1 text-sm text-slate-300">Create table links, share QR codes, and keep dine-in order context clean.</p>
+    </header>
+
+    <section class="no-print grid gap-3 sm:grid-cols-3">
+      <article class="ui-panel p-4">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Total links</p>
+        <p class="mt-2 text-2xl font-semibold text-white">{{ tables.length }}</p>
+      </article>
+      <article class="ui-panel p-4">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Active tables</p>
+        <p class="mt-2 text-2xl font-semibold text-emerald-300">{{ activeTablesCount }}</p>
+      </article>
+      <article class="ui-panel p-4">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Disabled</p>
+        <p class="mt-2 text-2xl font-semibold text-amber-300">{{ disabledTablesCount }}</p>
+      </article>
+    </section>
+
+    <article id="create-table" class="no-print ui-panel space-y-3 p-4 scroll-mt-24">
+      <h3 class="text-base font-semibold text-slate-100">Create table</h3>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr,120px,120px,auto] lg:items-end">
+        <label class="text-sm text-slate-300">
+          Table label
+          <input
+            v-model.trim="newTable.label"
+            maxlength="40"
+            class="ui-input mt-1"
+            placeholder="Table 4"
+          />
+        </label>
+        <label class="text-sm text-slate-300">
+          Position
+          <input
+            v-model.number="newTable.position"
+            type="number"
+            min="0"
+            class="ui-input mt-1"
+          />
+        </label>
+        <label class="text-sm text-slate-300">
+          Active
+          <select v-model="newTable.is_active" class="ui-input mt-1">
+            <option :value="true">Yes</option>
+            <option :value="false">No</option>
+          </select>
+        </label>
+        <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="creating" @click="createTable">
+          {{ creating ? "Adding..." : "Add table" }}
+        </button>
+      </div>
+      <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
+    </article>
+
+    <article id="bulk-generate" class="no-print ui-panel space-y-3 p-4 scroll-mt-24">
+      <h3 class="text-base font-semibold text-slate-100">Bulk generate tables</h3>
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,90px,90px,120px,120px,auto] xl:items-end">
+        <label class="text-sm text-slate-300">
+          Prefix
+          <input
+            v-model.trim="bulk.prefix"
+            maxlength="20"
+            class="ui-input mt-1"
+            placeholder="Table"
+          />
+        </label>
+        <label class="text-sm text-slate-300">
+          Start #
+          <input v-model.number="bulk.start" type="number" min="1" class="ui-input mt-1" />
+        </label>
+        <label class="text-sm text-slate-300">
+          Count
+          <input v-model.number="bulk.count" type="number" min="1" max="120" class="ui-input mt-1" />
+        </label>
+        <label class="text-sm text-slate-300">
+          Position from
+          <input v-model.number="bulk.position_start" type="number" min="0" class="ui-input mt-1" />
+        </label>
+        <label class="text-sm text-slate-300">
+          Active
+          <select v-model="bulk.is_active" class="ui-input mt-1">
+            <option :value="true">Yes</option>
+            <option :value="false">No</option>
+          </select>
+        </label>
+        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-60" :disabled="generating" @click="generateTables">
+          {{ generating ? "Generating..." : "Generate" }}
+        </button>
+      </div>
+      <p class="text-xs text-slate-500">Example: prefix "Table", start 1, count 20 creates Table 1 ... Table 20.</p>
+    </article>
+
+    <div class="no-print ui-panel p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-slate-400">{{ tables.length }} table link(s)</p>
+        <div class="ui-scroll-row">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchTables" :disabled="loading">
+            {{ loading ? "Refreshing..." : "Refresh" }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadServerQrZip" :disabled="!tables.length">
+            Server ZIP
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadServerQrPdf" :disabled="!tables.length">
+            Server PDF
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadAllQrPng" :disabled="!tables.length">
+            All QR PNG
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="exportCsv" :disabled="!tables.length">Export CSV</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadHtmlPack" :disabled="!tables.length">HTML pack</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="printCards" :disabled="!tables.length">Print cards</button>
+        </div>
+      </div>
+    </div>
+
+    <header class="print-only rounded-xl border border-slate-300 bg-white p-4 text-slate-900">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Table QR cards</p>
+      <h3 class="mt-1 text-2xl font-semibold">{{ tenantName }}</h3>
+      <p class="mt-1 text-xs text-slate-500">Generated {{ generatedAt }}</p>
+    </header>
+
+    <p v-if="!tables.length && !loading" class="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
+      No table links yet. Create one table or use bulk generation.
+    </p>
+
+    <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+      <article
+        v-for="table in tables"
+        :key="table.id"
+        class="table-card rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3"
+      >
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <div class="flex items-center gap-2">
+            <img
+              v-if="logoUrl"
+              :src="logoUrl"
+              alt="Restaurant logo"
+              class="h-7 w-7 rounded-full border border-slate-700 object-cover"
+              loading="lazy"
+            />
+            <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{{ tenantName }}</p>
+          </div>
+          <p class="mt-2 truncate text-xl font-semibold text-slate-100">{{ table.label }}</p>
+          <p class="text-xs text-slate-400">slug: {{ table.slug }}</p>
+        </div>
+
+        <div class="mx-auto w-fit rounded-xl border border-slate-700 bg-white p-2">
+          <img
+            v-if="tableQrSrc(table)"
+            :src="tableQrSrc(table)"
+            :alt="`QR ${table.label}`"
+            class="h-40 w-40"
+            loading="lazy"
+          />
+          <div
+            v-else
+            class="flex h-40 w-40 items-center justify-center bg-slate-100 text-center text-[11px] font-medium text-slate-500"
+          >
+            Generating QR...
+          </div>
+        </div>
+
+        <div class="space-y-1 text-xs">
+          <p class="text-slate-300">Scan to open menu for <span class="font-semibold">{{ table.label }}</span></p>
+          <a :href="tableShortUrl(table)" target="_blank" rel="noopener noreferrer" class="block break-all text-brand-secondary hover:underline">
+            {{ tableShortUrl(table) }}
+          </a>
+          <a :href="tableFullMenuUrl(table)" target="_blank" rel="noopener noreferrer" class="no-print block break-all text-slate-400 hover:underline">
+            full: {{ tableFullMenuUrl(table) }}
+          </a>
+        </div>
+
+        <div class="flex items-start justify-between gap-2">
+          <span
+            class="rounded-full px-2 py-1 text-[11px] font-semibold"
+            :class="table.is_active ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700 text-slate-300'"
+          >
+            {{ table.is_active ? "Active" : "Disabled" }}
+          </span>
+          <p class="print-only text-[10px] uppercase tracking-[0.15em] text-slate-600">Powered by {{ tenantName }}</p>
+        </div>
+
+        <div class="no-print grid grid-cols-2 gap-2 lg:grid-cols-3">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyShortUrl(table)">Copy short link</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyTableUrl(table)">Copy full menu link</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyQrUrl(table)">Copy QR image</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadQrPng(table)">Download QR PNG</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="toggleTable(table)">
+            {{ table.is_active ? "Disable" : "Enable" }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click="removeTable(table)">
+            Delete
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="no-print fixed bottom-4 left-3 right-3 z-20 grid grid-cols-3 gap-2 sm:hidden">
+      <a href="#create-table" class="ui-btn-primary justify-center">Create</a>
+      <a href="#bulk-generate" class="ui-btn-outline justify-center">Bulk</a>
+      <button class="ui-btn-outline justify-center" :disabled="loading" @click="fetchTables">
+        {{ loading ? "Loading..." : "Refresh" }}
+      </button>
+    </div>
+  </section>
+</template>
+
+<script setup>
+import { computed, onMounted, reactive, ref } from "vue";
+import QRCode from "qrcode";
+import api from "../lib/api";
+import { useToastStore } from "../stores/toast";
+import { useTenantStore } from "../stores/tenant";
+
+const toast = useToastStore();
+const tenant = useTenantStore();
+const loading = ref(false);
+const creating = ref(false);
+const generating = ref(false);
+const tables = ref([]);
+const qrDataUrls = ref({});
+const error = ref("");
+const newTable = reactive({
+  label: "",
+  position: 0,
+  is_active: true,
+});
+const bulk = reactive({
+  prefix: "Table",
+  start: 1,
+  count: 12,
+  position_start: 0,
+  is_active: true,
+});
+
+const tenantName = computed(() => {
+  const profileName = String(tenant.meta?.profile?.restaurant_name || "").trim();
+  if (profileName) return profileName;
+  const brandName = String(tenant.meta?.name || "").trim();
+  if (brandName) return brandName;
+  return "Restaurant";
+});
+const logoUrl = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
+const generatedAt = computed(() => new Date().toLocaleString());
+const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
+const disabledTablesCount = computed(() => tables.value.filter((table) => !table.is_active).length);
+
+const parseError = (err, fallback = "Request failed.") => {
+  const data = err?.response?.data;
+  if (typeof data?.detail === "string") return data.detail;
+  if (data && typeof data === "object") {
+    const first = Object.values(data).find((v) => Array.isArray(v) && v.length);
+    if (first) return String(first[0]);
+  }
+  return fallback;
+};
+
+const tableFullMenuUrl = (table) => {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const tableLabel = encodeURIComponent(table.label || "");
+  return `${origin}/browse?table=${tableLabel}`;
+};
+const tableShortUrl = (table) => `${typeof window === "undefined" ? "" : window.location.origin}/t/${encodeURIComponent(table.slug)}`;
+const tableQrSrc = (table) => qrDataUrls.value[table.id] || "";
+
+const generateQrForTable = async (table) => {
+  if (!table?.id) return;
+  const url = tableShortUrl(table);
+  const dataUrl = await QRCode.toDataURL(url, {
+    width: 240,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: {
+      dark: "#0f172a",
+      light: "#ffffff",
+    },
+  });
+  qrDataUrls.value = {
+    ...qrDataUrls.value,
+    [table.id]: dataUrl,
+  };
+};
+
+const generateQrBatch = async () => {
+  const rows = Array.isArray(tables.value) ? tables.value : [];
+  const nextQrs = {};
+  for (const table of rows) {
+    try {
+      const dataUrl = await QRCode.toDataURL(tableShortUrl(table), {
+        width: 240,
+        margin: 1,
+        errorCorrectionLevel: "M",
+        color: {
+          dark: "#0f172a",
+          light: "#ffffff",
+        },
+      });
+      nextQrs[table.id] = dataUrl;
+    } catch (err) {
+      // Keep card usable even if one QR render fails.
+    }
+  }
+  qrDataUrls.value = nextQrs;
+};
+
+const fetchTables = async () => {
+  loading.value = true;
+  error.value = "";
+  try {
+    const { data } = await api.get("/tables/");
+    tables.value = Array.isArray(data) ? data : [];
+    await generateQrBatch();
+  } catch (err) {
+    error.value = parseError(err, "Unable to load tables.");
+  } finally {
+    loading.value = false;
+  }
+};
+
+const createTable = async () => {
+  if (!newTable.label.trim()) {
+    toast.show("Table label is required.", "error");
+    return;
+  }
+  creating.value = true;
+  error.value = "";
+  try {
+    const payload = {
+      label: newTable.label.trim(),
+      position: Number(newTable.position) || 0,
+      is_active: newTable.is_active === true,
+    };
+    await api.post("/tables/", payload);
+    newTable.label = "";
+    newTable.position = 0;
+    newTable.is_active = true;
+    toast.show("Table link created", "success");
+    await fetchTables();
+  } catch (err) {
+    error.value = parseError(err, "Unable to create table.");
+    toast.show(error.value, "error");
+  } finally {
+    creating.value = false;
+  }
+};
+
+const generateTables = async () => {
+  if (!bulk.prefix.trim()) {
+    toast.show("Prefix is required.", "error");
+    return;
+  }
+  generating.value = true;
+  error.value = "";
+  try {
+    const payload = {
+      prefix: bulk.prefix.trim(),
+      start: Number(bulk.start) || 1,
+      count: Number(bulk.count) || 1,
+      position_start: Number(bulk.position_start) || 0,
+      is_active: bulk.is_active === true,
+    };
+    const { data } = await api.post("/tables/bulk-generate/", payload);
+    toast.show(data?.detail || "Tables generated", "success");
+    await fetchTables();
+  } catch (err) {
+    error.value = parseError(err, "Unable to bulk-generate tables.");
+    toast.show(error.value, "error");
+  } finally {
+    generating.value = false;
+  }
+};
+
+const toggleTable = async (table) => {
+  try {
+    await api.put(`/tables/${table.id}/`, {
+      ...table,
+      is_active: !table.is_active,
+    });
+    table.is_active = !table.is_active;
+    toast.show(table.is_active ? "Table enabled" : "Table disabled", "success");
+  } catch (err) {
+    toast.show(parseError(err, "Unable to update table."), "error");
+  }
+};
+
+const removeTable = async (table) => {
+  const confirmed = typeof window === "undefined" ? true : window.confirm(`Delete ${table.label}?`);
+  if (!confirmed) return;
+  try {
+    await api.delete(`/tables/${table.id}/`);
+    tables.value = tables.value.filter((item) => item.id !== table.id);
+    toast.show("Table deleted", "success");
+  } catch (err) {
+    toast.show(parseError(err, "Unable to delete table."), "error");
+  }
+};
+
+const copyText = async (value, successText) => {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.show(successText, "success");
+  } catch (err) {
+    toast.show("Copy failed", "error");
+  }
+};
+
+const copyShortUrl = (table) => copyText(tableShortUrl(table), "Short table link copied");
+const copyTableUrl = (table) => copyText(tableFullMenuUrl(table), "Full menu link copied");
+const copyQrUrl = async (table) => {
+  if (!tableQrSrc(table)) {
+    await generateQrForTable(table);
+  }
+  const src = tableQrSrc(table);
+  if (!src) {
+    toast.show("QR not ready yet", "error");
+    return;
+  }
+  copyText(src, "QR image data copied");
+};
+
+const safeFileBase = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60) || "table";
+
+const downloadDataUrl = (filename, dataUrl) => {
+  if (typeof window === "undefined" || !dataUrl) return;
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const parseFilenameFromDisposition = (value, fallback) => {
+  const raw = String(value || "");
+  const utf8Match = raw.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch (err) {
+      return utf8Match[1].trim();
+    }
+  }
+  const basicMatch = raw.match(/filename="?([^\";]+)"?/i);
+  if (basicMatch?.[1]) return basicMatch[1].trim();
+  return fallback;
+};
+
+const downloadBlob = (filename, blob) => {
+  if (typeof window === "undefined" || !blob) return;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadServerQrExport = async (format) => {
+  const normalized = String(format || "zip").trim().toLowerCase();
+  const ext = normalized === "pdf" ? "pdf" : "zip";
+  try {
+    const response = await api.get("/tables/qr-export/", {
+      params: { export_format: normalized },
+      responseType: "blob",
+    });
+    const fallback = `${safeFileBase(tenantName.value)}-qr-export.${ext}`;
+    const filename = parseFilenameFromDisposition(response?.headers?.["content-disposition"], fallback);
+    downloadBlob(filename, response?.data);
+    toast.show(`Server QR ${ext.toUpperCase()} downloaded`, "success");
+  } catch (err) {
+    toast.show(parseError(err, `Unable to download server QR ${ext.toUpperCase()}.`), "error");
+  }
+};
+
+const downloadServerQrZip = () => downloadServerQrExport("zip");
+const downloadServerQrPdf = () => downloadServerQrExport("pdf");
+
+const downloadQrPng = async (table) => {
+  if (!table?.id) return;
+  try {
+    const response = await api.get(`/tables/${table.id}/qr-image/`, {
+      responseType: "blob",
+    });
+    const fallback = `${safeFileBase(tenantName.value)}-${safeFileBase(table.label)}-qr.png`;
+    const filename = parseFilenameFromDisposition(response?.headers?.["content-disposition"], fallback);
+    downloadBlob(filename, response?.data);
+    toast.show(`Downloaded ${table.label} QR`, "success");
+    return;
+  } catch (err) {
+    // Fallback to in-browser QR generation if server export fails.
+  }
+
+  if (!tableQrSrc(table)) {
+    await generateQrForTable(table);
+  }
+  const src = tableQrSrc(table);
+  if (!src) {
+    toast.show("QR not ready yet", "error");
+    return;
+  }
+  const fallbackName = `${safeFileBase(tenantName.value)}-${safeFileBase(table.label)}-qr.png`;
+  downloadDataUrl(fallbackName, src);
+  toast.show(`Downloaded ${table.label} QR`, "success");
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const downloadAllQrPng = async () => {
+  if (!tables.value.length) return;
+  if (Object.keys(qrDataUrls.value).length < tables.value.length) {
+    await generateQrBatch();
+  }
+
+  let downloaded = 0;
+  for (const table of tables.value) {
+    const src = tableQrSrc(table);
+    if (!src) continue;
+    const filename = `${safeFileBase(tenantName.value)}-${safeFileBase(table.label)}-qr.png`;
+    downloadDataUrl(filename, src);
+    downloaded += 1;
+    await sleep(120);
+  }
+  if (downloaded) {
+    toast.show(`Started ${downloaded} QR download(s).`, "success");
+  } else {
+    toast.show("No QR images available to download.", "error");
+  }
+};
+
+const downloadFile = (filename, content, mimeType) => {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const escapeHtml = (value) =>
+  String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+const exportCsv = () => {
+  if (!tables.value.length) return;
+  const rows = [
+    ["label", "slug", "short_url", "full_menu_url", "is_active"],
+    ...tables.value.map((table) => [
+      table.label,
+      table.slug,
+      tableShortUrl(table),
+      tableFullMenuUrl(table),
+      table.is_active ? "true" : "false",
+    ]),
+  ];
+  const csv = rows
+    .map((row) => row.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const filename = `${tenantName.value.toLowerCase().replace(/\s+/g, "-") || "restaurant"}-tables.csv`;
+  downloadFile(filename, csv, "text/csv;charset=utf-8");
+  toast.show("CSV exported", "success");
+};
+
+const buildHtmlPack = () => {
+  const cards = tables.value
+    .map((table) => {
+      const short = tableShortUrl(table);
+      const full = tableFullMenuUrl(table);
+      const qrSrc = tableQrSrc(table);
+      return `
+        <article class="card">
+          <div class="head">
+            ${logoUrl.value ? `<img src="${escapeHtml(logoUrl.value)}" alt="Logo" class="logo" />` : ""}
+            <div>
+              <p class="brand">${escapeHtml(tenantName.value)}</p>
+              <h2>${escapeHtml(table.label)}</h2>
+            </div>
+          </div>
+          <div class="qr-wrap">
+            ${qrSrc ? `<img src="${escapeHtml(qrSrc)}" alt="QR ${escapeHtml(table.label)}" class="qr" />` : `<div class="qr-missing">QR unavailable</div>`}
+          </div>
+          <p class="hint">Scan to open menu</p>
+          <p class="url">${escapeHtml(short)}</p>
+          <p class="full">full: ${escapeHtml(full)}</p>
+          <p class="state">${table.is_active ? "Active" : "Disabled"}</p>
+        </article>
+      `;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(tenantName.value)} - Table QR Pack</title>
+  <style>
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f8fafc; color: #0f172a; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .meta { margin-bottom: 16px; }
+    .meta h1 { margin: 0; font-size: 24px; }
+    .meta p { margin: 6px 0 0; color: #475569; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #cbd5e1; border-radius: 14px; background: #fff; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+    .head { display: flex; align-items: center; gap: 10px; }
+    .logo { width: 26px; height: 26px; border-radius: 999px; object-fit: cover; border: 1px solid #cbd5e1; }
+    .brand { margin: 0; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+    h2 { margin: 2px 0 0; font-size: 20px; }
+    .qr-wrap { margin-top: 10px; display: flex; justify-content: center; }
+    .qr { width: 200px; height: 200px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .qr-missing { width: 200px; height: 200px; border: 1px dashed #94a3b8; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 12px; }
+    .hint { margin: 8px 0 0; font-size: 12px; color: #334155; }
+    .url { margin: 4px 0 0; font-size: 11px; color: #0f172a; word-break: break-all; }
+    .full { margin: 4px 0 0; font-size: 10px; color: #64748b; word-break: break-all; }
+    .state { margin: 8px 0 0; font-size: 10px; color: #334155; text-transform: uppercase; letter-spacing: .12em; }
+    @media print {
+      @page { size: A4; margin: 10mm; }
+      body { background: #fff; }
+      .wrap { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="meta">
+      <h1>${escapeHtml(tenantName.value)} - Table QR Pack</h1>
+      <p>Generated ${escapeHtml(generatedAt.value)} | ${tables.value.length} table(s)</p>
+    </header>
+    <section class="grid">
+      ${cards}
+    </section>
+  </main>
+</body>
+</html>`;
+};
+
+const downloadHtmlPack = async () => {
+  if (!tables.value.length) return;
+  if (Object.keys(qrDataUrls.value).length < tables.value.length) {
+    await generateQrBatch();
+  }
+  const html = buildHtmlPack();
+  const filename = `${tenantName.value.toLowerCase().replace(/\s+/g, "-") || "restaurant"}-qr-pack.html`;
+  downloadFile(filename, html, "text/html;charset=utf-8");
+  toast.show("HTML pack downloaded", "success");
+};
+
+const printCards = () => {
+  if (typeof window === "undefined") return;
+  window.print();
+};
+
+onMounted(fetchTables);
+</script>
+
+<style scoped>
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .grid {
+    gap: 12px !important;
+  }
+
+  .table-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border-width: 1px !important;
+    border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
+</style>

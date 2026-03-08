@@ -1,0 +1,10 @@
+﻿Django==4.2.11
+psycopg2-binary==2.9.9
+djangorestframework==3.14.0
+django-tenants==3.6.0
+python-dotenv==1.0.1
+dj-database-url==2.1.0
+django-cors-headers==4.4.0
+Pillow==10.4.0
+qrcode==7.4.2
+reportlab==4.2.2

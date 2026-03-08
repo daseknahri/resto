@@ -1,0 +1,91 @@
+﻿name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: resto
+          POSTGRES_USER: resto
+          POSTGRES_PASSWORD: resto
+        options: >-
+          --health-cmd="pg_isready -U resto" --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          cd backend
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+      - name: Run migrations (shared)
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py migrate_schemas --shared
+      - name: Run migrations (tenant)
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py migrate_schemas --tenant
+      - name: Seed plans
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py seed_plans
+      - name: Backend checks
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py check
+      - name: Backend tests
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py test tests -v 2
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        run: |
+          cd frontend
+          npm ci
+      - name: Lint & Build
+        env:
+          VITE_API_BASE_URL: http://localhost:8000/api
+        run: |
+          cd frontend
+          npm run lint
+          npm run build

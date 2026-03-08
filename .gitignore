@@ -1,0 +1,45 @@
+﻿# Environments
+.env
+.env.*
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.cover
+*.coverage
+*.pytest_cache/
+.venv/
+.tmp/
+
+# Node
+node_modules/
+dist/
+build/
+.npmrc
+
+# Editors/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+tmp_*
+*_cookie.txt
+
+# Django/Media placeholders
+media/
+staticfiles/
+
+# Coverage/Reports
+htmlcov/
+coverage.xml
+
+# Docker
+*.pid
+infra/postgres-data/
+
