@@ -45,6 +45,8 @@ This enables structured JSON logs for request traces and provisioning actions, w
   - `DJANGO_SENTRY_RELEASE` (for example commit SHA)
   - `DJANGO_SENTRY_TRACES_SAMPLE_RATE` (start with `0`)
   - `DJANGO_SENTRY_SEND_PII` (`False` by default)
+  - `DJANGO_SENTRY_CAPTURE_THROTTLE` (`False` by default; captures security throttle events)
+  - `DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS` (`30` by default; ignore low-wait noise)
 - Frontend:
   - `VITE_SENTRY_DSN`
   - `VITE_SENTRY_ENVIRONMENT`

@@ -69,7 +69,7 @@
 - [ ] Add security monitoring for throttled auth attempts (logs/alerts dashboard).
 - [x] Log throttled auth attempts through DRF exception handler (`security.throttle` logger).
 - [x] Add configurable security log handler/rotation (`DJANGO_SECURITY_LOG_FILE`, `DJANGO_SECURITY_LOG_LEVEL`).
-- [ ] Route throttle events to alerting/monitoring backend (Sentry/ELK/Grafana) with actionable alerts.
+- [x] Route throttle events to alerting/monitoring backend (Sentry/ELK/Grafana) with actionable alerts.
 - [ ] Enable secure production cookie settings:
 - [x] `SESSION_COOKIE_SECURE=True`
 - [x] `CSRF_COOKIE_SECURE=True`
@@ -103,6 +103,7 @@
 - [x] Add structured logging for backend API and provisioning jobs.
 - [x] Add Sentry (backend + frontend) with environment tagging.
 - [x] Configure production DSN values and verify first captured backend/frontend error event.
+- [ ] Tune throttle-to-Sentry alert threshold (`DJANGO_SENTRY_THROTTLE_MIN_WAIT_SECONDS`) after first week of production traffic.
 - [x] Add uptime monitoring and alerts for API/frontend.
 - [ ] Configure production alert webhook destination and verify down/recovered notifications.
 - [x] Add DB backup/restore routine and test restore procedure.
