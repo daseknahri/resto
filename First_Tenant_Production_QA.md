@@ -83,6 +83,8 @@ powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -Te
 
 Expected:
 - all checks pass
+- if the tenant has no seeded table link matching `table-1`, table-context checks are skipped by default
+- create at least one table in owner workspace if you want strict QR/table-context validation in this first run
 
 ## 9. Owner Workspace Verification
 - [ ] Open `https://firstresto.menu.kepoli.com/owner`

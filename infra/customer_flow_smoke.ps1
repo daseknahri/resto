@@ -4,7 +4,8 @@ param(
     [int]$WebPort = 5173,
     [string]$TableSlug = "table-1",
     [string]$FrontendBaseUrl = "",
-    [string]$ApiBaseUrl = ""
+    [string]$ApiBaseUrl = "",
+    [switch]$StrictTableContext
 )
 
 $ErrorActionPreference = "Stop"
@@ -162,7 +163,15 @@ foreach ($path in $routes) {
 
 $tableContext = Invoke-HttpJson -Method GET -Url "$apiBase/table-context/$([uri]::EscapeDataString($TableSlug))/" -Origin $frontendBase
 $tableContextPass = $tableContext.StatusCode -eq 200 -and $tableContext.Json -and $tableContext.Json.slug
-Add-Result -Test "table_context_api" -Pass $tableContextPass -Detail ("status={0}" -f $tableContext.StatusCode)
+$tableContextMissing = $tableContext.StatusCode -eq 404
+
+if ($tableContextPass) {
+    Add-Result -Test "table_context_api" -Pass $true -Detail ("status={0}" -f $tableContext.StatusCode)
+} elseif ($tableContextMissing -and -not $StrictTableContext) {
+    Add-Result -Test "table_context_api" -Pass $true -Detail ("skipped: table slug '{0}' not seeded on tenant" -f $TableSlug)
+} else {
+    Add-Result -Test "table_context_api" -Pass $false -Detail ("status={0}" -f $tableContext.StatusCode)
+}
 
 $categories = Invoke-HttpJson -Method GET -Url "$apiBase/categories/" -Origin $frontendBase
 $categoriesPass = $categories.StatusCode -eq 200 -and $categories.Json -and $categories.Json.Count -gt 0
@@ -214,7 +223,11 @@ if ($tableContextPass -and $dishSlug) {
     $carryoverPass = $handoff.StatusCode -eq 200 -and $handoff.Json -and ([string]$handoff.Json.table_slug).ToLower() -eq $TableSlug.ToLower()
     Add-Result -Test "table_context_carryover_order_handoff" -Pass $carryoverPass -Detail ("status={0}" -f $handoff.StatusCode)
 } else {
-    Add-Result -Test "table_context_carryover_order_handoff" -Pass $false -Detail "skipped: missing table context or dish seed data"
+    if ($tableContextMissing -and -not $StrictTableContext) {
+        Add-Result -Test "table_context_carryover_order_handoff" -Pass $true -Detail ("skipped: table slug '{0}' not seeded on tenant" -f $TableSlug)
+    } else {
+        Add-Result -Test "table_context_carryover_order_handoff" -Pass $false -Detail "skipped: missing table context or dish seed data"
+    }
 }
 
 Write-Host ""

@@ -57,6 +57,10 @@ Write-Host "Running tenant pre-release smoke..." -ForegroundColor Yellow
     -FrontendScheme https `
     -BackendPort 443 `
     -FrontendPort 443
+$preReleaseExitCode = $LASTEXITCODE
+if ($preReleaseExitCode -ne 0) {
+    throw "Tenant pre-release smoke failed with exit code $preReleaseExitCode"
+}
 
 Write-Host ""
 Write-Host "Running customer-flow smoke..." -ForegroundColor Yellow
@@ -64,6 +68,10 @@ Write-Host "Running customer-flow smoke..." -ForegroundColor Yellow
     -FrontendBaseUrl "https://$TenantHost" `
     -ApiBaseUrl "https://$TenantHost/api" `
     -TableSlug $TableSlug
+$customerFlowExitCode = $LASTEXITCODE
+if ($customerFlowExitCode -ne 0) {
+    throw "Customer-flow smoke failed with exit code $customerFlowExitCode"
+}
 
 Write-Host ""
 Write-Host "Production tenant smoke completed successfully for $TenantHost" -ForegroundColor Green

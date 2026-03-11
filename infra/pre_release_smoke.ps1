@@ -103,6 +103,27 @@ function Invoke-HttpCheck {
     }
 }
 
+function Test-RequiresCorsValidation {
+    param(
+        [Parameter(Mandatory = $true)][string]$RequestUrl,
+        [string]$Origin = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Origin)) {
+        return $false
+    }
+
+    try {
+        $requestUri = [System.Uri]$RequestUrl
+        $originUri = [System.Uri]$Origin
+        $requestPort = if ($requestUri.IsDefaultPort) { if ($requestUri.Scheme -eq "https") { 443 } else { 80 } } else { $requestUri.Port }
+        $originPort = if ($originUri.IsDefaultPort) { if ($originUri.Scheme -eq "https") { 443 } else { 80 } } else { $originUri.Port }
+        return ($requestUri.Scheme -ne $originUri.Scheme -or $requestUri.Host -ne $originUri.Host -or $requestPort -ne $originPort)
+    } catch {
+        return $true
+    }
+}
+
 $backendPortPart = if ($BackendPort -gt 0) { ":$BackendPort" } else { "" }
 $frontendPortPart = if ($FrontendPort -gt 0) { ":$FrontendPort" } else { "" }
 $backendBase = "${BackendScheme}://$TenantHost$backendPortPart"
@@ -126,13 +147,14 @@ $checks = @(
 
 $failed = @()
 foreach ($check in $checks) {
+    $requireCors = [bool]$check.Cors -and (Test-RequiresCorsValidation -RequestUrl $check.Url -Origin ($check.Origin))
     $result = Invoke-HttpCheck `
         -Name $check.Name `
         -Url $check.Url `
         -ExpectedStatus $check.Expected `
         -Origin ($check.Origin) `
         -RequireJsonField ($check.Json) `
-        -RequireCorsOrigin:([bool]$check.Cors)
+        -RequireCorsOrigin:$requireCors
 
     if ($result.Passed) {
         Write-Host "[PASS] $($result.Message)" -ForegroundColor Green

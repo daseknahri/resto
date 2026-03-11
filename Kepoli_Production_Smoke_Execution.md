@@ -135,6 +135,8 @@ This runs:
 
 Expected:
 - all checks pass
+- if the tenant has not seeded a `table-1` link yet, table-context checks are skipped by default
+- create at least one owner table link before this step if you want strict QR/table carryover validation
 
 ## Phase 7 - Manual Customer Verification
 Open and verify:
@@ -149,7 +151,7 @@ Check:
 - no demo fallback content appears
 - category and dish pages load
 - cart accepts item add/remove
-- table route carries table context into cart
+- table route carries table context into cart if a matching table link exists
 - reservation form submits
 - WhatsApp order handoff opens correctly for Basic tier
 
