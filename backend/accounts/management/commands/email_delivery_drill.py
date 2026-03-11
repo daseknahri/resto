@@ -19,6 +19,13 @@ def _normalize_base_url(raw: str) -> str:
     return value.rstrip("/")
 
 
+def _normalize_sent_count(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 class Command(BaseCommand):
     help = "Send a real activation + password-reset email drill to verify SMTP delivery."
 
@@ -47,7 +54,7 @@ class Command(BaseCommand):
         activation_url = f"{base_url}/activate?token={token}"
         reset_url = f"{base_url}/reset-password?token={token}"
 
-        sent_activation = send_activation_email(
+        sent_activation = _normalize_sent_count(send_activation_email(
             recipient,
             workspace_url,
             signin_url,
@@ -55,8 +62,8 @@ class Command(BaseCommand):
             onboarding_url,
             public_menu_url,
             token,
-        )
-        sent_reset = send_password_reset_email(recipient, reset_url, token)
+        ))
+        sent_reset = _normalize_sent_count(send_password_reset_email(recipient, reset_url, token))
 
         if sent_activation < 1 or sent_reset < 1:
             raise CommandError(
