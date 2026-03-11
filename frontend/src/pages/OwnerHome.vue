@@ -334,27 +334,34 @@ const refresh = async () => {
   error.value = "";
   try {
     await tenant.fetchMeta();
-    const { data } = await api.get("/owner/dashboard/", {
-      params: { days: 30 },
-      timeout: 8000,
-    });
-    categoriesCount.value = Number(data?.categories_count || 0);
-    dishesCount.value = Number(data?.dishes_count || 0);
-    analyticsSummary.value = data?.analytics_summary || analyticsSummary.value;
-    upgradeTargets.value = Array.isArray(data?.upgrade_targets) ? data.upgrade_targets : [];
-    upgradeRequests.value = Array.isArray(data?.upgrade_requests) ? data.upgrade_requests : [];
-    upgradeMeta.value = {
-      current_tier_code: data?.upgrade_meta?.current_tier_code || tenant.entitlements?.tier_code || "basic",
-      current_tier_name: data?.upgrade_meta?.current_tier_name || tenant.entitlements?.tier_name || "Basic",
-      has_pending_request: data?.upgrade_meta?.has_pending_request === true,
-    };
+    const [cats, dishes] = await Promise.all([
+      api.get("/categories/", { timeout: 5000 }),
+      api.get("/dishes/", { timeout: 5000 }),
+    ]);
+    categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
+    dishesCount.value = Array.isArray(dishes.data) ? dishes.data.length : 0;
     ensureUpgradeTargetSelection();
+    void hydrateOwnerInsights();
   } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
     toast.show(error.value, "error");
   } finally {
     loading.value = false;
   }
+};
+
+const hydrateOwnerInsights = async () => {
+  try {
+    const analytics = await api.get("/analytics/summary/", {
+      params: { days: 30 },
+      timeout: 5000,
+    });
+    analyticsSummary.value = analytics?.data || analyticsSummary.value;
+  } catch {
+    // Analytics are supplementary. Keep the dashboard responsive if they lag.
+  }
+
+  await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
 };
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
