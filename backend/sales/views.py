@@ -1,6 +1,6 @@
 import csv
 import re
-from datetime import date
+from datetime import date, timedelta
 from math import ceil
 from urllib.parse import quote_plus
 
@@ -19,7 +19,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from menu.models import Category, Dish, DishOption, TableLink
+from menu.models import AnalyticsEvent, Category, Dish, DishOption, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
 from tenancy.tiering import (
@@ -1912,6 +1912,112 @@ class TierUpgradeTargetsView(APIView):
                 ),
                 "has_pending_request": pending_exists,
                 "targets": targets,
+            }
+        )
+
+
+class OwnerDashboardView(APIView):
+    permission_classes = [IsAuthenticated, IsTenantEditor]
+
+    def get(self, request):
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            requested_days = int(request.query_params.get("days", "30"))
+        except (TypeError, ValueError):
+            requested_days = 30
+        days = max(1, min(90, requested_days))
+        since = timezone.now() - timedelta(days=days)
+
+        categories_count = Category.objects.count()
+        dishes_count = Dish.objects.count()
+
+        analytics_qs = AnalyticsEvent.objects.filter(created_at__gte=since)
+        tracked_events = (
+            "menu_view",
+            "dish_view",
+            "order_handoff_click",
+            "checkout_click",
+        )
+        raw_counts = {
+            row["event_type"]: row["count"]
+            for row in analytics_qs.values("event_type").annotate(count=Count("id"))
+        }
+        counts = {event_type: int(raw_counts.get(event_type, 0)) for event_type in tracked_events}
+        menu_views = counts.get("menu_view", 0)
+        order_actions = counts.get("order_handoff_click", 0) + counts.get("checkout_click", 0)
+        interaction_rate = round((order_actions / menu_views) * 100, 2) if menu_views else 0.0
+        top_categories = list(
+            analytics_qs.exclude(category_slug="")
+            .values("category_slug")
+            .annotate(count=Count("id"))
+            .order_by("-count", "category_slug")[:5]
+        )
+        top_dishes = list(
+            analytics_qs.exclude(dish_slug="")
+            .values("dish_slug")
+            .annotate(count=Count("id"))
+            .order_by("-count", "dish_slug")[:5]
+        )
+
+        with schema_context(get_public_schema_name()):
+            tenant_obj = Tenant.objects.select_related("plan").get(pk=tenant.id)
+            current_plan = tenant_obj.plan
+            pending_exists = TierUpgradeRequest.objects.filter(
+                tenant_id=tenant_obj.id,
+                status=TierUpgradeRequest.Status.PENDING,
+            ).exists()
+
+            upgrade_targets = []
+            for plan in Plan.objects.all():
+                if not is_plan_upgrade(getattr(current_plan, "code", ""), getattr(plan, "code", "")):
+                    continue
+                upgrade_targets.append(
+                    TierUpgradeTargetSerializer.from_plan(
+                        plan,
+                        can_request=not pending_exists,
+                    )
+                )
+            upgrade_targets.sort(key=lambda item: (plan_tier_order(item["code"]), item["name"].lower()))
+
+            upgrade_rows = (
+                TierUpgradeRequest.objects.select_related(
+                    "tenant",
+                    "requester",
+                    "approved_by",
+                    "current_plan",
+                    "target_plan",
+                )
+                .filter(tenant_id=tenant_obj.id)
+                .order_by("-requested_at")
+            )
+            upgrade_requests = TierUpgradeRequestSerializer(upgrade_rows, many=True).data
+
+        return Response(
+            {
+                "categories_count": categories_count,
+                "dishes_count": dishes_count,
+                "analytics_summary": {
+                    "days": days,
+                    "since": since.isoformat(),
+                    "total_events": analytics_qs.count(),
+                    "counts": counts,
+                    "top_categories": top_categories,
+                    "top_dishes": top_dishes,
+                    "interaction_rate_pct": interaction_rate,
+                },
+                "upgrade_meta": {
+                    "current_tier_code": external_plan_code(getattr(current_plan, "code", "")),
+                    "current_tier_name": plan_display_name(
+                        getattr(current_plan, "code", ""),
+                        fallback=getattr(current_plan, "name", ""),
+                    ),
+                    "has_pending_request": pending_exists,
+                },
+                "upgrade_targets": upgrade_targets,
+                "upgrade_requests": upgrade_requests,
             }
         )
 

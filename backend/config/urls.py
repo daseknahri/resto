@@ -18,6 +18,7 @@ from menu.views import (
     TableLinkViewSet,
 )
 from sales.views import (
+    OwnerDashboardView,
     OwnerReservationDetailView,
     OwnerReservationExportView,
     OwnerReservationBulkReminderView,
@@ -50,6 +51,7 @@ urlpatterns = [
     path("api/table-context/<slug:table_slug>/", TableContextView.as_view(), name="table-context"),
     path("api/tables/bulk-generate/", TableBulkGenerateView.as_view(), name="table-bulk-generate"),
     path("api/owner/reservations/", OwnerReservationListView.as_view(), name="owner-reservations"),
+    path("api/owner/dashboard/", OwnerDashboardView.as_view(), name="owner-dashboard"),
     path("api/owner/reservations/export/", OwnerReservationExportView.as_view(), name="owner-reservations-export"),
     path("api/owner/reservations/bulk-reminder/", OwnerReservationBulkReminderView.as_view(), name="owner-reservations-bulk-reminder"),
     path("api/owner/reservations/bulk-reminder-result/", OwnerReservationBulkReminderResultView.as_view(), name="owner-reservations-bulk-reminder-result"),

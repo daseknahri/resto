@@ -334,19 +334,21 @@ const refresh = async () => {
   error.value = "";
   try {
     await tenant.fetchMeta();
-    const [cats, dishes] = await Promise.all([api.get("/categories/"), api.get("/dishes/")]);
-    categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
-    dishesCount.value = Array.isArray(dishes.data) ? dishes.data.length : 0;
-    try {
-      const analytics = await api.get("/analytics/summary/", {
-        params: { days: 30 },
-        timeout: 6000,
-      });
-      analyticsSummary.value = analytics?.data || analyticsSummary.value;
-    } catch {
-      // Keep dashboard usable even if analytics endpoint is unavailable.
-    }
-    await Promise.all([fetchUpgradeTargets(), fetchUpgradeRequests()]);
+    const { data } = await api.get("/owner/dashboard/", {
+      params: { days: 30 },
+      timeout: 8000,
+    });
+    categoriesCount.value = Number(data?.categories_count || 0);
+    dishesCount.value = Number(data?.dishes_count || 0);
+    analyticsSummary.value = data?.analytics_summary || analyticsSummary.value;
+    upgradeTargets.value = Array.isArray(data?.upgrade_targets) ? data.upgrade_targets : [];
+    upgradeRequests.value = Array.isArray(data?.upgrade_requests) ? data.upgrade_requests : [];
+    upgradeMeta.value = {
+      current_tier_code: data?.upgrade_meta?.current_tier_code || tenant.entitlements?.tier_code || "basic",
+      current_tier_name: data?.upgrade_meta?.current_tier_name || tenant.entitlements?.tier_name || "Basic",
+      has_pending_request: data?.upgrade_meta?.has_pending_request === true,
+    };
+    ensureUpgradeTargetSelection();
   } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
     toast.show(error.value, "error");
@@ -382,7 +384,7 @@ const ensureUpgradeTargetSelection = () => {
 
 const fetchUpgradeTargets = async () => {
   try {
-    const { data } = await api.get("/tier-upgrade-targets/");
+    const { data } = await api.get("/tier-upgrade-targets/", { timeout: 6000 });
     const targets = Array.isArray(data?.targets) ? data.targets : [];
     upgradeTargets.value = targets;
     upgradeMeta.value = {
@@ -400,7 +402,7 @@ const fetchUpgradeRequests = async () => {
   upgradeLoading.value = true;
   upgradeError.value = "";
   try {
-    const { data } = await api.get("/tier-upgrade-requests/");
+    const { data } = await api.get("/tier-upgrade-requests/", { timeout: 6000 });
     upgradeRequests.value = Array.isArray(data) ? data : [];
     upgradeMeta.value = {
       ...upgradeMeta.value,
