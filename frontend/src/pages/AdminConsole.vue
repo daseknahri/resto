@@ -1071,6 +1071,12 @@ const tenantTimelineDefaults = () => ({
   hasPrev: false,
 });
 
+const getTenantTimelineState = (tenantId) => {
+  const key = String(tenantId || "");
+  if (!key) return tenantTimelineDefaults();
+  return tenantTimeline.value[key] || tenantTimelineDefaults();
+};
+
 const ensureTenantTimelineState = (tenantId) => {
   const key = String(tenantId || "");
   if (!key) return tenantTimelineDefaults();
@@ -1094,14 +1100,14 @@ const patchTenantTimelineState = (tenantId, patch) => {
   };
 };
 
-const tenantTimelineEntries = (tenantId) => ensureTenantTimelineState(tenantId).items || [];
-const tenantTimelineLoading = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).loading);
-const tenantTimelineExpanded = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).expanded);
-const tenantTimelinePage = (tenantId) => ensureTenantTimelineState(tenantId).page || 1;
-const tenantTimelineTotal = (tenantId) => ensureTenantTimelineState(tenantId).total || 0;
-const tenantTimelineTotalPages = (tenantId) => ensureTenantTimelineState(tenantId).totalPages || 1;
-const tenantTimelineHasNext = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).hasNext);
-const tenantTimelineHasPrev = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).hasPrev);
+const tenantTimelineEntries = (tenantId) => getTenantTimelineState(tenantId).items || [];
+const tenantTimelineLoading = (tenantId) => Boolean(getTenantTimelineState(tenantId).loading);
+const tenantTimelineExpanded = (tenantId) => Boolean(getTenantTimelineState(tenantId).expanded);
+const tenantTimelinePage = (tenantId) => getTenantTimelineState(tenantId).page || 1;
+const tenantTimelineTotal = (tenantId) => getTenantTimelineState(tenantId).total || 0;
+const tenantTimelineTotalPages = (tenantId) => getTenantTimelineState(tenantId).totalPages || 1;
+const tenantTimelineHasNext = (tenantId) => Boolean(getTenantTimelineState(tenantId).hasNext);
+const tenantTimelineHasPrev = (tenantId) => Boolean(getTenantTimelineState(tenantId).hasPrev);
 
 const fetchTenantTimeline = async (tenantId, page = 1) => {
   const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
