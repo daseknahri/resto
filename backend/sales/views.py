@@ -5,7 +5,8 @@ from math import ceil
 from urllib.parse import quote_plus
 
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -19,9 +20,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from menu.models import Category, Dish, DishOption, TableLink
-from tenancy.models import Plan, Profile, Tenant
+from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
-from tenancy.tiering import external_plan_code, plan_display_name, plan_tier_order, is_plan_upgrade
+from tenancy.tiering import (
+    canonical_plan_code,
+    external_plan_code,
+    plan_display_name,
+    plan_feature_flag_catalog,
+    plan_tier_order,
+    is_plan_upgrade,
+)
 from .messaging import build_onboarding_url, build_owner_checklist, build_public_menu_url
 
 from .audit import log_admin_action
@@ -29,6 +37,8 @@ from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, R
 from .permissions import IsPlatformAdmin, IsTenantEditor
 from .serializers import (
     AdminTenantSerializer,
+    AdminPlanFeatureFlagPlanSerializer,
+    AdminPlanFeatureFlagUpdateSerializer,
     AdminAuditLogSerializer,
     LeadSerializer,
     OwnerReservationBulkReminderSerializer,
@@ -746,7 +756,19 @@ class AdminTenantListView(APIView):
         )
 
         with schema_context(get_public_schema_name()):
-            queryset = Tenant.objects.select_related("plan", "owner").prefetch_related("domains").order_by("slug")
+            primary_domain_rows = Domain.objects.filter(tenant_id=OuterRef("pk"), is_primary=True).order_by("id")
+            fallback_domain_rows = Domain.objects.filter(tenant_id=OuterRef("pk")).order_by("id")
+            queryset = (
+                Tenant.objects.select_related("plan", "owner")
+                .annotate(
+                    primary_domain_value=Coalesce(
+                        Subquery(primary_domain_rows.values("domain")[:1]),
+                        Subquery(fallback_domain_rows.values("domain")[:1]),
+                        Value(""),
+                    )
+                )
+                .order_by("slug")
+            )
             queryset = queryset.exclude(schema_name=get_public_schema_name())
             if status_filter:
                 queryset = queryset.filter(lifecycle_status=status_filter)
@@ -969,6 +991,81 @@ class AdminTenantSettingsImportView(APIView):
             else "Dry-run passed. No changes were saved."
         )
         return Response({"detail": detail, "mode": mode, "summary": summary}, status=status.HTTP_200_OK)
+
+
+class AdminPlanFeatureFlagListView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request):
+        with schema_context(get_public_schema_name()):
+            plans = list(Plan.objects.order_by("name", "id"))
+            plan_ids = [int(plan.id) for plan in plans]
+            flag_rows = list(FeatureFlag.objects.filter(plan_id__in=plan_ids).order_by("plan_id", "key", "id"))
+
+            flags_by_plan = {}
+            for row in flag_rows:
+                flags_by_plan.setdefault(int(getattr(row, "plan_id", 0)), []).append(row)
+
+            data = [
+                AdminPlanFeatureFlagPlanSerializer.from_plan(plan, flags=flags_by_plan.get(int(plan.id), []))
+                for plan in plans
+            ]
+
+        return Response(
+            {
+                "catalog": plan_feature_flag_catalog(),
+                "plans": data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminPlanFeatureFlagUpdateView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def put(self, request, plan_code):
+        serializer = AdminPlanFeatureFlagUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        canonical_code = canonical_plan_code(plan_code)
+        if not canonical_code:
+            return Response({"detail": "Plan code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with schema_context(get_public_schema_name()):
+            plan = get_object_or_404(Plan, code=canonical_code)
+            updated_keys = []
+            for item in serializer.validated_data["feature_flags"]:
+                key = item["key"]
+                FeatureFlag.objects.update_or_create(
+                    plan=plan,
+                    key=key,
+                    defaults={
+                        "enabled": bool(item.get("enabled", False)),
+                        "config": item.get("config"),
+                    },
+                )
+                updated_keys.append(key)
+
+            current_flags = list(FeatureFlag.objects.filter(plan_id=plan.id).order_by("key", "id"))
+            payload = AdminPlanFeatureFlagPlanSerializer.from_plan(plan, flags=current_flags)
+            log_admin_action(
+                action="plan_feature_flags_updated",
+                request=request,
+                actor=request.user,
+                target_repr=f"plan:{plan.code}",
+                metadata={
+                    "plan_code": plan.code,
+                    "updated_keys": updated_keys,
+                },
+            )
+
+        return Response(
+            {
+                "detail": "Plan feature flags updated.",
+                "plan": payload,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class LeadProvisionPreviewView(APIView):

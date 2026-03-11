@@ -5,9 +5,12 @@ from tenancy.models import Plan, Tenant
 from tenancy.tiering import (
     canonical_plan_code,
     external_plan_code,
+    is_valid_plan_feature_flag_key,
     is_plan_upgrade,
+    normalize_plan_feature_flag_key,
     plan_display_name,
     plan_entitlements,
+    plan_feature_flag_catalog,
 )
 
 from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, ReservationTimelineEvent, TierUpgradeRequest
@@ -338,6 +341,9 @@ class AdminTenantSerializer(serializers.ModelSerializer):
         return plan_display_name(getattr(plan, "code", ""), fallback=getattr(plan, "name", ""))
 
     def get_primary_domain(self, obj):
+        annotated = getattr(obj, "primary_domain_value", None)
+        if annotated is not None:
+            return str(annotated or "")
         domains = getattr(obj, "domains", None)
         if domains is None:
             return ""
@@ -359,6 +365,107 @@ class TenantLifecycleUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"reason": "Cancel action requires a reason."})
         attrs["reason"] = reason
         return attrs
+
+
+class AdminPlanFeatureFlagItemSerializer(serializers.Serializer):
+    key = serializers.CharField(max_length=100)
+    enabled = serializers.BooleanField()
+    config = serializers.JSONField(required=False, allow_null=True)
+
+    def validate_key(self, value):
+        normalized = normalize_plan_feature_flag_key(value)
+        if not normalized:
+            raise serializers.ValidationError("Feature flag key is required.")
+        if not is_valid_plan_feature_flag_key(normalized):
+            raise serializers.ValidationError("Unknown feature flag key.")
+        return normalized
+
+    def validate_config(self, value):
+        if value is None:
+            return None
+        if not isinstance(value, (dict, list)):
+            raise serializers.ValidationError("Feature flag config must be an object or array.")
+        return value
+
+
+class AdminPlanFeatureFlagUpdateSerializer(serializers.Serializer):
+    feature_flags = AdminPlanFeatureFlagItemSerializer(many=True, allow_empty=False, max_length=100)
+
+    def validate_feature_flags(self, value):
+        deduped = []
+        seen = set()
+        for row in value:
+            key = row["key"]
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(row)
+        if not deduped:
+            raise serializers.ValidationError("At least one feature flag update is required.")
+        return deduped
+
+
+class AdminPlanFeatureFlagPlanSerializer(serializers.Serializer):
+    plan_code = serializers.CharField()
+    plan_name = serializers.CharField()
+    plan_tier_code = serializers.CharField()
+    plan_tier_name = serializers.CharField()
+    plan_is_active = serializers.BooleanField()
+    feature_flags = serializers.ListField(child=serializers.DictField())
+
+    @staticmethod
+    def from_plan(plan: Plan, *, flags=None):
+        catalog_rows = plan_feature_flag_catalog()
+        catalog_by_key = {row["key"]: row for row in catalog_rows}
+
+        flags = flags or []
+        existing = {}
+        for item in flags:
+            key = normalize_plan_feature_flag_key(getattr(item, "key", ""))
+            if not key:
+                continue
+            existing[key] = {
+                "enabled": bool(getattr(item, "enabled", False)),
+                "config": getattr(item, "config", None),
+            }
+
+        rendered_flags = []
+        for catalog_item in catalog_rows:
+            key = catalog_item["key"]
+            state = existing.get(key, {"enabled": False, "config": None})
+            rendered_flags.append(
+                {
+                    "key": key,
+                    "label": catalog_item.get("label", key.replace("_", " ").title()),
+                    "description": catalog_item.get("description", ""),
+                    "enabled": bool(state.get("enabled", False)),
+                    "config": state.get("config"),
+                }
+            )
+
+        # Keep unknown keys visible for support/debugging even if no longer cataloged.
+        for key in sorted(existing.keys()):
+            if key in catalog_by_key:
+                continue
+            state = existing[key]
+            rendered_flags.append(
+                {
+                    "key": key,
+                    "label": key.replace("_", " ").title(),
+                    "description": "Custom legacy flag",
+                    "enabled": bool(state.get("enabled", False)),
+                    "config": state.get("config"),
+                }
+            )
+
+        return {
+            "plan_code": external_plan_code(getattr(plan, "code", "")),
+            "plan_name": getattr(plan, "name", ""),
+            "plan_tier_code": external_plan_code(getattr(plan, "code", "")),
+            "plan_tier_name": plan_display_name(getattr(plan, "code", ""), fallback=getattr(plan, "name", "")),
+            "plan_is_active": bool(getattr(plan, "is_active", True)),
+            "feature_flags": rendered_flags,
+        }
 
 
 class TierUpgradeRequestSerializer(serializers.ModelSerializer):
