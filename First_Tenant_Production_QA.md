@@ -2,25 +2,28 @@
 ## Scope
 This checklist is for the first real restaurant after deploy on production.
 
+For the exact live execution order on your real domain, use:
+- `Kepoli_Production_Smoke_Execution.md`
+
 Use it after:
 - deployment is healthy
 - DNS resolves correctly
-- `kepoli.com`, `admin.kepoli.com`, and wildcard tenant subdomains are live
+- `menu.kepoli.com`, `admin.menu.kepoli.com`, and wildcard tenant subdomains are live
 
 ## Required Inputs
-- Super admin URL: `https://admin.kepoli.com/admin-console`
-- Public landing URL: `https://kepoli.com`
+- Super admin URL: `https://admin.menu.kepoli.com/admin-console`
+- Public landing URL: `https://menu.kepoli.com`
 - Test tenant slug: example `firstresto`
-- Expected tenant URL: `https://firstresto.kepoli.com`
+- Expected tenant URL: `https://firstresto.menu.kepoli.com`
 
 ## 1. Platform Health
-- [ ] Open `https://kepoli.com/health`
-- [ ] Open `https://admin.kepoli.com/health`
-- [ ] Open `https://kepoli.com/api/session/`
-- [ ] Confirm no console errors on `kepoli.com`
+- [ ] Open `https://menu.kepoli.com/health`
+- [ ] Open `https://admin.menu.kepoli.com/health`
+- [ ] Open `https://menu.kepoli.com/api/session/`
+- [ ] Confirm no console errors on `menu.kepoli.com`
 
 ## 2. Lead Capture
-- [ ] Submit a fresh lead from `https://kepoli.com/get-started`
+- [ ] Submit a fresh lead from `https://menu.kepoli.com/get-started`
 - [ ] Confirm lead appears in `admin-console`
 - [ ] Confirm lead card shows plan, source, and contact details
 
@@ -59,9 +62,9 @@ Use it after:
 - [ ] Confirm owner reaches launch summary
 
 ## 7. Public Verification
-- [ ] Open tenant public landing: `https://firstresto.kepoli.com/menu`
-- [ ] Open tenant browse page: `https://firstresto.kepoli.com/browse`
-- [ ] Open reservation page: `https://firstresto.kepoli.com/reserve`
+- [ ] Open tenant public landing: `https://firstresto.menu.kepoli.com/menu`
+- [ ] Open tenant browse page: `https://firstresto.menu.kepoli.com/browse`
+- [ ] Open reservation page: `https://firstresto.menu.kepoli.com/reserve`
 - [ ] Confirm branding is tenant-specific, not demo/public fallback
 - [ ] Confirm no console errors on tenant pages
 
@@ -69,14 +72,20 @@ Use it after:
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://firstresto.kepoli.com -ApiBaseUrl https://firstresto.kepoli.com/api -TableSlug table-1
+powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://firstresto.menu.kepoli.com -ApiBaseUrl https://firstresto.menu.kepoli.com/api -TableSlug table-1
+```
+
+Or run the full production wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug firstresto -BaseDomain menu.kepoli.com -PublicHost menu.kepoli.com -AdminHost admin.menu.kepoli.com -TableSlug table-1
 ```
 
 Expected:
 - all checks pass
 
 ## 9. Owner Workspace Verification
-- [ ] Open `https://firstresto.kepoli.com/owner`
+- [ ] Open `https://firstresto.menu.kepoli.com/owner`
 - [ ] Confirm readiness metrics render
 - [ ] Confirm public URL copy action works
 - [ ] Confirm tables page works

@@ -3,8 +3,16 @@
 - [ ] Keep this file updated every session: mark completed tasks, add new risks/tasks discovered during implementation.
 - [ ] For each completed task, add short proof in commit/PR notes (endpoint, screenshot, test, or command output).
 - [ ] Do not start Phase 2/3 items before all Phase 1 blockers are complete.
+- [ ] Follow [Launch_Closure_Plan.md](C:\Users\user\resto\Launch_Closure_Plan.md) as the active execution order until launch closure is complete.
 
 ## Phase 1 - Launch Blockers (Must Finish Before Selling)
+
+### Active Launch-Closure Sequence
+- [ ] Re-run and document one full tenant production smoke from lead -> provision -> activation -> onboarding -> publish -> customer verification.
+- [ ] Configure live email provider credentials and verify activation/reset delivery in production.
+- [ ] Execute and document one production restore drill.
+- [ ] Harden wildcard tenant routing so it remains stable across redeploy/restart operations.
+- [ ] Perform final owner/admin cleanup pass after production validation is complete.
 
 ### 1. Access, Auth, and Permissions
 - [x] Add dedicated sign-in flow (separate from activation).
