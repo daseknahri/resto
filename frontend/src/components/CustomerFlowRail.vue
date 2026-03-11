@@ -1,7 +1,7 @@
 <template>
   <section class="mx-auto hidden w-full max-w-5xl px-4 pt-3 md:block">
     <div class="ui-panel space-y-2 p-3 md:p-4">
-      <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">Guest journey</p>
+      <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("customerFlow.title") }}</p>
       <div class="grid grid-cols-4 gap-2">
         <RouterLink
           v-for="step in steps"
@@ -25,12 +25,14 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
 import { useLeadStore } from "../stores/lead";
 
 const route = useRoute();
 const cart = useCartStore();
 const lead = useLeadStore();
+const { itemCountLabel, t } = useI18n();
 
 const activeStep = computed(() => {
   const name = String(route.name || "");
@@ -45,30 +47,30 @@ const steps = computed(() => [
   {
     index: 0,
     name: "customer-home",
-    label: "Info",
+    label: t("customerFlow.info"),
     to: { name: "customer-home" },
-    hint: lead.success ? "Saved" : "Start",
+    hint: lead.success ? t("customerFlow.saved") : t("customerFlow.start"),
   },
   {
     index: 1,
     name: "menu",
-    label: "Menu",
+    label: t("customerFlow.menu"),
     to: { name: "menu" },
-    hint: "Browse",
+    hint: t("customerFlow.browse"),
   },
   {
     index: 2,
     name: "cart",
-    label: "Cart",
+    label: t("customerFlow.cart"),
     to: { name: "cart" },
-    hint: cart.count ? `${cart.count} item${cart.count > 1 ? "s" : ""}` : "Review",
+    hint: cart.count ? itemCountLabel(cart.count) : t("customerFlow.review"),
   },
   {
     index: 3,
     name: "reserve",
-    label: "Reserve",
+    label: t("customerFlow.reserve"),
     to: { name: "reserve" },
-    hint: "Book",
+    hint: t("customerFlow.book"),
   },
 ].map((step) => {
   const isActive = activeStep.value === step.index;

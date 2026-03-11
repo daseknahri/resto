@@ -72,6 +72,31 @@ class TenantAwareMiddlewareTests(SimpleTestCase):
     @patch.object(TenantAwareMainMiddleware, "setup_url_routing")
     @patch.object(TenantAwareMainMiddleware, "get_tenant")
     @patch("config.middleware.get_tenant_domain_model")
+    def test_configured_public_host_without_tenant_falls_back_to_public_routing(
+        self,
+        get_domain_model,
+        get_tenant,
+        setup_url_routing,
+        connection,
+    ):
+        get_domain_model.return_value = DummyDomainModel
+        get_tenant.side_effect = DummyDomainModel.DoesNotExist
+
+        request = self.factory.get("/api/session/", HTTP_HOST="admin.kepoli.com")
+        with self.settings(
+            PUBLIC_SCHEMA_HOSTS=["localhost", "127.0.0.1", "kepoli.com", "admin.kepoli.com"],
+            ALLOWED_HOSTS=["localhost", "127.0.0.1", "admin.kepoli.com"],
+        ):
+            response = self.middleware.process_request(request)
+
+        self.assertIsNone(response)
+        self.assertEqual(connection.set_schema_to_public.call_count, 2)
+        setup_url_routing.assert_called_once_with(request, force_public=True)
+
+    @patch("config.middleware.connection")
+    @patch.object(TenantAwareMainMiddleware, "setup_url_routing")
+    @patch.object(TenantAwareMainMiddleware, "get_tenant")
+    @patch("config.middleware.get_tenant_domain_model")
     def test_unknown_tenant_host_returns_json_404_with_cors(
         self,
         get_domain_model,

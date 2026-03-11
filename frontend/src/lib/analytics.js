@@ -1,4 +1,5 @@
 import api from "./api";
+import { isPublicDemoHost } from "./runtimeHost";
 
 const SESSION_KEY = "resto.analytics.session_id";
 const seenEventKeys = new Set();
@@ -43,6 +44,7 @@ const safeMetadata = (value) => {
 
 export const trackEvent = (eventType, payload = {}, options = {}) => {
   if (typeof window === "undefined") return;
+  if (isPublicDemoHost()) return;
   const once = options.once !== false;
   const path = toShortString(payload.path || window.location.pathname, 320);
   const categorySlug = toShortString(payload.category_slug, 160);

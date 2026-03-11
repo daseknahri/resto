@@ -6,7 +6,13 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from sales.views import AdminTenantLifecycleView, AdminTenantListView
+from sales.views import (
+    AdminTenantLifecycleView,
+    AdminTenantListView,
+    AdminTenantSettingsExportView,
+    AdminTenantSettingsImportView,
+    AdminTenantTimelineView,
+)
 
 
 def _passthrough_cm():
@@ -83,11 +89,37 @@ class _TenantQuerySet:
         return self.rows[item]
 
 
+class _AuditQuerySet:
+    def __init__(self, rows):
+        self.rows = list(rows)
+
+    def select_related(self, *args, **kwargs):
+        return self
+
+    def filter(self, **kwargs):
+        tenant_id = kwargs.get("tenant_id")
+        if tenant_id is None:
+            return self
+        return _AuditQuerySet([row for row in self.rows if getattr(getattr(row, "tenant", None), "id", None) == tenant_id])
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def count(self):
+        return len(self.rows)
+
+    def __getitem__(self, item):
+        return self.rows[item]
+
+
 class AdminTenantLifecycleTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.lifecycle_view = AdminTenantLifecycleView.as_view()
         self.list_view = AdminTenantListView.as_view()
+        self.timeline_view = AdminTenantTimelineView.as_view()
+        self.settings_export_view = AdminTenantSettingsExportView.as_view()
+        self.settings_import_view = AdminTenantSettingsImportView.as_view()
 
     @patch("sales.views.log_admin_action")
     @patch("sales.views.get_object_or_404")
@@ -173,3 +205,188 @@ class AdminTenantLifecycleTests(SimpleTestCase):
         self.assertEqual(response.data["pagination"]["page"], 1)
         self.assertEqual(response.data["pagination"]["total"], 2)
         self.assertEqual(len(response.data["results"]), 2)
+
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    @patch("sales.views.AdminAuditLog.objects")
+    def test_tenant_timeline_returns_paginated_entries(self, audit_objects, schema_context_mock, get_object_or_404_mock):
+        schema_context_mock.return_value = _passthrough_cm()
+        tenant = _tenant_stub(tenant_id=8, slug="alpha", schema_name="alpha")
+        get_object_or_404_mock.return_value = tenant
+
+        actor = SimpleNamespace(username="superadmin")
+        entries = [
+            SimpleNamespace(
+                id=1,
+                action="tenant_deactivated",
+                actor=actor,
+                tenant=tenant,
+                lead=None,
+                target_repr="tenant:alpha",
+                ip_address=None,
+                metadata={"lifecycle_action": "suspend"},
+                created_at=datetime(2026, 3, 8, 12, 0, tzinfo=timezone.utc),
+            ),
+            SimpleNamespace(
+                id=2,
+                action="tenant_reactivated",
+                actor=actor,
+                tenant=tenant,
+                lead=None,
+                target_repr="tenant:alpha",
+                ip_address=None,
+                metadata={"lifecycle_action": "reactivate"},
+                created_at=datetime(2026, 3, 8, 13, 0, tzinfo=timezone.utc),
+            ),
+            SimpleNamespace(
+                id=3,
+                action="activation_resent",
+                actor=actor,
+                tenant=tenant,
+                lead=SimpleNamespace(name="Demo Lead"),
+                target_repr="tenant:alpha",
+                ip_address=None,
+                metadata={},
+                created_at=datetime(2026, 3, 8, 14, 0, tzinfo=timezone.utc),
+            ),
+        ]
+        audit_objects.select_related.return_value = _AuditQuerySet(entries)
+
+        request = self.factory.get("/api/admin-tenants/8/timeline/?page=1&page_size=2")
+        force_authenticate(request, user=_admin_user())
+        response = self.timeline_view(request, tenant_id=8)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["pagination"]["page"], 1)
+        self.assertEqual(response.data["pagination"]["total"], 3)
+        self.assertEqual(response.data["pagination"]["total_pages"], 2)
+        self.assertTrue(response.data["pagination"]["has_next"])
+        self.assertEqual(len(response.data["results"]), 2)
+
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views._build_tenant_settings_export_payload")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_tenant_settings_export_returns_payload(
+        self,
+        schema_context_mock,
+        get_object_or_404_mock,
+        export_payload_mock,
+        log_admin_action_mock,
+    ):
+        schema_context_mock.return_value = _passthrough_cm()
+        tenant = _tenant_stub(tenant_id=9, slug="alpha", schema_name="alpha")
+        get_object_or_404_mock.return_value = tenant
+        export_payload_mock.return_value = {
+            "version": 1,
+            "tenant": {"slug": "alpha"},
+            "profile": {"tagline": "Demo"},
+            "categories": [{"name": "Main"}],
+            "table_links": [{"label": "T1"}],
+        }
+
+        request = self.factory.get("/api/admin-tenants/9/settings-export/")
+        force_authenticate(request, user=_admin_user())
+        response = self.settings_export_view(request, tenant_id=9)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["tenant"]["slug"], "alpha")
+        self.assertEqual(len(response.data["categories"]), 1)
+        export_payload_mock.assert_called_once()
+        log_admin_action_mock.assert_called_once()
+
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views._apply_tenant_settings_import")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_tenant_settings_import_returns_summary(
+        self,
+        schema_context_mock,
+        get_object_or_404_mock,
+        import_apply_mock,
+        log_admin_action_mock,
+    ):
+        schema_context_mock.return_value = _passthrough_cm()
+        tenant = _tenant_stub(tenant_id=9, slug="alpha", schema_name="alpha")
+        get_object_or_404_mock.return_value = tenant
+        import_apply_mock.return_value = {
+            "profile_updated": True,
+            "categories": 2,
+            "dishes": 8,
+            "options": 12,
+            "table_links": 4,
+        }
+
+        request = self.factory.post(
+            "/api/admin-tenants/9/settings-import/",
+            {"mode": "replace", "payload": {"profile": {"tagline": "Updated"}}},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.settings_import_view(request, tenant_id=9)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["summary"]["categories"], 2)
+        import_apply_mock.assert_called_once_with(
+            tenant=tenant,
+            payload={"profile": {"tagline": "Updated"}},
+            commit=True,
+        )
+        log_admin_action_mock.assert_called_once()
+
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_tenant_settings_import_rejects_unsupported_mode(self, schema_context_mock, get_object_or_404_mock):
+        schema_context_mock.return_value = _passthrough_cm()
+        get_object_or_404_mock.return_value = _tenant_stub(tenant_id=9, slug="alpha", schema_name="alpha")
+
+        request = self.factory.post(
+            "/api/admin-tenants/9/settings-import/",
+            {"mode": "merge", "payload": {"profile": {"tagline": "Updated"}}},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.settings_import_view(request, tenant_id=9)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Unsupported mode", response.data["detail"])
+
+    @patch("sales.views.log_admin_action")
+    @patch("sales.views._apply_tenant_settings_import")
+    @patch("sales.views.get_object_or_404")
+    @patch("sales.views.schema_context")
+    def test_tenant_settings_import_dry_run_uses_non_commit_mode(
+        self,
+        schema_context_mock,
+        get_object_or_404_mock,
+        import_apply_mock,
+        log_admin_action_mock,
+    ):
+        schema_context_mock.return_value = _passthrough_cm()
+        tenant = _tenant_stub(tenant_id=10, slug="beta", schema_name="beta")
+        get_object_or_404_mock.return_value = tenant
+        import_apply_mock.return_value = {
+            "profile_updated": True,
+            "categories": 1,
+            "dishes": 2,
+            "options": 3,
+            "table_links": 1,
+        }
+
+        request = self.factory.post(
+            "/api/admin-tenants/10/settings-import/",
+            {"mode": "dry_run", "payload": {"profile": {"tagline": "Preview"}}},
+            format="json",
+        )
+        force_authenticate(request, user=_admin_user())
+        response = self.settings_import_view(request, tenant_id=10)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["mode"], "dry_run")
+        self.assertIn("No changes were saved", response.data["detail"])
+        import_apply_mock.assert_called_once_with(
+            tenant=tenant,
+            payload={"profile": {"tagline": "Preview"}},
+            commit=False,
+        )
+        log_admin_action_mock.assert_called_once()

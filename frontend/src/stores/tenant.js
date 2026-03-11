@@ -1,14 +1,22 @@
-﻿import { defineStore } from "pinia";
+import { defineStore } from "pinia";
 import api from "../lib/api";
+import { DEMO_TENANT_META } from "../lib/demoMenu";
+import { translate } from "../i18n/translate";
+import { isPublicDemoHost } from "../lib/runtimeHost";
 import { useCartStore } from "./cart";
 
 export const useTenantStore = defineStore("tenant", {
   state: () => ({ meta: null, loading: false, error: null }),
   getters: {
-    entitlements(state) {
-      const e = state.meta?.entitlements;
+    resolvedMeta(state) {
+      if (state.meta) return state.meta;
+      if (isPublicDemoHost()) return DEMO_TENANT_META;
+      return null;
+    },
+    entitlements() {
+      const e = this.resolvedMeta?.entitlements;
       if (e && typeof e === "object") return e;
-      const plan = state.meta?.plan || {};
+      const plan = this.resolvedMeta?.plan || {};
       const canCheckout = plan.can_checkout === true;
       const canWhatsapp = plan.can_whatsapp_order === true;
       return {
@@ -22,30 +30,44 @@ export const useTenantStore = defineStore("tenant", {
         is_active: plan.is_active !== false,
       };
     },
-    isBrowseOnlyPlan(state) {
+    isBrowseOnlyPlan() {
       const mode = this.entitlements?.ordering_mode;
       if (mode) return mode === "menu_only";
       return false;
     },
   },
   actions: {
+    mergeProfile(profile) {
+      if (!this.meta || !profile || typeof profile !== "object") return;
+      this.meta = {
+        ...this.meta,
+        profile: {
+          ...(this.meta.profile || {}),
+          ...profile,
+        },
+      };
+    },
+    syncCartEntitlements() {
+      const cart = useCartStore();
+      const canCheckout = this.entitlements?.can_checkout === true;
+      const canWhatsapp = this.entitlements?.can_whatsapp_order === true;
+      cart.setCanCheckout(canCheckout);
+      cart.setCanWhatsapp(canWhatsapp);
+      if (!canCheckout && !canWhatsapp && cart.items.length) {
+        cart.clear();
+      }
+    },
     async fetchMeta() {
       this.loading = true;
       this.error = null;
       try {
         const res = await api.get("/meta/");
         this.meta = res.data;
-        const cart = useCartStore();
-        const canCheckout = this.entitlements?.can_checkout === true;
-        const canWhatsapp = this.entitlements?.can_whatsapp_order === true;
-        cart.setCanCheckout(canCheckout);
-        cart.setCanWhatsapp(canWhatsapp);
-        if (!canCheckout && !canWhatsapp && cart.items.length) {
-          cart.clear();
-        }
+        this.syncCartEntitlements();
       } catch (err) {
-        this.error = "Unable to load tenant settings";
-        console.error(err);
+        this.error = isPublicDemoHost() ? null : translate("tenantStore.loadFailed");
+        this.syncCartEntitlements();
+        if (!isPublicDemoHost()) console.error(err);
       } finally {
         this.loading = false;
       }

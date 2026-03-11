@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
+import { useLocaleStore } from "./stores/locale";
 import { initSentry } from "./lib/sentry";
 import "./styles/tailwind.css";
 
@@ -22,8 +23,10 @@ const normalizeDevHost = () => {
 
 normalizeDevHost();
 
+const pinia = createPinia();
 const app = createApp(App);
-app.use(createPinia());
+app.use(pinia);
 app.use(router);
+useLocaleStore(pinia).bootstrap();
 initSentry(app);
 app.mount("#app");

@@ -1,45 +1,43 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-28 sm:pb-6">
     <header class="space-y-3 ui-fade-up">
-      <p class="ui-kicker">Owner inbox</p>
-      <h2 class="ui-page-title ui-display">Reservation Requests</h2>
-      <p class="max-w-3xl text-sm text-slate-300">
-        Manage table reservation leads from your menu landing. Update status as you contact guests.
-      </p>
+      <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
+      <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
+      <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerReservations.description") }}</p>
     </header>
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <article class="ui-panel p-4">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Total</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.total") }}</p>
         <p class="mt-2 text-2xl font-semibold text-white">{{ counts.total }}</p>
       </article>
       <article class="ui-panel p-4">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">New</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.new") }}</p>
         <p class="mt-2 text-2xl font-semibold text-amber-300">{{ counts.new }}</p>
       </article>
       <article class="ui-panel p-4">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Overdue</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.overdue") }}</p>
         <p class="mt-2 text-2xl font-semibold text-rose-300">{{ counts.overdue_new }}</p>
       </article>
       <article class="ui-panel p-4">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Contacted</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.contacted") }}</p>
         <p class="mt-2 text-2xl font-semibold text-sky-300">{{ counts.contacted }}</p>
       </article>
       <article class="ui-panel p-4">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Confirmed</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.confirmed") }}</p>
         <p class="mt-2 text-2xl font-semibold text-emerald-300">{{ counts.won }}</p>
       </article>
     </div>
 
     <article class="ui-panel p-4 space-y-2">
       <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-slate-300">Follow-up completion</p>
+        <p class="text-sm text-slate-300">{{ t("ownerReservations.followUpCompletion") }}</p>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ followUpProgress }}%</span>
       </div>
       <div class="h-2 overflow-hidden rounded-full bg-slate-800">
         <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${followUpProgress}%` }"></div>
       </div>
-      <p class="text-xs text-slate-500">{{ resolvedCount }} resolved or contacted out of {{ counts.total }} total.</p>
+      <p class="text-xs text-slate-500">{{ t("ownerReservations.resolvedProgress", { resolved: resolvedCount, total: counts.total }) }}</p>
     </article>
 
     <section class="ui-panel p-4 space-y-4">
@@ -55,7 +53,7 @@
             {{ option.label }}
           </button>
         </div>
-        <span class="text-xs text-slate-500">Status filter</span>
+        <span class="text-xs text-slate-500">{{ t("ownerReservations.statusFilter") }}</span>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -75,7 +73,7 @@
           :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
           @click="setReminderFilter(reminderFilter === 'failed' ? '' : 'failed')"
         >
-          {{ reminderFilter === "failed" ? "Exit retry queue" : "Retry queue" }}
+          {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
         </button>
       </div>
 
@@ -83,7 +81,7 @@
         <input
           v-model.trim="searchQuery"
           class="ui-input"
-          placeholder="Search by guest name, phone, email, or note"
+          :placeholder="t('ownerReservations.searchPlaceholder')"
           @keyup.enter="applyFilters"
         />
         <input v-model="dateFrom" type="date" class="ui-input" />
@@ -95,16 +93,16 @@
             <option :value="50">50</option>
           </select>
           <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
-            Apply
+            {{ t("common.apply") }}
           </button>
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
-            Clear
+            {{ t("common.clear") }}
           </button>
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
-            {{ exporting ? "Exporting..." : "Export CSV" }}
+            {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
           </button>
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
-            {{ loading ? "Refreshing..." : "Refresh" }}
+            {{ loading ? t("common.loading") : t("common.refresh") }}
           </button>
         </div>
       </div>
@@ -113,9 +111,9 @@
         <div class="flex flex-wrap items-center justify-between gap-2">
           <label class="inline-flex items-center gap-2 text-xs text-slate-300">
             <input type="checkbox" :checked="allSelectedOnPage" @change="toggleSelectAllOnPage" />
-            Select page
+            {{ t("ownerReservations.selectPage") }}
           </label>
-          <p class="text-xs text-slate-400">{{ selectedCount }} selected</p>
+          <p class="text-xs text-slate-400">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
         </div>
         <div class="mt-2 flex flex-wrap gap-2">
           <button
@@ -124,57 +122,55 @@
             :disabled="!selectedCount || bulkReminderLoading"
             @click="bulkRetryReminders"
           >
-            {{ bulkReminderLoading ? "Preparing..." : "Bulk retry reminders" }}
+            {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('contacted')">
-            Mark contacted
+            {{ t("ownerReservations.markContacted") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('won')">
-            Mark confirmed
+            {{ t("ownerReservations.markConfirmed") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('lost')">
-            Mark unavailable
+            {{ t("ownerReservations.markUnavailable") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('new')">
-            Reset new
+            {{ t("ownerReservations.resetNew") }}
           </button>
         </div>
         <div v-if="pendingReminderReconciliation.length" class="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs space-y-2">
           <p class="text-amber-200">
-            {{ pendingReminderReconciliation.length }} reminders waiting reconciliation.
+            {{ t("ownerReservations.pendingReminderCount", { count: pendingReminderReconciliation.length }) }}
           </p>
-          <p class="text-amber-100/80">
-            Mark these as opened after you send them, or failed if delivery was not completed.
-          </p>
+          <p class="text-amber-100/80">{{ t("ownerReservations.pendingReminderHelp") }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               class="rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="reconcilePendingReminders('opened')"
             >
-              {{ bulkReconcileLoading ? "Saving..." : "Mark opened" }}
+              {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markOpened") }}
             </button>
             <button
               class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="reconcilePendingReminders('failed')"
             >
-              {{ bulkReconcileLoading ? "Saving..." : "Mark failed" }}
+              {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markFailed") }}
             </button>
             <button
               class="rounded-full border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="clearPendingReminderReconciliation"
             >
-              Clear pending
+              {{ t("ownerReservations.clearPending") }}
             </button>
           </div>
         </div>
       </div>
 
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
-      <p v-else-if="loading" class="text-sm text-slate-400">Loading reservations...</p>
-      <p v-else-if="!reservations.length" class="text-sm text-slate-400">No reservation requests in this filter.</p>
+      <p v-else-if="loading" class="text-sm text-slate-400">{{ t("ownerReservations.loadingReservations") }}</p>
+      <p v-else-if="!reservations.length" class="text-sm text-slate-400">{{ t("ownerReservations.noReservations") }}</p>
 
       <div class="grid gap-3 lg:grid-cols-2">
         <article
@@ -190,10 +186,10 @@
                 :checked="isSelected(reservation.id)"
                 @change="toggleSelection(reservation.id)"
               />
-              <span class="text-base font-semibold text-slate-100">{{ reservation.name || `Reservation #${reservation.id}` }}</span>
+              <span class="text-base font-semibold text-slate-100">{{ reservation.name || t("ownerReservations.fallbackReservationName", { id: reservation.id }) }}</span>
             </label>
             <span class="rounded-full px-2 py-1 text-[11px] font-semibold" :class="statusClass(reservation.status)">
-              {{ reservation.status }}
+              {{ statusLabel(reservation.status) }}
             </span>
           </div>
           <div v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'" class="flex flex-wrap items-center gap-2">
@@ -201,7 +197,7 @@
               {{ slaLabel(reservation) }}
             </span>
             <span v-if="reservation.follow_up_due_at" class="text-[11px] text-slate-500">
-              Due {{ formatDate(reservation.follow_up_due_at) }}
+              {{ t("ownerReservations.dueLabel", { date: formatDate(reservation.follow_up_due_at) }) }}
             </span>
           </div>
 
@@ -213,25 +209,25 @@
           </div>
 
           <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-line">
-            {{ reservation.notes || "No customer note" }}
+            {{ reservation.notes || t("ownerReservations.noCustomerNote") }}
           </p>
 
           <div class="flex flex-wrap items-center gap-2 text-[11px]">
             <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-300">
-              Reminders {{ reservation.reminder_count || 0 }}
+              {{ t("ownerReservations.reminders") }} {{ reservation.reminder_count || 0 }}
             </span>
             <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-400">
-              Opened {{ reservation.reminder_opened_count || 0 }}
+              {{ t("ownerReservations.opened") }} {{ reservation.reminder_opened_count || 0 }}
             </span>
             <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-400">
-              Failed {{ reservation.reminder_failed_count || 0 }}
+              {{ t("ownerReservations.failed") }} {{ reservation.reminder_failed_count || 0 }}
             </span>
             <span
               v-if="reservation.last_reminder_status"
               class="rounded-full px-2 py-1 font-semibold"
               :class="reminderStatusClass(reservation.last_reminder_status)"
             >
-              Last {{ reminderStatusLabel(reservation.last_reminder_status) }}
+              {{ t("ownerReservations.last") }} {{ reminderStatusLabel(reservation.last_reminder_status) }}
             </span>
             <span v-if="reservation.last_reminder_at" class="text-slate-500">
               {{ formatDate(reservation.last_reminder_at) }}
@@ -244,7 +240,7 @@
               :href="telHref(reservation)"
               class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-[var(--color-secondary)]"
             >
-              Call
+              {{ t("common.call") }}
             </a>
             <a
               v-if="whatsappHref(reservation)"
@@ -253,7 +249,7 @@
               rel="noopener noreferrer"
               class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-[var(--color-secondary)]"
             >
-              Quick chat
+              {{ t("ownerReservations.quickChat") }}
             </a>
           </div>
 
@@ -263,48 +259,48 @@
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
               @click="sendReminder(reservation)"
             >
-              {{ isReminderSending(reservation.id) ? "Opening..." : "Reminder" }}
+              {{ isReminderSending(reservation.id) ? t("ownerReservations.opening") : t("ownerReservations.reminder") }}
             </button>
             <button
               class="rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'contacted')"
             >
-              Contacted
+              {{ t("ownerReservations.contacted") }}
             </button>
             <button
               class="rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'won')"
             >
-              Confirmed
+              {{ t("ownerReservations.confirmed") }}
             </button>
             <button
               class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'lost')"
             >
-              Unavailable
+              {{ t("ownerReservations.unavailable") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'new')"
             >
-              Reset New
+              {{ t("ownerReservations.resetNew") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isTimelineLoading(reservation.id)"
               @click="toggleTimeline(reservation.id)"
             >
-              {{ isTimelineOpen(reservation.id) ? "Hide timeline" : "Timeline" }}
+              {{ isTimelineOpen(reservation.id) ? t("ownerReservations.hideTimeline") : t("ownerReservations.timeline") }}
             </button>
           </div>
 
           <div v-if="isTimelineOpen(reservation.id)" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
-            <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Follow-up timeline</p>
-            <p v-if="isTimelineLoading(reservation.id)" class="text-xs text-slate-500">Loading timeline...</p>
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-400">{{ t("ownerReservations.timelineTitle") }}</p>
+            <p v-if="isTimelineLoading(reservation.id)" class="text-xs text-slate-500">{{ t("ownerReservations.loadingTimeline") }}</p>
             <ul v-else class="space-y-2 text-xs">
               <li
                 v-for="entry in timelineFor(reservation.id)"
@@ -312,16 +308,16 @@
                 class="rounded-lg border border-slate-800 bg-slate-900/70 p-2"
               >
                 <div class="flex items-center justify-between gap-2">
-                  <span class="font-semibold text-slate-200">{{ entry.action }}</span>
+                  <span class="font-semibold text-slate-200">{{ timelineActionLabel(entry.action) }}</span>
                   <span class="text-slate-500">{{ formatDate(entry.created_at) }}</span>
                 </div>
                 <p v-if="entry.note" class="mt-1 whitespace-pre-line text-slate-300">{{ entry.note }}</p>
                 <p v-if="entry.previous_status || entry.new_status" class="mt-1 text-slate-400">
-                  {{ entry.previous_status || "-" }} -> {{ entry.new_status || "-" }}
+                  {{ statusLabel(entry.previous_status) || "-" }} -> {{ statusLabel(entry.new_status) || "-" }}
                 </p>
-                <p v-if="entry.actor_username" class="mt-1 text-slate-500">by {{ entry.actor_username }}</p>
+                <p v-if="entry.actor_username" class="mt-1 text-slate-500">{{ t("ownerReservations.byActor", { actor: entry.actor_username }) }}</p>
               </li>
-              <li v-if="!timelineFor(reservation.id).length" class="text-slate-500">No timeline entries yet.</li>
+              <li v-if="!timelineFor(reservation.id).length" class="text-slate-500">{{ t("ownerReservations.noTimelineEntries") }}</li>
             </ul>
 
             <div class="flex flex-wrap items-start gap-2">
@@ -329,14 +325,14 @@
                 v-model.trim="timelineNote[reservation.id]"
                 rows="2"
                 class="ui-textarea min-w-[220px] flex-1"
-                placeholder="Add follow-up note..."
+                :placeholder="t('ownerReservations.addFollowUpNote')"
               ></textarea>
               <button
                 class="ui-btn-outline px-3 py-2 text-xs disabled:opacity-60"
                 :disabled="isTimelineSubmitting(reservation.id)"
                 @click="addTimelineNote(reservation.id)"
               >
-                {{ isTimelineSubmitting(reservation.id) ? "Saving..." : "Add note" }}
+                {{ isTimelineSubmitting(reservation.id) ? t("ownerReservations.saving") : t("ownerReservations.addNote") }}
               </button>
             </div>
           </div>
@@ -345,14 +341,14 @@
 
       <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3">
         <p class="text-xs text-slate-400">
-          Page {{ pagination.page }} / {{ pagination.pages }} - {{ pagination.total }} total records
+          {{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}
         </p>
         <div class="flex items-center gap-2">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!pagination.has_prev || loading" @click="goPrevPage">
-            Previous
+            {{ t("common.previous") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!pagination.has_next || loading" @click="goNextPage">
-            Next
+            {{ t("common.next") }}
           </button>
         </div>
       </div>
@@ -363,17 +359,17 @@
       class="fixed bottom-4 left-3 right-3 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur lg:hidden"
     >
       <div class="space-y-2">
-        <p class="text-xs text-slate-300">{{ selectedCount }} selected</p>
+        <p class="text-xs text-slate-300">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
         <div class="grid grid-cols-3 gap-2">
-          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">Contacted</button>
-          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">Confirmed</button>
+          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">{{ t("ownerReservations.contacted") }}</button>
+          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">{{ t("ownerReservations.confirmed") }}</button>
           <button
             class="ui-btn-outline justify-center text-xs"
             :disabled="bulkReminderLoading"
             :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
             @click="bulkRetryReminders"
           >
-            Retry
+            {{ t("ownerReservations.retryQueue") }}
           </button>
         </div>
       </div>
@@ -383,10 +379,12 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
 
 const toast = useToastStore();
+const { t, formatDateTime } = useI18n();
 const reservations = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -427,21 +425,21 @@ const counts = ref({
   lost: 0,
 });
 
-const statusOptions = [
-  { value: "", label: "All" },
-  { value: "new", label: "New" },
-  { value: "contacted", label: "Contacted" },
-  { value: "won", label: "Confirmed" },
-  { value: "lost", label: "Unavailable" },
-];
+const statusOptions = computed(() => [
+  { value: "", label: t("ownerReservations.allStatuses") },
+  { value: "new", label: t("ownerReservations.new") },
+  { value: "contacted", label: t("ownerReservations.contacted") },
+  { value: "won", label: t("ownerReservations.confirmed") },
+  { value: "lost", label: t("ownerReservations.unavailable") },
+]);
 
-const reminderOptions = [
-  { value: "", label: "All reminders" },
-  { value: "failed", label: "Failed" },
-  { value: "sent", label: "Sent" },
-  { value: "opened", label: "Opened" },
-  { value: "none", label: "No reminders" },
-];
+const reminderOptions = computed(() => [
+  { value: "", label: t("ownerReservations.allReminders") },
+  { value: "failed", label: t("ownerReservations.failed") },
+  { value: "sent", label: t("ownerReservations.sent") },
+  { value: "opened", label: t("ownerReservations.opened") },
+  { value: "none", label: t("ownerReservations.noReminders") },
+]);
 
 const selectedCount = computed(() => selectedIds.value.length);
 const allSelectedOnPage = computed(() => {
@@ -463,14 +461,7 @@ const parseApiError = (err, fallback) => {
   return fallback;
 };
 
-const formatDate = (value) => {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString();
-  } catch (e) {
-    return String(value);
-  }
-};
+const formatDate = (value) => formatDateTime(value) || "-";
 
 const sanitizePhone = (value) => String(value || "").replace(/\D/g, "");
 const sanitizeTel = (value) =>
@@ -486,8 +477,8 @@ const telHref = (reservation) => {
 const whatsappHref = (reservation) => {
   const phone = sanitizePhone(reservation?.phone || "");
   if (!phone) return "";
-  const name = String(reservation?.name || "there").trim();
-  const text = encodeURIComponent(`Hi ${name}, this is your table reservation follow-up.`);
+  const name = String(reservation?.name || t("ownerReservations.guestFallback")).trim();
+  const text = encodeURIComponent(t("ownerReservations.whatsappTemplate", { name }));
   return `https://wa.me/${phone}?text=${text}`;
 };
 
@@ -497,6 +488,14 @@ const statusClass = (status) => {
   if (status === "won") return "bg-emerald-500/20 text-emerald-200";
   if (status === "lost") return "bg-rose-500/20 text-rose-200";
   return "bg-slate-700 text-slate-200";
+};
+
+const statusLabel = (status) => {
+  if (status === "new") return t("ownerReservations.new");
+  if (status === "contacted") return t("ownerReservations.contacted");
+  if (status === "won") return t("ownerReservations.confirmed");
+  if (status === "lost") return t("ownerReservations.unavailable");
+  return status ? String(status) : "";
 };
 
 const slaClass = (slaState) => {
@@ -511,12 +510,12 @@ const slaLabel = (reservation) => {
   const state = String(reservation?.sla_state || "");
   if (state === "overdue") {
     const minutes = Number(reservation?.sla_minutes_overdue || 0);
-    return minutes > 0 ? `Overdue ${minutes}m` : "Overdue";
+    return minutes > 0 ? `${t("ownerReservations.statusOverdue")} ${minutes}m` : t("ownerReservations.statusOverdue");
   }
-  if (state === "due_soon") return "Due soon";
-  if (state === "on_track") return "On track";
-  if (state === "resolved") return "Resolved";
-  return "No SLA";
+  if (state === "due_soon") return t("ownerReservations.statusDueSoon");
+  if (state === "on_track") return t("ownerReservations.statusOnTrack");
+  if (state === "resolved") return t("ownerReservations.statusResolved");
+  return t("ownerReservations.noSla");
 };
 
 const reminderStatusClass = (status) => {
@@ -527,10 +526,18 @@ const reminderStatusClass = (status) => {
 };
 
 const reminderStatusLabel = (status) => {
-  if (status === "opened") return "Opened";
-  if (status === "failed") return "Failed";
-  if (status === "sent") return "Sent";
-  return "Unknown";
+  if (status === "opened") return t("ownerReservations.opened");
+  if (status === "failed") return t("ownerReservations.failed");
+  if (status === "sent") return t("ownerReservations.sent");
+  return t("ownerReservations.unknown");
+};
+
+const timelineActionLabel = (action) => {
+  const normalized = String(action || "").toLowerCase();
+  if (normalized.includes("status")) return t("ownerReservations.timelineActionStatusChange");
+  if (normalized.includes("note")) return t("ownerReservations.timelineActionNote");
+  if (normalized.includes("reminder")) return t("ownerReservations.timelineActionReminder");
+  return action ? String(action) : t("ownerReservations.timelineActionUnknown");
 };
 
 const reminderFilterClass = (value) => {
@@ -605,7 +612,7 @@ const fetchReservations = async () => {
     }
     selectedIds.value = [];
   } catch (err) {
-    const message = parseApiError(err, "Unable to load reservations");
+    const message = parseApiError(err, t("ownerReservations.loadFailed"));
     error.value = message;
     toast.show(message, "error");
   } finally {
@@ -619,10 +626,10 @@ const updateStatus = async (reservation, status) => {
   updating.value = { ...updating.value, [id]: true };
   try {
     await api.put(`/owner/reservations/${id}/`, { status });
-    toast.show("Reservation updated", "success");
+    toast.show(t("ownerReservations.updatedReservation"), "success");
     await fetchReservations();
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to update reservation"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.updateReservationFailed")), "error");
   } finally {
     const clone = { ...updating.value };
     delete clone[id];
@@ -648,11 +655,11 @@ const sendReminder = async (reservation) => {
       await api.post(`/owner/reservations/${id}/reminder-result/`, {
         reminder_id: reminderId,
         status: opened ? "opened" : "failed",
-        error: opened ? "" : "Popup blocked by browser",
+        error: opened ? "" : t("ownerReservations.reminderBlocked"),
       });
     }
     if (popup) {
-      toast.show("Reminder opened in WhatsApp", "success");
+      toast.show(t("ownerReservations.reminderOpened"), "success");
     } else {
       if (link && navigator?.clipboard?.writeText) {
         try {
@@ -661,14 +668,14 @@ const sendReminder = async (reservation) => {
           // Ignore clipboard errors and still show fallback guidance.
         }
       }
-      toast.show("Reminder prepared, but popup was blocked", "error");
+      toast.show(t("ownerReservations.reminderBlocked"), "error");
     }
     await fetchReservations();
     if (isTimelineOpen(id)) {
       await fetchTimeline(id);
     }
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to prepare reminder"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.prepareReminderFailed")), "error");
   } finally {
     const clone = { ...reminderLoading.value };
     delete clone[id];
@@ -714,7 +721,7 @@ const bulkRetryReminders = async () => {
                 lead_id: first.lead_id,
                 reminder_id: first.reminder_id,
                 status: firstPopup ? "opened" : "failed",
-                error: firstPopup ? "" : "Popup blocked by browser",
+                error: firstPopup ? "" : t("ownerReservations.reminderBlocked"),
               },
             ],
           });
@@ -728,16 +735,20 @@ const bulkRetryReminders = async () => {
     }
 
     if (!preparedCount) {
-      toast.show("No reminders prepared for current selection", "info");
+      toast.show(t("ownerReservations.noRemindersPrepared"), "info");
     } else if (firstPopup) {
-      toast.show(`Prepared ${preparedCount} reminders. First chat opened.`, "success");
+      toast.show(t("ownerReservations.preparedAndOpened", { count: preparedCount }), "success");
     } else {
-      toast.show(`Prepared ${preparedCount} reminders. Links copied for manual send.`, "info");
+      toast.show(t("ownerReservations.preparedAndCopied", { count: preparedCount }), "info");
     }
 
     if (skippedNoPhone || skippedUnavailable || skippedNotFailed) {
       toast.show(
-        `Skipped ${skippedNoPhone} no-phone, ${skippedUnavailable} unavailable, ${skippedNotFailed} not-failed.`,
+        t("ownerReservations.skippedSummary", {
+          noPhone: skippedNoPhone,
+          unavailable: skippedUnavailable,
+          notFailed: skippedNotFailed,
+        }),
         "info"
       );
     }
@@ -750,7 +761,7 @@ const bulkRetryReminders = async () => {
       }
     }
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to prepare bulk reminders"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.prepareBulkReminderFailed")), "error");
   } finally {
     bulkReminderLoading.value = false;
   }
@@ -768,7 +779,7 @@ const reconcilePendingReminders = async (status) => {
       lead_id: item.lead_id,
       reminder_id: item.reminder_id,
       status,
-      error: status === "failed" ? "Owner marked as not delivered" : "",
+      error: status === "failed" ? t("ownerReservations.markFailed") : "",
     }));
     const res = await api.post("/owner/reservations/bulk-reminder-result/", { items });
     const updatedCount = Number(res?.data?.updated_count || 0);
@@ -776,8 +787,8 @@ const reconcilePendingReminders = async (status) => {
     pendingReminderReconciliation.value = [];
     toast.show(
       missingCount
-        ? `Updated ${updatedCount} reminders (${missingCount} missing).`
-        : `Updated ${updatedCount} reminders.`,
+        ? t("ownerReservations.reconciledWithMissing", { updated: updatedCount, missing: missingCount })
+        : t("ownerReservations.reconciled", { updated: updatedCount }),
       "success"
     );
     await fetchReservations();
@@ -788,7 +799,7 @@ const reconcilePendingReminders = async (status) => {
       }
     }
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to reconcile prepared reminders"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.reconcileFailed")), "error");
   } finally {
     bulkReconcileLoading.value = false;
   }
@@ -806,13 +817,13 @@ const bulkUpdateStatus = async (status) => {
     const missingCount = Array.isArray(res?.data?.missing_ids) ? res.data.missing_ids.length : 0;
     toast.show(
       missingCount
-        ? `Updated ${updatedCount}. ${missingCount} no longer available.`
-        : `Updated ${updatedCount} reservations.`,
+        ? t("ownerReservations.bulkUpdatedWithMissing", { updated: updatedCount, missing: missingCount })
+        : t("ownerReservations.bulkUpdated", { updated: updatedCount }),
       "success"
     );
     await fetchReservations();
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to update selected reservations"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.bulkUpdateFailed")), "error");
   } finally {
     bulkUpdating.value = false;
   }
@@ -892,7 +903,7 @@ const fetchTimeline = async (reservationId) => {
       [reservationId]: Array.isArray(res.data) ? res.data : [],
     };
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to load timeline"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.loadTimelineFailed")), "error");
   } finally {
     const clone = { ...timelineLoading.value };
     delete clone[reservationId];
@@ -917,7 +928,7 @@ const toggleTimeline = async (reservationId) => {
 const addTimelineNote = async (reservationId) => {
   const note = String(timelineNote.value[reservationId] || "").trim();
   if (!note) {
-    toast.show("Write a short note first", "info");
+    toast.show(t("ownerReservations.writeShortNote"), "info");
     return;
   }
   timelineSubmitting.value = { ...timelineSubmitting.value, [reservationId]: true };
@@ -929,9 +940,9 @@ const addTimelineNote = async (reservationId) => {
       [reservationId]: [res.data, ...existing],
     };
     timelineNote.value = { ...timelineNote.value, [reservationId]: "" };
-    toast.show("Timeline note added", "success");
+    toast.show(t("ownerReservations.noteAdded"), "success");
   } catch (err) {
-    toast.show(parseApiError(err, "Unable to add timeline note"), "error");
+    toast.show(parseApiError(err, t("ownerReservations.addTimelineFailed")), "error");
   } finally {
     const clone = { ...timelineSubmitting.value };
     delete clone[reservationId];
@@ -964,9 +975,9 @@ const exportCsv = async () => {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(objectUrl);
-    toast.show("Reservation export ready", "success");
+    toast.show(t("ownerReservations.exportReady"), "success");
   } catch (err) {
-    toast.show("Unable to export reservations", "error");
+    toast.show(t("ownerReservations.exportFailed"), "error");
   } finally {
     exporting.value = false;
   }

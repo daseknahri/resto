@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
 import { trackEvent } from "../lib/analytics";
+import { translate } from "../i18n/translate";
 import { useToastStore } from "./toast";
 
 const extractErrorMessage = (err, fallback) => {
@@ -32,9 +33,9 @@ export const useLeadStore = defineStore("lead", {
           { source, metadata: { plan_code: payload?.plan_code || "", has_phone: Boolean(payload?.phone) } },
           { once: false }
         );
-        toast.show("Lead received. We will reach out shortly.", "success");
+        toast.show(translate("leadStore.received"), "success");
       } catch (err) {
-        this.error = extractErrorMessage(err, "Unable to submit lead");
+        this.error = extractErrorMessage(err, translate("leadStore.submitFailed"));
         toast.show(this.error, "error");
       } finally {
         this.submitting = false;

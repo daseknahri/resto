@@ -16,11 +16,11 @@
           <div class="flex flex-wrap items-center gap-2">
             <span class="ui-chip">{{ statusLabel }}</span>
             <span v-if="locationLine" class="ui-chip">{{ locationLine }}</span>
-            <span class="ui-chip">Mode: {{ orderingModeLabel }}</span>
+            <span class="ui-chip">{{ t("menu.mode") }}: {{ orderingModeLabel }}</span>
           </div>
 
           <div class="space-y-1.5">
-            <p class="ui-kicker">Restaurant landing</p>
+            <p class="ui-kicker">{{ t("customerLeadPage.kicker") }}</p>
             <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">{{ tenantName }}</h1>
             <p class="max-w-2xl text-sm text-slate-200">{{ tenantDescription }}</p>
             <div v-if="socialLinks.length" class="flex flex-wrap gap-2 pt-1">
@@ -43,15 +43,15 @@
 
     <section class="grid gap-3 sm:grid-cols-2">
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 40ms">
-        <p class="ui-kicker">Step 1</p>
-        <p class="mt-1 text-lg font-semibold text-white">Browse menu</p>
-        <p class="mt-1 text-sm text-slate-300">Explore categories and dishes before placing an order.</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.stepOne") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ t("customerLeadPage.browseTitle") }}</p>
+        <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.browseText") }}</p>
       </article>
 
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 70ms">
-        <p class="ui-kicker">Step 2</p>
-        <p class="mt-1 text-lg font-semibold text-white">Reserve table</p>
-        <p class="mt-1 text-sm text-slate-300">Send your reservation request directly from mobile.</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.stepTwo") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ t("customerLeadPage.reserveTitle") }}</p>
+        <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
       </article>
 
       <a
@@ -63,9 +63,9 @@
         style="--ui-delay: 100ms"
         @click="trackContactClick('google_reviews')"
       >
-        <p class="ui-kicker">Trust</p>
-        <p class="mt-1 text-lg font-semibold text-white">Google reviews</p>
-        <p class="mt-1 text-sm text-slate-300">Check ratings and real customer feedback.</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.trust") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ t("customerLeadPage.googleReviews") }}</p>
+        <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.googleReviewsText") }}</p>
       </a>
 
       <a
@@ -77,36 +77,34 @@
         style="--ui-delay: 130ms"
         @click="trackContactClick(whatsappHref ? 'whatsapp_contact' : 'phone_call')"
       >
-        <p class="ui-kicker">Contact</p>
-        <p class="mt-1 text-lg font-semibold text-white">{{ whatsappHref ? "WhatsApp now" : "Call now" }}</p>
-        <p class="mt-1 text-sm text-slate-300">Get quick support before ordering.</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ whatsappHref ? t("customerLeadPage.whatsappNow") : t("customerLeadPage.callNow") }}</p>
+        <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.contactText") }}</p>
       </a>
     </section>
 
     <section class="grid gap-3 sm:grid-cols-3">
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
-        <p class="ui-kicker">Categories</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ categoriesCount }}</p>
       </article>
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 110ms">
-        <p class="ui-kicker">Dishes</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.dishes") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ dishesCount }}</p>
       </article>
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 140ms">
-        <p class="ui-kicker">Response</p>
-        <p class="mt-1 text-base font-semibold text-white">Fast confirmation</p>
+        <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
+        <p class="mt-1 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
       </article>
     </section>
 
     <section class="ui-panel ui-reveal p-4 md:p-5" style="--ui-delay: 120ms">
       <div class="grid gap-5 md:grid-cols-[1fr,1.2fr]">
         <div class="space-y-2">
-          <h2 class="text-xl font-semibold text-white">Need help before ordering?</h2>
-          <p class="text-sm text-slate-300">
-            Share your contact details and we will reach out with availability and recommendations.
-          </p>
+          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
           <div v-if="lead.success" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-            Thank you. We received your request and will contact you soon.
+            {{ t("customerLeadPage.leadSuccess") }}
           </div>
           <button
             v-if="lead.success"
@@ -114,7 +112,7 @@
             class="ui-btn-primary ui-touch-target w-full justify-center opacity-90 sm:w-auto"
             disabled
           >
-            We will contact you shortly
+            {{ t("customerLeadPage.leadSuccessCta") }}
           </button>
           <a
             v-if="reservationUrl"
@@ -124,14 +122,14 @@
             class="inline-flex text-sm text-[var(--color-secondary)] hover:underline"
             @click="trackContactClick('reservation_url')"
           >
-            Prefer direct booking? Open reservation link
+            {{ t("customerLeadPage.directBooking") }}
           </a>
         </div>
 
         <form class="space-y-3" @submit.prevent="submitLead">
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="space-y-1 text-sm text-slate-200">
-              Name
+              {{ t("common.name") }}
               <input
                 v-model.trim="form.name"
                 class="ui-input"
@@ -142,7 +140,7 @@
               <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
-              Phone
+              {{ t("common.phone") }}
               <input
                 v-model.trim="form.phone"
                 class="ui-input"
@@ -157,7 +155,7 @@
           </div>
 
           <label class="space-y-1 text-sm text-slate-200">
-            Email
+            {{ t("common.email") }}
             <input
               v-model.trim="form.email"
               type="email"
@@ -171,12 +169,12 @@
           </label>
 
           <label class="space-y-1 text-sm text-slate-200">
-            Message
+            {{ t("customerLeadPage.message") }}
             <textarea
               v-model.trim="form.note"
               rows="3"
               class="ui-textarea"
-              placeholder="Any dietary needs, preferred time, or questions..."
+              :placeholder="t('customerLeadPage.messagePlaceholder')"
             ></textarea>
           </label>
 
@@ -184,7 +182,7 @@
 
           <div class="flex flex-wrap items-center gap-3">
             <button type="submit" class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65" :disabled="lead.submitting || lead.success">
-              {{ lead.submitting ? "Sending..." : lead.success ? "Sent" : "Contact me" }}
+              {{ lead.submitting ? t("customerLeadPage.sending") : lead.success ? t("customerLeadPage.sent") : t("customerLeadPage.contactMe") }}
             </button>
           </div>
           <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
@@ -197,6 +195,7 @@
 
 <script setup>
 import { computed, onMounted, reactive } from "vue";
+import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
 import { useMenuStore } from "../stores/menu";
@@ -205,6 +204,8 @@ import { useTenantStore } from "../stores/tenant";
 const tenant = useTenantStore();
 const menu = useMenuStore();
 const lead = useLeadStore();
+const { t } = useI18n();
+const meta = computed(() => tenant.resolvedMeta || null);
 
 const form = reactive({
   name: "",
@@ -220,10 +221,10 @@ const errors = reactive({
   email: "",
 });
 
-const profile = computed(() => tenant.meta?.profile || {});
-const tenantName = computed(() => tenant.meta?.name || "Restaurant");
+const profile = computed(() => meta.value?.profile || {});
+const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const isOpen = computed(() => profile.value?.is_open !== false);
-const statusLabel = computed(() => (isOpen.value ? "Open now" : "Currently closed"));
+const statusLabel = computed(() => (isOpen.value ? t("customerLeadPage.openNow") : t("customerLeadPage.closedNow")));
 const locationLine = computed(() => {
   const line = String(profile.value?.address || profile.value?.city || "").trim();
   return line || "";
@@ -234,18 +235,19 @@ const tenantDescription = computed(() => {
   if (tagline && desc) return `${tagline} - ${desc}`;
   if (tagline) return tagline;
   if (desc) return desc;
-  return "Discover our menu, check reviews, and reserve your next table in a few taps.";
+  return t("customerLeadPage.fallbackDescription");
 });
 const heroImage = computed(() => String(profile.value?.hero_url || "").trim());
 const googleMapsUrl = computed(() => String(profile.value?.google_maps_url || "").trim());
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
-const categoriesCount = computed(() => menu.categories.length);
-const dishesCount = computed(() => menu.categories.reduce((sum, cat) => sum + Number(cat?.dishes?.length || 0), 0));
+const menuCategories = computed(() => (Array.isArray(menu.categories) ? menu.categories : []));
+const categoriesCount = computed(() => menuCategories.value.length);
+const dishesCount = computed(() => menuCategories.value.reduce((sum, cat) => sum + Number(cat?.dishes?.length || 0), 0));
 const orderingModeLabel = computed(() => {
   const mode = String(tenant.entitlements?.ordering_mode || "browse").toLowerCase();
-  if (mode === "checkout") return "Checkout";
-  if (mode === "whatsapp") return "WhatsApp";
-  return "Browse only";
+  if (mode === "checkout") return t("customerLeadPage.checkout");
+  if (mode === "whatsapp") return t("customerLeadPage.whatsapp");
+  return t("customerLeadPage.browseOnly");
 });
 
 const sanitizePhoneForTel = (value) =>
@@ -262,7 +264,7 @@ const phoneHref = computed(() => {
 const whatsappHref = computed(() => {
   const normalized = sanitizePhoneForWhatsapp(whatsappRaw.value);
   if (!normalized) return "";
-  const text = encodeURIComponent(`Hi ${tenantName.value}, I'd like more information.`);
+  const text = encodeURIComponent(t("customerLeadPage.moreInfoMessage", { tenant: tenantName.value }));
   return `https://wa.me/${normalized}?text=${text}`;
 });
 const socialLinks = computed(() =>
@@ -285,16 +287,16 @@ const validate = () => {
   let valid = true;
 
   if (!form.name || form.name.length < 2) {
-    errors.name = "Name must be at least 2 characters.";
+    errors.name = t("customerLeadPage.nameError");
     valid = false;
   }
   if (!form.phone && !form.email) {
-    errors.phone = "Provide phone or email.";
-    errors.email = "Provide phone or email.";
+    errors.phone = t("customerLeadPage.contactRequired");
+    errors.email = t("customerLeadPage.contactRequired");
     valid = false;
   }
   if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = "Invalid email address.";
+    errors.email = t("customerLeadPage.invalidEmail");
     valid = false;
   }
 
@@ -304,7 +306,7 @@ const validate = () => {
 const buildNotes = () => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
   const lines = [
-    "Customer lead from restaurant landing",
+    t("customerLeadPage.leadNoteIntro"),
     form.note ? `Message: ${form.note}` : "",
     pageUrl ? `Page URL: ${pageUrl}` : "",
   ].filter(Boolean);
@@ -338,7 +340,7 @@ const trackContactClick = (target) => {
 
 onMounted(async () => {
   lead.reset();
-  if (!menu.categories.length) {
+  if (!menuCategories.value.length) {
     await menu.fetchCategories();
   }
   trackEvent("customer_info_view", { source: "customer_landing_info" }, { onceKey: "customer:landing" });

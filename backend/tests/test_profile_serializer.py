@@ -16,3 +16,12 @@ class ProfileSerializerTests(SimpleTestCase):
         serializer = ProfileSerializer(data={"reservation_url": "invalid-url"})
         self.assertFalse(serializer.is_valid())
         self.assertIn("reservation_url", serializer.errors)
+
+    def test_language_accepts_supported_codes(self):
+        serializer = ProfileSerializer(data={"language": "fr"})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_language_rejects_unsupported_codes(self):
+        serializer = ProfileSerializer(data={"language": "es"})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("language", serializer.errors)

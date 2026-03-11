@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
+import { translate } from "../i18n/translate";
 
 const extractErrorMessage = (err, fallback) => {
   const data = err?.response?.data;
@@ -38,7 +39,7 @@ export const useSessionStore = defineStore("session", {
       } catch (err) {
         this.user = null;
         this.loaded = false;
-        this.error = extractErrorMessage(err, "Not authenticated");
+        this.error = extractErrorMessage(err, translate("sessionStore.notAuthenticated"));
         throw err;
       } finally {
         this.loading = false;
@@ -55,7 +56,7 @@ export const useSessionStore = defineStore("session", {
       } catch (err) {
         this.user = null;
         this.loaded = false;
-        this.error = extractErrorMessage(err, "Sign in failed");
+        this.error = extractErrorMessage(err, translate("sessionStore.signInFailed"));
         throw err;
       } finally {
         this.loading = false;

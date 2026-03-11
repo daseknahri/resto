@@ -33,6 +33,29 @@ Default local test logins (demo tenant):
 ## Tests
 - Lint (after installing pre-commit): `pre-commit install && pre-commit run --all-files`
 - Backend app tests: `cd backend && python manage.py test tests -v 2`
+- OpenAPI contract export:
+  - Windows: `powershell -ExecutionPolicy Bypass -File .\infra\export_openapi.ps1`
+  - Linux/macOS: `bash ./infra/export_openapi.sh`
+- Browser E2E critical + mobile regression:
+  - Prepare deterministic admin/demo seed:
+    - Windows: `powershell -ExecutionPolicy Bypass -File .\infra\prepare_e2e.ps1`
+    - Linux/macOS: `bash ./infra/prepare_e2e.sh`
+    - Also ensures owner login for workspace regression tests: `test_resto_user@demo.local / admin123`
+    - If backend is already running, restart it after preparation to reset in-process throttle cache.
+  - Start app locally:
+    - Windows: `powershell -ExecutionPolicy Bypass -File .\infra\run_local.ps1 -TenantHost demo.localhost`
+  - Install Playwright browser (first run only):
+    - `cd frontend && npm run e2e:install`
+  - Run suite:
+    - `cd frontend && npm run e2e:critical`
+    - `cd frontend && npm run e2e:mobile`
+    - `cd frontend && npm run e2e`
+  - Optional env overrides:
+    - `E2E_FRONTEND_URL`, `E2E_PUBLIC_FRONTEND_URL`, `E2E_API_URL`, `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD`
+  - Included spec also validates cross-host auth/CSRF behavior:
+    - tenant-host admin session + host isolation (`localhost` vs `demo.localhost`)
+    - CSRF required for unsafe auth endpoint (`POST /api/logout/`)
+  - Included mobile spec validates no horizontal overflow across landing, customer flow, owner workspace, and admin console at 390x844.
 
 ## Plan-gated order handoff
 - Endpoints:
@@ -76,6 +99,7 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
   - `DJANGO_SESSION_COOKIE_SAMESITE=Lax` (or `None` if cross-site is required)
   - `DJANGO_SESSION_COOKIE_DOMAIN=.yourdomain.com`
   - `DJANGO_CSRF_COOKIE_DOMAIN=.yourdomain.com`
+  - `DJANGO_PUBLIC_SCHEMA_HOSTS=yourdomain.com,admin.yourdomain.com,localhost,127.0.0.1`
 - SMTP delivery:
   - `DJANGO_EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`
   - `DJANGO_DEFAULT_FROM_EMAIL=noreply@yourdomain.com`
@@ -84,6 +108,11 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
   - `DJANGO_EMAIL_HOST_USER=...`
   - `DJANGO_EMAIL_HOST_PASSWORD=...`
   - `DJANGO_EMAIL_USE_TLS=True`
+
+- Frontend runtime API:
+  - `VITE_API_BASE_URL=auto`
+  - `VITE_ADMIN_API_BASE_URL=auto`
+  - `VITE_PLATFORM_PUBLIC_HOSTS=yourdomain.com,admin.yourdomain.com`
 
 ## Release utilities
 - Pre-release smoke test script: `infra/pre_release_smoke.ps1`

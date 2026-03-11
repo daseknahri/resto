@@ -70,6 +70,8 @@ class LeadAdmin(admin.ModelAdmin):
             (
                 activation,
                 admin_url,
+                workspace_url,
+                signin_url,
                 tenant_url,
                 activation_url,
                 whatsapp_link,
@@ -78,7 +80,9 @@ class LeadAdmin(admin.ModelAdmin):
             job = ProvisioningJob.objects.create(lead=lead, tenant=tenant, status=ProvisioningJob.Status.SUCCESS)
             job.append_log("Resent activation")
             job.append_log(f"Activation token: {activation.token}")
-            job.append_log(f"Admin URL: {admin_url}")
+            job.append_log(f"Workspace URL: {workspace_url}")
+            job.append_log(f"Sign-in URL: {signin_url}")
+            job.append_log(f"Django admin URL: {admin_url}")
             job.append_log(f"Tenant URL: {tenant_url}")
             job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:

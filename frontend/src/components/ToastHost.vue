@@ -11,15 +11,17 @@
         :class="toast.type === 'success' ? 'bg-emerald-400' : toast.type === 'error' ? 'bg-rose-400' : 'bg-amber-300'"
       ></span>
       <span>{{ toast.message }}</span>
-      <button class="text-xs text-slate-400 hover:text-slate-200" @click="toast.hide()">Close</button>
+      <button class="text-xs text-slate-400 hover:text-slate-200" @click="toast.hide()">{{ t("common.close") }}</button>
     </div>
   </transition>
 </template>
 
 <script setup>
+import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 
 const toast = useToastStore();
+const { t } = useI18n();
 </script>
 
 <style scoped>

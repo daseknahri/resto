@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -17,6 +18,17 @@ def parse_bool_env(var_name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def hostname_from_url(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = (parsed.hostname or "").strip().lower().strip(".")
+    if host.startswith("www."):
+        host = host[4:]
+    return host
 
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
@@ -148,6 +160,16 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
+public_schema_hosts = set(parse_csv_env("DJANGO_PUBLIC_SCHEMA_HOSTS", "localhost,127.0.0.1"))
+public_schema_hosts.update({"localhost", "127.0.0.1"})
+for inferred_host in (
+    hostname_from_url(PUBLIC_MENU_BASE_URL),
+    hostname_from_url(os.getenv("SERVICE_FQDN_FRONTEND", "")),
+    hostname_from_url(os.getenv("SERVICE_FQDN_ADMIN", "")),
+):
+    if inferred_host:
+        public_schema_hosts.add(inferred_host)
+PUBLIC_SCHEMA_HOSTS = sorted(public_schema_hosts)
 RESERVATION_SLA_NEW_MINUTES = int(os.getenv("RESERVATION_SLA_NEW_MINUTES", "30"))
 RESERVATION_SLA_DUE_SOON_MINUTES = int(os.getenv("RESERVATION_SLA_DUE_SOON_MINUTES", "10"))
 

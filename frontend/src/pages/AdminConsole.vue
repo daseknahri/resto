@@ -2,9 +2,9 @@
   <div class="mx-auto max-w-6xl px-4 py-6 space-y-6 ui-safe-bottom">
     <div class="ui-panel flex flex-wrap items-center justify-between gap-3 p-4">
       <div>
-        <p class="ui-kicker">Super Admin</p>
-        <h1 class="ui-display text-3xl font-semibold text-white">Provisioning and operations</h1>
-        <p class="mt-1 text-xs text-slate-400">Review incoming leads, provision tenants, and manage upgrade operations.</p>
+        <p class="ui-kicker">{{ t("adminConsole.superAdmin") }}</p>
+        <h1 class="ui-display text-3xl font-semibold text-white">{{ t("adminConsole.provisioningOperations") }}</h1>
+        <p class="mt-1 text-xs text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
       </div>
       <div class="ui-scroll-row">
         <a
@@ -13,10 +13,10 @@
           rel="noopener noreferrer"
           class="ui-btn-outline px-4 py-2 text-sm"
         >
-          Django admin
+          {{ t("adminConsole.djangoAdmin") }}
         </a>
-        <input v-model="domainSuffix" class="ui-input w-36 px-2 py-1 text-sm" placeholder="suffix (localhost)" />
-        <button @click="refreshAll" class="ui-btn-outline px-4 py-2 text-sm">Refresh</button>
+        <input v-model="domainSuffix" class="ui-input w-36 px-2 py-1 text-sm" :placeholder="t('adminConsole.suffixLocalhost')" />
+        <button @click="refreshAll" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
       </div>
     </div>
 
@@ -25,13 +25,13 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">Incoming leads</p>
-          <h2 class="text-xl font-semibold">Awaiting provisioning</h2>
+          <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
+          <h2 class="text-xl font-semibold">{{ t("adminConsole.awaitingProvisioning") }}</h2>
         </div>
-        <button @click="fetchLeads" class="ui-btn-outline px-3 py-1.5 text-xs">Refresh leads</button>
+        <button @click="fetchLeads" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
-      <p v-if="leadsLoading" class="text-sm text-slate-400">Loading leads...</p>
-      <p v-if="!leads.length && !leadsLoading" class="text-sm text-slate-400">No leads pending.</p>
+      <p v-if="leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingLeads") }}</p>
+      <p v-if="!leads.length && !leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.noLeadsPending") }}</p>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="lead in leads"
@@ -39,7 +39,7 @@
           class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
         >
           <div class="flex items-center justify-between">
-            <p class="font-semibold text-slate-100">{{ lead.name || 'Lead #' + lead.id }}</p>
+            <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
             <div class="flex items-center gap-2">
               <span class="text-xs text-slate-500">{{ lead.status }}</span>
               <span class="text-xs text-slate-400">{{ lead.plan_code?.toUpperCase() }}</span>
@@ -47,24 +47,24 @@
           </div>
           <p class="text-xs text-slate-400">{{ lead.email }} / {{ lead.phone }}</p>
           <p class="text-[11px] text-slate-500">
-            Source: {{ lead.source || "-" }}
-            <span v-if="lead.tenant_slug"> | Tenant: {{ lead.tenant_slug }}</span>
+            {{ t("adminConsole.source") }}: {{ lead.source || "-" }}
+            <span v-if="lead.tenant_slug"> | {{ t("adminConsole.tenant") }}: {{ lead.tenant_slug }}</span>
           </p>
           <p class="text-xs text-slate-500 line-clamp-2">{{ lead.notes }}</p>
           <p v-if="lead.onboarded_at" class="text-xs text-emerald-300">
-            Onboarded: {{ new Date(lead.onboarded_at).toLocaleString() }}
+            {{ t("adminConsole.onboarded") }}: {{ new Date(lead.onboarded_at).toLocaleString() }}
           </p>
           <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs space-y-1">
-            <p class="text-slate-400">Tenant URL preview</p>
-            <p v-if="previewLoading[lead.id]" class="text-slate-500">Checking availability...</p>
+            <p class="text-slate-400">{{ t("adminConsole.tenantUrlPreview") }}</p>
+            <p v-if="previewLoading[lead.id]" class="text-slate-500">{{ t("adminConsole.checkingAvailability") }}</p>
             <template v-else-if="previewFor(lead.id)">
               <p class="text-slate-200">{{ previewFor(lead.id).input_domain }}</p>
               <p v-if="previewFor(lead.id).collision" class="text-amber-300">
-                Collision detected. Will use {{ previewFor(lead.id).resolved_domain }}
+                {{ t("adminConsole.collisionDetectedWillUse", { domain: previewFor(lead.id).resolved_domain }) }}
               </p>
-              <p v-else class="text-emerald-300">Available</p>
+              <p v-else class="text-emerald-300">{{ t("common.available") }}</p>
             </template>
-            <p v-else class="text-slate-500">Not checked yet</p>
+            <p v-else class="text-slate-500">{{ t("adminConsole.notCheckedYet") }}</p>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <button
@@ -72,35 +72,35 @@
               :disabled="provLoading[lead.id]"
               @click="provision(lead)"
             >
-              {{ provLoading[lead.id] ? 'Provisioning...' : 'Provision' }}
+              {{ provLoading[lead.id] ? t("adminConsole.provisioning") : t("adminConsole.provision") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary"
               :disabled="previewLoading[lead.id]"
               @click="checkPreview(lead, true)"
             >
-              Check
+              {{ t("adminConsole.check") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
               :disabled="resendLoading[lead.id] || lead.status !== 'live'"
               @click="resendActivation(lead)"
             >
-              {{ resendLoading[lead.id] ? 'Sending...' : 'Resend activation' }}
+              {{ resendLoading[lead.id] ? t("adminConsole.sending") : t("adminConsole.resendActivation") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
               :disabled="packageLoading[lead.id] || lead.status !== 'live'"
               @click="loadOnboardingPackage(lead, false)"
             >
-              {{ packageLoading[lead.id] ? 'Loading...' : 'Load package' }}
+              {{ packageLoading[lead.id] ? t("common.loading") : t("adminConsole.loadPackage") }}
             </button>
             <button
               class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
               :disabled="removeLoading[lead.id]"
               @click="removeLead(lead)"
             >
-              {{ removeLoading[lead.id] ? 'Archiving...' : 'Archive' }}
+              {{ removeLoading[lead.id] ? t("adminConsole.archiving") : t("adminConsole.archive") }}
             </button>
           </div>
         </div>
@@ -110,12 +110,12 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">Tenant lifecycle controls</p>
-          <h2 class="text-xl font-semibold">Suspend, reactivate, cancel</h2>
+          <p class="text-sm text-slate-300">{{ t("adminConsole.tenantLifecycleControls") }}</p>
+          <h2 class="text-xl font-semibold">{{ t("adminConsole.suspendReactivateCancel") }}</h2>
         </div>
         <div class="ui-scroll-row">
           <label class="text-xs text-slate-400">
-            Page size
+            {{ t("adminConsole.pageSize") }}
             <select v-model.number="tenantPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
               <option :value="10">10</option>
               <option :value="25">25</option>
@@ -123,17 +123,17 @@
             </select>
           </label>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasPrev" @click="changeTenantPage(tenantPage - 1)">
-            Prev
+            {{ t("common.previous") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasNext" @click="changeTenantPage(tenantPage + 1)">
-            Next
+            {{ t("common.next") }}
           </button>
-          <button @click="fetchTenants(tenantPage)" class="ui-btn-outline px-3 py-1.5 text-xs">Refresh tenants</button>
+          <button @click="fetchTenants(tenantPage)" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshTenants") }}</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500">Page {{ tenantPage }} / {{ tenantTotalPages }} • total tenants: {{ tenantTotal }}</p>
-      <p v-if="tenantsLoading" class="text-sm text-slate-400">Loading tenants...</p>
-      <p v-else-if="!tenants.length" class="text-sm text-slate-400">No tenant records found.</p>
+      <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
+      <p v-if="tenantsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingTenants") }}</p>
+      <p v-else-if="!tenants.length" class="text-sm text-slate-400">{{ t("adminConsole.noTenantRecordsFound") }}</p>
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="tenant in tenants"
@@ -146,32 +146,119 @@
               {{ tenant.lifecycle_status }}
             </span>
           </div>
-          <p class="text-xs text-slate-400">Slug: {{ tenant.slug }} | Plan: {{ tenant.plan_name }}</p>
-          <p class="text-xs text-slate-500">Domain: {{ tenant.primary_domain || "-" }}</p>
-          <p class="text-xs text-slate-500">Owner: {{ tenant.owner_username || "-" }}</p>
-          <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">Cancel reason: {{ tenant.canceled_reason }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.slug") }}: {{ tenant.slug }} | {{ t("common.plan") }}: {{ tenant.plan_name }}</p>
+          <p class="text-xs text-slate-500">{{ t("adminConsole.domain") }}: {{ tenant.primary_domain || "-" }}</p>
+          <p class="text-xs text-slate-500">{{ t("adminConsole.owner") }}: {{ tenant.owner_username || "-" }}</p>
+          <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">{{ t("adminConsole.cancelReason") }}: {{ tenant.canceled_reason }}</p>
           <div class="grid grid-cols-3 gap-2">
             <button
               class="rounded-full border border-amber-400/70 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-50"
               :disabled="tenant.lifecycle_status !== 'active' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'suspend')"
             >
-              Suspend
+              {{ t("adminConsole.suspend") }}
             </button>
             <button
               class="rounded-full border border-emerald-400/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-50"
               :disabled="tenant.lifecycle_status === 'active' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'reactivate')"
             >
-              Reactivate
+              {{ t("adminConsole.reactivate") }}
             </button>
             <button
               class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-50"
               :disabled="tenant.lifecycle_status === 'canceled' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'cancel')"
             >
-              Cancel
+              {{ t("adminConsole.cancel") }}
             </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+              :disabled="!!tenantExportLoading[tenant.id]"
+              @click="exportTenantSettings(tenant)"
+            >
+              {{ tenantExportLoading[tenant.id] ? t("adminConsole.exporting") : t("adminConsole.exportSettings") }}
+            </button>
+            <button
+              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+              :disabled="!!tenantImportLoading[tenant.id]"
+              @click="openTenantImportPicker(tenant.id)"
+            >
+              {{ tenantImportLoading[tenant.id] ? t("adminConsole.importing") : t("adminConsole.importSettings") }}
+            </button>
+            <input
+              :ref="(el) => setTenantImportInputRef(tenant.id, el)"
+              type="file"
+              accept=".json,application/json"
+              class="hidden"
+              @change="handleTenantImportFile(tenant, $event)"
+            />
+          </div>
+          <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("adminConsole.actionHistory") }}</p>
+              <button
+                class="text-xs text-brand-secondary hover:underline disabled:opacity-50"
+                :disabled="tenantTimelineLoading(tenant.id)"
+                @click="toggleTenantTimeline(tenant)"
+              >
+                {{ tenantTimelineExpanded(tenant.id) ? t("adminConsole.hide") : t("adminConsole.show") }}
+              </button>
+            </div>
+            <template v-if="tenantTimelineExpanded(tenant.id)">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[11px] text-slate-500">
+                  {{ t("adminConsole.pageSummary", { page: tenantTimelinePage(tenant.id), pages: tenantTimelineTotalPages(tenant.id), total: tenantTimelineTotal(tenant.id) }) }}
+                </p>
+                <div class="flex items-center gap-1">
+                  <button
+                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                    :disabled="!tenantTimelineHasPrev(tenant.id) || tenantTimelineLoading(tenant.id)"
+                    @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) - 1)"
+                  >
+                    {{ t("common.previous") }}
+                  </button>
+                  <button
+                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                    :disabled="!tenantTimelineHasNext(tenant.id) || tenantTimelineLoading(tenant.id)"
+                    @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) + 1)"
+                  >
+                    {{ t("common.next") }}
+                  </button>
+                  <button
+                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                    :disabled="tenantTimelineLoading(tenant.id)"
+                    @click="fetchTenantTimeline(tenant.id, tenantTimelinePage(tenant.id))"
+                  >
+                    {{ t("common.refresh") }}
+                  </button>
+                </div>
+              </div>
+              <p v-if="tenantTimelineLoading(tenant.id)" class="text-xs text-slate-400">{{ t("adminConsole.loadingHistory") }}</p>
+              <p v-else-if="!tenantTimelineEntries(tenant.id).length" class="text-xs text-slate-500">
+                {{ t("adminConsole.noAdminActionsRecordedYet") }}
+              </p>
+              <ul v-else class="space-y-2">
+                <li
+                  v-for="entry in tenantTimelineEntries(tenant.id)"
+                  :key="`tenant-timeline-${tenant.id}-${entry.id}`"
+                  class="rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1.5"
+                >
+                  <div class="flex items-center justify-between gap-2 text-[11px]">
+                    <span class="font-semibold text-slate-200">{{ formatAuditAction(entry.action) }}</span>
+                    <span class="text-slate-500">{{ formatDate(entry.created_at) }}</span>
+                  </div>
+                  <p class="text-[11px] text-slate-400">
+                    {{ t("adminConsole.by") }} {{ entry.actor_username || t("adminConsole.system") }}
+                    <span v-if="entry.metadata?.lifecycle_action">
+                      • {{ entry.metadata.lifecycle_action }}
+                    </span>
+                  </p>
+                </li>
+              </ul>
+            </template>
           </div>
         </article>
       </div>
@@ -180,10 +267,10 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">Reservation follow-up SLA</p>
-          <h2 class="text-xl font-semibold">Overdue reservation alerts</h2>
+          <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
+          <h2 class="text-xl font-semibold">{{ t("adminConsole.overdueReservationAlerts") }}</h2>
         </div>
-        <button @click="fetchReservationAlerts" class="ui-btn-outline px-3 py-1.5 text-xs">Refresh alerts</button>
+        <button @click="fetchReservationAlerts" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshAlerts") }}</button>
       </div>
       <div class="ui-scroll-row">
         <button
@@ -191,45 +278,43 @@
           :class="alertState === 'all' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
           @click="setAlertState('all')"
         >
-          All alerts
+          {{ t("adminConsole.allAlerts") }}
         </button>
         <button
           class="ui-pill-nav text-xs"
           :class="alertState === 'overdue' ? 'border-rose-400 bg-rose-500/10 text-rose-200' : ''"
           @click="setAlertState('overdue')"
         >
-          Overdue only
+          {{ t("adminConsole.overdueOnly") }}
         </button>
         <button
           class="ui-pill-nav text-xs"
           :class="alertState === 'due_soon' ? 'border-amber-400 bg-amber-500/10 text-amber-200' : ''"
           @click="setAlertState('due_soon')"
         >
-          Due soon only
+          {{ t("adminConsole.dueSoonOnly") }}
         </button>
       </div>
       <div class="grid gap-2 sm:grid-cols-3">
         <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">Overdue</p>
+          <p class="text-slate-500">{{ t("adminConsole.overdue") }}</p>
           <p class="mt-1 text-base font-semibold text-rose-200">{{ alertCounts.overdue }}</p>
         </div>
         <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">Due soon</p>
+          <p class="text-slate-500">{{ t("adminConsole.dueSoon") }}</p>
           <p class="mt-1 text-base font-semibold text-amber-200">{{ alertCounts.due_soon }}</p>
         </div>
         <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">Total alerts</p>
+          <p class="text-slate-500">{{ t("adminConsole.totalAlerts") }}</p>
           <p class="mt-1 text-base font-semibold text-slate-100">{{ alertCounts.total_alerts }}</p>
         </div>
       </div>
       <p class="text-xs text-slate-500">
-        Tracks reservation leads still marked <span class="font-semibold text-amber-300">new</span>. Priority should be
-        highest for overdue follow-ups. SLA target: {{ alertThresholds.overdue_minutes }}m (due soon window:
-        last {{ alertThresholds.due_soon_minutes }}m before breach).
+        {{ t("adminConsole.reservationSlaCopy", { overdue: alertThresholds.overdue_minutes, dueSoon: alertThresholds.due_soon_minutes }) }}
       </p>
-      <p v-if="alertsLoading" class="text-sm text-slate-400">Loading alerts...</p>
+      <p v-if="alertsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingAlerts") }}</p>
       <p v-else-if="!reservationAlerts.length" class="text-sm text-slate-400">
-        No overdue or due-soon reservation leads right now.
+        {{ t("adminConsole.noReservationAlerts") }}
       </p>
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
@@ -238,21 +323,21 @@
           class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="font-semibold text-slate-100">{{ lead.name || `Lead #${lead.id}` }}</p>
+            <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
             <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="slaBadgeClass(lead.sla_state)">
               {{ slaLabel(lead) }}
             </span>
           </div>
           <p class="text-xs text-slate-400">
-            Tenant: <span class="text-slate-200">{{ lead.tenant_slug || "-" }}</span>
+            {{ t("adminConsole.tenant") }}: <span class="text-slate-200">{{ lead.tenant_slug || "-" }}</span>
           </p>
           <p class="text-xs text-slate-400">{{ lead.phone || "-" }} {{ lead.email ? `| ${lead.email}` : "" }}</p>
           <p class="text-xs text-slate-500">
-            Reminders: {{ lead.reminder_count || 0 }}
-            <span v-if="lead.last_reminder_status"> | Last: {{ lead.last_reminder_status }}</span>
+            {{ t("adminConsole.reminders") }}: {{ lead.reminder_count || 0 }}
+            <span v-if="lead.last_reminder_status"> | {{ t("adminConsole.last") }}: {{ lead.last_reminder_status }}</span>
           </p>
-          <p class="text-xs text-slate-500">Created: {{ formatDate(lead.created_at) }}</p>
-          <p class="text-xs text-slate-500">Due: {{ formatDate(lead.follow_up_due_at) }}</p>
+          <p class="text-xs text-slate-500">{{ t("adminConsole.created") }}: {{ formatDate(lead.created_at) }}</p>
+          <p class="text-xs text-slate-500">{{ t("adminConsole.due") }}: {{ formatDate(lead.follow_up_due_at) }}</p>
           <a
             v-if="lead.tenant_slug"
             :href="ownerReservationUrl(lead)"
@@ -260,7 +345,7 @@
             rel="noopener noreferrer"
             class="inline-flex rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-brand-primary"
           >
-            Open owner inbox
+            {{ t("adminConsole.openOwnerInbox") }}
           </a>
         </article>
       </div>
@@ -269,14 +354,14 @@
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">Cash-first upgrades</p>
-          <h2 class="ui-display text-2xl font-semibold">Tier upgrade requests</h2>
+          <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
+          <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.tierUpgradeRequests") }}</h2>
         </div>
         <button @click="fetchUpgradeRequests" class="ui-btn-outline px-4 py-2 text-sm">
-          Refresh
+          {{ t("common.refresh") }}
         </button>
       </div>
-      <p v-if="upgradeLoading" class="text-sm text-slate-400">Loading upgrade requests...</p>
+      <p v-if="upgradeLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingUpgradeRequests") }}</p>
       <div class="space-y-2 md:hidden">
         <article
           v-for="request in upgradeRequests"
@@ -292,39 +377,39 @@
           <p class="text-sm font-semibold text-slate-100">{{ request.tenant_slug }}</p>
           <p class="text-xs text-slate-400">{{ request.current_plan_name }} -> {{ request.target_plan_name }}</p>
           <p class="text-xs text-slate-500">
-            Payment: {{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}
+            {{ t("adminConsole.payment") }}: {{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}
           </p>
-          <p v-if="request.target_plan_is_active === false" class="text-xs text-amber-300">Target plan is inactive.</p>
+          <p v-if="request.target_plan_is_active === false" class="text-xs text-amber-300">{{ t("adminConsole.targetPlanInactive") }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button
               class="rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-50"
               :disabled="request.status !== 'pending' || request.target_plan_is_active === false || !!decisionLoading[request.id]"
               @click="decideUpgradeRequest(request, 'approve')"
             >
-              Approve
+              {{ t("adminConsole.approve") }}
             </button>
             <button
               class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-50"
               :disabled="request.status !== 'pending' || !!decisionLoading[request.id]"
               @click="decideUpgradeRequest(request, 'reject')"
             >
-              Reject
+              {{ t("adminConsole.reject") }}
             </button>
           </div>
         </article>
-        <p v-if="!upgradeRequests.length && !upgradeLoading" class="text-sm text-slate-400">No upgrade requests yet.</p>
+        <p v-if="!upgradeRequests.length && !upgradeLoading" class="text-sm text-slate-400">{{ t("adminConsole.noUpgradeRequestsYet") }}</p>
       </div>
       <div class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">When</th>
-              <th class="px-4 py-3 text-left">Tenant</th>
-              <th class="px-4 py-3 text-left">From</th>
-              <th class="px-4 py-3 text-left">To</th>
-              <th class="px-4 py-3 text-left">Payment</th>
-              <th class="px-4 py-3 text-left">Status</th>
-              <th class="px-4 py-3 text-left">Actions</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.from") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.to") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.payment") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("common.status") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.actions") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -334,7 +419,7 @@
               <td class="px-4 py-3 text-slate-300">{{ request.current_plan_name }}</td>
               <td class="px-4 py-3 text-slate-300">
                 <span>{{ request.target_plan_name }}</span>
-                <span v-if="request.target_plan_is_active === false" class="ml-2 text-xs text-amber-300">(inactive)</span>
+                <span v-if="request.target_plan_is_active === false" class="ml-2 text-xs text-amber-300">({{ t("adminConsole.inactive") }})</span>
               </td>
               <td class="px-4 py-3 text-slate-300">{{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}</td>
               <td class="px-4 py-3">
@@ -349,20 +434,20 @@
                     :disabled="request.status !== 'pending' || request.target_plan_is_active === false || !!decisionLoading[request.id]"
                     @click="decideUpgradeRequest(request, 'approve')"
                   >
-                    Approve
+                    {{ t("adminConsole.approve") }}
                   </button>
                   <button
                     class="rounded-full border border-rose-500/70 px-3 py-1 text-xs font-semibold text-rose-200 disabled:opacity-50"
                     :disabled="request.status !== 'pending' || !!decisionLoading[request.id]"
                     @click="decideUpgradeRequest(request, 'reject')"
                   >
-                    Reject
+                    {{ t("adminConsole.reject") }}
                   </button>
                 </div>
               </td>
             </tr>
             <tr v-if="!upgradeRequests.length && !upgradeLoading">
-              <td colspan="7" class="px-4 py-3 text-slate-400">No upgrade requests yet.</td>
+              <td colspan="7" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noUpgradeRequestsYet") }}</td>
             </tr>
           </tbody>
         </table>
@@ -371,11 +456,11 @@
 
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="ui-display text-2xl font-semibold">Provisioning jobs</h2>
-        <button @click="fetchJobs" class="ui-btn-outline px-4 py-2 text-sm">Refresh</button>
+        <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
+        <button @click="fetchJobs" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
       </div>
 
-      <p v-if="loading" class="text-sm text-slate-400">Loading jobs...</p>
+      <p v-if="loading" class="text-sm text-slate-400">{{ t("adminConsole.loadingJobs") }}</p>
       <div class="space-y-2 md:hidden">
         <article
           v-for="job in jobs"
@@ -386,23 +471,23 @@
             <p class="text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
             <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
           </div>
-          <p class="text-xs text-slate-400">Tenant: {{ job.tenant_slug || '-' }}</p>
-          <p class="text-xs text-slate-400">Updated: {{ new Date(job.updated_at).toLocaleString() }}</p>
-          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap">{{ job.log || "-" }}</p>
+            <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
+            <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ new Date(job.updated_at).toLocaleString() }}</p>
+          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
         </article>
-        <p v-if="!jobs.length && !loading" class="text-sm text-slate-400">No jobs yet.</p>
+        <p v-if="!jobs.length && !loading" class="text-sm text-slate-400">{{ t("adminConsole.noJobsYet") }}</p>
       </div>
 
       <div class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[920px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">ID</th>
-              <th class="px-4 py-3 text-left">Lead</th>
-              <th class="px-4 py-3 text-left">Tenant</th>
-              <th class="px-4 py-3 text-left">Status</th>
-              <th class="px-4 py-3 text-left">Log</th>
-              <th class="px-4 py-3 text-left">Updated</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.id") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.lead") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("common.status") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.log") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.updated") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -417,7 +502,7 @@
               <td class="px-4 py-3 text-slate-400">{{ new Date(job.updated_at).toLocaleString() }}</td>
             </tr>
             <tr v-if="!jobs.length && !loading">
-              <td colspan="6" class="px-4 py-3 text-slate-400">No jobs yet.</td>
+              <td colspan="6" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noJobsYet") }}</td>
             </tr>
           </tbody>
         </table>
@@ -426,10 +511,10 @@
 
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="ui-display text-2xl font-semibold">Security audit log</h2>
+        <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.securityAuditLog") }}</h2>
         <div class="ui-scroll-row">
           <label class="text-xs text-slate-400">
-            Page size
+            {{ t("adminConsole.pageSize") }}
             <select v-model.number="auditPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
               <option :value="25">25</option>
               <option :value="50">50</option>
@@ -441,22 +526,22 @@
             :disabled="!auditHasPrev"
             @click="changeAuditPage(auditPage - 1)"
           >
-            Prev
+            {{ t("common.previous") }}
           </button>
           <button
             class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50"
             :disabled="!auditHasNext"
             @click="changeAuditPage(auditPage + 1)"
           >
-            Next
+            {{ t("common.next") }}
           </button>
-          <button @click="fetchAuditLogs(auditPage)" class="ui-btn-outline px-4 py-2 text-sm">Refresh</button>
+          <button @click="fetchAuditLogs(auditPage)" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
         </div>
       </div>
       <p class="text-xs text-slate-500">
-        Page {{ auditPage }} / {{ auditTotalPages }} • total entries: {{ auditTotal }}
+        {{ t("adminConsole.pageEntriesSummary", { page: auditPage, pages: auditTotalPages, total: auditTotal }) }}
       </p>
-      <p v-if="auditLoading" class="text-sm text-slate-400">Loading audit logs...</p>
+      <p v-if="auditLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingAuditLogs") }}</p>
       <div class="space-y-2 md:hidden">
         <article
           v-for="entry in auditLogs"
@@ -467,33 +552,33 @@
             <p class="text-sm font-semibold text-slate-100">{{ entry.action }}</p>
             <p class="text-[11px] text-slate-500">{{ new Date(entry.created_at).toLocaleString() }}</p>
           </div>
-          <p class="text-xs text-slate-400">Actor: {{ entry.actor_username || "system" }}</p>
-          <p class="text-xs text-slate-400">Target: {{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</p>
-          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap">{{ formatAuditMetadata(entry.metadata) }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.actor") }}: {{ entry.actor_username || t("adminConsole.system") }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.target") }}: {{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</p>
+          <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ formatAuditMetadata(entry.metadata) }}</p>
         </article>
-        <p v-if="!auditLogs.length && !auditLoading" class="text-sm text-slate-400">No audit entries yet.</p>
+        <p v-if="!auditLogs.length && !auditLoading" class="text-sm text-slate-400">{{ t("adminConsole.noAuditEntriesYet") }}</p>
       </div>
       <div class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">When</th>
-              <th class="px-4 py-3 text-left">Action</th>
-              <th class="px-4 py-3 text-left">Actor</th>
-              <th class="px-4 py-3 text-left">Target</th>
-              <th class="px-4 py-3 text-left">Details</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.action") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.actor") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.target") }}</th>
+              <th class="px-4 py-3 text-left">{{ t("adminConsole.details") }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="entry in auditLogs" :key="entry.id" class="border-t border-slate-800">
               <td class="px-4 py-3 text-slate-300">{{ new Date(entry.created_at).toLocaleString() }}</td>
               <td class="px-4 py-3 text-slate-100">{{ entry.action }}</td>
-              <td class="px-4 py-3 text-slate-300">{{ entry.actor_username || "system" }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ entry.actor_username || t("adminConsole.system") }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</td>
               <td class="px-4 py-3 text-slate-400 max-w-[360px] whitespace-pre-wrap text-xs">{{ formatAuditMetadata(entry.metadata) }}</td>
             </tr>
             <tr v-if="!auditLogs.length && !auditLoading">
-              <td colspan="5" class="px-4 py-3 text-slate-400">No audit entries yet.</td>
+              <td colspan="5" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noAuditEntriesYet") }}</td>
             </tr>
           </tbody>
         </table>
@@ -502,47 +587,68 @@
 
     <section v-if="lastProvision" class="ui-panel p-4 space-y-2 text-sm text-slate-200">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="font-semibold">Latest provisioning package</h3>
+        <h3 class="font-semibold">{{ t("adminConsole.latestProvisioningPackage") }}</h3>
         <div class="flex items-center gap-3">
-          <button class="text-xs text-brand-secondary hover:underline" @click="copyOnboardingPackage">Copy package</button>
-          <button class="text-xs text-brand-secondary hover:underline" @click="lastProvision = null">Clear</button>
+          <button class="text-xs text-brand-secondary hover:underline" @click="copyOnboardingPackage">{{ t("adminConsole.copyPackage") }}</button>
+          <button class="text-xs text-brand-secondary hover:underline" @click="lastProvision = null">{{ t("common.clear") }}</button>
         </div>
       </div>
-      <p><span class="text-slate-400">Tenant:</span> {{ lastProvision.tenant || '-' }}</p>
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400">Tenant URL:</span>
-        <span class="truncate">{{ lastProvision.tenant_url || '-' }}</span>
-        <button v-if="lastProvision.tenant_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">Copy</button>
+      <p><span class="text-slate-400">{{ t("adminConsole.tenant") }}:</span> {{ lastProvision.tenant || '-' }}</p>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.tenantUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.tenant_url || '-' }}</span>
+        <button v-if="lastProvision.tenant_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400">Admin URL:</span>
-        <span class="truncate">{{ lastProvision.admin_url || '-' }}</span>
-        <button v-if="lastProvision.admin_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.admin_url)">Copy</button>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.workspaceUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.workspace_url || '-' }}</span>
+        <button v-if="lastProvision.workspace_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400">Activation token:</span>
-        <span class="truncate">{{ lastProvision.activation_token || '-' }}</span>
-        <button v-if="lastProvision.activation_token" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">Copy</button>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.onboardingUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.onboarding_url || '-' }}</span>
+        <button v-if="lastProvision.onboarding_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.onboarding_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400">WhatsApp link:</span>
-        <span class="truncate">{{ lastProvision.whatsapp_link || '-' }}</span>
-        <button v-if="lastProvision.whatsapp_link" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.whatsapp_link)">Copy</button>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.signInUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.signin_url || '-' }}</span>
+        <button v-if="lastProvision.signin_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.signin_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-slate-400">Activation URL:</span>
-        <span class="truncate">{{ lastProvision.activation_url || '-' }}</span>
-        <button v-if="lastProvision.activation_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">Copy</button>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.activationToken") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_token || '-' }}</span>
+        <button v-if="lastProvision.activation_token" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+      </div>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.whatsappLink") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.whatsapp_link || '-' }}</span>
+        <button v-if="lastProvision.whatsapp_link" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.whatsapp_link)">{{ t("common.copy") }}</button>
+      </div>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.activationUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_url || '-' }}</span>
+        <button v-if="lastProvision.activation_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
+      </div>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="text-slate-400">{{ t("adminConsole.publicMenuUrl") }}:</span>
+        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.public_menu_url || '-' }}</span>
+        <button v-if="lastProvision.public_menu_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.public_menu_url)">{{ t("common.copy") }}</button>
+      </div>
+      <div v-if="lastProvision.owner_next_steps?.length" class="space-y-1">
+        <span class="text-slate-400">{{ t("adminConsole.ownerNextSteps") }}:</span>
+        <ol class="list-decimal space-y-1 pl-5 text-xs text-slate-200">
+          <li v-for="step in lastProvision.owner_next_steps" :key="step">{{ step }}</li>
+        </ol>
       </div>
       <div class="space-y-1">
-        <span class="text-slate-400">WhatsApp message template:</span>
-        <pre class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs whitespace-pre-wrap">{{ lastProvision.whatsapp_message_template || '-' }}</pre>
+        <span class="text-slate-400">{{ t("adminConsole.whatsappMessageTemplate") }}:</span>
+        <pre class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs whitespace-pre-wrap break-all">{{ lastProvision.whatsapp_message_template || '-' }}</pre>
         <button
           v-if="lastProvision.whatsapp_message_template"
           class="text-xs text-brand-secondary hover:underline"
           @click="copyText(lastProvision.whatsapp_message_template)"
         >
-          Copy message
+          {{ t("adminConsole.copyMessage") }}
         </button>
       </div>
     </section>
@@ -552,6 +658,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
+import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 
 const jobs = ref([]);
@@ -566,7 +673,19 @@ const packageLoading = ref({});
 const removeLoading = ref({});
 const previewLoading = ref({});
 const previews = ref({});
-const domainSuffix = ref("localhost");
+const inferDomainSuffix = () => {
+  if (typeof window === "undefined") return "localhost";
+  const host = String(window.location.hostname || "").trim().toLowerCase().replace(/^www\./, "");
+  if (!host) return "localhost";
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) return "localhost";
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length >= 3 && parts[parts.length - 1].length === 2 && parts[parts.length - 2].length <= 3) {
+    return parts.slice(-3).join(".");
+  }
+  if (parts.length >= 2) return parts.slice(-2).join(".");
+  return host;
+};
+const domainSuffix = ref(inferDomainSuffix());
 const upgradeRequests = ref([]);
 const upgradeLoading = ref(false);
 const decisionLoading = ref({});
@@ -579,6 +698,10 @@ const tenantTotalPages = ref(1);
 const tenantHasNext = ref(false);
 const tenantHasPrev = ref(false);
 const tenantLifecycleLoading = ref({});
+const tenantExportLoading = ref({});
+const tenantImportLoading = ref({});
+const tenantImportInputs = ref({});
+const tenantTimeline = ref({});
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
 const alertState = ref("all");
@@ -592,6 +715,7 @@ const alertThresholds = ref({
   due_soon_minutes: 10,
 });
 const toast = useToastStore();
+const { t } = useI18n();
 const lastProvision = ref(null);
 const auditLogs = ref([]);
 const auditPage = ref(1);
@@ -623,14 +747,20 @@ const packageText = computed(() => {
   if (!lastProvision.value) return "";
   const p = lastProvision.value;
   return [
-    `Tenant: ${p.tenant || "-"}`,
-    `Tenant URL: ${p.tenant_url || "-"}`,
-    `Admin URL: ${p.admin_url || "-"}`,
-    `Activation URL: ${p.activation_url || "-"}`,
-    `Activation Token: ${p.activation_token || "-"}`,
-    `WhatsApp Link: ${p.whatsapp_link || "-"}`,
+    `${t("adminConsole.tenant")}: ${p.tenant || "-"}`,
+    `${t("adminConsole.tenantUrl")}: ${p.tenant_url || "-"}`,
+    `${t("adminConsole.workspaceUrl")}: ${p.workspace_url || "-"}`,
+    `${t("adminConsole.onboardingUrl")}: ${p.onboarding_url || "-"}`,
+    `${t("adminConsole.signInUrl")}: ${p.signin_url || "-"}`,
+    `${t("adminConsole.activationUrl")}: ${p.activation_url || "-"}`,
+    `${t("adminConsole.publicMenuUrl")}: ${p.public_menu_url || "-"}`,
+    `${t("adminConsole.activationToken")}: ${p.activation_token || "-"}`,
+    `${t("adminConsole.whatsappLink")}: ${p.whatsapp_link || "-"}`,
     "",
-    "WhatsApp Message Template:",
+    `${t("adminConsole.ownerNextSteps")}:`,
+    ...(Array.isArray(p.owner_next_steps) && p.owner_next_steps.length ? p.owner_next_steps.map((step, index) => `${index + 1}. ${step}`) : ["-"]),
+    "",
+    `${t("adminConsole.whatsappMessageTemplate")}:`,
     p.whatsapp_message_template || "-",
   ].join("\n");
 });
@@ -642,7 +772,7 @@ const fetchJobs = async () => {
     const res = await adminApi.get("/provision-jobs/");
     jobs.value = res.data;
   } catch (err) {
-    error.value = parseApiError(err, "Unable to load jobs (login as admin)");
+    error.value = parseApiError(err, t("adminConsole.loadJobsFailed"));
   } finally {
     loading.value = false;
   }
@@ -654,7 +784,7 @@ const fetchUpgradeRequests = async () => {
     const res = await adminApi.get("/admin-tier-upgrade-requests/");
     upgradeRequests.value = Array.isArray(res.data) ? res.data : [];
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load upgrade requests");
+    const msg = parseApiError(err, t("adminConsole.loadUpgradeRequestsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -691,7 +821,7 @@ const fetchAuditLogs = async (page = auditPage.value) => {
     auditHasNext.value = Boolean(pagination.has_next);
     auditHasPrev.value = Boolean(pagination.has_prev);
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load audit logs");
+    const msg = parseApiError(err, t("adminConsole.loadAuditLogsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -714,7 +844,7 @@ const fetchLeads = async () => {
     previewLoading.value = {};
     await Promise.all(leads.value.map((lead) => checkPreview(lead, false)));
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load leads (admin only)");
+    const msg = parseApiError(err, t("adminConsole.loadLeadsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -750,7 +880,7 @@ const fetchTenants = async (page = tenantPage.value) => {
     tenantHasNext.value = Boolean(pagination.has_next);
     tenantHasPrev.value = Boolean(pagination.has_prev);
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load tenants");
+    const msg = parseApiError(err, t("adminConsole.loadTenantsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -764,6 +894,240 @@ const changeTenantPage = async (nextPage) => {
   await fetchTenants(page);
 };
 
+const tenantTimelineDefaults = () => ({
+  expanded: false,
+  loaded: false,
+  loading: false,
+  items: [],
+  page: 1,
+  total: 0,
+  totalPages: 1,
+  hasNext: false,
+  hasPrev: false,
+});
+
+const ensureTenantTimelineState = (tenantId) => {
+  const key = String(tenantId || "");
+  if (!key) return tenantTimelineDefaults();
+  const existing = tenantTimeline.value[key];
+  if (existing) return existing;
+  const created = tenantTimelineDefaults();
+  tenantTimeline.value = { ...tenantTimeline.value, [key]: created };
+  return created;
+};
+
+const patchTenantTimelineState = (tenantId, patch) => {
+  const key = String(tenantId || "");
+  if (!key) return;
+  const current = ensureTenantTimelineState(key);
+  tenantTimeline.value = {
+    ...tenantTimeline.value,
+    [key]: {
+      ...current,
+      ...patch,
+    },
+  };
+};
+
+const tenantTimelineEntries = (tenantId) => ensureTenantTimelineState(tenantId).items || [];
+const tenantTimelineLoading = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).loading);
+const tenantTimelineExpanded = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).expanded);
+const tenantTimelinePage = (tenantId) => ensureTenantTimelineState(tenantId).page || 1;
+const tenantTimelineTotal = (tenantId) => ensureTenantTimelineState(tenantId).total || 0;
+const tenantTimelineTotalPages = (tenantId) => ensureTenantTimelineState(tenantId).totalPages || 1;
+const tenantTimelineHasNext = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).hasNext);
+const tenantTimelineHasPrev = (tenantId) => Boolean(ensureTenantTimelineState(tenantId).hasPrev);
+
+const fetchTenantTimeline = async (tenantId, page = 1) => {
+  const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
+  patchTenantTimelineState(tenantId, { loading: true });
+  try {
+    const res = await adminApi.get(`/admin-tenants/${tenantId}/timeline/`, {
+      params: {
+        page: requestedPage,
+        page_size: 10,
+      },
+    });
+    const payload = res?.data;
+    if (Array.isArray(payload)) {
+      patchTenantTimelineState(tenantId, {
+        items: payload.slice(0, 10),
+        page: 1,
+        total: payload.length,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+        loaded: true,
+      });
+      return;
+    }
+    const pagination = payload?.pagination || {};
+    patchTenantTimelineState(tenantId, {
+      items: Array.isArray(payload?.results) ? payload.results : [],
+      page: Number.parseInt(pagination.page, 10) || requestedPage,
+      total: Number.parseInt(pagination.total, 10) || 0,
+      totalPages: Number.parseInt(pagination.total_pages, 10) || 1,
+      hasNext: Boolean(pagination.has_next),
+      hasPrev: Boolean(pagination.has_prev),
+      loaded: true,
+    });
+  } catch (err) {
+    const msg = parseApiError(err, t("adminConsole.loadTenantHistoryFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    patchTenantTimelineState(tenantId, { loading: false });
+  }
+};
+
+const toggleTenantTimeline = async (tenant) => {
+  const tenantId = tenant?.id;
+  if (!tenantId) return;
+  const state = ensureTenantTimelineState(tenantId);
+  const nextExpanded = !state.expanded;
+  patchTenantTimelineState(tenantId, { expanded: nextExpanded });
+  if (nextExpanded && !state.loaded) {
+    await fetchTenantTimeline(tenantId, 1);
+  }
+};
+
+const changeTenantTimelinePage = async (tenantId, nextPage) => {
+  const page = Number.parseInt(nextPage, 10);
+  if (!Number.isFinite(page) || page < 1 || page > tenantTimelineTotalPages(tenantId)) return;
+  await fetchTenantTimeline(tenantId, page);
+};
+
+const setTenantImportInputRef = (tenantId, element) => {
+  const key = String(tenantId || "");
+  if (!key) return;
+  if (element) {
+    tenantImportInputs.value = { ...tenantImportInputs.value, [key]: element };
+    return;
+  }
+  const { [key]: _removed, ...rest } = tenantImportInputs.value;
+  tenantImportInputs.value = rest;
+};
+
+const openTenantImportPicker = (tenantId) => {
+  const key = String(tenantId || "");
+  const input = tenantImportInputs.value[key];
+  if (!input) {
+    toast.show(t("adminConsole.importInputNotReady"), "error");
+    return;
+  }
+  input.click();
+};
+
+const readFileAsText = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(t("adminConsole.unableToReadFile")));
+    reader.readAsText(file);
+  });
+
+const saveJsonFile = (filename, payload) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(objectUrl);
+};
+
+const exportTenantSettings = async (tenant) => {
+  if (!tenant?.id) return;
+  tenantExportLoading.value = { ...tenantExportLoading.value, [tenant.id]: true };
+  try {
+    const res = await adminApi.get(`/admin-tenants/${tenant.id}/settings-export/`);
+    const payload = res?.data || {};
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${tenant.slug || `tenant-${tenant.id}`}-settings-${stamp}.json`;
+    saveJsonFile(filename, payload);
+    toast.show(t("adminConsole.settingsExportDownloaded"), "success");
+    fetchAuditLogs(auditPage.value);
+    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
+      fetchTenantTimeline(tenant.id, 1);
+    }
+  } catch (err) {
+    const msg = parseApiError(err, t("adminConsole.exportTenantSettingsFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    tenantExportLoading.value = { ...tenantExportLoading.value, [tenant.id]: false };
+  }
+};
+
+const handleTenantImportFile = async (tenant, event) => {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (!file || !tenant?.id) return;
+  tenantImportLoading.value = { ...tenantImportLoading.value, [tenant.id]: true };
+  try {
+    const text = await readFileAsText(file);
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseError) {
+      throw new Error(t("adminConsole.invalidJsonFile"));
+    }
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error(t("adminConsole.importPayloadMustBeObject"));
+    }
+
+    const dryRunBody = Object.prototype.hasOwnProperty.call(parsed, "payload")
+      ? { ...parsed, mode: "dry_run" }
+      : { mode: "dry_run", payload: parsed };
+    const dryRunRes = await adminApi.post(`/admin-tenants/${tenant.id}/settings-import/`, dryRunBody);
+    const drySummary = dryRunRes?.data?.summary || {};
+    const shouldApply = window.confirm(
+      [
+        t("adminConsole.dryRunSuccessful"),
+        t("adminConsole.categoriesCount", { count: drySummary.categories || 0 }),
+        t("adminConsole.dishesCount", { count: drySummary.dishes || 0 }),
+        t("adminConsole.optionsCount", { count: drySummary.options || 0 }),
+        t("adminConsole.tableLinksCount", { count: drySummary.table_links || 0 }),
+        t("adminConsole.profileUpdated", { value: drySummary.profile_updated ? t("adminConsole.yes") : t("adminConsole.no") }),
+        "",
+        t("adminConsole.applyImportNow"),
+      ].join("\n")
+    );
+    if (!shouldApply) {
+      toast.show(t("adminConsole.dryRunCanceled"), "success");
+      return;
+    }
+
+    const replaceBody = Object.prototype.hasOwnProperty.call(parsed, "payload")
+      ? { ...parsed, mode: "replace" }
+      : { mode: "replace", payload: parsed };
+    const res = await adminApi.post(`/admin-tenants/${tenant.id}/settings-import/`, replaceBody);
+    const summary = res?.data?.summary || {};
+    toast.show(
+      t("adminConsole.importComplete", {
+        categories: summary.categories || 0,
+        dishes: summary.dishes || 0,
+        tables: summary.table_links || 0,
+      }),
+      "success"
+    );
+    await fetchTenants(tenantPage.value);
+    fetchAuditLogs(auditPage.value);
+    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
+      fetchTenantTimeline(tenant.id, 1);
+    }
+  } catch (err) {
+    const msg = parseApiError(err, err instanceof Error ? err.message : t("adminConsole.importTenantSettingsFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    tenantImportLoading.value = { ...tenantImportLoading.value, [tenant.id]: false };
+    if (input) input.value = "";
+  }
+};
+
 const tenantLifecycleStatusClass = (status) => {
   if (status === "active") return "bg-emerald-500/20 text-emerald-200";
   if (status === "suspended") return "bg-amber-500/20 text-amber-200";
@@ -775,15 +1139,15 @@ const applyTenantLifecycle = async (tenant, action) => {
   if (!tenant?.id || !action) return;
   let reason = "";
   if (action === "cancel") {
-    const value = window.prompt("Cancellation reason (required)", "");
+    const value = window.prompt(t("adminConsole.cancellationReasonRequiredPrompt"), "");
     if (value === null) return;
     reason = value.trim();
     if (!reason) {
-      toast.show("Cancellation reason is required", "error");
+      toast.show(t("adminConsole.cancellationReasonRequired"), "error");
       return;
     }
   } else if (action === "suspend") {
-    reason = (window.prompt("Suspend reason (optional)", "") || "").trim();
+    reason = (window.prompt(t("adminConsole.suspendReasonOptionalPrompt"), "") || "").trim();
   }
 
   tenantLifecycleLoading.value = { ...tenantLifecycleLoading.value, [tenant.id]: true };
@@ -792,12 +1156,15 @@ const applyTenantLifecycle = async (tenant, action) => {
       action,
       reason,
     });
-    const msg = res?.data?.detail || `Tenant ${action}d`;
+    const msg = res?.data?.detail || t("adminConsole.tenantActionDone", { action });
     toast.show(msg, "success");
     await fetchTenants(tenantPage.value);
     fetchAuditLogs(auditPage.value);
+    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
+      fetchTenantTimeline(tenant.id, 1);
+    }
   } catch (err) {
-    const msg = parseApiError(err, "Unable to update tenant lifecycle");
+    const msg = parseApiError(err, t("adminConsole.updateTenantLifecycleFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -822,7 +1189,7 @@ const fetchReservationAlerts = async () => {
       ...(payload.thresholds || {}),
     };
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load reservation alerts");
+    const msg = parseApiError(err, t("adminConsole.loadReservationAlertsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -848,14 +1215,14 @@ const checkPreview = async (lead, showToast = true) => {
     previews.value = { ...previews.value, [lead.id]: res.data };
     if (showToast) {
       if (res.data?.collision) {
-        toast.show(`Collision detected. Provision will use ${res.data.resolved_slug}`, "error");
+        toast.show(t("adminConsole.collisionDetectedProvision", { slug: res.data.resolved_slug }), "error");
       } else {
-        toast.show("Slug/domain available", "success");
+        toast.show(t("adminConsole.slugDomainAvailable"), "success");
       }
     }
   } catch (err) {
     if (showToast) {
-      toast.show(parseApiError(err, "Preview check failed"), "error");
+      toast.show(parseApiError(err, t("adminConsole.previewCheckFailed")), "error");
     }
   } finally {
     previewLoading.value = { ...previewLoading.value, [lead.id]: false };
@@ -871,20 +1238,26 @@ const provision = async (lead) => {
       requested_slug: preview?.input_slug || undefined,
     });
     const data = res.data || {};
-    toast.show(`Provisioned ${lead.name || lead.email}`, "success");
+    toast.show(t("adminConsole.provisionedLead", { lead: lead.name || lead.email }), "success");
     // display quick info for copy/paste
     lastProvision.value = {
       tenant_url: data.tenant_url,
+      workspace_url: data.workspace_url,
+      onboarding_url: data.onboarding_url,
+      signin_url: data.signin_url,
       admin_url: data.admin_url,
+      django_admin_url: data.django_admin_url,
       activation_url: data.activation_url,
+      public_menu_url: data.public_menu_url,
       activation_token: data.activation_token,
       tenant: data.tenant,
+      owner_next_steps: Array.isArray(data.owner_next_steps) ? data.owner_next_steps : [],
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
     fetchJobs();
   } catch (err) {
-    const msg = parseApiError(err, "Provision failed");
+    const msg = parseApiError(err, t("adminConsole.provisionFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -897,19 +1270,25 @@ const resendActivation = async (lead) => {
   try {
     const res = await adminApi.post(`/lead-resend-activation/${lead.id}/`);
     const data = res.data || {};
-    toast.show(`Activation resent for ${lead.name || lead.email}`, "success");
+    toast.show(t("adminConsole.activationResent", { lead: lead.name || lead.email }), "success");
     lastProvision.value = {
       tenant_url: data.tenant_url,
+      workspace_url: data.workspace_url,
+      onboarding_url: data.onboarding_url,
+      signin_url: data.signin_url,
       admin_url: data.admin_url,
+      django_admin_url: data.django_admin_url,
       activation_url: data.activation_url,
+      public_menu_url: data.public_menu_url,
       activation_token: data.activation_token,
       tenant: data.tenant,
+      owner_next_steps: Array.isArray(data.owner_next_steps) ? data.owner_next_steps : [],
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
     fetchJobs();
   } catch (err) {
-    const msg = parseApiError(err, "Resend failed");
+    const msg = parseApiError(err, t("adminConsole.resendFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -927,15 +1306,21 @@ const loadOnboardingPackage = async (lead, refreshToken = false) => {
     lastProvision.value = {
       tenant: data.tenant,
       tenant_url: data.tenant_url,
+      workspace_url: data.workspace_url,
+      onboarding_url: data.onboarding_url,
+      signin_url: data.signin_url,
       admin_url: data.admin_url,
+      django_admin_url: data.django_admin_url,
       activation_url: data.activation_url,
+      public_menu_url: data.public_menu_url,
       activation_token: data.activation_token,
+      owner_next_steps: Array.isArray(data.owner_next_steps) ? data.owner_next_steps : [],
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
-    toast.show(`Package loaded for ${lead.name || lead.email}`, "success");
+    toast.show(t("adminConsole.packageLoaded", { lead: lead.name || lead.email }), "success");
   } catch (err) {
-    const msg = parseApiError(err, "Unable to load onboarding package");
+    const msg = parseApiError(err, t("adminConsole.loadOnboardingPackageFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -950,9 +1335,9 @@ const removeLead = async (lead) => {
     leads.value = leads.value.filter((l) => l.id !== lead.id);
     const { [lead.id]: _removedPreview, ...rest } = previews.value;
     previews.value = rest;
-    toast.show(`Archived ${lead.name || lead.email}`, "success");
+    toast.show(t("adminConsole.archivedLead", { lead: lead.name || lead.email }), "success");
   } catch (err) {
-    const msg = parseApiError(err, "Unable to archive lead");
+    const msg = parseApiError(err, t("adminConsole.archiveLeadFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -966,22 +1351,22 @@ const decideUpgradeRequest = async (requestItem, decision) => {
     let adminNote = "";
     let paymentReference = requestItem.payment_reference || "";
     if (decision === "approve") {
-      paymentReference = window.prompt("Payment reference (optional)", paymentReference) ?? paymentReference;
-      adminNote = window.prompt("Internal admin note (optional)", "") ?? "";
+      paymentReference = window.prompt(t("adminConsole.paymentReferenceOptionalPrompt"), paymentReference) ?? paymentReference;
+      adminNote = window.prompt(t("adminConsole.internalAdminNoteOptionalPrompt"), "") ?? "";
     } else {
-      adminNote = window.prompt("Reason for rejection (optional)", "") ?? "";
+      adminNote = window.prompt(t("adminConsole.reasonForRejectionOptionalPrompt"), "") ?? "";
     }
     const res = await adminApi.put(`/admin-tier-upgrade-requests/${requestItem.id}/decision/`, {
       decision,
       admin_note: adminNote,
       payment_reference: paymentReference,
     });
-    const detail = res?.data?.detail || (decision === "approve" ? "Upgrade approved" : "Upgrade rejected");
+    const detail = res?.data?.detail || (decision === "approve" ? t("adminConsole.upgradeApproved") : t("adminConsole.upgradeRejected"));
     toast.show(detail, "success");
     await fetchUpgradeRequests();
     fetchAuditLogs();
   } catch (err) {
-    const msg = parseApiError(err, "Unable to process upgrade request");
+    const msg = parseApiError(err, t("adminConsole.processUpgradeFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
@@ -992,15 +1377,15 @@ const decideUpgradeRequest = async (requestItem, decision) => {
 const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text);
-    toast.show("Copied", "success");
+    toast.show(t("adminConsole.copied"), "success");
   } catch (e) {
-    toast.show("Copy failed", "error");
+    toast.show(t("adminConsole.copyFailed"), "error");
   }
 };
 
 const copyOnboardingPackage = async () => {
   if (!packageText.value) {
-    toast.show("No package details yet", "error");
+    toast.show(t("adminConsole.noPackageDetails"), "error");
     return;
   }
   await copyText(packageText.value);
@@ -1015,6 +1400,16 @@ const formatAuditMetadata = (meta) => {
   } catch (e) {
     return "-";
   }
+};
+
+const formatAuditAction = (action) => {
+  const raw = String(action || "").trim();
+  if (!raw) return t("adminConsole.defaultActionLabel");
+  return raw
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 };
 
 const formatDate = (value) => {
@@ -1053,11 +1448,11 @@ const slaLabel = (lead) => {
   const state = String(lead?.sla_state || "");
   if (state === "overdue") {
     const minutes = Number(lead?.sla_minutes_overdue || 0);
-    return minutes > 0 ? `Overdue ${minutes}m` : "Overdue";
+    return minutes > 0 ? t("adminConsole.overdueMinutes", { minutes }) : t("adminConsole.overdue");
   }
-  if (state === "due_soon") return "Due soon";
-  if (state === "on_track") return "On track";
-  return "SLA";
+  if (state === "due_soon") return t("adminConsole.dueSoon");
+  if (state === "on_track") return t("adminConsole.onTrack");
+  return t("adminConsole.sla");
 };
 
 const statusClass = (status) => {

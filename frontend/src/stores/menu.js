@@ -1,5 +1,27 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
+import { buildDemoDishesByCategory, DEMO_CATEGORIES } from "../lib/demoMenu";
+import { translate } from "../i18n/translate";
+import { isPublicDemoHost } from "../lib/runtimeHost";
+
+const normalizeDishes = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({
+    ...item,
+    options: Array.isArray(item?.options) ? item.options : [],
+  }));
+};
+
+const normalizeCategories = (value) => {
+  const rows = Array.isArray(value) ? value : Array.isArray(value?.results) ? value.results : [];
+  return rows.map((item) => ({
+    ...item,
+    dishes: normalizeDishes(item?.dishes),
+  }));
+};
+
+const demoCategories = () => normalizeCategories(DEMO_CATEGORIES);
+const demoDishesByCategory = () => buildDemoDishesByCategory();
 
 const extractErrorMessage = (err, fallback) => {
   const data = err?.response?.data;
@@ -30,30 +52,52 @@ export const useMenuStore = defineStore("menu", {
     error: null,
   }),
   actions: {
+    applyDemoMenuData() {
+      this.categories = demoCategories();
+      this.dishes = demoDishesByCategory();
+      this.error = null;
+    },
     async fetchCategories() {
       this.loading = true;
       this.error = null;
       try {
         const res = await api.get("/categories/");
-        this.categories = res.data;
+        const normalized = normalizeCategories(res.data);
+        if (normalized.length || !isPublicDemoHost()) {
+          this.categories = normalized;
+          if (!Object.keys(this.dishes).length) {
+            this.dishes = Object.fromEntries(normalized.map((category) => [category.slug, category.dishes || []]));
+          }
+        } else {
+          this.applyDemoMenuData();
+        }
       } catch (err) {
-        this.categories = [];
-        this.error = extractErrorMessage(err, "Unable to load categories");
-        if (!isExpectedPublicStateError(err)) console.error(err);
+        if (isPublicDemoHost()) {
+          this.applyDemoMenuData();
+        } else {
+          this.categories = [];
+          this.error = extractErrorMessage(err, translate("menuStore.loadCategoriesFailed"));
+          if (!isExpectedPublicStateError(err)) console.error(err);
+        }
       } finally {
         this.loading = false;
       }
     },
     async fetchDishesByCategory(slug) {
+      if (this.dishes[slug]?.length) return;
       this.loading = true;
       this.error = null;
       try {
         const res = await api.get("/dishes/", { params: { category: slug } });
-        this.dishes[slug] = res.data;
+        this.dishes[slug] = normalizeDishes(res.data);
       } catch (err) {
-        this.dishes[slug] = [];
-        this.error = extractErrorMessage(err, "Unable to load dishes");
-        if (!isExpectedPublicStateError(err)) console.error(err);
+        if (isPublicDemoHost()) {
+          this.dishes[slug] = demoDishesByCategory()[slug] || [];
+        } else {
+          this.dishes[slug] = [];
+          this.error = extractErrorMessage(err, translate("menuStore.loadDishesFailed"));
+          if (!isExpectedPublicStateError(err)) console.error(err);
+        }
       } finally {
         this.loading = false;
       }

@@ -2,8 +2,8 @@
   <div class="ui-auth-page flex items-center">
     <div class="ui-auth-card max-w-lg space-y-6">
       <div class="space-y-2 text-center">
-        <p class="ui-kicker">Access control</p>
-        <h1 class="text-2xl font-semibold text-white">Access denied</h1>
+        <p class="ui-kicker">{{ t("unauthorized.kicker") }}</p>
+        <h1 class="text-2xl font-semibold text-white">{{ t("unauthorized.title") }}</h1>
         <p class="text-sm text-slate-300">{{ message }}</p>
       </div>
 
@@ -13,34 +13,34 @@
           :to="signInLink"
           class="ui-btn-primary justify-center"
         >
-          Sign in
+          {{ t("common.signIn") }}
         </RouterLink>
         <RouterLink
           v-if="showAdmin"
           to="/admin-console"
           class="ui-btn-primary justify-center"
         >
-          Go to admin console
+          {{ t("unauthorized.goToAdminConsole") }}
         </RouterLink>
         <RouterLink
           v-if="showOnboarding"
           to="/owner/onboarding"
           class="ui-btn-primary justify-center"
         >
-          Go to onboarding
+          {{ t("unauthorized.goToOnboarding") }}
         </RouterLink>
         <button
           v-if="session.isAuthenticated"
           class="ui-btn-outline justify-center"
           @click="switchAccount"
         >
-          Switch account
+          {{ t("unauthorized.switchAccount") }}
         </button>
         <RouterLink
           to="/"
           class="ui-btn-outline justify-center"
         >
-          Back to home
+          {{ t("unauthorized.backToHome") }}
         </RouterLink>
       </div>
     </div>
@@ -50,19 +50,21 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+const { t } = useI18n();
 
 const reason = computed(() => (typeof route.query.reason === "string" ? route.query.reason : ""));
 const next = computed(() => (typeof route.query.next === "string" ? route.query.next : ""));
 
 const message = computed(() => {
-  if (reason.value === "admin") return "This page requires a platform admin account.";
-  if (reason.value === "editor") return "This page requires a tenant owner or tenant staff account.";
-  return "You do not have permission to access this page.";
+  if (reason.value === "admin") return t("unauthorized.adminRequired");
+  if (reason.value === "editor") return t("unauthorized.editorRequired");
+  return t("unauthorized.noPermission");
 });
 
 const signInLink = computed(() => {

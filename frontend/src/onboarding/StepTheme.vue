@@ -1,11 +1,11 @@
 ﻿<template>
   <div class="ui-panel space-y-4 p-5">
-    <h2 class="text-xl font-semibold">Theme</h2>
-    <p class="text-sm text-slate-400">Pick your brand colors, logo, and hero image.</p>
+    <h2 class="text-xl font-semibold">{{ t("stepTheme.title") }}</h2>
+    <p class="text-sm text-slate-400">{{ t("stepTheme.description") }}</p>
 
     <div class="grid sm:grid-cols-2 gap-3">
       <label class="space-y-1 text-sm text-slate-200">
-        Primary color
+        {{ t("stepTheme.primaryColor") }}
         <input
           v-model="form.primary_color"
           type="color"
@@ -17,7 +17,7 @@
       </label>
 
       <label class="space-y-1 text-sm text-slate-200">
-        Secondary color
+        {{ t("stepTheme.secondaryColor") }}
         <input
           v-model="form.secondary_color"
           type="color"
@@ -30,7 +30,7 @@
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
-      <p class="text-sm text-slate-200">Theme presets</p>
+      <p class="text-sm text-slate-200">{{ t("stepTheme.themePresets") }}</p>
       <div class="flex flex-wrap gap-2">
         <button
           v-for="preset in themePresets"
@@ -46,7 +46,7 @@
     </div>
 
     <label class="space-y-1 text-sm text-slate-200">
-      Logo URL
+      {{ t("stepTheme.logoUrl") }}
       <input
         v-model="form.logo_url"
         class="ui-input"
@@ -64,7 +64,7 @@
       >
         <div class="flex flex-wrap items-center gap-3">
           <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-            {{ uploadingLogo ? `Uploading ${logoProgress}%...` : "Upload logo" }}
+            {{ uploadingLogo ? t("stepTheme.uploadingProgress", { progress: logoProgress }) : t("stepTheme.uploadLogo") }}
             <input type="file" accept="image/*" class="hidden" :disabled="uploadingLogo" @change="uploadLogo" />
           </label>
           <button
@@ -73,20 +73,20 @@
             type="button"
             @click="clearLogo"
           >
-            Remove logo
+            {{ t("stepTheme.removeLogo") }}
           </button>
-          <img v-if="form.logo_url" :src="form.logo_url" alt="Logo preview" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+          <img v-if="form.logo_url" :src="form.logo_url" :alt="t('stepTheme.logoPreviewAlt')" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
         </div>
-        <p class="text-xs text-slate-500">Drop image here or use upload. Logo is optimized to square (1:1).</p>
+        <p class="text-xs text-slate-500">{{ t("stepTheme.logoDropHint") }}</p>
       </div>
-      <p class="text-xs text-slate-500">Accepted: JPG, PNG, WEBP up to 8MB.</p>
+      <p class="text-xs text-slate-500">{{ t("stepTheme.acceptedFormats") }}</p>
       <div v-if="uploadingLogo" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
         <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${logoProgress}%` }"></div>
       </div>
     </label>
 
     <label class="space-y-1 text-sm text-slate-200">
-      Hero image URL
+      {{ t("stepTheme.heroImageUrl") }}
       <input
         v-model="form.hero_url"
         class="ui-input"
@@ -104,7 +104,7 @@
       >
         <div class="flex flex-wrap items-center gap-3">
           <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-            {{ uploadingHero ? `Uploading ${heroProgress}%...` : "Upload hero image" }}
+            {{ uploadingHero ? t("stepTheme.uploadingProgress", { progress: heroProgress }) : t("stepTheme.uploadHeroImage") }}
             <input type="file" accept="image/*" class="hidden" :disabled="uploadingHero" @change="uploadHero" />
           </label>
           <button
@@ -113,30 +113,30 @@
             type="button"
             @click="clearHero"
           >
-            Remove hero
+            {{ t("stepTheme.removeHero") }}
           </button>
         </div>
-        <p class="text-xs text-slate-500">Drop image here or use upload. Hero is optimized to wide (16:9).</p>
+        <p class="text-xs text-slate-500">{{ t("stepTheme.heroDropHint") }}</p>
       </div>
-      <p class="text-xs text-slate-500">Accepted: JPG, PNG, WEBP up to 8MB.</p>
+      <p class="text-xs text-slate-500">{{ t("stepTheme.acceptedFormats") }}</p>
       <div v-if="uploadingHero" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
         <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${heroProgress}%` }"></div>
       </div>
     </label>
 
     <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4" :style="previewStyle">
-      <p class="text-sm text-slate-200">Preview</p>
+      <p class="text-sm text-slate-200">{{ t("stepTheme.preview") }}</p>
       <h3 class="text-xl font-semibold">{{ previewTitle }}</h3>
-      <p class="text-slate-300">Colors update live as you pick them.</p>
+      <p class="text-slate-300">{{ t("stepTheme.previewHint") }}</p>
     </div>
 
     <p v-if="errors.non_field_errors" class="text-sm text-red-300">{{ errors.non_field_errors }}</p>
 
     <div class="flex flex-wrap items-center gap-3">
       <button class="ui-btn-primary px-4 py-2" @click="saveAndNext" :disabled="saving || uploadingHero || uploadingLogo">
-        {{ saving ? "Saving..." : "Save & Next" }}
+        {{ saving ? t("common.saving") : t("common.saveAndNext") }}
       </button>
-      <button class="ui-btn-outline px-4 py-2" @click="$emit('back')">Back</button>
+      <button class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400">{{ status }}</p>
     </div>
   </div>
@@ -146,6 +146,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { profileApi, uploadApi } from "../lib/onboardingApi";
 import { THEME_PRESETS } from "./starterTemplates";
+import { useI18n } from "../composables/useI18n";
 import { useThemeStore } from "../stores/theme";
 import { useToastStore } from "../stores/toast";
 
@@ -167,6 +168,7 @@ const status = ref("");
 const errors = reactive({});
 const theme = useThemeStore();
 const toast = useToastStore();
+const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
 const themePresets = THEME_PRESETS;
 
@@ -177,7 +179,7 @@ const previewStyle = computed(() => ({
   borderColor: form.primary_color,
 }));
 
-const previewTitle = computed(() => "Your brand preview");
+const previewTitle = computed(() => t("stepTheme.previewTitle"));
 const isManagedUpload = (value = "") => /\/uploads\//.test(String(value));
 const cleanupManagedUpload = async (value) => {
   if (!isManagedUpload(value)) return;
@@ -215,7 +217,7 @@ const applyThemePreset = (preset) => {
   form.secondary_color = preset.secondary;
   clearField("primary_color");
   clearField("secondary_color");
-  status.value = `${preset.label} preset selected`;
+  status.value = t("stepTheme.presetSelected", { preset: preset.label });
 };
 
 const isPresetActive = (preset) =>
@@ -228,7 +230,7 @@ const load = async () => {
     const data = await profileApi.get();
     if (data) Object.assign(form, data);
   } catch (e) {
-    status.value = "Load failed";
+    status.value = t("common.loadFailed");
   }
 };
 
@@ -240,13 +242,13 @@ const saveAndNext = async () => {
     await profileApi.save(form);
     await flushPendingCleanup();
     theme.apply(form);
-    status.value = "Saved";
-    toast.show("Theme saved", "success");
+    status.value = t("common.saved");
+    toast.show(t("stepTheme.toastSaved"), "success");
     emit("next");
   } catch (e) {
-    status.value = "Save failed";
+    status.value = t("common.saveFailed");
     Object.assign(errors, e?.fieldErrors || {});
-    toast.show(e?.message || "Theme save failed", "error");
+    toast.show(e?.message || t("stepTheme.toastSaveFailed"), "error");
   } finally {
     saving.value = false;
   }
@@ -279,10 +281,10 @@ const uploadLogoFile = async (file) => {
     });
     form.logo_url = result.url || "";
     queueCleanup(old);
-    toast.show("Logo uploaded", "success");
+    toast.show(t("stepTheme.logoUploaded"), "success");
   } catch (e) {
     Object.assign(errors, e?.fieldErrors || {});
-    toast.show(e?.message || "Logo upload failed", "error");
+    toast.show(e?.message || t("stepTheme.logoUploadFailed"), "error");
   } finally {
     uploadingLogo.value = false;
     draggingLogo.value = false;
@@ -304,10 +306,10 @@ const uploadHeroFile = async (file) => {
     });
     form.hero_url = result.url || "";
     queueCleanup(old);
-    toast.show("Hero image uploaded", "success");
+    toast.show(t("stepTheme.heroUploaded"), "success");
   } catch (e) {
     Object.assign(errors, e?.fieldErrors || {});
-    toast.show(e?.message || "Hero upload failed", "error");
+    toast.show(e?.message || t("stepTheme.heroUploadFailed"), "error");
   } finally {
     uploadingHero.value = false;
     draggingHero.value = false;

@@ -3,8 +3,10 @@
 
 class Category(models.Model):
     name = models.CharField(max_length=150)
+    name_i18n = models.JSONField(default=dict, blank=True)
     slug = models.SlugField(max_length=160, unique=True)
     description = models.TextField(blank=True)
+    description_i18n = models.JSONField(default=dict, blank=True)
     image_url = models.URLField(blank=True)
     position = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=True)
@@ -21,8 +23,10 @@ class Category(models.Model):
 class Dish(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="dishes")
     name = models.CharField(max_length=200)
+    name_i18n = models.JSONField(default=dict, blank=True)
     slug = models.SlugField(max_length=210, unique=True)
     description = models.TextField(blank=True)
+    description_i18n = models.JSONField(default=dict, blank=True)
     price = models.DecimalField(max_digits=8, decimal_places=2)
     currency = models.CharField(max_length=8, default="USD")
     image_url = models.URLField(blank=True)
@@ -41,6 +45,7 @@ class Dish(models.Model):
 class DishOption(models.Model):
     dish = models.ForeignKey(Dish, on_delete=models.CASCADE, related_name="options")
     name = models.CharField(max_length=150)
+    name_i18n = models.JSONField(default=dict, blank=True)
     price_delta = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     is_required = models.BooleanField(default=False)
     max_select = models.PositiveIntegerField(default=1)

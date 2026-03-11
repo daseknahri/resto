@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
+import { translate } from "../i18n/translate";
 
 const LandingLayout = () => import("../layouts/LandingLayout.vue");
 const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
@@ -129,7 +130,7 @@ router.beforeEach(async (to) => {
       await tenant.fetchMeta();
     }
     if (tenant.isBrowseOnlyPlan) {
-      toast.show("Ordering features are not enabled for this tenant plan.", "info");
+      toast.show(translate("router.orderingDisabled"), "info");
       return { name: "menu" };
     }
   }
@@ -142,27 +143,27 @@ router.beforeEach(async (to) => {
   try {
     await session.fetchSession();
   } catch (err) {
-    toast.show("Unable to verify session. Please sign in.", "error");
+    toast.show(translate("router.verifySessionFailed"), "error");
     return { name: "signin", query: { next: to.fullPath } };
   }
 
   if (!session.isAuthenticated) {
     if (needsAdmin) {
-      toast.show("Please sign in as platform admin first.", "error");
+      toast.show(translate("router.signInAdminFirst"), "error");
     } else {
-      toast.show("Please sign in before accessing this page.", "error");
+      toast.show(translate("router.signInBeforeAccess"), "error");
     }
     return { name: "signin", query: { next: to.fullPath } };
   }
 
   if (needsAdmin && !session.isPlatformAdmin) {
-    toast.show("Admin access required.", "error");
+    toast.show(translate("router.adminRequired"), "error");
     return { name: "unauthorized", query: { reason: "admin", next: to.fullPath } };
   }
 
   const needsTenantEditor = to.matched.some((route) => route.meta?.tenantEditorOnly);
   if (needsTenantEditor && !session.canEditTenantMenu) {
-    toast.show("Menu editor access required.", "error");
+    toast.show(translate("router.editorRequired"), "error");
     return { name: "unauthorized", query: { reason: "editor", next: to.fullPath } };
   }
 

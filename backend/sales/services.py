@@ -1,6 +1,8 @@
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -13,7 +15,11 @@ from .messaging import (
     build_activation_message,
     build_activation_url,
     build_admin_url,
+    build_onboarding_url,
+    build_public_menu_url,
+    build_signin_url,
     build_tenant_frontend_url,
+    build_workspace_url,
     send_activation_email,
     send_activation_whatsapp,
 )
@@ -31,6 +37,8 @@ class ProvisionResult:
     job: ProvisioningJob
     activation_token: ActivationToken
     admin_url: str
+    workspace_url: str
+    signin_url: str
     tenant_url: str
     activation_url: str
     whatsapp_link: str
@@ -43,6 +51,8 @@ class ActivationResendResult:
     user: object
     activation_token: ActivationToken
     admin_url: str
+    workspace_url: str
+    signin_url: str
     tenant_url: str
     activation_url: str
     whatsapp_link: str
@@ -55,6 +65,8 @@ class OnboardingPackageResult:
     user: object
     activation_token: ActivationToken
     admin_url: str
+    workspace_url: str
+    signin_url: str
     tenant_url: str
     activation_url: str
     whatsapp_link: str
@@ -86,17 +98,68 @@ def _log_provisioning_event(event: str, **fields):
 def issue_activation(tenant, user, phone: str = ""):
     activation = ActivationToken.issue(tenant=tenant, user=user)
     admin_url = build_admin_url(tenant)
+    workspace_url = build_workspace_url(tenant)
+    onboarding_url = build_onboarding_url(tenant)
+    signin_url = build_signin_url(tenant)
     tenant_url = build_tenant_frontend_url(tenant)
+    public_menu_url = build_public_menu_url(tenant)
     activation_url = build_activation_url(tenant, activation.token)
-    whatsapp_message_template = build_activation_message(admin_url, activation_url, activation.token)
-    whatsapp_link = send_activation_whatsapp(phone, admin_url, activation_url, activation.token)
-    send_activation_email(user.email, admin_url, activation_url, activation.token)
-    return activation, admin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template
+    whatsapp_message_template = build_activation_message(
+        workspace_url,
+        signin_url,
+        activation_url,
+        onboarding_url,
+        public_menu_url,
+        activation.token,
+    )
+    whatsapp_link = send_activation_whatsapp(
+        phone,
+        workspace_url,
+        signin_url,
+        activation_url,
+        onboarding_url,
+        public_menu_url,
+        activation.token,
+    )
+    send_activation_email(
+        user.email,
+        workspace_url,
+        signin_url,
+        activation_url,
+        onboarding_url,
+        public_menu_url,
+        activation.token,
+    )
+    return activation, admin_url, workspace_url, signin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template
+
+
+def _default_domain_suffix() -> str:
+    base_url = (getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
+    if not base_url:
+        return "localhost"
+    parsed = urlparse(base_url if "://" in base_url else f"https://{base_url}")
+    host = (parsed.hostname or "").strip().lower().strip(".")
+    if host.startswith("www."):
+        host = host[4:]
+    return host or "localhost"
+
+
+def _is_local_suffix(value: str) -> bool:
+    raw = (value or "").strip().lower()
+    return raw in {"localhost", "127.0.0.1"} or raw.endswith(".localhost")
 
 
 def normalize_domain_suffix(domain_suffix: str | None) -> str:
-    suffix = (domain_suffix or "localhost").strip().lower().lstrip(".")
-    return suffix or "localhost"
+    fallback = _default_domain_suffix()
+    raw = (domain_suffix or "").strip().lower().lstrip(".")
+    if ":" in raw:
+        raw = raw.split(":", 1)[0]
+    if not raw:
+        return fallback
+
+    if _is_local_suffix(raw) and not _is_local_suffix(fallback):
+        return fallback
+    return raw
 
 
 def _base_slug_for_lead(lead: Lead) -> str:
@@ -239,14 +302,23 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
 
             Subscription.objects.get_or_create(tenant=tenant, plan=plan)
 
-            activation, admin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template = issue_activation(
-                tenant, user, phone=lead.phone
-            )
+            (
+                activation,
+                admin_url,
+                workspace_url,
+                signin_url,
+                tenant_url,
+                activation_url,
+                whatsapp_link,
+                whatsapp_message_template,
+            ) = issue_activation(tenant, user, phone=lead.phone)
 
             job = ProvisioningJob.objects.create(lead=lead, tenant=tenant, status=ProvisioningJob.Status.SUCCESS)
             job.append_log("Provisioning completed")
             job.append_log(f"Activation token: {mask_secret(activation.token)}")
-            job.append_log(f"Admin URL: {admin_url}")
+            job.append_log(f"Workspace URL: {workspace_url}")
+            job.append_log(f"Sign-in URL: {signin_url}")
+            job.append_log(f"Django admin URL: {admin_url}")
             job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 job.append_log(f"WhatsApp link: {whatsapp_link}")
@@ -275,6 +347,8 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
         job=job,
         activation_token=activation,
         admin_url=admin_url,
+        workspace_url=workspace_url,
+        signin_url=signin_url,
         tenant_url=tenant_url,
         activation_url=activation_url,
         whatsapp_link=whatsapp_link,
@@ -289,12 +363,21 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
             tenant = latest_job.tenant
             user = _get_tenant_owner_user(tenant)
 
-            activation, admin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template = issue_activation(
-                tenant, user, phone=lead.phone
-            )
+            (
+                activation,
+                admin_url,
+                workspace_url,
+                signin_url,
+                tenant_url,
+                activation_url,
+                whatsapp_link,
+                whatsapp_message_template,
+            ) = issue_activation(tenant, user, phone=lead.phone)
             latest_job.append_log("Activation token resent")
             latest_job.append_log(f"Activation token: {mask_secret(activation.token)}")
-            latest_job.append_log(f"Admin URL: {admin_url}")
+            latest_job.append_log(f"Workspace URL: {workspace_url}")
+            latest_job.append_log(f"Sign-in URL: {signin_url}")
+            latest_job.append_log(f"Django admin URL: {admin_url}")
             latest_job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
@@ -311,6 +394,8 @@ def resend_activation_for_lead(lead: Lead) -> ActivationResendResult:
         user=user,
         activation_token=activation,
         admin_url=admin_url,
+        workspace_url=workspace_url,
+        signin_url=signin_url,
         tenant_url=tenant_url,
         activation_url=activation_url,
         whatsapp_link=whatsapp_link,
@@ -365,6 +450,8 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
                 (
                     token_obj,
                     admin_url,
+                    workspace_url,
+                    signin_url,
                     tenant_url,
                     activation_url,
                     whatsapp_link,
@@ -374,13 +461,34 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
                 latest_job.append_log(f"Activation token: {mask_secret(token_obj.token)}")
             else:
                 admin_url = build_admin_url(tenant)
+                workspace_url = build_workspace_url(tenant)
+                onboarding_url = build_onboarding_url(tenant)
+                signin_url = build_signin_url(tenant)
                 tenant_url = build_tenant_frontend_url(tenant)
+                public_menu_url = build_public_menu_url(tenant)
                 activation_url = build_activation_url(tenant, token_obj.token)
-                whatsapp_message_template = build_activation_message(admin_url, activation_url, token_obj.token)
-                whatsapp_link = send_activation_whatsapp(lead.phone, admin_url, activation_url, token_obj.token)
+                whatsapp_message_template = build_activation_message(
+                    workspace_url,
+                    signin_url,
+                    activation_url,
+                    onboarding_url,
+                    public_menu_url,
+                    token_obj.token,
+                )
+                whatsapp_link = send_activation_whatsapp(
+                    lead.phone,
+                    workspace_url,
+                    signin_url,
+                    activation_url,
+                    onboarding_url,
+                    public_menu_url,
+                    token_obj.token,
+                )
 
             latest_job.append_log("Onboarding package prepared")
-            latest_job.append_log(f"Admin URL: {admin_url}")
+            latest_job.append_log(f"Workspace URL: {workspace_url}")
+            latest_job.append_log(f"Sign-in URL: {signin_url}")
+            latest_job.append_log(f"Django admin URL: {admin_url}")
             latest_job.append_log(f"Activation URL: {activation_url}")
             if whatsapp_link:
                 latest_job.append_log(f"WhatsApp link: {whatsapp_link}")
@@ -398,6 +506,8 @@ def onboarding_package_for_lead(lead: Lead, refresh_token: bool = False) -> Onbo
         user=user,
         activation_token=token_obj,
         admin_url=admin_url,
+        workspace_url=workspace_url,
+        signin_url=signin_url,
         tenant_url=tenant_url,
         activation_url=activation_url,
         whatsapp_link=whatsapp_link,

@@ -1,7 +1,7 @@
-﻿export const steps = [
-  { id: 1, title: "Brand & Contact", description: "Basics, phone, WhatsApp, address" },
-  { id: 2, title: "Categories", description: "Create and order categories" },
-  { id: 3, title: "Dishes", description: "Add dishes and options" },
-  { id: 4, title: "Theme", description: "Colors and imagery" },
-  { id: 5, title: "Publish", description: "Review and publish" },
+export const steps = [
+  { id: 1, titleKey: "onboardingWizard.steps.brandContact.title", descriptionKey: "onboardingWizard.steps.brandContact.description" },
+  { id: 2, titleKey: "onboardingWizard.steps.categories.title", descriptionKey: "onboardingWizard.steps.categories.description" },
+  { id: 3, titleKey: "onboardingWizard.steps.dishes.title", descriptionKey: "onboardingWizard.steps.dishes.description" },
+  { id: 4, titleKey: "onboardingWizard.steps.theme.title", descriptionKey: "onboardingWizard.steps.theme.description" },
+  { id: 5, titleKey: "onboardingWizard.steps.publish.title", descriptionKey: "onboardingWizard.steps.publish.description" },
 ];

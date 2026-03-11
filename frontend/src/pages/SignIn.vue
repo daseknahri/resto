@@ -2,14 +2,14 @@
   <div class="ui-auth-page flex items-center">
     <div class="ui-auth-card space-y-6">
       <div class="space-y-2 text-center">
-        <p class="ui-kicker">Returning user</p>
-        <h1 class="ui-display text-2xl font-semibold text-white">Sign in</h1>
-        <p class="text-sm text-slate-300">Use your account credentials to manage your restaurant workspace.</p>
+        <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
+        <h1 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h1>
+        <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
       </div>
 
       <form class="space-y-4" @submit.prevent="submit">
         <label class="space-y-1 text-sm text-slate-200">
-          Username or email
+          {{ t("signIn.identifier") }}
           <input
             v-model="identifier"
             autocomplete="username"
@@ -18,7 +18,7 @@
           />
         </label>
         <label class="space-y-1 text-sm text-slate-200">
-          Password
+          {{ t("signIn.password") }}
           <input
             v-model="password"
             type="password"
@@ -32,19 +32,19 @@
           :disabled="session.loading"
           class="ui-btn-primary w-full justify-center disabled:opacity-60"
         >
-          {{ session.loading ? "Signing in..." : "Sign in" }}
+          {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
         </button>
         <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
       </form>
 
       <div class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
         <p>
-          First-time account?
-          <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">Use activation link</RouterLink>
+          {{ t("signIn.firstTime") }}
+          <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
         </p>
         <p>
-          Forgot password?
-          <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">Reset it here</RouterLink>
+          {{ t("signIn.forgotPassword") }}
+          <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.resetHere") }}</RouterLink>
         </p>
       </div>
     </div>
@@ -54,11 +54,13 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+const { t } = useI18n();
 
 const identifier = ref("");
 const password = ref("");
@@ -91,7 +93,7 @@ const submit = async () => {
       router.push(fallbackRoute());
     }
   } catch (err) {
-    error.value = session.error || "Sign in failed";
+    error.value = session.error || t("signIn.failed");
   }
 };
 </script>

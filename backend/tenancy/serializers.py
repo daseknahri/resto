@@ -4,6 +4,8 @@ from django.utils import timezone
 from .models import Plan, Profile, Tenant
 from .tiering import external_plan_code, plan_display_name, plan_entitlements
 
+SUPPORTED_PROFILE_LANGUAGES = {"en", "fr", "ar"}
+
 
 class PlanSerializer(serializers.ModelSerializer):
     tier_code = serializers.SerializerMethodField()
@@ -98,6 +100,15 @@ class ProfileSerializer(serializers.ModelSerializer):
         except ValueError:
             raise serializers.ValidationError("Secondary color must be a valid hex value.")
         return color.upper()
+
+    def validate_language(self, value):
+        cleaned = (value or "").strip().lower()
+        if not cleaned:
+            return "en"
+        primary = cleaned.split("-")[0]
+        if primary not in SUPPORTED_PROFILE_LANGUAGES:
+            raise serializers.ValidationError("Language must be one of: en, fr, ar.")
+        return primary
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

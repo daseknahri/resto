@@ -4,10 +4,10 @@ from django.contrib import admin
 from django.urls import path, re_path
 from django.views.static import serve as static_serve
 
-from config.api import health_view
+from config.shared_api_urls import shared_api_urlpatterns
 
 urlpatterns = [
-    path("api/health/", health_view, name="public-health"),
+    *shared_api_urlpatterns,
     path("admin/", admin.site.urls),
 ]
 

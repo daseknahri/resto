@@ -3,31 +3,31 @@
     <div class="mx-auto max-w-6xl space-y-6">
       <header class="ui-panel-soft flex flex-wrap items-center justify-between gap-3 p-4 ui-fade-up">
         <div>
-          <p class="ui-kicker">Onboarding</p>
-          <h1 class="ui-display text-2xl font-semibold text-white">Launch your menu</h1>
+          <p class="ui-kicker">{{ t("onboardingWizard.kicker") }}</p>
+          <h1 class="ui-display text-2xl font-semibold text-white">{{ t("onboardingWizard.title") }}</h1>
         </div>
         <div class="flex items-center gap-2 text-sm text-slate-300">
           <span class="h-2 w-2 rounded-full" :class="published ? 'bg-emerald-400' : 'bg-amber-300'"></span>
-          {{ published ? "Published" : "Draft" }}
+          {{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}
         </div>
         <div class="w-full space-y-1">
           <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${progressPct}%` }"></div>
           </div>
-          <p class="text-xs text-slate-500">Step {{ current }} of {{ steps.length }} ({{ progressPct }}%)</p>
+          <p class="text-xs text-slate-500">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</p>
         </div>
       </header>
 
-      <div class="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <aside class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div class="grid min-w-0 gap-6 lg:grid-cols-[320px,1fr]">
+        <aside class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <div v-if="showResumeHint" class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-200">
-            <p>Resumed from your last session at step {{ current }}.</p>
+            <p>{{ t("onboardingWizard.resumedFromStep", { current }) }}</p>
             <button class="mt-2 text-emerald-300 underline underline-offset-2 hover:text-emerald-200" @click="restartWizard">
-              Start from step 1
+              {{ t("onboardingWizard.startFromStepOne") }}
             </button>
           </div>
 
-          <div class="ui-scroll-row mt-4 lg:mt-0 lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
+          <div class="ui-scroll-row mt-4 max-w-full lg:mt-0 lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
             <div
               v-for="step in steps"
               :key="step.id"
@@ -40,18 +40,18 @@
                 {{ step.id }}
               </div>
               <div>
-                <p class="font-semibold" :class="current === step.id ? 'text-white' : 'text-slate-300'">{{ step.title }}</p>
-                <p class="text-xs text-slate-400">{{ step.description }}</p>
+                <p class="font-semibold" :class="current === step.id ? 'text-white' : 'text-slate-300'">{{ t(step.titleKey) }}</p>
+                <p class="text-xs text-slate-400">{{ t(step.descriptionKey) }}</p>
               </div>
             </div>
           </div>
         </aside>
 
-        <main class="space-y-4">
+        <main class="min-w-0 space-y-4">
           <KeepAlive>
             <component :is="currentComponent" @next="next" @back="back" @publish="publish" />
           </KeepAlive>
-          <p class="text-xs text-slate-500">Use each step actions to continue. Validation runs before moving to next step.</p>
+          <p class="text-xs text-slate-500">{{ t("onboardingWizard.footerHint") }}</p>
         </main>
       </div>
     </div>
@@ -61,6 +61,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "../composables/useI18n";
 import { steps } from "../onboarding/steps";
 import StepBrand from "./StepBrand.vue";
 import StepCategories from "./StepCategories.vue";
@@ -74,6 +75,7 @@ const published = ref(false);
 const showResumeHint = ref(false);
 const tenant = useTenantStore();
 const router = useRouter();
+const { t } = useI18n();
 const mapping = {
   1: StepBrand,
   2: StepCategories,

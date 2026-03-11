@@ -1,5 +1,6 @@
-﻿import api from "../lib/api";
+import api from "../lib/api";
 import { slugify } from "../lib/slug";
+import { translate } from "../i18n/translate";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -28,6 +29,18 @@ const asValidationError = (err, fallback) => {
   wrapped.status = err?.response?.status;
   wrapped.raw = err;
   return wrapped;
+};
+
+const normalizeI18nMap = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  Object.entries(value).forEach(([rawLocale, rawText]) => {
+    const locale = String(rawLocale || "").trim().toLowerCase();
+    const text = String(rawText || "").trim();
+    if (!locale || !text) return;
+    out[locale] = text;
+  });
+  return out;
 };
 
 const localValidationError = (message, field = "image") => {
@@ -69,7 +82,7 @@ export const profileApi = {
       const { data } = await api.put("/profile/", payload);
       return data;
     } catch (err) {
-      throw asValidationError(err, "Unable to save profile");
+      throw asValidationError(err, translate("onboardingApi.saveProfileFailed"));
     }
   },
 };
@@ -83,7 +96,9 @@ export const categoryApi = {
     const baseSlug = slugify(cat.name || cat.slug || "category");
     const payload = {
       name: cat.name || "",
+      name_i18n: normalizeI18nMap(cat.name_i18n),
       description: cat.description || "",
+      description_i18n: normalizeI18nMap(cat.description_i18n),
       image_url: cat.image_url || "",
       position: Number(cat.position) || 0,
       is_published: cat.is_published ?? true,
@@ -102,7 +117,7 @@ export const categoryApi = {
         },
       });
     } catch (err) {
-      throw asValidationError(err, "Unable to save category");
+      throw asValidationError(err, translate("onboardingApi.saveCategoryFailed"));
     }
   },
   async remove(id) {
@@ -120,7 +135,9 @@ export const dishApi = {
     const payload = {
       category: dish.category,
       name: dish.name || "",
+      name_i18n: normalizeI18nMap(dish.name_i18n),
       description: dish.description || "",
+      description_i18n: normalizeI18nMap(dish.description_i18n),
       price: Number(dish.price) || 0,
       currency: dish.currency || "USD",
       image_url: dish.image_url || "",
@@ -141,7 +158,7 @@ export const dishApi = {
         },
       });
     } catch (err) {
-      throw asValidationError(err, "Unable to save dish");
+      throw asValidationError(err, translate("onboardingApi.saveDishFailed"));
     }
   },
   async remove(id) {
@@ -161,6 +178,7 @@ export const dishOptionApi = {
     const payload = {
       dish: Number(option.dish),
       name: String(option.name || "").trim(),
+      name_i18n: normalizeI18nMap(option.name_i18n),
       price_delta: Number(option.price_delta) || 0,
       is_required: option.is_required === true,
       max_select: Math.max(1, Number(option.max_select) || 1),
@@ -173,7 +191,7 @@ export const dishOptionApi = {
       const { data } = await api.post("/dish-options/", payload);
       return data;
     } catch (err) {
-      throw asValidationError(err, "Unable to save dish option");
+      throw asValidationError(err, translate("onboardingApi.saveDishOptionFailed"));
     }
   },
 
@@ -214,12 +232,12 @@ export const dishOptionApi = {
 
 export const uploadApi = {
   async image(file, options = {}) {
-    if (!file) throw localValidationError("Image file is required.");
+    if (!file) throw localValidationError(translate("onboardingApi.imageRequired"));
     if (!String(file.type || "").startsWith("image/")) {
-      throw localValidationError("Only image files are allowed.");
+      throw localValidationError(translate("onboardingApi.imageTypeInvalid"));
     }
     if (Number(file.size || 0) > MAX_IMAGE_BYTES) {
-      throw localValidationError("Image too large. Max size is 8MB.");
+      throw localValidationError(translate("onboardingApi.imageTooLarge"));
     }
 
     const form = new FormData();
@@ -241,7 +259,7 @@ export const uploadApi = {
       if (onProgress) onProgress(100);
       return data;
     } catch (err) {
-      throw asValidationError(err, "Unable to upload image");
+      throw asValidationError(err, translate("onboardingApi.uploadImageFailed"));
     }
   },
 
@@ -251,7 +269,7 @@ export const uploadApi = {
       const { data } = await api.post("/uploads/image-delete/", { value });
       return data;
     } catch (err) {
-      throw asValidationError(err, "Unable to remove image");
+      throw asValidationError(err, translate("onboardingApi.removeImageFailed"));
     }
   },
 };

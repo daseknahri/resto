@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const isLocalTenantHost = (host) => host === "localhost" || host.endsWith(".localhost");
+import { isLocalTenantHost, isPlatformPublicHost } from "./runtimeHost";
 
 const runtimeApiBase = () => {
   if (typeof window === "undefined") return "http://localhost:8000/api";
@@ -24,6 +23,15 @@ const resolveBaseURL = (envValue) => {
       ) {
         return runtime;
       }
+      if (
+        currentHost &&
+        envHost &&
+        currentHost !== envHost &&
+        !isLocalTenantHost(currentHost) &&
+        !isPlatformPublicHost(currentHost)
+      ) {
+        return runtime;
+      }
     } catch (e) {
       return runtime;
     }
@@ -44,8 +52,36 @@ const readCookie = (name) => {
   return match ? decodeURIComponent(match[1]) : "";
 };
 
+const readRuntimeLocale = () => {
+  if (typeof document === "undefined") return "";
+  const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
+  if (fromDocument) return fromDocument;
+  if (typeof window !== "undefined") {
+    try {
+      const host = window.location.hostname || "default";
+      const scoped = String(window.localStorage.getItem(`resto.locale:${host}`) || "").trim().toLowerCase();
+      if (scoped) return scoped;
+      return String(window.localStorage.getItem("resto.locale") || "").trim().toLowerCase();
+    } catch (err) {
+      return "";
+    }
+  }
+  return "";
+};
+
 adminApi.interceptors.request.use((config) => {
   const method = (config.method || "get").toLowerCase();
+  const locale = readRuntimeLocale();
+  if (locale) {
+    config.headers = config.headers || {};
+    config.headers["Accept-Language"] = locale;
+    if (["get", "head", "options"].includes(method)) {
+      config.params = config.params || {};
+      if (!config.params.lang) {
+        config.params.lang = locale;
+      }
+    }
+  }
   if (["post", "put", "patch", "delete"].includes(method)) {
     const token = readCookie("csrftoken");
     if (token) {

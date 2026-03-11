@@ -2,18 +2,16 @@
   <div class="space-y-4 px-4 py-4 pb-32 sm:pb-8 ui-safe-bottom">
     <header class="ui-glass ui-reveal p-4 md:p-5">
       <div class="space-y-1.5">
-        <p class="ui-kicker">Reservation</p>
-        <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">Reserve your table</h1>
-        <p class="max-w-2xl text-sm text-slate-300">
-          Submit your reservation request and our team will confirm with you.
-        </p>
+        <p class="ui-kicker">{{ t("reservationPage.kicker") }}</p>
+        <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">{{ t("reservationPage.title") }}</h1>
+        <p class="max-w-2xl text-sm text-slate-300">{{ t("reservationPage.description") }}</p>
       </div>
       <div class="mt-3 ui-divider"></div>
       <p class="mt-2 text-xs text-slate-400">
         {{
           cart.tableLabel
-            ? `Table context detected: ${cart.tableLabel}.`
-            : "No table context detected. Add it if needed."
+            ? t("reservationPage.tableDetected", { table: cart.tableLabel })
+            : t("reservationPage.tableMissing")
         }}
       </p>
       <a
@@ -24,7 +22,7 @@
         class="mt-2 inline-flex text-xs text-[var(--color-secondary)] hover:underline"
         @click="trackContactClick('reservation_url')"
       >
-        Prefer direct booking? Open reservation link
+        {{ t("reservationPage.directBooking") }}
       </a>
     </header>
 
@@ -36,8 +34,8 @@
         style="--ui-delay: 70ms"
         @click="trackContactClick('phone_call')"
       >
-        <p class="ui-kicker">Phone support</p>
-        <p class="mt-1 text-lg font-semibold text-white">Call now</p>
+        <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
       </a>
       <a
         v-if="whatsappHref"
@@ -48,15 +46,15 @@
         style="--ui-delay: 100ms"
         @click="trackContactClick('whatsapp_contact')"
       >
-        <p class="ui-kicker">Quick confirm</p>
-        <p class="mt-1 text-lg font-semibold text-white">WhatsApp message</p>
+        <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
+        <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
       </a>
     </section>
 
     <section class="ui-panel ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
       <div class="grid gap-4 md:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
-          Name
+          {{ t("common.name") }}
           <input
             v-model.trim="form.name"
             class="ui-input"
@@ -67,7 +65,7 @@
           <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
-          Phone
+          {{ t("common.phone") }}
           <input
             v-model.trim="form.phone"
             class="ui-input"
@@ -80,7 +78,7 @@
           <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
-          Email
+          {{ t("common.email") }}
           <input
             v-model.trim="form.email"
             type="email"
@@ -93,7 +91,7 @@
           <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
-          Party size
+          {{ t("reservationPage.partySize") }}
           <input
             v-model.number="form.party_size"
             type="number"
@@ -108,7 +106,7 @@
       </div>
 
       <div class="mt-4 space-y-2">
-        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Quick size</p>
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("reservationPage.quickSize") }}</p>
         <div class="flex flex-wrap gap-2">
           <button
             v-for="size in [2, 4, 6, 8]"
@@ -117,29 +115,29 @@
             :class="Number(form.party_size) === size ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="setPartySize(size)"
           >
-            {{ size }} guests
+            {{ t("reservationPage.guestCount", { count: size }) }}
           </button>
         </div>
       </div>
 
       <div class="mt-4 grid gap-4 md:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
-          Preferred date
+          {{ t("reservationPage.preferredDate") }}
           <input v-model="form.date" type="date" class="ui-input" />
         </label>
         <label class="space-y-1 text-sm text-slate-200">
-          Preferred time
+          {{ t("reservationPage.preferredTime") }}
           <input v-model="form.time" type="time" class="ui-input" />
         </label>
       </div>
 
       <label class="mt-4 block space-y-1 text-sm text-slate-200">
-        Notes
+        {{ t("common.notes") }}
         <textarea
           v-model.trim="form.note"
           rows="3"
           class="ui-textarea"
-          placeholder="Special request, seating preference..."
+          :placeholder="t('reservationPage.notesPlaceholder')"
         ></textarea>
       </label>
 
@@ -152,7 +150,7 @@
           :disabled="lead.submitting || submitted"
           @click="submitReservation"
         >
-          {{ lead.submitting ? "Sending..." : submitted ? "Request sent" : "Submit reservation" }}
+          {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
         </button>
         <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
       </div>
@@ -161,7 +159,7 @@
         v-if="submitted"
         class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
       >
-        Reservation request received. We will contact you.
+        {{ t("reservationPage.reservationReceived") }}
       </div>
       <button
         v-if="submitted"
@@ -169,7 +167,7 @@
         class="ui-btn-primary mt-3 w-full justify-center opacity-90 sm:w-auto"
         disabled
       >
-        We will contact you shortly
+        {{ t("reservationPage.contactSoon") }}
       </button>
     </section>
 
@@ -183,7 +181,7 @@
         :disabled="lead.submitting"
         @click="submitReservation"
       >
-        {{ lead.submitting ? "Sending..." : "Submit reservation" }}
+        {{ lead.submitting ? t("reservationPage.sending") : t("reservationPage.submitReservation") }}
       </button>
     </div>
   </div>
@@ -191,6 +189,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
+import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";
 import { useLeadStore } from "../stores/lead";
@@ -200,6 +199,8 @@ const tenant = useTenantStore();
 const lead = useLeadStore();
 const cart = useCartStore();
 const submitted = ref(false);
+const meta = computed(() => tenant.resolvedMeta || null);
+const { t } = useI18n();
 
 const form = reactive({
   name: "",
@@ -219,7 +220,7 @@ const errors = reactive({
   party_size: "",
 });
 
-const profile = computed(() => tenant.meta?.profile || {});
+const profile = computed(() => meta.value?.profile || {});
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
 
 const sanitizePhoneForTel = (value) =>
@@ -236,7 +237,11 @@ const phoneHref = computed(() => {
 const whatsappHref = computed(() => {
   const normalized = sanitizePhoneForWhatsapp(whatsappRaw.value);
   if (!normalized) return "";
-  const text = encodeURIComponent(`Hi, I'd like to reserve a table at ${tenant.meta?.name || "your restaurant"}.`);
+  const text = encodeURIComponent(
+    t("reservationPage.whatsappTemplate", {
+      tenant: meta.value?.name || t("customerLayout.fallbackTenantName"),
+    })
+  );
   return `https://wa.me/${normalized}?text=${text}`;
 });
 
@@ -253,20 +258,20 @@ const validate = () => {
   let valid = true;
 
   if (!form.name || form.name.length < 2) {
-    errors.name = "Name must be at least 2 characters.";
+    errors.name = t("reservationPage.nameError");
     valid = false;
   }
   if (!form.phone && !form.email) {
-    errors.phone = "Provide phone or email.";
-    errors.email = "Provide phone or email.";
+    errors.phone = t("reservationPage.contactRequired");
+    errors.email = t("reservationPage.contactRequired");
     valid = false;
   }
   if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = "Invalid email address.";
+    errors.email = t("reservationPage.invalidEmail");
     valid = false;
   }
   if (Number(form.party_size || 0) < 1) {
-    errors.party_size = "Party size must be at least 1.";
+    errors.party_size = t("reservationPage.partySizeError");
     valid = false;
   }
 
@@ -281,13 +286,13 @@ const setPartySize = (size) => {
 const reservationNotes = () => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
   const lines = [
-    `Reservation request for tenant: ${tenant.meta?.slug || "unknown"}`,
-    cart.tableLabel ? `Table context: ${cart.tableLabel}` : "",
-    form.party_size ? `Party size: ${form.party_size}` : "",
-    form.date ? `Preferred date: ${form.date}` : "",
-    form.time ? `Preferred time: ${form.time}` : "",
-    form.note ? `Customer note: ${form.note}` : "",
-    pageUrl ? `Page URL: ${pageUrl}` : "",
+    t("reservationPage.notesIntro", { tenant: meta.value?.slug || meta.value?.name || t("customerLayout.fallbackTenantName") }),
+    cart.tableLabel ? t("reservationPage.tableContextLine", { table: cart.tableLabel }) : "",
+    form.party_size ? t("reservationPage.partySizeLine", { count: form.party_size }) : "",
+    form.date ? t("reservationPage.preferredDateLine", { date: form.date }) : "",
+    form.time ? t("reservationPage.preferredTimeLine", { time: form.time }) : "",
+    form.note ? t("reservationPage.customerNoteLine", { note: form.note }) : "",
+    pageUrl ? t("reservationPage.pageUrlLine", { url: pageUrl }) : "",
   ].filter(Boolean);
   return lines.join("\n");
 };

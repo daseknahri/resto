@@ -30,6 +30,14 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install -r requirements.txt
+      - name: Check migration drift
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py makemigrations --check --dry-run
       - name: Run migrations (shared)
         env:
           DJANGO_SECRET_KEY: test
@@ -62,6 +70,19 @@ jobs:
           cd backend
           . .venv/bin/activate
           python manage.py check
+      - name: Export OpenAPI schema
+        env:
+          DJANGO_SECRET_KEY: test
+          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
+        run: |
+          cd backend
+          . .venv/bin/activate
+          python manage.py generateschema --format openapi-json --file openapi.json
+      - name: Upload OpenAPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: backend/openapi.json
       - name: Backend tests
         env:
           DJANGO_SECRET_KEY: test

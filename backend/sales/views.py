@@ -1,21 +1,28 @@
 import csv
+import re
 from datetime import date
 from math import ceil
 from urllib.parse import quote_plus
 
+from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.text import slugify
 from django_tenants.utils import get_public_schema_name, schema_context
-from rest_framework import mixins, status, viewsets
+from rest_framework import mixins, serializers, status, viewsets
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from tenancy.models import Plan, Tenant
+from menu.models import Category, Dish, DishOption, TableLink
+from tenancy.models import Plan, Profile, Tenant
+from tenancy.serializers import ProfileSerializer
 from tenancy.tiering import external_plan_code, plan_display_name, plan_tier_order, is_plan_upgrade
+from .messaging import build_onboarding_url, build_owner_checklist, build_public_menu_url
 
 from .audit import log_admin_action
 from .models import AdminAuditLog, Lead, ProvisioningJob, ReservationReminder, ReservationTimelineEvent, TierUpgradeRequest
@@ -75,6 +82,9 @@ DEFAULT_ADMIN_AUDIT_PAGE_SIZE = 50
 MAX_ADMIN_AUDIT_PAGE_SIZE = 200
 DEFAULT_ADMIN_TENANT_PAGE_SIZE = 25
 MAX_ADMIN_TENANT_PAGE_SIZE = 200
+DEFAULT_ADMIN_TENANT_TIMELINE_PAGE_SIZE = 10
+MAX_ADMIN_TENANT_TIMELINE_PAGE_SIZE = 50
+TENANT_SETTINGS_EXPORT_VERSION = 2
 
 
 def _parse_iso_date(value: str):
@@ -148,6 +158,300 @@ def _parse_positive_int(value: str, *, default: int, min_value: int = 1, max_val
     if max_value is not None and parsed > max_value:
         parsed = max_value
     return parsed
+
+
+def _next_unique_slug(raw_value, *, fallback: str, max_length: int, used: set[str]) -> str:
+    base = slugify(str(raw_value or "").strip()) or fallback
+    base = base[:max_length].strip("-") or fallback
+    candidate = base
+    index = 2
+    while candidate in used:
+        suffix = f"-{index}"
+        candidate = f"{base[: max(max_length - len(suffix), 1)]}{suffix}".strip("-")
+        if not candidate:
+            candidate = f"{fallback}-{index}"[:max_length]
+        index += 1
+    used.add(candidate)
+    return candidate
+
+
+def _build_tenant_settings_export_payload(tenant):
+    profile_payload = {}
+    categories_payload = []
+    table_links_payload = []
+
+    with schema_context(getattr(tenant, "schema_name", get_public_schema_name())):
+        profile, _ = Profile.objects.get_or_create(tenant_id=tenant.id)
+        profile_payload = dict(ProfileSerializer(instance=profile).data)
+
+        categories = (
+            Category.objects.order_by("position", "name")
+            .prefetch_related("dishes__options")
+        )
+        for category in categories:
+            dishes_payload = []
+            for dish in category.dishes.all().order_by("position", "name"):
+                options_payload = [
+                    {
+                        "name": option.name,
+                        "name_i18n": option.name_i18n or {},
+                        "price_delta": str(option.price_delta),
+                        "is_required": bool(option.is_required),
+                        "max_select": int(option.max_select),
+                    }
+                    for option in dish.options.all().order_by("id")
+                ]
+                dishes_payload.append(
+                    {
+                        "name": dish.name,
+                        "name_i18n": dish.name_i18n or {},
+                        "slug": dish.slug,
+                        "description": dish.description,
+                        "description_i18n": dish.description_i18n or {},
+                        "price": str(dish.price),
+                        "currency": dish.currency,
+                        "image_url": dish.image_url,
+                        "position": int(dish.position),
+                        "is_published": bool(dish.is_published),
+                        "options": options_payload,
+                    }
+                )
+
+            categories_payload.append(
+                {
+                    "name": category.name,
+                    "name_i18n": category.name_i18n or {},
+                    "slug": category.slug,
+                    "description": category.description,
+                    "description_i18n": category.description_i18n or {},
+                    "image_url": category.image_url,
+                    "position": int(category.position),
+                    "is_published": bool(category.is_published),
+                    "dishes": dishes_payload,
+                }
+            )
+
+        table_links_payload = [
+            {
+                "label": table.label,
+                "slug": table.slug,
+                "position": int(table.position),
+                "is_active": bool(table.is_active),
+            }
+            for table in TableLink.objects.order_by("position", "label", "id")
+        ]
+
+    domains = list(tenant.domains.order_by("-is_primary", "id").values_list("domain", flat=True))
+    return {
+        "version": TENANT_SETTINGS_EXPORT_VERSION,
+        "exported_at": timezone.now().isoformat(),
+        "tenant": {
+            "id": tenant.id,
+            "name": tenant.name,
+            "slug": tenant.slug,
+            "schema_name": tenant.schema_name,
+            "is_active": bool(tenant.is_active),
+            "lifecycle_status": getattr(tenant, "lifecycle_status", ""),
+            "plan_code": external_plan_code(getattr(getattr(tenant, "plan", None), "code", "")),
+            "plan_name": plan_display_name(
+                getattr(getattr(tenant, "plan", None), "code", ""),
+                fallback=getattr(getattr(tenant, "plan", None), "name", ""),
+            ),
+            "domains": domains,
+        },
+        "profile": profile_payload,
+        "categories": categories_payload,
+        "table_links": table_links_payload,
+    }
+
+
+def _coerce_payload_list(value, *, field_name: str):
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError(f"'{field_name}' must be a list.")
+    return value
+
+
+_I18N_LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
+
+
+def _coerce_i18n_dict(value, *, field_name: str, max_length: int):
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"'{field_name}' must be an object.")
+    cleaned = {}
+    for raw_locale, raw_text in value.items():
+        locale = str(raw_locale or "").strip().lower().replace("_", "-")
+        if not locale or not _I18N_LOCALE_RE.match(locale):
+            raise ValueError(f"'{field_name}' locale must be like 'en', 'fr', or 'ar'.")
+        text = str(raw_text or "").strip()
+        if not text:
+            continue
+        cleaned[locale] = text[:max_length]
+    return cleaned
+
+
+def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
+    if not isinstance(payload, dict):
+        raise ValueError("Import payload must be a JSON object.")
+
+    profile_payload = payload.get("profile")
+    categories_payload = _coerce_payload_list(payload.get("categories"), field_name="categories")
+    table_links_payload = _coerce_payload_list(payload.get("table_links"), field_name="table_links")
+    if profile_payload is None and categories_payload is None and table_links_payload is None:
+        raise ValueError("Payload must include at least one of: profile, categories, table_links.")
+    if profile_payload is not None and not isinstance(profile_payload, dict):
+        raise ValueError("'profile' must be an object.")
+
+    summary = {
+        "profile_updated": False,
+        "categories": 0,
+        "dishes": 0,
+        "options": 0,
+        "table_links": 0,
+    }
+    with schema_context(getattr(tenant, "schema_name", get_public_schema_name())):
+        with transaction.atomic():
+            if categories_payload is not None:
+                DishOption.objects.all().delete()
+                Dish.objects.all().delete()
+                Category.objects.all().delete()
+
+                category_slugs: set[str] = set()
+                dish_slugs: set[str] = set()
+                for index, raw_category in enumerate(categories_payload, start=1):
+                    if not isinstance(raw_category, dict):
+                        raise ValueError(f"categories[{index - 1}] must be an object.")
+                    category_name = str(raw_category.get("name", "")).strip() or f"Category {index}"
+                    category_slug = _next_unique_slug(
+                        raw_category.get("slug") or category_name,
+                        fallback="category",
+                        max_length=160,
+                        used=category_slugs,
+                    )
+                    category = Category.objects.create(
+                        name=category_name[:150],
+                        name_i18n=_coerce_i18n_dict(
+                            raw_category.get("name_i18n"),
+                            field_name=f"categories[{index - 1}].name_i18n",
+                            max_length=150,
+                        ),
+                        slug=category_slug,
+                        description=str(raw_category.get("description", "") or "")[:1000],
+                        description_i18n=_coerce_i18n_dict(
+                            raw_category.get("description_i18n"),
+                            field_name=f"categories[{index - 1}].description_i18n",
+                            max_length=1000,
+                        ),
+                        image_url=str(raw_category.get("image_url", "") or "")[:2000],
+                        position=max(0, int(raw_category.get("position", index - 1) or 0)),
+                        is_published=bool(raw_category.get("is_published", True)),
+                    )
+                    summary["categories"] += 1
+
+                    dishes_payload = raw_category.get("dishes") or []
+                    if not isinstance(dishes_payload, list):
+                        raise ValueError(f"categories[{index - 1}].dishes must be a list.")
+                    for dish_index, raw_dish in enumerate(dishes_payload, start=1):
+                        if not isinstance(raw_dish, dict):
+                            raise ValueError(f"categories[{index - 1}].dishes[{dish_index - 1}] must be an object.")
+                        dish_name = str(raw_dish.get("name", "")).strip() or f"Dish {index}-{dish_index}"
+                        dish_slug = _next_unique_slug(
+                            raw_dish.get("slug") or dish_name,
+                            fallback="dish",
+                            max_length=210,
+                            used=dish_slugs,
+                        )
+                        dish = Dish.objects.create(
+                            category=category,
+                            name=dish_name[:200],
+                            name_i18n=_coerce_i18n_dict(
+                                raw_dish.get("name_i18n"),
+                                field_name=f"categories[{index - 1}].dishes[{dish_index - 1}].name_i18n",
+                                max_length=200,
+                            ),
+                            slug=dish_slug,
+                            description=str(raw_dish.get("description", "") or "")[:1500],
+                            description_i18n=_coerce_i18n_dict(
+                                raw_dish.get("description_i18n"),
+                                field_name=f"categories[{index - 1}].dishes[{dish_index - 1}].description_i18n",
+                                max_length=1500,
+                            ),
+                            price=raw_dish.get("price", "0"),
+                            currency=(str(raw_dish.get("currency", "USD") or "USD").strip().upper() or "USD")[:8],
+                            image_url=str(raw_dish.get("image_url", "") or "")[:2000],
+                            position=max(0, int(raw_dish.get("position", dish_index - 1) or 0)),
+                            is_published=bool(raw_dish.get("is_published", True)),
+                        )
+                        summary["dishes"] += 1
+
+                        options_payload = raw_dish.get("options") or []
+                        if not isinstance(options_payload, list):
+                            raise ValueError(
+                                f"categories[{index - 1}].dishes[{dish_index - 1}].options must be a list."
+                            )
+                        for option_index, raw_option in enumerate(options_payload, start=1):
+                            if not isinstance(raw_option, dict):
+                                raise ValueError(
+                                    "categories[{0}].dishes[{1}].options[{2}] must be an object.".format(
+                                        index - 1,
+                                        dish_index - 1,
+                                        option_index - 1,
+                                    )
+                                )
+                            option_name = str(raw_option.get("name", "")).strip() or f"Option {option_index}"
+                            DishOption.objects.create(
+                                dish=dish,
+                                name=option_name[:150],
+                                name_i18n=_coerce_i18n_dict(
+                                    raw_option.get("name_i18n"),
+                                    field_name="categories[{0}].dishes[{1}].options[{2}].name_i18n".format(
+                                        index - 1,
+                                        dish_index - 1,
+                                        option_index - 1,
+                                    ),
+                                    max_length=150,
+                                ),
+                                price_delta=raw_option.get("price_delta", "0"),
+                                is_required=bool(raw_option.get("is_required", False)),
+                                max_select=max(1, int(raw_option.get("max_select", 1) or 1)),
+                            )
+                            summary["options"] += 1
+
+            if table_links_payload is not None:
+                TableLink.objects.all().delete()
+                table_slugs: set[str] = set()
+                for index, raw_table in enumerate(table_links_payload, start=1):
+                    if not isinstance(raw_table, dict):
+                        raise ValueError(f"table_links[{index - 1}] must be an object.")
+                    label = str(raw_table.get("label", "")).strip() or f"Table {index}"
+                    slug_value = _next_unique_slug(
+                        raw_table.get("slug") or label,
+                        fallback="table",
+                        max_length=55,
+                        used=table_slugs,
+                    )
+                    TableLink.objects.create(
+                        label=label[:40],
+                        slug=slug_value,
+                        position=max(0, int(raw_table.get("position", index - 1) or 0)),
+                        is_active=bool(raw_table.get("is_active", True)),
+                    )
+                    summary["table_links"] += 1
+
+            if profile_payload is not None:
+                profile, _ = Profile.objects.get_or_create(tenant_id=tenant.id)
+                serializer = ProfileSerializer(instance=profile, data=profile_payload, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                summary["profile_updated"] = True
+
+            if not commit:
+                transaction.set_rollback(True)
+
+    return summary
 
 
 def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_date=None, to_date=None):
@@ -317,14 +621,28 @@ class ProvisionLeadViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
             metadata={
                 "status": "success",
                 "tenant_url": result.tenant_url,
-                "admin_url": result.admin_url,
+                "workspace_url": result.workspace_url,
             },
         )
+        onboarding_url = build_onboarding_url(result.tenant)
+        public_menu_url = build_public_menu_url(result.tenant)
         return Response(
             {
                 "detail": "Provisioned",
                 "tenant": result.tenant.slug,
                 "tenant_url": result.tenant_url,
+                "workspace_url": result.workspace_url,
+                "onboarding_url": onboarding_url,
+                "signin_url": result.signin_url,
+                "public_menu_url": public_menu_url,
+                "owner_next_steps": build_owner_checklist(
+                    result.workspace_url,
+                    result.signin_url,
+                    result.activation_url,
+                    onboarding_url,
+                    public_menu_url,
+                ),
+                "django_admin_url": result.admin_url,
                 "admin_url": result.admin_url,
                 "activation_url": result.activation_url,
                 "activation_token": result.activation_token.token,
@@ -531,6 +849,128 @@ class AdminTenantLifecycleView(APIView):
         return Response({"detail": detail, "tenant": payload}, status=status.HTTP_200_OK)
 
 
+class AdminTenantTimelineView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request, tenant_id):
+        page = _parse_positive_int(
+            request.query_params.get("page"),
+            default=1,
+            min_value=1,
+        )
+        page_size = _parse_positive_int(
+            request.query_params.get("page_size"),
+            default=DEFAULT_ADMIN_TENANT_TIMELINE_PAGE_SIZE,
+            min_value=1,
+            max_value=MAX_ADMIN_TENANT_TIMELINE_PAGE_SIZE,
+        )
+
+        with schema_context(get_public_schema_name()):
+            tenant = get_object_or_404(Tenant.objects.only("id", "slug", "schema_name"), pk=tenant_id)
+            if getattr(tenant, "schema_name", "") == get_public_schema_name():
+                return Response({"detail": "Public tenant does not have admin timeline."}, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = AdminAuditLog.objects.select_related("actor", "tenant", "lead").filter(tenant_id=tenant.id).order_by("-created_at")
+            total = queryset.count()
+            total_pages = max(1, ceil(total / page_size)) if total else 1
+            if page > total_pages:
+                page = total_pages
+
+            offset = (page - 1) * page_size
+            rows = queryset[offset : offset + page_size]
+            data = AdminAuditLogSerializer(rows, many=True).data
+
+        return Response(
+            {
+                "results": data,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1,
+                },
+            }
+        )
+
+
+class AdminTenantSettingsExportView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def get(self, request, tenant_id):
+        with schema_context(get_public_schema_name()):
+            tenant = get_object_or_404(Tenant.objects.select_related("plan").prefetch_related("domains"), pk=tenant_id)
+            if getattr(tenant, "schema_name", "") == get_public_schema_name():
+                return Response({"detail": "Public tenant settings export is not supported."}, status=status.HTTP_400_BAD_REQUEST)
+            payload = _build_tenant_settings_export_payload(tenant)
+            log_admin_action(
+                action=AdminAuditLog.Actions.TENANT_SETTINGS_EXPORTED,
+                request=request,
+                actor=request.user,
+                tenant=tenant,
+                target_repr=f"tenant:{tenant.slug}",
+                metadata={
+                    "categories": len(payload.get("categories") or []),
+                    "table_links": len(payload.get("table_links") or []),
+                    "has_profile": bool(payload.get("profile")),
+                },
+            )
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class AdminTenantSettingsImportView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, tenant_id):
+        body = request.data if isinstance(request.data, dict) else {}
+        mode = str(body.get("mode", "replace") or "replace").strip().lower()
+        if mode not in {"replace", "dry_run"}:
+            return Response({"detail": "Unsupported mode. Use replace or dry_run."}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = body.get("payload")
+        if payload is None:
+            payload = body
+
+        with schema_context(get_public_schema_name()):
+            tenant = get_object_or_404(Tenant.objects.select_related("plan").prefetch_related("domains"), pk=tenant_id)
+            if getattr(tenant, "schema_name", "") == get_public_schema_name():
+                return Response({"detail": "Public tenant settings import is not supported."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                summary = _apply_tenant_settings_import(tenant=tenant, payload=payload, commit=(mode == "replace"))
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            except DRFValidationError as exc:
+                detail = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
+                return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            except (TypeError, serializers.ValidationError) as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+            log_admin_action(
+                action=(
+                    AdminAuditLog.Actions.TENANT_SETTINGS_IMPORTED
+                    if mode == "replace"
+                    else AdminAuditLog.Actions.TENANT_SETTINGS_IMPORT_DRY_RUN
+                ),
+                request=request,
+                actor=request.user,
+                tenant=tenant,
+                target_repr=f"tenant:{tenant.slug}",
+                metadata={
+                    "mode": mode,
+                    **summary,
+                },
+            )
+
+        detail = (
+            "Tenant settings imported."
+            if mode == "replace"
+            else "Dry-run passed. No changes were saved."
+        )
+        return Response({"detail": detail, "mode": mode, "summary": summary}, status=status.HTTP_200_OK)
+
+
 class LeadProvisionPreviewView(APIView):
     permission_classes = [IsPlatformAdmin]
 
@@ -558,11 +998,25 @@ class LeadResendActivationView(APIView):
             target_repr=f"tenant:{result.tenant.slug}",
             metadata={"activation_url": result.activation_url},
         )
+        onboarding_url = build_onboarding_url(result.tenant)
+        public_menu_url = build_public_menu_url(result.tenant)
         return Response(
             {
                 "detail": "Activation resent",
                 "tenant": result.tenant.slug,
                 "tenant_url": result.tenant_url,
+                "workspace_url": result.workspace_url,
+                "onboarding_url": onboarding_url,
+                "signin_url": result.signin_url,
+                "public_menu_url": public_menu_url,
+                "owner_next_steps": build_owner_checklist(
+                    result.workspace_url,
+                    result.signin_url,
+                    result.activation_url,
+                    onboarding_url,
+                    public_menu_url,
+                ),
+                "django_admin_url": result.admin_url,
                 "admin_url": result.admin_url,
                 "activation_url": result.activation_url,
                 "activation_token": result.activation_token.token,
@@ -590,11 +1044,25 @@ class LeadOnboardingPackageView(APIView):
             target_repr=f"tenant:{result.tenant.slug}",
             metadata={"refresh_token": refresh_token, "activation_url": result.activation_url},
         )
+        onboarding_url = build_onboarding_url(result.tenant)
+        public_menu_url = build_public_menu_url(result.tenant)
         return Response(
             {
                 "detail": "Onboarding package ready",
                 "tenant": result.tenant.slug,
                 "tenant_url": result.tenant_url,
+                "workspace_url": result.workspace_url,
+                "onboarding_url": onboarding_url,
+                "signin_url": result.signin_url,
+                "public_menu_url": public_menu_url,
+                "owner_next_steps": build_owner_checklist(
+                    result.workspace_url,
+                    result.signin_url,
+                    result.activation_url,
+                    onboarding_url,
+                    public_menu_url,
+                ),
+                "django_admin_url": result.admin_url,
                 "admin_url": result.admin_url,
                 "activation_url": result.activation_url,
                 "activation_token": result.activation_token.token,

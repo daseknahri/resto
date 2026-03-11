@@ -3,31 +3,31 @@
     <header class="ui-glass ui-reveal p-4 md:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="ui-kicker">Your selection</p>
-          <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">Cart</h1>
-          <p class="mt-1 text-xs text-slate-400">Plan: {{ planLabel }}</p>
-          <p v-if="tableLabelModel" class="mt-1 text-xs text-slate-300">Table: {{ tableLabelModel }}</p>
+          <p class="ui-kicker">{{ t("cartPage.kicker") }}</p>
+          <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">{{ t("common.cart") }}</h1>
+          <p class="mt-1 text-xs text-slate-400">{{ t("cartPage.plan", { plan: planLabel }) }}</p>
+          <p v-if="tableLabelModel" class="mt-1 text-xs text-slate-300">{{ t("cartPage.table", { table: tableLabelModel }) }}</p>
         </div>
         <button
           v-if="cart.items.length"
           class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50"
           @click="clearCart"
         >
-          Clear
+          {{ t("common.clear") }}
         </button>
       </div>
       <div class="mt-3 ui-divider"></div>
-      <p class="mt-2 text-sm text-slate-300">Review items, adjust quantity, then send your order through WhatsApp.</p>
+      <p class="mt-2 text-sm text-slate-300">{{ t("cartPage.reviewAdjustSend") }}</p>
     </header>
 
     <div v-if="isBrowseOnlyPlan" class="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-6 text-sky-100 space-y-2">
-      <p class="text-base font-semibold">Ordering disabled</p>
-      <p class="text-sm">This tenant plan allows browsing only right now. Cart and ordering actions are unavailable.</p>
+      <p class="text-base font-semibold">{{ t("cartPage.orderingDisabled") }}</p>
+      <p class="text-sm">{{ t("cartPage.browseOnlyBody") }}</p>
     </div>
 
     <div v-else-if="!cart.items.length" class="rounded-2xl border border-dashed border-slate-700 p-6 text-slate-300">
-      <p class="text-base font-semibold text-slate-100">Cart is empty.</p>
-      <p class="mt-1 text-sm text-slate-400">Use navigation to browse the menu and continue your order.</p>
+      <p class="text-base font-semibold text-slate-100">{{ t("cartPage.cartEmpty") }}</p>
+      <p class="mt-1 text-sm text-slate-400">{{ t("cartPage.cartEmptyBody") }}</p>
     </div>
 
     <div v-else class="space-y-3">
@@ -40,14 +40,14 @@
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="truncate text-base font-semibold text-slate-100">{{ item.name }}</p>
-            <p class="text-xs text-slate-400">{{ formatPrice(item.price, item.currency) }} each</p>
+            <p class="text-xs text-slate-400">{{ formatCurrency(item.price, item.currency) }} {{ t("cartPage.each") }}</p>
             <p v-if="item.note" class="mt-1 text-xs text-slate-400">{{ item.note }}</p>
             <p v-else-if="item.option_labels?.length" class="mt-1 text-xs text-slate-400">
-              Options: {{ item.option_labels.join(", ") }}
+              {{ t("cartPage.options") }}: {{ item.option_labels.join(", ") }}
             </p>
           </div>
           <p class="text-right text-base font-semibold text-[var(--color-secondary)]">
-            {{ formatPrice(item.price * item.qty, item.currency) }}
+            {{ formatCurrency(item.price * item.qty, item.currency) }}
           </p>
         </div>
 
@@ -56,7 +56,7 @@
             <button
               class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
               @click="cart.decrement(item.key)"
-              aria-label="Decrease quantity"
+              :aria-label="t('cartPage.decreaseQuantity')"
             >
               -
             </button>
@@ -72,22 +72,22 @@
             <button
               class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
               @click="cart.increment(item.key)"
-              aria-label="Increase quantity"
+              :aria-label="t('cartPage.increaseQuantity')"
             >
               +
             </button>
           </div>
-          <button class="text-xs text-red-300 hover:text-red-200" @click="cart.remove(item.key)">Remove</button>
+          <button class="text-xs text-red-300 hover:text-red-200" @click="cart.remove(item.key)">{{ t("cartPage.remove") }}</button>
         </div>
       </article>
     </div>
 
     <section v-if="!isBrowseOnlyPlan" class="ui-glass space-y-3 p-5">
       <div v-if="isTableContextOrder" class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-        <p class="font-semibold">Table QR order</p>
+        <p class="font-semibold">{{ t("cartPage.tableQrOrder") }}</p>
         <p class="mt-1">
-          Table context detected{{ cart.tableLabel ? `: ${cart.tableLabel}` : "" }}.
-          Only an optional note is required before sending to the restaurant.
+          {{ t("cartPage.tableContextDetected", { table: cart.tableLabel || "-" }) }}
+          {{ t("cartPage.optionalNoteOnly") }}
         </p>
       </div>
 
@@ -98,34 +98,34 @@
             :class="fulfillmentType === 'pickup' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="fulfillmentType = 'pickup'"
           >
-            Pickup
+            {{ t("cartPage.pickup") }}
           </button>
           <button
             class="ui-btn-outline justify-center text-sm"
             :class="fulfillmentType === 'delivery' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="fulfillmentType = 'delivery'"
           >
-            Delivery
+            {{ t("cartPage.delivery") }}
           </button>
         </div>
-        <p class="text-xs text-slate-400">Select fulfillment type before sending order.</p>
+        <p class="text-xs text-slate-400">{{ t("cartPage.selectFulfillment") }}</p>
         <p v-if="fieldErrors.fulfillment_type" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
         <div class="grid gap-3 md:grid-cols-2">
           <label class="block space-y-1">
-            <span class="text-xs text-slate-400">Customer name (required)</span>
+            <span class="text-xs text-slate-400">{{ t("cartPage.customerNameRequired") }}</span>
             <input
               v-model.trim="customerNameModel"
               maxlength="80"
               class="ui-input"
               autocomplete="name"
-              placeholder="Example: John"
+              :placeholder="t('cartPage.customerNameExample')"
               @input="clearFieldError('customer_name')"
             />
             <p v-if="fieldErrors.customer_name" class="text-xs text-red-300">{{ fieldErrors.customer_name }}</p>
           </label>
           <label class="block space-y-1">
-            <span class="text-xs text-slate-400">Customer phone (required)</span>
+            <span class="text-xs text-slate-400">{{ t("cartPage.customerPhoneRequired") }}</span>
             <input
               v-model.trim="customerPhoneModel"
               maxlength="30"
@@ -141,20 +141,20 @@
 
         <div v-if="isDelivery" class="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3">
           <div class="space-y-1 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Delivery location</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("cartPage.deliveryLocation") }}</p>
             <p class="text-xs text-slate-300">
-              Choose one: use current location, paste map link, or enter coordinates manually.
+              {{ t("cartPage.deliveryLocationHelp") }}
             </p>
           </div>
 
           <label class="block space-y-1">
-            <span class="text-xs text-slate-400">Delivery address (required)</span>
+            <span class="text-xs text-slate-400">{{ t("cartPage.deliveryAddressRequired") }}</span>
             <textarea
               v-model.trim="deliveryAddress"
               rows="2"
               maxlength="180"
               class="ui-textarea"
-              placeholder="Street, building, floor, area..."
+              :placeholder="t('cartPage.deliveryAddressPlaceholder')"
               @input="clearFieldError('delivery_address')"
             ></textarea>
             <p v-if="fieldErrors.delivery_address" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
@@ -162,42 +162,42 @@
 
           <div class="grid gap-2 md:grid-cols-[auto,1fr] md:items-center">
             <button class="ui-btn-outline px-3 py-2 text-xs" :disabled="locating" @click="useCurrentLocation">
-              {{ locating ? "Locating..." : "Use current location" }}
+              {{ locating ? t("cartPage.locating") : t("cartPage.useCurrentLocation") }}
             </button>
             <p class="text-xs text-slate-400">
               {{
                 hasLocationCoords
-                  ? `Location ready: ${formatCoordinate(deliveryLat)}, ${formatCoordinate(deliveryLng)}`
-                  : "No coordinates yet."
+                  ? t("cartPage.locationReady", { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
+                  : t("cartPage.noCoordinatesYet")
               }}
             </p>
           </div>
           <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openInAppMapPicker">
-              Pick pin in app
+              {{ t("cartPage.pickPinInApp") }}
             </button>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openExternalMap">
-              Open external map
+              {{ t("cartPage.openExternalMap") }}
             </button>
             <button
               class="ui-btn-outline px-3 py-1.5 text-xs"
               :disabled="!hasLocationCoords && !deliveryLocationUrl"
               @click="clearLocation"
             >
-              Clear location
+              {{ t("cartPage.clearLocation") }}
             </button>
             <button
               class="ui-btn-outline px-3 py-1.5 text-xs"
               :disabled="!hasLocationCoords"
               @click="copyCoordinates"
             >
-              Copy coordinates
+              {{ t("cartPage.copyCoordinates") }}
             </button>
           </div>
           <p v-if="locationError" class="text-xs text-red-300">{{ locationError }}</p>
 
           <label class="block space-y-1">
-            <span class="text-xs text-slate-400">Map pin URL (optional if location captured)</span>
+            <span class="text-xs text-slate-400">{{ t("cartPage.mapPinUrlOptional") }}</span>
             <input
               v-model.trim="deliveryLocationUrl"
               maxlength="500"
@@ -211,7 +211,7 @@
 
           <div class="grid gap-3 md:grid-cols-2">
             <label class="block space-y-1">
-              <span class="text-xs text-slate-400">Latitude (optional)</span>
+              <span class="text-xs text-slate-400">{{ t("cartPage.latitudeOptional") }}</span>
               <input
                 v-model.number="deliveryLat"
                 type="number"
@@ -224,7 +224,7 @@
               <p v-if="fieldErrors.delivery_lat" class="text-xs text-red-300">{{ fieldErrors.delivery_lat }}</p>
             </label>
             <label class="block space-y-1">
-              <span class="text-xs text-slate-400">Longitude (optional)</span>
+              <span class="text-xs text-slate-400">{{ t("cartPage.longitudeOptional") }}</span>
               <input
                 v-model.number="deliveryLng"
                 type="number"
@@ -241,23 +241,23 @@
       </div>
 
       <label class="block space-y-1">
-        <span class="text-xs text-slate-400">Optional note for restaurant</span>
+        <span class="text-xs text-slate-400">{{ t("cartPage.optionalNoteForRestaurant") }}</span>
         <textarea
           v-model.trim="customerNote"
           rows="2"
           maxlength="300"
           class="ui-textarea"
-          :placeholder="isTableContextOrder ? 'Example: no onion, extra sauce' : 'Example: call on arrival, special instructions'"
+          :placeholder="isTableContextOrder ? t('cartPage.tableNotePlaceholder') : t('cartPage.generalNotePlaceholder')"
         ></textarea>
       </label>
 
       <div class="rounded-2xl border border-slate-700/60 bg-slate-950/50 px-4 py-3">
         <div class="flex items-center justify-between text-sm text-slate-300">
-          <span>Total</span>
-          <span class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatPrice(cart.total, currency) }}</span>
+          <span>{{ t("cartPage.total") }}</span>
+          <span class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(cart.total, currency) }}</span>
         </div>
         <p class="mt-1 text-xs text-slate-500">
-          Channel: {{ cart.canCheckout ? "Checkout" : cart.canWhatsapp ? "WhatsApp handoff" : "Ordering disabled" }}
+          {{ t("cartPage.channel") }}: {{ cart.canCheckout ? t("cartPage.checkout") : cart.canWhatsapp ? t("cartPage.whatsappHandoff") : t("cartPage.orderingDisabled") }}
         </p>
       </div>
 
@@ -267,7 +267,7 @@
         :disabled="processingCheckout"
         @click="startCheckout"
       >
-        {{ processingCheckout ? "Preparing checkout..." : "Proceed to checkout (Growth/Pro)" }}
+        {{ processingCheckout ? t("cartPage.preparingCheckout") : t("cartPage.proceedCheckout") }}
       </button>
 
       <button
@@ -276,7 +276,7 @@
         :disabled="sendingWhatsapp"
         @click="openWhatsApp"
       >
-        {{ sendingWhatsapp ? "Preparing WhatsApp..." : "Send order via WhatsApp" }}
+        {{ sendingWhatsapp ? t("cartPage.preparingWhatsApp") : t("cartPage.sendViaWhatsApp") }}
       </button>
 
       <button
@@ -284,17 +284,17 @@
         class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50"
         disabled
       >
-        Ordering disabled on this plan
+        {{ t("cartPage.orderingDisabledPlan") }}
       </button>
 
       <p v-if="!cart.canCheckout" class="text-xs text-slate-400">
-        {{ cart.canWhatsapp ? "WhatsApp handoff is enabled on your current plan." : "Ordering is disabled on your current plan." }}
+        {{ cart.canWhatsapp ? t("cartPage.whatsappEnabledCurrentPlan") : t("cartPage.orderingDisabledCurrentPlan") }}
       </p>
 
       <div v-if="unavailableSlugs.length" class="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
-        <p>Unavailable items detected: {{ unavailableSlugs.join(", ") }}</p>
+        <p>{{ t("cartPage.unavailableItemsDetected", { items: unavailableSlugs.join(", ") }) }}</p>
         <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="removeUnavailable">
-          Remove unavailable items
+          {{ t("cartPage.removeUnavailableItems") }}
         </button>
       </div>
 
@@ -308,8 +308,8 @@
     >
       <div class="flex items-center justify-between gap-2">
         <div>
-          <p class="text-xs text-slate-400">Total</p>
-          <p class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatPrice(cart.total, currency) }}</p>
+          <p class="text-xs text-slate-400">{{ t("cartPage.total") }}</p>
+          <p class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(cart.total, currency) }}</p>
         </div>
         <button
           v-if="cart.canCheckout"
@@ -317,7 +317,7 @@
           :disabled="processingCheckout"
           @click="startCheckout"
         >
-          {{ processingCheckout ? "Loading..." : "Checkout" }}
+          {{ processingCheckout ? t("common.loading") : t("cartPage.checkout") }}
         </button>
         <button
           v-else-if="cart.canWhatsapp"
@@ -325,7 +325,7 @@
           :disabled="sendingWhatsapp"
           @click="openWhatsApp"
         >
-          {{ sendingWhatsapp ? "Loading..." : "WhatsApp" }}
+          {{ sendingWhatsapp ? t("common.loading") : t("cartPage.whatsapp") }}
         </button>
       </div>
     </div>
@@ -338,26 +338,26 @@
         <div class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
           <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
             <div>
-              <p class="ui-kicker">Map picker</p>
-              <h2 class="text-base font-semibold text-slate-100">Tap map to choose delivery pin</h2>
+              <p class="ui-kicker">{{ t("cartPage.mapPicker") }}</p>
+              <h2 class="text-base font-semibold text-slate-100">{{ t("cartPage.tapMapToChoosePin") }}</h2>
             </div>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">Close</button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">{{ t("common.close") }}</button>
           </header>
 
           <div class="space-y-3 p-3">
             <p class="text-xs text-slate-400">
-              Selected:
+              {{ t("cartPage.selected") }}:
               {{
                 hasTemporaryMapSelection
                   ? `${formatCoordinate(temporaryMapLat)}, ${formatCoordinate(temporaryMapLng)}`
-                  : "No pin selected yet."
+                  : t("cartPage.noPinSelectedYet")
               }}
             </p>
             <div ref="mapContainerRef" class="h-[52vh] min-h-[280px] w-full overflow-hidden rounded-xl border border-slate-700/80"></div>
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">Cancel</button>
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">{{ t("cartPage.cancel") }}</button>
               <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="!hasTemporaryMapSelection" @click="applyMapSelection">
-                Use selected pin
+                {{ t("cartPage.useSelectedPin") }}
               </button>
             </div>
           </div>
@@ -369,6 +369,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
@@ -378,6 +379,7 @@ import { trackEvent } from "../lib/analytics";
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
+const { formatCurrency, t } = useI18n();
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -402,6 +404,7 @@ const leafletModuleRef = ref(null);
 const leafletAssetsReady = ref(false);
 const temporaryMapLat = ref(null);
 const temporaryMapLng = ref(null);
+const meta = computed(() => tenant.resolvedMeta || null);
 
 const parseCoordinateValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -413,9 +416,9 @@ const parseCoordinateValue = (value) => {
 
 const currency = computed(() => {
   const firstItemCurrency = cart.items.find((item) => item.currency)?.currency;
-  return firstItemCurrency || tenant.meta?.plan?.currency || "USD";
+  return firstItemCurrency || meta.value?.plan?.currency || "USD";
 });
-const planLabel = computed(() => tenant.meta?.plan?.tier_name || tenant.meta?.plan?.name || "Basic");
+const planLabel = computed(() => meta.value?.plan?.tier_name || meta.value?.plan?.name || "Basic");
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const tableLabelModel = computed(() => cart.tableLabel || "");
 const isTableContextOrder = computed(() => Boolean(cart.tableSlug || cart.tableLabel));
@@ -440,8 +443,6 @@ const customerPhoneModel = computed({
   set: (value) => cart.setCustomerPhone(value),
 });
 
-const formatPrice = (value, curr = "USD") =>
-  new Intl.NumberFormat("en", { style: "currency", currency: curr }).format(value || 0);
 const formatCoordinate = (value) => {
   const number = Number(value);
   if (!Number.isFinite(number)) return "-";
@@ -463,7 +464,7 @@ const setLineQty = (item, event) => {
 const clearCart = () => {
   cart.clear();
   unavailableSlugs.value = [];
-  toast.show("Cart cleared", "info");
+  toast.show(t("cartPage.cartCleared"), "info");
 };
 
 const parseCoordinatesFromMapUrl = (value) => {
@@ -600,7 +601,7 @@ const applyMapSelection = () => {
   const lat = parseCoordinateValue(temporaryMapLat.value);
   const lng = parseCoordinateValue(temporaryMapLng.value);
   if (lat === null || lng === null) {
-    toast.show("Select a pin on the map first.", "error");
+    toast.show(t("cartPage.selectPinFirst"), "error");
     return;
   }
   setLocationCoordinates(lat, lng);
@@ -612,7 +613,7 @@ const applyMapSelection = () => {
     source: "cart_delivery_location",
     metadata: { action: "map_pin_selected" },
   });
-  toast.show("Delivery pin selected", "success");
+  toast.show(t("cartPage.deliveryPinSelected"), "success");
 };
 
 const clearLocation = () => {
@@ -634,9 +635,9 @@ const copyCoordinates = async () => {
   if (lat === null || lng === null) return;
   try {
     await navigator.clipboard.writeText(`${lat},${lng}`);
-    toast.show("Coordinates copied", "success");
+    toast.show(t("cartPage.coordinatesCopied"), "success");
   } catch (err) {
-    toast.show("Unable to copy coordinates", "error");
+    toast.show(t("cartPage.unableToCopyCoordinates"), "error");
   }
 };
 
@@ -678,7 +679,7 @@ watch(showMapModal, async (value) => {
   try {
     await initLeafletMap();
   } catch (err) {
-    toast.show("Unable to load map picker. Use external map link.", "error");
+    toast.show(t("cartPage.unableToLoadMapPicker"), "error");
     showMapModal.value = false;
   }
 });
@@ -686,7 +687,7 @@ watch(showMapModal, async (value) => {
 const useCurrentLocation = () => {
   locationError.value = "";
   if (typeof navigator === "undefined" || !navigator.geolocation) {
-    locationError.value = "Location is not supported on this device/browser.";
+    locationError.value = t("cartPage.locationNotSupported");
     return;
   }
   locating.value = true;
@@ -695,7 +696,7 @@ const useCurrentLocation = () => {
       const lat = position?.coords?.latitude;
       const lng = position?.coords?.longitude;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        locationError.value = "Unable to read your GPS location.";
+        locationError.value = t("cartPage.unableToReadGps");
         locating.value = false;
         return;
       }
@@ -712,11 +713,11 @@ const useCurrentLocation = () => {
     },
     (err) => {
       if (err?.code === 1) {
-        locationError.value = "Location permission denied.";
+        locationError.value = t("cartPage.locationPermissionDenied");
       } else if (err?.code === 3) {
-        locationError.value = "Location request timed out. Retry.";
+        locationError.value = t("cartPage.locationRequestTimedOut");
       } else {
-        locationError.value = "Unable to capture your location.";
+        locationError.value = t("cartPage.unableToCaptureLocation");
       }
       locating.value = false;
     },
@@ -739,7 +740,7 @@ const openExternalMap = () => {
     source: "cart_delivery_location",
     metadata: { action: "open_external_map" },
   });
-  toast.show("Open map and share location link back if needed.", "info");
+  toast.show(t("cartPage.openMapAndShare"), "info");
 };
 
 const validateForm = () => {
@@ -750,40 +751,40 @@ const validateForm = () => {
 
   const errors = {};
   if (!fulfillmentType.value) {
-    errors.fulfillment_type = "Select pickup or delivery.";
+    errors.fulfillment_type = t("cartPage.selectPickupOrDelivery");
   }
   if (!cart.customerName) {
-    errors.customer_name = "Customer name is required.";
+    errors.customer_name = t("cartPage.customerNameRequiredError");
   }
   if (!cart.customerPhone) {
-    errors.customer_phone = "Customer phone is required.";
+    errors.customer_phone = t("cartPage.customerPhoneRequiredError");
   }
   if (fulfillmentType.value === "delivery") {
     if (!deliveryAddress.value) {
-      errors.delivery_address = "Delivery address is required.";
+      errors.delivery_address = t("cartPage.deliveryAddressRequiredError");
     }
     const latValue = parseCoordinateValue(deliveryLat.value);
     const lngValue = parseCoordinateValue(deliveryLng.value);
     const hasLat = latValue !== null;
     const hasLng = lngValue !== null;
     if (hasLat && (latValue < -90 || latValue > 90)) {
-      errors.delivery_lat = "Latitude must be between -90 and 90.";
+      errors.delivery_lat = t("cartPage.latitudeRangeError");
     }
     if (hasLng && (lngValue < -180 || lngValue > 180)) {
-      errors.delivery_lng = "Longitude must be between -180 and 180.";
+      errors.delivery_lng = t("cartPage.longitudeRangeError");
     }
     if (hasLat !== hasLng) {
-      errors.delivery_lat = "Latitude and longitude must be provided together.";
-      errors.delivery_lng = "Latitude and longitude must be provided together.";
+      errors.delivery_lat = t("cartPage.latLngTogetherError");
+      errors.delivery_lng = t("cartPage.latLngTogetherError");
     }
     if (!hasLocationCoords.value && !deliveryLocationUrl.value.trim()) {
-      errors.delivery_location_url = "Provide map link or use current location.";
+      errors.delivery_location_url = t("cartPage.provideMapLinkOrCurrentLocation");
     }
   }
 
   fieldErrors.value = errors;
   if (Object.keys(errors).length) {
-    toast.show("Please complete required order details.", "error");
+    toast.show(t("cartPage.completeRequiredOrderDetails"), "error");
     return false;
   }
   return true;
@@ -856,28 +857,28 @@ const mapOrderApiError = (err, fallback) => {
   assignFieldErrors(data);
 
   if (code === "items_unavailable" && unavailable.length) {
-    return `Some items are unavailable: ${unavailable.join(", ")}. Remove them and retry.`;
+    return t("cartPage.itemsUnavailable", { items: unavailable.join(", ") });
   }
   if (code === "plan_forbidden" || code === "plan_forbidden_checkout") {
-    return "This action is not available on your current plan.";
+    return t("cartPage.actionNotAvailableOnPlan");
   }
   if (code === "menu_unpublished") {
-    return "Menu is not published yet.";
+    return t("cartPage.menuNotPublishedYet");
   }
   if (code === "restaurant_closed") {
-    return "Restaurant is currently closed.";
+    return t("cartPage.restaurantCurrentlyClosed");
   }
   if (code === "contact_missing") {
-    return "Restaurant contact is not configured yet.";
+    return t("cartPage.restaurantContactNotConfigured");
   }
   if (code === "table_unavailable") {
-    return "This table QR link is unavailable. Please rescan or ask staff for a new QR.";
+    return t("cartPage.tableQrUnavailable");
   }
   if (code === "mixed_currency") {
-    return "Cart has mixed currencies. Please keep one currency per order.";
+    return t("cartPage.mixedCurrency");
   }
   if (code === "menu_temporarily_disabled") {
-    return note ? `Menu is temporarily unavailable. ${note}` : "Menu is temporarily unavailable.";
+    return note ? t("cartPage.menuTemporarilyUnavailableWithNote", { note }) : t("cartPage.menuTemporarilyUnavailable");
   }
   if (data && typeof data === "object") {
     const firstList = Object.values(data).find((v) => Array.isArray(v) && v.length);
@@ -895,7 +896,7 @@ const removeUnavailable = () => {
   const toRemove = cart.items.filter((item) => blocked.has(item.slug)).map((item) => item.key);
   toRemove.forEach((key) => cart.remove(key));
   unavailableSlugs.value = [];
-  toast.show("Unavailable items removed", "success");
+  toast.show(t("cartPage.unavailableItemsRemoved"), "success");
 };
 
 const startCheckout = async () => {
@@ -905,7 +906,7 @@ const startCheckout = async () => {
   fieldErrors.value = {};
   if (!cart.canCheckout) return;
   if (!cart.items.length) {
-    toast.show("Cart is empty.", "error");
+    toast.show(t("cartPage.cartEmpty"), "error");
     return;
   }
   if (!validateForm()) return;
@@ -920,14 +921,14 @@ const startCheckout = async () => {
     const data = res?.data || {};
     if (data.checkout_url) {
       window.open(data.checkout_url, "_blank", "noopener,noreferrer");
-      toast.show("Opening checkout", "success");
+      toast.show(t("cartPage.openingCheckout"), "success");
       return;
     }
-    const detail = data.detail || "Checkout is not configured yet for this tenant.";
+    const detail = data.detail || t("cartPage.checkoutNotConfigured");
     checkoutError.value = detail;
     toast.show(detail, "info");
   } catch (err) {
-    const detail = mapOrderApiError(err, "Unable to start checkout.");
+    const detail = mapOrderApiError(err, t("cartPage.unableToStartCheckout"));
     checkoutError.value = detail;
     toast.show(detail, "error");
   } finally {
@@ -942,7 +943,7 @@ const openWhatsApp = async () => {
   fieldErrors.value = {};
   if (!cart.canWhatsapp) return;
   if (!cart.items.length) {
-    toast.show("Cart is empty.", "error");
+    toast.show(t("cartPage.cartEmpty"), "error");
     return;
   }
   if (!validateForm()) return;
@@ -955,11 +956,11 @@ const openWhatsApp = async () => {
     });
     const res = await api.post("/order-handoff/", buildPayload());
     const url = res?.data?.url;
-    if (!url) throw new Error("Missing WhatsApp handoff URL");
+    if (!url) throw new Error(t("cartPage.missingWhatsappHandoffUrl"));
     window.open(url, "_blank", "noopener,noreferrer");
-    toast.show("Opening WhatsApp", "success");
+    toast.show(t("cartPage.openingWhatsApp"), "success");
   } catch (err) {
-    const detail = mapOrderApiError(err, "Unable to prepare WhatsApp order.");
+    const detail = mapOrderApiError(err, t("cartPage.unableToPrepareWhatsAppOrder"));
     handoffError.value = detail;
     toast.show(detail, "error");
   } finally {

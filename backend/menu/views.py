@@ -422,7 +422,10 @@ class AnalyticsEventIngestView(APIView):
     def post(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
-            return Response({"detail": "Tenant not resolved.", "code": "tenant_missing"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Analytics ingestion ignored for public host.", "code": "public_host_ignored"},
+                status=status.HTTP_202_ACCEPTED,
+            )
         if getattr(tenant, "schema_name", "") == "public":
             return Response(
                 {"detail": "Analytics ingestion ignored for public schema.", "code": "public_schema_ignored"},

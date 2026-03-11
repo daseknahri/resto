@@ -1,0 +1,28 @@
+http:
+  routers:
+    kepoli-tenant-wildcard-http:
+      entryPoints:
+        - web
+      rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`)
+      middlewares:
+        - kepoli-tenant-https-redirect
+      service: noop@internal
+
+    kepoli-tenant-wildcard-https:
+      entryPoints:
+        - websecure
+      rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`)
+      service: menu-kepoli-com-frontend@docker
+      priority: 100
+      tls: true
+
+  middlewares:
+    kepoli-tenant-https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+tls:
+  certificates:
+    - certFile: /traefik/certs/menu.kepoli.com/fullchain.pem
+      keyFile: /traefik/certs/menu.kepoli.com/privkey.pem

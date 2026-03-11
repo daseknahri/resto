@@ -53,7 +53,8 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
 
     @staticmethod
     def _is_public_host(hostname: str) -> bool:
-        return hostname in {"localhost", "127.0.0.1"}
+        normalized = (hostname or "").strip().lower().split(":", 1)[0]
+        return normalized in set(getattr(settings, "PUBLIC_SCHEMA_HOSTS", []))
 
     def process_request(self, request):
         connection.set_schema_to_public()

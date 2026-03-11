@@ -74,7 +74,7 @@ Enable/start:
 Use one server block that handles root + wildcard:
 - `server_name example.com *.example.com;`
 - Serve frontend static build from `/srv/resto/frontend/dist`
-- Proxy `/api/` and `/admin/` to `http://127.0.0.1:8000`
+- Proxy `/api/`, `/api-auth/`, `/admin/`, `/media/`, and `/static/` to `http://127.0.0.1:8000`
 - Forward host headers so tenant resolution works:
   - `proxy_set_header Host $host;`
   - `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`
@@ -97,6 +97,7 @@ Enable HTTPS:
    - `sudo systemctl reload nginx`
 6. Run smoke checks:
    - `powershell -ExecutionPolicy Bypass -File .\infra\pre_release_smoke.ps1 -TenantHost demo.example.com -BackendPort 443 -FrontendPort 443 -AllowMenuLocked`
+   - `powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://demo.example.com -ApiBaseUrl https://demo.example.com/api -TableSlug table-1`
    - Or equivalent `curl` checks from server.
 
 ## 8. Rollback Procedure
@@ -120,6 +121,7 @@ Enable HTTPS:
 - Provision test lead and verify onboarding package links
 - Complete onboarding and publish menu
 - Verify published menu accessible publicly
+- Run first real tenant checklist in `First_Tenant_Production_QA.md`
 - Check `/var/log/resto/security.log` for throttle/security entries
 
 ## 10. Incident Notes

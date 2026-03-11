@@ -2,7 +2,9 @@ param(
     [string]$TenantHost = "demo.localhost",
     [int]$ApiPort = 8000,
     [int]$WebPort = 5173,
-    [string]$TableSlug = "table-1"
+    [string]$TableSlug = "table-1",
+    [string]$FrontendBaseUrl = "",
+    [string]$ApiBaseUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -93,8 +95,35 @@ function Invoke-HttpJson {
     }
 }
 
-$frontendBase = "http://$TenantHost`:$WebPort"
-$apiBase = "http://$TenantHost`:$ApiPort/api"
+function Normalize-BaseUrl {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    return ($Value.Trim().TrimEnd("/"))
+}
+
+if ($FrontendBaseUrl) {
+    $frontendBase = Normalize-BaseUrl -Value $FrontendBaseUrl
+} else {
+    $frontendBase = "http://$TenantHost`:$WebPort"
+}
+
+if ($ApiBaseUrl) {
+    $apiBase = Normalize-BaseUrl -Value $ApiBaseUrl
+} else {
+    try {
+        $uri = [System.Uri]$frontendBase
+        $defaultPort = if ($uri.Scheme -eq "https") { 443 } else { 80 }
+        if ($uri.Port -eq $defaultPort) {
+            $apiBase = "$($uri.Scheme)://$($uri.Host)/api"
+        } else {
+            $apiBase = "$($uri.Scheme)://$($uri.Host):$($uri.Port)/api"
+        }
+    } catch {
+        $apiBase = "http://$TenantHost`:$ApiPort/api"
+    }
+}
 
 Write-Host "Customer-flow smoke started" -ForegroundColor Cyan
 Write-Host "Frontend: $frontendBase"

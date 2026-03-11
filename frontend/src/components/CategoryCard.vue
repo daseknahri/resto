@@ -8,15 +8,15 @@
       <img :src="image" :alt="title" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/0"></div>
       <span class="absolute right-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-100">
-        {{ count }} items
+        {{ itemCountLabel(count) }}
       </span>
       <div class="absolute bottom-4 left-4 right-4 flex items-center justify-between">
         <div>
           <p class="text-lg font-semibold text-white drop-shadow sm:text-xl">{{ title }}</p>
-          <p class="text-xs text-slate-200">Open category</p>
+          <p class="text-xs text-slate-200">{{ t("categoryCard.openCategory") }}</p>
         </div>
         <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-900 font-semibold transition-transform group-hover:translate-x-0.5">
-          Go
+          {{ t("categoryCard.go") }}
         </span>
       </div>
     </div>
@@ -24,7 +24,10 @@
 </template>
 
 <script setup>
+import { useI18n } from "../composables/useI18n";
+
 defineEmits(["click"]);
+const { itemCountLabel, t } = useI18n();
 
 defineProps({
   title: { type: String, required: true },

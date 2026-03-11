@@ -1,32 +1,32 @@
 ﻿<template>
   <div class="ui-panel space-y-4 p-5">
-    <h2 class="text-xl font-semibold">Publish</h2>
-    <p class="text-sm text-slate-400">Review your setup and publish your menu.</p>
+    <h2 class="text-xl font-semibold">{{ t("stepPublish.title") }}</h2>
+    <p class="text-sm text-slate-400">{{ t("stepPublish.description") }}</p>
     <div v-if="isBrowseOnlyPlan" class="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-100">
-      This tenant currently has browsing-only access. Publishing makes the menu public, but ordering actions remain disabled until plan entitlements are enabled.
+      {{ t("stepPublish.browseOnlyWarning") }}
     </div>
 
     <ul class="text-sm space-y-2">
       <li v-for="item in checks" :key="item.key" class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
         <span class="text-slate-200">{{ item.label }}</span>
-        <span class="text-xs font-semibold" :class="item.ok ? 'text-emerald-300' : 'text-amber-300'">{{ item.ok ? 'OK' : 'Missing' }}</span>
+        <span class="text-xs font-semibold" :class="item.ok ? 'text-emerald-300' : 'text-amber-300'">{{ item.ok ? t("stepPublish.ok") : t("stepPublish.missing") }}</span>
       </li>
     </ul>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-1 text-sm">
-      <p class="text-slate-300">Menu URL</p>
+      <p class="text-slate-300">{{ t("stepPublish.menuUrl") }}</p>
       <p class="text-slate-100 break-all">{{ menuUrl }}</p>
-      <p v-if="publishedAt" class="text-xs text-slate-400">Published at: {{ formattedPublishedAt }}</p>
+      <p v-if="publishedAt" class="text-xs text-slate-400">{{ t("stepPublish.publishedAt", { date: formattedPublishedAt }) }}</p>
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-      <p class="text-sm text-slate-300">Availability controls</p>
+      <p class="text-sm text-slate-300">{{ t("stepPublish.availabilityControls") }}</p>
       <label class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
-        <span class="text-sm text-slate-200">Restaurant open</span>
+        <span class="text-sm text-slate-200">{{ t("stepPublish.restaurantOpen") }}</span>
         <input v-model="form.is_open" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
       </label>
       <label class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
-        <span class="text-sm text-slate-200">Temporarily disable public menu</span>
+        <span class="text-sm text-slate-200">{{ t("stepPublish.disablePublicMenu") }}</span>
         <input
           v-model="form.is_menu_temporarily_disabled"
           type="checkbox"
@@ -36,13 +36,13 @@
       </label>
 
       <div v-if="form.is_menu_temporarily_disabled" class="space-y-1">
-        <label class="text-sm text-slate-200">Disable message</label>
+        <label class="text-sm text-slate-200">{{ t("stepPublish.disableMessage") }}</label>
         <textarea
           v-model="form.menu_disabled_note"
           rows="2"
           class="w-full rounded-xl bg-slate-900 border px-3 py-2 text-sm"
           :class="errors.menu_disabled_note ? 'border-red-400' : 'border-slate-700'"
-          placeholder="Example: We are updating the menu and will reopen at 6 PM."
+          :placeholder="t('stepPublish.disableMessagePlaceholder')"
           @input="clearError('menu_disabled_note')"
         ></textarea>
         <p v-if="errors.menu_disabled_note" class="text-xs text-red-300">{{ errors.menu_disabled_note }}</p>
@@ -54,13 +54,13 @@
           :disabled="savingStatus"
           @click="saveStatus"
         >
-          {{ savingStatus ? "Saving status..." : "Save status" }}
+          {{ savingStatus ? t("stepPublish.savingStatus") : t("stepPublish.saveStatus") }}
         </button>
       </div>
     </div>
 
     <p v-if="!canAttemptPublish" class="text-xs text-amber-300">
-      Add at least one category and one dish before publishing.
+      {{ t("stepPublish.publishRequirement") }}
     </p>
     <p v-if="errors.is_menu_published" class="text-sm text-red-300">{{ errors.is_menu_published }}</p>
     <p v-if="errors.non_field_errors" class="text-sm text-red-300">{{ errors.non_field_errors }}</p>
@@ -71,17 +71,17 @@
         :disabled="publishing || !canAttemptPublish"
         @click="publish"
       >
-        {{ publishing ? "Publishing..." : published ? "Published" : "Publish menu" }}
+        {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu") }}
       </button>
       <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="refreshChecks" :disabled="loadingChecks">
-        {{ loadingChecks ? "Refreshing..." : "Refresh checks" }}
+        {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
       </button>
       <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
-        Launch summary
+        {{ t("stepPublish.launchSummary") }}
       </RouterLink>
-      <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">Preview menu</RouterLink>
-      <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">Copy menu URL</button>
-      <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">Back to landing</RouterLink>
+      <RouterLink to="/menu" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.previewMenu") }}</RouterLink>
+      <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyMenuUrl">{{ t("stepPublish.copyMenuUrl") }}</button>
+      <RouterLink to="/" class="ui-btn-outline w-full justify-center sm:w-auto">{{ t("stepPublish.backToLanding") }}</RouterLink>
     </div>
   </div>
 </template>
@@ -90,12 +90,14 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useToastStore } from "../stores/toast";
 import { categoryApi, dishApi, profileApi } from "../lib/onboardingApi";
+import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { trackEvent } from "../lib/analytics";
 
 const emit = defineEmits(["publish"]);
 const toast = useToastStore();
 const tenant = useTenantStore();
+const { t, formatDateTime } = useI18n();
 const publishing = ref(false);
 const savingStatus = ref(false);
 const loadingChecks = ref(false);
@@ -119,7 +121,7 @@ const menuUrl = computed(() => {
 
 const formattedPublishedAt = computed(() => {
   if (!publishedAt.value) return "";
-  return new Date(publishedAt.value).toLocaleString();
+  return formatDateTime(publishedAt.value);
 });
 const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsappOrder = computed(() => tenant.entitlements?.can_whatsapp_order === true);
@@ -131,15 +133,15 @@ const checks = computed(() => {
   const hasBrand = Boolean((p.tagline || "").trim() || hasContact);
   const hasTheme = Boolean((p.logo_url || "").trim() || (p.hero_url || "").trim() || p.primary_color || p.secondary_color);
   const items = [
-    { key: "brand", label: "Brand and contact set", ok: hasBrand },
-    { key: "categories", label: `Categories added (${categoriesCount.value})`, ok: categoriesCount.value > 0 },
-    { key: "dishes", label: `Dishes added (${dishesCount.value})`, ok: dishesCount.value > 0 },
-    { key: "theme", label: "Theme configured", ok: hasTheme },
+    { key: "brand", label: t("stepPublish.checkBrandContact"), ok: hasBrand },
+    { key: "categories", label: t("stepPublish.checkCategories", { count: categoriesCount.value }), ok: categoriesCount.value > 0 },
+    { key: "dishes", label: t("stepPublish.checkDishes", { count: dishesCount.value }), ok: dishesCount.value > 0 },
+    { key: "theme", label: t("stepPublish.checkTheme"), ok: hasTheme },
   ];
   if (isBrowseOnlyPlan.value) {
-    items.push({ key: "plan_mode", label: "Plan mode: Browse-only", ok: true });
+    items.push({ key: "plan_mode", label: t("stepPublish.checkPlanBrowseOnly"), ok: true });
   } else if (canCheckout.value || canWhatsappOrder.value) {
-    items.push({ key: "plan_mode", label: "Plan mode: Ordering enabled", ok: true });
+    items.push({ key: "plan_mode", label: t("stepPublish.checkPlanOrdering"), ok: true });
   }
   return items;
 });
@@ -179,7 +181,7 @@ const refreshChecks = async () => {
     categoriesCount.value = Array.isArray(categories) ? categories.length : 0;
     dishesCount.value = Array.isArray(dishes) ? dishes.length : 0;
   } catch (e) {
-    toast.show("Unable to refresh checks", "error");
+    toast.show(t("stepPublish.refreshChecksFailed"), "error");
   } finally {
     loadingChecks.value = false;
   }
@@ -207,10 +209,10 @@ const saveStatus = async () => {
     form.is_menu_temporarily_disabled = saved?.is_menu_temporarily_disabled === true;
     form.menu_disabled_note = saved?.menu_disabled_note || "";
     await tenant.fetchMeta();
-    toast.show("Availability status saved", "success");
+    toast.show(t("stepPublish.statusSaved"), "success");
   } catch (e) {
     Object.assign(errors, e?.fieldErrors || {});
-    toast.show(e?.message || "Status save failed", "error");
+    toast.show(e?.message || t("stepPublish.statusSaveFailed"), "error");
   } finally {
     savingStatus.value = false;
   }
@@ -236,10 +238,10 @@ const publish = async () => {
       },
     });
     emit("publish");
-    toast.show("Menu published. Share your URL with customers.", "success");
+    toast.show(t("stepPublish.publishedSuccess"), "success");
   } catch (e) {
     Object.assign(errors, e?.fieldErrors || {});
-    toast.show(e?.message || "Publish failed", "error");
+    toast.show(e?.message || t("stepPublish.publishFailed"), "error");
   } finally {
     publishing.value = false;
   }
@@ -248,9 +250,9 @@ const publish = async () => {
 const copyMenuUrl = async () => {
   try {
     await navigator.clipboard.writeText(menuUrl.value);
-    toast.show("Menu URL copied", "success");
+    toast.show(t("stepPublish.menuCopied"), "success");
   } catch (e) {
-    toast.show("Copy failed", "error");
+    toast.show(t("stepPublish.copyFailed"), "error");
   }
 };
 
