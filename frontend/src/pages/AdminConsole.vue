@@ -15,8 +15,12 @@
         >
           {{ t("adminConsole.djangoAdmin") }}
         </a>
-        <input v-model="domainSuffix" class="ui-input w-36 px-2 py-1 text-sm" :placeholder="t('adminConsole.suffixLocalhost')" />
-        <button @click="refreshAll" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
+        <input
+          v-model="domainSuffix"
+          class="ui-input w-48 px-2 py-1 text-sm"
+          :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
+        />
+        <button class="ui-btn-outline px-4 py-2 text-sm" @click="refreshAll">{{ t("common.refresh") }}</button>
       </div>
     </div>
 
@@ -28,7 +32,7 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
           <h2 class="text-xl font-semibold">{{ t("adminConsole.awaitingProvisioning") }}</h2>
         </div>
-        <button @click="fetchLeads" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshLeads") }}</button>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
       <p v-if="leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingLeads") }}</p>
       <p v-if="!leads.length && !leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.noLeadsPending") }}</p>
@@ -128,7 +132,7 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasNext" @click="changeTenantPage(tenantPage + 1)">
             {{ t("common.next") }}
           </button>
-          <button @click="fetchTenants(tenantPage)" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshTenants") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchTenants(tenantPage)">{{ t("adminConsole.refreshTenants") }}</button>
         </div>
       </div>
       <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
@@ -270,7 +274,7 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
           <h2 class="text-xl font-semibold">{{ t("adminConsole.overdueReservationAlerts") }}</h2>
         </div>
-        <button @click="fetchReservationAlerts" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("adminConsole.refreshAlerts") }}</button>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchReservationAlerts">{{ t("adminConsole.refreshAlerts") }}</button>
       </div>
       <div class="ui-scroll-row">
         <button
@@ -357,7 +361,7 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
           <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.tierUpgradeRequests") }}</h2>
         </div>
-        <button @click="fetchUpgradeRequests" class="ui-btn-outline px-4 py-2 text-sm">
+        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchUpgradeRequests">
           {{ t("common.refresh") }}
         </button>
       </div>
@@ -456,8 +460,76 @@
 
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p class="text-sm text-slate-300">{{ t("adminConsole.planFeatureFlags") }}</p>
+          <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.planFeatureControls") }}</h2>
+          <p class="text-xs text-slate-500">{{ t("adminConsole.planFeatureControlsHint") }}</p>
+        </div>
+        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchPlanFeatureFlags">
+          {{ t("common.refresh") }}
+        </button>
+      </div>
+      <p v-if="planFlagsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingPlanFeatureFlags") }}</p>
+      <p v-else-if="!planFeatureRows.length" class="text-sm text-slate-400">{{ t("adminConsole.noPlanFeatureFlags") }}</p>
+      <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article
+          v-for="plan in planFeatureRows"
+          :key="`plan-flag-${plan.plan_code}`"
+          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-3"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <p class="font-semibold text-slate-100">{{ plan.plan_name }}</p>
+              <p class="text-[11px] text-slate-500">{{ plan.plan_code?.toUpperCase() }}</p>
+            </div>
+            <span
+              class="rounded-full px-2 py-1 text-[10px] font-semibold"
+              :class="plan.plan_is_active ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/60 text-slate-300'"
+            >
+              {{ plan.plan_is_active ? t("common.available") : t("adminConsole.inactive") }}
+            </span>
+          </div>
+          <div class="space-y-2">
+            <div
+              v-for="flag in plan.feature_flags"
+              :key="`${plan.plan_code}-${flag.key}`"
+              class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2"
+            >
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold text-slate-100">{{ flag.label || flag.key }}</p>
+                  <p class="text-[11px] text-slate-400">{{ flag.description || "-" }}</p>
+                </div>
+                <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+                  <input v-model="flag.enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900" />
+                </label>
+              </div>
+              <textarea
+                v-model="flag.configText"
+                rows="3"
+                class="ui-input w-full px-2 py-1 text-xs font-mono"
+                :placeholder="t('adminConsole.flagConfigPlaceholder')"
+              />
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] text-slate-500">{{ flag.key }}</span>
+                <button
+                  class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-100 hover:border-brand-primary disabled:opacity-50"
+                  :disabled="!!planFlagSaving[planFlagStateKey(plan.plan_code, flag.key)]"
+                  @click="savePlanFeatureFlag(plan, flag)"
+                >
+                  {{ planFlagSaving[planFlagStateKey(plan.plan_code, flag.key)] ? t("common.saving") : t("adminConsole.saveFlag") }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ui-panel p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
-        <button @click="fetchJobs" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
+        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchJobs">{{ t("common.refresh") }}</button>
       </div>
 
       <p v-if="loading" class="text-sm text-slate-400">{{ t("adminConsole.loadingJobs") }}</p>
@@ -471,8 +543,8 @@
             <p class="text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
             <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
           </div>
-            <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
-            <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ new Date(job.updated_at).toLocaleString() }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ new Date(job.updated_at).toLocaleString() }}</p>
           <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
         </article>
         <p v-if="!jobs.length && !loading" class="text-sm text-slate-400">{{ t("adminConsole.noJobsYet") }}</p>
@@ -535,7 +607,7 @@
           >
             {{ t("common.next") }}
           </button>
-          <button @click="fetchAuditLogs(auditPage)" class="ui-btn-outline px-4 py-2 text-sm">{{ t("common.refresh") }}</button>
+          <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchAuditLogs(auditPage)">{{ t("common.refresh") }}</button>
         </div>
       </div>
       <p class="text-xs text-slate-500">
@@ -660,6 +732,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
+import { getPrimaryPublicHost } from "../lib/runtimeHost";
 
 const jobs = ref([]);
 const leads = ref([]);
@@ -675,6 +748,8 @@ const previewLoading = ref({});
 const previews = ref({});
 const inferDomainSuffix = () => {
   if (typeof window === "undefined") return "localhost";
+  const configuredPublicHost = getPrimaryPublicHost();
+  if (configuredPublicHost) return configuredPublicHost;
   const host = String(window.location.hostname || "").trim().toLowerCase().replace(/^www\./, "");
   if (!host) return "localhost";
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) return "localhost";
@@ -685,10 +760,14 @@ const inferDomainSuffix = () => {
   if (parts.length >= 2) return parts.slice(-2).join(".");
   return host;
 };
-const domainSuffix = ref(inferDomainSuffix());
+const inferredDomainSuffix = inferDomainSuffix();
+const domainSuffix = ref("");
 const upgradeRequests = ref([]);
 const upgradeLoading = ref(false);
 const decisionLoading = ref({});
+const planFeatureRows = ref([]);
+const planFlagsLoading = ref(false);
+const planFlagSaving = ref({});
 const tenants = ref([]);
 const tenantsLoading = ref(false);
 const tenantPage = ref(1);
@@ -735,7 +814,7 @@ const parseApiError = (err, fallback) => {
   if (typeof data === "string" && data.trim()) return data;
   return fallback;
 };
-const normalizeSuffix = (value) => (value || "localhost").replace(/^\.+/, "");
+const normalizeSuffix = (value) => String(value || "").trim().replace(/^\.+/, "");
 const djangoAdminUrl = computed(() => {
   if (typeof window === "undefined") return "/admin/";
   const host = window.location.hostname;
@@ -764,6 +843,93 @@ const packageText = computed(() => {
     p.whatsapp_message_template || "-",
   ].join("\n");
 });
+
+const parseFlagConfigText = (text) => {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  return JSON.parse(raw);
+};
+
+const toConfigText = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "";
+  }
+};
+
+const normalizePlanFeatureRow = (row) => ({
+  ...row,
+  feature_flags: Array.isArray(row?.feature_flags)
+    ? row.feature_flags.map((flag) => ({
+        ...flag,
+        configText: toConfigText(flag?.config),
+      }))
+    : [],
+});
+
+const planFlagStateKey = (planCode, key) => `${String(planCode || "").trim().toLowerCase()}:${String(key || "").trim().toLowerCase()}`;
+
+const fetchPlanFeatureFlags = async () => {
+  planFlagsLoading.value = true;
+  try {
+    const res = await adminApi.get("/admin-plan-feature-flags/");
+    const rows = Array.isArray(res?.data?.plans) ? res.data.plans : [];
+    planFeatureRows.value = rows.map((row) => normalizePlanFeatureRow(row));
+  } catch (err) {
+    const msg = parseApiError(err, t("adminConsole.loadPlanFeatureFlagsFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    planFlagsLoading.value = false;
+  }
+};
+
+const savePlanFeatureFlag = async (plan, flag) => {
+  const planCode = String(plan?.plan_code || "").trim();
+  const key = String(flag?.key || "").trim();
+  if (!planCode || !key) return;
+  const stateKey = planFlagStateKey(planCode, key);
+  planFlagSaving.value = { ...planFlagSaving.value, [stateKey]: true };
+  try {
+    let config = null;
+    try {
+      config = parseFlagConfigText(flag.configText);
+    } catch {
+      const msg = t("adminConsole.invalidFlagConfig");
+      error.value = msg;
+      toast.show(msg, "error");
+      return;
+    }
+
+    const res = await adminApi.put(`/admin-plan-feature-flags/${planCode}/`, {
+      feature_flags: [
+        {
+          key,
+          enabled: Boolean(flag.enabled),
+          config,
+        },
+      ],
+    });
+    const updatedPlan = res?.data?.plan;
+    if (updatedPlan && typeof updatedPlan === "object") {
+      planFeatureRows.value = planFeatureRows.value.map((row) =>
+        row.plan_code === updatedPlan.plan_code ? normalizePlanFeatureRow(updatedPlan) : row
+      );
+    } else {
+      flag.configText = toConfigText(config);
+    }
+    toast.show(t("adminConsole.planFeatureFlagSaved", { plan: planCode.toUpperCase(), key }), "success");
+    fetchAuditLogs(auditPage.value);
+  } catch (err) {
+    const msg = parseApiError(err, t("adminConsole.savePlanFeatureFlagFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    planFlagSaving.value = { ...planFlagSaving.value, [stateKey]: false };
+  }
+};
 
 const fetchJobs = async () => {
   loading.value = true;
@@ -1004,8 +1170,9 @@ const setTenantImportInputRef = (tenantId, element) => {
     tenantImportInputs.value = { ...tenantImportInputs.value, [key]: element };
     return;
   }
-  const { [key]: _removed, ...rest } = tenantImportInputs.value;
-  tenantImportInputs.value = rest;
+  const nextInputs = { ...tenantImportInputs.value };
+  delete nextInputs[key];
+  tenantImportInputs.value = nextInputs;
 };
 
 const openTenantImportPicker = (tenantId) => {
@@ -1071,7 +1238,7 @@ const handleTenantImportFile = async (tenant, event) => {
     let parsed;
     try {
       parsed = JSON.parse(text);
-    } catch (parseError) {
+    } catch {
       throw new Error(t("adminConsole.invalidJsonFile"));
     }
     if (!parsed || typeof parsed !== "object") {
@@ -1209,9 +1376,12 @@ const previewFor = (leadId) => previews.value[leadId] || null;
 const checkPreview = async (lead, showToast = true) => {
   previewLoading.value = { ...previewLoading.value, [lead.id]: true };
   try {
-    const res = await adminApi.get(`/lead-provision-preview/${lead.id}/`, {
-      params: { domain_suffix: normalizeSuffix(domainSuffix.value || "localhost") },
-    });
+    const resolvedSuffix = normalizeSuffix(domainSuffix.value);
+    const params = {};
+    if (resolvedSuffix) {
+      params.domain_suffix = resolvedSuffix;
+    }
+    const res = await adminApi.get(`/lead-provision-preview/${lead.id}/`, { params });
     previews.value = { ...previews.value, [lead.id]: res.data };
     if (showToast) {
       if (res.data?.collision) {
@@ -1233,10 +1403,14 @@ const provision = async (lead) => {
   provLoading.value = { ...provLoading.value, [lead.id]: true };
   try {
     const preview = previewFor(lead.id);
-    const res = await adminApi.put(`/lead-provision/${lead.id}/`, {
-      domain_suffix: domainSuffix.value || "localhost",
+    const resolvedSuffix = normalizeSuffix(domainSuffix.value);
+    const payload = {
       requested_slug: preview?.input_slug || undefined,
-    });
+    };
+    if (resolvedSuffix) {
+      payload.domain_suffix = resolvedSuffix;
+    }
+    const res = await adminApi.put(`/lead-provision/${lead.id}/`, payload);
     const data = res.data || {};
     toast.show(t("adminConsole.provisionedLead", { lead: lead.name || lead.email }), "success");
     // display quick info for copy/paste
@@ -1333,8 +1507,9 @@ const removeLead = async (lead) => {
   try {
     await adminApi.delete(`/leads/${lead.id}/`);
     leads.value = leads.value.filter((l) => l.id !== lead.id);
-    const { [lead.id]: _removedPreview, ...rest } = previews.value;
-    previews.value = rest;
+    const nextPreviews = { ...previews.value };
+    delete nextPreviews[lead.id];
+    previews.value = nextPreviews;
     toast.show(t("adminConsole.archivedLead", { lead: lead.name || lead.email }), "success");
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.archiveLeadFailed"));
@@ -1378,7 +1553,7 @@ const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text);
     toast.show(t("adminConsole.copied"), "success");
-  } catch (e) {
+  } catch {
     toast.show(t("adminConsole.copyFailed"), "error");
   }
 };
@@ -1397,7 +1572,7 @@ const formatAuditMetadata = (meta) => {
     return Object.entries(meta)
       .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
       .join("\n");
-  } catch (e) {
+  } catch {
     return "-";
   }
 };
@@ -1416,7 +1591,7 @@ const formatDate = (value) => {
   if (!value) return "-";
   try {
     return new Date(value).toLocaleString();
-  } catch (e) {
+  } catch {
     return String(value);
   }
 };
@@ -1474,6 +1649,7 @@ const refreshAll = () => {
   fetchTenants();
   fetchReservationAlerts();
   fetchUpgradeRequests();
+  fetchPlanFeatureFlags();
   fetchJobs();
   fetchAuditLogs();
 };
