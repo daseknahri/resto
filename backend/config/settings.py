@@ -33,6 +33,8 @@ def hostname_from_url(value: str) -> str:
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
+MEDIA_STORAGE_BACKEND = os.getenv("DJANGO_MEDIA_STORAGE_BACKEND", "local").strip().lower()
+USE_S3_MEDIA_STORAGE = MEDIA_STORAGE_BACKEND in {"s3", "s3boto3", "object"}
 allowed_hosts = set(parse_csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost"))
 allowed_hosts.update({"localhost", "127.0.0.1", ".localhost"})
 ALLOWED_HOSTS = sorted(allowed_hosts)
@@ -66,6 +68,8 @@ SHARED_APPS = [
     "tenancy",
     "sales",
 ]
+if USE_S3_MEDIA_STORAGE:
+    SHARED_APPS.append("storages")
 
 TENANT_APPS = [
     "django.contrib.contenttypes",
@@ -156,10 +160,9 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
+TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", ""))
 public_schema_hosts = set(parse_csv_env("DJANGO_PUBLIC_SCHEMA_HOSTS", "localhost,127.0.0.1"))
 public_schema_hosts.update({"localhost", "127.0.0.1"})
 for inferred_host in (
@@ -172,6 +175,79 @@ for inferred_host in (
 PUBLIC_SCHEMA_HOSTS = sorted(public_schema_hosts)
 RESERVATION_SLA_NEW_MINUTES = int(os.getenv("RESERVATION_SLA_NEW_MINUTES", "30"))
 RESERVATION_SLA_DUE_SOON_MINUTES = int(os.getenv("RESERVATION_SLA_DUE_SOON_MINUTES", "10"))
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+MEDIA_URL = "/media/"
+if USE_S3_MEDIA_STORAGE:
+    AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "").strip()
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "").strip()
+    AWS_S3_ENDPOINT_URL = os.getenv("AWS_S3_ENDPOINT_URL", "").strip() or None
+    AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "").strip()
+    AWS_S3_ADDRESSING_STYLE = os.getenv("AWS_S3_ADDRESSING_STYLE", "auto").strip().lower() or "auto"
+    AWS_QUERYSTRING_AUTH = parse_bool_env("AWS_QUERYSTRING_AUTH", True)
+    AWS_QUERYSTRING_EXPIRE = int(os.getenv("AWS_QUERYSTRING_EXPIRE", "900"))
+    AWS_DEFAULT_ACL = None
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_SIGNATURE_VERSION = os.getenv("AWS_S3_SIGNATURE_VERSION", "").strip() or None
+    AWS_S3_OBJECT_PARAMETERS = {
+        "CacheControl": os.getenv("AWS_S3_OBJECT_CACHE_CONTROL", "public, max-age=31536000"),
+    }
+    AWS_MEDIA_LOCATION = os.getenv("AWS_MEDIA_LOCATION", "media").strip().strip("/") or "media"
+
+    missing_s3 = []
+    for env_name, env_value in (
+        ("AWS_STORAGE_BUCKET_NAME", AWS_STORAGE_BUCKET_NAME),
+        ("AWS_ACCESS_KEY_ID", AWS_ACCESS_KEY_ID),
+        ("AWS_SECRET_ACCESS_KEY", AWS_SECRET_ACCESS_KEY),
+    ):
+        if not env_value:
+            missing_s3.append(env_name)
+    if missing_s3:
+        raise RuntimeError(
+            "DJANGO_MEDIA_STORAGE_BACKEND=s3 but required variables are missing: "
+            + ", ".join(missing_s3)
+        )
+    if AWS_QUERYSTRING_EXPIRE <= 0:
+        raise RuntimeError("AWS_QUERYSTRING_EXPIRE must be a positive integer.")
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": AWS_STORAGE_BUCKET_NAME,
+            "location": AWS_MEDIA_LOCATION,
+            "default_acl": AWS_DEFAULT_ACL,
+            "querystring_auth": AWS_QUERYSTRING_AUTH,
+            "querystring_expire": AWS_QUERYSTRING_EXPIRE,
+            "file_overwrite": AWS_S3_FILE_OVERWRITE,
+            "object_parameters": AWS_S3_OBJECT_PARAMETERS,
+        },
+    }
+
+    media_location_prefix = f"{AWS_MEDIA_LOCATION}/" if AWS_MEDIA_LOCATION else ""
+    if AWS_S3_CUSTOM_DOMAIN:
+        custom_domain = AWS_S3_CUSTOM_DOMAIN.strip().rstrip("/")
+        if custom_domain.startswith(("http://", "https://")):
+            MEDIA_URL = f"{custom_domain}/{media_location_prefix}"
+        else:
+            MEDIA_URL = f"https://{custom_domain}/{media_location_prefix}"
+    elif AWS_S3_ENDPOINT_URL:
+        endpoint = AWS_S3_ENDPOINT_URL.rstrip("/")
+        MEDIA_URL = f"{endpoint}/{AWS_STORAGE_BUCKET_NAME}/{media_location_prefix}"
+    else:
+        if AWS_S3_REGION_NAME:
+            MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/{media_location_prefix}"
+        else:
+            MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/{media_location_prefix}"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -195,6 +271,7 @@ EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = parse_bool_env("DJANGO_EMAIL_USE_TLS", False)
 EMAIL_USE_SSL = parse_bool_env("DJANGO_EMAIL_USE_SSL", False)
 EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "10"))
+EMAIL_FAIL_SILENTLY = parse_bool_env("DJANGO_EMAIL_FAIL_SILENTLY", DEBUG)
 
 SESSION_COOKIE_SECURE = parse_bool_env("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = parse_bool_env("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
@@ -213,6 +290,7 @@ SECURITY_LOG_FILE = os.getenv("DJANGO_SECURITY_LOG_FILE", "")
 LOG_FORMAT = os.getenv("DJANGO_LOG_FORMAT", "text").strip().lower()
 REQUEST_LOG_LEVEL = os.getenv("DJANGO_REQUEST_LOG_LEVEL", "INFO").strip().upper()
 PROVISIONING_LOG_LEVEL = os.getenv("DJANGO_PROVISIONING_LOG_LEVEL", "INFO").strip().upper()
+EMAIL_LOG_LEVEL = os.getenv("DJANGO_EMAIL_LOG_LEVEL", "INFO").strip().upper()
 ACTIVE_LOG_FORMATTER = "json" if LOG_FORMAT == "json" else "standard"
 
 LOGGING = {
@@ -248,6 +326,11 @@ LOGGING = {
             "level": PROVISIONING_LOG_LEVEL,
             "propagate": False,
         },
+        "app.email": {
+            "handlers": ["console"],
+            "level": EMAIL_LOG_LEVEL,
+            "propagate": False,
+        },
     },
 }
 
@@ -262,3 +345,4 @@ if SECURITY_LOG_FILE:
     LOGGING["loggers"]["security.throttle"]["handlers"].append("security_file")
     LOGGING["loggers"]["app.request"]["handlers"].append("security_file")
     LOGGING["loggers"]["sales.provisioning"]["handlers"].append("security_file")
+    LOGGING["loggers"]["app.email"]["handlers"].append("security_file")
