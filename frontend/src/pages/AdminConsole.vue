@@ -1008,9 +1008,6 @@ const fetchLeads = async () => {
     leads.value = res.data;
     previews.value = {};
     previewLoading.value = {};
-    leads.value.forEach((lead) => {
-      checkPreview(lead, false);
-    });
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadLeadsFailed"));
     error.value = msg;
@@ -1648,21 +1645,14 @@ const upgradeStatusClass = (status) => {
 
 const refreshAll = () => {
   fetchLeads();
-  fetchTenants();
-  fetchReservationAlerts();
   fetchUpgradeRequests();
-  fetchPlanFeatureFlags();
-  fetchJobs();
-  fetchAuditLogs();
 };
 
 onMounted(refreshAll);
 
 watch(domainSuffix, () => {
-  if (!leads.value.length) return;
-  leads.value.forEach((lead) => {
-    checkPreview(lead, false);
-  });
+  previews.value = {};
+  previewLoading.value = {};
 });
 
 watch(auditPageSize, () => {
