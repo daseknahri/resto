@@ -38,7 +38,7 @@ const resolveBaseURL = (envValue) => {
       ) {
         return runtime;
       }
-    } catch (e) {
+    } catch {
       // if env isn't a valid absolute URL, fallback to runtime
       return runtime;
     }
@@ -53,12 +53,6 @@ const api = axios.create({
   xsrfHeaderName: "X-CSRFToken",
 });
 
-const readCookie = (name) => {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : "";
-};
-
 const readRuntimeLocale = () => {
   if (typeof document === "undefined") return "";
   const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
@@ -69,7 +63,7 @@ const readRuntimeLocale = () => {
       const scoped = String(window.localStorage.getItem(`resto.locale:${host}`) || "").trim().toLowerCase();
       if (scoped) return scoped;
       return String(window.localStorage.getItem("resto.locale") || "").trim().toLowerCase();
-    } catch (err) {
+    } catch {
       return "";
     }
   }
@@ -87,13 +81,6 @@ api.interceptors.request.use((config) => {
       if (!config.params.lang) {
         config.params.lang = locale;
       }
-    }
-  }
-  if (["post", "put", "patch", "delete"].includes(method)) {
-    const token = readCookie("csrftoken");
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers["X-CSRFToken"] = token;
     }
   }
   return config;

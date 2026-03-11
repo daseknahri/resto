@@ -47,12 +47,6 @@ const adminApi = axios.create({
   xsrfHeaderName: "X-CSRFToken",
 });
 
-const readCookie = (name) => {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : "";
-};
-
 const readRuntimeLocale = () => {
   if (typeof document === "undefined") return "";
   const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
@@ -81,13 +75,6 @@ adminApi.interceptors.request.use((config) => {
       if (!config.params.lang) {
         config.params.lang = locale;
       }
-    }
-  }
-  if (["post", "put", "patch", "delete"].includes(method)) {
-    const token = readCookie("csrftoken");
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers["X-CSRFToken"] = token;
     }
   }
   return config;
