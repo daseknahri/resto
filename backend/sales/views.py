@@ -5,7 +5,7 @@ from math import ceil
 from urllib.parse import quote_plus
 
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery, Value
+from django.db.models import Count, F, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -765,7 +765,10 @@ class AdminTenantListView(APIView):
                         Subquery(primary_domain_rows.values("domain")[:1]),
                         Subquery(fallback_domain_rows.values("domain")[:1]),
                         Value(""),
-                    )
+                    ),
+                    owner_username_value=Coalesce(F("owner__username"), Value("")),
+                    plan_code_value=Coalesce(F("plan__code"), Value("")),
+                    plan_name_value=Coalesce(F("plan__name"), Value("")),
                 )
                 .order_by("slug")
             )
@@ -787,8 +790,41 @@ class AdminTenantListView(APIView):
             if page > total_pages:
                 page = total_pages
             offset = (page - 1) * page_size
-            rows = queryset[offset : offset + page_size]
-            data = AdminTenantSerializer(rows, many=True).data
+            rows = list(
+                queryset[offset : offset + page_size].values(
+                    "id",
+                    "name",
+                    "slug",
+                    "schema_name",
+                    "is_active",
+                    "lifecycle_status",
+                    "suspended_at",
+                    "canceled_at",
+                    "canceled_reason",
+                    "owner_username_value",
+                    "plan_code_value",
+                    "plan_name_value",
+                    "primary_domain_value",
+                )
+            )
+            data = [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "slug": row["slug"],
+                    "schema_name": row["schema_name"],
+                    "is_active": row["is_active"],
+                    "lifecycle_status": row["lifecycle_status"],
+                    "suspended_at": row["suspended_at"],
+                    "canceled_at": row["canceled_at"],
+                    "canceled_reason": row["canceled_reason"] or "",
+                    "owner_username": row["owner_username_value"] or "",
+                    "plan_code": external_plan_code(row["plan_code_value"] or ""),
+                    "plan_name": plan_display_name(row["plan_code_value"] or "", fallback=row["plan_name_value"] or ""),
+                    "primary_domain": row["primary_domain_value"] or "",
+                }
+                for row in rows
+            ]
 
         return Response(
             {
