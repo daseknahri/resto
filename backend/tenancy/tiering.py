@@ -27,6 +27,38 @@ PLAN_TIER_ORDER = {
 }
 
 
+PLAN_FEATURE_FLAG_CATALOG = {
+    "customer_reservations": {
+        "label": "Customer reservations",
+        "description": "Expose reservation flow and reservation lead capture in customer pages.",
+    },
+    "owner_reservation_inbox": {
+        "label": "Owner reservation inbox",
+        "description": "Enable owner follow-up workspace for reservation requests.",
+    },
+    "owner_table_management": {
+        "label": "Owner table management",
+        "description": "Allow table QR setup and table-link management in owner workspace.",
+    },
+    "in_app_order_management": {
+        "label": "In-app order management",
+        "description": "Enable future in-app order operations beyond WhatsApp handoff.",
+    },
+    "checkout_payments": {
+        "label": "Checkout payments",
+        "description": "Enable online checkout/payment capabilities.",
+    },
+    "multi_language_content": {
+        "label": "Multi-language content",
+        "description": "Enable translated menu and profile content management.",
+    },
+    "advanced_analytics": {
+        "label": "Advanced analytics",
+        "description": "Enable enhanced analytics dashboards and conversion reporting.",
+    },
+}
+
+
 def canonical_plan_code(code: str | None) -> str:
     raw = (code or "").strip().lower()
     return PLAN_CODE_CANONICAL.get(raw, raw)
@@ -51,6 +83,27 @@ def plan_tier_order(code: str | None) -> int:
 
 def is_plan_upgrade(current_code: str | None, target_code: str | None) -> bool:
     return plan_tier_order(target_code) > plan_tier_order(current_code)
+
+
+def normalize_plan_feature_flag_key(key: str | None) -> str:
+    return str(key or "").strip().lower()
+
+
+def is_valid_plan_feature_flag_key(key: str | None) -> bool:
+    return normalize_plan_feature_flag_key(key) in PLAN_FEATURE_FLAG_CATALOG
+
+
+def plan_feature_flag_catalog() -> list[dict]:
+    rows = []
+    for key, value in PLAN_FEATURE_FLAG_CATALOG.items():
+        rows.append(
+            {
+                "key": key,
+                "label": value.get("label", key.replace("_", " ").title()),
+                "description": value.get("description", ""),
+            }
+        )
+    return rows
 
 
 def plan_entitlements(plan) -> dict:
