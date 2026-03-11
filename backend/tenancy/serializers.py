@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 
+from django.core.exceptions import DisallowedHost
 from rest_framework import serializers
 from django.utils import timezone
 
@@ -15,7 +16,10 @@ def _normalize_local_media_url(value: str, request) -> str:
         return raw
 
     parsed = urlparse(raw)
-    request_host = str(getattr(request, "get_host", lambda: "")() or "").strip().lower()
+    try:
+        request_host = str(getattr(request, "get_host", lambda: "")() or "").strip().lower()
+    except DisallowedHost:
+        request_host = str(getattr(request, "META", {}).get("HTTP_HOST", "") or "").strip().lower()
     if not request_host:
         return raw
 
