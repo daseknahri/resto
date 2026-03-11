@@ -779,7 +779,7 @@ const tenantHasPrev = ref(false);
 const tenantLifecycleLoading = ref({});
 const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
-const tenantImportInputs = ref({});
+const tenantImportInputs = new Map();
 const tenantTimeline = ref({});
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
@@ -1172,17 +1172,15 @@ const setTenantImportInputRef = (tenantId, element) => {
   const key = String(tenantId || "");
   if (!key) return;
   if (element) {
-    tenantImportInputs.value = { ...tenantImportInputs.value, [key]: element };
+    tenantImportInputs.set(key, element);
     return;
   }
-  const nextInputs = { ...tenantImportInputs.value };
-  delete nextInputs[key];
-  tenantImportInputs.value = nextInputs;
+  tenantImportInputs.delete(key);
 };
 
 const openTenantImportPicker = (tenantId) => {
   const key = String(tenantId || "");
-  const input = tenantImportInputs.value[key];
+  const input = tenantImportInputs.get(key);
   if (!input) {
     toast.show(t("adminConsole.importInputNotReady"), "error");
     return;
