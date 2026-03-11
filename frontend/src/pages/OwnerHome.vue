@@ -338,13 +338,16 @@ const refresh = async () => {
     categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
     dishesCount.value = Array.isArray(dishes.data) ? dishes.data.length : 0;
     try {
-      const analytics = await api.get("/analytics/summary/", { params: { days: 30 } });
+      const analytics = await api.get("/analytics/summary/", {
+        params: { days: 30 },
+        timeout: 6000,
+      });
       analyticsSummary.value = analytics?.data || analyticsSummary.value;
-    } catch (analyticsErr) {
+    } catch {
       // Keep dashboard usable even if analytics endpoint is unavailable.
     }
     await Promise.all([fetchUpgradeTargets(), fetchUpgradeRequests()]);
-  } catch (err) {
+  } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
     toast.show(error.value, "error");
   } finally {
@@ -361,7 +364,7 @@ const copyMenuUrl = async () => {
     setTimeout(() => {
       copied.value = false;
     }, 1800);
-  } catch (err) {
+  } catch {
     toast.show(t("ownerHome.copyFailed"), "error");
   }
 };
@@ -388,7 +391,7 @@ const fetchUpgradeTargets = async () => {
       has_pending_request: data?.has_pending_request === true,
     };
     ensureUpgradeTargetSelection();
-  } catch (err) {
+  } catch {
     upgradeTargets.value = [];
   }
 };
@@ -404,7 +407,7 @@ const fetchUpgradeRequests = async () => {
       has_pending_request: upgradeRequests.value.some((request) => request.status === "pending"),
     };
     ensureUpgradeTargetSelection();
-  } catch (err) {
+  } catch {
     upgradeError.value = t("ownerHome.loadRequestsFailed");
   } finally {
     upgradeLoading.value = false;

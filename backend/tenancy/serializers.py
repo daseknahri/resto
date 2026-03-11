@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from rest_framework import serializers
 from django.utils import timezone
 
@@ -5,6 +7,29 @@ from .models import Plan, Profile, Tenant
 from .tiering import external_plan_code, plan_display_name, plan_entitlements
 
 SUPPORTED_PROFILE_LANGUAGES = {"en", "fr", "ar"}
+
+
+def _normalize_local_media_url(value: str, request) -> str:
+    raw = str(value or "").strip()
+    if not raw or request is None:
+        return raw
+
+    parsed = urlparse(raw)
+    request_host = str(getattr(request, "get_host", lambda: "")() or "").strip().lower()
+    if not request_host:
+        return raw
+
+    if parsed.scheme and parsed.netloc:
+        parsed_host = parsed.netloc.strip().lower()
+        if parsed.scheme == "http" and parsed_host == request_host and parsed.path.startswith("/media/"):
+            return f"https://{request_host}{parsed.path}{f'?{parsed.query}' if parsed.query else ''}"
+        return raw
+
+    if raw.startswith("/media/"):
+        scheme = "https" if request.is_secure() else "http"
+        return f"{scheme}://{request_host}{raw}"
+
+    return raw
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -158,6 +183,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             instance.save(update_fields=["published_at"])
         return instance
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        data["logo_url"] = _normalize_local_media_url(data.get("logo_url", ""), request)
+        data["hero_url"] = _normalize_local_media_url(data.get("hero_url", ""), request)
+        return data
+
 
 class TenantMetaSerializer(serializers.Serializer):
     name = serializers.CharField()
@@ -168,7 +200,7 @@ class TenantMetaSerializer(serializers.Serializer):
     feature_flags = serializers.ListField(child=serializers.DictField(), allow_empty=True)
 
     @staticmethod
-    def from_tenant(tenant: Tenant):
+    def from_tenant(tenant: Tenant, *, request=None):
         plan_flags = []
         if getattr(tenant, "plan", None) and hasattr(tenant.plan, "feature_flags"):
             plan_flags = [
@@ -177,7 +209,7 @@ class TenantMetaSerializer(serializers.Serializer):
             ]
         profile = None
         if hasattr(tenant, "profile"):
-            profile = ProfileSerializer(instance=tenant.profile).data
+            profile = ProfileSerializer(instance=tenant.profile, context={"request": request}).data
         return TenantMetaSerializer(
             {
                 "name": tenant.name,
@@ -186,5 +218,6 @@ class TenantMetaSerializer(serializers.Serializer):
                 "profile": profile,
                 "entitlements": plan_entitlements(tenant.plan) if getattr(tenant, "plan", None) else {},
                 "feature_flags": plan_flags,
-            }
+            },
+            context={"request": request},
         )

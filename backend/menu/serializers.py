@@ -1,4 +1,5 @@
 import re
+from urllib.parse import urlparse
 
 from django.utils.text import slugify
 from rest_framework import serializers
@@ -7,6 +8,30 @@ from .models import Category, Dish, DishOption, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
+
+
+def _normalize_local_media_url(value: str, request) -> str:
+    raw = str(value or "").strip()
+    if not raw or request is None:
+        return raw
+
+    parsed = urlparse(raw)
+    request_host = str(getattr(request, "get_host", lambda: "")() or "").strip().lower()
+    if not request_host:
+        return raw
+
+    if parsed.scheme and parsed.netloc:
+        parsed_host = parsed.netloc.strip().lower()
+        if parsed.scheme == "http" and parsed_host == request_host and parsed.path.startswith("/media/"):
+            suffix = f"?{parsed.query}" if parsed.query else ""
+            return f"https://{request_host}{parsed.path}{suffix}"
+        return raw
+
+    if raw.startswith("/media/"):
+        scheme = "https" if request.is_secure() else "http"
+        return f"{scheme}://{request_host}{raw}"
+
+    return raw
 
 
 def _normalize_locale(value) -> str:
@@ -67,7 +92,10 @@ class LocalizedContentMixin:
             # Keep owner/admin editing payloads in canonical base fields.
             # Public/anonymous menu responses remain locale-aware.
             return ""
-        query_locale = _normalize_locale(request.query_params.get("lang", ""))
+        query_params = getattr(request, "query_params", None)
+        if query_params is None:
+            query_params = getattr(request, "GET", {})
+        query_locale = _normalize_locale(query_params.get("lang", ""))
         if query_locale:
             return query_locale
         header = ""
@@ -193,6 +221,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         data = super().to_representation(instance)
         data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
         data["description"] = self._localized_text(data.get("description"), data.get("description_i18n"))
+        data["image_url"] = _normalize_local_media_url(data.get("image_url", ""), self.context.get("request"))
         return data
 
 
@@ -236,6 +265,7 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
         data = super().to_representation(instance)
         data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
         data["description"] = self._localized_text(data.get("description"), data.get("description_i18n"))
+        data["image_url"] = _normalize_local_media_url(data.get("image_url", ""), self.context.get("request"))
         return data
 
 

@@ -167,7 +167,7 @@ class TenantMetaView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved"}, status=400)
-        serializer = TenantMetaSerializer.from_tenant(tenant)
+        serializer = TenantMetaSerializer.from_tenant(tenant, request=request)
         return Response(serializer.data)
 
 
