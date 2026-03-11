@@ -9,6 +9,7 @@ import { useTenantStore } from "./stores/tenant";
 import { useLocaleStore } from "./stores/locale";
 import { useThemeStore } from "./stores/theme";
 import { useSessionStore } from "./stores/session";
+import { isPlatformAdminHost, isPublicDemoHost } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
 
 const tenant = useTenantStore();
@@ -24,12 +25,15 @@ watch(
 );
 
 onMounted(async () => {
-  await tenant.fetchMeta();
-  locale.setTenantDefault(tenant.resolvedMeta?.profile?.language);
-  if (tenant.resolvedMeta?.profile) theme.apply(tenant.resolvedMeta.profile);
+  const skipTenantBootstrap = isPlatformAdminHost() || isPublicDemoHost();
+  if (!skipTenantBootstrap) {
+    await tenant.fetchMeta();
+    locale.setTenantDefault(tenant.resolvedMeta?.profile?.language);
+    if (tenant.resolvedMeta?.profile) theme.apply(tenant.resolvedMeta.profile);
+  }
   try {
     await session.fetchSession();
-  } catch (err) {
+  } catch {
     // Anonymous session is expected for public visitors.
   }
 });

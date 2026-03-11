@@ -3,6 +3,7 @@ import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 import { translate } from "../i18n/translate";
+import { currentHostname, getPlatformAdminHost, isPlatformAdminHost } from "../lib/runtimeHost";
 
 const LandingLayout = () => import("../layouts/LandingLayout.vue");
 const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
@@ -123,6 +124,15 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const toast = useToastStore();
+  const needsAdmin = to.matched.some((route) => route.meta?.adminOnly);
+  if (needsAdmin) {
+    const adminHost = getPlatformAdminHost();
+    const currentHost = currentHostname();
+    if (typeof window !== "undefined" && adminHost && currentHost && currentHost !== adminHost && !isPlatformAdminHost(currentHost)) {
+      window.location.assign(`${window.location.protocol}//${adminHost}${to.fullPath}`);
+      return false;
+    }
+  }
   const requiresOrderFeatures = to.matched.some((route) => route.meta?.requiresOrderFeatures);
   if (requiresOrderFeatures) {
     const tenant = useTenantStore();
@@ -139,10 +149,9 @@ router.beforeEach(async (to) => {
   if (!requiresAuth) return true;
 
   const session = useSessionStore();
-  const needsAdmin = to.matched.some((route) => route.meta?.adminOnly);
   try {
     await session.fetchSession();
-  } catch (err) {
+  } catch {
     toast.show(translate("router.verifySessionFailed"), "error");
     return { name: "signin", query: { next: to.fullPath } };
   }

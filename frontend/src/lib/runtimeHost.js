@@ -8,6 +8,8 @@ export const isLocalTenantHost = (host) => host === "localhost" || host.endsWith
 
 const platformPublicHosts = parseCsv(import.meta.env.VITE_PLATFORM_PUBLIC_HOSTS || "");
 
+const firstMatchingHost = (matcher) => platformPublicHosts.find((host) => matcher(host)) || "";
+
 export const currentHostname = () => {
   if (typeof window === "undefined") return "";
   return String(window.location.hostname || "").trim().toLowerCase();
@@ -30,3 +32,8 @@ export const isPlatformApiHost = (host = currentHostname()) => {
 
 export const isPublicDemoHost = (host = currentHostname()) =>
   isPlatformPublicHost(host) && !isPlatformAdminHost(host) && !isPlatformApiHost(host);
+
+export const getPlatformAdminHost = () => firstMatchingHost((host) => isPlatformAdminHost(host));
+
+export const getPrimaryPublicHost = () =>
+  firstMatchingHost((host) => !isPlatformAdminHost(host) && !isPlatformApiHost(host));
