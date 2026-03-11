@@ -57,7 +57,7 @@ Example restore:
   --backup-file /var/backups/kepoli/kepoli_platform_<TIMESTAMP>.dump \
   --db-name kepoli_platform \
   --db-user kepoli_user \
-  --admin-user postgres
+  --admin-user kepoli_user
 ```
 
 Notes:
@@ -71,10 +71,11 @@ After restore:
 
 1. Redeploy app or restart API service.
 2. Confirm health:
-   - `https://api.kepoli.com/api/health/`
+   - `https://menu.kepoli.com/health`
+   - `https://admin.menu.kepoli.com/health`
 3. Validate critical app paths:
-   - `https://kepoli.com/menu`
-   - `https://admin.kepoli.com/admin-console`
+   - `https://yassernahri7.menu.kepoli.com/menu`
+   - `https://admin.menu.kepoli.com/admin-console`
 
 ## 6. Scheduling (Daily)
 

@@ -142,4 +142,4 @@ fi
 
 echo "Backup completed."
 echo "Restore command example:"
-echo "  ./infra/coolify/restore_postgres.sh --container \"$POSTGRES_CONTAINER\" --backup-file \"$BACKUP_FILE\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --admin-user postgres"
+echo "  ./infra/coolify/restore_postgres.sh --container \"$POSTGRES_CONTAINER\" --backup-file \"$BACKUP_FILE\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --admin-user \"$DB_USER\""

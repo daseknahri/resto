@@ -15,7 +15,7 @@ Options:
   --container <name>       Explicit postgres container name
   --db-name <name>         Target database name (default: POSTGRES_DB env or kepoli_platform)
   --db-user <name>         Target database owner/user (default: POSTGRES_USER env or kepoli_user)
-  --admin-user <name>      Admin DB user for drop/create (default: postgres)
+  --admin-user <name>      Admin DB user for drop/create (default: POSTGRES_USER env or db user)
   --no-drop-recreate       Restore into existing DB without dropping/recreating
   --force                  Skip safety confirmation
   --dry-run                Print actions only
@@ -28,7 +28,7 @@ RESOURCE_UUID=""
 POSTGRES_CONTAINER=""
 DB_NAME="${POSTGRES_DB:-kepoli_platform}"
 DB_USER="${POSTGRES_USER:-kepoli_user}"
-ADMIN_USER="postgres"
+ADMIN_USER="${POSTGRES_USER:-}"
 DROP_RECREATE=1
 FORCE=0
 DRY_RUN=0
@@ -82,6 +82,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$ADMIN_USER" ]]; then
+  ADMIN_USER="$DB_USER"
+fi
 
 if [[ -z "$BACKUP_FILE" ]]; then
   echo "--backup-file is required." >&2
