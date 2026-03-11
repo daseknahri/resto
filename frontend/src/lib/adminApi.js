@@ -32,7 +32,7 @@ const resolveBaseURL = (envValue) => {
       ) {
         return runtime;
       }
-    } catch (e) {
+    } catch {
       return runtime;
     }
   }
@@ -41,6 +41,7 @@ const resolveBaseURL = (envValue) => {
 
 const adminApi = axios.create({
   baseURL: resolveBaseURL(import.meta.env.VITE_ADMIN_API_BASE_URL || import.meta.env.VITE_API_BASE_URL),
+  timeout: 15000,
   withCredentials: true,
   xsrfCookieName: "csrftoken",
   xsrfHeaderName: "X-CSRFToken",
@@ -62,7 +63,7 @@ const readRuntimeLocale = () => {
       const scoped = String(window.localStorage.getItem(`resto.locale:${host}`) || "").trim().toLowerCase();
       if (scoped) return scoped;
       return String(window.localStorage.getItem("resto.locale") || "").trim().toLowerCase();
-    } catch (err) {
+    } catch {
       return "";
     }
   }

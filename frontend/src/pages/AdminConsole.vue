@@ -1008,7 +1008,9 @@ const fetchLeads = async () => {
     leads.value = res.data;
     previews.value = {};
     previewLoading.value = {};
-    await Promise.all(leads.value.map((lead) => checkPreview(lead, false)));
+    leads.value.forEach((lead) => {
+      checkPreview(lead, false);
+    });
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadLeadsFailed"));
     error.value = msg;
@@ -1658,7 +1660,9 @@ onMounted(refreshAll);
 
 watch(domainSuffix, () => {
   if (!leads.value.length) return;
-  Promise.all(leads.value.map((lead) => checkPreview(lead, false)));
+  leads.value.forEach((lead) => {
+    checkPreview(lead, false);
+  });
 });
 
 watch(auditPageSize, () => {
