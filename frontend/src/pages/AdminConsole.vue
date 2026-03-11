@@ -20,7 +20,7 @@
           class="ui-input w-48 px-2 py-1 text-sm"
           :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
         />
-        <button class="ui-btn-outline px-4 py-2 text-sm" @click="refreshAll">{{ t("common.refresh") }}</button>
+        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="leadsLoading || upgradeLoading" @click="refreshAll">{{ t("common.refresh") }}</button>
       </div>
     </div>
 
@@ -32,7 +32,7 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
           <h2 class="text-xl font-semibold">{{ t("adminConsole.awaitingProvisioning") }}</h2>
         </div>
-        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadsLoading" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
       <p v-if="leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingLeads") }}</p>
       <p v-if="!leads.length && !leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.noLeadsPending") }}</p>
@@ -132,7 +132,7 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="!tenantHasNext" @click="changeTenantPage(tenantPage + 1)">
             {{ t("common.next") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchTenants(tenantPage)">{{ t("adminConsole.refreshTenants") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="tenantsLoading" @click="fetchTenants(tenantPage)">{{ t("adminConsole.refreshTenants") }}</button>
         </div>
       </div>
       <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
@@ -177,92 +177,100 @@
               {{ t("adminConsole.cancel") }}
             </button>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
-              :disabled="!!tenantExportLoading[tenant.id]"
-              @click="exportTenantSettings(tenant)"
-            >
-              {{ tenantExportLoading[tenant.id] ? t("adminConsole.exporting") : t("adminConsole.exportSettings") }}
-            </button>
-            <button
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
-              :disabled="!!tenantImportLoading[tenant.id]"
-              @click="openTenantImportPicker(tenant.id)"
-            >
-              {{ tenantImportLoading[tenant.id] ? t("adminConsole.importing") : t("adminConsole.importSettings") }}
-            </button>
-            <input
-              :ref="(el) => setTenantImportInputRef(tenant.id, el)"
-              type="file"
-              accept=".json,application/json"
-              class="hidden"
-              @change="handleTenantImportFile(tenant, $event)"
-            />
-          </div>
-          <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("adminConsole.actionHistory") }}</p>
+          <button
+            class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary"
+            @click="toggleTenantTools(tenant.id)"
+          >
+            {{ tenantToolsExpanded(tenant.id) ? `${t("adminConsole.hide")} tools` : `${t("adminConsole.show")} tools` }}
+          </button>
+          <div v-if="tenantToolsExpanded(tenant.id)" class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
               <button
-                class="text-xs text-brand-secondary hover:underline disabled:opacity-50"
-                :disabled="tenantTimelineLoading(tenant.id)"
-                @click="toggleTenantTimeline(tenant)"
+                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+                :disabled="!!tenantExportLoading[tenant.id]"
+                @click="exportTenantSettings(tenant)"
               >
-                {{ tenantTimelineExpanded(tenant.id) ? t("adminConsole.hide") : t("adminConsole.show") }}
+                {{ tenantExportLoading[tenant.id] ? t("adminConsole.exporting") : t("adminConsole.exportSettings") }}
               </button>
+              <button
+                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+                :disabled="!!tenantImportLoading[tenant.id]"
+                @click="openTenantImportPicker(tenant.id)"
+              >
+                {{ tenantImportLoading[tenant.id] ? t("adminConsole.importing") : t("adminConsole.importSettings") }}
+              </button>
+              <input
+                :ref="(el) => setTenantImportInputRef(tenant.id, el)"
+                type="file"
+                accept=".json,application/json"
+                class="hidden"
+                @change="handleTenantImportFile(tenant, $event)"
+              />
             </div>
-            <template v-if="tenantTimelineExpanded(tenant.id)">
+            <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2">
               <div class="flex items-center justify-between gap-2">
-                <p class="text-[11px] text-slate-500">
-                  {{ t("adminConsole.pageSummary", { page: tenantTimelinePage(tenant.id), pages: tenantTimelineTotalPages(tenant.id), total: tenantTimelineTotal(tenant.id) }) }}
-                </p>
-                <div class="flex items-center gap-1">
-                  <button
-                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
-                    :disabled="!tenantTimelineHasPrev(tenant.id) || tenantTimelineLoading(tenant.id)"
-                    @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) - 1)"
-                  >
-                    {{ t("common.previous") }}
-                  </button>
-                  <button
-                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
-                    :disabled="!tenantTimelineHasNext(tenant.id) || tenantTimelineLoading(tenant.id)"
-                    @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) + 1)"
-                  >
-                    {{ t("common.next") }}
-                  </button>
-                  <button
-                    class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
-                    :disabled="tenantTimelineLoading(tenant.id)"
-                    @click="fetchTenantTimeline(tenant.id, tenantTimelinePage(tenant.id))"
-                  >
-                    {{ t("common.refresh") }}
-                  </button>
-                </div>
-              </div>
-              <p v-if="tenantTimelineLoading(tenant.id)" class="text-xs text-slate-400">{{ t("adminConsole.loadingHistory") }}</p>
-              <p v-else-if="!tenantTimelineEntries(tenant.id).length" class="text-xs text-slate-500">
-                {{ t("adminConsole.noAdminActionsRecordedYet") }}
-              </p>
-              <ul v-else class="space-y-2">
-                <li
-                  v-for="entry in tenantTimelineEntries(tenant.id)"
-                  :key="`tenant-timeline-${tenant.id}-${entry.id}`"
-                  class="rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1.5"
+                <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("adminConsole.actionHistory") }}</p>
+                <button
+                  class="text-xs text-brand-secondary hover:underline disabled:opacity-50"
+                  :disabled="tenantTimelineLoading(tenant.id)"
+                  @click="toggleTenantTimeline(tenant)"
                 >
-                  <div class="flex items-center justify-between gap-2 text-[11px]">
-                    <span class="font-semibold text-slate-200">{{ formatAuditAction(entry.action) }}</span>
-                    <span class="text-slate-500">{{ formatDate(entry.created_at) }}</span>
-                  </div>
-                  <p class="text-[11px] text-slate-400">
-                    {{ t("adminConsole.by") }} {{ entry.actor_username || t("adminConsole.system") }}
-                    <span v-if="entry.metadata?.lifecycle_action">
-                      • {{ entry.metadata.lifecycle_action }}
-                    </span>
+                  {{ tenantTimelineExpanded(tenant.id) ? t("adminConsole.hide") : t("adminConsole.show") }}
+                </button>
+              </div>
+              <template v-if="tenantTimelineExpanded(tenant.id)">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-[11px] text-slate-500">
+                    {{ t("adminConsole.pageSummary", { page: tenantTimelinePage(tenant.id), pages: tenantTimelineTotalPages(tenant.id), total: tenantTimelineTotal(tenant.id) }) }}
                   </p>
-                </li>
-              </ul>
-            </template>
+                  <div class="flex items-center gap-1">
+                    <button
+                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      :disabled="!tenantTimelineHasPrev(tenant.id) || tenantTimelineLoading(tenant.id)"
+                      @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) - 1)"
+                    >
+                      {{ t("common.previous") }}
+                    </button>
+                    <button
+                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      :disabled="!tenantTimelineHasNext(tenant.id) || tenantTimelineLoading(tenant.id)"
+                      @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) + 1)"
+                    >
+                      {{ t("common.next") }}
+                    </button>
+                    <button
+                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      :disabled="tenantTimelineLoading(tenant.id)"
+                      @click="fetchTenantTimeline(tenant.id, tenantTimelinePage(tenant.id))"
+                    >
+                      {{ t("common.refresh") }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="tenantTimelineLoading(tenant.id)" class="text-xs text-slate-400">{{ t("adminConsole.loadingHistory") }}</p>
+                <p v-else-if="!tenantTimelineEntries(tenant.id).length" class="text-xs text-slate-500">
+                  {{ t("adminConsole.noAdminActionsRecordedYet") }}
+                </p>
+                <ul v-else class="space-y-2">
+                  <li
+                    v-for="entry in tenantTimelineEntries(tenant.id)"
+                    :key="`tenant-timeline-${tenant.id}-${entry.id}`"
+                    class="rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1.5"
+                  >
+                    <div class="flex items-center justify-between gap-2 text-[11px]">
+                      <span class="font-semibold text-slate-200">{{ formatAuditAction(entry.action) }}</span>
+                      <span class="text-slate-500">{{ formatDate(entry.created_at) }}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">
+                      {{ t("adminConsole.by") }} {{ entry.actor_username || t("adminConsole.system") }}
+                      <span v-if="entry.metadata?.lifecycle_action">
+                        • {{ entry.metadata.lifecycle_action }}
+                      </span>
+                    </p>
+                  </li>
+                </ul>
+              </template>
+            </div>
           </div>
         </article>
       </div>
@@ -274,8 +282,14 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
           <h2 class="text-xl font-semibold">{{ t("adminConsole.overdueReservationAlerts") }}</h2>
         </div>
-        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchReservationAlerts">{{ t("adminConsole.refreshAlerts") }}</button>
+        <div class="ui-scroll-row">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.alerts = !adminPanels.alerts">
+            {{ adminPanels.alerts ? t("adminConsole.hide") : t("adminConsole.show") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="alertsLoading || !adminPanels.alerts" @click="fetchReservationAlerts">{{ t("adminConsole.refreshAlerts") }}</button>
+        </div>
       </div>
+      <template v-if="adminPanels.alerts">
       <div class="ui-scroll-row">
         <button
           class="ui-pill-nav text-xs"
@@ -353,6 +367,7 @@
           </a>
         </article>
       </div>
+      </template>
     </section>
 
     <section class="ui-panel p-4 space-y-3">
@@ -361,7 +376,7 @@
           <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
           <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.tierUpgradeRequests") }}</h2>
         </div>
-        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchUpgradeRequests">
+        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
           {{ t("common.refresh") }}
         </button>
       </div>
@@ -465,10 +480,16 @@
           <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.planFeatureControls") }}</h2>
           <p class="text-xs text-slate-500">{{ t("adminConsole.planFeatureControlsHint") }}</p>
         </div>
-        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchPlanFeatureFlags">
-          {{ t("common.refresh") }}
-        </button>
+        <div class="ui-scroll-row">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.planFlags = !adminPanels.planFlags">
+            {{ adminPanels.planFlags ? t("adminConsole.hide") : t("adminConsole.show") }}
+          </button>
+          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="planFlagsLoading || !adminPanels.planFlags" @click="fetchPlanFeatureFlags">
+            {{ t("common.refresh") }}
+          </button>
+        </div>
       </div>
+      <template v-if="adminPanels.planFlags">
       <p v-if="planFlagsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingPlanFeatureFlags") }}</p>
       <p v-else-if="!planFeatureRows.length" class="text-sm text-slate-400">{{ t("adminConsole.noPlanFeatureFlags") }}</p>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -524,14 +545,20 @@
           </div>
         </article>
       </div>
+      </template>
     </section>
 
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
-        <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchJobs">{{ t("common.refresh") }}</button>
+        <div class="ui-scroll-row">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.jobs = !adminPanels.jobs">
+            {{ adminPanels.jobs ? t("adminConsole.hide") : t("adminConsole.show") }}
+          </button>
+          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="loading || !adminPanels.jobs" @click="fetchJobs">{{ t("common.refresh") }}</button>
+        </div>
       </div>
-
+      <template v-if="adminPanels.jobs">
       <p v-if="loading" class="text-sm text-slate-400">{{ t("adminConsole.loadingJobs") }}</p>
       <div class="space-y-2 md:hidden">
         <article
@@ -579,12 +606,16 @@
           </tbody>
         </table>
       </div>
+      </template>
     </section>
 
     <section class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.securityAuditLog") }}</h2>
         <div class="ui-scroll-row">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.audit = !adminPanels.audit">
+            {{ adminPanels.audit ? t("adminConsole.hide") : t("adminConsole.show") }}
+          </button>
           <label class="text-xs text-slate-400">
             {{ t("adminConsole.pageSize") }}
             <select v-model.number="auditPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
@@ -607,9 +638,10 @@
           >
             {{ t("common.next") }}
           </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchAuditLogs(auditPage)">{{ t("common.refresh") }}</button>
+          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="auditLoading || !adminPanels.audit" @click="fetchAuditLogs(auditPage)">{{ t("common.refresh") }}</button>
         </div>
       </div>
+      <template v-if="adminPanels.audit">
       <p class="text-xs text-slate-500">
         {{ t("adminConsole.pageEntriesSummary", { page: auditPage, pages: auditTotalPages, total: auditTotal }) }}
       </p>
@@ -655,6 +687,7 @@
           </tbody>
         </table>
       </div>
+      </template>
     </section>
 
     <section v-if="lastProvision" class="ui-panel p-4 space-y-2 text-sm text-slate-200">
@@ -768,6 +801,12 @@ const decisionLoading = ref({});
 const planFeatureRows = ref([]);
 const planFlagsLoading = ref(false);
 const planFlagSaving = ref({});
+const adminPanels = ref({
+  alerts: false,
+  planFlags: false,
+  jobs: false,
+  audit: false,
+});
 const tenants = ref([]);
 const tenantsLoading = ref(false);
 const tenantPage = ref(1);
@@ -780,6 +819,7 @@ const tenantLifecycleLoading = ref({});
 const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
+const tenantTools = ref({});
 const tenantTimeline = ref({});
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
@@ -872,6 +912,15 @@ const normalizePlanFeatureRow = (row) => ({
 });
 
 const planFlagStateKey = (planCode, key) => `${String(planCode || "").trim().toLowerCase()}:${String(key || "").trim().toLowerCase()}`;
+const tenantToolsExpanded = (tenantId) => Boolean(tenantTools.value[String(tenantId || "")]);
+const toggleTenantTools = (tenantId) => {
+  const key = String(tenantId || "");
+  if (!key) return;
+  tenantTools.value = {
+    ...tenantTools.value,
+    [key]: !tenantToolsExpanded(key),
+  };
+};
 
 const fetchPlanFeatureFlags = async () => {
   planFlagsLoading.value = true;
@@ -923,7 +972,6 @@ const savePlanFeatureFlag = async (plan, flag) => {
       flag.configText = toConfigText(config);
     }
     toast.show(t("adminConsole.planFeatureFlagSaved", { plan: planCode.toUpperCase(), key }), "success");
-    fetchAuditLogs(auditPage.value);
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.savePlanFeatureFlagFailed"));
     error.value = msg;
@@ -1239,10 +1287,6 @@ const exportTenantSettings = async (tenant) => {
     const filename = `${tenant.slug || `tenant-${tenant.id}`}-settings-${stamp}.json`;
     saveJsonFile(filename, payload);
     toast.show(t("adminConsole.settingsExportDownloaded"), "success");
-    fetchAuditLogs(auditPage.value);
-    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
-      fetchTenantTimeline(tenant.id, 1);
-    }
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.exportTenantSettingsFailed"));
     error.value = msg;
@@ -1305,10 +1349,6 @@ const handleTenantImportFile = async (tenant, event) => {
       "success"
     );
     await fetchTenants(tenantPage.value);
-    fetchAuditLogs(auditPage.value);
-    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
-      fetchTenantTimeline(tenant.id, 1);
-    }
   } catch (err) {
     const msg = parseApiError(err, err instanceof Error ? err.message : t("adminConsole.importTenantSettingsFailed"));
     error.value = msg;
@@ -1350,10 +1390,6 @@ const applyTenantLifecycle = async (tenant, action) => {
     const msg = res?.data?.detail || t("adminConsole.tenantActionDone", { action });
     toast.show(msg, "success");
     await fetchTenants(tenantPage.value);
-    fetchAuditLogs(auditPage.value);
-    if (tenantTimelineExpanded(tenant.id) || tenantTimelineEntries(tenant.id).length) {
-      fetchTenantTimeline(tenant.id, 1);
-    }
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.updateTenantLifecycleFailed"));
     error.value = msg;
@@ -1453,7 +1489,6 @@ const provision = async (lead) => {
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
-    fetchJobs();
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.provisionFailed"));
     error.value = msg;
@@ -1484,7 +1519,6 @@ const resendActivation = async (lead) => {
       whatsapp_link: data.whatsapp_link,
       whatsapp_message_template: data.whatsapp_message_template,
     };
-    fetchJobs();
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.resendFailed"));
     error.value = msg;
@@ -1563,7 +1597,6 @@ const decideUpgradeRequest = async (requestItem, decision) => {
     const detail = res?.data?.detail || (decision === "approve" ? t("adminConsole.upgradeApproved") : t("adminConsole.upgradeRejected"));
     toast.show(detail, "success");
     await fetchUpgradeRequests();
-    fetchAuditLogs();
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.processUpgradeFailed"));
     error.value = msg;

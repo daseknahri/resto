@@ -14,3 +14,7 @@ class PublicUrlconfTests(SimpleTestCase):
     def test_public_urlconf_exposes_admin_tenants_endpoint(self):
         match = resolve("/api/admin-tenants/", urlconf="config.public_urls")
         self.assertEqual(match.view_name, "admin-tenants")
+
+    def test_public_urlconf_exposes_admin_plan_feature_flags_endpoint(self):
+        match = resolve("/api/admin-plan-feature-flags/", urlconf="config.public_urls")
+        self.assertEqual(match.view_name, "admin-plan-feature-flags")

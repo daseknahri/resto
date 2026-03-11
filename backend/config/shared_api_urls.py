@@ -13,6 +13,8 @@ from config.api import health_view
 from menu.views import AnalyticsEventIngestView
 from sales.views import (
     AdminReservationAlertsView,
+    AdminPlanFeatureFlagListView,
+    AdminPlanFeatureFlagUpdateView,
     AdminTenantLifecycleView,
     AdminTenantListView,
     AdminTenantSettingsExportView,
@@ -48,6 +50,12 @@ shared_api_urlpatterns = [
     path("api/lead-resend-activation/<int:lead_id>/", LeadResendActivationView.as_view(), name="lead-resend-activation"),
     path("api/lead-onboarding-package/<int:lead_id>/", LeadOnboardingPackageView.as_view(), name="lead-onboarding-package"),
     path("api/admin-reservation-alerts/", AdminReservationAlertsView.as_view(), name="admin-reservation-alerts"),
+    path("api/admin-plan-feature-flags/", AdminPlanFeatureFlagListView.as_view(), name="admin-plan-feature-flags"),
+    path(
+        "api/admin-plan-feature-flags/<str:plan_code>/",
+        AdminPlanFeatureFlagUpdateView.as_view(),
+        name="admin-plan-feature-flags-update",
+    ),
     path("api/admin-tenants/", AdminTenantListView.as_view(), name="admin-tenants"),
     path("api/admin-tenants/<int:tenant_id>/lifecycle/", AdminTenantLifecycleView.as_view(), name="admin-tenant-lifecycle"),
     path("api/admin-tenants/<int:tenant_id>/timeline/", AdminTenantTimelineView.as_view(), name="admin-tenant-timeline"),
