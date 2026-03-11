@@ -20,13 +20,44 @@
           class="ui-input w-48 px-2 py-1 text-sm"
           :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
         />
-        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="leadsLoading || upgradeLoading" @click="refreshAll">{{ t("common.refresh") }}</button>
+        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
       </div>
+    </div>
+
+    <div class="ui-panel flex flex-wrap gap-2 p-3">
+      <button
+        class="ui-pill-nav text-xs"
+        :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        @click="selectAdminView('operations')"
+      >
+        {{ t("adminConsole.provisioningOperations") }}
+      </button>
+      <button
+        class="ui-pill-nav text-xs"
+        :class="activeAdminView === 'tenants' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        @click="selectAdminView('tenants')"
+      >
+        {{ t("adminConsole.tenantLifecycleControls") }}
+      </button>
+      <button
+        class="ui-pill-nav text-xs"
+        :class="activeAdminView === 'monitoring' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        @click="selectAdminView('monitoring')"
+      >
+        {{ t("adminConsole.reservationFollowUpSla") }}
+      </button>
+      <button
+        class="ui-pill-nav text-xs"
+        :class="activeAdminView === 'plans' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        @click="selectAdminView('plans')"
+      >
+        {{ t("adminConsole.planFeatureFlags") }}
+      </button>
     </div>
 
     <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'operations'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
@@ -111,7 +142,7 @@
       </div>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'tenants'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.tenantLifecycleControls") }}</p>
@@ -276,7 +307,7 @@
       </div>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
@@ -370,7 +401,7 @@
       </template>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'operations'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
@@ -473,7 +504,7 @@
       </div>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'plans'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.planFeatureFlags") }}</p>
@@ -548,7 +579,7 @@
       </template>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
         <div class="ui-scroll-row">
@@ -609,7 +640,7 @@
       </template>
     </section>
 
-    <section class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.securityAuditLog") }}</h2>
         <div class="ui-scroll-row">
@@ -690,7 +721,7 @@
       </template>
     </section>
 
-    <section v-if="lastProvision" class="ui-panel p-4 space-y-2 text-sm text-slate-200">
+    <section v-if="lastProvision && activeAdminView === 'operations'" class="ui-panel p-4 space-y-2 text-sm text-slate-200">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="font-semibold">{{ t("adminConsole.latestProvisioningPackage") }}</h3>
         <div class="flex items-center gap-3">
@@ -821,6 +852,13 @@ const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
 const tenantTools = ref({});
 const tenantTimeline = ref({});
+const activeAdminView = ref("operations");
+const loadedAdminViews = ref({
+  operations: false,
+  tenants: false,
+  monitoring: false,
+  plans: false,
+});
 const reservationAlerts = ref([]);
 const alertsLoading = ref(false);
 const alertState = ref("all");
@@ -885,6 +923,13 @@ const packageText = computed(() => {
     p.whatsapp_message_template || "-",
   ].join("\n");
 });
+const activeAdminViewLoading = computed(() => {
+  if (activeAdminView.value === "operations") return leadsLoading.value || upgradeLoading.value;
+  if (activeAdminView.value === "tenants") return tenantsLoading.value;
+  if (activeAdminView.value === "monitoring") return alertsLoading.value || loading.value || auditLoading.value;
+  if (activeAdminView.value === "plans") return planFlagsLoading.value;
+  return false;
+});
 
 const parseFlagConfigText = (text) => {
   const raw = String(text || "").trim();
@@ -928,6 +973,7 @@ const fetchPlanFeatureFlags = async () => {
     const res = await adminApi.get("/admin-plan-feature-flags/");
     const rows = Array.isArray(res?.data?.plans) ? res.data.plans : [];
     planFeatureRows.value = rows.map((row) => normalizePlanFeatureRow(row));
+    loadedAdminViews.value = { ...loadedAdminViews.value, plans: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadPlanFeatureFlagsFailed"));
     error.value = msg;
@@ -987,6 +1033,7 @@ const fetchJobs = async () => {
   try {
     const res = await adminApi.get("/provision-jobs/");
     jobs.value = res.data;
+    loadedAdminViews.value = { ...loadedAdminViews.value, monitoring: true };
   } catch (err) {
     error.value = parseApiError(err, t("adminConsole.loadJobsFailed"));
   } finally {
@@ -999,6 +1046,7 @@ const fetchUpgradeRequests = async () => {
   try {
     const res = await adminApi.get("/admin-tier-upgrade-requests/");
     upgradeRequests.value = Array.isArray(res.data) ? res.data : [];
+    loadedAdminViews.value = { ...loadedAdminViews.value, operations: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadUpgradeRequestsFailed"));
     error.value = msg;
@@ -1036,6 +1084,7 @@ const fetchAuditLogs = async (page = auditPage.value) => {
     auditTotalPages.value = Number.parseInt(pagination.total_pages, 10) || 1;
     auditHasNext.value = Boolean(pagination.has_next);
     auditHasPrev.value = Boolean(pagination.has_prev);
+    loadedAdminViews.value = { ...loadedAdminViews.value, monitoring: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadAuditLogsFailed"));
     error.value = msg;
@@ -1058,6 +1107,7 @@ const fetchLeads = async () => {
     leads.value = res.data;
     previews.value = {};
     previewLoading.value = {};
+    loadedAdminViews.value = { ...loadedAdminViews.value, operations: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadLeadsFailed"));
     error.value = msg;
@@ -1100,6 +1150,7 @@ const fetchTenants = async (page = tenantPage.value) => {
     tenantTotalPages.value = Number.parseInt(pagination.total_pages, 10) || 1;
     tenantHasNext.value = Boolean(pagination.has_next);
     tenantHasPrev.value = Boolean(pagination.has_prev);
+    loadedAdminViews.value = { ...loadedAdminViews.value, tenants: true };
   } catch (err) {
     if (err?.code === "ERR_CANCELED") return;
     const msg = parseApiError(err, t("adminConsole.loadTenantsFailed"));
@@ -1415,6 +1466,7 @@ const fetchReservationAlerts = async () => {
       ...alertThresholds.value,
       ...(payload.thresholds || {}),
     };
+    loadedAdminViews.value = { ...loadedAdminViews.value, monitoring: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadReservationAlertsFailed"));
     error.value = msg;
@@ -1701,12 +1753,49 @@ const upgradeStatusClass = (status) => {
   return "bg-amber-500/30 text-amber-200";
 };
 
-const refreshAll = () => {
-  fetchLeads();
-  fetchUpgradeRequests();
+const refreshCurrentView = async () => {
+  if (activeAdminView.value === "operations") {
+    await Promise.all([fetchLeads(), fetchUpgradeRequests()]);
+    return;
+  }
+  if (activeAdminView.value === "tenants") {
+    await fetchTenants(tenantPage.value);
+    return;
+  }
+  if (activeAdminView.value === "monitoring") {
+    const tasks = [];
+    if (adminPanels.value.alerts) tasks.push(fetchReservationAlerts());
+    if (adminPanels.value.jobs) tasks.push(fetchJobs());
+    if (adminPanels.value.audit) tasks.push(fetchAuditLogs(auditPage.value));
+    if (tasks.length) {
+      await Promise.all(tasks);
+    }
+    return;
+  }
+  if (activeAdminView.value === "plans") {
+    await fetchPlanFeatureFlags();
+  }
 };
 
-onMounted(refreshAll);
+const selectAdminView = async (view) => {
+  activeAdminView.value = view;
+  if (loadedAdminViews.value[view]) return;
+  if (view === "operations") {
+    await Promise.all([fetchLeads(), fetchUpgradeRequests()]);
+    return;
+  }
+  if (view === "tenants") {
+    await fetchTenants(tenantPage.value);
+    return;
+  }
+  if (view === "plans") {
+    await fetchPlanFeatureFlags();
+  }
+};
+
+onMounted(() => {
+  selectAdminView("operations");
+});
 
 watch(domainSuffix, () => {
   previews.value = {};
