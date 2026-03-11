@@ -803,6 +803,8 @@ const auditTotal = ref(0);
 const auditTotalPages = ref(1);
 const auditHasNext = ref(false);
 const auditHasPrev = ref(false);
+let tenantsRequestController = null;
+const tenantTimelineControllers = new Map();
 const parseApiError = (err, fallback) => {
   const data = err?.response?.data;
   if (typeof data?.detail === "string") return data.detail;
@@ -1019,9 +1021,15 @@ const fetchLeads = async () => {
 
 const fetchTenants = async (page = tenantPage.value) => {
   const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
+  if (tenantsRequestController) {
+    tenantsRequestController.abort();
+  }
+  const controller = new AbortController();
+  tenantsRequestController = controller;
   tenantsLoading.value = true;
   try {
     const res = await adminApi.get("/admin-tenants/", {
+      signal: controller.signal,
       params: {
         page: requestedPage,
         page_size: tenantPageSize.value,
@@ -1045,10 +1053,14 @@ const fetchTenants = async (page = tenantPage.value) => {
     tenantHasNext.value = Boolean(pagination.has_next);
     tenantHasPrev.value = Boolean(pagination.has_prev);
   } catch (err) {
+    if (err?.code === "ERR_CANCELED") return;
     const msg = parseApiError(err, t("adminConsole.loadTenantsFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
+    if (tenantsRequestController === controller) {
+      tenantsRequestController = null;
+    }
     tenantsLoading.value = false;
   }
 };
@@ -1111,9 +1123,14 @@ const tenantTimelineHasPrev = (tenantId) => Boolean(getTenantTimelineState(tenan
 
 const fetchTenantTimeline = async (tenantId, page = 1) => {
   const requestedPage = Number.isFinite(Number(page)) ? Math.max(1, Number.parseInt(page, 10)) : 1;
+  const key = String(tenantId || "");
+  tenantTimelineControllers.get(key)?.abort();
+  const controller = new AbortController();
+  tenantTimelineControllers.set(key, controller);
   patchTenantTimelineState(tenantId, { loading: true });
   try {
     const res = await adminApi.get(`/admin-tenants/${tenantId}/timeline/`, {
+      signal: controller.signal,
       params: {
         page: requestedPage,
         page_size: 10,
@@ -1143,10 +1160,14 @@ const fetchTenantTimeline = async (tenantId, page = 1) => {
       loaded: true,
     });
   } catch (err) {
+    if (err?.code === "ERR_CANCELED") return;
     const msg = parseApiError(err, t("adminConsole.loadTenantHistoryFailed"));
     error.value = msg;
     toast.show(msg, "error");
   } finally {
+    if (tenantTimelineControllers.get(key) === controller) {
+      tenantTimelineControllers.delete(key);
+    }
     patchTenantTimelineState(tenantId, { loading: false });
   }
 };
@@ -1659,11 +1680,4 @@ watch(domainSuffix, () => {
   previewLoading.value = {};
 });
 
-watch(auditPageSize, () => {
-  fetchAuditLogs(1);
-});
-
-watch(tenantPageSize, () => {
-  fetchTenants(1);
-});
 </script>
