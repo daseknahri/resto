@@ -2,7 +2,7 @@ http:
   routers:
     kepoli-tenant-wildcard-http:
       entryPoints:
-        - web
+        - http
       rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`)
       middlewares:
         - kepoli-tenant-https-redirect
@@ -10,7 +10,7 @@ http:
 
     kepoli-tenant-wildcard-https:
       entryPoints:
-        - websecure
+        - https
       rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`)
       service: menu-kepoli-com-frontend@docker
       priority: 100
