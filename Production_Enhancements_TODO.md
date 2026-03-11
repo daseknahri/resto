@@ -12,6 +12,7 @@
 - [ ] Configure live email provider credentials and verify activation/reset delivery in production.
 - [ ] Execute and document one production restore drill.
 - [ ] Harden wildcard tenant routing so it remains stable across redeploy/restart operations.
+- [x] Add VPS scripts to render/install wildcard Traefik config from the live Coolify frontend target (`infra/coolify/render_tenant_wildcard_proxy.sh`, `infra/coolify/install_tenant_wildcard_proxy.sh`).
 - [ ] Perform final owner/admin cleanup pass after production validation is complete.
 
 ### 1. Access, Auth, and Permissions
@@ -280,6 +281,7 @@
 - [x] Prepare exact Coolify/VPS wildcard proxy configuration and Traefik dynamic-config template for `*.menu.kepoli.com`.
 - [ ] Install production wildcard certificate for `menu.kepoli.com` + `*.menu.kepoli.com` and attach it to the Coolify proxy.
 - [ ] Apply server-level Traefik wildcard router and verify tenant host resolution on production (`<slug>.menu.kepoli.com`).
+- [ ] Re-run wildcard installer after the next Coolify resource recreation/redeploy and document the exact stable ops procedure.
 - [x] Add explicit tenant domain suffix control (`TENANT_DOMAIN_SUFFIX`) so provisioning can target namespace wildcards (for example `*.menu.kepoli.com`) without coupling to root domain.
 - [x] Document Coolify wildcard ownership strategy to avoid cross-app conflicts on shared root domains.
 - [x] Document same-host `/api` proxy requirement for `kepoli.com`, `admin.kepoli.com`, and `*.kepoli.com`.

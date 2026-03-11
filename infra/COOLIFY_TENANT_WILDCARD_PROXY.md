@@ -98,7 +98,50 @@ sudo chmod 600 /data/coolify/proxy/certs/menu.kepoli.com/privkey.pem
 sudo chmod 644 /data/coolify/proxy/certs/menu.kepoli.com/fullchain.pem
 ```
 
-## 5. Add the Traefik wildcard router in Coolify
+## 5. Generate the Traefik wildcard router config from the live deployment
+
+Manual YAML editing works, but it is fragile because the frontend target can change across redeploys.
+
+Use the installer script on the VPS to render the correct target from the current running containers:
+
+```bash
+cd /opt/resto
+bash infra/coolify/install_tenant_wildcard_proxy.sh \
+  --resource-uuid <RESOURCE_UUID> \
+  --base-domain menu.kepoli.com \
+  --dry-run
+```
+
+Review the rendered YAML. Then install it:
+
+```bash
+cd /opt/resto
+bash infra/coolify/install_tenant_wildcard_proxy.sh \
+  --resource-uuid <RESOURCE_UUID> \
+  --base-domain menu.kepoli.com
+```
+
+This writes a dynamic config file under:
+
+- `/data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml`
+
+The script:
+
+- detects the current frontend container for the resource
+- prefers the container hostname if the proxy can resolve it
+- falls back to the shared-network IP when hostname resolution is not available
+- emits the Traefik `ruleSyntax: v2` host-regexp format that is known to work on this stack
+
+If you need to inspect the generated YAML without installing:
+
+```bash
+cd /opt/resto
+bash infra/coolify/render_tenant_wildcard_proxy.sh \
+  --resource-uuid <RESOURCE_UUID> \
+  --base-domain menu.kepoli.com
+```
+
+## 6. Load the Traefik wildcard router into Coolify
 
 Open:
 
@@ -107,7 +150,9 @@ Open:
 - `Proxy`
 - `Dynamic Configurations`
 
-Create a new dynamic configuration and paste the contents of:
+Create a new dynamic configuration and paste the contents of the rendered file, or keep the file in the proxy dynamic directory if your Coolify proxy is already configured to load file-provider configs from there.
+
+Reference template:
 
 - [traefik-kepoli-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-kepoli-tenant-wildcard.yml)
 
@@ -124,14 +169,14 @@ Important:
   - `/traefik/certs/menu.kepoli.com/fullchain.pem`
   - `/traefik/certs/menu.kepoli.com/privkey.pem`
 
-## 6. Restart the Coolify proxy
+## 7. Restart the Coolify proxy
 
 After saving the dynamic configuration:
 
 1. open `Servers`
 2. click `Restart Proxy`
 
-## 7. Verify the wildcard route
+## 8. Verify the wildcard route
 
 Test exact hosts first:
 
@@ -169,7 +214,7 @@ Expected after provisioning:
 - `/health` returns `200`
 - `/api/health/` returns `200`
 
-## 8. Why this works
+## 9. Why this works
 
 - Coolify exact-host routing already handles:
   - `menu.kepoli.com`
@@ -177,9 +222,9 @@ Expected after provisioning:
 - the tenant wildcard is added at the proxy layer, not at the app-domain form layer
 - Nginx preserves the original forwarded tenant host to Django, so host-based tenant resolution still works
 
-## 9. Known limitation
+## 10. Known limitation
 
-The manual Certbot DNS path does not auto-renew by itself.
+The manual Certbot DNS path does not auto-renew by itself, and the rendered wildcard target should be regenerated after major resource recreation if Coolify changes the frontend container/network target.
 
 Short-term:
 
@@ -189,10 +234,13 @@ Short-term:
 Later:
 
 - switch to automated DNS-challenge issuance through a supported DNS API workflow
+- automate wildcard proxy regeneration after Coolify redeploy/resource recreate
 
-## 10. Files involved
+## 11. Files involved
 
 - [docker-compose.coolify.yml](C:/Users/user/resto/docker-compose.coolify.yml)
 - [frontend/nginx.conf](C:/Users/user/resto/frontend/nginx.conf)
 - [traefik-kepoli-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-kepoli-tenant-wildcard.yml)
+- [render_tenant_wildcard_proxy.sh](C:/Users/user/resto/infra/coolify/render_tenant_wildcard_proxy.sh)
+- [install_tenant_wildcard_proxy.sh](C:/Users/user/resto/infra/coolify/install_tenant_wildcard_proxy.sh)
 - [DEPLOY_REAL_APP_COOLIFY.md](C:/Users/user/resto/DEPLOY_REAL_APP_COOLIFY.md)
