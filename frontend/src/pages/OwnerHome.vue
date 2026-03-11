@@ -6,7 +6,7 @@
       <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerHome.description") }}</p>
     </header>
 
-    <div class="grid gap-4 md:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <article class="ui-panel p-4 ui-fade-up">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.readiness") }}</p>
         <p class="mt-2 text-3xl font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</p>
@@ -53,7 +53,7 @@
         <h3 class="text-lg font-semibold">{{ t("ownerHome.analyticsTitle") }}</h3>
         <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
       </div>
-      <div class="grid gap-3 md:grid-cols-4">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.menuViews") }}</p>
           <p class="mt-2 text-2xl font-semibold text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
@@ -71,7 +71,7 @@
           <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
         </div>
       </div>
-      <div class="grid gap-3 md:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-2">
         <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
           <ul class="mt-2 space-y-1 text-sm text-slate-200">
@@ -106,7 +106,7 @@
           {{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}
         </button>
       </div>
-      <ul class="grid gap-2 md:grid-cols-2">
+      <ul class="grid gap-2 sm:grid-cols-2">
         <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
           <span>{{ t("ownerHome.brandContactPresent") }}</span>
           <span :class="hasContact ? 'text-emerald-300' : 'text-amber-300'">{{ hasContact ? t("ownerHome.ready") : t("ownerHome.missing") }}</span>
@@ -149,7 +149,7 @@
         }}
       </p>
 
-      <div v-if="upgradeTargets.length" class="grid gap-3 md:grid-cols-[1fr,2fr,auto]">
+      <div v-if="upgradeTargets.length" class="grid gap-3 lg:grid-cols-[1fr,2fr,auto]">
         <label class="text-sm text-slate-300">
           {{ t("ownerHome.targetTier") }}
           <select v-model="upgradeTargetCode" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
@@ -237,11 +237,11 @@
 
     <article class="ui-panel p-5 space-y-4">
       <h3 class="text-lg font-semibold">{{ t("ownerHome.quickActions") }}</h3>
-      <div class="flex flex-wrap gap-3">
-        <RouterLink to="/owner/onboarding" class="ui-btn-primary">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <RouterLink to="/owner/onboarding" class="ui-btn-primary w-full">
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <button class="ui-btn-outline" @click="copyMenuUrl">
+        <button class="ui-btn-outline w-full" @click="copyMenuUrl">
           {{ t("ownerHome.copyPublicUrl") }}
         </button>
       </div>

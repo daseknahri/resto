@@ -77,7 +77,7 @@
         </button>
       </div>
 
-      <div class="grid gap-3 md:grid-cols-[1fr,auto,auto,auto]">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,auto,auto,auto]">
         <input
           v-model.trim="searchQuery"
           class="ui-input"
@@ -86,7 +86,7 @@
         />
         <input v-model="dateFrom" type="date" class="ui-input" />
         <input v-model="dateTo" type="date" class="ui-input" />
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-1">
           <select v-model.number="pageSize" class="ui-input w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
@@ -253,7 +253,7 @@
             </a>
           </div>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <button
               class="rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
@@ -664,7 +664,7 @@ const sendReminder = async (reservation) => {
       if (link && navigator?.clipboard?.writeText) {
         try {
           await navigator.clipboard.writeText(link);
-        } catch (e) {
+        } catch {
           // Ignore clipboard errors and still show fallback guidance.
         }
       }
@@ -707,7 +707,7 @@ const bulkRetryReminders = async () => {
     if (links.length && navigator?.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(links.join("\n"));
-      } catch (e) {
+      } catch {
         // Ignore clipboard errors and keep summary toast.
       }
     }
@@ -728,7 +728,7 @@ const bulkRetryReminders = async () => {
           if (Number(res?.data?.updated_count || 0) > 0) {
             pendingReminderReconciliation.value = pendingReminderReconciliation.value.slice(1);
           }
-        } catch (e) {
+        } catch {
           // Best effort tracking; do not fail whole operation.
         }
       }
@@ -952,7 +952,7 @@ const addTimelineNote = async (reservationId) => {
 
 const parseFilename = (contentDisposition) => {
   const value = String(contentDisposition || "");
-  const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(value);
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(value);
   if (!match?.[1]) return "reservations.csv";
   return decodeURIComponent(match[1]).replace(/"/g, "").trim() || "reservations.csv";
 };
@@ -976,7 +976,7 @@ const exportCsv = async () => {
     link.remove();
     window.URL.revokeObjectURL(objectUrl);
     toast.show(t("ownerReservations.exportReady"), "success");
-  } catch (err) {
+  } catch {
     toast.show(t("ownerReservations.exportFailed"), "error");
   } finally {
     exporting.value = false;

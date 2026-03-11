@@ -1,30 +1,37 @@
-﻿<template>
-  <div class="mx-auto max-w-6xl px-4 py-6 space-y-6 ui-safe-bottom">
-    <div class="ui-panel flex flex-wrap items-center justify-between gap-3 p-4">
-      <div>
+﻿<!-- eslint-disable vue/html-indent -->
+<template>
+  <div class="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6 space-y-6 ui-safe-bottom">
+    <div class="ui-panel flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">
+      <div class="space-y-2">
         <p class="ui-kicker">{{ t("adminConsole.superAdmin") }}</p>
-        <h1 class="ui-display text-3xl font-semibold text-white">{{ t("adminConsole.provisioningOperations") }}</h1>
+        <h1 class="ui-display text-3xl font-semibold text-white">{{ activeAdminViewTitle }}</h1>
         <p class="mt-1 text-xs text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ activeAdminViewLabel }}</span>
+          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ currentDomainSuffixLabel }}</span>
+        </div>
       </div>
-      <div class="ui-scroll-row">
-        <a
-          :href="djangoAdminUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="ui-btn-outline px-4 py-2 text-sm"
-        >
-          {{ t("adminConsole.djangoAdmin") }}
-        </a>
+      <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto] md:min-w-[22rem]">
         <input
           v-model="domainSuffix"
-          class="ui-input w-48 px-2 py-1 text-sm"
+          class="ui-input w-full px-3 py-2 text-sm"
           :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
         />
-        <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="ui-btn-outline w-full px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
+          <a
+            :href="djangoAdminUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-outline w-full px-4 py-2 text-sm"
+          >
+            {{ t("adminConsole.djangoAdmin") }}
+          </a>
+        </div>
       </div>
     </div>
 
-    <div class="ui-panel flex flex-wrap gap-2 p-3">
+    <div class="ui-panel hidden flex-wrap gap-2 p-3 md:flex">
       <button
         class="ui-pill-nav text-xs"
         :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
@@ -101,7 +108,7 @@
             </template>
             <p v-else class="text-slate-500">{{ t("adminConsole.notCheckedYet") }}</p>
           </div>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               class="flex-1 rounded-full bg-brand-secondary px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
               :disabled="provLoading[lead.id]"
@@ -131,7 +138,7 @@
               {{ packageLoading[lead.id] ? t("common.loading") : t("adminConsole.loadPackage") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
+              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50 sm:col-span-2"
               :disabled="removeLoading[lead.id]"
               @click="removeLead(lead)"
             >
@@ -185,7 +192,7 @@
           <p class="text-xs text-slate-500">{{ t("adminConsole.domain") }}: {{ tenant.primary_domain || "-" }}</p>
           <p class="text-xs text-slate-500">{{ t("adminConsole.owner") }}: {{ tenant.owner_username || "-" }}</p>
           <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">{{ t("adminConsole.cancelReason") }}: {{ tenant.canceled_reason }}</p>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               class="rounded-full border border-amber-400/70 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-50"
               :disabled="tenant.lifecycle_status !== 'active' || !!tenantLifecycleLoading[tenant.id]"
@@ -215,7 +222,7 @@
             {{ tenantToolsExpanded(tenant.id) ? `${t("adminConsole.hide")} tools` : `${t("adminConsole.show")} tools` }}
           </button>
           <div v-if="tenantToolsExpanded(tenant.id)" class="space-y-2">
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
                 :disabled="!!tenantExportLoading[tenant.id]"
@@ -250,11 +257,11 @@
                 </button>
               </div>
               <template v-if="tenantTimelineExpanded(tenant.id)">
-                <div class="flex items-center justify-between gap-2">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p class="text-[11px] text-slate-500">
                     {{ t("adminConsole.pageSummary", { page: tenantTimelinePage(tenant.id), pages: tenantTimelineTotalPages(tenant.id), total: tenantTimelineTotal(tenant.id) }) }}
                   </p>
-                  <div class="flex items-center gap-1">
+                  <div class="flex flex-wrap items-center gap-1">
                     <button
                       class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
                       :disabled="!tenantTimelineHasPrev(tenant.id) || tenantTimelineLoading(tenant.id)"
@@ -730,42 +737,42 @@
         </div>
       </div>
       <p><span class="text-slate-400">{{ t("adminConsole.tenant") }}:</span> {{ lastProvision.tenant || '-' }}</p>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.tenantUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.tenant_url || '-' }}</span>
         <button v-if="lastProvision.tenant_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.workspaceUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.workspace_url || '-' }}</span>
         <button v-if="lastProvision.workspace_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.onboardingUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.onboarding_url || '-' }}</span>
         <button v-if="lastProvision.onboarding_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.onboarding_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.signInUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.signin_url || '-' }}</span>
         <button v-if="lastProvision.signin_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.signin_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.activationToken") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_token || '-' }}</span>
         <button v-if="lastProvision.activation_token" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.whatsappLink") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.whatsapp_link || '-' }}</span>
         <button v-if="lastProvision.whatsapp_link" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.whatsapp_link)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.activationUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_url || '-' }}</span>
         <button v-if="lastProvision.activation_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
       </div>
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
         <span class="text-slate-400">{{ t("adminConsole.publicMenuUrl") }}:</span>
         <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.public_menu_url || '-' }}</span>
         <button v-if="lastProvision.public_menu_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.public_menu_url)">{{ t("common.copy") }}</button>
@@ -788,6 +795,39 @@
         </button>
       </div>
     </section>
+
+    <nav class="ui-bottom-dock md:hidden">
+      <div class="ui-bottom-dock-grid grid-cols-4">
+        <button
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('operations')"
+        >
+          {{ t("adminConsole.provisioningOperations") }}
+        </button>
+        <button
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :class="activeAdminView === 'tenants' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('tenants')"
+        >
+          {{ t("adminConsole.tenantLifecycleControls") }}
+        </button>
+        <button
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :class="activeAdminView === 'monitoring' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('monitoring')"
+        >
+          {{ t("adminConsole.reservationFollowUpSla") }}
+        </button>
+        <button
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :class="activeAdminView === 'plans' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('plans')"
+        >
+          {{ t("adminConsole.planFeatureFlags") }}
+        </button>
+      </div>
+    </nav>
   </div>
 </template>
 
@@ -923,6 +963,20 @@ const packageText = computed(() => {
     p.whatsapp_message_template || "-",
   ].join("\n");
 });
+const adminViewLabels = computed(() => ({
+  operations: t("adminConsole.provisioningOperations"),
+  tenants: t("adminConsole.tenantLifecycleControls"),
+  monitoring: t("adminConsole.reservationFollowUpSla"),
+  plans: t("adminConsole.planFeatureFlags"),
+}));
+const activeAdminViewLabel = computed(() => adminViewLabels.value[activeAdminView.value] || adminViewLabels.value.operations);
+const activeAdminViewTitle = computed(() => {
+  if (activeAdminView.value === "tenants") return t("adminConsole.suspendReactivateCancel");
+  if (activeAdminView.value === "monitoring") return t("adminConsole.reservationFollowUpSla");
+  if (activeAdminView.value === "plans") return t("adminConsole.planFeatureControls");
+  return t("adminConsole.provisioningOperations");
+});
+const currentDomainSuffixLabel = computed(() => `${t("adminConsole.suffixOptional")}: ${normalizeSuffix(domainSuffix.value) || inferredDomainSuffix}`);
 const activeAdminViewLoading = computed(() => {
   if (activeAdminView.value === "operations") return leadsLoading.value || upgradeLoading.value;
   if (activeAdminView.value === "tenants") return tenantsLoading.value;
@@ -1803,3 +1857,4 @@ watch(domainSuffix, () => {
 });
 
 </script>
+
