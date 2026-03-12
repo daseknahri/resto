@@ -87,18 +87,43 @@
     </section>
 
     <section id="plans" class="space-y-4">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="ui-display text-2xl font-semibold text-white">{{ t("home.plansTitle") }}</h2>
+      <div class="ui-section-band flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div class="space-y-2">
+          <p class="ui-kicker">{{ t("home.heroBadge") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.plansTitle") }}</h2>
+          <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("home.heroSubtitle") }}</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-3 md:min-w-[360px]">
+          <article class="ui-admin-subcard">
+            <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+          </article>
+        </div>
       </div>
       <div class="grid gap-4 md:grid-cols-3">
         <article
           v-for="plan in plans"
           :key="plan.code"
-          class="relative overflow-hidden rounded-[1.7rem] border p-5 shadow-lg shadow-black/20"
+          class="relative overflow-hidden rounded-[1.8rem] border p-5 shadow-lg shadow-black/20 transition duration-300"
           :class="plan.recommended ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/12' : 'border-slate-700/60 bg-slate-900/55'"
         >
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+          <div v-if="plan.recommended" class="pointer-events-none absolute right-5 top-5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-secondary)]">
+            {{ t("common.available") }}
+          </div>
           <div class="flex items-center justify-between">
-            <p class="text-lg font-semibold text-white">{{ plan.name }}</p>
+            <div>
+              <p class="ui-kicker">{{ t("common.plan") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ plan.name }}</p>
+            </div>
             <span
               class="rounded-full px-2 py-1 text-[11px] font-semibold"
               :class="plan.available ? 'bg-emerald-400/90 text-emerald-950' : 'bg-slate-700 text-slate-200'"
@@ -106,13 +131,17 @@
               {{ plan.available ? t("common.available") : t("common.soon") }}
             </span>
           </div>
-          <p class="mt-1 text-sm text-slate-300">{{ plan.description }}</p>
-          <ul class="mt-4 space-y-1 text-sm text-slate-300">
-            <li v-for="line in plan.features" :key="line">- {{ line }}</li>
+          <p class="mt-3 text-sm text-slate-300">{{ plan.description }}</p>
+          <ul class="mt-5 space-y-2 text-sm text-slate-300">
+            <li v-for="(line, featureIndex) in plan.features" :key="line" class="flex items-start gap-2">
+              <span class="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"></span>
+              <span class="flex-1">{{ line }}</span>
+              <span class="text-[10px] uppercase tracking-[0.14em] text-slate-500">{{ String(featureIndex + 1).padStart(2, "0") }}</span>
+            </li>
           </ul>
           <RouterLink
             :to="{ name: 'lead', query: { plan: plan.code } }"
-            class="mt-5 inline-flex rounded-full border px-4 py-2 text-sm font-semibold transition-colors ui-touch-target"
+            class="mt-6 inline-flex rounded-full border px-4 py-2 text-sm font-semibold transition-colors ui-touch-target"
             :class="plan.recommended ? 'border-[var(--color-secondary)] text-[var(--color-secondary)]' : 'border-slate-700 text-slate-100'"
           >
             {{ plan.cta }}

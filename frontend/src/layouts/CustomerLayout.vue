@@ -1,32 +1,52 @@
 <template>
   <div class="ui-shell">
     <header class="ui-header">
-      <div class="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3">
-        <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-2.5">
-          <img
-            v-if="tenantLogo"
-            :src="tenantLogo"
-            :alt="`${tenantName} logo`"
-            class="h-8 w-8 rounded-lg border border-slate-700/70 object-cover"
-            loading="lazy"
-          />
-          <p class="truncate text-lg font-semibold text-slate-100">{{ tenantName }}</p>
-        </RouterLink>
+      <div class="mx-auto w-full max-w-5xl px-4 py-3">
+        <div class="ui-hero-ribbon flex flex-col gap-3 px-4 py-3 sm:px-5">
+          <div class="flex items-start justify-between gap-3">
+            <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
+              <img
+                v-if="tenantLogo"
+                :src="tenantLogo"
+                :alt="`${tenantName} logo`"
+                class="h-10 w-10 rounded-2xl border border-slate-700/70 object-cover shadow-lg shadow-black/30"
+                loading="lazy"
+              />
+              <div class="min-w-0">
+                <p class="ui-kicker">{{ t("customerLeadPage.kicker") }}</p>
+                <p class="truncate text-lg font-semibold text-slate-100">{{ tenantName }}</p>
+                <p v-if="tenantTagline" class="truncate text-xs text-slate-400">{{ tenantTagline }}</p>
+              </div>
+            </RouterLink>
 
-        <div class="flex items-center gap-2">
-          <span v-if="cart.tableLabel" class="hidden ui-chip text-[10px] uppercase tracking-[0.15em] text-slate-300 md:inline-flex">
-            {{ t("customerLayout.table") }} {{ cart.tableLabel }}
-          </span>
-          <LanguageSwitcher />
-          <RouterLink to="/cart" class="relative inline-flex ui-touch-target min-w-[2.25rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/70 px-3 text-sm text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
-            {{ t("common.cart") }}
-            <span
-              v-if="cart.count"
-              class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
+            <div class="flex items-center gap-2">
+              <LanguageSwitcher />
+              <RouterLink to="/cart" class="relative inline-flex ui-touch-target min-w-[2.5rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-3 text-sm text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
+                {{ t("common.cart") }}
+                <span
+                  v-if="cart.count"
+                  class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
+                >
+                  {{ cart.count }}
+                </span>
+              </RouterLink>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-chip-strong">{{ serviceStateLabel }}</span>
+            <span class="ui-data-strip">{{ orderingModeLabel }}</span>
+            <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
+            <a
+              v-if="googleMapsUrl"
+              :href="googleMapsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-chip text-[11px]"
             >
-              {{ cart.count }}
-            </span>
-          </RouterLink>
+              {{ t("customerLeadPage.googleReviews") }}
+            </a>
+          </div>
         </div>
       </div>
     </header>
@@ -94,11 +114,19 @@ const { t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(meta.value?.profile?.logo_url || "").trim());
+const tenantTagline = computed(() => String(meta.value?.profile?.tagline || meta.value?.profile?.description || "").trim());
+const googleMapsUrl = computed(() => String(meta.value?.profile?.google_maps_url || "").trim());
 const orderingModeLabel = computed(() => {
   const mode = String(tenant.entitlements?.ordering_mode || "browse").toLowerCase();
   if (mode === "checkout") return t("customerLeadPage.checkout");
   if (mode === "whatsapp") return t("customerLeadPage.whatsapp");
   return t("customerLeadPage.browseOnly");
+});
+const serviceStateLabel = computed(() => {
+  const profile = meta.value?.profile;
+  if (!profile) return orderingModeLabel.value;
+  if (profile.is_menu_temporarily_disabled) return t("customerLayout.menuDisabledFallback");
+  return profile.is_open === false ? t("customerLeadPage.closedNow") : t("customerLeadPage.openNow");
 });
 
 const activeCustomerSection = computed(() => {
