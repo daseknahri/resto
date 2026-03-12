@@ -89,7 +89,13 @@
     </header>
 
     <main class="mx-auto w-full max-w-7xl px-4 py-6 pb-28 md:pb-10">
-      <RouterView />
+      <RouterView v-slot="{ Component, route: viewRoute }">
+        <Transition name="ui-route" mode="out-in">
+          <div :key="viewRoute.fullPath" class="ui-route-frame">
+            <component :is="Component" />
+          </div>
+        </Transition>
+      </RouterView>
     </main>
 
     <nav class="ui-bottom-dock md:hidden">

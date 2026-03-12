@@ -92,7 +92,13 @@
     <CustomerFlowRail />
 
     <main class="mx-auto w-full max-w-5xl pb-28 md:pb-8">
-      <RouterView />
+      <RouterView v-slot="{ Component, route: viewRoute }">
+        <Transition name="ui-route" mode="out-in">
+          <div :key="viewRoute.fullPath" class="ui-route-frame">
+            <component :is="Component" />
+          </div>
+        </Transition>
+      </RouterView>
     </main>
 
     <section class="mx-auto w-full max-w-5xl px-4 pt-3 md:hidden">

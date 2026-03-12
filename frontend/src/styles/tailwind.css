@@ -252,6 +252,10 @@ body[dir="rtl"] .ui-kicker {
     background: rgba(2, 6, 23, 0.58);
     color: rgb(226 232 240);
     backdrop-filter: blur(16px);
+    transition:
+      transform var(--motion-fast) var(--ease-fluid),
+      border-color var(--motion-fast) var(--ease-fluid),
+      background-color var(--motion-fast) var(--ease-fluid);
   }
 
   .ui-live-dot {
@@ -282,6 +286,7 @@ body[dir="rtl"] .ui-kicker {
     @apply absolute inset-y-0 left-0 rounded-full;
     background: linear-gradient(90deg, rgba(16, 185, 129, 0.9), rgba(245, 158, 11, 0.95));
     box-shadow: 0 0 18px rgba(245, 158, 11, 0.25);
+    transition: width var(--motion-slow) var(--ease-fluid);
   }
 
   .ui-journey-step {
@@ -498,6 +503,11 @@ body[dir="rtl"] .ui-kicker {
     border-color: rgba(71, 85, 105, 0.85);
     background: rgba(2, 8, 23, 0.54);
     color: rgb(226 232 240);
+    transition:
+      transform var(--motion-fast) var(--ease-fluid),
+      border-color var(--motion-fast) var(--ease-fluid),
+      background-color var(--motion-fast) var(--ease-fluid),
+      color var(--motion-fast) var(--ease-fluid);
   }
 
   .ui-state-chip[data-active="true"] {
@@ -704,6 +714,11 @@ body[dir="rtl"] .ui-kicker {
 
   .ui-chip {
     @apply inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-xs text-slate-200;
+    transition:
+      transform var(--motion-fast) var(--ease-fluid),
+      border-color var(--motion-fast) var(--ease-fluid),
+      background-color var(--motion-fast) var(--ease-fluid),
+      color var(--motion-fast) var(--ease-fluid);
   }
 
   .ui-chip-strong {
@@ -798,6 +813,36 @@ body[dir="rtl"] .ui-kicker {
     animation: ui-fade-up 280ms ease-out both;
   }
 
+  .ui-route-frame {
+    will-change: opacity, transform, filter;
+  }
+
+  .ui-route-enter-active {
+    transition:
+      opacity var(--motion-base) var(--ease-fluid),
+      transform var(--motion-base) var(--ease-fluid),
+      filter var(--motion-base) var(--ease-fluid);
+  }
+
+  .ui-route-leave-active {
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-fast) ease,
+      filter var(--motion-fast) ease;
+  }
+
+  .ui-route-enter-from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.992);
+    filter: blur(8px);
+  }
+
+  .ui-route-leave-to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.996);
+    filter: blur(5px);
+  }
+
   .ui-reveal {
     animation: ui-fade-up var(--motion-base) var(--ease-fluid) both;
     animation-delay: var(--ui-delay, 0ms);
@@ -870,6 +915,13 @@ body[dir="rtl"] .ui-kicker {
 }
 
 @media (hover: hover) {
+  .ui-chip:hover,
+  .ui-status-pill:hover,
+  .ui-state-chip:hover {
+    transform: translateY(-1px);
+    border-color: rgba(245, 158, 11, 0.24);
+  }
+
   .ui-surface-lift:hover {
     transform: translateY(-2px);
     border-color: rgba(245, 158, 11, 0.45);
@@ -888,8 +940,11 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-fade-up,
-  .ui-reveal {
+  .ui-reveal,
+  .ui-route-enter-active,
+  .ui-route-leave-active {
     animation: none !important;
+    transition: none !important;
   }
 }
 

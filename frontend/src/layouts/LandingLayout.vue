@@ -47,7 +47,13 @@
     </header>
 
     <main class="mx-auto w-full max-w-6xl ui-fade-up">
-      <RouterView />
+      <RouterView v-slot="{ Component, route: viewRoute }">
+        <Transition name="ui-route" mode="out-in">
+          <div :key="viewRoute.fullPath" class="ui-route-frame">
+            <component :is="Component" />
+          </div>
+        </Transition>
+      </RouterView>
     </main>
 
     <footer class="ui-footer">
