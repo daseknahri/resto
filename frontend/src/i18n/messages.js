@@ -2896,4 +2896,4 @@ const mergeLocaleInto = (target, source) => {
   return target;
 };
 
-messages.ar = mergeLocaleInto(mergeLocaleInto(cloneLocaleValue(messages.en), messages.ar), arabicMessages);
+messages.ar = mergeLocaleInto(cloneLocaleValue(messages.en), arabicMessages);
