@@ -1,24 +1,75 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-24 sm:pb-0">
-    <header class="no-print ui-hero-stage ui-fade-up overflow-hidden">
-      <div class="relative grid gap-6 p-5 md:grid-cols-[1.2fr,0.8fr] md:p-8">
-        <div class="space-y-4">
+    <header class="no-print ui-workspace-stage ui-fade-up overflow-hidden">
+      <div class="relative ui-workspace-grid gap-5">
+        <div class="space-y-5">
           <span class="ui-chip-strong w-fit">{{ t("ownerTables.kicker") }}</span>
           <div class="space-y-2">
             <h2 class="ui-display text-3xl font-semibold text-white md:text-4xl">{{ t("ownerTables.title") }}</h2>
             <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("ownerTables.description") }}</p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <span class="ui-data-strip">{{ t("ownerTables.totalLinks") }}: {{ tables.length }}</span>
+            <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>
+            <span class="ui-data-strip">{{ t("ownerTables.disabledTables") }}: {{ disabledTablesCount }}</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
             <a href="#create-table" class="ui-btn-primary">{{ t("ownerTables.create") }}</a>
             <a href="#bulk-generate" class="ui-btn-outline">{{ t("ownerTables.bulk") }}</a>
+            <button class="ui-btn-outline" :disabled="loading" @click="fetchTables">
+              {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
+            </button>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <article class="ui-stat-tile">
+              <p class="ui-stat-label">{{ t("ownerTables.cardsTitle") }}</p>
+              <p class="ui-stat-value">{{ tables.length }}</p>
+              <p class="ui-stat-note">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+            </article>
+            <article class="ui-stat-tile">
+              <p class="ui-stat-label">{{ t("common.available") }}</p>
+              <p class="ui-stat-value text-emerald-300">{{ activeTablesCount }}</p>
+              <p class="ui-stat-note">{{ t("ownerTables.activeTables") }}</p>
+            </article>
+            <article class="ui-stat-tile">
+              <p class="ui-stat-label">{{ t("ownerTables.disabledTables") }}</p>
+              <p class="ui-stat-value text-amber-300">{{ disabledTablesCount }}</p>
+              <p class="ui-stat-note">{{ t("ownerTables.disabledState") }}</p>
+            </article>
           </div>
         </div>
 
-        <div class="grid gap-3 self-end">
-          <article class="ui-orbit-card">
+        <div class="grid gap-3 self-start">
+          <article class="ui-action-tile space-y-2">
             <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ tenantName }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+            <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrZip">
+                {{ t("ownerTables.serverZip") }}
+              </button>
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrPdf">
+                {{ t("ownerTables.serverPdf") }}
+              </button>
+            </div>
+          </article>
+          <article class="ui-action-tile space-y-2">
+            <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
+            <p class="text-lg font-semibold text-white">{{ t("ownerTables.bulkGenerate") }}</p>
+            <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
+            <a href="#bulk-generate" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("ownerTables.generate") }}</a>
+          </article>
+          <article class="ui-action-tile space-y-2">
+            <p class="ui-kicker">{{ t("ownerTables.exportCsv") }}</p>
+            <p class="text-lg font-semibold text-white">{{ t("ownerTables.printCards") }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadAllQrPng">
+                {{ t("ownerTables.allQrPng") }}
+              </button>
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">
+                {{ t("ownerTables.printCards") }}
+              </button>
+            </div>
           </article>
           <article class="ui-orbit-card">
             <p class="ui-kicker">{{ t("common.available") }}</p>
@@ -29,25 +80,11 @@
       </div>
     </header>
 
-    <section class="no-print grid gap-3 sm:grid-cols-3">
-      <article class="ui-metric-card">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.totalLinks") }}</p>
-        <p class="mt-2 text-2xl font-semibold text-white">{{ tables.length }}</p>
-      </article>
-      <article class="ui-metric-card">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.activeTables") }}</p>
-        <p class="mt-2 text-2xl font-semibold text-emerald-300">{{ activeTablesCount }}</p>
-      </article>
-      <article class="ui-metric-card">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.disabledTables") }}</p>
-        <p class="mt-2 text-2xl font-semibold text-amber-300">{{ disabledTablesCount }}</p>
-      </article>
-    </section>
-
-    <article id="create-table" class="no-print ui-command-deck space-y-4 p-4 scroll-mt-24 md:p-5">
+    <article id="create-table" class="no-print ui-action-tile space-y-4 p-4 scroll-mt-24 md:p-5">
       <div class="space-y-1">
         <p class="ui-kicker">{{ t("ownerTables.create") }}</p>
         <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.createTable") }}</h3>
+        <p class="text-sm text-slate-400">{{ t("ownerTables.tableLabelPlaceholder") }}</p>
       </div>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr,120px,120px,auto] lg:items-end">
         <label class="text-sm text-slate-300">
@@ -82,10 +119,11 @@
       <p v-if="error" class="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
     </article>
 
-    <article id="bulk-generate" class="no-print ui-command-deck space-y-4 p-4 scroll-mt-24 md:p-5">
+    <article id="bulk-generate" class="no-print ui-action-tile space-y-4 p-4 scroll-mt-24 md:p-5">
       <div class="space-y-1">
         <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
         <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
+        <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
       </div>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,90px,90px,120px,120px,auto] xl:items-end">
         <label class="text-sm text-slate-300">
@@ -123,7 +161,7 @@
       <p class="text-xs text-slate-500">{{ t("ownerTables.bulkHint") }}</p>
     </article>
 
-    <div class="no-print ui-section-band p-4">
+    <div class="no-print ui-toolbar-band p-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
         <div class="ui-scroll-row">

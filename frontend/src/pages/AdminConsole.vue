@@ -1,8 +1,8 @@
 <!-- eslint-disable vue/html-indent -->
 <template>
-  <div class="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6 space-y-6 ui-safe-bottom">
-    <div class="ui-command-deck space-y-4 p-4">
-      <div class="ui-toolbar-grid items-start">
+  <div class="mx-auto max-w-7xl px-4 py-6 pb-28 md:pb-6 space-y-6 ui-safe-bottom">
+    <div class="ui-workspace-stage space-y-4 p-4 md:p-5">
+      <div class="ui-workspace-grid items-start">
         <div class="space-y-2">
           <p class="ui-kicker">{{ t("adminConsole.superAdmin") }}</p>
           <h1 class="ui-display text-3xl font-semibold text-white">{{ activeAdminViewTitle }}</h1>
@@ -12,24 +12,74 @@
             <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ currentDomainSuffixLabel }}</span>
           </div>
         </div>
-        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto] xl:min-w-[24rem]">
-          <input
-            v-model="domainSuffix"
-            class="ui-input w-full px-3 py-2 text-sm"
-            :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
-          />
-          <div class="grid grid-cols-2 gap-2">
-            <button class="ui-btn-outline w-full px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
-            <a
-              :href="djangoAdminUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ui-btn-outline w-full px-4 py-2 text-sm"
-            >
-              {{ t("adminConsole.djangoAdmin") }}
-            </a>
-          </div>
+        <div class="grid gap-3 self-start">
+          <article class="ui-action-tile space-y-3">
+            <div class="space-y-1">
+              <p class="ui-kicker">{{ t("adminConsole.tenantLifecycleControls") }}</p>
+              <p class="text-sm text-slate-400">{{ t("adminConsole.suffixOptional") }}</p>
+            </div>
+            <input
+              v-model="domainSuffix"
+              class="ui-input w-full px-3 py-2 text-sm"
+              :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
+            />
+            <div class="grid grid-cols-2 gap-2">
+              <button class="ui-btn-outline w-full px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
+              <a
+                :href="djangoAdminUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ui-btn-outline w-full px-4 py-2 text-sm"
+              >
+                {{ t("adminConsole.djangoAdmin") }}
+              </a>
+            </div>
+          </article>
+          <article class="ui-orbit-card space-y-2">
+            <p class="ui-kicker">{{ activeAdminViewLabel }}</p>
+            <p class="text-lg font-semibold text-white">{{ currentDomainSuffixLabel }}</p>
+            <p class="text-sm text-slate-400">{{ activeAdminViewLoading ? t("common.loading") : t("common.available") }}</p>
+          </article>
         </div>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article v-for="metric in activeAdminMetrics" :key="metric.label" class="ui-stat-tile">
+          <p class="ui-stat-label">{{ metric.label }}</p>
+          <p class="ui-stat-value" :class="metric.valueClass">{{ metric.value }}</p>
+          <p class="ui-stat-note">{{ metric.note }}</p>
+        </article>
+      </div>
+
+      <div class="ui-scroll-row md:hidden">
+        <button
+          class="ui-pill-nav text-xs"
+          :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('operations')"
+        >
+          {{ t("adminConsole.provisioningOperations") }}
+        </button>
+        <button
+          class="ui-pill-nav text-xs"
+          :class="activeAdminView === 'tenants' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('tenants')"
+        >
+          {{ t("adminConsole.tenantLifecycleControls") }}
+        </button>
+        <button
+          class="ui-pill-nav text-xs"
+          :class="activeAdminView === 'monitoring' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('monitoring')"
+        >
+          {{ t("adminConsole.reservationFollowUpSla") }}
+        </button>
+        <button
+          class="ui-pill-nav text-xs"
+          :class="activeAdminView === 'plans' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          @click="selectAdminView('plans')"
+        >
+          {{ t("adminConsole.planFeatureFlags") }}
+        </button>
       </div>
     </div>
 
@@ -66,7 +116,7 @@
 
     <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
 
-    <section v-if="activeAdminView === 'operations'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
@@ -151,7 +201,7 @@
       </div>
     </section>
 
-    <section v-if="activeAdminView === 'tenants'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'tenants'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.tenantLifecycleControls") }}</p>
@@ -304,7 +354,7 @@
                     <p class="text-[11px] text-slate-400">
                       {{ t("adminConsole.by") }} {{ entry.actor_username || t("adminConsole.system") }}
                       <span v-if="entry.metadata?.lifecycle_action">
-                        • {{ entry.metadata.lifecycle_action }}
+                        | {{ entry.metadata.lifecycle_action }}
                       </span>
                     </p>
                   </li>
@@ -316,7 +366,7 @@
       </div>
     </section>
 
-    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
@@ -410,7 +460,7 @@
       </template>
     </section>
 
-    <section v-if="activeAdminView === 'operations'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
@@ -513,7 +563,7 @@
       </div>
     </section>
 
-    <section v-if="activeAdminView === 'plans'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'plans'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="text-sm text-slate-300">{{ t("adminConsole.planFeatureFlags") }}</p>
@@ -588,7 +638,7 @@
       </template>
     </section>
 
-    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
         <div class="ui-scroll-row">
@@ -649,7 +699,7 @@
       </template>
     </section>
 
-    <section v-if="activeAdminView === 'monitoring'" class="ui-panel p-4 space-y-3">
+    <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.securityAuditLog") }}</h2>
         <div class="ui-scroll-row">
@@ -730,7 +780,7 @@
       </template>
     </section>
 
-    <section v-if="lastProvision && activeAdminView === 'operations'" class="ui-panel p-4 space-y-2 text-sm text-slate-200">
+    <section v-if="lastProvision && activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3 text-sm text-slate-200">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="font-semibold">{{ t("adminConsole.latestProvisioningPackage") }}</h3>
         <div class="flex items-center gap-3">
@@ -985,6 +1035,48 @@ const activeAdminViewLoading = computed(() => {
   if (activeAdminView.value === "monitoring") return alertsLoading.value || loading.value || auditLoading.value;
   if (activeAdminView.value === "plans") return planFlagsLoading.value;
   return false;
+});
+const activeAdminMetrics = computed(() => {
+  if (activeAdminView.value === "tenants") {
+    const activeCount = tenants.value.filter((tenant) => tenant.lifecycle_status === "active").length;
+    const pausedCount = tenants.value.filter((tenant) => tenant.lifecycle_status === "suspended").length;
+    return [
+      { label: t("adminConsole.tenantLifecycleControls"), value: tenantTotal.value, note: t("adminConsole.pageSummary", { page: tenantPage.value, pages: tenantTotalPages.value, total: tenantTotal.value }), valueClass: "" },
+      { label: t("common.available"), value: activeCount, note: t("adminConsole.tenantLifecycleControls"), valueClass: "text-emerald-300" },
+      { label: t("adminConsole.suspend"), value: pausedCount, note: t("adminConsole.suspendReactivateCancel"), valueClass: "text-amber-300" },
+      { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
+    ];
+  }
+
+  if (activeAdminView.value === "monitoring") {
+    return [
+      { label: t("adminConsole.totalAlerts"), value: alertCounts.value.total_alerts || reservationAlerts.value.length, note: t("adminConsole.reservationFollowUpSla"), valueClass: "text-amber-300" },
+      { label: t("adminConsole.provisioningJobs"), value: jobs.value.length, note: adminPanels.value.jobs ? t("common.available") : t("adminConsole.hide"), valueClass: "" },
+      { label: t("adminConsole.securityAuditLog"), value: auditTotal.value || auditLogs.value.length, note: adminPanels.value.audit ? t("common.available") : t("adminConsole.hide"), valueClass: "" },
+      { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
+    ];
+  }
+
+  if (activeAdminView.value === "plans") {
+    const activePlans = planFeatureRows.value.filter((plan) => plan.plan_is_active).length;
+    const enabledFlags = planFeatureRows.value.reduce(
+      (count, plan) => count + plan.feature_flags.filter((flag) => flag.enabled).length,
+      0
+    );
+    return [
+      { label: t("common.plan"), value: planFeatureRows.value.length, note: t("adminConsole.planFeatureFlags"), valueClass: "" },
+      { label: t("common.available"), value: activePlans, note: t("adminConsole.planFeatureControls"), valueClass: "text-emerald-300" },
+      { label: t("adminConsole.planFeatureFlags"), value: enabledFlags, note: t("adminConsole.saveFlag"), valueClass: "text-brand-secondary" },
+      { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
+    ];
+  }
+
+  return [
+    { label: t("adminConsole.incomingLeads"), value: leads.value.length, note: t("adminConsole.awaitingProvisioning"), valueClass: "" },
+    { label: t("adminConsole.tierUpgradeRequests"), value: upgradeRequests.value.length, note: t("adminConsole.cashFirstUpgrades"), valueClass: "text-brand-secondary" },
+    { label: t("adminConsole.latestProvisioningPackage"), value: lastProvision.value ? 1 : 0, note: lastProvision.value?.tenant || t("common.clear"), valueClass: lastProvision.value ? "text-emerald-300" : "text-slate-200" },
+    { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
+  ];
 });
 
 const parseFlagConfigText = (text) => {
