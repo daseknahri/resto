@@ -27,7 +27,7 @@
           </div>
         </div>
 
-        <aside class="ui-command-deck ui-reveal flex flex-col gap-4 p-4 lg:p-5" style="--ui-delay: 60ms">
+        <aside class="ui-command-deck ui-reveal flex flex-col gap-4 p-4 lg:sticky lg:top-24 lg:h-fit lg:p-5" style="--ui-delay: 60ms">
           <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("menu.kicker") }}</p>
             <h2 class="text-xl font-semibold text-white">{{ t("category.helper") }}</h2>
@@ -53,6 +53,28 @@
               :placeholder="t('category.searchPlaceholder')"
             />
           </label>
+
+          <button v-if="hasSearch" class="ui-btn-outline justify-center" @click="search = ''">
+            {{ t("common.clear") }}
+          </button>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <p class="ui-kicker">{{ t("common.categories") }}</p>
+              <span class="ui-chip text-[10px]">{{ menuCategories.length }}</span>
+            </div>
+            <div class="ui-scroll-row">
+              <RouterLink
+                v-for="category in menuCategories"
+                :key="category.slug"
+                :to="{ name: 'category', params: { slug: category.slug } }"
+                class="ui-pill-nav whitespace-nowrap"
+                :data-active="category.slug === props.slug"
+              >
+                {{ category.name }}
+              </RouterLink>
+            </div>
+          </div>
 
           <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
             <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
@@ -114,6 +136,27 @@
     </div>
     <div v-if="!menu.loading && !filteredDishes.length" class="ui-section-band text-center">
       <p class="text-sm text-slate-300">{{ t("category.noMatch") }}</p>
+    </div>
+    <div v-if="filteredDishes.length > 1" class="ui-section-band space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="ui-kicker">{{ categoryName }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("category.helper") }}</h2>
+        </div>
+        <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+          {{ t("common.reserve") }}
+        </RouterLink>
+      </div>
+      <div class="ui-scroll-row">
+        <RouterLink
+          v-for="dish in filteredDishes.slice(0, 8)"
+          :key="`${dish.slug}-footer`"
+          :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
+          class="ui-chip"
+        >
+          {{ dish.name }}
+        </RouterLink>
+      </div>
     </div>
     <p v-if="menu.loading" class="text-sm text-slate-400">{{ t("category.loading") }}</p>
     <p v-if="menu.error" class="text-sm text-red-400">{{ menu.error }}</p>
