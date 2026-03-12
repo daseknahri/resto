@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4 px-4 py-4 pb-32 sm:pb-8 ui-safe-bottom">
-    <header class="ui-glass ui-reveal p-4 md:p-5">
+    <header class="ui-hero-ribbon ui-reveal p-4 md:p-5">
       <div class="space-y-1.5">
         <p class="ui-kicker">{{ t("reservationPage.kicker") }}</p>
         <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">{{ t("reservationPage.title") }}</h1>
@@ -14,6 +14,11 @@
             : t("reservationPage.tableMissing")
         }}
       </p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ cart.tableLabel ? t("common.reserve") : t("reservationPage.directBooking") }}</span>
+        <span v-if="phoneHref" class="ui-data-strip">{{ t("reservationPage.callNow") }}</span>
+        <span v-if="whatsappHref" class="ui-data-strip">{{ t("reservationPage.whatsappMessage") }}</span>
+      </div>
       <a
         v-if="reservationUrl"
         :href="reservationUrl"
@@ -30,7 +35,7 @@
       <a
         v-if="phoneHref"
         :href="phoneHref"
-        class="ui-panel ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
+        class="ui-orbit-card ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
         style="--ui-delay: 70ms"
         @click="trackContactClick('phone_call')"
       >
@@ -42,7 +47,7 @@
         :href="whatsappHref"
         target="_blank"
         rel="noopener noreferrer"
-        class="ui-panel ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
+        class="ui-orbit-card ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
         style="--ui-delay: 100ms"
         @click="trackContactClick('whatsapp_contact')"
       >
@@ -51,7 +56,13 @@
       </a>
     </section>
 
-    <section class="ui-panel ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
+    <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
+      <div class="mb-4 flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
+        <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
+        <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
+      </div>
+
       <div class="grid gap-4 md:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("common.name") }}
@@ -105,7 +116,7 @@
         </label>
       </div>
 
-      <div class="mt-4 space-y-2">
+      <div class="mt-5 space-y-2">
         <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("reservationPage.quickSize") }}</p>
         <div class="flex flex-wrap gap-2">
           <button
@@ -120,7 +131,7 @@
         </div>
       </div>
 
-      <div class="mt-4 grid gap-4 md:grid-cols-2">
+      <div class="mt-5 grid gap-4 md:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("reservationPage.preferredDate") }}
           <input v-model="form.date" type="date" class="ui-input" />
@@ -131,7 +142,7 @@
         </label>
       </div>
 
-      <label class="mt-4 block space-y-1 text-sm text-slate-200">
+      <label class="mt-5 block space-y-1 text-sm text-slate-200">
         {{ t("common.notes") }}
         <textarea
           v-model.trim="form.note"
@@ -143,7 +154,7 @@
 
       <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
 
-      <div class="mt-4 flex flex-wrap items-center gap-3">
+      <div class="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
           class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65"

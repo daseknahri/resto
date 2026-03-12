@@ -4,6 +4,12 @@ from sales.services import normalize_domain_suffix
 
 
 class ProvisioningDomainSuffixTests(SimpleTestCase):
+    @override_settings(TENANT_DOMAIN_SUFFIX="menu.kepoli.com", PUBLIC_MENU_BASE_URL="https://kepoli.com")
+    def test_prefers_explicit_tenant_domain_suffix(self):
+        self.assertEqual(normalize_domain_suffix(None), "menu.kepoli.com")
+        self.assertEqual(normalize_domain_suffix(""), "menu.kepoli.com")
+        self.assertEqual(normalize_domain_suffix("localhost"), "menu.kepoli.com")
+
     @override_settings(PUBLIC_MENU_BASE_URL="https://kepoli.com")
     def test_uses_public_menu_base_domain_when_suffix_missing(self):
         self.assertEqual(normalize_domain_suffix(None), "kepoli.com")
@@ -23,4 +29,3 @@ class ProvisioningDomainSuffixTests(SimpleTestCase):
     def test_keeps_explicit_non_local_suffix(self):
         self.assertEqual(normalize_domain_suffix("menus.kepoli.net"), "menus.kepoli.net")
         self.assertEqual(normalize_domain_suffix(".kepoli.com"), "kepoli.com")
-

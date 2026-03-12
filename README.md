@@ -19,6 +19,7 @@
 2) `npm install`
 3) Optional: copy `frontend/.env.example` to `frontend/.env`
 4) `npm run dev`
+5) UI system reference: `frontend/src/styles/UI_SYSTEM.md`
 
 ## One-Command Local Run (Windows)
 - Start backend + frontend in separate PowerShell windows:
@@ -103,18 +104,57 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
 - SMTP delivery:
   - `DJANGO_EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`
   - `DJANGO_DEFAULT_FROM_EMAIL=noreply@yourdomain.com`
+  - `DJANGO_SERVER_EMAIL=noreply@yourdomain.com`
   - `DJANGO_EMAIL_HOST=smtp.yourprovider.com`
   - `DJANGO_EMAIL_PORT=587`
   - `DJANGO_EMAIL_HOST_USER=...`
   - `DJANGO_EMAIL_HOST_PASSWORD=...`
   - `DJANGO_EMAIL_USE_TLS=True`
+  - `DJANGO_EMAIL_USE_SSL=False`
+  - `DJANGO_EMAIL_FAIL_SILENTLY=False`
+  - DNS auth check on VPS:
+  - `bash infra/coolify/check_email_dns.sh --domain yourdomain.com --dkim-selector <selector1> --dkim-selector <selector2>`
+  - Validate config and live send:
+  - `cd backend && .\.venv\Scripts\python.exe manage.py check_email_delivery --expect-smtp --expect-no-fail-silently`
+  - `cd backend && .\.venv\Scripts\python.exe manage.py check_email_delivery --expect-smtp --expect-no-fail-silently --send-test --to you@yourdomain.com`
+  - End-to-end owner email drill:
+  - `cd backend && .\.venv\Scripts\python.exe manage.py email_delivery_drill --to you@yourdomain.com --base-url menu.yourdomain.com`
 
 - Frontend runtime API:
   - `VITE_API_BASE_URL=auto`
   - `VITE_ADMIN_API_BASE_URL=auto`
   - `VITE_PLATFORM_PUBLIC_HOSTS=yourdomain.com,admin.yourdomain.com`
 
+- Optional media object storage:
+  - `DJANGO_MEDIA_STORAGE_BACKEND=local` (default) or `s3`
+  - For `s3`, set `AWS_STORAGE_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+  - Signed URL TTL: `AWS_QUERYSTRING_EXPIRE=900`
+  - Optional provider tuning: `AWS_S3_ENDPOINT_URL`, `AWS_S3_CUSTOM_DOMAIN`, `AWS_S3_REGION_NAME`
+  - Lifecycle policy template: `infra/coolify/s3_media_lifecycle_policy.example.json`
+
+- Env templates and validation:
+  - `coolify.env.example` (repo template)
+  - `coolify.env.production.sample` (production starter template)
+  - `powershell -ExecutionPolicy Bypass -File .\infra\validate_coolify_env.ps1 -EnvFile .\coolify.env.example`
+  - `infra/COOLIFY_ENV_SECURITY_CHECKLIST.md`
+
 ## Release utilities
 - Pre-release smoke test script: `infra/pre_release_smoke.ps1`
 - Deployment + rollback guide: `infra/DEPLOYMENT_RUNBOOK.md`
+- Release-candidate freeze baseline: `Release_Candidate_Freeze.md`
+- Release-candidate freeze automation:
+  - Windows: `powershell -ExecutionPolicy Bypass -File .\infra\release_candidate_freeze.ps1`
+  - Linux/macOS: `bash ./infra/release_candidate_freeze.sh`
+- Live tenant production smoke:
+  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain kepoli.com -TableSlug table-1`
+- Exact operator runbook:
+  - `Kepoli_Production_Smoke_Execution.md`
+
+## Wildcard tenant proxy hardening
+- Runbook:
+  - `infra/COOLIFY_TENANT_WILDCARD_PROXY.md`
+- Render current wildcard config from live Coolify containers:
+  - `bash infra/coolify/render_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.kepoli.com`
+- Install/update wildcard config on VPS:
+  - `bash infra/coolify/install_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.kepoli.com`
 - Analytics retention cleanup (scheduled): `cd backend && .\.venv\Scripts\python.exe manage.py prune_analytics_events --days 90`

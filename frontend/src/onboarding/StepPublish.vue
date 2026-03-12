@@ -73,7 +73,7 @@
       >
         {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu") }}
       </button>
-      <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="refreshChecks" :disabled="loadingChecks">
+      <button class="ui-btn-outline w-full justify-center sm:w-auto" :disabled="loadingChecks" @click="refreshChecks">
         {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
       </button>
       <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
@@ -164,7 +164,7 @@ const load = async () => {
     form.is_open = data?.is_open !== false;
     form.is_menu_temporarily_disabled = data?.is_menu_temporarily_disabled === true;
     form.menu_disabled_note = data?.menu_disabled_note || "";
-  } catch (e) {
+  } catch {
     // keep default state
   }
 };
@@ -180,7 +180,7 @@ const refreshChecks = async () => {
     profileSnapshot.value = profile || {};
     categoriesCount.value = Array.isArray(categories) ? categories.length : 0;
     dishesCount.value = Array.isArray(dishes) ? dishes.length : 0;
-  } catch (e) {
+  } catch {
     toast.show(t("stepPublish.refreshChecksFailed"), "error");
   } finally {
     loadingChecks.value = false;
@@ -251,7 +251,7 @@ const copyMenuUrl = async () => {
   try {
     await navigator.clipboard.writeText(menuUrl.value);
     toast.show(t("stepPublish.menuCopied"), "success");
-  } catch (e) {
+  } catch {
     toast.show(t("stepPublish.copyFailed"), "error");
   }
 };

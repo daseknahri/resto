@@ -1,6 +1,10 @@
 from urllib.parse import quote_plus
 
+import logging
+from django.conf import settings
 from django.core.mail import send_mail
+
+logger = logging.getLogger("app.email")
 
 
 def primary_domain_for_tenant(tenant) -> str:
@@ -101,7 +105,16 @@ def send_activation_email(
         "Use the activation URL to set your password, complete onboarding, then publish your menu.\n\n"
         "Thank you."
     )
-    send_mail(subject, body, None, [email], fail_silently=True)
+    sent = send_mail(
+        subject,
+        body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning("Activation email not sent", extra={"target_email": email})
+    return sent
 
 
 def send_activation_whatsapp(

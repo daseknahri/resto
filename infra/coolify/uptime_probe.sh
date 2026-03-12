@@ -10,9 +10,9 @@ Usage:
 
 Examples:
   uptime_probe.sh \
-    --check "https://kepoli.com/health|200" \
-    --check "https://admin.kepoli.com/health|200" \
-    --check "https://api.kepoli.com/api/health/|200"
+    --check "https://menu.kepoli.com/health|200" \
+    --check "https://admin.menu.kepoli.com/health|200" \
+    --check "https://menu.kepoli.com/api/health/|200"
 
 Options:
   --check <spec>              Check spec format: URL or URL|EXPECTED_STATUS

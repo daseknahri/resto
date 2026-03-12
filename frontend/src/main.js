@@ -16,7 +16,7 @@ const normalizeDevHost = () => {
     if (!targetHost || targetHost === "localhost" || !targetHost.endsWith(".localhost")) return;
     const targetUrl = `${window.location.protocol}//${targetHost}:${window.location.port}${window.location.pathname}${window.location.search}${window.location.hash}`;
     window.location.replace(targetUrl);
-  } catch (e) {
+  } catch {
     // Ignore malformed env URL and keep current host.
   }
 };

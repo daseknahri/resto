@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-3 px-4 py-3 pb-32 sm:pb-8 ui-safe-bottom">
-    <header class="ui-glass ui-reveal overflow-hidden p-3 md:p-4">
+    <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
       <div class="space-y-1.5">
         <p class="ui-kicker">{{ t("menu.kicker") }}</p>
         <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">{{ tenantName }}</h1>
@@ -9,14 +9,14 @@
 
       <div class="mt-3 ui-divider"></div>
       <div class="mt-3 flex flex-wrap gap-2">
-        <span class="ui-chip">{{ categories.length }} {{ t("common.categories") }}</span>
+        <span class="ui-chip-strong">{{ categories.length }} {{ t("common.categories") }}</span>
         <span class="ui-chip">{{ totalDishes }} {{ t("common.dishes") }}</span>
         <span class="ui-chip">{{ t("menu.mode") }}: {{ orderingModeLabel }}</span>
       </div>
     </header>
 
     <section
-      class="ui-panel ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+4.8rem)] z-10 space-y-3 p-3.5 md:static md:p-4"
+      class="ui-glass ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+4.8rem)] z-10 space-y-3 p-3.5 md:static md:p-4"
       style="--ui-delay: 50ms"
     >
       <div class="grid gap-3 md:grid-cols-[1fr,auto] md:items-center">
@@ -50,7 +50,7 @@
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <p>{{ t("menu.tip") }}</p>
-        <p class="text-slate-400">{{ totalDishes }} {{ t("common.dishes") }}</p>
+        <p class="ui-chip">{{ totalDishes }} {{ t("common.dishes") }}</p>
       </div>
     </section>
 

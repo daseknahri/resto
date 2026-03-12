@@ -44,12 +44,12 @@
     </main>
 
     <section class="mx-auto w-full max-w-5xl px-4 pt-3 md:hidden">
-      <div class="ui-panel flex flex-wrap items-center gap-2 px-3 py-2.5 text-[11px] text-slate-300">
-        <span class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">{{ currentSectionLabel }}</span>
-        <span v-if="cart.tableLabel" class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">
+      <div class="ui-hero-ribbon flex flex-wrap items-center gap-2 px-3 py-2.5 text-[11px] text-slate-300">
+        <span class="ui-data-strip">{{ currentSectionLabel }}</span>
+        <span v-if="cart.tableLabel" class="ui-data-strip">
           {{ t("customerLayout.table") }} {{ cart.tableLabel }}
         </span>
-        <span class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">{{ orderingModeLabel }}</span>
+        <span class="ui-data-strip">{{ orderingModeLabel }}</span>
       </div>
     </section>
 

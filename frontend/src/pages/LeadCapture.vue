@@ -7,7 +7,7 @@
     </header>
 
     <div class="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
-      <form @submit.prevent="submit" class="ui-glass p-5 md:p-6 space-y-4">
+      <form class="ui-glass p-5 md:p-6 space-y-4" @submit.prevent="submit">
         <div class="rounded-2xl border border-slate-700/50 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
           {{ t("leadCapture.qualityRule") }}
         </div>

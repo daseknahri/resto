@@ -133,7 +133,7 @@
     <p v-if="errors.non_field_errors" class="text-sm text-red-300">{{ errors.non_field_errors }}</p>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button class="ui-btn-primary px-4 py-2" @click="saveAndNext" :disabled="saving || uploadingHero || uploadingLogo">
+      <button class="ui-btn-primary px-4 py-2" :disabled="saving || uploadingHero || uploadingLogo" @click="saveAndNext">
         {{ saving ? t("common.saving") : t("common.saveAndNext") }}
       </button>
       <button class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
@@ -185,7 +185,7 @@ const cleanupManagedUpload = async (value) => {
   if (!isManagedUpload(value)) return;
   try {
     await uploadApi.removeImage(value);
-  } catch (e) {
+  } catch {
     // Non-blocking cleanup.
   }
 };
@@ -229,7 +229,7 @@ const load = async () => {
   try {
     const data = await profileApi.get();
     if (data) Object.assign(form, data);
-  } catch (e) {
+  } catch {
     status.value = t("common.loadFailed");
   }
 };

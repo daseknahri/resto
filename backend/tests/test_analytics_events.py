@@ -30,11 +30,11 @@ class AnalyticsEventIngestViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
-    def test_rejects_when_tenant_missing(self):
+    def test_ignores_public_host_when_tenant_missing(self):
         req = self.factory.post("/api/analytics/events/", {"event_type": "menu_view"}, format="json")
         response = AnalyticsEventIngestView.as_view()(req)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "tenant_missing")
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(response.data["code"], "public_host_ignored")
 
     @patch("menu.views.AnalyticsEvent.objects.create")
     def test_records_event_for_resolved_tenant(self, create_mock):

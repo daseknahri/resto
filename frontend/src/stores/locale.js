@@ -10,7 +10,7 @@ const readStoredLocale = () => {
   if (typeof window === "undefined") return "";
   try {
     return String(window.localStorage.getItem(storageKey()) || "").trim();
-  } catch (err) {
+  } catch {
     return "";
   }
 };
@@ -19,7 +19,7 @@ const writeStoredLocale = (value) => {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(storageKey(), value);
-  } catch (err) {
+  } catch {
     // Ignore storage write failures and keep runtime locale only.
   }
 };

@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-4 px-4 py-4 pb-28 sm:pb-8 ui-safe-bottom">
-
     <div v-if="menu.loading" class="space-y-3" role="status" aria-live="polite">
       <div class="h-64 animate-pulse rounded-3xl bg-slate-800/60"></div>
       <div class="h-32 animate-pulse rounded-3xl bg-slate-800/60"></div>
@@ -12,13 +11,13 @@
       <p class="text-sm text-slate-400">{{ t("dishPage.notFoundText") }}</p>
     </div>
 
-    <div v-else class="ui-glass ui-reveal overflow-hidden shadow-2xl shadow-black/40">
+    <div v-else class="ui-hero-stage ui-reveal overflow-hidden shadow-2xl shadow-black/40">
       <div class="relative h-[34vh] min-h-[210px] max-h-[320px] w-full sm:h-72">
         <img :src="dish.image_url || placeholder" :alt="dish.name" class="h-full w-full object-cover" loading="lazy" referrerpolicy="no-referrer" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
         <div class="absolute bottom-3 left-3 right-3 space-y-2.5 md:bottom-4 md:left-4 md:right-4">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/90">{{ categoryName }}</span>
+            <span class="ui-chip-strong">{{ categoryName }}</span>
             <span
               v-if="isBrowseOnlyPlan"
               class="rounded-full bg-sky-400/90 px-3 py-1 text-[11px] font-semibold text-sky-950 shadow"
@@ -42,9 +41,15 @@
       </div>
 
       <div class="space-y-5 p-4 sm:p-6">
+        <div class="flex flex-wrap gap-2">
+          <span class="ui-data-strip">{{ formatCurrency(dish.price, dish.currency) }}</span>
+          <span v-if="dish.options?.length" class="ui-data-strip">{{ t("dishPage.optionsCount", { count: dish.options.length }) }}</span>
+          <span v-if="selectedOptionObjects.length" class="ui-data-strip">{{ t("dishPage.total") }} {{ formatCurrency(totalWithOptions, dish.currency) }}</span>
+        </div>
+
         <p class="leading-relaxed text-slate-200">{{ dish.description || t("dishPage.noDescription") }}</p>
 
-        <div v-if="dish.options?.length" class="space-y-2">
+        <div v-if="dish.options?.length" class="ui-section-band space-y-3">
           <p class="text-sm text-slate-300">{{ t("dishPage.options") }}</p>
           <ul class="grid gap-2 sm:grid-cols-2 text-sm">
             <li
@@ -59,9 +64,9 @@
             >
               <label class="flex w-full items-center gap-2">
                 <input
+                  v-model="selectedOptionIds"
                   type="checkbox"
                   :value="opt.id"
-                  v-model="selectedOptionIds"
                   class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
                 />
                 <div class="min-w-0 flex-1">
@@ -75,13 +80,13 @@
           <p v-if="hasRequiredMissing" class="text-xs text-amber-300">{{ t("dishPage.selectRequiredOptions") }}</p>
         </div>
 
-        <div class="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+        <div class="ui-section-band grid gap-3 sm:flex sm:flex-wrap sm:items-center">
           <label class="inline-flex items-center gap-2 text-sm text-slate-300">
             {{ t("dishPage.qty") }}
             <span class="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 p-1">
-              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" @click="decrementQty" :aria-label="t('dishPage.decreaseQuantity')">-</button>
+              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">-</button>
               <input v-model.number="qty" type="number" min="1" max="99" class="w-12 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
-              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" @click="incrementQty" :aria-label="t('dishPage.increaseQuantity')">+</button>
+              <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
             </span>
           </label>
           <button
@@ -111,7 +116,7 @@
         <p v-if="isBrowseOnlyPlan" class="text-sm text-sky-300">{{ t("dishPage.orderingDisabledPlan") }}</p>
         <p v-else-if="!cart.canCheckout && cart.canWhatsapp" class="text-sm text-slate-400">{{ t("dishPage.whatsappEnabledCheckoutDisabled") }}</p>
 
-        <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
+        <div class="ui-spotlight-card p-4 text-sm text-slate-300">
           <div class="flex items-center justify-between">
             <span>{{ t("dishPage.base", { qty }) }}</span>
             <span class="text-slate-100">{{ formatCurrency(baseTotal, dish.currency) }}</span>
@@ -131,23 +136,24 @@
           <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyLink">{{ t("dishPage.copyLink") }}</button>
           <button
             class="ui-btn-outline w-full justify-center sm:w-auto"
-            @click="resetOptions"
             :disabled="!selectedOptionIds.length"
             :class="!selectedOptionIds.length ? 'cursor-not-allowed opacity-50' : ''"
+            @click="resetOptions"
           >
             {{ t("dishPage.clearOptions") }}
           </button>
-          <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="scrollToTop" :aria-label="t('dishPage.backToTop')">{{ t("dishPage.backToTop") }}</button>
+          <button class="ui-btn-outline w-full justify-center sm:w-auto" :aria-label="t('dishPage.backToTop')" @click="scrollToTop">{{ t("dishPage.backToTop") }}</button>
         </div>
         <p v-if="copyStatus" class="text-xs text-slate-400" role="status" aria-live="polite">{{ copyStatus }}</p>
 
-        <div v-if="similarDishes.length || menu.loading" class="space-y-2 pt-1" ref="similarVis.target">
+        <div v-if="similarDishes.length || menu.loading" ref="similarVis.target" class="space-y-3 pt-1">
           <p class="text-sm text-slate-300">{{ t("dishPage.similarDishes") }}</p>
           <div class="grid gap-3 sm:grid-cols-3">
-            <div v-if="menu.loading && !similarVis.isVisible" v-for="n in 3" :key="'sk-' + n" class="h-32 animate-pulse rounded-2xl bg-slate-800/50"></div>
+            <template v-if="showSimilarSkeletons">
+              <div v-for="n in 3" :key="'sk-' + n" class="h-32 animate-pulse rounded-2xl bg-slate-800/50"></div>
+            </template>
             <RouterLink
-              v-if="similarVis.isVisible"
-              v-for="(item, index) in similarDishes"
+              v-for="(item, index) in visibleSimilarDishes"
               :key="item.slug"
               :to="{ name: 'dish', params: { category: props.category, dish: item.slug } }"
               class="group ui-surface-lift ui-reveal overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
@@ -233,6 +239,8 @@ const similarDishes = computed(() =>
     .sort((a, b) => (a.price || 0) - (b.price || 0))
     .slice(0, 3)
 );
+const showSimilarSkeletons = computed(() => menu.loading && !similarVis.isVisible);
+const visibleSimilarDishes = computed(() => (similarVis.isVisible ? similarDishes.value : []));
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
 const shareUrl = computed(() => {
@@ -377,7 +385,7 @@ const copySummary = async () => {
     await navigator.clipboard.writeText(summaryText.value);
     copyStatus.value = t("dishPage.summaryCopied");
     toast.show(t("dishPage.summaryCopiedToClipboard"), "success");
-  } catch (e) {
+  } catch {
     copyStatus.value = t("dishPage.copyFailed");
     toast.show(t("dishPage.copyFailed"), "error");
   }
@@ -389,7 +397,7 @@ const copyLink = async () => {
   try {
     await navigator.clipboard.writeText(shareUrl.value);
     toast.show(t("dishPage.linkCopied"), "success");
-  } catch (e) {
+  } catch {
     toast.show(t("dishPage.copyFailed"), "error");
   }
 };

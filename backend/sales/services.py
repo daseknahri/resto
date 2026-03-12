@@ -134,6 +134,10 @@ def issue_activation(tenant, user, phone: str = ""):
 
 
 def _default_domain_suffix() -> str:
+    configured_suffix = (getattr(settings, "TENANT_DOMAIN_SUFFIX", "") or "").strip().lower().lstrip(".")
+    if configured_suffix:
+        return configured_suffix
+
     base_url = (getattr(settings, "PUBLIC_MENU_BASE_URL", "") or "").strip()
     if not base_url:
         return "localhost"
@@ -234,7 +238,7 @@ def provision_lead(lead: Lead, domain_suffix: str = "localhost", requested_slug:
     _log_provisioning_event(
         "lead_provision_start",
         lead_id=lead.id,
-        lead_status=lead.status,
+        lead_status=getattr(lead, "status", None),
         requested_slug=(requested_slug or "").strip().lower() or None,
         domain_suffix=normalize_domain_suffix(domain_suffix),
     )

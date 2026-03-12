@@ -3,7 +3,7 @@ export const DEFAULT_LOCALE = "en";
 export const LOCALE_OPTIONS = [
   { code: "en", label: "English", nativeLabel: "EN", dir: "ltr" },
   { code: "fr", label: "French", nativeLabel: "FR", dir: "ltr" },
-  { code: "ar", label: "Arabic", nativeLabel: "AR", dir: "rtl" },
+  { code: "ar", label: "Arabic", nativeLabel: "عربي", dir: "rtl" },
 ];
 
 const SUPPORTED = new Set(LOCALE_OPTIONS.map((option) => option.code));

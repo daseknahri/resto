@@ -17,7 +17,7 @@
       </p>
     </header>
 
-    <article class="ui-panel space-y-3 p-5" v-if="isPublished">
+    <article v-if="isPublished" class="ui-panel space-y-3 p-5">
       <p class="text-sm text-slate-300">{{ t("ownerLaunchSuccess.publicUrl") }}</p>
       <p class="break-all text-base font-semibold text-slate-100">{{ menuUrl }}</p>
       <div class="grid gap-2 sm:flex sm:flex-wrap">
@@ -35,7 +35,7 @@
       </div>
     </article>
 
-    <article class="ui-panel space-y-3 p-5" v-if="isPublished">
+    <article v-if="isPublished" class="ui-panel space-y-3 p-5">
       <p class="text-sm text-slate-300">{{ t("ownerLaunchSuccess.shareMessageTitle") }}</p>
       <pre class="whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-xs text-slate-200">{{ shareMessage }}</pre>
       <button class="ui-btn-outline w-full justify-center sm:w-auto" @click="copyShareMessage">
@@ -78,7 +78,7 @@ const copyMenuUrl = async () => {
   try {
     await navigator.clipboard.writeText(menuUrl.value);
     toast.show(t("ownerLaunchSuccess.menuUrlCopied"), "success");
-  } catch (err) {
+  } catch {
     toast.show(t("ownerLaunchSuccess.copyFailed"), "error");
   }
 };
@@ -87,7 +87,7 @@ const copyShareMessage = async () => {
   try {
     await navigator.clipboard.writeText(shareMessage.value);
     toast.show(t("ownerLaunchSuccess.shareCopied"), "success");
-  } catch (err) {
+  } catch {
     toast.show(t("ownerLaunchSuccess.copyFailed"), "error");
   }
 };

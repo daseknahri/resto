@@ -5,12 +5,13 @@
       <button class="text-sm underline" @click="dismiss">{{ t("home.dismiss") }}</button>
     </div>
 
-    <div class="ui-glass relative overflow-hidden">
-      <div class="pointer-events-none absolute -right-12 -top-12 h-56 w-56 rounded-full bg-amber-400/10 blur-3xl"></div>
-      <div class="pointer-events-none absolute -left-10 bottom-0 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl"></div>
+    <div class="ui-hero-stage">
+      <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-amber-400/12 blur-3xl"></div>
+      <div class="pointer-events-none absolute -left-16 bottom-0 h-64 w-64 rounded-full bg-teal-400/14 blur-3xl"></div>
+      <div class="pointer-events-none absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
       <div class="relative grid gap-8 p-5 sm:p-6 md:grid-cols-[1.3fr,1fr] md:p-10">
         <div class="space-y-6">
-          <div class="ui-chip w-fit">
+          <div class="ui-chip-strong w-fit">
             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
             {{ t("home.heroBadge") }}
             <span class="text-emerald-300">{{ t("home.heroLive") }}</span>
@@ -32,15 +33,15 @@
           </div>
 
           <div class="grid gap-3 pt-2 sm:grid-cols-3">
-            <article class="rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3">
+            <article class="ui-metric-card">
               <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.launchTime") }}</p>
               <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3">
+            <article class="ui-metric-card">
               <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.interfaces") }}</p>
               <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
             </article>
-            <article class="rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3">
+            <article class="ui-metric-card">
               <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.tierReady") }}</p>
               <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
             </article>
@@ -48,17 +49,17 @@
         </div>
 
         <div class="grid gap-3 self-end">
-          <article class="ui-panel bg-slate-950/65 p-4">
+          <article class="ui-orbit-card">
             <p class="ui-kicker">{{ t("home.interfaces.landing") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.landingTitle") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.landingText") }}</p>
           </article>
-          <article class="ui-panel bg-slate-950/65 p-4">
+          <article class="ui-orbit-card">
             <p class="ui-kicker">{{ t("home.interfaces.owner") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.ownerTitle") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.ownerText") }}</p>
           </article>
-          <article class="ui-panel bg-slate-950/65 p-4">
+          <article class="ui-orbit-card">
             <p class="ui-kicker">{{ t("home.interfaces.customer") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.customerTitle") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.customerText") }}</p>
@@ -68,17 +69,17 @@
     </div>
 
     <section class="grid gap-3 md:gap-4 md:grid-cols-3">
-      <article class="ui-panel p-5">
+      <article class="ui-spotlight-card p-5">
         <p class="ui-kicker">{{ t("home.phases.phase1") }}</p>
         <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase1Title") }}</p>
         <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase1Text") }}</p>
       </article>
-      <article class="ui-panel p-5">
+      <article class="ui-spotlight-card p-5">
         <p class="ui-kicker">{{ t("home.phases.phase2") }}</p>
         <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase2Title") }}</p>
         <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase2Text") }}</p>
       </article>
-      <article class="ui-panel p-5">
+      <article class="ui-spotlight-card p-5">
         <p class="ui-kicker">{{ t("home.phases.phase3") }}</p>
         <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase3Title") }}</p>
         <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase3Text") }}</p>
@@ -93,7 +94,7 @@
         <article
           v-for="plan in plans"
           :key="plan.code"
-          class="rounded-2xl border p-5 shadow-lg shadow-black/20"
+          class="relative overflow-hidden rounded-[1.7rem] border p-5 shadow-lg shadow-black/20"
           :class="plan.recommended ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/12' : 'border-slate-700/60 bg-slate-900/55'"
         >
           <div class="flex items-center justify-between">

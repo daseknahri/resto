@@ -1,3 +1,5 @@
+import arabicMessages from "./messages-ar.js";
+
 export const messages = {
   en: {
     common: {
@@ -953,6 +955,7 @@ export const messages = {
       loadAuditLogsFailed: "Unable to load audit logs",
       loadLeadsFailed: "Unable to load leads (admin only)",
       loadTenantsFailed: "Unable to load tenants",
+      loadPlanFeatureFlagsFailed: "Unable to load plan feature flags",
       loadTenantHistoryFailed: "Unable to load tenant history",
       importInputNotReady: "Import input is not ready yet. Retry.",
       unableToReadFile: "Unable to read file.",
@@ -1006,6 +1009,7 @@ export const messages = {
       reviewIncomingLeads: "Review incoming leads, provision tenants, and manage upgrade operations.",
       djangoAdmin: "Django admin",
       suffixLocalhost: "suffix (localhost)",
+      suffixOptional: "domain suffix (optional, auto)",
       incomingLeads: "Incoming leads",
       awaitingProvisioning: "Awaiting provisioning",
       refreshLeads: "Refresh leads",
@@ -1069,6 +1073,16 @@ export const messages = {
       openOwnerInbox: "Open owner inbox",
       cashFirstUpgrades: "Cash-first upgrades",
       tierUpgradeRequests: "Tier upgrade requests",
+      planFeatureFlags: "Plan controls",
+      planFeatureControls: "Feature flags by plan",
+      planFeatureControlsHint: "Use this panel to toggle advanced capabilities per tier.",
+      loadingPlanFeatureFlags: "Loading plan feature flags...",
+      noPlanFeatureFlags: "No plan feature flags found.",
+      flagConfigPlaceholder: "Optional JSON config (object/array)",
+      saveFlag: "Save flag",
+      invalidFlagConfig: "Config must be valid JSON.",
+      planFeatureFlagSaved: "Saved {key} for {plan}.",
+      savePlanFeatureFlagFailed: "Unable to save plan feature flag",
       loadingUpgradeRequests: "Loading upgrade requests...",
       payment: "Payment",
       targetPlanInactive: "Target plan is inactive.",
@@ -2214,6 +2228,7 @@ export const messages = {
       reviewIncomingLeads: "Revoir les leads entrants, provisionner les tenants et gerer les upgrades.",
       djangoAdmin: "Admin Django",
       suffixLocalhost: "suffixe (localhost)",
+      suffixOptional: "suffixe domaine (optionnel, auto)",
       incomingLeads: "Leads entrants",
       awaitingProvisioning: "En attente de provisioning",
       refreshLeads: "Rafraichir les leads",
@@ -2846,3 +2861,39 @@ export const messages = {
     }
   }
 };
+
+const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const isCorruptedTranslation = (value) => {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim();
+  if (!normalized || !normalized.includes("?")) return false;
+  return normalized.replace(/[\s?.,:;!()[\]{}%0-9/+\\-]/g, "").length === 0;
+};
+
+const cloneLocaleValue = (value) => {
+  if (Array.isArray(value)) return value.map(cloneLocaleValue);
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneLocaleValue(item)]));
+  }
+  return value;
+};
+
+const mergeLocaleInto = (target, source) => {
+  if (!isPlainObject(source)) return target;
+  Object.entries(source).forEach(([key, value]) => {
+    if (isCorruptedTranslation(value)) return;
+    if (Array.isArray(value)) {
+      target[key] = value.map(cloneLocaleValue);
+      return;
+    }
+    if (isPlainObject(value)) {
+      target[key] = mergeLocaleInto(isPlainObject(target[key]) ? target[key] : {}, value);
+      return;
+    }
+    if (value !== undefined) target[key] = value;
+  });
+  return target;
+};
+
+messages.ar = mergeLocaleInto(mergeLocaleInto(cloneLocaleValue(messages.en), messages.ar), arabicMessages);

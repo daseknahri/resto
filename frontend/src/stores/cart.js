@@ -38,7 +38,7 @@ const loadStoredCartItems = () => {
     const raw = JSON.parse(localStorage.getItem(cartStorageKey()) || "[]");
     if (!Array.isArray(raw)) return [];
     return raw.map(normalizeCartItem).filter((item) => item.slug);
-  } catch (err) {
+  } catch {
     return [];
   }
 };
@@ -83,7 +83,7 @@ const loadStoredTableLabel = () => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return "";
   try {
     return sanitizeTableLabel(localStorage.getItem(tableLabelStorageKey()) || "");
-  } catch (err) {
+  } catch {
     return "";
   }
 };
@@ -91,7 +91,7 @@ const loadStoredTableSlug = () => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return "";
   try {
     return sanitizeTableSlug(localStorage.getItem(tableSlugStorageKey()) || "");
-  } catch (err) {
+  } catch {
     return "";
   }
 };
@@ -100,7 +100,7 @@ const loadStoredCustomerName = () => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return "";
   try {
     return sanitizeCustomerName(localStorage.getItem(customerNameStorageKey()) || "");
-  } catch (err) {
+  } catch {
     return "";
   }
 };
@@ -109,7 +109,7 @@ const loadStoredCustomerPhone = () => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return "";
   try {
     return sanitizeCustomerPhone(localStorage.getItem(customerPhoneStorageKey()) || "");
-  } catch (err) {
+  } catch {
     return "";
   }
 };

@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-3 px-4 py-3 pb-32 sm:space-y-4 sm:py-4 sm:pb-8 ui-safe-bottom">
-    <header class="ui-glass ui-reveal overflow-hidden p-0">
+    <header class="ui-hero-stage ui-reveal overflow-hidden p-0">
       <div class="relative min-h-[208px] overflow-hidden md:min-h-[260px]">
         <img
           v-if="heroImage"
@@ -14,7 +14,7 @@
 
         <div class="relative flex min-h-[208px] flex-col justify-end gap-3 p-4 md:min-h-[260px] md:p-5">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-chip">{{ statusLabel }}</span>
+            <span class="ui-chip-strong">{{ statusLabel }}</span>
             <span v-if="locationLine" class="ui-chip">{{ locationLine }}</span>
             <span class="ui-chip">{{ t("menu.mode") }}: {{ orderingModeLabel }}</span>
           </div>
@@ -42,13 +42,13 @@
     </header>
 
     <section class="grid gap-3 sm:grid-cols-2">
-      <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 40ms">
+      <article class="ui-orbit-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 40ms">
         <p class="ui-kicker">{{ t("customerLeadPage.stepOne") }}</p>
         <p class="mt-1 text-lg font-semibold text-white">{{ t("customerLeadPage.browseTitle") }}</p>
         <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.browseText") }}</p>
       </article>
 
-      <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 70ms">
+      <article class="ui-orbit-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 70ms">
         <p class="ui-kicker">{{ t("customerLeadPage.stepTwo") }}</p>
         <p class="mt-1 text-lg font-semibold text-white">{{ t("customerLeadPage.reserveTitle") }}</p>
         <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
@@ -59,7 +59,7 @@
         :href="googleMapsUrl"
         target="_blank"
         rel="noopener noreferrer"
-        class="ui-panel ui-surface-lift ui-reveal group p-4 transition hover:border-[var(--color-secondary)]/70"
+        class="ui-spotlight-card ui-surface-lift ui-reveal group p-4 transition hover:border-[var(--color-secondary)]/70"
         style="--ui-delay: 100ms"
         @click="trackContactClick('google_reviews')"
       >
@@ -73,7 +73,7 @@
         :href="whatsappHref || phoneHref || '#'"
         target="_blank"
         rel="noopener noreferrer"
-        class="ui-panel ui-surface-lift ui-reveal group p-4 transition hover:border-[var(--color-secondary)]/70"
+        class="ui-spotlight-card ui-surface-lift ui-reveal group p-4 transition hover:border-[var(--color-secondary)]/70"
         style="--ui-delay: 130ms"
         @click="trackContactClick(whatsappHref ? 'whatsapp_contact' : 'phone_call')"
       >
@@ -84,21 +84,21 @@
     </section>
 
     <section class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
+      <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
         <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ categoriesCount }}</p>
       </article>
-      <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 110ms">
+      <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 110ms">
         <p class="ui-kicker">{{ t("customerLeadPage.dishes") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ dishesCount }}</p>
       </article>
-      <article class="ui-panel ui-surface-lift ui-reveal col-span-2 p-4 sm:col-span-1" style="--ui-delay: 140ms">
+      <article class="ui-metric-card ui-surface-lift ui-reveal col-span-2 p-4 sm:col-span-1" style="--ui-delay: 140ms">
         <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
         <p class="mt-1 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
       </article>
     </section>
 
-    <section class="ui-panel ui-reveal p-4 md:p-5" style="--ui-delay: 120ms">
+    <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 120ms">
       <div class="grid gap-5 md:grid-cols-[1fr,1.2fr]">
         <div class="space-y-2">
           <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>

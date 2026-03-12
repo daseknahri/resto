@@ -1,0 +1,37 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart-uploads",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": ""
+      },
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+      }
+    },
+    {
+      "ID": "expire-temporary-media-staging",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "media/tmp/"
+      },
+      "Expiration": {
+        "Days": 14
+      }
+    },
+    {
+      "ID": "transition-cold-media",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "media/"
+      },
+      "Transitions": [
+        {
+          "Days": 60,
+          "StorageClass": "STANDARD_IA"
+        }
+      ]
+    }
+  ]
+}

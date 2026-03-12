@@ -98,21 +98,21 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
         <div class="ui-scroll-row">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="fetchTables" :disabled="loading">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadServerQrZip" :disabled="!tables.length">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrZip">
             {{ t("ownerTables.serverZip") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadServerQrPdf" :disabled="!tables.length">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrPdf">
             {{ t("ownerTables.serverPdf") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadAllQrPng" :disabled="!tables.length">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadAllQrPng">
             {{ t("ownerTables.allQrPng") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="exportCsv" :disabled="!tables.length">{{ t("ownerTables.exportCsv") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadHtmlPack" :disabled="!tables.length">{{ t("ownerTables.htmlPack") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="printCards" :disabled="!tables.length">{{ t("ownerTables.printCards") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">{{ t("ownerTables.exportCsv") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadHtmlPack">{{ t("ownerTables.htmlPack") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">{{ t("ownerTables.printCards") }}</button>
         </div>
       </div>
     </div>
@@ -302,7 +302,7 @@ const generateQrBatch = async () => {
         },
       });
       nextQrs[table.id] = dataUrl;
-    } catch (err) {
+    } catch {
       // Keep card usable even if one QR render fails.
     }
   }
@@ -405,7 +405,7 @@ const copyText = async (value, successText) => {
   try {
     await navigator.clipboard.writeText(value);
     toast.show(successText, "success");
-  } catch (err) {
+  } catch {
     toast.show(t("ownerTables.copyFailed"), "error");
   }
 };
@@ -448,11 +448,11 @@ const parseFilenameFromDisposition = (value, fallback) => {
   if (utf8Match?.[1]) {
     try {
       return decodeURIComponent(utf8Match[1].trim());
-    } catch (err) {
+    } catch {
       return utf8Match[1].trim();
     }
   }
-  const basicMatch = raw.match(/filename="?([^\";]+)"?/i);
+  const basicMatch = raw.match(/filename="?([^";]+)"?/i);
   if (basicMatch?.[1]) return basicMatch[1].trim();
   return fallback;
 };
@@ -500,7 +500,7 @@ const downloadQrPng = async (table) => {
     downloadBlob(filename, response?.data);
     toast.show(t("ownerTables.downloadSuccess", { label: table.label }), "success");
     return;
-  } catch (err) {
+  } catch {
     // Fallback to in-browser QR generation if server export fails.
   }
 

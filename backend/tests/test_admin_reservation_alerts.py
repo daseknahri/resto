@@ -16,11 +16,11 @@ def _passthrough_cm():
 
 
 def _admin_user():
-    return Mock(is_authenticated=True, is_superuser=False, is_staff=False, is_platform_admin=True)
+    return Mock(is_authenticated=True, is_superuser=False, is_staff=False, is_platform_admin=True, pk=1, id=1)
 
 
 def _non_admin_user():
-    return Mock(is_authenticated=True, is_superuser=False, is_staff=False, is_platform_admin=False)
+    return Mock(is_authenticated=True, is_superuser=False, is_staff=False, is_platform_admin=False, pk=2, id=2)
 
 
 def _lead_row(*, lead_id=1, tenant_slug="demo", created_at=None):

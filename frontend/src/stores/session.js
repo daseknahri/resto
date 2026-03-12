@@ -65,7 +65,7 @@ export const useSessionStore = defineStore("session", {
     async signOut() {
       try {
         await api.post("/logout/");
-      } catch (err) {
+      } catch {
         // keep local clear even if API fails
       } finally {
         this.clear();

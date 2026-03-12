@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4 px-4 py-4 pb-32 sm:pb-6 ui-safe-bottom">
-    <header class="ui-glass ui-reveal p-4 md:p-5">
+    <header class="ui-hero-ribbon ui-reveal p-4 md:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t("cartPage.kicker") }}</p>
@@ -19,18 +19,18 @@
       <div class="mt-3 ui-divider"></div>
       <p class="mt-2 text-sm text-slate-300">{{ t("cartPage.reviewAdjustSend") }}</p>
       <div class="mt-3 flex flex-wrap gap-2">
-        <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
-        <span class="ui-chip">{{ planLabel }}</span>
-        <span v-if="tableLabelModel" class="ui-chip">{{ t("cartPage.table", { table: tableLabelModel }) }}</span>
+        <span class="ui-data-strip">{{ itemCountLabel(cart.count) }}</span>
+        <span class="ui-data-strip">{{ planLabel }}</span>
+        <span v-if="tableLabelModel" class="ui-data-strip">{{ t("cartPage.table", { table: tableLabelModel }) }}</span>
       </div>
     </header>
 
-    <div v-if="isBrowseOnlyPlan" class="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-6 text-sky-100 space-y-2">
+    <div v-if="isBrowseOnlyPlan" class="ui-section-band border-sky-500/40 bg-sky-500/10 p-6 text-sky-100 space-y-2">
       <p class="text-base font-semibold">{{ t("cartPage.orderingDisabled") }}</p>
       <p class="text-sm">{{ t("cartPage.browseOnlyBody") }}</p>
     </div>
 
-    <div v-else-if="!cart.items.length" class="rounded-2xl border border-dashed border-slate-700 p-6 text-slate-300">
+    <div v-else-if="!cart.items.length" class="ui-section-band border-dashed border-slate-700 p-6 text-slate-300">
       <p class="text-base font-semibold text-slate-100">{{ t("cartPage.cartEmpty") }}</p>
       <p class="mt-1 text-sm text-slate-400">{{ t("cartPage.cartEmptyBody") }}</p>
     </div>
@@ -57,7 +57,7 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="inline-flex items-center rounded-full border border-slate-700 bg-slate-950/60 p-1">
+          <div class="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/80 p-1 shadow-inner shadow-black/30">
             <button
               class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
               :aria-label="t('cartPage.decreaseQuantity')"
@@ -87,7 +87,14 @@
       </article>
     </div>
 
-    <section v-if="!isBrowseOnlyPlan" class="ui-glass space-y-3 p-5">
+    <section v-if="!isBrowseOnlyPlan" class="ui-glass space-y-4 p-5">
+      <div class="flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ t("cartPage.channel") }}: {{ cart.canCheckout ? t("cartPage.checkout") : cart.canWhatsapp ? t("cartPage.whatsappHandoff") : t("cartPage.orderingDisabled") }}</span>
+        <span v-if="isTableContextOrder" class="ui-data-strip">{{ t("cartPage.tableQrOrder") }}</span>
+        <span v-else-if="isDelivery" class="ui-data-strip">{{ t("cartPage.delivery") }}</span>
+        <span v-else-if="fulfillmentType === 'pickup'" class="ui-data-strip">{{ t("cartPage.pickup") }}</span>
+      </div>
+
       <div v-if="isTableContextOrder" class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-sm text-emerald-100">
         <p class="font-semibold">{{ t("cartPage.tableQrOrder") }}</p>
         <p class="mt-1">
@@ -116,7 +123,7 @@
         <p class="text-xs text-slate-400">{{ t("cartPage.selectFulfillment") }}</p>
         <p v-if="fieldErrors.fulfillment_type" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
-        <div class="grid gap-3 md:grid-cols-2">
+        <div class="ui-section-band grid gap-3 md:grid-cols-2">
           <label class="block space-y-1">
             <span class="text-xs text-slate-400">{{ t("cartPage.customerNameRequired") }}</span>
             <input
@@ -256,7 +263,7 @@
         ></textarea>
       </label>
 
-      <div class="rounded-2xl border border-slate-700/60 bg-slate-950/50 px-4 py-3">
+      <div class="ui-section-band px-4 py-3">
         <div class="flex items-center justify-between text-sm text-slate-300">
           <span>{{ t("cartPage.total") }}</span>
           <span class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(cart.total, currency) }}</span>

@@ -92,7 +92,7 @@ const submit = async () => {
     } else {
       router.push(fallbackRoute());
     }
-  } catch (err) {
+  } catch {
     error.value = session.error || t("signIn.failed");
   }
 };

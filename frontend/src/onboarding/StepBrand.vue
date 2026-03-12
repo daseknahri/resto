@@ -52,8 +52,8 @@
         <input
           v-model="form.reservation_url"
           :class="inputClass('reservation_url')"
-          @input="clearField('reservation_url')"
           placeholder="https://..."
+          @input="clearField('reservation_url')"
         />
         <p v-if="fieldError('reservation_url')" class="text-xs text-red-300">{{ fieldError("reservation_url") }}</p>
       </label>
@@ -87,7 +87,7 @@
     <p v-if="fieldError('non_field_errors')" class="text-sm text-red-300">{{ fieldError("non_field_errors") }}</p>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button class="ui-btn-primary px-4 py-2" @click="saveAndNext" :disabled="saving">
+      <button class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
         {{ saving ? t("common.saving") : t("common.saveAndNext") }}
       </button>
       <p class="text-sm text-slate-400">{{ status }}</p>
@@ -124,7 +124,6 @@ const locale = useLocaleStore();
 const toast = useToastStore();
 const emit = defineEmits(["next"]);
 const { localeOptions, t } = useI18n();
-const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsappOrder = computed(() => tenant.entitlements?.can_whatsapp_order === true);
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const introText = computed(() =>
@@ -150,7 +149,7 @@ const load = async () => {
   try {
     const data = await profileApi.get();
     Object.assign(form, data || {});
-  } catch (e) {
+  } catch {
     status.value = t("stepBrand.statusLoadFailed");
   }
 };

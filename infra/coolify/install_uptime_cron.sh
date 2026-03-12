@@ -19,7 +19,7 @@ Options:
   --log-file <path>           Cron output log file (default: /var/log/resto-uptime.log)
   --cooldown-minutes <n>      Repeated down-alert cooldown in minutes (default: 20)
   --state-file <path>         Probe state file path (default: /var/tmp/kepoli-uptime.state)
-  --check <url|code>          Check spec (repeatable). Default is kepoli frontend/admin/api health URLs.
+  --check <url|code>          Check spec (repeatable). Default is menu/admin proxied API health URLs.
   --remove                    Remove installed cron line and generated runner
   --dry-run                   Print actions only, do not write files
   -h, --help                  Show help
@@ -108,9 +108,9 @@ done
 
 if [[ ${#CHECKS[@]} -eq 0 ]]; then
   CHECKS=(
-    "https://kepoli.com/health|200"
-    "https://admin.kepoli.com/health|200"
-    "https://api.kepoli.com/api/health/|200"
+    "https://menu.kepoli.com/health|200"
+    "https://admin.menu.kepoli.com/health|200"
+    "https://menu.kepoli.com/api/health/|200"
   )
 fi
 

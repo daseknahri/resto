@@ -144,7 +144,7 @@
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button class="ui-btn-primary px-4 py-2" @click="saveAndNext" :disabled="saving || hasActiveUploads">
+      <button class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
         {{ saving ? t("common.saving") : t("common.saveAndNext") }}
       </button>
       <button class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
@@ -245,7 +245,7 @@ const cleanupManagedUpload = async (value) => {
   if (!isManagedUpload(value)) return;
   try {
     await uploadApi.removeImage(value);
-  } catch (e) {
+  } catch {
     // Non-blocking cleanup.
   }
 };
@@ -363,7 +363,7 @@ const load = async () => {
     const rows = data.length ? data.map(normalize) : [normalize()];
     categories.splice(0, categories.length, ...rows);
     hydrateTranslationLocalesFromRows(rows);
-  } catch (e) {
+  } catch {
     status.value = t("common.loadFailed");
     categories.splice(0, categories.length, normalize());
     enforceTranslationLocaleSelection();

@@ -18,7 +18,7 @@ const currentLocale = () => {
   try {
     const locale = useLocaleStore();
     return normalizeLocale(locale.current);
-  } catch (err) {
+  } catch {
     return DEFAULT_LOCALE;
   }
 };
@@ -28,4 +28,3 @@ export const translate = (key, params = {}) => {
   const value = getByPath(messages[locale], key) ?? getByPath(messages[DEFAULT_LOCALE], key) ?? key;
   return interpolate(value, params);
 };
-

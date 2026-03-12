@@ -1,4 +1,9 @@
+import logging
+
+from django.conf import settings
 from django.core.mail import send_mail
+
+logger = logging.getLogger("app.email")
 
 
 def send_password_reset_email(email: str, reset_url: str, token: str):
@@ -10,4 +15,13 @@ def send_password_reset_email(email: str, reset_url: str, token: str):
         f"Reset token: {token}\n\n"
         "If you did not request this, you can ignore this message.\n"
     )
-    send_mail(subject, body, None, [email], fail_silently=True)
+    sent = send_mail(
+        subject,
+        body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning("Password reset email not sent", extra={"target_email": email})
+    return sent

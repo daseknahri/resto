@@ -14,7 +14,7 @@ const getSessionId = () => {
     const generated = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     window.sessionStorage.setItem(SESSION_KEY, generated);
     return generated;
-  } catch (err) {
+  } catch {
     return "";
   }
 };

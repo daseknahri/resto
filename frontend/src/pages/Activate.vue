@@ -55,7 +55,7 @@ const submit = async () => {
   if (store.success) {
     try {
       await session.fetchSession(true);
-    } catch (e) {
+    } catch {
       // Ignore and continue with navigation fallback.
     }
     const next = typeof route.query.next === "string" ? route.query.next : null;

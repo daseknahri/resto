@@ -94,14 +94,14 @@ esac
 
 if [[ ${#CHECKS[@]} -eq 0 ]]; then
   CHECKS=(
-    "https://kepoli.com/health|200"
-    "https://admin.kepoli.com/health|200"
-    "https://api.kepoli.com/api/health/|200"
+    "https://menu.kepoli.com/health|200"
+    "https://admin.menu.kepoli.com/health|200"
+    "https://menu.kepoli.com/api/health/|200"
   )
 fi
 
 if [[ -z "$FAILURE_CHECK" ]]; then
-  FAILURE_CHECK="https://api.kepoli.com/api/health-bad/|200"
+  FAILURE_CHECK="https://menu.kepoli.com/api/health-bad/|200"
 fi
 
 PROBE_SCRIPT="${REPO_DIR%/}/infra/coolify/uptime_probe.sh"
