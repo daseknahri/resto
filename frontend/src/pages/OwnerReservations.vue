@@ -228,9 +228,49 @@
         </div>
       </div>
 
+      <article v-if="selectedCount" class="ui-hero-ribbon space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="ui-kicker">{{ activeFilterSummary }}</p>
+            <h3 class="text-lg font-semibold text-white">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</h3>
+            <p class="text-sm text-slate-300">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="ui-btn-outline px-3 py-1.5 text-xs"
+              :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
+              :disabled="bulkReminderLoading"
+              @click="bulkRetryReminders"
+            >
+              {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">
+              {{ t("ownerReservations.markContacted") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">
+              {{ t("ownerReservations.markConfirmed") }}
+            </button>
+          </div>
+        </div>
+      </article>
+
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
       <p v-else-if="loading" class="text-sm text-slate-400">{{ t("ownerReservations.loadingReservations") }}</p>
-      <p v-else-if="!reservations.length" class="text-sm text-slate-400">{{ t("ownerReservations.noReservations") }}</p>
+      <article v-else-if="!reservations.length" class="ui-section-band space-y-3 text-sm">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ activeFilterSummary }}</p>
+          <h3 class="text-lg font-semibold text-white">{{ t("ownerReservations.noReservations") }}</h3>
+          <p class="text-slate-400">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-outline px-4 py-2 text-sm" @click="clearFilters">
+            {{ t("common.clear") }}
+          </button>
+          <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchReservations">
+            {{ t("common.refresh") }}
+          </button>
+        </div>
+      </article>
 
       <div class="grid gap-3 lg:grid-cols-2">
         <article
@@ -419,13 +459,22 @@
 
     <div
       v-if="selectedCount"
-      class="fixed bottom-4 left-3 right-3 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur lg:hidden"
+      class="fixed bottom-4 left-3 right-3 z-20 rounded-[1.4rem] border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur lg:hidden"
     >
       <div class="space-y-2">
-        <p class="text-xs text-slate-300">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-[10px] uppercase tracking-[0.2em] text-slate-500">{{ activeFilterSummary }}</p>
+            <p class="mt-1 text-xs text-slate-300">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
+          </div>
+          <button class="text-xs text-slate-400 hover:text-slate-100" @click="selectedIds = []">
+            {{ t("common.clear") }}
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
           <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">{{ t("ownerReservations.contacted") }}</button>
           <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">{{ t("ownerReservations.confirmed") }}</button>
+          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('lost')">{{ t("ownerReservations.unavailable") }}</button>
           <button
             class="ui-btn-outline justify-center text-xs"
             :disabled="bulkReminderLoading"

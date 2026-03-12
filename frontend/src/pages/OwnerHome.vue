@@ -121,6 +121,50 @@
       </div>
     </header>
 
+    <article class="ui-hero-ribbon ui-fade-up overflow-hidden">
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr),380px]">
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <p class="ui-kicker">{{ nextWorkspaceAction.kicker }}</p>
+            <h3 class="text-2xl font-semibold text-white">{{ nextWorkspaceAction.title }}</h3>
+            <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ nextWorkspaceAction.description }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+            <span class="ui-chip">{{ planModeLabel }}</span>
+            <span class="ui-data-strip">{{ t("ownerHome.readiness") }} {{ readinessScore }}%</span>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <RouterLink :to="nextWorkspaceAction.to" class="ui-btn-primary px-5 py-2.5">
+              {{ nextWorkspaceAction.cta }}
+            </RouterLink>
+            <RouterLink to="/menu" class="ui-btn-outline px-5 py-2.5">
+              {{ t("ownerLayout.publicPreview") }}
+            </RouterLink>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          <article
+            v-for="card in commandDeckCards"
+            :key="card.label"
+            class="ui-focus-card"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="ui-kicker">{{ card.label }}</p>
+                <p class="mt-2 text-lg font-semibold text-white">{{ card.value }}</p>
+                <p class="mt-1 text-sm text-slate-400">{{ card.note }}</p>
+              </div>
+              <RouterLink :to="card.to" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
+                {{ card.actionLabel }}
+              </RouterLink>
+            </div>
+          </article>
+        </div>
+      </div>
+    </article>
+
     <article class="ui-section-band space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -426,6 +470,52 @@ const readinessItems = computed(() => [
   },
 ]);
 
+const nextWorkspaceAction = computed(() => {
+  if (!hasContact.value || !hasTheme.value) {
+    return {
+      kicker: t("ownerLayout.menuBuilder"),
+      title: t("ownerHome.brandContactPresent"),
+      description: t("ownerHome.readinessHint"),
+      cta: t("ownerHome.openMenuBuilder"),
+      to: "/owner/onboarding",
+    };
+  }
+  if (categoriesCount.value === 0) {
+    return {
+      kicker: t("ownerLayout.menuBuilder"),
+      title: t("ownerHome.categoriesAdded"),
+      description: t("ownerHome.pushTo100"),
+      cta: t("ownerHome.openMenuBuilder"),
+      to: "/owner/onboarding",
+    };
+  }
+  if (dishesCount.value === 0) {
+    return {
+      kicker: t("ownerLayout.menuBuilder"),
+      title: t("ownerHome.dishesAdded"),
+      description: t("ownerHome.pushTo100"),
+      cta: t("ownerHome.openMenuBuilder"),
+      to: "/owner/onboarding",
+    };
+  }
+  if (!published.value) {
+    return {
+      kicker: t("ownerHome.launchProgress"),
+      title: t("ownerHome.menuPublished"),
+      description: t("ownerHome.readinessHint"),
+      cta: t("ownerHome.openMenuBuilder"),
+      to: "/owner/onboarding",
+    };
+  }
+  return {
+    kicker: t("ownerLayout.tablesQr"),
+    title: t("ownerHome.ready"),
+    description: t("ownerHome.menuPublished"),
+    cta: t("ownerLayout.tablesQr"),
+    to: "/owner/tables",
+  };
+});
+
 const refresh = async () => {
   loading.value = true;
   error.value = "";
@@ -462,6 +552,29 @@ const hydrateOwnerInsights = async () => {
 };
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
+const commandDeckCards = computed(() => [
+  {
+    label: t("ownerLayout.publicPreview"),
+    value: published.value ? t("ownerHome.published") : t("ownerHome.draft"),
+    note: menuUrl.value,
+    actionLabel: t("ownerLayout.publicPreview"),
+    to: "/menu",
+  },
+  {
+    label: t("ownerLayout.reservations"),
+    value: String(upgradeRequests.value.length),
+    note: t("ownerHome.recentRequests"),
+    actionLabel: t("ownerLayout.reservations"),
+    to: "/owner/reservations",
+  },
+  {
+    label: t("ownerHome.purchaseUpgrade"),
+    value: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic",
+    note: t("ownerHome.currentPlan", { plan: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }),
+    actionLabel: t("ownerHome.purchaseTier"),
+    to: "/owner",
+  },
+]);
 
 const copyMenuUrl = async () => {
   try {

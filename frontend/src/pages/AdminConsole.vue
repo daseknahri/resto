@@ -780,71 +780,78 @@
       </template>
     </section>
 
-    <section v-if="lastProvision && activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3 text-sm text-slate-200">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="font-semibold">{{ t("adminConsole.latestProvisioningPackage") }}</h3>
-        <div class="flex items-center gap-3">
-          <button class="text-xs text-brand-secondary hover:underline" @click="copyOnboardingPackage">{{ t("adminConsole.copyPackage") }}</button>
-          <button class="text-xs text-brand-secondary hover:underline" @click="lastProvision = null">{{ t("common.clear") }}</button>
+    <section v-if="lastProvision && activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-4 text-sm text-slate-200">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="ui-kicker">{{ t("adminConsole.latestProvisioningPackage") }}</p>
+          <h3 class="text-xl font-semibold text-white">{{ lastProvision.tenant || "-" }}</h3>
+          <p class="text-sm text-slate-400">{{ lastProvision.public_menu_url || lastProvision.tenant_url || "-" }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyOnboardingPackage">{{ t("adminConsole.copyPackage") }}</button>
+          <button
+            v-if="lastProvision.whatsapp_message_template"
+            class="ui-btn-outline px-3 py-1.5 text-xs"
+            @click="copyText(lastProvision.whatsapp_message_template)"
+          >
+            {{ t("adminConsole.copyMessage") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="lastProvision = null">{{ t("common.clear") }}</button>
         </div>
       </div>
-      <p><span class="text-slate-400">{{ t("adminConsole.tenant") }}:</span> {{ lastProvision.tenant || '-' }}</p>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.tenantUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.tenant_url || '-' }}</span>
-        <button v-if="lastProvision.tenant_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
+
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.tenantUrl") }}</p>
+          <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.tenant_url || "-" }}</p>
+          <button v-if="lastProvision.tenant_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
+        </article>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.workspaceUrl") }}</p>
+          <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.workspace_url || "-" }}</p>
+          <button v-if="lastProvision.workspace_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
+        </article>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.activationUrl") }}</p>
+          <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.activation_url || "-" }}</p>
+          <button v-if="lastProvision.activation_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
+        </article>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.activationToken") }}</p>
+          <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.activation_token || "-" }}</p>
+          <button v-if="lastProvision.activation_token" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+        </article>
       </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.workspaceUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.workspace_url || '-' }}</span>
-        <button v-if="lastProvision.workspace_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.onboardingUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.onboarding_url || '-' }}</span>
-        <button v-if="lastProvision.onboarding_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.onboarding_url)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.signInUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.signin_url || '-' }}</span>
-        <button v-if="lastProvision.signin_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.signin_url)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.activationToken") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_token || '-' }}</span>
-        <button v-if="lastProvision.activation_token" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.whatsappLink") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.whatsapp_link || '-' }}</span>
-        <button v-if="lastProvision.whatsapp_link" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.whatsapp_link)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.activationUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.activation_url || '-' }}</span>
-        <button v-if="lastProvision.activation_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
-      </div>
-      <div class="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-        <span class="text-slate-400">{{ t("adminConsole.publicMenuUrl") }}:</span>
-        <span class="min-w-0 flex-1 break-all text-xs sm:text-sm">{{ lastProvision.public_menu_url || '-' }}</span>
-        <button v-if="lastProvision.public_menu_url" class="text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.public_menu_url)">{{ t("common.copy") }}</button>
-      </div>
-      <div v-if="lastProvision.owner_next_steps?.length" class="space-y-1">
-        <span class="text-slate-400">{{ t("adminConsole.ownerNextSteps") }}:</span>
-        <ol class="list-decimal space-y-1 pl-5 text-xs text-slate-200">
-          <li v-for="step in lastProvision.owner_next_steps" :key="step">{{ step }}</li>
-        </ol>
-      </div>
-      <div class="space-y-1">
-        <span class="text-slate-400">{{ t("adminConsole.whatsappMessageTemplate") }}:</span>
-        <pre class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs whitespace-pre-wrap break-all">{{ lastProvision.whatsapp_message_template || '-' }}</pre>
-        <button
-          v-if="lastProvision.whatsapp_message_template"
-          class="text-xs text-brand-secondary hover:underline"
-          @click="copyText(lastProvision.whatsapp_message_template)"
-        >
-          {{ t("adminConsole.copyMessage") }}
-        </button>
+
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr),420px]">
+        <article class="ui-focus-card space-y-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("adminConsole.ownerNextSteps") }}</p>
+            <p class="text-sm text-slate-300">{{ t("adminConsole.provisioningOperations") }}</p>
+          </div>
+          <ol v-if="lastProvision.owner_next_steps?.length" class="space-y-2 text-sm text-slate-200">
+            <li v-for="(step, index) in lastProvision.owner_next_steps" :key="step" class="flex items-start gap-3 rounded-xl border border-slate-800/80 bg-slate-950/50 px-3 py-2.5">
+              <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-xs font-semibold text-[var(--color-secondary)]">{{ index + 1 }}</span>
+              <span class="leading-6">{{ step }}</span>
+            </li>
+          </ol>
+          <p v-else class="text-sm text-slate-500">-</p>
+        </article>
+
+        <article class="ui-command-deck space-y-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("adminConsole.whatsappMessageTemplate") }}</p>
+            <p class="text-sm text-slate-300">{{ t("adminConsole.whatsappLink") }}</p>
+          </div>
+          <div class="space-y-2">
+            <div class="rounded-xl border border-slate-800/80 bg-slate-950/50 px-3 py-2.5">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500">{{ t("adminConsole.whatsappLink") }}</p>
+              <p class="mt-2 break-all text-xs text-slate-200">{{ lastProvision.whatsapp_link || "-" }}</p>
+              <button v-if="lastProvision.whatsapp_link" class="mt-2 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.whatsapp_link)">{{ t("common.copy") }}</button>
+            </div>
+            <pre class="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs whitespace-pre-wrap break-all">{{ lastProvision.whatsapp_message_template || "-" }}</pre>
+          </div>
+        </article>
       </div>
     </section>
 

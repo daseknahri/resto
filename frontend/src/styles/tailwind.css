@@ -292,6 +292,21 @@ body[dir="rtl"] .ui-kicker {
     background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.35), transparent);
   }
 
+  .ui-focus-card {
+    @apply relative overflow-hidden rounded-[1.4rem] border bg-slate-950/70 p-4 shadow-lg shadow-black/25 backdrop-blur-xl;
+    border-color: rgba(148, 163, 184, 0.18);
+    transition: transform var(--motion-base) var(--ease-fluid), border-color var(--motion-base) var(--ease-fluid),
+      box-shadow var(--motion-base) var(--ease-fluid);
+  }
+
+  .ui-focus-card::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(circle at 12% 16%, rgba(245, 158, 11, 0.14), transparent 28%),
+      radial-gradient(circle at 88% 18%, rgba(20, 184, 166, 0.12), transparent 26%);
+  }
+
   .ui-toolbar-band {
     @apply rounded-[1.3rem] border border-slate-800/80 bg-slate-950/45 p-3 backdrop-blur-xl;
   }
@@ -404,6 +419,7 @@ body[dir="rtl"] .ui-kicker {
     .ui-section-band:hover,
     .ui-stat-tile:hover,
     .ui-action-tile:hover,
+    .ui-focus-card:hover,
     .ui-reservation-card:hover {
       transform: translateY(-3px);
       border-color: rgba(245, 158, 11, 0.24);
