@@ -119,263 +119,310 @@
         </div>
       </div>
 
-      <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
-        <p class="text-sm text-slate-200">{{ t("stepDishes.quickStarters") }}</p>
-        <button
-          type="button"
-          class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
-          @click="addStarterDishes"
-        >
-          {{ t("stepDishes.addSuggested") }}
-        </button>
-        <p class="text-xs text-slate-500">{{ t("stepDishes.quickStarterHint") }}</p>
-      </div>
-
-      <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
-        <p class="text-sm text-slate-200">{{ t("stepDishes.translationsTitle") }}</p>
-        <p class="text-xs text-slate-400">
-          {{ t("stepDishes.translationsHint", { count: maxTranslationLocales }) }}
-        </p>
-        <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-          <button
-            v-for="locale in secondaryLocales"
-            :key="locale.code"
-            type="button"
-            class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-            :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-            :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-            @click="toggleTranslationLocale(locale.code)"
-          >
-            {{ locale.nativeLabel }} ({{ locale.label }})
-          </button>
-        </div>
-        <p v-else class="text-xs text-slate-500">{{ t("stepDishes.translationsUnavailable") }}</p>
-      </div>
-
-      <div class="space-y-3">
-        <template v-if="activeCategoryDishes.length">
-          <div
-            v-for="(dish, idx) in activeCategoryDishes"
-            :key="dish.local_id"
-            class="rounded-[26px] border border-slate-800 bg-slate-950/85 p-4 shadow-[0_18px_45px_rgba(2,8,23,0.22)] space-y-3"
-          >
-            <div class="flex flex-col gap-3 border-b border-slate-800/80 pb-3 sm:flex-row sm:items-start sm:justify-between">
-              <div class="space-y-1">
-                <p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                  {{ t("stepDishes.dishCardLabel", { index: idx + 1 }) }}
-                </p>
-                <p class="text-sm text-slate-300">
-                  {{ t("stepDishes.categoryPinned", { category: activeCategoryRecord?.name || t("stepDishes.selectCategory") }) }}
-                </p>
-              </div>
-              <button class="text-xs text-red-300" @click="removeDishByLocalId(dish.local_id)">
-                {{ t("stepDishes.removeDish") }}
-              </button>
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div class="space-y-1">
-                <input
-                  v-model="dish.name"
-                  class="ui-input"
-                  :class="rowError(dish, 'name') ? 'border-red-400' : 'border-slate-700'"
-                  :placeholder="t('stepDishes.dishNamePlaceholder')"
-                  @input="clearRowError(dish.local_id, 'name')"
-                />
-                <p v-if="rowError(dish, 'name')" class="text-xs text-red-300">{{ rowError(dish, "name") }}</p>
-              </div>
-
-              <div class="space-y-1">
-                <select
-                  v-model="dish.category"
-                  class="ui-input"
-                  :class="rowError(dish, 'category') ? 'border-red-400' : 'border-slate-700'"
-                  @change="clearRowError(dish.local_id, 'category')"
-                >
-                  <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-                  <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-                </select>
-                <p v-if="rowError(dish, 'category')" class="text-xs text-red-300">{{ rowError(dish, "category") }}</p>
-              </div>
-
-              <div class="space-y-1">
-                <input
-                  v-model.number="dish.price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="ui-input"
-                  :class="rowError(dish, 'price') ? 'border-red-400' : 'border-slate-700'"
-                  :placeholder="t('stepDishes.pricePlaceholder')"
-                  @input="clearRowError(dish.local_id, 'price')"
-                />
-                <p v-if="rowError(dish, 'price')" class="text-xs text-red-300">{{ rowError(dish, "price") }}</p>
-              </div>
-
-              <div class="space-y-1">
-                <div
-                  class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
-                  :class="draggingRows[dish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
-                  @dragenter="setDragState(dish.local_id, true)"
-                  @dragleave="setDragState(dish.local_id, false)"
-                  @dragover="preventDropDefaults"
-                  @drop="dropImage(dish, $event)"
-                >
-                  <input
-                    v-model="dish.image_url"
-                    class="ui-input"
-                    :class="rowError(dish, 'image_url') ? 'border-red-400' : 'border-slate-700'"
-                    :placeholder="t('stepDishes.imageUrlPlaceholder')"
-                    @input="clearRowError(dish.local_id, 'image_url')"
-                  />
-                  <p v-if="rowError(dish, 'image_url')" class="text-xs text-red-300">{{ rowError(dish, "image_url") }}</p>
-                  <div class="flex flex-wrap items-center gap-3">
-                    <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-                      {{ uploadingRows[dish.local_id] ? t("stepDishes.uploadingProgress", { progress: uploadProgressRows[dish.local_id] || 0 }) : t("stepDishes.uploadImage") }}
-                      <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[dish.local_id]" @change="uploadImage(dish, $event)" />
-                    </label>
-                    <button
-                      v-if="dish.image_url"
-                      type="button"
-                      class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
-                      @click="clearImage(dish)"
-                    >
-                      {{ t("stepDishes.removeImage") }}
-                    </button>
-                    <img v-if="dish.image_url" :src="dish.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
-                  </div>
-                  <p class="text-xs text-slate-500">{{ t("stepDishes.dropImageHint") }}</p>
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr),320px] xl:items-start">
+        <div class="space-y-3">
+          <template v-if="activeCategoryDishes.length">
+            <div
+              v-for="(dish, idx) in activeCategoryDishes"
+              :key="dish.local_id"
+              class="rounded-[26px] border border-slate-800 bg-slate-950/85 p-4 shadow-[0_18px_45px_rgba(2,8,23,0.22)] space-y-3"
+            >
+              <div class="flex flex-col gap-3 border-b border-slate-800/80 pb-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="space-y-1">
+                  <p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                    {{ t("stepDishes.dishCardLabel", { index: idx + 1 }) }}
+                  </p>
+                  <p class="text-sm text-slate-300">
+                    {{ t("stepDishes.categoryPinned", { category: activeCategoryRecord?.name || t("stepDishes.selectCategory") }) }}
+                  </p>
                 </div>
-
-                <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>
-                <div v-if="uploadingRows[dish.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
-                  <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[dish.local_id] || 0}%` }"></div>
-                </div>
-              </div>
-            </div>
-
-            <textarea
-              v-model="dish.description"
-              rows="2"
-              class="ui-textarea"
-              :class="rowError(dish, 'description') ? 'border-red-400' : 'border-slate-700'"
-              :placeholder="t('stepDishes.descriptionPlaceholder')"
-              @input="clearRowError(dish.local_id, 'description')"
-            ></textarea>
-            <p v-if="rowError(dish, 'description')" class="text-xs text-red-300">{{ rowError(dish, "description") }}</p>
-
-            <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepDishes.translatedContent") }}</p>
-              <div
-                v-for="localeCode in selectedTranslationLocales"
-                :key="`${dish.local_id}-${localeCode}`"
-                class="grid gap-2 sm:grid-cols-2"
-              >
-                <input
-                  v-model="dish.name_i18n[localeCode]"
-                  class="ui-input"
-                  :placeholder="t('stepDishes.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
-                />
-                <input
-                  v-model="dish.description_i18n[localeCode]"
-                  class="ui-input"
-                  :placeholder="t('stepDishes.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
-                />
-              </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.variantsTitle") }}</p>
-                <button
-                  type="button"
-                  class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
-                  @click="addOption(dish)"
-                >
-                  {{ t("stepDishes.addVariant") }}
+                <button class="text-xs text-red-300" @click="removeDishByLocalId(dish.local_id)">
+                  {{ t("stepDishes.removeDish") }}
                 </button>
               </div>
-              <p class="text-xs text-slate-500">{{ t("stepDishes.variantsHint") }}</p>
-
-              <div v-if="dish.options?.length" class="space-y-2">
-                <div
-                  v-for="(option, optIdx) in dish.options"
-                  :key="option.local_id"
-                  class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
-                >
-                  <div class="grid gap-2 sm:grid-cols-[1fr,130px,130px,auto] sm:items-center">
+  
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-1">
+                  <input
+                    v-model="dish.name"
+                    class="ui-input"
+                    :class="rowError(dish, 'name') ? 'border-red-400' : 'border-slate-700'"
+                    :placeholder="t('stepDishes.dishNamePlaceholder')"
+                    @input="clearRowError(dish.local_id, 'name')"
+                  />
+                  <p v-if="rowError(dish, 'name')" class="text-xs text-red-300">{{ rowError(dish, "name") }}</p>
+                </div>
+  
+                <div class="space-y-1">
+                  <select
+                    v-model="dish.category"
+                    class="ui-input"
+                    :class="rowError(dish, 'category') ? 'border-red-400' : 'border-slate-700'"
+                    @change="clearRowError(dish.local_id, 'category')"
+                  >
+                    <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
+                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                  </select>
+                  <p v-if="rowError(dish, 'category')" class="text-xs text-red-300">{{ rowError(dish, "category") }}</p>
+                </div>
+  
+                <div class="space-y-1">
+                  <input
+                    v-model.number="dish.price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="ui-input"
+                    :class="rowError(dish, 'price') ? 'border-red-400' : 'border-slate-700'"
+                    :placeholder="t('stepDishes.pricePlaceholder')"
+                    @input="clearRowError(dish.local_id, 'price')"
+                  />
+                  <p v-if="rowError(dish, 'price')" class="text-xs text-red-300">{{ rowError(dish, "price") }}</p>
+                </div>
+  
+                <div class="space-y-1">
+                  <div
+                    class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
+                    :class="draggingRows[dish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+                    @dragenter="setDragState(dish.local_id, true)"
+                    @dragleave="setDragState(dish.local_id, false)"
+                    @dragover="preventDropDefaults"
+                    @drop="dropImage(dish, $event)"
+                  >
                     <input
-                      v-model="option.name"
+                      v-model="dish.image_url"
                       class="ui-input"
-                      :class="rowError(dish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
-                      :placeholder="t('stepDishes.variantNamePlaceholder')"
-                      @input="clearRowError(dish.local_id, optionFieldKey(option, 'name'))"
+                      :class="rowError(dish, 'image_url') ? 'border-red-400' : 'border-slate-700'"
+                      :placeholder="t('stepDishes.imageUrlPlaceholder')"
+                      @input="clearRowError(dish.local_id, 'image_url')"
                     />
-                    <input
-                      v-model.number="option.price_delta"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      class="ui-input"
-                      :class="rowError(dish, optionFieldKey(option, 'price_delta')) ? 'border-red-400' : 'border-slate-700'"
-                      :placeholder="t('stepDishes.extraPricePlaceholder')"
-                      @input="clearRowError(dish.local_id, optionFieldKey(option, 'price_delta'))"
-                    />
-                    <input
-                      v-model.number="option.max_select"
-                      type="number"
-                      min="1"
-                      step="1"
-                      class="ui-input"
-                      :class="rowError(dish, optionFieldKey(option, 'max_select')) ? 'border-red-400' : 'border-slate-700'"
-                      :placeholder="t('stepDishes.maxSelectPlaceholder')"
-                      @input="clearRowError(dish.local_id, optionFieldKey(option, 'max_select'))"
-                    />
-                    <button
-                      type="button"
-                      class="rounded-full border border-slate-700 px-3 py-2 text-xs text-red-200 hover:border-red-400/60"
-                      @click="removeOption(dish, optIdx)"
-                    >
-                      {{ t("stepDishes.remove") }}
-                    </button>
+                    <p v-if="rowError(dish, 'image_url')" class="text-xs text-red-300">{{ rowError(dish, "image_url") }}</p>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                        {{ uploadingRows[dish.local_id] ? t("stepDishes.uploadingProgress", { progress: uploadProgressRows[dish.local_id] || 0 }) : t("stepDishes.uploadImage") }}
+                        <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[dish.local_id]" @change="uploadImage(dish, $event)" />
+                      </label>
+                      <button
+                        v-if="dish.image_url"
+                        type="button"
+                        class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                        @click="clearImage(dish)"
+                      >
+                        {{ t("stepDishes.removeImage") }}
+                      </button>
+                      <img v-if="dish.image_url" :src="dish.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+                    </div>
+                    <p class="text-xs text-slate-500">{{ t("stepDishes.dropImageHint") }}</p>
                   </div>
-                  <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300">
-                    <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
-                    {{ t("stepDishes.requiredBeforeAddToCart") }}
-                  </label>
-                  <div v-if="selectedTranslationLocales.length" class="mt-2 grid gap-2 sm:grid-cols-2">
-                    <input
-                      v-for="localeCode in selectedTranslationLocales"
-                      :key="`${option.local_id}-${localeCode}`"
-                      v-model="option.name_i18n[localeCode]"
-                      class="ui-input"
-                      :placeholder="t('stepDishes.translatedVariantPlaceholder', { locale: localeLabel(localeCode) })"
-                    />
+  
+                  <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>
+                  <div v-if="uploadingRows[dish.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+                    <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[dish.local_id] || 0}%` }"></div>
                   </div>
-                  <p v-if="rowError(dish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "name")) }}</p>
-                  <p v-if="rowError(dish, optionFieldKey(option, 'price_delta'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "price_delta")) }}</p>
-                  <p v-if="rowError(dish, optionFieldKey(option, 'max_select'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "max_select")) }}</p>
                 </div>
               </div>
-              <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
-              <p v-if="rowError(dish, 'options')" class="text-xs text-red-300">{{ rowError(dish, "options") }}</p>
+  
+              <textarea
+                v-model="dish.description"
+                rows="2"
+                class="ui-textarea"
+                :class="rowError(dish, 'description') ? 'border-red-400' : 'border-slate-700'"
+                :placeholder="t('stepDishes.descriptionPlaceholder')"
+                @input="clearRowError(dish.local_id, 'description')"
+              ></textarea>
+              <p v-if="rowError(dish, 'description')" class="text-xs text-red-300">{{ rowError(dish, "description") }}</p>
+  
+              <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepDishes.translatedContent") }}</p>
+                <div
+                  v-for="localeCode in selectedTranslationLocales"
+                  :key="`${dish.local_id}-${localeCode}`"
+                  class="grid gap-2 sm:grid-cols-2"
+                >
+                  <input
+                    v-model="dish.name_i18n[localeCode]"
+                    class="ui-input"
+                    :placeholder="t('stepDishes.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
+                  />
+                  <input
+                    v-model="dish.description_i18n[localeCode]"
+                    class="ui-input"
+                    :placeholder="t('stepDishes.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
+                  />
+                </div>
+              </div>
+  
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.variantsTitle") }}</p>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                    @click="addOption(dish)"
+                  >
+                    {{ t("stepDishes.addVariant") }}
+                  </button>
+                </div>
+                <p class="text-xs text-slate-500">{{ t("stepDishes.variantsHint") }}</p>
+  
+                <div v-if="dish.options?.length" class="space-y-2">
+                  <div
+                    v-for="(option, optIdx) in dish.options"
+                    :key="option.local_id"
+                    class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
+                  >
+                    <div class="grid gap-2 sm:grid-cols-[1fr,130px,130px,auto] sm:items-center">
+                      <input
+                        v-model="option.name"
+                        class="ui-input"
+                        :class="rowError(dish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
+                        :placeholder="t('stepDishes.variantNamePlaceholder')"
+                        @input="clearRowError(dish.local_id, optionFieldKey(option, 'name'))"
+                      />
+                      <input
+                        v-model.number="option.price_delta"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="ui-input"
+                        :class="rowError(dish, optionFieldKey(option, 'price_delta')) ? 'border-red-400' : 'border-slate-700'"
+                        :placeholder="t('stepDishes.extraPricePlaceholder')"
+                        @input="clearRowError(dish.local_id, optionFieldKey(option, 'price_delta'))"
+                      />
+                      <input
+                        v-model.number="option.max_select"
+                        type="number"
+                        min="1"
+                        step="1"
+                        class="ui-input"
+                        :class="rowError(dish, optionFieldKey(option, 'max_select')) ? 'border-red-400' : 'border-slate-700'"
+                        :placeholder="t('stepDishes.maxSelectPlaceholder')"
+                        @input="clearRowError(dish.local_id, optionFieldKey(option, 'max_select'))"
+                      />
+                      <button
+                        type="button"
+                        class="rounded-full border border-slate-700 px-3 py-2 text-xs text-red-200 hover:border-red-400/60"
+                        @click="removeOption(dish, optIdx)"
+                      >
+                        {{ t("stepDishes.remove") }}
+                      </button>
+                    </div>
+                    <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300">
+                      <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                      {{ t("stepDishes.requiredBeforeAddToCart") }}
+                    </label>
+                    <div v-if="selectedTranslationLocales.length" class="mt-2 grid gap-2 sm:grid-cols-2">
+                      <input
+                        v-for="localeCode in selectedTranslationLocales"
+                        :key="`${option.local_id}-${localeCode}`"
+                        v-model="option.name_i18n[localeCode]"
+                        class="ui-input"
+                        :placeholder="t('stepDishes.translatedVariantPlaceholder', { locale: localeLabel(localeCode) })"
+                      />
+                    </div>
+                    <p v-if="rowError(dish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "name")) }}</p>
+                    <p v-if="rowError(dish, optionFieldKey(option, 'price_delta'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "price_delta")) }}</p>
+                    <p v-if="rowError(dish, optionFieldKey(option, 'max_select'))" class="mt-1 text-xs text-red-300">{{ rowError(dish, optionFieldKey(option, "max_select")) }}</p>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
+                <p v-if="rowError(dish, 'options')" class="text-xs text-red-300">{{ rowError(dish, "options") }}</p>
+              </div>
+  
+              <p v-if="rowError(dish, 'slug')" class="text-xs text-red-300">{{ rowError(dish, "slug") }}</p>
+              <p v-if="rowError(dish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(dish, "non_field_errors") }}</p>
+            </div>
+          </template>
+
+          <div
+            v-else
+            class="rounded-[26px] border border-dashed border-slate-700 bg-slate-950/55 p-6 text-center"
+          >
+            <p class="text-sm font-semibold text-white">{{ t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</p>
+            <p class="mt-2 text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
+            <button type="button" class="ui-btn-primary mt-4 px-4 py-2" @click="addDishForCategory()">
+              {{ t("stepDishes.addDishToCategory") }}
+            </button>
+          </div>
+        </div>
+
+        <aside class="space-y-4 xl:sticky xl:top-24">
+          <div class="ui-command-deck space-y-4">
+            <div class="space-y-1.5">
+              <p class="ui-kicker">{{ t("stepDishes.currentCategory") }}</p>
+              <h4 class="text-lg font-semibold text-white">{{ activeCategoryRecord?.name }}</h4>
+              <p class="text-sm text-slate-300">{{ activeCategoryRecord?.description || t("stepDishes.categoryFillHint") }}</p>
             </div>
 
-            <p v-if="rowError(dish, 'slug')" class="text-xs text-red-300">{{ rowError(dish, "slug") }}</p>
-            <p v-if="rowError(dish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(dish, "non_field_errors") }}</p>
-          </div>
-        </template>
+            <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <article class="ui-orbit-card p-4">
+                <p class="ui-stat-label">{{ t("stepDishes.dishesInCategory") }}</p>
+                <p class="mt-2 text-2xl font-semibold text-white">{{ activeCategoryDishes.length }}</p>
+              </article>
+              <article class="ui-orbit-card p-4">
+                <p class="ui-stat-label">{{ t("stepDishes.categoriesReady") }}</p>
+                <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ completedCategoryCount }}/{{ sortedCategoryOptions.length }}</p>
+              </article>
+              <article class="ui-orbit-card p-4">
+                <p class="ui-stat-label">{{ t("common.next") }}</p>
+                <p class="mt-2 text-sm font-semibold text-white">{{ hasNextCategory ? t("stepDishes.nextCategory") : t("common.saveAndNext") }}</p>
+                <p class="mt-1 text-xs text-slate-400">{{ t("stepDishes.nextStepHint") }}</p>
+              </article>
+            </div>
 
-        <div
-          v-else
-          class="rounded-[26px] border border-dashed border-slate-700 bg-slate-950/55 p-6 text-center"
-        >
-          <p class="text-sm font-semibold text-white">{{ t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</p>
-          <p class="mt-2 text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
-          <button type="button" class="ui-btn-primary mt-4 px-4 py-2" @click="addDishForCategory()">
-            {{ t("stepDishes.addDishToCategory") }}
-          </button>
-        </div>
+            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <button
+                type="button"
+                class="ui-btn-outline justify-center px-4 py-2 text-sm"
+                :disabled="!hasPreviousCategory"
+                @click="goToPreviousCategory"
+              >
+                {{ t("stepDishes.previousCategory") }}
+              </button>
+              <button
+                type="button"
+                class="ui-btn-outline justify-center px-4 py-2 text-sm"
+                :disabled="!hasNextCategory"
+                @click="goToNextCategory"
+              >
+                {{ t("stepDishes.nextCategory") }}
+              </button>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+            <p class="text-sm text-slate-200">{{ t("stepDishes.quickStarters") }}</p>
+            <button
+              type="button"
+              class="ui-btn-outline px-4 py-2 text-sm"
+              @click="addStarterDishes"
+            >
+              {{ t("stepDishes.addSuggested") }}
+            </button>
+            <p class="text-xs text-slate-500">{{ t("stepDishes.quickStarterHint") }}</p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+            <p class="text-sm text-slate-200">{{ t("stepDishes.translationsTitle") }}</p>
+            <p class="text-xs text-slate-400">
+              {{ t("stepDishes.translationsHint", { count: maxTranslationLocales }) }}
+            </p>
+            <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
+              <button
+                v-for="locale in secondaryLocales"
+                :key="locale.code"
+                type="button"
+                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
+                @click="toggleTranslationLocale(locale.code)"
+              >
+                {{ locale.nativeLabel }} ({{ locale.label }})
+              </button>
+            </div>
+            <p v-else class="text-xs text-slate-500">{{ t("stepDishes.translationsUnavailable") }}</p>
+          </div>
+        </aside>
       </div>
     </template>
 
