@@ -124,9 +124,33 @@
         </div>
         <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadsLoading" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
-      <p v-if="leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingLeads") }}</p>
-      <p v-if="!leads.length && !leadsLoading" class="text-sm text-slate-400">{{ t("adminConsole.noLeadsPending") }}</p>
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-if="leadsLoading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <article v-for="n in 3" :key="`lead-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-32 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-full rounded-full"></div>
+            <div class="ui-skeleton h-3 w-3/4 rounded-full"></div>
+          </div>
+          <div class="ui-admin-subcard space-y-2">
+            <div class="ui-skeleton h-3 w-24 rounded-full"></div>
+            <div class="ui-skeleton h-3 w-full rounded-full"></div>
+            <div class="ui-skeleton h-3 w-2/3 rounded-full"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="ui-skeleton h-10 rounded-full"></div>
+            <div class="ui-skeleton h-10 rounded-full"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!leads.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.incomingLeads") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noLeadsPending") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
+      </article>
+      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div
           v-for="lead in leads"
           :key="lead.id"
@@ -226,9 +250,30 @@
         </div>
       </div>
       <p class="text-xs text-slate-500">{{ t("adminConsole.pageSummary", { page: tenantPage, pages: tenantTotalPages, total: tenantTotal }) }}</p>
-      <p v-if="tenantsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingTenants") }}</p>
-      <p v-else-if="!tenants.length" class="text-sm text-slate-400">{{ t("adminConsole.noTenantRecordsFound") }}</p>
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div v-if="tenantsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in tenantPageSize" :key="`tenant-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-36 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-20 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-5/6 rounded-full"></div>
+            <div class="ui-skeleton h-3 w-3/4 rounded-full"></div>
+            <div class="ui-skeleton h-3 w-2/3 rounded-full"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="ui-skeleton h-9 rounded-full"></div>
+            <div class="ui-skeleton h-9 rounded-full"></div>
+            <div class="ui-skeleton h-9 rounded-full"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!tenants.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.tenantLifecycleControls") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noTenantRecordsFound") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.suspendReactivateCancel") }}</p>
+      </article>
+      <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="tenant in tenants"
           :key="`tenant-${tenant.id}`"
@@ -420,11 +465,28 @@
       <p class="text-xs text-slate-500">
         {{ t("adminConsole.reservationSlaCopy", { overdue: alertThresholds.overdue_minutes, dueSoon: alertThresholds.due_soon_minutes }) }}
       </p>
-      <p v-if="alertsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingAlerts") }}</p>
-      <p v-else-if="!reservationAlerts.length" class="text-sm text-slate-400">
-        {{ t("adminConsole.noReservationAlerts") }}
-      </p>
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div v-if="alertsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in 3" :key="`alert-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-28 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-full rounded-full"></div>
+            <div class="ui-skeleton h-3 w-4/5 rounded-full"></div>
+            <div class="ui-skeleton h-3 w-3/5 rounded-full"></div>
+          </div>
+          <div class="ui-skeleton h-8 w-32 rounded-full"></div>
+        </article>
+      </div>
+      <article v-else-if="!reservationAlerts.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noReservationAlerts") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">
+          {{ t("adminConsole.reservationSlaCopy", { overdue: alertThresholds.overdue_minutes, dueSoon: alertThresholds.due_soon_minutes }) }}
+        </p>
+      </article>
+      <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="lead in reservationAlerts"
           :key="`alert-${lead.id}`"
@@ -470,8 +532,29 @@
           {{ t("common.refresh") }}
         </button>
       </div>
-      <p v-if="upgradeLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingUpgradeRequests") }}</p>
-      <div class="space-y-2 md:hidden">
+      <div v-if="upgradeLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in 3" :key="`upgrade-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-28 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-3/4 rounded-full"></div>
+            <div class="ui-skeleton h-3 w-full rounded-full"></div>
+            <div class="ui-skeleton h-3 w-2/3 rounded-full"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="ui-skeleton h-9 rounded-full"></div>
+            <div class="ui-skeleton h-9 rounded-full"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!upgradeRequests.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.cashFirstUpgrades") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noUpgradeRequestsYet") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.planFeatureControlsHint") }}</p>
+      </article>
+      <div v-else class="space-y-2 md:hidden">
         <article
           v-for="request in upgradeRequests"
           :key="`upgrade-mobile-${request.id}`"
@@ -506,9 +589,8 @@
             </button>
           </div>
         </article>
-        <p v-if="!upgradeRequests.length && !upgradeLoading" class="text-sm text-slate-400">{{ t("adminConsole.noUpgradeRequestsYet") }}</p>
       </div>
-      <div class="ui-table-wrap hidden md:block">
+      <div v-if="upgradeRequests.length" class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
@@ -555,9 +637,6 @@
                 </div>
               </td>
             </tr>
-            <tr v-if="!upgradeRequests.length && !upgradeLoading">
-              <td colspan="7" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noUpgradeRequestsYet") }}</td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -580,8 +659,23 @@
         </div>
       </div>
       <template v-if="adminPanels.planFlags">
-      <p v-if="planFlagsLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingPlanFeatureFlags") }}</p>
-      <p v-else-if="!planFeatureRows.length" class="text-sm text-slate-400">{{ t("adminConsole.noPlanFeatureFlags") }}</p>
+      <div v-if="planFlagsLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in 3" :key="`plan-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-28 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-20 rounded-2xl"></div>
+            <div class="ui-skeleton h-20 rounded-2xl"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!planFeatureRows.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.planFeatureFlags") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noPlanFeatureFlags") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.planFeatureControlsHint") }}</p>
+      </article>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="plan in planFeatureRows"
@@ -649,8 +743,24 @@
         </div>
       </div>
       <template v-if="adminPanels.jobs">
-      <p v-if="loading" class="text-sm text-slate-400">{{ t("adminConsole.loadingJobs") }}</p>
-      <div class="space-y-2 md:hidden">
+      <div v-if="loading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in 3" :key="`job-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-32 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-16 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-5/6 rounded-full"></div>
+            <div class="ui-skeleton h-16 rounded-2xl"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!jobs.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.provisioningJobs") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noJobsYet") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.provisioningOperations") }}</p>
+      </article>
+      <div v-else class="space-y-2 md:hidden">
         <article
           v-for="job in jobs"
           :key="`job-mobile-${job.id}`"
@@ -664,10 +774,9 @@
           <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ new Date(job.updated_at).toLocaleString() }}</p>
           <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
         </article>
-        <p v-if="!jobs.length && !loading" class="text-sm text-slate-400">{{ t("adminConsole.noJobsYet") }}</p>
       </div>
 
-      <div class="ui-table-wrap hidden md:block">
+      <div v-if="jobs.length" class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[920px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
@@ -689,9 +798,6 @@
               </td>
               <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
               <td class="px-4 py-3 text-slate-400">{{ new Date(job.updated_at).toLocaleString() }}</td>
-            </tr>
-            <tr v-if="!jobs.length && !loading">
-              <td colspan="6" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noJobsYet") }}</td>
             </tr>
           </tbody>
         </table>
@@ -735,8 +841,25 @@
       <p class="text-xs text-slate-500">
         {{ t("adminConsole.pageEntriesSummary", { page: auditPage, pages: auditTotalPages, total: auditTotal }) }}
       </p>
-      <p v-if="auditLoading" class="text-sm text-slate-400">{{ t("adminConsole.loadingAuditLogs") }}</p>
-      <div class="space-y-2 md:hidden">
+      <div v-if="auditLoading" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <article v-for="n in 3" :key="`audit-skeleton-${n}`" class="ui-admin-card space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="ui-skeleton h-4 w-28 rounded-full"></div>
+            <div class="ui-skeleton h-4 w-20 rounded-full"></div>
+          </div>
+          <div class="space-y-2">
+            <div class="ui-skeleton h-3 w-full rounded-full"></div>
+            <div class="ui-skeleton h-3 w-2/3 rounded-full"></div>
+            <div class="ui-skeleton h-14 rounded-2xl"></div>
+          </div>
+        </article>
+      </div>
+      <article v-else-if="!auditLogs.length" class="ui-empty-state">
+        <p class="ui-kicker">{{ t("adminConsole.securityAuditLog") }}</p>
+        <h3 class="text-xl font-semibold text-white">{{ t("adminConsole.noAuditEntriesYet") }}</h3>
+        <p class="max-w-2xl text-sm text-slate-400">{{ t("adminConsole.pageEntriesSummary", { page: auditPage, pages: auditTotalPages, total: auditTotal }) }}</p>
+      </article>
+      <div v-else class="space-y-2 md:hidden">
         <article
           v-for="entry in auditLogs"
           :key="`audit-mobile-${entry.id}`"
@@ -750,9 +873,8 @@
           <p class="text-xs text-slate-400">{{ t("adminConsole.target") }}: {{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</p>
           <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ formatAuditMetadata(entry.metadata) }}</p>
         </article>
-        <p v-if="!auditLogs.length && !auditLoading" class="text-sm text-slate-400">{{ t("adminConsole.noAuditEntriesYet") }}</p>
       </div>
-      <div class="ui-table-wrap hidden md:block">
+      <div v-if="auditLogs.length" class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
@@ -770,9 +892,6 @@
               <td class="px-4 py-3 text-slate-300">{{ entry.actor_username || t("adminConsole.system") }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</td>
               <td class="px-4 py-3 text-slate-400 max-w-[360px] whitespace-pre-wrap text-xs">{{ formatAuditMetadata(entry.metadata) }}</td>
-            </tr>
-            <tr v-if="!auditLogs.length && !auditLoading">
-              <td colspan="5" class="px-4 py-3 text-slate-400">{{ t("adminConsole.noAuditEntriesYet") }}</td>
             </tr>
           </tbody>
         </table>
