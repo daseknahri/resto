@@ -8,6 +8,21 @@ export const isLocalTenantHost = (host) => host === "localhost" || host.endsWith
 
 const platformPublicHosts = parseCsv(import.meta.env.VITE_PLATFORM_PUBLIC_HOSTS || "");
 
+const isLikelyMenuRootHost = (host) => {
+  const normalized = String(host || "").trim().toLowerCase();
+  return normalized === "menu" || normalized.startsWith("menu.");
+};
+
+const isLikelyAdminRootHost = (host) => {
+  const normalized = String(host || "").trim().toLowerCase();
+  return normalized === "admin" || normalized.startsWith("admin.");
+};
+
+const isLikelyApiRootHost = (host) => {
+  const normalized = String(host || "").trim().toLowerCase();
+  return normalized === "api" || normalized.startsWith("api.");
+};
+
 const firstMatchingHost = (matcher) => platformPublicHosts.find((host) => matcher(host)) || "";
 
 export const currentHostname = () => {
@@ -17,17 +32,24 @@ export const currentHostname = () => {
 
 export const isPlatformPublicHost = (host = currentHostname()) => {
   const normalized = String(host || "").trim().toLowerCase();
-  return platformPublicHosts.includes(normalized);
+  if (platformPublicHosts.includes(normalized)) return true;
+  // Fallback for production builds where VITE_PLATFORM_PUBLIC_HOSTS might be missing.
+  // This keeps root hosts (menu/admin/api) from being treated as tenant hosts.
+  return (
+    isLikelyMenuRootHost(normalized) ||
+    isLikelyAdminRootHost(normalized) ||
+    isLikelyApiRootHost(normalized)
+  );
 };
 
 export const isPlatformAdminHost = (host = currentHostname()) => {
   const normalized = String(host || "").trim().toLowerCase();
-  return normalized === "admin" || normalized.startsWith("admin.");
+  return isLikelyAdminRootHost(normalized);
 };
 
 export const isPlatformApiHost = (host = currentHostname()) => {
   const normalized = String(host || "").trim().toLowerCase();
-  return normalized === "api" || normalized.startsWith("api.");
+  return isLikelyApiRootHost(normalized);
 };
 
 export const isPublicDemoHost = (host = currentHostname()) =>

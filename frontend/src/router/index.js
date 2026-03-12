@@ -3,7 +3,7 @@ import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 import { translate } from "../i18n/translate";
-import { currentHostname, getPlatformAdminHost, isPlatformAdminHost } from "../lib/runtimeHost";
+import { currentHostname, getPlatformAdminHost, isPlatformAdminHost, isPublicDemoHost } from "../lib/runtimeHost";
 
 const LandingLayout = () => import("../layouts/LandingLayout.vue");
 const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
@@ -124,6 +124,11 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const toast = useToastStore();
+  const needsCustomerInterface = to.matched.some((route) => route.meta?.interface === "customer");
+  if (needsCustomerInterface && isPublicDemoHost()) {
+    return { name: "home" };
+  }
+
   const needsAdmin = to.matched.some((route) => route.meta?.adminOnly);
   if (needsAdmin) {
     const adminHost = getPlatformAdminHost();
