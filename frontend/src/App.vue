@@ -44,10 +44,13 @@ onMounted(async () => {
     locale.setTenantDefault(tenant.resolvedMeta?.profile?.language);
     if (tenant.resolvedMeta?.profile) theme.apply(tenant.resolvedMeta.profile);
   }
-  try {
-    await session.fetchSession();
-  } catch {
-    // Anonymous session is expected for public visitors.
+  const shouldFetchSession = !isPublicDemoHost();
+  if (shouldFetchSession) {
+    try {
+      await session.fetchSession();
+    } catch {
+      // Anonymous session is expected for public visitors.
+    }
   }
 });
 </script>
