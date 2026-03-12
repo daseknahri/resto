@@ -25,13 +25,13 @@
     </header>
 
     <div class="grid gap-3 sm:grid-cols-3">
-      <a href="mailto:support@example.com" class="ui-spotlight-card p-4 transition hover:border-[var(--color-secondary)]/70">
+      <a :href="`mailto:${supportEmail}`" class="ui-spotlight-card p-4 transition hover:border-[var(--color-secondary)]/70">
         <p class="ui-kicker">{{ t("common.email") }}</p>
-        <p class="mt-2 text-sm font-semibold text-slate-100">support@example.com</p>
+        <p class="mt-2 text-sm font-semibold text-slate-100">{{ supportEmail }}</p>
       </a>
-      <a href="https://wa.me/212600000000" target="_blank" rel="noopener noreferrer" class="ui-spotlight-card p-4 transition hover:border-[var(--color-secondary)]/70">
+      <a :href="whatsappUrl" target="_blank" rel="noopener noreferrer" class="ui-spotlight-card p-4 transition hover:border-[var(--color-secondary)]/70">
         <p class="ui-kicker">{{ t("contactPage.whatsapp") }}</p>
-        <p class="mt-2 text-sm font-semibold text-slate-100">+212600000000</p>
+        <p class="mt-2 text-sm font-semibold text-slate-100">{{ supportPhoneLabel }}</p>
       </a>
       <article class="ui-spotlight-card p-4">
         <p class="ui-kicker">{{ t("contactPage.hours") }}</p>
@@ -51,7 +51,17 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
+const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || "contact@kepoli.com").trim());
+const supportPhone = computed(() => String(import.meta.env.VITE_CONTACT_PHONE || "").trim());
+const supportPhoneLabel = computed(() => supportPhone.value || "+212...");
+const whatsappUrl = computed(() => {
+  const normalized = supportPhone.value.replace(/[^\d]/g, "");
+  const text = encodeURIComponent(import.meta.env.VITE_CONTACT_MESSAGE || "");
+  if (!normalized) return "#";
+  return `https://wa.me/${normalized}${text ? `?text=${text}` : ""}`;
+});
 </script>

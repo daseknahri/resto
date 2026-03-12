@@ -18,8 +18,8 @@
         <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
           <article class="ui-stat-tile">
             <p class="ui-stat-label">{{ t("common.plan") }}</p>
-            <p class="ui-stat-value text-2xl">Basic</p>
-            <p class="ui-stat-note">{{ t("leadCapture.responseTarget") }}</p>
+            <p class="ui-stat-value text-2xl">{{ selectedPlanLabel }}</p>
+            <p class="ui-stat-note">{{ selectedPlanDescription }}</p>
           </article>
           <article class="ui-stat-tile">
             <p class="ui-stat-label">{{ t("leadCapture.whatHappensNext") }}</p>
@@ -130,6 +130,39 @@
       </form>
 
       <aside class="space-y-4">
+        <article class="ui-command-deck p-5">
+          <p class="ui-kicker">{{ t("common.plan") }}</p>
+          <div class="mt-4 grid gap-3">
+            <button
+              type="button"
+              class="rounded-[1.35rem] border p-4 text-left transition"
+              :class="form.plan_code === 'basic' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              @click="form.plan_code = 'basic'"
+            >
+              <p class="text-sm font-semibold text-white">Basic</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planBasic") }}</p>
+            </button>
+            <button
+              type="button"
+              class="rounded-[1.35rem] border p-4 text-left transition"
+              :class="form.plan_code === 'growth' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              @click="form.plan_code = 'growth'"
+            >
+              <p class="text-sm font-semibold text-white">Growth</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
+            </button>
+            <button
+              type="button"
+              class="rounded-[1.35rem] border p-4 text-left transition"
+              :class="form.plan_code === 'pro' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              @click="form.plan_code = 'pro'"
+            >
+              <p class="text-sm font-semibold text-white">Pro</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planPro") }}</p>
+            </button>
+          </div>
+        </article>
+
         <article class="ui-spotlight-card p-5">
           <p class="ui-kicker">{{ t("leadCapture.whatHappensNext") }}</p>
           <ol class="mt-4 space-y-3 text-sm text-slate-200">
@@ -143,15 +176,15 @@
         <article class="ui-panel-soft p-5">
           <p class="ui-kicker">{{ t("leadCapture.planGuidance") }}</p>
           <div class="mt-4 space-y-3 text-sm text-slate-200">
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'basic' ? 'border-[var(--color-secondary)]/50' : ''">
               <p class="font-semibold text-white">Basic</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planBasic") }}</p>
             </div>
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'growth' ? 'border-[var(--color-secondary)]/50' : ''">
               <p class="font-semibold text-white">Growth</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
             </div>
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'pro' ? 'border-[var(--color-secondary)]/50' : ''">
               <p class="font-semibold text-white">Pro</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planPro") }}</p>
             </div>
@@ -163,7 +196,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, watch } from "vue";
+import { computed, onMounted, reactive, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useLeadStore } from "../stores/lead";
@@ -187,6 +220,18 @@ const errors = reactive({
   phone: "",
   plan_code: "",
   notes: "",
+});
+
+const selectedPlanLabel = computed(() => {
+  if (form.plan_code === "growth") return "Growth";
+  if (form.plan_code === "pro") return "Pro";
+  return "Basic";
+});
+
+const selectedPlanDescription = computed(() => {
+  if (form.plan_code === "growth") return t("leadCapture.planGrowth");
+  if (form.plan_code === "pro") return t("leadCapture.planPro");
+  return t("leadCapture.planBasic");
 });
 
 const applyPlanFromQuery = () => {
