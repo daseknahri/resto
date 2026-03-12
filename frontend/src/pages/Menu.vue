@@ -182,6 +182,84 @@
       </div>
     </section>
 
+    <section
+      v-if="featuredCategoryCards.length"
+      class="grid gap-3 xl:grid-cols-[minmax(0,1.12fr),320px]"
+    >
+      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 80ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t('menu.kicker') }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t('customerLeadPage.browseTitle') }}</h2>
+          </div>
+          <span class="ui-chip-strong">
+            {{ featuredCategoryCards.length }} {{ t('common.categories') }}
+          </span>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <button
+            v-for="category in featuredCategoryCards"
+            :key="`featured-${category.slug}`"
+            class="ui-orbit-card ui-surface-lift ui-press overflow-hidden p-0 text-left transition hover:border-[var(--color-secondary)]/70"
+            @click="goToCategory(category.slug)"
+          >
+            <div class="relative min-h-[176px] overflow-hidden">
+              <img
+                :src="category.image_url || placeholder"
+                :alt="category.name"
+                class="absolute inset-0 h-full w-full object-cover opacity-50"
+                loading="lazy"
+              />
+              <div class="absolute inset-0 bg-gradient-to-br from-slate-950/82 via-slate-950/70 to-slate-950/86"></div>
+
+              <div class="relative flex min-h-[176px] flex-col justify-between p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <span class="ui-chip-strong">
+                    {{ category.dishes?.length || 0 }} {{ t('common.dishes') }}
+                  </span>
+                  <span class="ui-chip text-[10px]">{{ category.rank }}</span>
+                </div>
+                <div class="space-y-1">
+                  <p class="line-clamp-1 text-lg font-semibold text-white">
+                    {{ category.name }}
+                  </p>
+                  <p class="line-clamp-2 text-sm text-slate-300">
+                    {{ category.description || t('menu.tip') }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </button>
+        </div>
+      </article>
+
+      <aside class="ui-command-deck ui-reveal p-4 md:p-5" style="--ui-delay: 110ms">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t('customerLeadPage.stepOne') }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t('menu.kicker') }}</h2>
+          <p class="text-sm text-slate-300">{{ t('menu.tip') }}</p>
+        </div>
+
+        <div class="mt-4 grid gap-2">
+          <button
+            v-for="category in categories.slice(0, 5)"
+            :key="`rail-${category.slug}`"
+            class="ui-admin-subcard flex items-center justify-between gap-3 text-left transition hover:border-[var(--color-secondary)]/70"
+            @click="goToCategory(category.slug)"
+          >
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-white">{{ category.name }}</p>
+              <p class="mt-1 text-xs text-slate-400">
+                {{ category.dishes?.length || 0 }} {{ t('common.dishes') }}
+              </p>
+            </div>
+            <span class="ui-chip text-[10px]">{{ t('categoryCard.go') }}</span>
+          </button>
+        </div>
+      </aside>
+    </section>
+
     <div class="grid gap-4 sm:grid-cols-2">
       <CategoryCard
         v-for="(cat, index) in categories"
@@ -299,6 +377,15 @@ const heroCategory = computed(() => {
   return ranked[0] || null;
 });
 const highlightCategory = computed(() => categories.value[0] || heroCategory.value || null);
+const featuredCategoryCards = computed(() =>
+  [...categories.value]
+    .sort((a, b) => (b.dishes?.length || 0) - (a.dishes?.length || 0))
+    .slice(0, 3)
+    .map((category, index) => ({
+      ...category,
+      rank: String(index + 1).padStart(2, '0'),
+    }))
+);
 
 const categories = computed(() => {
   const term = search.value.toLowerCase();

@@ -91,6 +91,74 @@
       </div>
     </header>
 
+    <section v-if="featuredDish" class="grid gap-3 xl:grid-cols-[minmax(0,1.08fr),320px]">
+      <article class="ui-focus-card ui-reveal overflow-hidden p-0" style="--ui-delay: 90ms">
+        <div class="grid gap-4 md:grid-cols-[220px,minmax(0,1fr)]">
+          <div class="relative min-h-[220px] overflow-hidden rounded-[1.5rem] border border-slate-800/60 bg-slate-950/60">
+            <img
+              :src="featuredDish.image_url || placeholder"
+              :alt="featuredDish.name"
+              class="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+            />
+            <div class="absolute inset-0 bg-gradient-to-br from-slate-950/82 via-slate-950/56 to-slate-950/84"></div>
+            <div class="relative flex min-h-[220px] flex-col justify-between p-4">
+              <span class="ui-chip-strong">{{ t("category.viewDish") }}</span>
+              <div class="space-y-1">
+                <p class="ui-kicker">{{ t("customerLeadPage.stepOne") }}</p>
+                <p class="text-xl font-semibold text-white">{{ featuredDish.name }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex min-h-full flex-col justify-between gap-4 p-4 md:pr-5 md:pt-5">
+            <div class="space-y-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="ui-chip">{{ categoryName }}</span>
+                <span class="ui-chip">{{ formatCurrency(featuredDish.price, featuredDish.currency) }}</span>
+              </div>
+              <h2 class="text-2xl font-semibold text-white">{{ featuredDish.name }}</h2>
+              <p class="text-sm leading-relaxed text-slate-300">
+                {{ featuredDish.description || t("dishPage.noDescription") }}
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <RouterLink
+                :to="{ name: 'dish', params: { category: props.slug, dish: featuredDish.slug } }"
+                class="ui-btn-primary justify-center"
+              >
+                {{ t("category.viewDish") }}
+              </RouterLink>
+              <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
+                {{ t("customerLayout.navCart") }}
+              </RouterLink>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="ui-command-deck ui-reveal p-4 md:p-5" style="--ui-delay: 110ms">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t("customerLeadPage.stepTwo") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.reserveTitle") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
+        </div>
+
+        <div class="mt-4 grid gap-2">
+          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+            {{ t("customerLayout.navReserve") }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
+            {{ t("customerLayout.navMenu") }}
+          </RouterLink>
+          <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
+            {{ t("customerLayout.navCart") }}
+          </RouterLink>
+        </div>
+      </aside>
+    </section>
+
     <div class="grid gap-4">
       <article
         v-for="(dish, index) in filteredDishes"
@@ -195,6 +263,7 @@ const filteredDishes = computed(() => {
     return name.includes(term) || description.includes(term);
   });
 });
+const featuredDish = computed(() => filteredDishes.value[0] || null);
 const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80";
 
 onMounted(() => {
