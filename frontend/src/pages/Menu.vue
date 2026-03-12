@@ -151,6 +151,23 @@
         <p>{{ t('menu.tip') }}</p>
         <p class="ui-chip">{{ totalDishes }} {{ t('common.dishes') }}</p>
       </div>
+      <div class="ui-state-strip">
+        <div class="relative z-[1] flex flex-wrap items-center gap-2 text-xs">
+          <span class="ui-state-chip" :data-active="isRestaurantOpen">
+            <span class="ui-live-dot" :class="isRestaurantOpen ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+            {{ isRestaurantOpen ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow') }}
+          </span>
+          <span class="ui-state-chip" :data-active="Boolean(cart.count)">
+            {{ t('common.cart') }} / {{ itemCountLabel(cart.count) }}
+          </span>
+          <span v-if="cart.tableLabel" class="ui-state-chip" data-active="true">
+            {{ t('common.table') }} / {{ cart.tableLabel }}
+          </span>
+          <span class="ui-state-chip" :data-active="Boolean(search)">
+            {{ search ? search : t('menu.sortOrder') }}
+          </span>
+        </div>
+      </div>
       <div
         v-if="categories.length"
         class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -158,7 +175,8 @@
         <button
           v-for="cat in categories.slice(0, 8)"
           :key="`quick-${cat.slug}`"
-          class="ui-chip whitespace-nowrap transition-colors hover:border-[var(--color-secondary)]/55 hover:text-[var(--color-secondary)]"
+          class="ui-state-chip whitespace-nowrap"
+          :data-active="highlightCategory?.slug === cat.slug"
           @click="goToCategory(cat.slug)"
         >
           {{ cat.name }}

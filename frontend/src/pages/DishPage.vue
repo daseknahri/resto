@@ -193,16 +193,30 @@
                 })
               }}</span>
             </div>
+            <div class="ui-state-strip">
+              <div class="relative z-[1] flex flex-wrap items-center gap-2 text-xs">
+                <span class="ui-state-chip" :data-active="selectedOptionObjects.length > 0">
+                  {{ t('dishPage.options') }} / {{ selectedOptionObjects.length }}
+                </span>
+                <span class="ui-state-chip" :data-active="qty > 1">
+                  {{ t('dishPage.qty') }} / {{ qty }}
+                </span>
+                <span class="ui-state-chip" :data-active="!hasRequiredMissing">
+                  {{
+                    hasRequiredMissing
+                      ? t('dishPage.selectRequiredOptions')
+                      : t('dishPage.total')
+                  }}
+                </span>
+              </div>
+            </div>
             <ul class="grid gap-2 sm:grid-cols-2 text-sm">
               <li
                 v-for="opt in dish.options"
                 :key="opt.id"
-                class="rounded-xl border bg-slate-900/60 px-3 py-2 transition-colors"
-                :class="
-                  isOptionSelected(opt.id)
-                    ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/10'
-                    : 'border-slate-800 hover:border-[var(--color-secondary)]/50'
-                "
+                class="ui-selection-card"
+                :data-active="isOptionSelected(opt.id)"
+                :data-warning="opt.is_required && !isOptionSelected(opt.id)"
               >
                 <label class="flex w-full items-center gap-2">
                   <input
@@ -429,6 +443,23 @@
               </button>
             </div>
 
+            <div class="ui-state-strip">
+              <div class="relative z-[1] grid gap-2 text-xs sm:grid-cols-3">
+                <div class="ui-admin-subcard">
+                  <p class="ui-stat-label">{{ t('common.cart') }}</p>
+                  <p class="mt-2 text-sm font-semibold text-white">{{ itemCountLabel(cart.count) }}</p>
+                </div>
+                <div class="ui-admin-subcard">
+                  <p class="ui-stat-label">{{ t('dishPage.options') }}</p>
+                  <p class="mt-2 text-sm font-semibold text-white">{{ selectedOptionObjects.length }}</p>
+                </div>
+                <div class="ui-admin-subcard">
+                  <p class="ui-stat-label">{{ t('menu.mode') }}</p>
+                  <p class="mt-2 text-sm font-semibold text-white">{{ orderingStateLabel }}</p>
+                </div>
+              </div>
+            </div>
+
             <div class="grid gap-2">
               <button
                 class="ui-btn-outline w-full justify-center"
@@ -516,7 +547,11 @@
       <div class="min-w-0">
         <p class="truncate text-sm text-slate-200">{{ dish.name }}</p>
         <p class="text-xs text-slate-400">
-          {{ selectedOptionObjects.length }} {{ t('dishPage.options') }} / {{ qty }} {{ t('dishPage.qty') }}
+          {{
+            hasRequiredMissing
+              ? t('dishPage.selectRequiredOptions')
+              : `${selectedOptionObjects.length} ${t('dishPage.options')} / ${qty} ${t('dishPage.qty')}`
+          }}
         </p>
         <p class="text-lg font-semibold text-[var(--color-secondary)]">
           {{ formatCurrency(totalWithOptions, dish.currency) }}

@@ -252,10 +252,25 @@
             </button>
           </div>
         </div>
+        <div class="ui-state-strip">
+          <div class="relative z-[1] flex flex-wrap items-center gap-2 text-xs">
+            <span class="ui-state-chip" data-active="true">
+              {{ t("ownerReservations.selectedCount", { count: selectedCount }) }}
+            </span>
+            <span class="ui-state-chip" :data-active="statusFilter !== 'all'">
+              {{ statusFilterLabel(statusFilter) }}
+            </span>
+            <span class="ui-state-chip" :data-active="reminderFilter !== 'all'">
+              {{ reminderFilterLabel(reminderFilter) }}
+            </span>
+          </div>
+        </div>
       </article>
 
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
-      <p v-else-if="loading" class="text-sm text-slate-400">{{ t("ownerReservations.loadingReservations") }}</p>
+      <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
+        <article v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]"></article>
+      </div>
       <article v-else-if="!reservations.length" class="ui-section-band space-y-3 text-sm">
         <div class="space-y-1">
           <p class="ui-kicker">{{ activeFilterSummary }}</p>
@@ -293,7 +308,7 @@
             </span>
           </div>
           <div class="flex flex-wrap gap-2">
-            <span class="ui-data-strip">{{ formatDate(reservation.created_at) }}</span>
+            <span class="ui-state-chip" data-active="true">{{ formatDate(reservation.created_at) }}</span>
             <span
               v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'"
               class="rounded-full px-2 py-1 text-[11px] font-semibold"
@@ -301,7 +316,7 @@
             >
               {{ slaLabel(reservation) }}
             </span>
-            <span v-if="reservation.follow_up_due_at" class="ui-data-strip">
+            <span v-if="reservation.follow_up_due_at" class="ui-state-chip" :data-active="reservation.sla_state === 'warning' || reservation.sla_state === 'overdue'">
               {{ t("ownerReservations.dueLabel", { date: formatDate(reservation.follow_up_due_at) }) }}
             </span>
           </div>
@@ -341,7 +356,7 @@
             <a
               v-if="telHref(reservation)"
               :href="telHref(reservation)"
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-[var(--color-secondary)]"
+              class="ui-btn-outline px-3 py-1.5 text-xs"
             >
               {{ t("common.call") }}
             </a>
@@ -350,7 +365,7 @@
               :href="whatsappHref(reservation)"
               target="_blank"
               rel="noopener noreferrer"
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-[var(--color-secondary)]"
+              class="ui-btn-outline px-3 py-1.5 text-xs"
             >
               {{ t("ownerReservations.quickChat") }}
             </a>
@@ -555,6 +570,8 @@ const reminderOptions = computed(() => [
 const activeStatusLabel = computed(() => statusOptions.value.find((option) => option.value === statusFilter.value)?.label || t("ownerReservations.allStatuses"));
 const activeReminderLabel = computed(() => reminderOptions.value.find((option) => option.value === reminderFilter.value)?.label || t("ownerReservations.allReminders"));
 const activeFilterSummary = computed(() => `${activeStatusLabel.value} / ${activeReminderLabel.value}`);
+const statusFilterLabel = (value) => statusOptions.value.find((option) => option.value === value)?.label || t("ownerReservations.allStatuses");
+const reminderFilterLabel = (value) => reminderOptions.value.find((option) => option.value === value)?.label || t("ownerReservations.allReminders");
 
 const selectedCount = computed(() => selectedIds.value.length);
 const allSelectedOnPage = computed(() => {
