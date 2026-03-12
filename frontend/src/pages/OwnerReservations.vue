@@ -1,35 +1,54 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-28 sm:pb-6">
-    <header class="space-y-3 ui-fade-up">
-      <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
-      <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
-      <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerReservations.description") }}</p>
+    <header class="ui-workspace-stage ui-fade-up space-y-4">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div class="space-y-3">
+          <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
+          <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
+          <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ t("ownerReservations.description") }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
+            {{ loading ? t("common.loading") : t("common.refresh") }}
+          </button>
+          <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
+            {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ counts.total }} {{ t("ownerReservations.total") }}</span>
+        <span class="ui-data-strip">{{ counts.new }} {{ t("ownerReservations.new") }}</span>
+        <span class="ui-data-strip">{{ counts.overdue_new }} {{ t("ownerReservations.overdue") }}</span>
+        <span class="ui-data-strip">{{ followUpProgress }}% {{ t("ownerReservations.followUpCompletion") }}</span>
+      </div>
     </header>
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <article class="ui-panel p-4">
+      <article class="ui-stat-tile">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.total") }}</p>
         <p class="mt-2 text-2xl font-semibold text-white">{{ counts.total }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-stat-tile">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.new") }}</p>
         <p class="mt-2 text-2xl font-semibold text-amber-300">{{ counts.new }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-stat-tile">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.overdue") }}</p>
         <p class="mt-2 text-2xl font-semibold text-rose-300">{{ counts.overdue_new }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-stat-tile">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.contacted") }}</p>
         <p class="mt-2 text-2xl font-semibold text-sky-300">{{ counts.contacted }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-stat-tile">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerReservations.confirmed") }}</p>
         <p class="mt-2 text-2xl font-semibold text-emerald-300">{{ counts.won }}</p>
       </article>
     </div>
 
-    <article class="ui-panel p-4 space-y-2">
+    <article class="ui-section-band space-y-2">
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm text-slate-300">{{ t("ownerReservations.followUpCompletion") }}</p>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ followUpProgress }}%</span>
@@ -40,8 +59,8 @@
       <p class="text-xs text-slate-500">{{ t("ownerReservations.resolvedProgress", { resolved: resolvedCount, total: counts.total }) }}</p>
     </article>
 
-    <section class="ui-panel p-4 space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+    <section class="ui-command-deck space-y-4">
+      <div class="ui-toolbar-band flex flex-wrap items-center justify-between gap-3">
         <div class="ui-scroll-row">
           <button
             v-for="option in statusOptions"
@@ -56,7 +75,7 @@
         <span class="text-xs text-slate-500">{{ t("ownerReservations.statusFilter") }}</span>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="ui-toolbar-band flex flex-wrap items-center justify-between gap-3">
         <div class="ui-scroll-row">
           <button
             v-for="option in reminderOptions"
@@ -77,7 +96,7 @@
         </button>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,auto,auto,auto]">
+      <div class="ui-toolbar-band grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,auto,auto,auto]">
         <input
           v-model.trim="searchQuery"
           class="ui-input"
@@ -98,16 +117,10 @@
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
             {{ t("common.clear") }}
           </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
-            {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
-          </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
-            {{ loading ? t("common.loading") : t("common.refresh") }}
-          </button>
         </div>
       </div>
 
-      <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+      <div class="ui-toolbar-band">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <label class="inline-flex items-center gap-2 text-xs text-slate-300">
             <input type="checkbox" :checked="allSelectedOnPage" @change="toggleSelectAllOnPage" />
@@ -176,7 +189,7 @@
         <article
           v-for="reservation in reservations"
           :key="reservation.id"
-          class="rounded-2xl border bg-slate-900/70 p-4 space-y-3"
+          class="ui-reservation-card ui-surface-lift space-y-3"
           :class="reservationCardClass(reservation)"
         >
           <div class="flex items-start justify-between gap-3">

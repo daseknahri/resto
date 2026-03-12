@@ -1,8 +1,8 @@
 ﻿<template>
   <div class="ui-shell">
     <header class="ui-header">
-      <div class="mx-auto w-full max-w-6xl px-4 py-4 ui-fade-up">
-        <div class="ui-command-deck space-y-4">
+      <div class="mx-auto w-full max-w-7xl px-4 py-4 ui-fade-up">
+        <div class="ui-workspace-stage space-y-4">
           <div class="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div class="flex min-w-0 items-center gap-3">
               <img
@@ -23,6 +23,7 @@
                   </span>
                   <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="planModeClass">{{ planModeLabel }}</span>
                 </div>
+                <p class="mt-3 max-w-2xl text-sm text-slate-300">{{ t("ownerLayout.setupFlow") }}</p>
               </div>
             </div>
 
@@ -44,7 +45,14 @@
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
-            <p class="text-xs text-slate-400">{{ t("ownerLayout.setupFlow") }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <RouterLink to="/owner/onboarding" class="ui-btn-primary ui-touch-target px-4 py-2 text-xs md:hidden">
+                {{ t("ownerLayout.menuBuilder") }}
+              </RouterLink>
+              <RouterLink to="/menu" class="ui-btn-outline ui-touch-target px-4 py-2 text-xs md:hidden">
+                {{ t("ownerLayout.publicPreview") }}
+              </RouterLink>
+            </div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ tenant.meta?.slug || "tenant" }}</span>
               <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ planModeLabel }}</span>
@@ -54,25 +62,33 @@
       </div>
     </header>
 
-    <main class="mx-auto w-full max-w-6xl px-4 py-6 pb-28 md:pb-10">
+    <main class="mx-auto w-full max-w-7xl px-4 py-6 pb-28 md:pb-10">
       <RouterView />
     </main>
 
     <nav class="ui-bottom-dock md:hidden">
       <div class="ui-bottom-dock-grid grid-cols-5">
-        <RouterLink to="/owner" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]">
+        <RouterLink to="/owner" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]" :data-active="$route.path === '/owner'">
           {{ t("ownerLayout.dashboard") }}
         </RouterLink>
-        <RouterLink to="/owner/onboarding" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]">
+        <RouterLink
+          to="/owner/onboarding"
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :data-active="$route.path.startsWith('/owner/onboarding')"
+        >
           {{ t("ownerLayout.menuBuilder") }}
         </RouterLink>
-        <RouterLink to="/owner/tables" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]">
+        <RouterLink to="/owner/tables" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]" :data-active="$route.path.startsWith('/owner/tables')">
           {{ t("ownerLayout.tablesQr") }}
         </RouterLink>
-        <RouterLink to="/owner/reservations" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]">
+        <RouterLink
+          to="/owner/reservations"
+          class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]"
+          :data-active="$route.path.startsWith('/owner/reservations')"
+        >
           {{ t("ownerLayout.reservations") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]">
+        <RouterLink to="/menu" class="ui-pill-nav ui-touch-target justify-center text-center text-[11px]" :data-active="$route.path === '/menu'">
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
       </div>

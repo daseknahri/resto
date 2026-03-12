@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="min-h-screen bg-slate-950 px-4 py-6 text-slate-50 ui-safe-bottom">
     <div class="mx-auto max-w-6xl space-y-6">
-      <header class="ui-hero-ribbon ui-fade-up overflow-hidden p-0">
+      <header class="ui-workspace-stage ui-fade-up overflow-hidden p-0">
         <div class="grid gap-6 p-5 md:grid-cols-[1.15fr,0.85fr] md:p-6">
           <div class="space-y-3">
             <span class="ui-chip-strong w-fit">{{ t("onboardingWizard.kicker") }}</span>
@@ -36,7 +36,7 @@
       </header>
 
       <div class="grid min-w-0 gap-6 lg:grid-cols-[340px,1fr]">
-        <aside class="ui-command-deck min-w-0 p-4">
+        <aside class="ui-workspace-stage min-w-0 p-4">
           <div v-if="showResumeHint" class="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-200">
             <p>{{ t("onboardingWizard.resumedFromStep", { current }) }}</p>
             <button class="mt-2 text-emerald-300 underline underline-offset-2 hover:text-emerald-200" @click="restartWizard">
@@ -50,7 +50,7 @@
               :key="step.id"
               type="button"
               class="group flex min-w-[220px] items-start gap-3 rounded-[1.25rem] border p-3 text-left transition lg:min-w-0"
-              :class="current === step.id ? 'border-amber-400/40 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-slate-800/80 bg-slate-950/35 hover:border-slate-700/80'"
+              :class="current === step.id ? 'border-amber-400/40 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-slate-800/80 bg-slate-950/45 hover:border-slate-700/80'"
               @click="current = step.id"
             >
               <div
