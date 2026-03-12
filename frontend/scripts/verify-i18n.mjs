@@ -1,4 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { messages } from "../src/i18n/messages.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = resolve(__filename, "..");
+const projectRoot = resolve(__dirname, "..");
 
 const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
@@ -23,8 +30,27 @@ const brokenArabic = Object.entries(arabic).filter(
     (value.includes("????") || /[ØÙÂ][^\s]*/.test(value)),
 );
 
+const sourceFiles = [
+  resolve(projectRoot, "src/i18n/messages.js"),
+  resolve(projectRoot, "src/i18n/messages-ar.js"),
+  resolve(projectRoot, "src/i18n/config.js"),
+];
+
+const sourceIssues = sourceFiles.flatMap((filePath) => {
+  const text = readFileSync(filePath, "utf8");
+  const issues = [];
+  if (/\?\?\?\?/.test(text)) {
+    issues.push(`${filePath}: contains placeholder question-mark translations`);
+  }
+  if (/[\u00D8\u00D9\u00C2][^\s]*/.test(text)) {
+    issues.push(`${filePath}: contains mojibake-like sequences`);
+  }
+  return issues;
+});
+
 console.log(`Arabic missing keys: ${missingArabic.length}`);
 console.log(`Arabic broken strings: ${brokenArabic.length}`);
+console.log(`Arabic source issues: ${sourceIssues.length}`);
 
 if (missingArabic.length) {
   console.log("Missing Arabic keys:");
@@ -36,7 +62,12 @@ if (brokenArabic.length) {
   brokenArabic.slice(0, 50).forEach(([key, value]) => console.log(`- ${key}: ${value}`));
 }
 
-if (missingArabic.length || brokenArabic.length) {
+if (sourceIssues.length) {
+  console.log("Arabic source issues:");
+  sourceIssues.slice(0, 50).forEach((issue) => console.log(`- ${issue}`));
+}
+
+if (missingArabic.length || brokenArabic.length || sourceIssues.length) {
   process.exitCode = 1;
 } else {
   console.log("Arabic locale verification passed.");
