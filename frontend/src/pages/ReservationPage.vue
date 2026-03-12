@@ -1,186 +1,221 @@
 <template>
   <div class="space-y-4 px-4 py-4 pb-32 sm:pb-8 ui-safe-bottom">
-    <header class="ui-hero-ribbon ui-reveal p-4 md:p-5">
-      <div class="space-y-1.5">
-        <p class="ui-kicker">{{ t("reservationPage.kicker") }}</p>
-        <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl">{{ t("reservationPage.title") }}</h1>
-        <p class="max-w-2xl text-sm text-slate-300">{{ t("reservationPage.description") }}</p>
-      </div>
-      <div class="mt-3 ui-divider"></div>
-      <p class="mt-2 text-xs text-slate-400">
-        {{
-          cart.tableLabel
-            ? t("reservationPage.tableDetected", { table: cart.tableLabel })
-            : t("reservationPage.tableMissing")
-        }}
-      </p>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ cart.tableLabel ? t("common.reserve") : t("reservationPage.directBooking") }}</span>
-        <span v-if="phoneHref" class="ui-data-strip">{{ t("reservationPage.callNow") }}</span>
-        <span v-if="whatsappHref" class="ui-data-strip">{{ t("reservationPage.whatsappMessage") }}</span>
-      </div>
-      <a
-        v-if="reservationUrl"
-        :href="reservationUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="mt-2 inline-flex text-xs text-[var(--color-secondary)] hover:underline"
-        @click="trackContactClick('reservation_url')"
-      >
-        {{ t("reservationPage.directBooking") }}
-      </a>
-    </header>
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr),340px]">
+      <div class="space-y-4">
+        <header class="ui-hero-stage ui-reveal overflow-hidden p-0">
+          <div class="relative min-h-[224px] overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-br from-amber-500/12 via-slate-950/60 to-teal-500/14"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_24%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_22%)]"></div>
 
-    <section class="grid gap-3 sm:grid-cols-2">
-      <a
-        v-if="phoneHref"
-        :href="phoneHref"
-        class="ui-orbit-card ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
-        style="--ui-delay: 70ms"
-        @click="trackContactClick('phone_call')"
-      >
-        <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
-        <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
-      </a>
-      <a
-        v-if="whatsappHref"
-        :href="whatsappHref"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="ui-orbit-card ui-surface-lift ui-reveal p-4 transition hover:border-[var(--color-secondary)]/70"
-        style="--ui-delay: 100ms"
-        @click="trackContactClick('whatsapp_contact')"
-      >
-        <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
-        <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
-      </a>
-    </section>
+            <div class="relative flex min-h-[224px] flex-col justify-end gap-3 p-4 md:p-5">
+              <div class="flex flex-wrap gap-2">
+                <span class="ui-chip-strong">{{ cart.tableLabel ? t("common.reserve") : t("reservationPage.directBooking") }}</span>
+                <span class="ui-chip">{{ t("reservationPage.partySize") }} / {{ form.party_size }}</span>
+                <span v-if="form.date" class="ui-chip">{{ form.date }}</span>
+              </div>
 
-    <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
-      <div class="mb-4 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
-        <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
-        <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
-      </div>
+              <div class="space-y-1.5">
+                <p class="ui-kicker">{{ t("reservationPage.kicker") }}</p>
+                <h1 class="ui-display text-3xl font-semibold tracking-tight text-white md:text-4xl">{{ t("reservationPage.title") }}</h1>
+                <p class="max-w-2xl text-sm text-slate-200 md:text-base">{{ t("reservationPage.description") }}</p>
+              </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("common.name") }}
-          <input
-            v-model.trim="form.name"
-            class="ui-input"
-            :class="fieldClass('name')"
-            autocomplete="name"
-            @input="clearError('name')"
-          />
-          <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
-        </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("common.phone") }}
-          <input
-            v-model.trim="form.phone"
-            class="ui-input"
-            :class="fieldClass('phone')"
-            placeholder="+212..."
-            inputmode="tel"
-            autocomplete="tel"
-            @input="clearError('phone')"
-          />
-          <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
-        </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("common.email") }}
-          <input
-            v-model.trim="form.email"
-            type="email"
-            class="ui-input"
-            :class="fieldClass('email')"
-            inputmode="email"
-            autocomplete="email"
-            @input="clearError('email')"
-          />
-          <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
-        </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("reservationPage.partySize") }}
-          <input
-            v-model.number="form.party_size"
-            type="number"
-            min="1"
-            class="ui-input"
-            :class="fieldClass('party_size')"
-            inputmode="numeric"
-            @input="clearError('party_size')"
-          />
-          <p v-if="errors.party_size" class="text-xs text-red-300">{{ errors.party_size }}</p>
-        </label>
-      </div>
+              <p class="text-xs text-slate-300/90">
+                {{
+                  cart.tableLabel
+                    ? t("reservationPage.tableDetected", { table: cart.tableLabel })
+                    : t("reservationPage.tableMissing")
+                }}
+              </p>
+            </div>
+          </div>
+        </header>
 
-      <div class="mt-5 space-y-2">
-        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("reservationPage.quickSize") }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="size in [2, 4, 6, 8]"
-            :key="size"
-            class="ui-pill-nav"
-            :class="Number(form.party_size) === size ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
-            @click="setPartySize(size)"
+        <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
+          <div class="mb-4 flex flex-wrap gap-2">
+            <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
+            <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
+            <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("common.name") }}
+              <input
+                v-model.trim="form.name"
+                class="ui-input"
+                :class="fieldClass('name')"
+                autocomplete="name"
+                @input="clearError('name')"
+              />
+              <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
+            </label>
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("common.phone") }}
+              <input
+                v-model.trim="form.phone"
+                class="ui-input"
+                :class="fieldClass('phone')"
+                placeholder="+212..."
+                inputmode="tel"
+                autocomplete="tel"
+                @input="clearError('phone')"
+              />
+              <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
+            </label>
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("common.email") }}
+              <input
+                v-model.trim="form.email"
+                type="email"
+                class="ui-input"
+                :class="fieldClass('email')"
+                inputmode="email"
+                autocomplete="email"
+                @input="clearError('email')"
+              />
+              <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
+            </label>
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("reservationPage.partySize") }}
+              <input
+                v-model.number="form.party_size"
+                type="number"
+                min="1"
+                class="ui-input"
+                :class="fieldClass('party_size')"
+                inputmode="numeric"
+                @input="clearError('party_size')"
+              />
+              <p v-if="errors.party_size" class="text-xs text-red-300">{{ errors.party_size }}</p>
+            </label>
+          </div>
+
+          <div class="mt-5 space-y-2">
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("reservationPage.quickSize") }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="size in [2, 4, 6, 8]"
+                :key="size"
+                class="ui-pill-nav"
+                :class="Number(form.party_size) === size ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
+                @click="setPartySize(size)"
+              >
+                {{ t("reservationPage.guestCount", { count: size }) }}
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("reservationPage.preferredDate") }}
+              <input v-model="form.date" type="date" class="ui-input" />
+            </label>
+            <label class="space-y-1 text-sm text-slate-200">
+              {{ t("reservationPage.preferredTime") }}
+              <input v-model="form.time" type="time" class="ui-input" />
+            </label>
+          </div>
+
+          <label class="mt-5 block space-y-1 text-sm text-slate-200">
+            {{ t("common.notes") }}
+            <textarea
+              v-model.trim="form.note"
+              rows="3"
+              class="ui-textarea"
+              :placeholder="t('reservationPage.notesPlaceholder')"
+            ></textarea>
+          </label>
+
+          <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
+
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65"
+              :disabled="lead.submitting || submitted"
+              @click="submitReservation"
+            >
+              {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
+            </button>
+            <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
+          </div>
+
+          <div
+            v-if="submitted"
+            class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
           >
-            {{ t("reservationPage.guestCount", { count: size }) }}
+            {{ t("reservationPage.reservationReceived") }}
+          </div>
+          <button
+            v-if="submitted"
+            type="button"
+            class="ui-btn-primary mt-3 w-full justify-center opacity-90 sm:w-auto"
+            disabled
+          >
+            {{ t("reservationPage.contactSoon") }}
           </button>
-        </div>
+        </section>
       </div>
 
-      <div class="mt-5 grid gap-4 md:grid-cols-2">
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("reservationPage.preferredDate") }}
-          <input v-model="form.date" type="date" class="ui-input" />
-        </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("reservationPage.preferredTime") }}
-          <input v-model="form.time" type="time" class="ui-input" />
-        </label>
-      </div>
+      <aside class="space-y-4">
+        <section class="ui-command-deck ui-reveal p-4 lg:sticky lg:top-24" style="--ui-delay: 80ms">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</h2>
+            <p class="text-sm text-slate-300">{{ t("reservationPage.description") }}</p>
+          </div>
 
-      <label class="mt-5 block space-y-1 text-sm text-slate-200">
-        {{ t("common.notes") }}
-        <textarea
-          v-model.trim="form.note"
-          rows="3"
-          class="ui-textarea"
-          :placeholder="t('reservationPage.notesPlaceholder')"
-        ></textarea>
-      </label>
+          <div class="mt-4 space-y-2">
+            <div class="ui-admin-subcard flex items-center justify-between gap-3">
+              <span class="ui-stat-label">{{ t("common.reserve") }}</span>
+              <span class="text-sm font-medium text-white">{{ cart.tableLabel || t("reservationPage.directBooking") }}</span>
+            </div>
+            <div class="ui-admin-subcard flex items-center justify-between gap-3">
+              <span class="ui-stat-label">{{ t("reservationPage.partySize") }}</span>
+              <span class="text-sm font-medium text-white">{{ form.party_size }}</span>
+            </div>
+            <div class="ui-admin-subcard flex items-center justify-between gap-3">
+              <span class="ui-stat-label">{{ t("customerLayout.navCart") }}</span>
+              <span class="text-sm font-medium text-white">{{ cart.count }}</span>
+            </div>
+          </div>
 
-      <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
-
-      <div class="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65"
-          :disabled="lead.submitting || submitted"
-          @click="submitReservation"
-        >
-          {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
-        </button>
-        <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
-      </div>
-
-      <div
-        v-if="submitted"
-        class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
-      >
-        {{ t("reservationPage.reservationReceived") }}
-      </div>
-      <button
-        v-if="submitted"
-        type="button"
-        class="ui-btn-primary mt-3 w-full justify-center opacity-90 sm:w-auto"
-        disabled
-      >
-        {{ t("reservationPage.contactSoon") }}
-      </button>
-    </section>
+          <div class="mt-4 grid gap-3">
+            <a
+              v-if="phoneHref"
+              :href="phoneHref"
+              class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
+              @click="trackContactClick('phone_call')"
+            >
+              <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
+              <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
+            </a>
+            <a
+              v-if="whatsappHref"
+              :href="whatsappHref"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
+              @click="trackContactClick('whatsapp_contact')"
+            >
+              <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
+              <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
+            </a>
+            <a
+              v-if="reservationUrl"
+              :href="reservationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-btn-outline justify-center"
+              @click="trackContactClick('reservation_url')"
+            >
+              {{ t("reservationPage.directBooking") }}
+            </a>
+          </div>
+        </section>
+      </aside>
+    </div>
 
     <div
       v-if="!submitted"

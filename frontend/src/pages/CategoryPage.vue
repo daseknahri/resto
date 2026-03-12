@@ -1,19 +1,71 @@
 <template>
   <div class="space-y-4 px-4 py-4 ui-safe-bottom">
-    <header class="ui-glass ui-reveal overflow-hidden p-4 md:p-5">
-      <div>
-        <p class="ui-kicker">{{ t("category.kicker") }}</p>
-        <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-        <p class="mt-1 text-sm text-slate-300">{{ t("category.dishesAvailable", { count: filteredDishes.length }) }}</p>
-      </div>
-      <div class="mt-3 ui-divider"></div>
-      <div class="mt-3 grid gap-3 md:grid-cols-[1fr,auto] md:items-center">
-        <p class="text-sm text-slate-400">{{ t("category.helper") }}</p>
-        <input
-          v-model.trim="search"
-          class="ui-input"
-          :placeholder="t('category.searchPlaceholder')"
-        />
+    <header class="ui-hero-stage ui-reveal overflow-hidden p-0">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr),320px]">
+        <div class="relative min-h-[240px] overflow-hidden rounded-[1.6rem] border border-slate-800/60 bg-slate-950/60 lg:min-h-[296px]">
+          <img
+            v-if="categoryImage"
+            :src="categoryImage"
+            :alt="categoryName"
+            class="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+          <div class="absolute inset-0 bg-slate-950/76"></div>
+          <div class="absolute inset-0 bg-gradient-to-br from-black/15 via-slate-950/60 to-black/80"></div>
+
+          <div class="relative flex min-h-[240px] flex-col justify-end gap-3 p-4 lg:min-h-[296px] lg:p-5">
+            <div class="flex flex-wrap gap-2">
+              <span class="ui-chip-strong">{{ t("category.dishesAvailable", { count: dishes.length }) }}</span>
+              <span v-if="cart.count" class="ui-chip">{{ t("common.cart") }} / {{ cart.count }}</span>
+              <span v-if="hasSearch" class="ui-chip text-[var(--color-secondary)]">{{ search }}</span>
+            </div>
+            <div class="space-y-1.5">
+              <p class="ui-kicker">{{ t("category.kicker") }}</p>
+              <h1 class="ui-display text-3xl font-semibold capitalize text-white md:text-4xl">{{ categoryName }}</h1>
+              <p class="max-w-2xl text-sm text-slate-200 md:text-base">{{ categoryDescription }}</p>
+            </div>
+          </div>
+        </div>
+
+        <aside class="ui-command-deck ui-reveal flex flex-col gap-4 p-4 lg:p-5" style="--ui-delay: 60ms">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("menu.kicker") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("category.helper") }}</h2>
+            <p class="text-sm text-slate-300">{{ t("menu.intro") }}</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t("customerLeadPage.dishes") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-white">{{ filteredDishes.length }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t("common.cart") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-white">{{ cart.count }}</p>
+            </article>
+          </div>
+
+          <label class="space-y-1 text-sm text-slate-200">
+            {{ t("category.searchPlaceholder") }}
+            <input
+              v-model.trim="search"
+              class="ui-input"
+              :placeholder="t('category.searchPlaceholder')"
+            />
+          </label>
+
+          <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+            <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
+              {{ t("customerLayout.navMenu") }}
+            </RouterLink>
+            <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
+              {{ t("customerLayout.navCart") }}
+            </RouterLink>
+            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+              {{ t("customerLayout.navReserve") }}
+            </RouterLink>
+          </div>
+        </aside>
       </div>
     </header>
 
@@ -21,30 +73,48 @@
       <article
         v-for="(dish, index) in filteredDishes"
         :key="dish.slug"
-        class="ui-panel ui-surface-lift ui-reveal p-3 sm:p-4"
+        class="ui-orbit-card ui-surface-lift ui-reveal p-3 sm:p-4"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 30}ms` }"
       >
-        <div class="flex flex-col gap-4 sm:flex-row">
-          <img :src="dish.image_url || placeholder" :alt="dish.name" class="h-36 w-full rounded-2xl object-cover sm:h-24 sm:w-24" loading="lazy" />
-          <div class="min-w-0 flex-1">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="truncate text-lg font-semibold text-white">{{ dish.name }}</p>
-                <p class="mt-0.5 line-clamp-2 text-sm text-slate-300">{{ dish.description }}</p>
-              </div>
-              <p class="font-semibold text-[var(--color-secondary)]">{{ formatCurrency(dish.price, dish.currency) }}</p>
+        <div class="grid gap-4 sm:grid-cols-[132px,minmax(0,1fr)] sm:items-start">
+          <div class="relative overflow-hidden rounded-[1.3rem] border border-slate-800/70 bg-slate-950/70">
+            <img :src="dish.image_url || placeholder" :alt="dish.name" class="h-36 w-full object-cover sm:h-[132px]" loading="lazy" />
+            <div class="absolute inset-x-0 top-0 flex items-center justify-between p-2">
+              <span class="ui-chip bg-slate-950/80 text-[10px]">{{ String(index + 1).padStart(2, "0") }}</span>
+              <span v-if="dish.variants?.length" class="ui-chip bg-slate-950/80 text-[10px]">
+                {{ t("dishPage.optionsCount", { count: dish.variants.length }) }}
+              </span>
             </div>
-            <RouterLink
-              :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
-              class="mt-3 inline-flex ui-touch-target items-center text-sm text-[var(--color-secondary)] hover:underline"
-            >
-              {{ t("category.viewDish") }}
-            </RouterLink>
+          </div>
+
+          <div class="flex min-h-full flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <p class="truncate text-lg font-semibold text-white sm:text-xl">{{ dish.name }}</p>
+                <p class="line-clamp-3 text-sm text-slate-300">{{ dish.description || t("dishPage.noDescription") }}</p>
+              </div>
+              <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">
+                {{ formatCurrency(dish.price, dish.currency) }}
+              </p>
+            </div>
+
+            <div class="mt-auto flex flex-wrap items-center gap-2">
+              <span class="ui-data-strip">{{ categoryName }}</span>
+              <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
+              <RouterLink
+                :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
+                class="ui-btn-outline ml-auto justify-center"
+              >
+                {{ t("category.viewDish") }}
+              </RouterLink>
+            </div>
           </div>
         </div>
       </article>
     </div>
-    <p v-if="!menu.loading && !filteredDishes.length" class="text-sm text-slate-400">{{ t("category.noMatch") }}</p>
+    <div v-if="!menu.loading && !filteredDishes.length" class="ui-section-band text-center">
+      <p class="text-sm text-slate-300">{{ t("category.noMatch") }}</p>
+    </div>
     <p v-if="menu.loading" class="text-sm text-slate-400">{{ t("category.loading") }}</p>
     <p v-if="menu.error" class="text-sm text-red-400">{{ menu.error }}</p>
   </div>
@@ -54,16 +124,25 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
+import { useCartStore } from "../stores/cart";
 import { useMenuStore } from "../stores/menu";
 
 const props = defineProps({ slug: String });
 const menu = useMenuStore();
+const cart = useCartStore();
 const { formatCurrency, t } = useI18n();
 const search = ref("");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);
 const menuCategories = computed(() => (Array.isArray(menu.categories) ? menu.categories : []));
-const categoryName = computed(() => menuCategories.value.find((c) => c.slug === props.slug)?.name || props.slug);
+const currentCategory = computed(() => menuCategories.value.find((c) => c.slug === props.slug) || null);
+const categoryName = computed(() => currentCategory.value?.name || props.slug);
+const categoryDescription = computed(() => {
+  const description = String(currentCategory.value?.description || "").trim();
+  return description || t("category.helper");
+});
+const categoryImage = computed(() => String(currentCategory.value?.image_url || "").trim());
+const hasSearch = computed(() => Boolean(search.value.trim()));
 const filteredDishes = computed(() => {
   const term = search.value.toLowerCase();
   if (!term) return dishes.value;
