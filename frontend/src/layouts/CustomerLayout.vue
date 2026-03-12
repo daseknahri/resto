@@ -34,8 +34,11 @@
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong">{{ serviceStateLabel }}</span>
-            <span class="ui-data-strip">{{ orderingModeLabel }}</span>
+            <span class="ui-status-pill">
+              <span class="ui-live-dot" :class="serviceDotClass"></span>
+              {{ serviceStateLabel }}
+            </span>
+            <span class="ui-status-pill">{{ orderingModeLabel }}</span>
             <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
             <a
               v-if="googleMapsUrl"
@@ -66,8 +69,12 @@
           </nav>
 
           <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-data-strip">{{ currentSectionLabel }}</span>
-            <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
+            <span class="ui-status-pill">
+              <span class="ui-live-dot bg-[var(--color-secondary)]"></span>
+              {{ currentSectionLabel }}
+            </span>
+            <span class="ui-status-pill">{{ orderingModeLabel }}</span>
+            <span v-if="cart.tableLabel" class="ui-status-pill">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
             <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-4 py-2 text-xs">
               {{ t("customerLayout.navReserve") }}
             </RouterLink>
@@ -90,11 +97,14 @@
 
     <section class="mx-auto w-full max-w-5xl px-4 pt-3 md:hidden">
       <div class="ui-hero-ribbon flex flex-wrap items-center gap-2 px-3 py-2.5 text-[11px] text-slate-300">
-        <span class="ui-data-strip">{{ currentSectionLabel }}</span>
-        <span v-if="cart.tableLabel" class="ui-data-strip">
+        <span class="ui-status-pill">
+          <span class="ui-live-dot" :class="serviceDotClass"></span>
+          {{ currentSectionLabel }}
+        </span>
+        <span v-if="cart.tableLabel" class="ui-status-pill">
           {{ t("customerLayout.table") }} {{ cart.tableLabel }}
         </span>
-        <span class="ui-data-strip">{{ orderingModeLabel }}</span>
+        <span class="ui-status-pill">{{ orderingModeLabel }}</span>
       </div>
     </section>
 
@@ -152,6 +162,13 @@ const serviceStateLabel = computed(() => {
   if (!profile) return orderingModeLabel.value;
   if (profile.is_menu_temporarily_disabled) return t("customerLayout.menuDisabledFallback");
   return profile.is_open === false ? t("customerLeadPage.closedNow") : t("customerLeadPage.openNow");
+});
+const serviceDotClass = computed(() => {
+  const profile = meta.value?.profile;
+  if (!profile) return "bg-[var(--color-secondary)]";
+  if (profile.is_menu_temporarily_disabled) return "bg-rose-400";
+  if (profile.is_open === false) return "bg-amber-400";
+  return "bg-emerald-400";
 });
 
 const activeCustomerSection = computed(() => {

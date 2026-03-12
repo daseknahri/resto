@@ -60,6 +60,25 @@
 
           <div class="space-y-2">
             <div class="flex items-center justify-between gap-2">
+              <p class="ui-kicker">{{ t("dishPage.options") }}</p>
+              <span class="ui-chip text-[10px]">{{ filteredDishes.length }}</span>
+            </div>
+            <div class="ui-scroll-row">
+              <button
+                v-for="filter in filterOptions"
+                :key="filter.key"
+                class="ui-pill-nav inline-flex items-center gap-2 whitespace-nowrap"
+                :class="activeFilter === filter.key ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
+                @click="activeFilter = filter.key"
+              >
+                <span>{{ filter.label }}</span>
+                <span class="ui-chip bg-slate-950/75 text-[10px]">{{ filter.count }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <span class="ui-chip text-[10px]">{{ menuCategories.length }}</span>
             </div>
@@ -116,6 +135,7 @@
               <div class="flex flex-wrap items-center gap-2">
                 <span class="ui-chip">{{ categoryName }}</span>
                 <span class="ui-chip">{{ formatCurrency(featuredDish.price, featuredDish.currency) }}</span>
+                <span v-if="activeFilter !== 'all'" class="ui-chip text-[var(--color-secondary)]">{{ activeFilterLabel }}</span>
               </div>
               <h2 class="text-2xl font-semibold text-white">{{ featuredDish.name }}</h2>
               <p class="text-sm leading-relaxed text-slate-300">
@@ -190,6 +210,7 @@
 
             <div class="mt-auto flex flex-wrap items-center gap-2">
               <span class="ui-data-strip">{{ categoryName }}</span>
+              <span v-if="activeFilter !== 'all'" class="ui-data-strip text-[var(--color-secondary)]">{{ activeFilterLabel }}</span>
               <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
               <RouterLink
                 :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
@@ -263,6 +284,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const { formatCurrency, t } = useI18n();
 const search = ref("");
+const activeFilter = ref("all");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);
 const menuCategories = computed(() => (Array.isArray(menu.categories) ? menu.categories : []));
@@ -274,13 +296,24 @@ const categoryDescription = computed(() => {
 });
 const categoryImage = computed(() => String(currentCategory.value?.image_url || "").trim());
 const hasSearch = computed(() => Boolean(search.value.trim()));
+const filterOptions = computed(() => [
+  { key: "all", label: categoryName.value, count: dishes.value.length },
+  { key: "vegan", label: t("dishPage.vegan"), count: dishes.value.filter((dish) => dish.is_vegan).length },
+  { key: "spicy", label: t("dishPage.spicy"), count: dishes.value.filter((dish) => dish.is_spicy).length },
+  { key: "options", label: t("dishPage.options"), count: dishes.value.filter((dish) => Array.isArray(dish.options) && dish.options.length > 0).length },
+]);
+const activeFilterLabel = computed(() => filterOptions.value.find((filter) => filter.key === activeFilter.value)?.label || categoryName.value);
 const filteredDishes = computed(() => {
   const term = search.value.toLowerCase();
-  if (!term) return dishes.value;
   return dishes.value.filter((dish) => {
     const name = String(dish.name || "").toLowerCase();
     const description = String(dish.description || "").toLowerCase();
-    return name.includes(term) || description.includes(term);
+    const matchesSearch = !term || name.includes(term) || description.includes(term);
+    if (!matchesSearch) return false;
+    if (activeFilter.value === "vegan") return Boolean(dish.is_vegan);
+    if (activeFilter.value === "spicy") return Boolean(dish.is_spicy);
+    if (activeFilter.value === "options") return Array.isArray(dish.options) && dish.options.length > 0;
+    return true;
   });
 });
 const featuredDish = computed(() => filteredDishes.value[0] || null);
@@ -295,6 +328,8 @@ watch(
   () => props.slug,
   (slug) => {
     if (!slug) return;
+    activeFilter.value = "all";
+    search.value = "";
     trackEvent("category_view", { source: "customer_category", category_slug: slug }, { onceKey: `category:${slug}` });
   },
   { immediate: true }

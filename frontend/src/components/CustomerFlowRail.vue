@@ -1,21 +1,45 @@
 <template>
   <section class="mx-auto hidden w-full max-w-5xl px-4 pt-3 md:block">
-    <div class="ui-panel space-y-2 p-3 md:p-4">
-      <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("customerFlow.title") }}</p>
-      <div class="grid grid-cols-4 gap-2">
+    <div class="ui-journey-rail space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
+          <p class="text-sm text-slate-300">{{ currentStepLabel }}</p>
+        </div>
+        <span class="ui-status-pill">
+          {{ steps.length ? activeStep + 1 : 0 }}/{{ steps.length }}
+        </span>
+      </div>
+
+      <div class="ui-journey-progress">
+        <span :style="{ width: progressWidth }"></span>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3">
         <RouterLink
           v-for="step in steps"
           :key="step.name"
           :to="step.to"
-          class="rounded-xl border px-2 py-2 text-center transition md:px-3"
-          :class="stepClass(step)"
+          class="ui-journey-step md:px-3"
+          :data-active="step.isActive"
+          :data-complete="step.isCompleted"
           :aria-current="step.isActive ? 'page' : undefined"
         >
-          <div class="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold" :class="stepDotClass(step)">
-            {{ step.index + 1 }}
+          <div class="flex items-start justify-between gap-3">
+            <div
+              class="flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold"
+              :class="stepDotClass(step)"
+            >
+              {{ step.index + 1 }}
+            </div>
+            <span class="ui-chip text-[10px]">
+              {{ String(step.index + 1).padStart(2, "0") }}
+            </span>
           </div>
-          <p class="text-xs font-semibold leading-tight">{{ step.label }}</p>
-          <p class="mt-0.5 text-[10px] leading-tight" :class="stepHintClass(step)">{{ step.hint }}</p>
+          <div class="mt-3 space-y-1">
+            <p class="text-sm font-semibold leading-tight">{{ step.label }}</p>
+            <p class="text-[11px] leading-tight" :class="stepHintClass(step)">{{ step.hint }}</p>
+          </div>
         </RouterLink>
       </div>
     </div>
@@ -82,11 +106,11 @@ const steps = computed(() => [
   };
 }));
 
-const stepClass = (step) => {
-  if (step.isActive) return "border-[var(--color-secondary)] bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]";
-  if (step.isCompleted) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
-  return "border-slate-700/70 bg-slate-950/40 text-slate-200 hover:border-[var(--color-secondary)]/50 hover:text-[var(--color-secondary)]";
-};
+const currentStepLabel = computed(() => steps.value[activeStep.value]?.label || t("customerFlow.info"));
+const progressWidth = computed(() => {
+  const maxIndex = Math.max(steps.value.length - 1, 1);
+  return `${(activeStep.value / maxIndex) * 100}%`;
+});
 
 const stepDotClass = (step) => {
   if (step.isActive) return "border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]";

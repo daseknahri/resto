@@ -131,6 +131,25 @@
             >
           </div>
 
+          <div class="ui-toolbar-band grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">
+            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              <span class="ui-status-pill">
+                <span class="ui-live-dot" :class="selectionDotClass"></span>
+                {{ selectionStateLabel }}
+              </span>
+              <span class="ui-data-strip">{{ t('common.cart') }} / {{ cart.count }}</span>
+              <span v-if="cart.tableLabel" class="ui-data-strip">{{ t('common.reserve') }} / {{ cart.tableLabel }}</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
+                {{ t('customerLayout.navCart') }}
+              </RouterLink>
+              <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
+                {{ t('customerLayout.navReserve') }}
+              </RouterLink>
+            </div>
+          </div>
+
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article class="ui-admin-subcard">
               <p class="ui-stat-label">{{ t('common.categories') }}</p>
@@ -575,6 +594,18 @@ const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
 const orderingStateLabel = computed(() => {
   if (isBrowseOnlyPlan.value) return t('dishPage.menuOnly');
   return isRestaurantOpen.value ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow');
+});
+const selectionStateLabel = computed(() => {
+  if (hasRequiredMissing.value) return t('dishPage.selectRequiredOptions');
+  if (selectedOptionObjects.value.length) {
+    return t('dishPage.optionsCount', { count: selectedOptionObjects.value.length });
+  }
+  return orderingStateLabel.value;
+});
+const selectionDotClass = computed(() => {
+  if (hasRequiredMissing.value) return 'bg-amber-400';
+  if (selectedOptionObjects.value.length) return 'bg-emerald-400';
+  return isRestaurantOpen.value ? 'bg-[var(--color-secondary)]' : 'bg-rose-400';
 });
 const shareUrl = computed(() => {
   if (typeof window === 'undefined') return route.fullPath;
