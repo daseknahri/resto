@@ -35,6 +35,29 @@
           t('cartPage.table', { table: tableLabelModel })
         }}</span>
       </div>
+      <div
+        v-if="cart.items.length && !isBrowseOnlyPlan"
+        class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <article
+          v-for="item in checkoutReadiness"
+          :key="item.key"
+          class="ui-readiness-item"
+          :data-complete="item.complete"
+          :data-warning="!item.complete"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="ui-readiness-dot"></span>
+                <p class="ui-kicker">{{ item.label }}</p>
+              </div>
+              <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
+            </div>
+            <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
+          </div>
+        </article>
+      </div>
     </header>
 
     <div
@@ -194,6 +217,26 @@
                 <p>{{ itemCountLabel(cart.count) }}</p>
                 <p>{{ planLabel }}</p>
               </div>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <article
+                v-for="item in checkoutReadiness"
+                :key="`aside-${item.key}`"
+                class="ui-readiness-item"
+                :data-complete="item.complete"
+                :data-warning="!item.complete"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="ui-readiness-dot"></span>
+                      <p class="ui-kicker">{{ item.label }}</p>
+                    </div>
+                    <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
+                  </div>
+                  <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
+                </div>
+              </article>
             </div>
             <div class="flex flex-wrap gap-2">
               <span class="ui-data-strip"
@@ -503,6 +546,18 @@
                     : t('cartPage.orderingDisabled')
               }}
             </p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <span class="ui-status-pill">
+                <span class="ui-live-dot" :class="checkoutStateDotClass"></span>
+                {{ checkoutStateLabel }}
+              </span>
+              <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline px-3 py-1.5 text-xs">
+                {{ t('customerLayout.navMenu') }}
+              </RouterLink>
+              <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-3 py-1.5 text-xs">
+                {{ t('customerLayout.navReserve') }}
+              </RouterLink>
+            </div>
           </div>
 
           <button
@@ -569,6 +624,9 @@
           </p>
           <p class="text-[11px] text-slate-500">
             {{ itemCountLabel(cart.count) }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-400">
+            {{ checkoutStateLabel }}
           </p>
         </div>
         <button
@@ -671,7 +729,7 @@ import { trackEvent } from '../lib/analytics';
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { formatCurrency, t } = useI18n();
+const { formatCurrency, itemCountLabel, t } = useI18n();
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -730,6 +788,84 @@ const hasTemporaryMapSelection = computed(() => {
   const lat = parseCoordinateValue(temporaryMapLat.value);
   const lng = parseCoordinateValue(temporaryMapLng.value);
   return lat !== null && lng !== null;
+});
+const hasFulfillmentSelection = computed(
+  () => isTableContextOrder.value || Boolean(fulfillmentType.value)
+);
+const hasDeliveryReady = computed(() => {
+  if (!isDelivery.value) return true;
+  return Boolean(
+    deliveryAddress.value &&
+      (hasLocationCoords.value || deliveryLocationUrl.value.trim())
+  );
+});
+const checkoutReadiness = computed(() => {
+  const items = [
+    {
+      key: 'items',
+      label: t('common.cart'),
+      value: itemCountLabel(cart.count),
+      complete: cart.items.length > 0,
+    },
+    {
+      key: 'fulfillment',
+      label: t('cartPage.selectFulfillment'),
+      value: isTableContextOrder.value
+        ? t('cartPage.tableQrOrder')
+        : fulfillmentType.value === 'delivery'
+          ? t('cartPage.delivery')
+          : fulfillmentType.value === 'pickup'
+            ? t('cartPage.pickup')
+            : t('cartPage.selectPickupOrDelivery'),
+      complete: hasFulfillmentSelection.value,
+    },
+    {
+      key: 'name',
+      label: t('common.name'),
+      value: cart.customerName || t('cartPage.customerNameRequiredError'),
+      complete: Boolean(cart.customerName),
+    },
+    {
+      key: 'phone',
+      label: t('common.phone'),
+      value: cart.customerPhone || t('cartPage.customerPhoneRequiredError'),
+      complete: Boolean(cart.customerPhone),
+    },
+  ];
+
+  if (isDelivery.value) {
+    items.push({
+      key: 'delivery',
+      label: t('cartPage.deliveryLocation'),
+      value:
+        deliveryAddress.value ||
+        deliveryLocationUrl.value ||
+        t('cartPage.provideMapLinkOrCurrentLocation'),
+      complete: hasDeliveryReady.value,
+    });
+  }
+
+  return items;
+});
+const checkoutReadyCount = computed(
+  () => checkoutReadiness.value.filter((item) => item.complete).length
+);
+const checkoutStateLabel = computed(() => {
+  if (!cart.items.length) return t('cartPage.cartEmpty');
+  if (isTableContextOrder.value) return t('cartPage.tableQrOrder');
+  if (checkoutReadyCount.value === checkoutReadiness.value.length)
+    return cart.canCheckout
+      ? t('cartPage.checkout')
+      : cart.canWhatsapp
+        ? t('cartPage.whatsappHandoff')
+        : t('cartPage.orderingDisabled');
+  return t('cartPage.completeRequiredOrderDetails');
+});
+const checkoutStateDotClass = computed(() => {
+  if (!cart.items.length) return 'bg-rose-400';
+  if (checkoutReadyCount.value === checkoutReadiness.value.length)
+    return cart.canCheckout || cart.canWhatsapp ? 'bg-emerald-400' : 'bg-amber-400';
+  return 'bg-amber-400';
 });
 
 const customerNameModel = computed({
@@ -1329,3 +1465,4 @@ onBeforeUnmount(() => {
   leafletModuleRef.value = null;
 });
 </script>
+

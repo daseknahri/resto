@@ -413,6 +413,48 @@ body[dir="rtl"] .ui-kicker {
     @apply rounded-[1.6rem] border border-slate-800/80 bg-slate-950/55 p-5 shadow-lg shadow-black/25 backdrop-blur-xl;
   }
 
+  .ui-readiness-item {
+    @apply relative overflow-hidden rounded-[1.15rem] border px-3 py-3 transition;
+    border-color: rgba(71, 85, 105, 0.8);
+    background: rgba(2, 8, 23, 0.52);
+  }
+
+  .ui-readiness-item::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.5), transparent);
+  }
+
+  .ui-readiness-item[data-complete="true"] {
+    border-color: rgba(16, 185, 129, 0.34);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .ui-readiness-item[data-complete="true"]::before,
+  .ui-readiness-item[data-warning="true"]::before {
+    opacity: 1;
+  }
+
+  .ui-readiness-item[data-warning="true"] {
+    border-color: rgba(245, 158, 11, 0.34);
+    background: rgba(245, 158, 11, 0.08);
+  }
+
+  .ui-readiness-dot {
+    @apply inline-flex h-2.5 w-2.5 rounded-full;
+    background: rgba(148, 163, 184, 0.7);
+  }
+
+  .ui-readiness-item[data-complete="true"] .ui-readiness-dot {
+    background: rgb(52 211 153);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14);
+  }
+
+  .ui-readiness-item[data-warning="true"] .ui-readiness-dot {
+    background: rgb(251 191 36);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14);
+  }
+
   .ui-focus-card::before {
     content: "";
     @apply pointer-events-none absolute inset-0;

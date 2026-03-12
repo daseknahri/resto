@@ -49,12 +49,38 @@
           </article>
         </section>
 
+        <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <article
+            v-for="item in reservationChecklist"
+            :key="item.key"
+            class="ui-readiness-item ui-reveal"
+            :style="{ '--ui-delay': item.delay }"
+            :data-complete="item.complete"
+            :data-warning="!item.complete"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="ui-readiness-dot"></span>
+                  <p class="ui-kicker">{{ item.label }}</p>
+                </div>
+                <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
+              </div>
+              <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
+            </div>
+          </article>
+        </section>
+
         <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
           <div class="mb-4 flex flex-wrap gap-2">
             <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
             <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
             <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
             <span class="ui-data-strip">{{ reservationModeLabel }}</span>
+            <span class="ui-status-pill">
+              <span class="ui-live-dot" :class="reservationStateDotClass"></span>
+              {{ reservationStateLabel }}
+            </span>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
@@ -242,6 +268,35 @@
           </div>
 
           <div class="mt-4 space-y-2">
+            <article class="ui-focus-card space-y-3 p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <p class="ui-kicker">{{ t("reservationPage.submitReservation") }}</p>
+                  <h3 class="text-base font-semibold text-white">{{ reservationStateLabel }}</h3>
+                </div>
+                <span class="ui-chip-strong">{{ reservationReadyCount }}/{{ reservationChecklist.length }}</span>
+              </div>
+              <div class="grid gap-2">
+                <article
+                  v-for="item in reservationChecklist"
+                  :key="`aside-${item.key}`"
+                  class="ui-readiness-item"
+                  :data-complete="item.complete"
+                  :data-warning="!item.complete"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="ui-readiness-dot"></span>
+                        <p class="ui-kicker">{{ item.label }}</p>
+                      </div>
+                      <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
+                    </div>
+                    <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
+                  </div>
+                </article>
+              </div>
+            </article>
             <article
               v-for="(item, index) in reservationJourney"
               :key="`aside-${item.label}`"
@@ -419,6 +474,55 @@ const reservationJourney = computed(() => [
     delay: "130ms",
   },
 ]);
+const hasReservationContact = computed(() => Boolean(form.phone || form.email));
+const reservationChecklist = computed(() => [
+  {
+    key: "name",
+    label: t("common.name"),
+    value: form.name || t("reservationPage.nameError"),
+    complete: Boolean(form.name && form.name.trim().length >= 2),
+    delay: "120ms",
+  },
+  {
+    key: "contact",
+    label: t("common.phone"),
+    value: form.phone || form.email || t("reservationPage.contactRequired"),
+    complete: hasReservationContact.value,
+    delay: "140ms",
+  },
+  {
+    key: "party",
+    label: t("reservationPage.partySize"),
+    value: t("reservationPage.guestCount", { count: form.party_size || 0 }),
+    complete: Number(form.party_size || 0) >= 1,
+    delay: "160ms",
+  },
+  {
+    key: "slot",
+    label: t("reservationPage.quickConfirm"),
+    value:
+      form.date && form.time
+        ? `${form.date} - ${form.time}`
+        : form.date || form.time || t("reservationPage.directBooking"),
+    complete: Boolean(form.date && form.time),
+    delay: "180ms",
+  },
+]);
+const reservationReadyCount = computed(
+  () => reservationChecklist.value.filter((item) => item.complete).length
+);
+const reservationStateLabel = computed(() => {
+  if (submitted.value) return t("reservationPage.requestSent");
+  if (reservationReadyCount.value === reservationChecklist.value.length)
+    return t("reservationPage.submitReservation");
+  return t("reservationPage.contactRequired");
+});
+const reservationStateDotClass = computed(() => {
+  if (submitted.value) return "bg-emerald-400";
+  if (reservationReadyCount.value === reservationChecklist.value.length)
+    return "bg-[var(--color-secondary)]";
+  return "bg-amber-400";
+});
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
@@ -525,3 +629,4 @@ onMounted(() => {
   if (cart.customerPhone && !form.phone) form.phone = cart.customerPhone;
 });
 </script>
+
