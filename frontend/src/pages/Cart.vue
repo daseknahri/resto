@@ -1,6 +1,6 @@
 <template>
-  <div class="space-y-4 px-4 py-4 pb-32 sm:pb-6 ui-safe-bottom">
-    <header class="ui-hero-ribbon ui-reveal p-4 md:p-5">
+  <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
+    <header class="ui-hero-ribbon ui-reveal p-3 md:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
@@ -9,9 +9,6 @@
           >
             {{ t('common.cart') }}
           </h1>
-          <p class="mt-1 text-xs text-slate-400">
-            {{ t('cartPage.plan', { plan: planLabel }) }}
-          </p>
           <p v-if="tableLabelModel" class="mt-1 text-xs text-slate-300">
             {{ t('cartPage.table', { table: tableLabelModel }) }}
           </p>
@@ -25,44 +22,17 @@
         </button>
       </div>
       <div class="mt-3 ui-divider"></div>
-      <p class="mt-2 text-sm text-slate-300">
-        {{ t('cartPage.reviewAdjustSend') }}
-      </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <span class="ui-data-strip">{{ itemCountLabel(cart.count) }}</span>
-        <span class="ui-data-strip">{{ planLabel }}</span>
         <span v-if="tableLabelModel" class="ui-data-strip">{{
           t('cartPage.table', { table: tableLabelModel })
         }}</span>
-      </div>
-      <div
-        v-if="cart.items.length && !isBrowseOnlyPlan"
-        class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <article
-          v-for="item in checkoutReadiness"
-          :key="item.key"
-          class="ui-readiness-item"
-          :data-complete="item.complete"
-          :data-warning="!item.complete"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="ui-readiness-dot"></span>
-                <p class="ui-kicker">{{ item.label }}</p>
-              </div>
-              <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
-            </div>
-            <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
-          </div>
-        </article>
       </div>
     </header>
 
     <div
       v-if="isBrowseOnlyPlan"
-      class="ui-section-band border-sky-500/40 bg-sky-500/10 p-6 text-sky-100 space-y-2"
+      class="ui-section-band border-sky-500/40 bg-sky-500/10 p-4 text-sky-100 space-y-2 sm:p-6"
     >
       <p class="text-base font-semibold">
         {{ t('cartPage.orderingDisabled') }}
@@ -72,7 +42,7 @@
 
     <div
       v-else-if="!cart.items.length"
-      class="ui-section-band border-dashed border-slate-700 p-6 text-slate-300"
+      class="ui-section-band border-dashed border-slate-700 p-4 text-slate-300 sm:p-6"
     >
       <p class="text-base font-semibold text-slate-100">
         {{ t('cartPage.cartEmpty') }}
@@ -84,11 +54,11 @@
 
     <div
       v-else
-      class="grid gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(21rem,0.85fr)] xl:items-start"
+      class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),minmax(21rem,0.85fr)] xl:items-start"
     >
-      <div class="space-y-3">
+      <div class="space-y-2.5 sm:space-y-3">
         <div
-          class="ui-section-band flex flex-wrap items-center justify-between gap-3 p-4"
+          class="ui-section-band flex flex-wrap items-center justify-between gap-2.5 p-3.5 sm:p-4"
         >
           <div class="flex flex-wrap gap-2">
             <span class="ui-data-strip">{{ itemCountLabel(cart.count) }}</span>
@@ -111,7 +81,7 @@
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal space-y-3 p-4"
+          class="ui-panel ui-surface-lift ui-reveal space-y-3 p-3.5 sm:p-4"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-start justify-between gap-3">
@@ -204,8 +174,8 @@
         v-if="!isBrowseOnlyPlan"
         class="xl:sticky xl:top-[calc(var(--safe-top)+5.75rem)] xl:self-start"
       >
-        <section class="ui-glass space-y-4 p-5">
-          <div class="ui-spotlight-card space-y-3 p-4">
+        <section class="ui-glass space-y-3 p-4 sm:space-y-4 sm:p-5">
+          <div class="ui-spotlight-card space-y-3 p-3.5 sm:p-4">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="ui-kicker">{{ t('cartPage.total') }}</p>
@@ -217,49 +187,6 @@
                 <p>{{ itemCountLabel(cart.count) }}</p>
                 <p>{{ planLabel }}</p>
               </div>
-            </div>
-            <div class="grid gap-2 sm:grid-cols-2">
-              <article
-                v-for="item in checkoutReadiness"
-                :key="`aside-${item.key}`"
-                class="ui-readiness-item"
-                :data-complete="item.complete"
-                :data-warning="!item.complete"
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2">
-                      <span class="ui-readiness-dot"></span>
-                      <p class="ui-kicker">{{ item.label }}</p>
-                    </div>
-                    <p class="mt-2 text-sm font-medium text-white">{{ item.value }}</p>
-                  </div>
-                  <span class="ui-chip text-[10px]">{{ item.complete ? 'OK' : '...' }}</span>
-                </div>
-              </article>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <span class="ui-data-strip"
-              >{{ t('cartPage.channel') }}:
-                {{
-                  cart.canCheckout
-                    ? t('cartPage.checkout')
-                    : cart.canWhatsapp
-                      ? t('cartPage.whatsappHandoff')
-                      : t('cartPage.orderingDisabled')
-                }}</span
-              >
-              <span v-if="isTableContextOrder" class="ui-data-strip">{{
-                t('cartPage.tableQrOrder')
-              }}</span>
-              <span v-else-if="isDelivery" class="ui-data-strip">{{
-                t('cartPage.delivery')
-              }}</span>
-              <span
-                v-else-if="fulfillmentType === 'pickup'"
-                class="ui-data-strip"
-              >{{ t('cartPage.pickup') }}</span
-              >
             </div>
           </div>
 
@@ -546,18 +473,6 @@
                     : t('cartPage.orderingDisabled')
               }}
             </p>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <span class="ui-status-pill">
-                <span class="ui-live-dot" :class="checkoutStateDotClass"></span>
-                {{ checkoutStateLabel }}
-              </span>
-              <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline px-3 py-1.5 text-xs">
-                {{ t('customerLayout.navMenu') }}
-              </RouterLink>
-              <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-3 py-1.5 text-xs">
-                {{ t('customerLayout.navReserve') }}
-              </RouterLink>
-            </div>
           </div>
 
           <button
@@ -614,7 +529,7 @@
 
     <div
       v-if="!isBrowseOnlyPlan && cart.items.length"
-      class="fixed bottom-20 left-3 right-3 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur sm:hidden"
+      class="fixed bottom-[5.15rem] left-2.5 right-2.5 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-2.5 shadow-xl shadow-black/40 backdrop-blur sm:hidden"
     >
       <div class="flex items-center justify-between gap-2">
         <div>
@@ -624,9 +539,6 @@
           </p>
           <p class="text-[11px] text-slate-500">
             {{ itemCountLabel(cart.count) }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-400">
-            {{ checkoutStateLabel }}
           </p>
         </div>
         <button
@@ -788,84 +700,6 @@ const hasTemporaryMapSelection = computed(() => {
   const lat = parseCoordinateValue(temporaryMapLat.value);
   const lng = parseCoordinateValue(temporaryMapLng.value);
   return lat !== null && lng !== null;
-});
-const hasFulfillmentSelection = computed(
-  () => isTableContextOrder.value || Boolean(fulfillmentType.value)
-);
-const hasDeliveryReady = computed(() => {
-  if (!isDelivery.value) return true;
-  return Boolean(
-    deliveryAddress.value &&
-      (hasLocationCoords.value || deliveryLocationUrl.value.trim())
-  );
-});
-const checkoutReadiness = computed(() => {
-  const items = [
-    {
-      key: 'items',
-      label: t('common.cart'),
-      value: itemCountLabel(cart.count),
-      complete: cart.items.length > 0,
-    },
-    {
-      key: 'fulfillment',
-      label: t('cartPage.selectFulfillment'),
-      value: isTableContextOrder.value
-        ? t('cartPage.tableQrOrder')
-        : fulfillmentType.value === 'delivery'
-          ? t('cartPage.delivery')
-          : fulfillmentType.value === 'pickup'
-            ? t('cartPage.pickup')
-            : t('cartPage.selectPickupOrDelivery'),
-      complete: hasFulfillmentSelection.value,
-    },
-    {
-      key: 'name',
-      label: t('common.name'),
-      value: cart.customerName || t('cartPage.customerNameRequiredError'),
-      complete: Boolean(cart.customerName),
-    },
-    {
-      key: 'phone',
-      label: t('common.phone'),
-      value: cart.customerPhone || t('cartPage.customerPhoneRequiredError'),
-      complete: Boolean(cart.customerPhone),
-    },
-  ];
-
-  if (isDelivery.value) {
-    items.push({
-      key: 'delivery',
-      label: t('cartPage.deliveryLocation'),
-      value:
-        deliveryAddress.value ||
-        deliveryLocationUrl.value ||
-        t('cartPage.provideMapLinkOrCurrentLocation'),
-      complete: hasDeliveryReady.value,
-    });
-  }
-
-  return items;
-});
-const checkoutReadyCount = computed(
-  () => checkoutReadiness.value.filter((item) => item.complete).length
-);
-const checkoutStateLabel = computed(() => {
-  if (!cart.items.length) return t('cartPage.cartEmpty');
-  if (isTableContextOrder.value) return t('cartPage.tableQrOrder');
-  if (checkoutReadyCount.value === checkoutReadiness.value.length)
-    return cart.canCheckout
-      ? t('cartPage.checkout')
-      : cart.canWhatsapp
-        ? t('cartPage.whatsappHandoff')
-        : t('cartPage.orderingDisabled');
-  return t('cartPage.completeRequiredOrderDetails');
-});
-const checkoutStateDotClass = computed(() => {
-  if (!cart.items.length) return 'bg-rose-400';
-  if (checkoutReadyCount.value === checkoutReadiness.value.length)
-    return cart.canCheckout || cart.canWhatsapp ? 'bg-emerald-400' : 'bg-amber-400';
-  return 'bg-amber-400';
 });
 
 const customerNameModel = computed({
@@ -1465,4 +1299,3 @@ onBeforeUnmount(() => {
   leafletModuleRef.value = null;
 });
 </script>
-
