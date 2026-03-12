@@ -299,6 +299,26 @@ body[dir="rtl"] .ui-kicker {
       box-shadow var(--motion-base) var(--ease-fluid);
   }
 
+  .ui-skeleton {
+    @apply relative overflow-hidden rounded-[1.35rem] border border-slate-800/70 bg-slate-900/55;
+  }
+
+  .ui-skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      110deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 38%,
+      transparent 68%
+    );
+    animation: ui-shimmer 1.5s linear infinite;
+  }
+
+  .ui-empty-state {
+    @apply rounded-[1.6rem] border border-slate-800/80 bg-slate-950/55 p-5 shadow-lg shadow-black/25 backdrop-blur-xl;
+  }
+
   .ui-focus-card::before {
     content: "";
     @apply pointer-events-none absolute inset-0;
@@ -630,6 +650,15 @@ body[dir="rtl"] .ui-kicker {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes ui-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
   }
 }
 

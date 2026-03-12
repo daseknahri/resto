@@ -1,16 +1,36 @@
 <template>
   <div class="space-y-4 px-4 py-4 pb-28 sm:pb-8 ui-safe-bottom">
-    <div v-if="menu.loading" class="space-y-3" role="status" aria-live="polite">
-      <div class="h-64 animate-pulse rounded-3xl bg-slate-800/60"></div>
-      <div class="h-32 animate-pulse rounded-3xl bg-slate-800/60"></div>
+    <div v-if="menu.loading" class="space-y-4" role="status" aria-live="polite">
+      <div class="ui-skeleton h-72 rounded-[1.8rem]"></div>
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr),20rem]">
+        <div class="space-y-3">
+          <div class="ui-skeleton h-24 rounded-[1.5rem]"></div>
+          <div class="ui-skeleton h-48 rounded-[1.5rem]"></div>
+        </div>
+        <div class="ui-skeleton h-72 rounded-[1.5rem]"></div>
+      </div>
       <p class="text-sm text-slate-400">{{ t('dishPage.loadingDish') }}</p>
     </div>
 
-    <div v-else-if="!dish" class="ui-panel p-6" role="alert">
-      <p class="text-lg font-semibold text-slate-100">
-        {{ t('dishPage.notFoundTitle') }}
-      </p>
-      <p class="text-sm text-slate-400">{{ t('dishPage.notFoundText') }}</p>
+    <div v-else-if="!dish" class="ui-empty-state space-y-4" role="alert">
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ categoryName }}</p>
+        <p class="text-lg font-semibold text-slate-100">
+          {{ t('dishPage.notFoundTitle') }}
+        </p>
+        <p class="text-sm text-slate-400">{{ t('dishPage.notFoundText') }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <RouterLink
+          :to="{ name: 'category', params: { slug: props.category } }"
+          class="ui-btn-outline justify-center"
+        >
+          {{ t('common.backTo') }} {{ categoryName }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary justify-center">
+          {{ t('customerLayout.navMenu') }}
+        </RouterLink>
+      </div>
     </div>
 
     <div
@@ -257,12 +277,14 @@
                 </div>
               </RouterLink>
             </div>
-            <p
+            <div
               v-if="!menu.loading && !similarDishes.length"
-              class="text-xs text-slate-500"
+              class="ui-empty-state text-center"
             >
-              {{ t('dishPage.noSimilarDishesYet') }}
-            </p>
+              <p class="text-xs text-slate-500">
+                {{ t('dishPage.noSimilarDishesYet') }}
+              </p>
+            </div>
           </div>
         </div>
 

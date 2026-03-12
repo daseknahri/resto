@@ -202,8 +202,22 @@
         </div>
       </article>
     </div>
-    <div v-if="!menu.loading && !filteredDishes.length" class="ui-section-band text-center">
-      <p class="text-sm text-slate-300">{{ t("category.noMatch") }}</p>
+    <div v-if="!menu.loading && !filteredDishes.length" class="ui-empty-state space-y-4 text-center">
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ categoryName }}</p>
+        <p class="text-lg font-semibold text-white">{{ t("category.noMatch") }}</p>
+      </div>
+      <div class="flex flex-wrap justify-center gap-2">
+        <button class="ui-btn-outline justify-center" @click="search = ''">
+          {{ t("common.clear") }}
+        </button>
+        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
+          {{ t("customerLayout.navMenu") }}
+        </RouterLink>
+        <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+          {{ t("customerLayout.navReserve") }}
+        </RouterLink>
+      </div>
     </div>
     <div v-if="filteredDishes.length > 1" class="ui-section-band space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -226,7 +240,13 @@
         </RouterLink>
       </div>
     </div>
-    <p v-if="menu.loading" class="text-sm text-slate-400">{{ t("category.loading") }}</p>
+    <div v-if="menu.loading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div
+        v-for="n in 3"
+        :key="`loading-${n}`"
+        class="ui-skeleton h-44 rounded-[1.5rem]"
+      ></div>
+    </div>
     <p v-if="menu.error" class="text-sm text-red-400">{{ menu.error }}</p>
   </div>
 </template>

@@ -273,18 +273,37 @@
 
       <div
         v-if="!menu.loading && !categories.length"
-        class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 text-slate-300 sm:col-span-2"
+        class="ui-empty-state space-y-4 text-slate-300 sm:col-span-2"
       >
-        <p class="font-semibold text-slate-100">{{ t('menu.noMatchTitle') }}</p>
-        <p class="mt-1 text-sm text-slate-400">{{ t('menu.noMatchText') }}</p>
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t('menu.kicker') }}</p>
+          <p class="text-xl font-semibold text-slate-100">{{ t('menu.noMatchTitle') }}</p>
+          <p class="text-sm text-slate-400">{{ t('menu.noMatchText') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-outline justify-center" @click="clearSearch">
+            {{ t('common.clear') }}
+          </button>
+          <RouterLink :to="{ name: 'customer-home' }" class="ui-btn-outline justify-center">
+            {{ t('customerLayout.navInfo') }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+            {{ t('customerLayout.navReserve') }}
+          </RouterLink>
+        </div>
       </div>
 
-      <div v-if="menu.loading" class="space-y-3 sm:col-span-2">
+      <div v-if="menu.loading" class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
         <div
           v-for="n in 4"
           :key="n"
-          class="h-48 animate-pulse rounded-3xl bg-slate-800/50"
+          class="ui-skeleton h-56 rounded-[1.8rem]"
         ></div>
+        <div class="ui-empty-state sm:col-span-2">
+          <p class="ui-kicker">{{ t('menu.kicker') }}</p>
+          <p class="mt-1 text-base font-semibold text-white">{{ t('menu.intro') }}</p>
+          <p class="mt-2 text-sm text-slate-400">{{ t('menu.tip') }}</p>
+        </div>
       </div>
 
       <p v-if="menu.error" class="text-sm text-red-400 sm:col-span-2">
