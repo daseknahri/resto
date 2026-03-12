@@ -48,6 +48,31 @@
             </a>
           </div>
         </div>
+
+        <div class="mt-3 hidden items-center justify-between gap-4 md:flex">
+          <nav class="ui-segmented max-w-fit">
+            <RouterLink
+              v-for="item in navItems"
+              :key="`desktop-${item.key}`"
+              :to="item.to"
+              class="ui-segmented-button min-w-[7rem]"
+              :data-active="activeCustomerSection === item.key"
+            >
+              <span>{{ item.label }}</span>
+              <span v-if="item.badge" class="ml-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
+                {{ item.badge }}
+              </span>
+            </RouterLink>
+          </nav>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="ui-data-strip">{{ currentSectionLabel }}</span>
+            <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
+            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-4 py-2 text-xs">
+              {{ t("customerLayout.navReserve") }}
+            </RouterLink>
+          </div>
+        </div>
       </div>
     </header>
 

@@ -118,7 +118,7 @@
     </section>
 
     <section class="grid gap-3 lg:grid-cols-[1.08fr,0.92fr]">
-      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 95ms">
+      <article class="ui-focus-card ui-reveal p-4 md:p-5" style="--ui-delay: 95ms">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="space-y-1">
             <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
@@ -127,16 +127,28 @@
           <span class="ui-chip-strong">{{ statusLabel }}</span>
         </div>
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
-          <div class="rounded-[1.25rem] border border-slate-800/80 bg-slate-950/45 p-4">
+          <article class="ui-admin-subcard">
             <p class="ui-stat-label">{{ t("customerLeadPage.response") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("customerLeadPage.reserveText") }}</p>
-          </div>
-          <div class="rounded-[1.25rem] border border-slate-800/80 bg-slate-950/45 p-4">
+          </article>
+          <article class="ui-admin-subcard">
             <p class="ui-stat-label">{{ t("menu.mode") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ orderingModeLabel }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ tenantDescription }}</p>
-          </div>
+          </article>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <article
+            v-for="item in visitJourney"
+            :key="item.label"
+            class="ui-orbit-card ui-surface-lift p-4"
+          >
+            <p class="ui-kicker">{{ item.label }}</p>
+            <p class="mt-1 text-base font-semibold text-white">{{ item.title }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
+          </article>
         </div>
       </article>
 
@@ -172,21 +184,148 @@
             {{ t("customerLeadPage.directBooking") }}
           </a>
         </div>
+
+        <div class="mt-4 grid gap-2">
+          <a
+            v-for="social in socialLinks"
+            :key="`deck-${social.key}`"
+            :href="social.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-admin-subcard transition hover:border-[var(--color-secondary)]/70"
+            @click="trackContactClick(`social_${social.key}`)"
+          >
+            <p class="ui-kicker">{{ social.label }}</p>
+            <p class="mt-1 text-sm font-medium text-white">{{ tenantName }}</p>
+          </a>
+        </div>
       </article>
     </section>
 
-    <section class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
-        <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
-        <p class="mt-1 text-2xl font-semibold text-white">{{ categoriesCount }}</p>
+    <section class="grid gap-3 lg:grid-cols-[0.86fr,1.14fr]">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
+          <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
+          <p class="mt-1 text-2xl font-semibold text-white">{{ categoriesCount }}</p>
+        </article>
+        <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 110ms">
+          <p class="ui-kicker">{{ t("customerLeadPage.dishes") }}</p>
+          <p class="mt-1 text-2xl font-semibold text-white">{{ dishesCount }}</p>
+        </article>
+        <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 140ms">
+          <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
+          <p class="mt-1 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
+        </article>
+        <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 170ms">
+          <p class="ui-kicker">{{ t("menu.mode") }}</p>
+          <p class="mt-1 text-base font-semibold text-white">{{ orderingModeLabel }}</p>
+        </article>
+      </div>
+
+      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 140ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("customerLeadPage.googleReviews") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
+          </div>
+          <span class="ui-data-strip">{{ locationLine || tenantName }}</span>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("customerLeadPage.browseTitle") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ t("customerLeadPage.browseText") }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("customerLeadPage.reserveTitle") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("customerLeadPage.trust") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ t("customerLeadPage.googleReviewsText") }}</p>
+          </article>
+        </div>
       </article>
-      <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 110ms">
-        <p class="ui-kicker">{{ t("customerLeadPage.dishes") }}</p>
-        <p class="mt-1 text-2xl font-semibold text-white">{{ dishesCount }}</p>
+    </section>
+
+    <section v-if="featuredCategories.length" class="grid gap-3 lg:grid-cols-[1.08fr,0.92fr]">
+      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 150ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.browseTitle") }}</h2>
+          </div>
+          <span class="ui-data-strip">{{ categoriesCount }} {{ t("customerLeadPage.categories") }}</span>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <RouterLink
+            v-for="category in featuredCategories"
+            :key="category.slug"
+            :to="{ name: 'category', params: { slug: category.slug } }"
+            class="ui-admin-subcard ui-press overflow-hidden transition hover:border-[var(--color-secondary)]/70"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="h-16 w-16 overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/70"
+              >
+                <img
+                  v-if="category.image"
+                  :src="category.image"
+                  :alt="category.name"
+                  class="h-full w-full object-cover"
+                  loading="lazy"
+                />
+                <div
+                  v-else
+                  class="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(20,184,166,0.14),transparent_36%)] text-sm font-semibold text-slate-200"
+                >
+                  {{ category.name.slice(0, 1) }}
+                </div>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-base font-semibold text-white">{{ category.name }}</p>
+                <p class="mt-1 text-sm text-slate-300">
+                  {{ category.count }} {{ t("common.dishes") }}
+                </p>
+                <p class="mt-2 text-xs font-medium text-[var(--color-secondary)]">
+                  {{ t("categoryCard.openCategory") }}
+                </p>
+              </div>
+            </div>
+          </RouterLink>
+        </div>
       </article>
-      <article class="ui-metric-card ui-surface-lift ui-reveal col-span-2 p-4 sm:col-span-1" style="--ui-delay: 140ms">
-        <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
-        <p class="mt-1 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
+
+      <article class="ui-command-deck ui-reveal p-4 md:p-5" style="--ui-delay: 180ms">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t("customerLeadPage.stepOne") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
+        </div>
+
+        <div class="mt-4 grid gap-2">
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary justify-center">
+            {{ t("customerLayout.navMenu") }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
+            {{ t("customerLayout.navCart") }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline justify-center">
+            {{ t("customerLayout.navReserve") }}
+          </RouterLink>
+        </div>
+
+        <div class="mt-4 grid gap-2">
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("customerLeadPage.stepTwo") }}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("customerLeadPage.trust") }}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ t("customerLeadPage.googleReviewsText") }}</p>
+          </article>
+        </div>
       </article>
     </section>
 
@@ -370,6 +509,19 @@ const whatsappHref = computed(() => {
   const text = encodeURIComponent(t("customerLeadPage.moreInfoMessage", { tenant: tenantName.value }));
   return `https://wa.me/${normalized}?text=${text}`;
 });
+const featuredCategories = computed(() =>
+  menuCategories.value
+    .slice()
+    .sort((a, b) => Number(b?.dishes?.length || 0) - Number(a?.dishes?.length || 0))
+    .slice(0, 4)
+    .map((category) => ({
+      slug: String(category?.slug || "").trim(),
+      name: String(category?.name || "").trim() || tenantName.value,
+      image: String(category?.image_url || "").trim(),
+      count: Number(category?.dishes?.length || 0),
+    }))
+    .filter((category) => category.slug)
+);
 const socialLinks = computed(() =>
   [
     { key: "instagram", label: "Instagram", url: String(profile.value?.instagram_url || "").trim() },
@@ -377,6 +529,23 @@ const socialLinks = computed(() =>
     { key: "tiktok", label: "TikTok", url: String(profile.value?.tiktok_url || "").trim() },
   ].filter((item) => Boolean(item.url))
 );
+const visitJourney = computed(() => [
+  {
+    label: "01",
+    title: t("customerLeadPage.browseTitle"),
+    text: t("customerLeadPage.browseText"),
+  },
+  {
+    label: "02",
+    title: t("customerLeadPage.reserveTitle"),
+    text: t("customerLeadPage.reserveText"),
+  },
+  {
+    label: "03",
+    title: t("customerLeadPage.googleReviews"),
+    text: t("customerLeadPage.googleReviewsText"),
+  },
+]);
 
 const fieldClass = (field) => (errors[field] ? "border-red-400" : "border-slate-700");
 const clearError = (field) => {

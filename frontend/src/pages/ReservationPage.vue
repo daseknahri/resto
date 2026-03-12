@@ -31,6 +31,19 @@
           </div>
         </header>
 
+        <section class="grid gap-3 sm:grid-cols-3">
+          <article
+            v-for="item in reservationJourney"
+            :key="item.label"
+            class="ui-metric-card ui-surface-lift ui-reveal p-4"
+            :style="{ '--ui-delay': item.delay }"
+          >
+            <p class="ui-kicker">{{ item.label }}</p>
+            <p class="mt-1 text-lg font-semibold text-white">{{ item.title }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
+          </article>
+        </section>
+
         <section class="ui-glass ui-reveal p-4 md:p-5" style="--ui-delay: 130ms">
           <div class="mb-4 flex flex-wrap gap-2">
             <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
@@ -173,6 +186,21 @@
           >
             {{ t("reservationPage.contactSoon") }}
           </button>
+
+          <div class="mt-5 grid gap-3 md:grid-cols-3">
+            <article class="ui-admin-subcard">
+              <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
+              <p class="mt-2 text-sm font-medium text-white">{{ t("customerLeadPage.responseValue") }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
+              <p class="mt-2 text-sm font-medium text-white">{{ form.time || "--" }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-kicker">{{ t("reservationPage.partySize") }}</p>
+              <p class="mt-2 text-sm font-medium text-white">{{ form.party_size }}</p>
+            </article>
+          </div>
         </section>
       </div>
 
@@ -206,6 +234,22 @@
               <p>{{ t("reservationPage.preferredTime") }}: <span class="font-medium text-slate-100">{{ form.time || "--" }}</span></p>
               <p>{{ t("reservationPage.partySize") }}: <span class="font-medium text-slate-100">{{ form.party_size }}</span></p>
             </div>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <article
+              v-for="item in reservationJourney"
+              :key="`aside-${item.label}`"
+              class="ui-admin-subcard"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="ui-kicker">{{ item.label }}</p>
+                  <p class="mt-1 text-sm font-semibold text-white">{{ item.title }}</p>
+                </div>
+              </div>
+              <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
+            </article>
           </div>
 
           <div class="mt-4 grid gap-3">
@@ -243,6 +287,58 @@
         </section>
       </aside>
     </div>
+
+    <section class="grid gap-3 lg:grid-cols-[0.96fr,1.04fr]">
+      <article class="ui-focus-card ui-reveal p-4 md:p-5" style="--ui-delay: 150ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("customerLayout.navReserve") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("reservationPage.quickConfirm") }}</h2>
+          </div>
+          <span class="ui-chip-strong">{{ reservationModeLabel }}</span>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <RouterLink :to="{ name: 'customer-home' }" class="ui-admin-subcard transition hover:border-[var(--color-secondary)]/70">
+            <p class="ui-kicker">{{ t("customerLayout.navInfo") }}</p>
+            <p class="mt-1 text-sm font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</p>
+          </RouterLink>
+          <RouterLink :to="{ name: 'menu' }" class="ui-admin-subcard transition hover:border-[var(--color-secondary)]/70">
+            <p class="ui-kicker">{{ t("customerLayout.navMenu") }}</p>
+            <p class="mt-1 text-sm font-semibold text-white">{{ t("customerLeadPage.browseTitle") }}</p>
+          </RouterLink>
+          <RouterLink :to="{ name: 'cart' }" class="ui-admin-subcard transition hover:border-[var(--color-secondary)]/70">
+            <p class="ui-kicker">{{ t("customerLayout.navCart") }}</p>
+            <p class="mt-1 text-sm font-semibold text-white">{{ t("cartPage.kicker") }}</p>
+          </RouterLink>
+        </div>
+      </article>
+
+      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 180ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("reservationPage.submitReservation") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</h2>
+          </div>
+          <span class="ui-data-strip">{{ form.party_size }} {{ t("reservationPage.guestCount", { count: form.party_size }) }}</span>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("reservationPage.preferredDate") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ form.date || "--" }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ form.time || "--" }}</p>
+          </article>
+          <article class="ui-admin-subcard">
+            <p class="ui-kicker">{{ t("reservationPage.partySize") }}</p>
+            <p class="mt-2 text-sm text-slate-300">{{ form.party_size }}</p>
+          </article>
+        </div>
+      </article>
+    </section>
 
     <div
       v-if="!submitted"
@@ -297,6 +393,26 @@ const errors = reactive({
 const profile = computed(() => meta.value?.profile || {});
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
 const reservationModeLabel = computed(() => (reservationUrl.value ? t("reservationPage.directBooking") : t("customerLeadPage.responseValue")));
+const reservationJourney = computed(() => [
+  {
+    label: "01",
+    title: t("reservationPage.submitReservation"),
+    text: t("reservationPage.description"),
+    delay: "70ms",
+  },
+  {
+    label: "02",
+    title: t("reservationPage.quickConfirm"),
+    text: cart.tableLabel ? t("reservationPage.tableDetected", { table: cart.tableLabel }) : t("reservationPage.tableMissing"),
+    delay: "100ms",
+  },
+  {
+    label: "03",
+    title: t("customerLeadPage.responseValue"),
+    text: t("reservationPage.contactSoon"),
+    delay: "130ms",
+  },
+]);
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
