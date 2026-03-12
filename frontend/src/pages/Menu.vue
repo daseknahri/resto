@@ -164,6 +164,22 @@
           {{ cat.name }}
         </button>
       </div>
+      <div class="ui-toolbar-band grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+          <span class="ui-data-strip">{{ categories.length }} {{ t('common.categories') }}</span>
+          <span class="ui-data-strip">{{ totalDishes }} {{ t('common.dishes') }}</span>
+          <span v-if="highlightCategory" class="ui-data-strip">{{ highlightCategory.name }}</span>
+          <span v-if="search" class="ui-data-strip text-[var(--color-secondary)]">{{ search }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 sm:flex">
+          <RouterLink :to="{ name: 'customer-home' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
+            {{ t('customerLayout.navInfo') }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center text-xs sm:text-sm">
+            {{ t('customerLayout.navReserve') }}
+          </RouterLink>
+        </div>
+      </div>
     </section>
 
     <div class="grid gap-4 sm:grid-cols-2">
@@ -197,6 +213,27 @@
         {{ menu.error }}
       </p>
     </div>
+
+    <section v-if="categories.length" class="ui-section-band ui-reveal space-y-3 p-4" style="--ui-delay: 110ms">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t('menu.kicker') }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ tenantName }}</h2>
+          <p class="text-sm text-slate-400">{{ t('menu.tip') }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <RouterLink :to="{ name: 'customer-home' }" class="ui-btn-outline justify-center">
+            {{ t('common.landing') }}
+          </RouterLink>
+          <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
+            {{ t('common.cart') }}
+          </RouterLink>
+          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
+            {{ t('common.reserve') }}
+          </RouterLink>
+        </div>
+      </div>
+    </section>
 
     <RouterLink
       v-if="cart.count"
@@ -261,6 +298,7 @@ const heroCategory = computed(() => {
   );
   return ranked[0] || null;
 });
+const highlightCategory = computed(() => categories.value[0] || heroCategory.value || null);
 
 const categories = computed(() => {
   const term = search.value.toLowerCase();

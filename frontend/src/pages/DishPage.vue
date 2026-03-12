@@ -76,6 +76,28 @@
 
       <div class="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr),20rem]">
         <div class="space-y-5">
+          <div class="flex flex-wrap items-center gap-2">
+            <RouterLink
+              :to="{ name: 'category', params: { slug: props.category } }"
+              class="ui-btn-outline justify-center text-xs sm:text-sm"
+            >
+              {{ t('common.backTo') }} {{ categoryName }}
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'menu' }"
+              class="ui-btn-outline justify-center text-xs sm:text-sm"
+            >
+              {{ t('customerLayout.navMenu') }}
+            </RouterLink>
+            <RouterLink
+              v-if="cart.count"
+              :to="{ name: 'cart' }"
+              class="ui-btn-outline justify-center text-xs sm:text-sm"
+            >
+              {{ t('common.cart') }} / {{ cart.count }}
+            </RouterLink>
+          </div>
+
           <div class="flex flex-wrap gap-2">
             <span class="ui-data-strip">{{
               formatCurrency(dish.price, dish.currency)
@@ -87,6 +109,25 @@
             >{{ t('dishPage.total') }}
               {{ formatCurrency(totalWithOptions, dish.currency) }}</span
             >
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t('common.categories') }}</p>
+              <p class="mt-2 text-sm font-semibold text-white">{{ categoryName }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t('menu.mode') }}</p>
+              <p class="mt-2 text-sm font-semibold text-white">{{ isRestaurantOpen ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow') }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t('dishPage.options') }}</p>
+              <p class="mt-2 text-sm font-semibold text-white">{{ selectedOptionObjects.length }}</p>
+            </article>
+            <article class="ui-admin-subcard">
+              <p class="ui-stat-label">{{ t('dishPage.qty') }}</p>
+              <p class="mt-2 text-sm font-semibold text-white">{{ qty }}</p>
+            </article>
           </div>
 
           <div class="ui-section-band space-y-3">
@@ -229,6 +270,12 @@
           class="space-y-4 lg:sticky lg:top-[calc(var(--safe-top)+5.75rem)] lg:self-start"
         >
           <div class="ui-spotlight-card space-y-4 p-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="ui-chip-strong">{{ categoryName }}</span>
+              <span class="ui-chip">{{ orderingStateLabel }}</span>
+              <span v-if="cart.tableLabel" class="ui-chip">{{ t('common.table') }} / {{ cart.tableLabel }}</span>
+            </div>
+
             <div class="space-y-2">
               <p class="ui-kicker">{{ t('dishPage.total') }}</p>
               <p class="text-3xl font-semibold text-white">
@@ -302,6 +349,18 @@
                       : t('dishPage.addContactToOrder')
                 }}
               </button>
+              <RouterLink
+                :to="{ name: 'reserve' }"
+                class="ui-btn-outline w-full justify-center"
+              >
+                {{ t('customerLayout.navReserve') }}
+              </RouterLink>
+              <RouterLink
+                :to="{ name: 'cart' }"
+                class="ui-btn-outline w-full justify-center"
+              >
+                {{ t('common.cart') }}
+              </RouterLink>
               <button
                 v-if="cart.canWhatsapp"
                 class="ui-btn-outline w-full justify-center"
@@ -415,6 +474,9 @@
     >
       <div class="min-w-0">
         <p class="truncate text-sm text-slate-200">{{ dish.name }}</p>
+        <p class="text-xs text-slate-400">
+          {{ selectedOptionObjects.length }} {{ t('dishPage.options') }} / {{ qty }} {{ t('dishPage.qty') }}
+        </p>
         <p class="text-lg font-semibold text-[var(--color-secondary)]">
           {{ formatCurrency(totalWithOptions, dish.currency) }}
         </p>
@@ -488,6 +550,10 @@ const visibleSimilarDishes = computed(() =>
 );
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
+const orderingStateLabel = computed(() => {
+  if (isBrowseOnlyPlan.value) return t('dishPage.menuOnly');
+  return isRestaurantOpen.value ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow');
+});
 const shareUrl = computed(() => {
   if (typeof window === 'undefined') return route.fullPath;
   return `${window.location.origin}${route.fullPath}`;
