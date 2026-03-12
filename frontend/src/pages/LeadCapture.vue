@@ -1,15 +1,48 @@
-<template>
-  <section class="space-y-8 px-4 py-8 md:py-10">
-    <header class="space-y-2 ui-fade-up">
-      <p class="ui-kicker">{{ t("leadCapture.kicker") }}</p>
-      <h2 class="ui-page-title ui-display">{{ t("leadCapture.title") }}</h2>
-      <p class="max-w-3xl text-slate-400">{{ t("leadCapture.description") }}</p>
+﻿<template>
+  <section class="space-y-6 px-4 py-6 md:space-y-8 md:py-8">
+    <header class="ui-hero-ribbon ui-fade-up overflow-hidden p-0">
+      <div class="grid gap-6 p-5 md:grid-cols-[1.15fr,0.85fr] md:p-6">
+        <div class="space-y-4">
+          <span class="ui-chip-strong w-fit">{{ t("leadCapture.kicker") }}</span>
+          <div class="space-y-2">
+            <h2 class="ui-display max-w-3xl text-3xl font-semibold text-white md:text-4xl">{{ t("leadCapture.title") }}</h2>
+            <p class="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">{{ t("leadCapture.description") }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs text-slate-300">
+            <span class="ui-data-strip">{{ t("leadCapture.planBasic") }}</span>
+            <span class="ui-data-strip">{{ t("leadCapture.planGrowth") }}</span>
+            <span class="ui-data-strip">{{ t("leadCapture.planPro") }}</span>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+          <article class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("common.plan") }}</p>
+            <p class="ui-stat-value text-2xl">Basic</p>
+            <p class="ui-stat-note">{{ t("leadCapture.responseTarget") }}</p>
+          </article>
+          <article class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("leadCapture.whatHappensNext") }}</p>
+            <p class="ui-stat-value text-2xl">4</p>
+            <p class="ui-stat-note">{{ t("leadCapture.step4") }}</p>
+          </article>
+          <article class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("common.workspace") }}</p>
+            <p class="ui-stat-value text-2xl">Owner</p>
+            <p class="ui-stat-note">{{ t("leadCapture.qualityRule") }}</p>
+          </article>
+        </div>
+      </div>
     </header>
 
-    <div class="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
-      <form class="ui-glass p-5 md:p-6 space-y-4" @submit.prevent="submit">
-        <div class="rounded-2xl border border-slate-700/50 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
-          {{ t("leadCapture.qualityRule") }}
+    <div class="grid gap-6 xl:grid-cols-[1.12fr,0.88fr]">
+      <form class="ui-command-deck space-y-4 p-5 md:p-6" @submit.prevent="submit">
+        <div class="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
+          <div>
+            <p class="font-medium text-white">{{ t("leadCapture.whatHappensNext") }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.qualityRule") }}</p>
+          </div>
+          <span class="ui-chip-strong">{{ t("common.getStarted") }}</span>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
@@ -88,29 +121,41 @@
           <span v-else-if="lead.error" class="text-red-400">{{ lead.error }}</span>
         </div>
 
-        <button type="submit" :disabled="lead.submitting" class="ui-btn-primary ui-touch-target disabled:opacity-60">
-          {{ lead.submitting ? t("leadCapture.submitting") : lead.success ? t("leadCapture.submitted") : t("leadCapture.submitLead") }}
-        </button>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="submit" :disabled="lead.submitting" class="ui-btn-primary ui-touch-target disabled:opacity-60">
+            {{ lead.submitting ? t("leadCapture.submitting") : lead.success ? t("leadCapture.submitted") : t("leadCapture.submitLead") }}
+          </button>
+          <span class="text-xs text-slate-500">{{ t("leadCapture.step1") }}</span>
+        </div>
       </form>
 
       <aside class="space-y-4">
-        <article class="ui-panel p-5">
-          <p class="text-sm text-slate-300">{{ t("leadCapture.whatHappensNext") }}</p>
-          <ol class="mt-3 space-y-2 text-sm text-slate-200">
-            <li>{{ t("leadCapture.step1") }}</li>
-            <li>{{ t("leadCapture.step2") }}</li>
-            <li>{{ t("leadCapture.step3") }}</li>
-            <li>{{ t("leadCapture.step4") }}</li>
+        <article class="ui-spotlight-card p-5">
+          <p class="ui-kicker">{{ t("leadCapture.whatHappensNext") }}</p>
+          <ol class="mt-4 space-y-3 text-sm text-slate-200">
+            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">1</span><span>{{ t("leadCapture.step1") }}</span></li>
+            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">2</span><span>{{ t("leadCapture.step2") }}</span></li>
+            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">3</span><span>{{ t("leadCapture.step3") }}</span></li>
+            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">4</span><span>{{ t("leadCapture.step4") }}</span></li>
           </ol>
         </article>
 
-        <article class="ui-panel p-5">
-          <p class="text-sm text-slate-300">{{ t("leadCapture.planGuidance") }}</p>
-          <ul class="mt-3 space-y-2 text-sm text-slate-200">
-            <li>- {{ t("leadCapture.planBasic") }}</li>
-            <li>- {{ t("leadCapture.planGrowth") }}</li>
-            <li>- {{ t("leadCapture.planPro") }}</li>
-          </ul>
+        <article class="ui-panel-soft p-5">
+          <p class="ui-kicker">{{ t("leadCapture.planGuidance") }}</p>
+          <div class="mt-4 space-y-3 text-sm text-slate-200">
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+              <p class="font-semibold text-white">Basic</p>
+              <p class="mt-1 text-slate-400">{{ t("leadCapture.planBasic") }}</p>
+            </div>
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+              <p class="font-semibold text-white">Growth</p>
+              <p class="mt-1 text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
+            </div>
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+              <p class="font-semibold text-white">Pro</p>
+              <p class="mt-1 text-slate-400">{{ t("leadCapture.planPro") }}</p>
+            </div>
+          </div>
         </article>
       </aside>
     </div>
