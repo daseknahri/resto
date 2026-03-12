@@ -1,7 +1,7 @@
 <template>
   <section class="space-y-6 pb-24 sm:pb-6">
     <header class="ui-workspace-stage ui-fade-up">
-      <div class="ui-workspace-grid">
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.14fr),360px]">
         <div class="space-y-5">
           <div class="space-y-2">
             <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
@@ -73,37 +73,80 @@
           <p v-if="copied" class="text-xs text-emerald-300">{{ t("ownerHome.menuUrlCopied") }}</p>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-          <article class="ui-stat-tile ui-fade-up">
-            <p class="ui-stat-label">{{ t("ownerHome.readiness") }}</p>
-            <p class="ui-stat-value text-[var(--color-secondary)]">{{ readinessScore }}%</p>
-            <p class="ui-stat-note">{{ t("ownerHome.readinessHint") }}</p>
+        <aside class="ui-command-deck ui-fade-up space-y-4">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("ownerHome.quickActions") }}</p>
+            <h3 class="text-xl font-semibold text-white">{{ t("ownerHome.launchChecklist") }}</h3>
+            <p class="text-sm text-slate-300">{{ t("ownerHome.readinessHint") }}</p>
+          </div>
+
+          <article class="ui-action-tile space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="ui-stat-label">{{ t("ownerLayout.publicPreview") }}</p>
+                <p class="mt-2 break-all text-sm font-medium text-white">{{ menuUrl }}</p>
+              </div>
+              <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'">
+                {{ published ? t("ownerHome.published") : t("ownerHome.draft") }}
+              </span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <RouterLink to="/menu" class="ui-btn-outline justify-center text-xs">
+                {{ t("ownerLayout.publicPreview") }}
+              </RouterLink>
+              <button class="ui-btn-outline justify-center text-xs" @click="copyMenuUrl">
+                {{ t("ownerHome.copyPublicUrl") }}
+              </button>
+            </div>
           </article>
 
-          <article class="ui-stat-tile ui-fade-up">
-            <p class="ui-stat-label">{{ t("common.categories") }}</p>
-            <p class="ui-stat-value">{{ categoriesCount }}</p>
-            <p class="ui-stat-note">{{ t("ownerHome.categoriesHint") }}</p>
-          </article>
-
-          <article class="ui-stat-tile ui-fade-up">
-            <p class="ui-stat-label">{{ t("common.dishes") }}</p>
-            <p class="ui-stat-value">{{ dishesCount }}</p>
-            <p class="ui-stat-note">{{ t("ownerHome.dishesHint") }}</p>
-          </article>
-        </div>
+          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <RouterLink to="/owner/onboarding" class="ui-orbit-card ui-surface-lift block p-4">
+              <p class="ui-kicker">{{ t("ownerLayout.menuBuilder") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ categoriesCount }} / {{ dishesCount }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.launchProgress") }}</p>
+            </RouterLink>
+            <RouterLink to="/owner/tables" class="ui-orbit-card ui-surface-lift block p-4">
+              <p class="ui-kicker">{{ t("ownerLayout.tablesQr") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ published ? t("ownerHome.ready") : t("ownerHome.pending") }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.menuPublished") }}</p>
+            </RouterLink>
+            <RouterLink to="/owner/reservations" class="ui-orbit-card ui-surface-lift block p-4">
+              <p class="ui-kicker">{{ t("ownerLayout.reservations") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ upgradeRequests.length }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.recentRequests") }}</p>
+            </RouterLink>
+          </div>
+        </aside>
       </div>
     </header>
 
-    <article class="ui-section-band space-y-3">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
+    <article class="ui-section-band space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
+          <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
+        </div>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</span>
       </div>
       <div class="h-2 overflow-hidden rounded-full bg-slate-800">
         <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${readinessScore}%` }"></div>
       </div>
-      <p class="text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <article
+          v-for="item in readinessItems"
+          :key="item.label"
+          class="ui-admin-subcard flex items-center justify-between gap-3"
+        >
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-slate-100">{{ item.label }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ item.note }}</p>
+          </div>
+          <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold" :class="item.ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'">
+            {{ item.ready ? t("ownerHome.ready") : t("ownerHome.missing") }}
+          </span>
+        </article>
+      </div>
     </article>
 
     <article class="ui-command-deck space-y-4">
@@ -132,60 +175,41 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
-          <ul class="mt-2 space-y-1 text-sm text-slate-200">
-            <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between">
-              <span>{{ humanizeSlug(item.category_slug) }}</span>
-              <span class="text-slate-400">{{ item.count }}</span>
+          <ul class="mt-3 space-y-2 text-sm text-slate-200">
+            <li v-for="item in topCategories" :key="item.category_slug" class="space-y-1.5">
+              <div class="flex items-center justify-between gap-3">
+                <span>{{ humanizeSlug(item.category_slug) }}</span>
+                <span class="text-slate-400">{{ item.count }}</span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  class="h-full rounded-full bg-[var(--color-secondary)]"
+                  :style="{ width: `${scaledCount(item.count, topCategoryPeak)}%` }"
+                ></div>
+              </div>
             </li>
             <li v-if="!topCategories.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
         </div>
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
-          <ul class="mt-2 space-y-1 text-sm text-slate-200">
-            <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between">
-              <span>{{ humanizeSlug(item.dish_slug) }}</span>
-              <span class="text-slate-400">{{ item.count }}</span>
+          <ul class="mt-3 space-y-2 text-sm text-slate-200">
+            <li v-for="item in topDishes" :key="item.dish_slug" class="space-y-1.5">
+              <div class="flex items-center justify-between gap-3">
+                <span>{{ humanizeSlug(item.dish_slug) }}</span>
+                <span class="text-slate-400">{{ item.count }}</span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div
+                  class="h-full rounded-full bg-cyan-400/80"
+                  :style="{ width: `${scaledCount(item.count, topDishPeak)}%` }"
+                ></div>
+              </div>
             </li>
             <li v-if="!topDishes.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
         </div>
       </div>
-    </article>
-
-    <article class="ui-section-band space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-lg font-semibold">{{ t("ownerHome.launchChecklist") }}</h3>
-        <button
-          class="ui-btn-outline px-3 py-1.5 text-xs"
-          :disabled="loading"
-          @click="refresh"
-        >
-          {{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}
-        </button>
-      </div>
-      <ul class="grid gap-2 sm:grid-cols-2">
-        <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
-          <span>{{ t("ownerHome.brandContactPresent") }}</span>
-          <span :class="hasContact ? 'text-emerald-300' : 'text-amber-300'">{{ hasContact ? t("ownerHome.ready") : t("ownerHome.missing") }}</span>
-        </li>
-        <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
-          <span>{{ t("ownerHome.themeConfigured") }}</span>
-          <span :class="hasTheme ? 'text-emerald-300' : 'text-amber-300'">{{ hasTheme ? t("ownerHome.ready") : t("ownerHome.missing") }}</span>
-        </li>
-        <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
-          <span>{{ t("ownerHome.categoriesAdded") }}</span>
-          <span :class="categoriesCount > 0 ? 'text-emerald-300' : 'text-amber-300'">{{ categoriesCount > 0 ? t("ownerHome.ready") : t("ownerHome.missing") }}</span>
-        </li>
-        <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
-          <span>{{ t("ownerHome.dishesAdded") }}</span>
-          <span :class="dishesCount > 0 ? 'text-emerald-300' : 'text-amber-300'">{{ dishesCount > 0 ? t("ownerHome.ready") : t("ownerHome.missing") }}</span>
-        </li>
-        <li class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm">
-          <span>{{ t("ownerHome.menuPublished") }}</span>
-          <span :class="published ? 'text-emerald-300' : 'text-amber-300'">{{ published ? t("ownerHome.ready") : t("ownerHome.pending") }}</span>
-        </li>
-      </ul>
     </article>
 
     <article class="ui-command-deck space-y-4">
@@ -372,6 +396,35 @@ const topCategories = computed(() => analyticsSummary.value?.top_categories || [
 const topDishes = computed(() => analyticsSummary.value?.top_dishes || []);
 const pendingUpgrade = computed(() => upgradeRequests.value.find((request) => request.status === "pending") || null);
 const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgradeMeta.value.has_pending_request === true);
+const topCategoryPeak = computed(() => Math.max(1, ...topCategories.value.map((item) => Number(item?.count || 0))));
+const topDishPeak = computed(() => Math.max(1, ...topDishes.value.map((item) => Number(item?.count || 0))));
+const readinessItems = computed(() => [
+  {
+    label: t("ownerHome.brandContactPresent"),
+    note: t("ownerHome.quickActions"),
+    ready: hasContact.value,
+  },
+  {
+    label: t("ownerHome.themeConfigured"),
+    note: t("ownerLayout.publicPreview"),
+    ready: hasTheme.value,
+  },
+  {
+    label: t("ownerHome.categoriesAdded"),
+    note: `${categoriesCount.value} ${t("common.categories")}`,
+    ready: categoriesCount.value > 0,
+  },
+  {
+    label: t("ownerHome.dishesAdded"),
+    note: `${dishesCount.value} ${t("common.dishes")}`,
+    ready: dishesCount.value > 0,
+  },
+  {
+    label: t("ownerHome.menuPublished"),
+    note: planModeLabel.value,
+    ready: published.value,
+  },
+]);
 
 const refresh = async () => {
   loading.value = true;
@@ -512,6 +565,13 @@ const humanizeSlug = (value) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const scaledCount = (value, max) => {
+  const numeric = Number(value || 0);
+  const denominator = Number(max || 1);
+  if (!numeric || denominator <= 0) return 6;
+  return Math.max(10, Math.min(100, Math.round((numeric / denominator) * 100)));
+};
 
 onMounted(async () => {
   await refresh();

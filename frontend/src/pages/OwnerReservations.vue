@@ -1,27 +1,74 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-28 sm:pb-6">
     <header class="ui-workspace-stage ui-fade-up space-y-4">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div class="space-y-3">
-          <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
-          <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
-          <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ t("ownerReservations.description") }}</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
-            {{ loading ? t("common.loading") : t("common.refresh") }}
-          </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
-            {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
-          </button>
-        </div>
-      </div>
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.15fr),340px]">
+        <div class="space-y-4">
+          <div class="space-y-3">
+            <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
+            <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
+            <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ t("ownerReservations.description") }}</p>
+          </div>
 
-      <div class="flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ counts.total }} {{ t("ownerReservations.total") }}</span>
-        <span class="ui-data-strip">{{ counts.new }} {{ t("ownerReservations.new") }}</span>
-        <span class="ui-data-strip">{{ counts.overdue_new }} {{ t("ownerReservations.overdue") }}</span>
-        <span class="ui-data-strip">{{ followUpProgress }}% {{ t("ownerReservations.followUpCompletion") }}</span>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-data-strip">{{ counts.total }} {{ t("ownerReservations.total") }}</span>
+            <span class="ui-data-strip">{{ counts.new }} {{ t("ownerReservations.new") }}</span>
+            <span class="ui-data-strip">{{ counts.overdue_new }} {{ t("ownerReservations.overdue") }}</span>
+            <span class="ui-data-strip">{{ followUpProgress }}% {{ t("ownerReservations.followUpCompletion") }}</span>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-3">
+            <article class="ui-action-tile">
+              <p class="ui-stat-label">{{ t("ownerReservations.new") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-amber-300">{{ counts.new }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ t("ownerReservations.statusFilter") }}</p>
+            </article>
+            <article class="ui-action-tile">
+              <p class="ui-stat-label">{{ t("ownerReservations.overdue") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-rose-300">{{ counts.overdue_new }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ t("ownerReservations.followUpCompletion") }}</p>
+            </article>
+            <article class="ui-action-tile">
+              <p class="ui-stat-label">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
+              <p class="mt-2 text-2xl font-semibold text-white">{{ selectedCount }}</p>
+              <p class="mt-1 text-sm text-slate-400">{{ activeFilterSummary }}</p>
+            </article>
+          </div>
+        </div>
+
+        <aside class="ui-command-deck space-y-4">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("ownerReservations.followUpCompletion") }}</p>
+            <h3 class="text-xl font-semibold text-white">{{ activeFilterSummary }}</h3>
+            <p class="text-sm text-slate-300">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
+          </div>
+
+          <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <button class="ui-btn-primary justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
+              {{ loading ? t("common.loading") : t("common.refresh") }}
+            </button>
+            <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
+              {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
+            </button>
+            <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
+              {{ t("common.clear") }}
+            </button>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <article class="ui-orbit-card p-4">
+              <p class="ui-kicker">{{ t("ownerReservations.total") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ counts.total }}</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("ownerReservations.resolvedProgress", { resolved: resolvedCount, total: counts.total }) }}</p>
+            </article>
+            <article class="ui-orbit-card p-4">
+              <p class="ui-kicker">{{ t("ownerReservations.followUpCompletion") }}</p>
+              <p class="mt-2 text-lg font-semibold text-[var(--color-secondary)]">{{ followUpProgress }}%</p>
+              <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                <div class="h-full rounded-full bg-[var(--color-secondary)]" :style="{ width: `${followUpProgress}%` }"></div>
+              </div>
+            </article>
+          </div>
+        </aside>
       </div>
     </header>
 
@@ -205,16 +252,19 @@
               {{ statusLabel(reservation.status) }}
             </span>
           </div>
-          <div v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'" class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full px-2 py-1 text-[11px] font-semibold" :class="slaClass(reservation.sla_state)">
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-data-strip">{{ formatDate(reservation.created_at) }}</span>
+            <span
+              v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'"
+              class="rounded-full px-2 py-1 text-[11px] font-semibold"
+              :class="slaClass(reservation.sla_state)"
+            >
               {{ slaLabel(reservation) }}
             </span>
-            <span v-if="reservation.follow_up_due_at" class="text-[11px] text-slate-500">
+            <span v-if="reservation.follow_up_due_at" class="ui-data-strip">
               {{ t("ownerReservations.dueLabel", { date: formatDate(reservation.follow_up_due_at) }) }}
             </span>
           </div>
-
-          <p class="text-xs text-slate-400">{{ formatDate(reservation.created_at) }}</p>
 
           <div class="space-y-1 text-sm">
             <p class="text-slate-200">{{ reservation.phone || "-" }}</p>
@@ -453,6 +503,9 @@ const reminderOptions = computed(() => [
   { value: "opened", label: t("ownerReservations.opened") },
   { value: "none", label: t("ownerReservations.noReminders") },
 ]);
+const activeStatusLabel = computed(() => statusOptions.value.find((option) => option.value === statusFilter.value)?.label || t("ownerReservations.allStatuses"));
+const activeReminderLabel = computed(() => reminderOptions.value.find((option) => option.value === reminderFilter.value)?.label || t("ownerReservations.allReminders"));
+const activeFilterSummary = computed(() => `${activeStatusLabel.value} / ${activeReminderLabel.value}`);
 
 const selectedCount = computed(() => selectedIds.value.length);
 const allSelectedOnPage = computed(() => {
