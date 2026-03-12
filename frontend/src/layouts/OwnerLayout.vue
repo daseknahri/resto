@@ -44,18 +44,44 @@
             <RouterLink to="/menu" class="ui-segmented-button ui-touch-target" :data-active="$route.path === '/menu'">{{ t("ownerLayout.publicPreview") }}</RouterLink>
           </div>
 
-          <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <RouterLink to="/owner/onboarding" class="ui-btn-primary ui-touch-target px-4 py-2 text-xs md:hidden">
-                {{ t("ownerLayout.menuBuilder") }}
-              </RouterLink>
-              <RouterLink to="/menu" class="ui-btn-outline ui-touch-target px-4 py-2 text-xs md:hidden">
-                {{ t("ownerLayout.publicPreview") }}
-              </RouterLink>
+          <div class="ui-context-band space-y-3">
+            <div class="grid gap-2 lg:grid-cols-[minmax(0,1.2fr),repeat(3,minmax(0,1fr))]">
+              <article class="ui-context-stat min-w-0">
+                <p class="ui-kicker">{{ currentSectionLabel }}</p>
+                <p class="mt-1 truncate text-sm font-semibold text-white">{{ tenantName }}</p>
+                <p class="mt-1 text-xs text-slate-400">{{ t("ownerHome.launchProgress") }} {{ ownerReadinessLabel }}</p>
+              </article>
+              <article class="ui-context-stat">
+                <p class="ui-kicker">{{ t("ownerHome.state") }}</p>
+                <p class="mt-1 text-sm font-semibold" :class="workspaceStateClass">{{ workspaceStateLabel }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ tenant.meta?.slug || "tenant" }}</p>
+              </article>
+              <article class="ui-context-stat">
+                <p class="ui-kicker">{{ t("common.plan") }}</p>
+                <p class="mt-1 text-sm font-semibold text-white">{{ tenant.meta?.plan?.name || planModeLabel }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ planModeLabel }}</p>
+              </article>
+              <article class="ui-context-stat">
+                <p class="ui-kicker">{{ t("ownerLayout.publicPreview") }}</p>
+                <p class="mt-1 truncate text-sm font-semibold text-white">{{ publicMenuLabel }}</p>
+                <RouterLink to="/menu" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline">{{ t("ownerLayout.publicPreview") }}</RouterLink>
+              </article>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ tenant.meta?.slug || "tenant" }}</span>
-              <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ planModeLabel }}</span>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="ui-route-badge">{{ currentSectionLabel }}</span>
+                <RouterLink to="/owner/onboarding" class="ui-btn-primary ui-touch-target px-4 py-2 text-xs md:hidden">
+                  {{ t("ownerLayout.menuBuilder") }}
+                </RouterLink>
+                <RouterLink to="/menu" class="ui-btn-outline ui-touch-target px-4 py-2 text-xs md:hidden">
+                  {{ t("ownerLayout.publicPreview") }}
+                </RouterLink>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ tenant.meta?.slug || "tenant" }}</span>
+                <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ planModeLabel }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -98,7 +124,7 @@
 
 <script setup>
 import { computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
@@ -107,14 +133,34 @@ import { useTenantStore } from "../stores/tenant";
 const session = useSessionStore();
 const tenant = useTenantStore();
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
+const publicMenuLabel = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.host}/menu`));
 const planModeLabel = computed(() => {
   if (tenant.entitlements?.ordering_mode === "checkout") return t("ownerLayout.checkout");
   if (tenant.entitlements?.ordering_mode === "whatsapp") return t("ownerLayout.whatsapp");
   return t("ownerLayout.browseOnly");
 });
+const currentSectionLabel = computed(() => {
+  if (route.path.startsWith("/owner/onboarding")) return t("ownerLayout.menuBuilder");
+  if (route.path.startsWith("/owner/tables")) return t("ownerLayout.tablesQr");
+  if (route.path.startsWith("/owner/reservations")) return t("ownerLayout.reservations");
+  if (route.path === "/menu") return t("ownerLayout.publicPreview");
+  return t("ownerLayout.dashboard");
+});
+const ownerReadinessLabel = computed(() => {
+  const profile = tenant.meta?.profile || {};
+  const items = [
+    Boolean((profile.phone || "").trim() || (profile.whatsapp || "").trim()),
+    Boolean((profile.logo_url || "").trim() || (profile.hero_url || "").trim() || profile.primary_color || profile.secondary_color),
+    Boolean(profile.is_menu_published),
+  ];
+  return `${Math.round((items.filter(Boolean).length / items.length) * 100)}%`;
+});
+const workspaceStateLabel = computed(() => (tenant.meta?.profile?.is_menu_published ? t("ownerHome.published") : t("ownerHome.draft")));
+const workspaceStateClass = computed(() => (tenant.meta?.profile?.is_menu_published ? "text-emerald-300" : "text-amber-300"));
 const planModeClass = computed(() => {
   if (tenant.entitlements?.ordering_mode === "checkout") return "bg-emerald-500/20 text-emerald-300";
   if (tenant.entitlements?.ordering_mode === "whatsapp") return "bg-amber-500/20 text-amber-300";

@@ -180,16 +180,60 @@
         <article
           v-for="item in readinessItems"
           :key="item.label"
-          class="ui-admin-subcard flex items-center justify-between gap-3"
+          class="ui-checklist-card flex items-start justify-between gap-3"
+          :data-complete="item.ready"
+          :data-warning="!item.ready"
         >
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-slate-100">{{ item.label }}</p>
-            <p class="mt-1 text-xs text-slate-500">{{ item.note }}</p>
+          <div class="flex min-w-0 items-start gap-3">
+            <span class="ui-readiness-dot mt-1 shrink-0"></span>
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-slate-100">{{ item.label }}</p>
+              <p class="mt-1 text-xs text-slate-500">{{ item.note }}</p>
+              <RouterLink v-if="item.to" :to="item.to" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline">
+                {{ item.actionLabel }}
+              </RouterLink>
+            </div>
           </div>
           <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold" :class="item.ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'">
             {{ item.ready ? t("ownerHome.ready") : t("ownerHome.missing") }}
           </span>
         </article>
+      </div>
+    </article>
+
+    <article class="ui-context-band">
+      <div class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),420px]">
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ nextWorkspaceAction.kicker }}</p>
+            <p class="text-lg font-semibold text-white">{{ nextWorkspaceAction.title }}</p>
+            <p class="text-sm text-slate-300">{{ nextWorkspaceAction.description }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-route-badge">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+            <span class="ui-route-badge">{{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}</span>
+            <span class="ui-route-badge">{{ planModeLabel }}</span>
+          </div>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+          <article class="ui-context-stat">
+            <p class="ui-kicker">{{ t("ownerHome.launchProgress") }}</p>
+            <p class="mt-1 text-sm font-semibold text-white">{{ readinessScore }}%</p>
+            <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
+          </article>
+          <article class="ui-context-stat">
+            <p class="ui-kicker">{{ t("ownerLayout.publicPreview") }}</p>
+            <p class="mt-1 truncate text-sm font-semibold text-white">{{ menuUrl }}</p>
+            <button class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyMenuUrl">{{ t("ownerHome.copyPublicUrl") }}</button>
+          </article>
+          <article class="ui-context-stat">
+            <p class="ui-kicker">{{ t("ownerHome.quickActions") }}</p>
+            <RouterLink :to="nextWorkspaceAction.to" class="mt-1 inline-flex text-sm font-semibold text-brand-secondary hover:underline">
+              {{ nextWorkspaceAction.cta }}
+            </RouterLink>
+            <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.analyticsSubtitle") }}</p>
+          </article>
+        </div>
       </div>
     </article>
 
@@ -447,26 +491,36 @@ const readinessItems = computed(() => [
     label: t("ownerHome.brandContactPresent"),
     note: t("ownerHome.quickActions"),
     ready: hasContact.value,
+    to: hasContact.value ? "" : "/owner/onboarding",
+    actionLabel: t("ownerHome.openMenuBuilder"),
   },
   {
     label: t("ownerHome.themeConfigured"),
     note: t("ownerLayout.publicPreview"),
     ready: hasTheme.value,
+    to: hasTheme.value ? "" : "/owner/onboarding",
+    actionLabel: t("ownerHome.openMenuBuilder"),
   },
   {
     label: t("ownerHome.categoriesAdded"),
     note: `${categoriesCount.value} ${t("common.categories")}`,
     ready: categoriesCount.value > 0,
+    to: categoriesCount.value > 0 ? "" : "/owner/onboarding",
+    actionLabel: t("ownerLayout.menuBuilder"),
   },
   {
     label: t("ownerHome.dishesAdded"),
     note: `${dishesCount.value} ${t("common.dishes")}`,
     ready: dishesCount.value > 0,
+    to: dishesCount.value > 0 ? "" : "/owner/onboarding",
+    actionLabel: t("ownerLayout.menuBuilder"),
   },
   {
     label: t("ownerHome.menuPublished"),
     note: planModeLabel.value,
     ready: published.value,
+    to: published.value ? "/menu" : "/owner/onboarding",
+    actionLabel: published.value ? t("ownerLayout.publicPreview") : t("ownerHome.openMenuBuilder"),
   },
 ]);
 

@@ -463,6 +463,56 @@ body[dir="rtl"] .ui-kicker {
       radial-gradient(circle at 88% 18%, rgba(20, 184, 166, 0.12), transparent 26%);
   }
 
+  .ui-context-band {
+    @apply relative overflow-hidden rounded-[1.3rem] border bg-slate-950/55 p-3 shadow-lg shadow-black/20 backdrop-blur-xl;
+    border-color: rgba(148, 163, 184, 0.16);
+  }
+
+  .ui-context-band::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(245, 158, 11, 0.12), transparent 24%),
+      radial-gradient(circle at 88% 16%, rgba(20, 184, 166, 0.12), transparent 24%);
+  }
+
+  .ui-context-stat {
+    @apply rounded-[1rem] border border-slate-800/80 bg-slate-950/60 px-3 py-2 shadow-sm shadow-black/20;
+  }
+
+  .ui-route-badge {
+    @apply inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em];
+    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(2, 6, 23, 0.54);
+    color: rgb(203 213 225);
+  }
+
+  .ui-checklist-card {
+    @apply relative overflow-hidden rounded-[1.15rem] border bg-slate-950/55 p-3 shadow-sm shadow-black/20 transition;
+    border-color: rgba(71, 85, 105, 0.8);
+  }
+
+  .ui-checklist-card::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.45), transparent);
+  }
+
+  .ui-checklist-card[data-complete="true"] {
+    border-color: rgba(16, 185, 129, 0.34);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .ui-checklist-card[data-complete="true"]::before,
+  .ui-checklist-card[data-warning="true"]::before {
+    opacity: 1;
+  }
+
+  .ui-checklist-card[data-warning="true"] {
+    border-color: rgba(245, 158, 11, 0.34);
+    background: rgba(245, 158, 11, 0.08);
+  }
+
   .ui-toolbar-band {
     @apply rounded-[1.3rem] border border-slate-800/80 bg-slate-950/45 p-3 backdrop-blur-xl;
   }

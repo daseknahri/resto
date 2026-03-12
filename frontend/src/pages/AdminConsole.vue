@@ -919,6 +919,39 @@
         </div>
       </div>
 
+      <div class="ui-context-band">
+        <div class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),420px]">
+          <div class="space-y-3">
+            <div class="space-y-1">
+              <p class="ui-kicker">{{ t("adminConsole.provisioningOperations") }}</p>
+              <p class="text-lg font-semibold text-white">{{ lastProvision.tenant || "-" }}</p>
+              <p class="text-sm text-slate-300">{{ currentDomainSuffixLabel }}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="ui-route-badge">{{ t("adminConsole.latestProvisioningPackage") }}</span>
+              <span class="ui-route-badge">{{ lastProvision.public_menu_url || lastProvision.tenant_url || "-" }}</span>
+            </div>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+            <article class="ui-context-stat">
+              <p class="ui-kicker">{{ t("adminConsole.tenantUrl") }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-white">{{ lastProvision.tenant_url || "-" }}</p>
+              <button v-if="lastProvision.tenant_url" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
+            </article>
+            <article class="ui-context-stat">
+              <p class="ui-kicker">{{ t("adminConsole.workspaceUrl") }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-white">{{ lastProvision.workspace_url || "-" }}</p>
+              <button v-if="lastProvision.workspace_url" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
+            </article>
+            <article class="ui-context-stat">
+              <p class="ui-kicker">{{ t("adminConsole.activationToken") }}</p>
+              <p class="mt-1 break-all text-sm font-semibold text-white">{{ lastProvision.activation_token || "-" }}</p>
+              <button v-if="lastProvision.activation_token" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+            </article>
+          </div>
+        </div>
+      </div>
+
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("adminConsole.tenantUrl") }}</p>
@@ -949,7 +982,13 @@
             <p class="text-sm text-slate-300">{{ t("adminConsole.provisioningOperations") }}</p>
           </div>
           <ol v-if="lastProvision.owner_next_steps?.length" class="space-y-2 text-sm text-slate-200">
-            <li v-for="(step, index) in lastProvision.owner_next_steps" :key="step" class="flex items-start gap-3 rounded-xl border border-slate-800/80 bg-slate-950/50 px-3 py-2.5">
+            <li
+              v-for="(step, index) in lastProvision.owner_next_steps"
+              :key="step"
+              class="ui-checklist-card flex items-start gap-3"
+              :data-complete="index < 1"
+              :data-warning="index >= 1"
+            >
               <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-xs font-semibold text-[var(--color-secondary)]">{{ index + 1 }}</span>
               <span class="leading-6">{{ step }}</span>
             </li>
