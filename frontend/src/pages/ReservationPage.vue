@@ -49,6 +49,25 @@
           </article>
         </section>
 
+        <section class="ui-state-strip ui-reveal" style="--ui-delay: 115ms">
+          <div class="relative z-[1] grid gap-2 md:grid-cols-[minmax(0,1fr),auto,auto,auto] md:items-center">
+            <div class="min-w-0">
+              <p class="ui-kicker">{{ t("reservationPage.submitReservation") }}</p>
+              <p class="truncate text-sm font-medium text-white">{{ reservationStateLabel }}</p>
+              <p class="mt-1 text-xs text-slate-400">{{ reservationModeLabel }}</p>
+            </div>
+            <span class="ui-state-chip" :data-active="reservationReadyCount === reservationChecklist.length">
+              {{ reservationReadyCount }}/{{ reservationChecklist.length }}
+            </span>
+            <span class="ui-state-chip" :data-active="Boolean(cart.tableLabel)">
+              {{ cart.tableLabel ? `${t("common.table")} / ${cart.tableLabel}` : t("reservationPage.tableMissing") }}
+            </span>
+            <span class="ui-state-chip" :data-active="Boolean(form.date && form.time)">
+              {{ form.date && form.time ? `${form.date} / ${form.time}` : t("reservationPage.quickConfirm") }}
+            </span>
+          </div>
+        </section>
+
         <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <article
             v-for="item in reservationChecklist"
@@ -405,6 +424,12 @@
       v-if="!submitted"
       class="fixed bottom-20 left-3 right-3 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur sm:hidden"
     >
+      <div class="mb-3 flex items-center justify-between gap-3 text-xs text-slate-300">
+        <span class="ui-state-chip" :data-active="reservationReadyCount === reservationChecklist.length">
+          {{ reservationReadyCount }}/{{ reservationChecklist.length }}
+        </span>
+        <span class="truncate text-right">{{ reservationStateLabel }}</span>
+      </div>
       <button
         type="button"
         class="ui-btn-primary w-full justify-center"
@@ -629,4 +654,3 @@ onMounted(() => {
   if (cart.customerPhone && !form.phone) form.phone = cart.customerPhone;
 });
 </script>
-

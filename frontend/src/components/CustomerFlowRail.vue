@@ -15,6 +15,22 @@
         <span :style="{ width: progressWidth }"></span>
       </div>
 
+      <div class="ui-state-strip">
+        <div class="relative z-[1] grid gap-2 md:grid-cols-[minmax(0,1fr),auto,auto] md:items-center">
+          <div class="min-w-0">
+            <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
+            <p class="truncate text-sm font-medium text-white">{{ currentStepLabel }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ currentStepHint }}</p>
+          </div>
+          <span class="ui-state-chip" data-active="true">
+            {{ completionLabel }}
+          </span>
+          <span class="ui-state-chip" :data-active="Boolean(cart.count)">
+            {{ cart.count ? itemCountLabel(cart.count) : t("customerFlow.review") }}
+          </span>
+        </div>
+      </div>
+
       <div class="grid grid-cols-4 gap-3">
         <RouterLink
           v-for="step in steps"
@@ -107,6 +123,8 @@ const steps = computed(() => [
 }));
 
 const currentStepLabel = computed(() => steps.value[activeStep.value]?.label || t("customerFlow.info"));
+const currentStepHint = computed(() => steps.value[activeStep.value]?.hint || t("customerFlow.start"));
+const completionLabel = computed(() => `${steps.value.filter((step) => step.isCompleted).length}/${steps.value.length}`);
 const progressWidth = computed(() => {
   const maxIndex = Math.max(steps.value.length - 1, 1);
   return `${(activeStep.value / maxIndex) * 100}%`;

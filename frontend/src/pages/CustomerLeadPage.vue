@@ -212,6 +212,25 @@
       </article>
     </section>
 
+    <section class="ui-state-strip ui-reveal" style="--ui-delay: 125ms">
+      <div class="relative z-[1] grid gap-2 md:grid-cols-[minmax(0,1fr),auto,auto,auto] md:items-center">
+        <div class="min-w-0">
+          <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
+          <p class="truncate text-sm font-medium text-white">{{ tenantName }}</p>
+          <p class="mt-1 text-xs text-slate-400">{{ tenantDescription }}</p>
+        </div>
+        <span class="ui-state-chip" :data-active="Boolean(categoriesCount)">
+          {{ categoriesCount }} {{ t("customerLeadPage.categories") }}
+        </span>
+        <span class="ui-state-chip" :data-active="Boolean(dishesCount)">
+          {{ dishesCount }} {{ t("customerLeadPage.dishes") }}
+        </span>
+        <span class="ui-state-chip" :data-active="Boolean(googleMapsUrl)">
+          {{ googleMapsUrl ? t("customerLeadPage.googleReviews") : orderingModeLabel }}
+        </span>
+      </div>
+    </section>
+
     <section class="grid gap-3 lg:grid-cols-[0.86fr,1.14fr]">
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
