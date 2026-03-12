@@ -18,7 +18,9 @@ const arabic = flattenLocale(messages.ar);
 
 const missingArabic = Object.keys(english).filter((key) => !(key in arabic));
 const brokenArabic = Object.entries(arabic).filter(
-  ([, value]) => typeof value === "string" && value.includes("????"),
+  ([, value]) =>
+    typeof value === "string" &&
+    (value.includes("????") || /[ØÙÂ][^\s]*/.test(value)),
 );
 
 console.log(`Arabic missing keys: ${missingArabic.length}`);
