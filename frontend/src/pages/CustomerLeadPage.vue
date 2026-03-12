@@ -117,6 +117,64 @@
       </a>
     </section>
 
+    <section class="grid gap-3 lg:grid-cols-[1.08fr,0.92fr]">
+      <article class="ui-section-band ui-reveal p-4 md:p-5" style="--ui-delay: 95ms">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
+            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
+          </div>
+          <span class="ui-chip-strong">{{ statusLabel }}</span>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-[1.25rem] border border-slate-800/80 bg-slate-950/45 p-4">
+            <p class="ui-stat-label">{{ t("customerLeadPage.response") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("customerLeadPage.reserveText") }}</p>
+          </div>
+          <div class="rounded-[1.25rem] border border-slate-800/80 bg-slate-950/45 p-4">
+            <p class="ui-stat-label">{{ t("menu.mode") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ orderingModeLabel }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ tenantDescription }}</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="ui-command-deck ui-reveal p-4 md:p-5" style="--ui-delay: 110ms">
+        <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
+        <div class="mt-4 grid gap-2">
+          <a
+            v-if="phoneHref"
+            :href="phoneHref"
+            class="ui-btn-outline justify-center"
+            @click="trackContactClick('phone_call')"
+          >
+            {{ t("customerLeadPage.callNow") }}
+          </a>
+          <a
+            v-if="whatsappHref"
+            :href="whatsappHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-primary justify-center"
+            @click="trackContactClick('whatsapp_contact')"
+          >
+            {{ t("customerLeadPage.whatsappNow") }}
+          </a>
+          <a
+            v-if="reservationUrl"
+            :href="reservationUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-outline justify-center"
+            @click="trackContactClick('reservation_url')"
+          >
+            {{ t("customerLeadPage.directBooking") }}
+          </a>
+        </div>
+      </article>
+    </section>
+
     <section class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       <article class="ui-metric-card ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
         <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>

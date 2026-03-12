@@ -36,6 +36,7 @@
             <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
             <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
             <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
+            <span class="ui-data-strip">{{ reservationModeLabel }}</span>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
@@ -106,15 +107,32 @@
             </div>
           </div>
 
-          <div class="mt-5 grid gap-4 md:grid-cols-2">
-            <label class="space-y-1 text-sm text-slate-200">
-              {{ t("reservationPage.preferredDate") }}
-              <input v-model="form.date" type="date" class="ui-input" />
-            </label>
-            <label class="space-y-1 text-sm text-slate-200">
-              {{ t("reservationPage.preferredTime") }}
-              <input v-model="form.time" type="time" class="ui-input" />
-            </label>
+          <div class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr),220px]">
+            <div class="grid gap-4 md:grid-cols-2">
+              <label class="space-y-1 text-sm text-slate-200">
+                {{ t("reservationPage.preferredDate") }}
+                <input v-model="form.date" type="date" class="ui-input" />
+              </label>
+              <label class="space-y-1 text-sm text-slate-200">
+                {{ t("reservationPage.preferredTime") }}
+                <input v-model="form.time" type="time" class="ui-input" />
+              </label>
+            </div>
+
+            <div class="rounded-[1.35rem] border border-slate-800/80 bg-slate-950/45 p-3">
+              <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button
+                  v-for="slot in quickTimes"
+                  :key="slot"
+                  class="ui-pill-nav"
+                  :class="form.time === slot ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
+                  @click="form.time = slot"
+                >
+                  {{ slot }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <label class="mt-5 block space-y-1 text-sm text-slate-200">
@@ -178,6 +196,15 @@
             <div class="ui-admin-subcard flex items-center justify-between gap-3">
               <span class="ui-stat-label">{{ t("customerLayout.navCart") }}</span>
               <span class="text-sm font-medium text-white">{{ cart.count }}</span>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-[1.35rem] border border-slate-800/80 bg-slate-950/45 p-3">
+            <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
+            <div class="mt-3 space-y-2 text-sm text-slate-300">
+              <p>{{ t("reservationPage.preferredDate") }}: <span class="font-medium text-slate-100">{{ form.date || "--" }}</span></p>
+              <p>{{ t("reservationPage.preferredTime") }}: <span class="font-medium text-slate-100">{{ form.time || "--" }}</span></p>
+              <p>{{ t("reservationPage.partySize") }}: <span class="font-medium text-slate-100">{{ form.party_size }}</span></p>
             </div>
           </div>
 
@@ -247,6 +274,7 @@ const cart = useCartStore();
 const submitted = ref(false);
 const meta = computed(() => tenant.resolvedMeta || null);
 const { t } = useI18n();
+const quickTimes = ["12:30", "14:00", "19:30", "21:00"];
 
 const form = reactive({
   name: "",
@@ -268,6 +296,7 @@ const errors = reactive({
 
 const profile = computed(() => meta.value?.profile || {});
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
+const reservationModeLabel = computed(() => (reservationUrl.value ? t("reservationPage.directBooking") : t("customerLeadPage.responseValue")));
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
