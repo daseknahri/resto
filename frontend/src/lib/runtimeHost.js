@@ -7,6 +7,9 @@ const parseCsv = (value) =>
 export const isLocalTenantHost = (host) => host === "localhost" || host.endsWith(".localhost");
 
 const platformPublicHosts = parseCsv(import.meta.env.VITE_PLATFORM_PUBLIC_HOSTS || "");
+const publicDemoTenantSlug = String(import.meta.env.VITE_PUBLIC_DEMO_TENANT_SLUG || "")
+  .trim()
+  .toLowerCase();
 
 const isLikelyMenuRootHost = (host) => {
   const normalized = String(host || "").trim().toLowerCase();
@@ -59,3 +62,7 @@ export const getPlatformAdminHost = () => firstMatchingHost((host) => isPlatform
 
 export const getPrimaryPublicHost = () =>
   firstMatchingHost((host) => !isPlatformAdminHost(host) && !isPlatformApiHost(host));
+
+export const getPublicDemoTenantSlug = () => publicDemoTenantSlug;
+
+export const hasPublicDemoTenant = () => Boolean(publicDemoTenantSlug);

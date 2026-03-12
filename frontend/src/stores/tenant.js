@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import api from "../lib/api";
 import { DEMO_TENANT_META } from "../lib/demoMenu";
 import { translate } from "../i18n/translate";
-import { isPublicDemoHost } from "../lib/runtimeHost";
+import { hasPublicDemoTenant, isPublicDemoHost } from "../lib/runtimeHost";
 import { useCartStore } from "./cart";
 
 export const useTenantStore = defineStore("tenant", {
@@ -10,7 +10,7 @@ export const useTenantStore = defineStore("tenant", {
   getters: {
     resolvedMeta(state) {
       if (state.meta) return state.meta;
-      if (isPublicDemoHost()) return DEMO_TENANT_META;
+      if (isPublicDemoHost() && !hasPublicDemoTenant()) return DEMO_TENANT_META;
       return null;
     },
     entitlements() {
@@ -65,9 +65,9 @@ export const useTenantStore = defineStore("tenant", {
         this.meta = res.data;
         this.syncCartEntitlements();
       } catch (err) {
-        this.error = isPublicDemoHost() ? null : translate("tenantStore.loadFailed");
+        this.error = isPublicDemoHost() && !hasPublicDemoTenant() ? null : translate("tenantStore.loadFailed");
         this.syncCartEntitlements();
-        if (!isPublicDemoHost()) console.error(err);
+        if (!(isPublicDemoHost() && !hasPublicDemoTenant())) console.error(err);
       } finally {
         this.loading = false;
       }

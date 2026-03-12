@@ -9,7 +9,7 @@ import { useTenantStore } from "./stores/tenant";
 import { useLocaleStore } from "./stores/locale";
 import { useThemeStore } from "./stores/theme";
 import { useSessionStore } from "./stores/session";
-import { isPlatformAdminHost, isPublicDemoHost } from "./lib/runtimeHost";
+import { hasPublicDemoTenant, isPlatformAdminHost, isPublicDemoHost } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
 
 const tenant = useTenantStore();
@@ -25,7 +25,7 @@ watch(
 );
 
 onMounted(async () => {
-  const skipTenantBootstrap = isPlatformAdminHost() || isPublicDemoHost();
+  const skipTenantBootstrap = isPlatformAdminHost() || (isPublicDemoHost() && !hasPublicDemoTenant());
   if (!skipTenantBootstrap) {
     await tenant.fetchMeta();
     locale.setTenantDefault(tenant.resolvedMeta?.profile?.language);

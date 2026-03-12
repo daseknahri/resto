@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import api from "../lib/api";
 import { buildDemoDishesByCategory, DEMO_CATEGORIES } from "../lib/demoMenu";
 import { translate } from "../i18n/translate";
-import { isPublicDemoHost } from "../lib/runtimeHost";
+import { hasPublicDemoTenant, isPublicDemoHost } from "../lib/runtimeHost";
 
 const normalizeDishes = (value) => {
   if (!Array.isArray(value)) return [];
@@ -63,7 +63,7 @@ export const useMenuStore = defineStore("menu", {
       try {
         const res = await api.get("/categories/");
         const normalized = normalizeCategories(res.data);
-        if (normalized.length || !isPublicDemoHost()) {
+        if (normalized.length || !isPublicDemoHost() || hasPublicDemoTenant()) {
           this.categories = normalized;
           if (!Object.keys(this.dishes).length) {
             this.dishes = Object.fromEntries(normalized.map((category) => [category.slug, category.dishes || []]));
@@ -72,7 +72,7 @@ export const useMenuStore = defineStore("menu", {
           this.applyDemoMenuData();
         }
       } catch (err) {
-        if (isPublicDemoHost()) {
+        if (isPublicDemoHost() && !hasPublicDemoTenant()) {
           this.applyDemoMenuData();
         } else {
           this.categories = [];
@@ -91,7 +91,7 @@ export const useMenuStore = defineStore("menu", {
         const res = await api.get("/dishes/", { params: { category: slug } });
         this.dishes[slug] = normalizeDishes(res.data);
       } catch (err) {
-        if (isPublicDemoHost()) {
+        if (isPublicDemoHost() && !hasPublicDemoTenant()) {
           this.dishes[slug] = demoDishesByCategory()[slug] || [];
         } else {
           this.dishes[slug] = [];
