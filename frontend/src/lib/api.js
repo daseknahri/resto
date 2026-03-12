@@ -62,6 +62,37 @@ const api = axios.create({
   xsrfHeaderName: "X-CSRFToken",
 });
 
+const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
+
+const isCsrfMismatchError = (error) => {
+  if (error?.response?.status !== 403) return false;
+  const body = error?.response?.data;
+  if (typeof body === "string") return body.toLowerCase().includes("csrf");
+  const detail = String(body?.detail || "").toLowerCase();
+  return detail.includes("csrf");
+};
+
+const stripCsrfHeaders = (headers) => {
+  if (!headers || typeof headers !== "object") return;
+  delete headers["X-CSRFToken"];
+  delete headers["X-Csrftoken"];
+  delete headers["x-csrftoken"];
+};
+
+const refreshCsrfCookie = async () => {
+  const locale = readRuntimeLocale();
+  const config = {
+    withCredentials: true,
+    headers: {},
+    params: {},
+  };
+  if (locale) {
+    config.headers["Accept-Language"] = locale;
+    config.params.lang = locale;
+  }
+  await api.get("/session/", config);
+};
+
 const readRuntimeLocale = () => {
   if (typeof document === "undefined") return "";
   const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
@@ -97,7 +128,19 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const original = error?.config || {};
+    if (isCsrfMismatchError(error) && isUnsafeMethod(original.method) && !original.__csrfRetried) {
+      original.__csrfRetried = true;
+      original.headers = { ...(original.headers || {}) };
+      stripCsrfHeaders(original.headers);
+      try {
+        await refreshCsrfCookie();
+        return api.request(original);
+      } catch {
+        // If refresh fails, keep original error.
+      }
+    }
     if (error.response?.status === 429) {
       error.response.data = { detail: translate("apiClient.rateLimitRetry") };
     }

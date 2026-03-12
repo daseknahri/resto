@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import login, logout
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -64,6 +66,7 @@ def build_frontend_base_url(request, user):
     return f"https://{domain}"
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class ActivationView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ActivationThrottle]
@@ -76,6 +79,7 @@ class ActivationView(APIView):
         return Response({"detail": "Account activated", "user": serialize_user_session(user)}, status=status.HTTP_200_OK)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [LoginBurstThrottle, LoginSustainedThrottle]
@@ -96,6 +100,7 @@ class LogoutView(APIView):
         return Response({"detail": "Signed out"}, status=status.HTTP_200_OK)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class SessionView(APIView):
     permission_classes = [AllowAny]
 

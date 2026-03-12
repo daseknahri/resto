@@ -47,6 +47,37 @@ const adminApi = axios.create({
   xsrfHeaderName: "X-CSRFToken",
 });
 
+const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
+
+const isCsrfMismatchError = (error) => {
+  if (error?.response?.status !== 403) return false;
+  const body = error?.response?.data;
+  if (typeof body === "string") return body.toLowerCase().includes("csrf");
+  const detail = String(body?.detail || "").toLowerCase();
+  return detail.includes("csrf");
+};
+
+const stripCsrfHeaders = (headers) => {
+  if (!headers || typeof headers !== "object") return;
+  delete headers["X-CSRFToken"];
+  delete headers["X-Csrftoken"];
+  delete headers["x-csrftoken"];
+};
+
+const refreshCsrfCookie = async () => {
+  const locale = readRuntimeLocale();
+  const config = {
+    withCredentials: true,
+    headers: {},
+    params: {},
+  };
+  if (locale) {
+    config.headers["Accept-Language"] = locale;
+    config.params.lang = locale;
+  }
+  await adminApi.get("/session/", config);
+};
+
 const readRuntimeLocale = () => {
   if (typeof document === "undefined") return "";
   const fromDocument = String(document.documentElement?.lang || "").trim().toLowerCase();
@@ -79,5 +110,24 @@ adminApi.interceptors.request.use((config) => {
   }
   return config;
 });
+
+adminApi.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error?.config || {};
+    if (isCsrfMismatchError(error) && isUnsafeMethod(original.method) && !original.__csrfRetried) {
+      original.__csrfRetried = true;
+      original.headers = { ...(original.headers || {}) };
+      stripCsrfHeaders(original.headers);
+      try {
+        await refreshCsrfCookie();
+        return adminApi.request(original);
+      } catch {
+        // Keep original error if refresh/retry fails.
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default adminApi;
