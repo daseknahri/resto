@@ -1,61 +1,63 @@
 <!-- eslint-disable vue/html-indent -->
 <template>
   <div class="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6 space-y-6 ui-safe-bottom">
-    <div class="ui-panel flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">
-      <div class="space-y-2">
-        <p class="ui-kicker">{{ t("adminConsole.superAdmin") }}</p>
-        <h1 class="ui-display text-3xl font-semibold text-white">{{ activeAdminViewTitle }}</h1>
-        <p class="mt-1 text-xs text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
-        <div class="flex flex-wrap gap-2">
-          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ activeAdminViewLabel }}</span>
-          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ currentDomainSuffixLabel }}</span>
+    <div class="ui-command-deck space-y-4 p-4">
+      <div class="ui-toolbar-grid items-start">
+        <div class="space-y-2">
+          <p class="ui-kicker">{{ t("adminConsole.superAdmin") }}</p>
+          <h1 class="ui-display text-3xl font-semibold text-white">{{ activeAdminViewTitle }}</h1>
+          <p class="mt-1 text-xs text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ activeAdminViewLabel }}</span>
+            <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ currentDomainSuffixLabel }}</span>
+          </div>
         </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto] md:min-w-[22rem]">
-        <input
-          v-model="domainSuffix"
-          class="ui-input w-full px-3 py-2 text-sm"
-          :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
-        />
-        <div class="grid grid-cols-2 gap-2">
-          <button class="ui-btn-outline w-full px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
-          <a
-            :href="djangoAdminUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="ui-btn-outline w-full px-4 py-2 text-sm"
-          >
-            {{ t("adminConsole.djangoAdmin") }}
-          </a>
+        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto] xl:min-w-[24rem]">
+          <input
+            v-model="domainSuffix"
+            class="ui-input w-full px-3 py-2 text-sm"
+            :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
+          />
+          <div class="grid grid-cols-2 gap-2">
+            <button class="ui-btn-outline w-full px-4 py-2 text-sm disabled:opacity-50" :disabled="activeAdminViewLoading" @click="refreshCurrentView">{{ t("common.refresh") }}</button>
+            <a
+              :href="djangoAdminUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-btn-outline w-full px-4 py-2 text-sm"
+            >
+              {{ t("adminConsole.djangoAdmin") }}
+            </a>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="ui-panel hidden flex-wrap gap-2 p-3 md:flex">
+    <div class="ui-segmented hidden md:flex">
       <button
-        class="ui-pill-nav text-xs"
-        :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        class="ui-segmented-button"
+        :data-active="activeAdminView === 'operations'"
         @click="selectAdminView('operations')"
       >
         {{ t("adminConsole.provisioningOperations") }}
       </button>
       <button
-        class="ui-pill-nav text-xs"
-        :class="activeAdminView === 'tenants' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        class="ui-segmented-button"
+        :data-active="activeAdminView === 'tenants'"
         @click="selectAdminView('tenants')"
       >
         {{ t("adminConsole.tenantLifecycleControls") }}
       </button>
       <button
-        class="ui-pill-nav text-xs"
-        :class="activeAdminView === 'monitoring' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        class="ui-segmented-button"
+        :data-active="activeAdminView === 'monitoring'"
         @click="selectAdminView('monitoring')"
       >
         {{ t("adminConsole.reservationFollowUpSla") }}
       </button>
       <button
-        class="ui-pill-nav text-xs"
-        :class="activeAdminView === 'plans' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+        class="ui-segmented-button"
+        :data-active="activeAdminView === 'plans'"
         @click="selectAdminView('plans')"
       >
         {{ t("adminConsole.planFeatureFlags") }}
@@ -78,7 +80,7 @@
         <div
           v-for="lead in leads"
           :key="lead.id"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between">
             <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
@@ -96,7 +98,7 @@
           <p v-if="lead.onboarded_at" class="text-xs text-emerald-300">
             {{ t("adminConsole.onboarded") }}: {{ new Date(lead.onboarded_at).toLocaleString() }}
           </p>
-          <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs space-y-1">
+          <div class="ui-admin-subcard text-xs space-y-1">
             <p class="text-slate-400">{{ t("adminConsole.tenantUrlPreview") }}</p>
             <p v-if="previewLoading[lead.id]" class="text-slate-500">{{ t("adminConsole.checkingAvailability") }}</p>
             <template v-else-if="previewFor(lead.id)">
@@ -180,7 +182,7 @@
         <article
           v-for="tenant in tenants"
           :key="`tenant-${tenant.id}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="font-semibold text-slate-100">{{ tenant.name }}</p>
@@ -245,7 +247,7 @@
                 @change="handleTenantImportFile(tenant, $event)"
               />
             </div>
-            <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2">
+            <div class="ui-admin-subcard space-y-2">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("adminConsole.actionHistory") }}</p>
                 <button
@@ -376,7 +378,7 @@
         <article
           v-for="lead in reservationAlerts"
           :key="`alert-${lead.id}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
@@ -423,7 +425,7 @@
         <article
           v-for="request in upgradeRequests"
           :key="`upgrade-mobile-${request.id}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="text-xs text-slate-400">{{ new Date(request.requested_at).toLocaleString() }}</p>
@@ -552,7 +554,7 @@
             <div
               v-for="flag in plan.feature_flags"
               :key="`${plan.plan_code}-${flag.key}`"
-              class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 space-y-2"
+              class="ui-admin-subcard space-y-2"
             >
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
@@ -602,7 +604,7 @@
         <article
           v-for="job in jobs"
           :key="`job-mobile-${job.id}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
@@ -688,7 +690,7 @@
         <article
           v-for="entry in auditLogs"
           :key="`audit-mobile-${entry.id}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-2"
+          class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-semibold text-slate-100">{{ entry.action }}</p>

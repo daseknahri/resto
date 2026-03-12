@@ -1,43 +1,57 @@
 <template>
   <section class="space-y-6 pb-24 sm:pb-6">
-    <header class="space-y-3 ui-fade-up">
-      <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-      <h2 class="ui-page-title ui-display">{{ t("ownerHome.title") }}</h2>
-      <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerHome.description") }}</p>
+    <header class="ui-hero-ribbon ui-fade-up space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-2">
+          <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
+          <h2 class="ui-page-title ui-display">{{ t("ownerHome.title") }}</h2>
+          <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerHome.description") }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+          <span class="ui-chip">{{ planModeLabel }}</span>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ t("ownerHome.readiness") }}: {{ readinessScore }}%</span>
+        <span class="ui-data-strip">{{ categoriesCount }} {{ t("common.categories") }}</span>
+        <span class="ui-data-strip">{{ dishesCount }} {{ t("common.dishes") }}</span>
+      </div>
     </header>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <article class="ui-panel p-4 ui-fade-up">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.readiness") }}</p>
-        <p class="mt-2 text-3xl font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</p>
-        <p class="text-xs text-slate-400">{{ t("ownerHome.readinessHint") }}</p>
+      <article class="ui-stat-tile ui-fade-up">
+        <p class="ui-stat-label">{{ t("ownerHome.readiness") }}</p>
+        <p class="ui-stat-value text-[var(--color-secondary)]">{{ readinessScore }}%</p>
+        <p class="ui-stat-note">{{ t("ownerHome.readinessHint") }}</p>
       </article>
 
-      <article class="ui-panel p-4 ui-fade-up">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("common.categories") }}</p>
-        <p class="mt-2 text-3xl font-semibold">{{ categoriesCount }}</p>
-        <p class="text-xs text-slate-400">{{ t("ownerHome.categoriesHint") }}</p>
+      <article class="ui-stat-tile ui-fade-up">
+        <p class="ui-stat-label">{{ t("common.categories") }}</p>
+        <p class="ui-stat-value">{{ categoriesCount }}</p>
+        <p class="ui-stat-note">{{ t("ownerHome.categoriesHint") }}</p>
       </article>
 
-      <article class="ui-panel p-4 ui-fade-up">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("common.dishes") }}</p>
-        <p class="mt-2 text-3xl font-semibold">{{ dishesCount }}</p>
-        <p class="text-xs text-slate-400">{{ t("ownerHome.dishesHint") }}</p>
+      <article class="ui-stat-tile ui-fade-up">
+        <p class="ui-stat-label">{{ t("common.dishes") }}</p>
+        <p class="ui-stat-value">{{ dishesCount }}</p>
+        <p class="ui-stat-note">{{ t("ownerHome.dishesHint") }}</p>
       </article>
 
-      <article class="ui-panel p-4 ui-fade-up">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.state") }}</p>
+      <article class="ui-stat-tile ui-fade-up">
+        <p class="ui-stat-label">{{ t("ownerHome.state") }}</p>
         <p class="mt-2 text-xl font-semibold" :class="published ? 'text-emerald-300' : 'text-amber-300'">
           {{ published ? t("ownerHome.published") : t("ownerHome.draft") }}
         </p>
-        <p class="text-xs text-slate-400">{{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}</p>
+        <p class="ui-stat-note">{{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}</p>
         <p class="mt-1 text-xs" :class="isBrowseOnlyPlan ? 'text-sky-300' : 'text-slate-400'">
           {{ planModeLabel }}
         </p>
       </article>
     </div>
 
-    <article class="ui-panel p-5 space-y-3">
+    <article class="ui-section-band space-y-3">
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</span>
@@ -48,31 +62,31 @@
       <p class="text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
     </article>
 
-    <article class="ui-panel p-5 space-y-4">
+    <article class="ui-command-deck space-y-4">
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-lg font-semibold">{{ t("ownerHome.analyticsTitle") }}</h3>
         <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
       </div>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.menuViews") }}</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
         </div>
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.dishViews") }}</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-100">{{ analyticsCounts.dish_view || 0 }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ analyticsCounts.dish_view || 0 }}</p>
         </div>
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.orderActions") }}</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-100">{{ orderActionsCount }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.orderActions") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ orderActionsCount }}</p>
         </div>
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.interactionRate") }}</p>
-          <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.interactionRate") }}</p>
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
+        <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
           <ul class="mt-2 space-y-1 text-sm text-slate-200">
             <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between">
@@ -82,7 +96,7 @@
             <li v-if="!topCategories.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
         </div>
-        <div class="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
+        <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
           <ul class="mt-2 space-y-1 text-sm text-slate-200">
             <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between">
@@ -95,7 +109,7 @@
       </div>
     </article>
 
-    <article class="ui-panel p-5 space-y-4">
+    <article class="ui-section-band space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-lg font-semibold">{{ t("ownerHome.launchChecklist") }}</h3>
         <button
@@ -130,7 +144,7 @@
       </ul>
     </article>
 
-    <article class="ui-panel p-5 space-y-4">
+    <article class="ui-command-deck space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 class="text-lg font-semibold">{{ t("ownerHome.purchaseUpgrade") }}</h3>
@@ -235,7 +249,7 @@
       </div>
     </article>
 
-    <article class="ui-panel p-5 space-y-4">
+    <article class="ui-section-band space-y-4">
       <h3 class="text-lg font-semibold">{{ t("ownerHome.quickActions") }}</h3>
       <div class="grid gap-3 sm:grid-cols-2">
         <RouterLink to="/owner/onboarding" class="ui-btn-primary w-full">

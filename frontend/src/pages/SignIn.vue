@@ -1,51 +1,74 @@
 <template>
   <div class="ui-auth-page flex items-center">
-    <div class="ui-auth-card space-y-6">
-      <div class="space-y-2 text-center">
-        <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
-        <h1 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h1>
-        <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
-      </div>
+    <div class="ui-auth-stage">
+      <section class="ui-auth-spotlight relative space-y-6">
+        <div class="relative space-y-3">
+          <span class="ui-chip-strong w-fit">{{ t("signIn.kicker") }}</span>
+          <h1 class="ui-display max-w-lg text-4xl font-semibold text-white">{{ t("signIn.title") }}</h1>
+          <p class="max-w-md text-sm text-slate-300">{{ t("signIn.description") }}</p>
+        </div>
 
-      <form class="space-y-4" @submit.prevent="submit">
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("signIn.identifier") }}
-          <input
-            v-model="identifier"
-            autocomplete="username"
-            class="ui-input"
-            required
-          />
-        </label>
-        <label class="space-y-1 text-sm text-slate-200">
-          {{ t("signIn.password") }}
-          <input
-            v-model="password"
-            type="password"
-            autocomplete="current-password"
-            class="ui-input"
-            required
-          />
-        </label>
-        <button
-          type="submit"
-          :disabled="session.loading"
-          class="ui-btn-primary w-full justify-center disabled:opacity-60"
-        >
-          {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
-        </button>
-        <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
-      </form>
+        <div class="relative grid gap-3">
+          <article class="ui-orbit-card">
+            <p class="ui-kicker">{{ t("common.workspace") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.identifier") }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("signIn.firstTime") }}</p>
+          </article>
+          <article class="ui-orbit-card">
+            <p class="ui-kicker">{{ t("common.reserve") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.password") }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("signIn.forgotPassword") }}</p>
+          </article>
+        </div>
+      </section>
 
-      <div class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
-        <p>
-          {{ t("signIn.firstTime") }}
-          <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
-        </p>
-        <p>
-          {{ t("signIn.forgotPassword") }}
-          <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.resetHere") }}</RouterLink>
-        </p>
+      <div class="ui-auth-card space-y-6">
+        <div class="space-y-2 text-center">
+          <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
+        </div>
+
+        <form class="space-y-4" @submit.prevent="submit">
+          <label class="space-y-1 text-sm text-slate-200">
+            {{ t("signIn.identifier") }}
+            <input
+              v-model="identifier"
+              autocomplete="username"
+              class="ui-input"
+              required
+            />
+          </label>
+          <label class="space-y-1 text-sm text-slate-200">
+            {{ t("signIn.password") }}
+            <input
+              v-model="password"
+              type="password"
+              autocomplete="current-password"
+              class="ui-input"
+              required
+            />
+          </label>
+          <button
+            type="submit"
+            :disabled="session.loading"
+            class="ui-btn-primary w-full justify-center disabled:opacity-60"
+          >
+            {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
+          </button>
+          <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
+        </form>
+
+        <div class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
+          <p>
+            {{ t("signIn.firstTime") }}
+            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
+          </p>
+          <p>
+            {{ t("signIn.forgotPassword") }}
+            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.resetHere") }}</RouterLink>
+          </p>
+        </div>
       </div>
     </div>
   </div>

@@ -1,47 +1,55 @@
-<template>
+﻿<template>
   <div class="ui-shell">
     <header class="ui-header">
-      <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 ui-fade-up md:flex-row md:items-center md:justify-between">
-        <div class="flex min-w-0 items-center gap-3">
-          <img
-            v-if="tenantLogo"
-            :src="tenantLogo"
-            :alt="`${tenantName} logo`"
-            class="h-10 w-10 shrink-0 rounded-xl border border-slate-700/70 object-cover"
-            loading="lazy"
-          />
-          <div class="min-w-0">
-            <h1 class="ui-display truncate text-xl font-semibold text-white">{{ tenantName }}</h1>
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerLayout.kicker") }}</p>
-            <p v-if="tenant.meta?.plan?.name" class="mt-1 text-xs text-slate-400">
-              {{ t("common.plan") }}: <span class="font-semibold text-slate-200">{{ tenant.meta.plan.name }}</span>
-              <span class="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="planModeClass">{{ planModeLabel }}</span>
-            </p>
-          </div>
-        </div>
+      <div class="mx-auto w-full max-w-6xl px-4 py-4 ui-fade-up">
+        <div class="ui-command-deck space-y-4">
+          <div class="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div class="flex min-w-0 items-center gap-3">
+              <img
+                v-if="tenantLogo"
+                :src="tenantLogo"
+                :alt="`${tenantName} logo`"
+                class="h-10 w-10 shrink-0 rounded-xl border border-slate-700/70 object-cover"
+                loading="lazy"
+              />
+              <div class="min-w-0">
+                <p class="ui-kicker">{{ t("ownerLayout.kicker") }}</p>
+                <h1 class="ui-display truncate text-2xl font-semibold text-white">{{ tenantName }}</h1>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  <span class="ui-data-strip">{{ tenant.meta?.slug || "tenant" }}</span>
+                  <span v-if="tenant.meta?.plan?.name" class="ui-chip">
+                    {{ t("common.plan") }}:
+                    <span class="font-semibold text-slate-100">{{ tenant.meta.plan.name }}</span>
+                  </span>
+                  <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="planModeClass">{{ planModeLabel }}</span>
+                </div>
+              </div>
+            </div>
 
-        <div class="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-end">
-          <LanguageSwitcher />
-          <div class="flex items-center gap-2">
-            <RouterLink to="/menu" class="ui-pill-nav ui-touch-target hidden md:inline-flex">{{ t("ownerLayout.publicPreview") }}</RouterLink>
-            <button class="ui-pill-nav ui-touch-target" @click="signOut">{{ t("common.signOut") }}</button>
+            <div class="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-end">
+              <LanguageSwitcher />
+              <div class="flex items-center gap-2">
+                <RouterLink to="/menu" class="ui-btn-outline ui-touch-target hidden md:inline-flex">{{ t("ownerLayout.publicPreview") }}</RouterLink>
+                <button class="ui-pill-nav ui-touch-target" @click="signOut">{{ t("common.signOut") }}</button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="ui-scroll-row hidden min-w-0 max-w-full w-full md:flex md:flex-wrap md:items-center md:gap-2 md:overflow-visible md:pb-0">
-          <RouterLink to="/owner" class="ui-pill-nav ui-touch-target">{{ t("ownerLayout.dashboard") }}</RouterLink>
-          <RouterLink to="/owner/onboarding" class="ui-pill-nav ui-touch-target">{{ t("ownerLayout.menuBuilder") }}</RouterLink>
-          <RouterLink to="/owner/tables" class="ui-pill-nav ui-touch-target">{{ t("ownerLayout.tablesQr") }}</RouterLink>
-          <RouterLink to="/owner/reservations" class="ui-pill-nav ui-touch-target">{{ t("ownerLayout.reservations") }}</RouterLink>
-          <RouterLink to="/menu" class="ui-pill-nav ui-touch-target">{{ t("ownerLayout.publicPreview") }}</RouterLink>
-        </div>
-      </div>
-      <div class="ui-divider"></div>
-      <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2">
-        <p class="text-xs text-slate-400">{{ t("ownerLayout.setupFlow") }}</p>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ tenant.meta?.slug || "tenant" }}</span>
-          <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ planModeLabel }}</span>
+          <div class="ui-segmented hidden md:flex">
+            <RouterLink to="/owner" class="ui-segmented-button ui-touch-target" :data-active="$route.path === '/owner'">{{ t("ownerLayout.dashboard") }}</RouterLink>
+            <RouterLink to="/owner/onboarding" class="ui-segmented-button ui-touch-target" :data-active="$route.path.startsWith('/owner/onboarding')">{{ t("ownerLayout.menuBuilder") }}</RouterLink>
+            <RouterLink to="/owner/tables" class="ui-segmented-button ui-touch-target" :data-active="$route.path.startsWith('/owner/tables')">{{ t("ownerLayout.tablesQr") }}</RouterLink>
+            <RouterLink to="/owner/reservations" class="ui-segmented-button ui-touch-target" :data-active="$route.path.startsWith('/owner/reservations')">{{ t("ownerLayout.reservations") }}</RouterLink>
+            <RouterLink to="/menu" class="ui-segmented-button ui-touch-target" :data-active="$route.path === '/menu'">{{ t("ownerLayout.publicPreview") }}</RouterLink>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
+            <p class="text-xs text-slate-400">{{ t("ownerLayout.setupFlow") }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ tenant.meta?.slug || "tenant" }}</span>
+              <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ planModeLabel }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </header>
