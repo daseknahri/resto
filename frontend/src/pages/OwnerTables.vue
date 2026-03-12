@@ -1,28 +1,54 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-24 sm:pb-0">
-    <header class="no-print ui-panel p-5 ui-fade-up">
-      <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
-      <h2 class="ui-display text-3xl font-semibold text-white">{{ t("ownerTables.title") }}</h2>
-      <p class="mt-1 text-sm text-slate-300">{{ t("ownerTables.description") }}</p>
+    <header class="no-print ui-hero-stage ui-fade-up overflow-hidden">
+      <div class="relative grid gap-6 p-5 md:grid-cols-[1.2fr,0.8fr] md:p-8">
+        <div class="space-y-4">
+          <span class="ui-chip-strong w-fit">{{ t("ownerTables.kicker") }}</span>
+          <div class="space-y-2">
+            <h2 class="ui-display text-3xl font-semibold text-white md:text-4xl">{{ t("ownerTables.title") }}</h2>
+            <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("ownerTables.description") }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href="#create-table" class="ui-btn-primary">{{ t("ownerTables.create") }}</a>
+            <a href="#bulk-generate" class="ui-btn-outline">{{ t("ownerTables.bulk") }}</a>
+          </div>
+        </div>
+
+        <div class="grid gap-3 self-end">
+          <article class="ui-orbit-card">
+            <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ tenantName }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+          </article>
+          <article class="ui-orbit-card">
+            <p class="ui-kicker">{{ t("common.available") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ activeTablesCount }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("ownerTables.activeTables") }}</p>
+          </article>
+        </div>
+      </div>
     </header>
 
     <section class="no-print grid gap-3 sm:grid-cols-3">
-      <article class="ui-panel p-4">
+      <article class="ui-metric-card">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.totalLinks") }}</p>
         <p class="mt-2 text-2xl font-semibold text-white">{{ tables.length }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-metric-card">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.activeTables") }}</p>
         <p class="mt-2 text-2xl font-semibold text-emerald-300">{{ activeTablesCount }}</p>
       </article>
-      <article class="ui-panel p-4">
+      <article class="ui-metric-card">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerTables.disabledTables") }}</p>
         <p class="mt-2 text-2xl font-semibold text-amber-300">{{ disabledTablesCount }}</p>
       </article>
     </section>
 
-    <article id="create-table" class="no-print ui-panel space-y-3 p-4 scroll-mt-24">
-      <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.createTable") }}</h3>
+    <article id="create-table" class="no-print ui-command-deck space-y-4 p-4 scroll-mt-24 md:p-5">
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ t("ownerTables.create") }}</p>
+        <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.createTable") }}</h3>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr,120px,120px,auto] lg:items-end">
         <label class="text-sm text-slate-300">
           {{ t("ownerTables.tableLabel") }}
@@ -53,11 +79,14 @@
           {{ creating ? t("ownerTables.adding") : t("ownerTables.addTable") }}
         </button>
       </div>
-      <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
+      <p v-if="error" class="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
     </article>
 
-    <article id="bulk-generate" class="no-print ui-panel space-y-3 p-4 scroll-mt-24">
-      <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
+    <article id="bulk-generate" class="no-print ui-command-deck space-y-4 p-4 scroll-mt-24 md:p-5">
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
+        <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,90px,90px,120px,120px,auto] xl:items-end">
         <label class="text-sm text-slate-300">
           {{ t("ownerTables.prefix") }}
@@ -94,7 +123,7 @@
       <p class="text-xs text-slate-500">{{ t("ownerTables.bulkHint") }}</p>
     </article>
 
-    <div class="no-print ui-panel p-4">
+    <div class="no-print ui-section-band p-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
         <div class="ui-scroll-row">
@@ -131,9 +160,9 @@
       <article
         v-for="table in tables"
         :key="table.id"
-        class="table-card rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-3"
+        class="table-card ui-spotlight-card space-y-3 p-4"
       >
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/55 p-3">
           <div class="flex items-center gap-2">
             <img
               v-if="logoUrl"
@@ -176,7 +205,7 @@
 
         <div class="flex items-start justify-between gap-2">
           <span
-            class="rounded-full px-2 py-1 text-[11px] font-semibold"
+            class="rounded-full border px-2 py-1 text-[11px] font-semibold"
             :class="table.is_active ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700 text-slate-300'"
           >
             {{ table.is_active ? t("ownerTables.active") : t("ownerTables.disabledState") }}

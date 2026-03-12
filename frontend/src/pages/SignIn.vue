@@ -20,10 +20,25 @@
             <p class="mt-1 text-sm text-slate-400">{{ t("signIn.forgotPassword") }}</p>
           </article>
         </div>
+
+        <div class="grid gap-3 sm:grid-cols-3">
+          <article class="ui-metric-card">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.workspace") }}</p>
+            <p class="mt-1 text-xl font-semibold text-white">Owner</p>
+          </article>
+          <article class="ui-metric-card">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.available") }}</p>
+            <p class="mt-1 text-xl font-semibold text-white">24/7</p>
+          </article>
+          <article class="ui-metric-card">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.refresh") }}</p>
+            <p class="mt-1 text-xl font-semibold text-white">{{ t("signIn.kicker") }}</p>
+          </article>
+        </div>
       </section>
 
       <div class="ui-auth-card space-y-6">
-        <div class="space-y-2 text-center">
+        <div class="ui-hero-ribbon space-y-3 text-center">
           <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
           <h2 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h2>
           <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
@@ -56,10 +71,11 @@
           >
             {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
           </button>
-          <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
+          <p v-if="error" class="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
         </form>
 
-        <div class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
+        <div class="ui-section-band space-y-3 text-xs text-slate-300">
+          <p class="font-medium text-slate-100">{{ t("signIn.firstTime") }}</p>
           <p>
             {{ t("signIn.firstTime") }}
             <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
