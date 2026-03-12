@@ -141,13 +141,18 @@
 
         <div class="mt-4 grid gap-3 md:grid-cols-3">
           <article
-            v-for="item in visitJourney"
+            v-for="(item, index) in visitJourney"
             :key="item.label"
-            class="ui-orbit-card ui-surface-lift p-4"
+            class="ui-story-card ui-surface-lift p-4"
           >
-            <p class="ui-kicker">{{ item.label }}</p>
-            <p class="mt-1 text-base font-semibold text-white">{{ item.title }}</p>
-            <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ item.label }}</p>
+                <p class="mt-1 text-base font-semibold text-white">{{ item.title }}</p>
+              </div>
+              <span class="ui-step-badge">{{ String(index + 1).padStart(2, "0") }}</span>
+            </div>
+            <p class="mt-3 text-sm text-slate-300">{{ item.text }}</p>
           </article>
         </div>
       </article>
@@ -192,11 +197,16 @@
             :href="social.url"
             target="_blank"
             rel="noopener noreferrer"
-            class="ui-admin-subcard transition hover:border-[var(--color-secondary)]/70"
+            class="ui-story-card transition hover:border-[var(--color-secondary)]/70"
             @click="trackContactClick(`social_${social.key}`)"
           >
-            <p class="ui-kicker">{{ social.label }}</p>
-            <p class="mt-1 text-sm font-medium text-white">{{ tenantName }}</p>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ social.label }}</p>
+                <p class="mt-1 text-sm font-medium text-white">{{ tenantName }}</p>
+              </div>
+              <span class="ui-chip text-[10px]">{{ t("customerLeadPage.quickContact") }}</span>
+            </div>
           </a>
         </div>
       </article>
@@ -263,7 +273,7 @@
             v-for="category in featuredCategories"
             :key="category.slug"
             :to="{ name: 'category', params: { slug: category.slug } }"
-            class="ui-admin-subcard ui-press overflow-hidden transition hover:border-[var(--color-secondary)]/70"
+            class="ui-story-card ui-press overflow-hidden transition hover:border-[var(--color-secondary)]/70"
           >
             <div class="flex items-center gap-3">
               <div
@@ -335,11 +345,11 @@
           <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
           <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
           <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            <article class="ui-admin-subcard">
+            <article class="ui-story-card">
               <p class="ui-stat-label">{{ t("customerLeadPage.response") }}</p>
               <p class="mt-2 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
             </article>
-            <article class="ui-admin-subcard">
+            <article class="ui-story-card">
               <p class="ui-stat-label">{{ t("customerLeadPage.quickContact") }}</p>
               <p class="mt-2 text-sm text-slate-200">
                 {{ whatsappHref ? t("customerLeadPage.whatsappNow") : phoneHref ? t("customerLeadPage.callNow") : t("customerLeadPage.directBooking") }}

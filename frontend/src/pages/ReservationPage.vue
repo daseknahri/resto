@@ -33,14 +33,19 @@
 
         <section class="grid gap-3 sm:grid-cols-3">
           <article
-            v-for="item in reservationJourney"
+            v-for="(item, index) in reservationJourney"
             :key="item.label"
-            class="ui-metric-card ui-surface-lift ui-reveal p-4"
+            class="ui-story-card ui-surface-lift ui-reveal p-4"
             :style="{ '--ui-delay': item.delay }"
           >
-            <p class="ui-kicker">{{ item.label }}</p>
-            <p class="mt-1 text-lg font-semibold text-white">{{ item.title }}</p>
-            <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ item.label }}</p>
+                <p class="mt-1 text-lg font-semibold text-white">{{ item.title }}</p>
+              </div>
+              <span class="ui-step-badge">{{ String(index + 1).padStart(2, "0") }}</span>
+            </div>
+            <p class="mt-3 text-sm text-slate-300">{{ item.text }}</p>
           </article>
         </section>
 
@@ -238,15 +243,16 @@
 
           <div class="mt-4 space-y-2">
             <article
-              v-for="item in reservationJourney"
+              v-for="(item, index) in reservationJourney"
               :key="`aside-${item.label}`"
-              class="ui-admin-subcard"
+              class="ui-story-card"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="ui-kicker">{{ item.label }}</p>
                   <p class="mt-1 text-sm font-semibold text-white">{{ item.title }}</p>
                 </div>
+                <span class="ui-step-badge">{{ String(index + 1).padStart(2, "0") }}</span>
               </div>
               <p class="mt-2 text-sm text-slate-300">{{ item.text }}</p>
             </article>
