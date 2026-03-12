@@ -1,4 +1,4 @@
-﻿import api from "../lib/api";
+import api from "../lib/api";
 import { defineStore } from "pinia";
 
 export const useActivationStore = defineStore("activation", {

@@ -1,4 +1,4 @@
-﻿<!-- eslint-disable vue/html-indent -->
+<!-- eslint-disable vue/html-indent -->
 <template>
   <div class="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-6 space-y-6 ui-safe-bottom">
     <div class="ui-panel flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between">

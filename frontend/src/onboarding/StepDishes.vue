@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="ui-panel space-y-4 p-5">
     <h2 class="text-xl font-semibold">{{ t("stepDishes.title") }}</h2>
     <p class="text-sm text-slate-400">{{ t("stepDishes.description") }}</p>
