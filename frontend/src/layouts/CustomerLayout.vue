@@ -43,15 +43,34 @@
       <RouterView />
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-700/40 bg-slate-950/90 px-4 py-2 backdrop-blur-xl ui-safe-bottom md:hidden">
-      <div class="mx-auto grid w-full max-w-5xl grid-cols-4 gap-2 text-xs text-slate-300">
-        <RouterLink :to="{ name: 'customer-home' }" class="ui-chip ui-press justify-center py-2">{{ t("customerLayout.navInfo") }}</RouterLink>
-        <RouterLink :to="{ name: 'menu' }" class="ui-chip ui-press justify-center py-2">{{ t("customerLayout.navMenu") }}</RouterLink>
-        <RouterLink to="/cart" class="ui-chip ui-press justify-center py-2">
-          {{ t("customerLayout.navCart") }}
-          <span v-if="cart.count" class="rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-900">{{ cart.count }}</span>
+    <section class="mx-auto w-full max-w-5xl px-4 pt-3 md:hidden">
+      <div class="ui-panel flex flex-wrap items-center gap-2 px-3 py-2.5 text-[11px] text-slate-300">
+        <span class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">{{ currentSectionLabel }}</span>
+        <span v-if="cart.tableLabel" class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">
+          {{ t("customerLayout.table") }} {{ cart.tableLabel }}
+        </span>
+        <span class="ui-chip border-slate-700/70 bg-slate-950/45 text-[11px]">{{ orderingModeLabel }}</span>
+      </div>
+    </section>
+
+    <nav class="ui-bottom-dock md:hidden">
+      <div class="ui-bottom-dock-grid grid-cols-4 text-xs">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.key"
+          :to="item.to"
+          class="ui-press flex min-h-[3.1rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center transition"
+          :class="navItemClass(item.key)"
+          :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
+        >
+          <span class="text-[11px] font-semibold leading-none">{{ item.label }}</span>
+          <span
+            v-if="item.badge"
+            class="rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950"
+          >
+            {{ item.badge }}
+          </span>
         </RouterLink>
-        <RouterLink :to="{ name: 'reserve' }" class="ui-chip ui-press justify-center py-2">{{ t("customerLayout.navReserve") }}</RouterLink>
       </div>
     </nav>
   </div>
@@ -75,6 +94,40 @@ const { t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(meta.value?.profile?.logo_url || "").trim());
+const orderingModeLabel = computed(() => {
+  const mode = String(tenant.entitlements?.ordering_mode || "browse").toLowerCase();
+  if (mode === "checkout") return t("customerLeadPage.checkout");
+  if (mode === "whatsapp") return t("customerLeadPage.whatsapp");
+  return t("customerLeadPage.browseOnly");
+});
+
+const activeCustomerSection = computed(() => {
+  const name = String(route.name || "");
+  if (name === "customer-home") return "info";
+  if (name === "menu" || name === "category" || name === "dish") return "menu";
+  if (name === "cart") return "cart";
+  if (name === "reserve") return "reserve";
+  return "info";
+});
+
+const currentSectionLabel = computed(() => {
+  if (activeCustomerSection.value === "menu") return t("customerLayout.navMenu");
+  if (activeCustomerSection.value === "cart") return t("customerLayout.navCart");
+  if (activeCustomerSection.value === "reserve") return t("customerLayout.navReserve");
+  return t("customerLayout.navInfo");
+});
+
+const navItems = computed(() => [
+  { key: "info", label: t("customerLayout.navInfo"), to: { name: "customer-home" }, badge: "" },
+  { key: "menu", label: t("customerLayout.navMenu"), to: { name: "menu" }, badge: "" },
+  { key: "cart", label: t("customerLayout.navCart"), to: { name: "cart" }, badge: cart.count ? String(cart.count) : "" },
+  { key: "reserve", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" },
+]);
+
+const navItemClass = (key) =>
+  activeCustomerSection.value === key
+    ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/12 text-[var(--color-secondary)] shadow-lg shadow-black/30"
+    : "border-slate-700/70 bg-slate-950/55 text-slate-300";
 
 const tenantNotice = computed(() => {
   const profile = meta.value?.profile;
@@ -117,7 +170,7 @@ const resolveTableFromSlug = async (tableSlug) => {
       cart.setTableContext(label, slug);
       return;
     }
-  } catch (err) {
+  } catch {
     // Fallback to a humanized slug so cart still has useful context in degraded cases.
   }
   cart.setTableContext(humanizeSlug(normalizedSlug), normalizedSlug);

@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-4 px-4 py-4 pb-32 sm:pb-8 ui-safe-bottom">
+  <div class="space-y-3 px-4 py-3 pb-32 sm:space-y-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <header class="ui-glass ui-reveal overflow-hidden p-0">
-      <div class="relative min-h-[240px] overflow-hidden md:min-h-[260px]">
+      <div class="relative min-h-[208px] overflow-hidden md:min-h-[260px]">
         <img
           v-if="heroImage"
           :src="heroImage"
@@ -12,7 +12,7 @@
         <div class="absolute inset-0 bg-slate-950/76"></div>
         <div class="absolute inset-0 bg-gradient-to-br from-black/10 via-slate-950/60 to-black/80"></div>
 
-        <div class="relative flex min-h-[240px] flex-col justify-end gap-3 p-4 md:min-h-[260px] md:p-5">
+        <div class="relative flex min-h-[208px] flex-col justify-end gap-3 p-4 md:min-h-[260px] md:p-5">
           <div class="flex flex-wrap items-center gap-2">
             <span class="ui-chip">{{ statusLabel }}</span>
             <span v-if="locationLine" class="ui-chip">{{ locationLine }}</span>
@@ -83,7 +83,7 @@
       </a>
     </section>
 
-    <section class="grid gap-3 sm:grid-cols-3">
+    <section class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 80ms">
         <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ categoriesCount }}</p>
@@ -92,7 +92,7 @@
         <p class="ui-kicker">{{ t("customerLeadPage.dishes") }}</p>
         <p class="mt-1 text-2xl font-semibold text-white">{{ dishesCount }}</p>
       </article>
-      <article class="ui-panel ui-surface-lift ui-reveal p-4" style="--ui-delay: 140ms">
+      <article class="ui-panel ui-surface-lift ui-reveal col-span-2 p-4 sm:col-span-1" style="--ui-delay: 140ms">
         <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
         <p class="mt-1 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
       </article>
@@ -189,7 +189,6 @@
         </form>
       </div>
     </section>
-
   </div>
 </template>
 

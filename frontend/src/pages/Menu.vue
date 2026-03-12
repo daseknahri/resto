@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-3 px-4 py-3 pb-32 sm:pb-8 ui-safe-bottom">
-    <header class="ui-glass ui-reveal overflow-hidden p-3.5 md:p-4">
+    <header class="ui-glass ui-reveal overflow-hidden p-3 md:p-4">
       <div class="space-y-1.5">
         <p class="ui-kicker">{{ t("menu.kicker") }}</p>
         <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">{{ tenantName }}</h1>
@@ -15,7 +15,10 @@
       </div>
     </header>
 
-    <section class="ui-panel ui-reveal ui-surface-lift space-y-3 p-4" style="--ui-delay: 50ms">
+    <section
+      class="ui-panel ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+4.8rem)] z-10 space-y-3 p-3.5 md:static md:p-4"
+      style="--ui-delay: 50ms"
+    >
       <div class="grid gap-3 md:grid-cols-[1fr,auto] md:items-center">
         <div class="relative">
           <input v-model.trim="search" class="ui-input pr-12" :placeholder="t('menu.searchPlaceholder')" />
@@ -28,16 +31,16 @@
           </button>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <div class="grid grid-cols-2 gap-2 text-xs text-slate-400 md:flex md:flex-wrap md:items-center">
           <button
-            class="ui-pill-nav text-xs"
+            class="ui-pill-nav text-xs md:min-w-[7rem]"
             :class="sortBy === 'position' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="sortBy = 'position'"
           >
             {{ t("menu.sortOrder") }}
           </button>
           <button
-            class="ui-pill-nav text-xs"
+            class="ui-pill-nav text-xs md:min-w-[7rem]"
             :class="sortBy === 'count' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="sortBy = 'count'"
           >
@@ -45,7 +48,10 @@
           </button>
         </div>
       </div>
-      <p class="text-xs text-slate-500">{{ t("menu.tip") }}</p>
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <p>{{ t("menu.tip") }}</p>
+        <p class="text-slate-400">{{ totalDishes }} {{ t("common.dishes") }}</p>
+      </div>
     </section>
 
     <div class="grid gap-4 sm:grid-cols-2">
@@ -99,7 +105,7 @@ const menu = useMenuStore();
 const tenant = useTenantStore();
 const cart = useCartStore();
 const router = useRouter();
-const { formatCurrency, itemCountLabel, t } = useI18n();
+const { formatCurrency, t } = useI18n();
 
 const search = ref("");
 const sortBy = ref("position");

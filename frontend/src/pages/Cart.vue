@@ -18,6 +18,11 @@
       </div>
       <div class="mt-3 ui-divider"></div>
       <p class="mt-2 text-sm text-slate-300">{{ t("cartPage.reviewAdjustSend") }}</p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
+        <span class="ui-chip">{{ planLabel }}</span>
+        <span v-if="tableLabelModel" class="ui-chip">{{ t("cartPage.table", { table: tableLabelModel }) }}</span>
+      </div>
     </header>
 
     <div v-if="isBrowseOnlyPlan" class="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-6 text-sky-100 space-y-2">
@@ -51,12 +56,12 @@
           </p>
         </div>
 
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="inline-flex items-center rounded-full border border-slate-700 bg-slate-950/60 p-1">
             <button
               class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
-              @click="cart.decrement(item.key)"
               :aria-label="t('cartPage.decreaseQuantity')"
+              @click="cart.decrement(item.key)"
             >
               -
             </button>
@@ -71,8 +76,8 @@
             />
             <button
               class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
-              @click="cart.increment(item.key)"
               :aria-label="t('cartPage.increaseQuantity')"
+              @click="cart.increment(item.key)"
             >
               +
             </button>
@@ -310,6 +315,7 @@
         <div>
           <p class="text-xs text-slate-400">{{ t("cartPage.total") }}</p>
           <p class="text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(cart.total, currency) }}</p>
+          <p class="text-[11px] text-slate-500">{{ itemCountLabel(cart.count) }}</p>
         </div>
         <button
           v-if="cart.canCheckout"
@@ -636,7 +642,7 @@ const copyCoordinates = async () => {
   try {
     await navigator.clipboard.writeText(`${lat},${lng}`);
     toast.show(t("cartPage.coordinatesCopied"), "success");
-  } catch (err) {
+  } catch {
     toast.show(t("cartPage.unableToCopyCoordinates"), "error");
   }
 };
@@ -678,7 +684,7 @@ watch(showMapModal, async (value) => {
   await nextTick();
   try {
     await initLeafletMap();
-  } catch (err) {
+  } catch {
     toast.show(t("cartPage.unableToLoadMapPicker"), "error");
     showMapModal.value = false;
   }
