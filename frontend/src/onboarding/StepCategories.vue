@@ -1,67 +1,150 @@
 <template>
-  <div class="ui-panel space-y-4 p-5">
-    <h2 class="text-xl font-semibold">{{ t("stepCategories.title") }}</h2>
-    <p class="text-sm text-slate-400">{{ t("stepCategories.description") }}</p>
+  <div class="ui-panel space-y-5 p-5">
+    <section class="ui-hero-stage rounded-[30px] p-5 sm:p-6">
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.12fr),320px]">
+        <div class="space-y-5">
+          <div class="space-y-2">
+            <p class="ui-hero-ribbon">{{ t("stepCategories.title") }}</p>
+            <h2 class="text-2xl font-semibold text-white sm:text-3xl">{{ t("stepCategories.description") }}</h2>
+            <p class="max-w-3xl text-sm leading-7 text-slate-300">
+              {{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}
+            </p>
+          </div>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
-      <p class="text-sm text-slate-200">{{ t("stepCategories.quickTemplates") }}</p>
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="pack in categoryTemplatePacks"
-          :key="pack.id"
-          type="button"
-          class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-          :class="selectedTemplate === pack.id ? 'border-brand-secondary text-brand-secondary bg-brand-secondary/10' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-          @click="selectedTemplate = pack.id"
-        >
-          {{ pack.label }}
-        </button>
-      </div>
-      <button class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary" type="button" @click="applyTemplate">
-        {{ t("stepCategories.applyTemplate") }}
-      </button>
-    </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-data-strip">{{ categories.length }} {{ t("common.categories") }}</span>
+            <span class="ui-data-strip">{{ selectedTranslationLocales.length }}/{{ maxTranslationLocales }} {{ t("stepCategories.translationsTitle") }}</span>
+            <span class="ui-data-strip">{{ categoryTemplatePacks.length }} {{ t("stepCategories.quickTemplates") }}</span>
+          </div>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
-      <p class="text-sm text-slate-200">{{ t("stepCategories.translationsTitle") }}</p>
-      <p class="text-xs text-slate-400">
-        {{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}
-      </p>
-      <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-        <button
-          v-for="locale in secondaryLocales"
-          :key="locale.code"
-          type="button"
-          class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-          :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-          :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-          @click="toggleTranslationLocale(locale.code)"
-        >
-          {{ locale.nativeLabel }} ({{ locale.label }})
-        </button>
+          <div class="ui-section-band space-y-4 rounded-[28px] p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ t("stepCategories.quickTemplates") }}</p>
+                <p class="mt-1 text-sm text-slate-300">{{ t("stepCategories.description") }}</p>
+              </div>
+              <button class="ui-btn-outline px-4 py-2 text-sm" type="button" @click="applyTemplate">
+                {{ t("stepCategories.applyTemplate") }}
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="pack in categoryTemplatePacks"
+                :key="pack.id"
+                type="button"
+                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                :class="selectedTemplate === pack.id ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary shadow-[0_12px_35px_rgba(245,158,11,0.15)]' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                @click="selectedTemplate = pack.id"
+              >
+                {{ pack.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/90 bg-slate-950/50 p-4 space-y-3">
+            <div>
+              <p class="ui-kicker">{{ t("stepCategories.translationsTitle") }}</p>
+              <p class="mt-1 text-xs text-slate-400">
+                {{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}
+              </p>
+            </div>
+            <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
+              <button
+                v-for="locale in secondaryLocales"
+                :key="locale.code"
+                type="button"
+                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
+                @click="toggleTranslationLocale(locale.code)"
+              >
+                {{ locale.nativeLabel }} ({{ locale.label }})
+              </button>
+            </div>
+            <p v-else class="text-xs text-slate-500">{{ t("stepCategories.translationsUnavailable") }}</p>
+          </div>
+        </div>
+
+        <aside class="ui-command-deck space-y-4">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("common.status") }}</p>
+            <h3 class="text-xl font-semibold text-white">{{ activeTemplateLabel }}</h3>
+            <p class="text-sm text-slate-300">{{ t("stepCategories.quickTemplates") }}</p>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <article class="ui-orbit-card p-4">
+              <p class="ui-stat-label">{{ t("common.categories") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-white">{{ categories.length }}</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("stepCategories.addCategory") }}</p>
+            </article>
+            <article class="ui-orbit-card p-4">
+              <p class="ui-stat-label">{{ t("stepCategories.translationsTitle") }}</p>
+              <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ selectedTranslationLocales.length }}</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}</p>
+            </article>
+            <article class="ui-orbit-card p-4">
+              <p class="ui-stat-label">{{ t("common.next") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ t("common.dishes") }}</p>
+              <p class="mt-1 text-xs text-slate-400">{{ t("common.saveAndNext") }}</p>
+            </article>
+          </div>
+
+          <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <button class="ui-btn-primary justify-center px-4 py-2 text-sm" type="button" @click="add">
+              {{ t("stepCategories.addCategory") }}
+            </button>
+            <button class="ui-btn-outline justify-center px-4 py-2 text-sm" type="button" @click="applyTemplate">
+              {{ t("stepCategories.applyTemplate") }}
+            </button>
+          </div>
+        </aside>
       </div>
-      <p v-else class="text-xs text-slate-500">{{ t("stepCategories.translationsUnavailable") }}</p>
-    </div>
+    </section>
 
     <div class="space-y-3">
-      <div v-for="(cat, idx) in categories" :key="cat.local_id" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-        <div class="flex items-center gap-3">
-          <input
-            v-model="cat.name"
-            class="flex-1 rounded-xl bg-slate-900 border px-3 py-2"
-            :class="rowError(cat, 'name') ? 'border-red-400' : 'border-slate-700'"
-            :placeholder="t('stepCategories.categoryNamePlaceholder')"
-            @input="clearRowError(cat.local_id, 'name')"
-          />
-          <input
-            v-model.number="cat.position"
-            type="number"
-            min="0"
-            class="w-20 rounded-xl bg-slate-900 border px-3 py-2"
-            :class="rowError(cat, 'position') ? 'border-red-400' : 'border-slate-700'"
-            @input="clearRowError(cat.local_id, 'position')"
-          />
-          <button class="text-sm text-red-300" @click="remove(idx)">{{ t("stepCategories.remove") }}</button>
+      <div
+        v-for="(cat, idx) in categories"
+        :key="cat.local_id"
+        class="rounded-[26px] border border-slate-800 bg-slate-950/82 p-4 shadow-[0_18px_45px_rgba(2,8,23,0.2)] space-y-4"
+      >
+        <div class="flex flex-col gap-3 border-b border-slate-800/80 pb-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+              {{ t("common.categories") }} {{ idx + 1 }}
+            </p>
+            <p class="text-sm text-slate-300">{{ t("stepCategories.description") }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="ui-data-strip">{{ Number(cat.position || 0) }}</span>
+            <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" @click="remove(idx)">
+              {{ t("stepCategories.remove") }}
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
+          <div class="space-y-1">
+            <input
+              v-model="cat.name"
+              class="ui-input"
+              :class="rowError(cat, 'name') ? 'border-red-400' : 'border-slate-700'"
+              :placeholder="t('stepCategories.categoryNamePlaceholder')"
+              @input="clearRowError(cat.local_id, 'name')"
+            />
+            <p v-if="rowError(cat, 'name')" class="text-xs text-red-300">{{ rowError(cat, "name") }}</p>
+          </div>
+          <div class="space-y-1">
+            <input
+              v-model.number="cat.position"
+              type="number"
+              min="0"
+              class="ui-input"
+              :class="rowError(cat, 'position') ? 'border-red-400' : 'border-slate-700'"
+              @input="clearRowError(cat.local_id, 'position')"
+            />
+            <p v-if="rowError(cat, 'position')" class="text-xs text-red-300">{{ rowError(cat, "position") }}</p>
+          </div>
         </div>
 
         <textarea
@@ -72,6 +155,7 @@
           :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
           @input="clearRowError(cat.local_id, 'description')"
         ></textarea>
+        <p v-if="rowError(cat, 'description')" class="text-xs text-red-300">{{ rowError(cat, "description") }}</p>
 
         <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepCategories.translatedContent") }}</p>
@@ -131,19 +215,16 @@
           <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[cat.local_id] || 0}%` }"></div>
         </div>
 
-        <p v-if="rowError(cat, 'name')" class="text-xs text-red-300">{{ rowError(cat, "name") }}</p>
-        <p v-if="rowError(cat, 'description')" class="text-xs text-red-300">{{ rowError(cat, "description") }}</p>
-        <p v-if="rowError(cat, 'position')" class="text-xs text-red-300">{{ rowError(cat, "position") }}</p>
         <p v-if="rowError(cat, 'image_url')" class="text-xs text-red-300">{{ rowError(cat, "image_url") }}</p>
         <p v-if="rowError(cat, 'slug')" class="text-xs text-red-300">{{ rowError(cat, "slug") }}</p>
         <p v-if="rowError(cat, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(cat, "non_field_errors") }}</p>
       </div>
-      <button class="text-sm text-[var(--color-secondary)]" @click="add">{{ t("stepCategories.addCategory") }}</button>
+      <button class="ui-btn-outline px-4 py-2 text-sm" @click="add">{{ t("stepCategories.addCategory") }}</button>
     </div>
 
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-wrap items-center gap-3 border-t border-slate-800/80 pt-3">
       <button class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
         {{ saving ? t("common.saving") : t("common.saveAndNext") }}
       </button>
@@ -186,6 +267,9 @@ const maxTranslationLocales = computed(() =>
 );
 const defaultLocale = computed(() => normalizeLocale(tenant.resolvedMeta?.profile?.language || "en"));
 const secondaryLocales = computed(() => LOCALE_OPTIONS.filter((option) => option.code !== defaultLocale.value));
+const activeTemplateLabel = computed(
+  () => categoryTemplatePacks.find((pack) => pack.id === selectedTemplate.value)?.label || t("stepCategories.quickTemplates")
+);
 
 const localeLabel = (code) => {
   const match = LOCALE_OPTIONS.find((option) => option.code === code);

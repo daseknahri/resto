@@ -13,6 +13,9 @@
               <span class="ui-data-strip">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</span>
               <span class="ui-data-strip">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</span>
             </div>
+            <div class="h-2 overflow-hidden rounded-full bg-slate-900/80">
+              <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${progressPct}%` }"></div>
+            </div>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
@@ -44,6 +47,24 @@
             </button>
           </div>
 
+          <div class="ui-command-deck mt-4 space-y-3">
+            <div class="space-y-1.5">
+              <p class="ui-kicker">{{ t("common.next") }}</p>
+              <h2 class="text-lg font-semibold text-white">{{ currentStepTitle }}</h2>
+              <p class="text-sm text-slate-300">{{ currentStepDescription }}</p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <article class="ui-orbit-card p-3.5">
+                <p class="ui-stat-label">{{ t("common.status") }}</p>
+                <p class="mt-2 text-lg font-semibold text-white">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</p>
+              </article>
+              <article class="ui-orbit-card p-3.5">
+                <p class="ui-stat-label">{{ t("common.saved") }}</p>
+                <p class="mt-2 text-lg font-semibold text-[var(--color-secondary)]">{{ progressPct }}%</p>
+              </article>
+            </div>
+          </div>
+
           <div class="ui-scroll-row max-w-full lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
             <button
               v-for="step in steps"
@@ -60,7 +81,12 @@
                 {{ step.id }}
               </div>
               <div class="space-y-1">
-                <p class="font-semibold" :class="current === step.id ? 'text-white' : 'text-slate-300'">{{ t(step.titleKey) }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold" :class="current === step.id ? 'text-white' : 'text-slate-300'">{{ t(step.titleKey) }}</p>
+                  <span v-if="step.id < current || (published && step.id === steps.length)" class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                    {{ t("common.saved") }}
+                  </span>
+                </div>
                 <p class="text-xs leading-5 text-slate-400">{{ t(step.descriptionKey) }}</p>
               </div>
             </button>
@@ -106,6 +132,9 @@ const mapping = {
 };
 const currentComponent = computed(() => mapping[current.value]);
 const progressPct = computed(() => Math.round((current.value / steps.length) * 100));
+const currentStep = computed(() => steps.find((step) => step.id === current.value) || steps[0]);
+const currentStepTitle = computed(() => t(currentStep.value?.titleKey || steps[0].titleKey));
+const currentStepDescription = computed(() => t(currentStep.value?.descriptionKey || steps[0].descriptionKey));
 const stepStorageKey = computed(() => {
   const slug = tenant.meta?.slug || "tenant";
   return `resto:onboarding-step:${slug}`;
