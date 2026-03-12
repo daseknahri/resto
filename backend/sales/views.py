@@ -1,4 +1,5 @@
 import csv
+import logging
 import re
 from datetime import date, timedelta
 from math import ceil
@@ -95,6 +96,7 @@ MAX_ADMIN_TENANT_PAGE_SIZE = 200
 DEFAULT_ADMIN_TENANT_TIMELINE_PAGE_SIZE = 10
 MAX_ADMIN_TENANT_TIMELINE_PAGE_SIZE = 50
 TENANT_SETTINGS_EXPORT_VERSION = 2
+logger = logging.getLogger(__name__)
 
 
 def _parse_iso_date(value: str):
@@ -608,11 +610,51 @@ class ProvisionLeadViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsPlatformAdmin]
 
     def update(self, request, *args, **kwargs):
-        lead = self.get_object()
-        domain_suffix = request.data.get("domain_suffix", "localhost")
-        requested_slug = request.data.get("requested_slug")
+        lead = None
         try:
+            lead = self.get_object()
+            domain_suffix = request.data.get("domain_suffix", "localhost")
+            requested_slug = request.data.get("requested_slug")
             result = provision_lead(lead, domain_suffix=domain_suffix, requested_slug=requested_slug)
+            log_admin_action(
+                action=AdminAuditLog.Actions.LEAD_PROVISIONED,
+                request=request,
+                tenant=result.tenant,
+                lead=lead,
+                target_repr=f"tenant:{result.tenant.slug}",
+                metadata={
+                    "status": "success",
+                    "tenant_url": result.tenant_url,
+                    "workspace_url": result.workspace_url,
+                },
+            )
+            onboarding_url = build_onboarding_url(result.tenant)
+            public_menu_url = build_public_menu_url(result.tenant)
+            return Response(
+                {
+                    "detail": "Provisioned",
+                    "tenant": result.tenant.slug,
+                    "tenant_url": result.tenant_url,
+                    "workspace_url": result.workspace_url,
+                    "onboarding_url": onboarding_url,
+                    "signin_url": result.signin_url,
+                    "public_menu_url": public_menu_url,
+                    "owner_next_steps": build_owner_checklist(
+                        result.workspace_url,
+                        result.signin_url,
+                        result.activation_url,
+                        onboarding_url,
+                        public_menu_url,
+                    ),
+                    "django_admin_url": result.admin_url,
+                    "admin_url": result.admin_url,
+                    "activation_url": result.activation_url,
+                    "activation_token": result.activation_token.token,
+                    "job_id": result.job.id,
+                    "whatsapp_link": result.whatsapp_link,
+                    "whatsapp_message_template": result.whatsapp_message_template,
+                }
+            )
         except ValueError as exc:
             log_admin_action(
                 action=AdminAuditLog.Actions.LEAD_PROVISIONED,
@@ -622,45 +664,19 @@ class ProvisionLeadViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):
                 metadata={"status": "failed", "reason": str(exc)},
             )
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        log_admin_action(
-            action=AdminAuditLog.Actions.LEAD_PROVISIONED,
-            request=request,
-            tenant=result.tenant,
-            lead=lead,
-            target_repr=f"tenant:{result.tenant.slug}",
-            metadata={
-                "status": "success",
-                "tenant_url": result.tenant_url,
-                "workspace_url": result.workspace_url,
-            },
-        )
-        onboarding_url = build_onboarding_url(result.tenant)
-        public_menu_url = build_public_menu_url(result.tenant)
-        return Response(
-            {
-                "detail": "Provisioned",
-                "tenant": result.tenant.slug,
-                "tenant_url": result.tenant_url,
-                "workspace_url": result.workspace_url,
-                "onboarding_url": onboarding_url,
-                "signin_url": result.signin_url,
-                "public_menu_url": public_menu_url,
-                "owner_next_steps": build_owner_checklist(
-                    result.workspace_url,
-                    result.signin_url,
-                    result.activation_url,
-                    onboarding_url,
-                    public_menu_url,
-                ),
-                "django_admin_url": result.admin_url,
-                "admin_url": result.admin_url,
-                "activation_url": result.activation_url,
-                "activation_token": result.activation_token.token,
-                "job_id": result.job.id,
-                "whatsapp_link": result.whatsapp_link,
-                "whatsapp_message_template": result.whatsapp_message_template,
-            }
-        )
+        except Exception as exc:
+            logger.exception("Unexpected lead provisioning failure", extra={"lead_id": getattr(lead, "id", None)})
+            log_admin_action(
+                action=AdminAuditLog.Actions.LEAD_PROVISIONED,
+                request=request,
+                lead=lead,
+                target_repr=f"lead:{getattr(lead, 'id', 'unknown')}",
+                metadata={"status": "failed", "reason": str(exc), "error_type": exc.__class__.__name__},
+            )
+            return Response(
+                {"detail": "Provisioning failed unexpectedly.", "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ProvisioningJobViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -1123,6 +1139,12 @@ class LeadResendActivationView(APIView):
             result = resend_activation_for_lead(lead)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("Unexpected activation resend failure", extra={"lead_id": lead.id})
+            return Response(
+                {"detail": "Activation resend failed unexpectedly.", "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         log_admin_action(
             action=AdminAuditLog.Actions.ACTIVATION_RESENT,
             request=request,
@@ -1169,6 +1191,15 @@ class LeadOnboardingPackageView(APIView):
             result = onboarding_package_for_lead(lead, refresh_token=refresh_token)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception(
+                "Unexpected onboarding package failure",
+                extra={"lead_id": lead.id, "refresh_token": refresh_token},
+            )
+            return Response(
+                {"detail": "Onboarding package failed unexpectedly.", "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         log_admin_action(
             action=AdminAuditLog.Actions.ONBOARDING_PACKAGE_SENT,
             request=request,

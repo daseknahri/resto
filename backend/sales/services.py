@@ -121,15 +121,28 @@ def issue_activation(tenant, user, phone: str = ""):
         public_menu_url,
         activation.token,
     )
-    send_activation_email(
-        user.email,
-        workspace_url,
-        signin_url,
-        activation_url,
-        onboarding_url,
-        public_menu_url,
-        activation.token,
-    )
+    if getattr(user, "email", ""):
+        try:
+            send_activation_email(
+                user.email,
+                workspace_url,
+                signin_url,
+                activation_url,
+                onboarding_url,
+                public_menu_url,
+                activation.token,
+            )
+        except Exception as exc:
+            # Provisioning/onboarding must remain available even when SMTP is down.
+            logger.exception("Activation email send failed", extra={"tenant_slug": getattr(tenant, "slug", "")})
+            _log_provisioning_event(
+                "activation_email_failed",
+                tenant_id=getattr(tenant, "id", None),
+                tenant_slug=getattr(tenant, "slug", ""),
+                user_id=getattr(user, "id", None),
+                error_type=exc.__class__.__name__,
+                error=str(exc),
+            )
     return activation, admin_url, workspace_url, signin_url, tenant_url, activation_url, whatsapp_link, whatsapp_message_template
 
 
