@@ -40,29 +40,61 @@
         </div>
 
         <div class="grid gap-3 self-start">
-          <article class="ui-action-tile space-y-2">
-            <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ tenantName }}</p>
-            <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
-            <div class="flex flex-wrap gap-2">
+          <article class="ui-command-deck space-y-3">
+            <div v-if="selectedTable" class="relative space-y-3">
+              <div class="space-y-1">
+                <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
+                <p class="text-xl font-semibold text-white">{{ selectedTable.label }}</p>
+                <p class="text-sm text-slate-400">{{ t("ownerTables.slug") }}: {{ selectedTable.slug }}</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span class="ui-data-strip">{{ t("ownerTables.scanHint", { table: selectedTable.label }) }}</span>
+                <span
+                  class="rounded-full border px-2 py-1 text-[11px] font-semibold"
+                  :class="selectedTable.is_active ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200' : 'border-slate-700 bg-slate-900/70 text-slate-300'"
+                >
+                  {{ selectedTable.is_active ? t("ownerTables.active") : t("ownerTables.disabledState") }}
+                </span>
+              </div>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <button class="ui-btn-outline px-3 py-2 text-xs" @click="copyShortUrl(selectedTable)">{{ t("ownerTables.copyShort") }}</button>
+                <button class="ui-btn-outline px-3 py-2 text-xs" @click="copyTableUrl(selectedTable)">{{ t("ownerTables.copyFull") }}</button>
+                <button class="ui-btn-outline px-3 py-2 text-xs" @click="downloadQrPng(selectedTable)">{{ t("ownerTables.downloadQr") }}</button>
+                <button class="ui-btn-outline px-3 py-2 text-xs" @click="toggleTable(selectedTable)">
+                  {{ selectedTable.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+                </button>
+              </div>
+              <div class="space-y-1 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3">
+                <a
+                  :href="tableShortUrl(selectedTable)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block break-all text-sm text-brand-secondary hover:underline"
+                >
+                  {{ tableShortUrl(selectedTable) }}
+                </a>
+                <a
+                  :href="tableFullMenuUrl(selectedTable)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block break-all text-xs text-slate-400 hover:underline"
+                >
+                  {{ t("ownerTables.fullLinkPrefix") }}: {{ tableFullMenuUrl(selectedTable) }}
+                </a>
+              </div>
+            </div>
+            <div v-else class="space-y-2">
+              <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
+              <p class="text-lg font-semibold text-white">{{ tenantName }}</p>
+              <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
               <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrZip">
                 {{ t("ownerTables.serverZip") }}
               </button>
               <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrPdf">
                 {{ t("ownerTables.serverPdf") }}
               </button>
-            </div>
-          </article>
-          <article class="ui-action-tile space-y-2">
-            <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
-            <p class="text-lg font-semibold text-white">{{ t("ownerTables.bulkGenerate") }}</p>
-            <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
-            <a href="#bulk-generate" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("ownerTables.generate") }}</a>
-          </article>
-          <article class="ui-action-tile space-y-2">
-            <p class="ui-kicker">{{ t("ownerTables.exportCsv") }}</p>
-            <p class="text-lg font-semibold text-white">{{ t("ownerTables.printCards") }}</p>
-            <div class="flex flex-wrap gap-2">
               <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadAllQrPng">
                 {{ t("ownerTables.allQrPng") }}
               </button>
@@ -71,10 +103,19 @@
               </button>
             </div>
           </article>
+          <article class="ui-action-tile space-y-2">
+            <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
+            <p class="text-lg font-semibold text-white">{{ t("ownerTables.bulkGenerate") }}</p>
+            <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
+            <div class="flex flex-wrap gap-2">
+              <a href="#create-table" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("ownerTables.create") }}</a>
+              <a href="#bulk-generate" class="ui-btn-outline px-3 py-1.5 text-xs">{{ t("ownerTables.generate") }}</a>
+            </div>
+          </article>
           <article class="ui-orbit-card">
             <p class="ui-kicker">{{ t("common.available") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ activeTablesCount }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("ownerTables.activeTables") }}</p>
+            <p class="mt-2 text-lg font-semibold text-white">{{ filteredTables.length }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</p>
           </article>
         </div>
       </div>
@@ -162,25 +203,43 @@
     </article>
 
     <div class="no-print ui-toolbar-band p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-sm text-slate-400">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</p>
+      <div class="ui-toolbar-grid">
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-center">
+          <label class="text-sm text-slate-300">
+            <span class="sr-only">{{ t("common.search") }}</span>
+            <input
+              v-model.trim="searchQuery"
+              class="ui-input"
+              :placeholder="t('common.search')"
+            />
+          </label>
+          <div class="ui-segmented">
+            <button class="ui-segmented-button" :data-active="statusFilter === 'all'" @click="statusFilter = 'all'">
+              {{ t("ownerTables.cardsTitle") }}
+            </button>
+            <button class="ui-segmented-button" :data-active="statusFilter === 'active'" @click="statusFilter = 'active'">
+              {{ t("ownerTables.activeTables") }}
+            </button>
+            <button class="ui-segmented-button" :data-active="statusFilter === 'disabled'" @click="statusFilter = 'disabled'">
+              {{ t("ownerTables.disabledTables") }}
+            </button>
+          </div>
+        </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrZip">
-            {{ t("ownerTables.serverZip") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadServerQrPdf">
-            {{ t("ownerTables.serverPdf") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadAllQrPng">
-            {{ t("ownerTables.allQrPng") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">{{ t("ownerTables.exportCsv") }}</button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadHtmlPack">{{ t("ownerTables.htmlPack") }}</button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">{{ t("ownerTables.printCards") }}</button>
         </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</span>
+        <span v-if="searchQuery" class="ui-data-strip">{{ t("common.search") }}: {{ searchQuery }}</span>
+        <span v-if="statusFilter !== 'all'" class="ui-data-strip">
+          {{ statusFilter === 'active' ? t("ownerTables.activeTables") : t("ownerTables.disabledTables") }}
+        </span>
       </div>
     </div>
 
@@ -194,11 +253,17 @@
       {{ t("ownerTables.noLinks") }}
     </p>
 
+    <div v-else-if="!filteredTables.length && !loading" class="rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/30 p-5 text-sm text-slate-400">
+      {{ t("common.search") }} · 0 / {{ tables.length }}
+    </div>
+
     <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
       <article
-        v-for="table in tables"
+        v-for="table in filteredTables"
         :key="table.id"
-        class="table-card ui-spotlight-card space-y-3 p-4"
+        class="table-card ui-spotlight-card space-y-3 p-4 ui-press cursor-pointer"
+        :class="selectedTable?.id === table.id ? 'border-brand-secondary/60 shadow-brand-secondary/10' : ''"
+        @click="selectedTableId = table.id"
       >
         <div class="rounded-xl border border-slate-800/80 bg-slate-950/55 p-3">
           <div class="flex items-center gap-2">
@@ -252,14 +317,14 @@
         </div>
 
         <div class="no-print grid grid-cols-2 gap-2 lg:grid-cols-3">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyShortUrl(table)">{{ t("ownerTables.copyShort") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyTableUrl(table)">{{ t("ownerTables.copyFull") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="copyQrUrl(table)">{{ t("ownerTables.copyQr") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="downloadQrPng(table)">{{ t("ownerTables.downloadQr") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="toggleTable(table)">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">{{ t("ownerTables.copyShort") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">{{ t("ownerTables.copyFull") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">{{ t("ownerTables.copyQr") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">{{ t("ownerTables.downloadQr") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
             {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click="removeTable(table)">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
             {{ t("ownerTables.delete") }}
           </button>
         </div>
@@ -293,6 +358,9 @@ const generating = ref(false);
 const tables = ref([]);
 const qrDataUrls = ref({});
 const error = ref("");
+const searchQuery = ref("");
+const statusFilter = ref("all");
+const selectedTableId = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -317,6 +385,22 @@ const logoUrl = computed(() => String(tenant.meta?.profile?.logo_url || "").trim
 const generatedAt = computed(() => new Date().toLocaleString());
 const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
 const disabledTablesCount = computed(() => tables.value.filter((table) => !table.is_active).length);
+const filteredTables = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  return tables.value.filter((table) => {
+    if (statusFilter.value === "active" && !table.is_active) return false;
+    if (statusFilter.value === "disabled" && table.is_active) return false;
+    if (!query) return true;
+    return [table.label, table.slug]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query));
+  });
+});
+const selectedTable = computed(() => {
+  const preferred = filteredTables.value.find((table) => table.id === selectedTableId.value);
+  if (preferred) return preferred;
+  return filteredTables.value[0] || null;
+});
 
 const parseError = (err, fallback = t("ownerTables.requestFailed")) => {
   const data = err?.response?.data;
@@ -382,6 +466,9 @@ const fetchTables = async () => {
   try {
     const { data } = await api.get("/tables/");
     tables.value = Array.isArray(data) ? data : [];
+    if (!tables.value.some((table) => table.id === selectedTableId.value)) {
+      selectedTableId.value = tables.value[0]?.id ?? null;
+    }
     await generateQrBatch();
   } catch (err) {
     error.value = parseError(err, t("ownerTables.loadFailed"));
@@ -462,6 +549,9 @@ const removeTable = async (table) => {
   try {
     await api.delete(`/tables/${table.id}/`);
     tables.value = tables.value.filter((item) => item.id !== table.id);
+    if (selectedTableId.value === table.id) {
+      selectedTableId.value = tables.value[0]?.id ?? null;
+    }
     toast.show(t("ownerTables.deleted"), "success");
   } catch (err) {
     toast.show(parseError(err, t("ownerTables.deleteFailed")), "error");
