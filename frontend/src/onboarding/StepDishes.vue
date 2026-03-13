@@ -104,7 +104,7 @@
                     @change="clearRowError(dish.local_id, 'category')"
                   >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ cat.name }}</option>
                   </select>
                   <p v-if="rowError(dish, 'category')" class="text-xs text-red-300">{{ rowError(dish, "category") }}</p>
                 </div>
@@ -292,32 +292,34 @@
       </div>
     </template>
 
-    <div
-      v-if="quickDishModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
-      @click.self="closeQuickDishModal"
-    >
-      <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
-        <div class="flex items-center justify-between gap-3">
-          <h3 class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
-          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickDishModal">{{ t("common.close") }}</button>
-        </div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2">
-          <select v-model="quickDish.category" class="ui-input">
-            <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-            <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-          </select>
-          <input v-model="quickDish.name" class="ui-input" :placeholder="t('stepDishes.dishNamePlaceholder')" />
-          <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
-          <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
-          <textarea v-model="quickDish.description" rows="2" class="ui-textarea sm:col-span-2" :placeholder="t('stepDishes.descriptionPlaceholder')"></textarea>
-        </div>
-        <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
-          <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
+    <Teleport to="body">
+      <div
+        v-if="quickDishModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+        @click.self="closeQuickDishModal"
+      >
+        <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+            <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickDishModal">{{ t("common.close") }}</button>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <select v-model="quickDish.category" class="ui-input">
+              <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
+              <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ cat.name }}</option>
+            </select>
+            <input v-model="quickDish.name" class="ui-input" :placeholder="t('stepDishes.dishNamePlaceholder')" />
+            <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
+            <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
+            <textarea v-model="quickDish.description" rows="2" class="ui-textarea sm:col-span-2" :placeholder="t('stepDishes.descriptionPlaceholder')"></textarea>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
 
@@ -544,7 +546,7 @@ const normalize = (dish = {}) => ({
   name: dish.name || "",
   name_i18n: dish.name_i18n && typeof dish.name_i18n === "object" ? { ...dish.name_i18n } : {},
   slug: dish.slug || "",
-  category: dish.category || "",
+  category: dish.category ? String(dish.category) : "",
   price: Number(dish.price || 0),
   currency: dish.currency || "USD",
   image_url: dish.image_url || "",

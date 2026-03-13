@@ -153,49 +153,51 @@
       <button class="ui-btn-outline px-4 py-2 text-sm" @click="openQuickCategoryModal">{{ t("stepCategories.addCategory") }}</button>
     </div>
 
-    <div
-      v-if="quickCategoryModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
-      @click.self="closeQuickCategoryModal"
-    >
-      <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
-        <div class="flex items-center justify-between gap-3">
-          <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
-          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
-        </div>
-        <div class="mt-4 space-y-3">
-          <input
-            v-model="quickCategory.name"
-            class="ui-input"
-            :placeholder="t('stepCategories.categoryNamePlaceholder')"
-          />
-          <textarea
-            v-model="quickCategory.description"
-            rows="2"
-            class="ui-textarea"
-            :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-          ></textarea>
-          <div class="grid gap-3 sm:grid-cols-2">
+    <Teleport to="body">
+      <div
+        v-if="quickCategoryModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+        @click.self="closeQuickCategoryModal"
+      >
+        <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+            <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
+          </div>
+          <div class="mt-4 space-y-3">
             <input
-              v-model.number="quickCategory.position"
-              type="number"
-              min="0"
+              v-model="quickCategory.name"
               class="ui-input"
-              :placeholder="t('stepCategories.positionMin')"
+              :placeholder="t('stepCategories.categoryNamePlaceholder')"
             />
-            <input
-              v-model="quickCategory.image_url"
-              class="ui-input"
-              :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
-            />
+            <textarea
+              v-model="quickCategory.description"
+              rows="2"
+              class="ui-textarea"
+              :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+            ></textarea>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <input
+                v-model.number="quickCategory.position"
+                type="number"
+                min="0"
+                class="ui-input"
+                :placeholder="t('stepCategories.positionMin')"
+              />
+              <input
+                v-model="quickCategory.image_url"
+                class="ui-input"
+                :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
+              />
+            </div>
+          </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddCategory">{{ t("stepCategories.addCategory") }}</button>
           </div>
         </div>
-        <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
-          <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddCategory">{{ t("stepCategories.addCategory") }}</button>
-        </div>
       </div>
-    </div>
+    </Teleport>
 
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
 
