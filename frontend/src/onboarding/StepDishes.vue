@@ -1,125 +1,68 @@
 <template>
   <div class="ui-panel space-y-4 p-5">
-    <h2 class="text-xl font-semibold">{{ t("stepDishes.title") }}</h2>
-    <p class="text-sm text-slate-400">{{ t("stepDishes.description") }}</p>
+    <div class="ui-section-band rounded-[24px] p-4 sm:p-5">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
+          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("stepDishes.description") }}</h2>
+        </div>
+        <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="openQuickDishModal">
+          {{ t("stepDishes.addDishToCategory") }}
+        </button>
+      </div>
+    </div>
 
     <div v-if="!sortedCategoryOptions.length" class="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
       {{ t("stepDishes.addCategoriesFirst") }}
     </div>
 
     <template v-else>
-      <div class="ui-section-band space-y-4 rounded-[28px] p-4 sm:p-5">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div class="space-y-1">
-            <p class="ui-hero-ribbon">{{ t("stepDishes.categoryWorkflowTitle") }}</p>
-            <h3 class="text-lg font-semibold text-white sm:text-xl">
-              {{ t("stepDishes.categoryWorkflowDescription") }}
-            </h3>
-            <p class="text-sm text-slate-400">
-              {{ t("stepDishes.categoryProgress", { completed: completedCategoryCount, total: sortedCategoryOptions.length }) }}
-            </p>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              class="ui-btn-outline px-4 py-2 text-sm"
-              :disabled="!hasPreviousCategory"
-              @click="goToPreviousCategory"
-            >
-              {{ t("stepDishes.previousCategory") }}
-            </button>
-            <button
-              type="button"
-              class="ui-btn-outline px-4 py-2 text-sm"
-              :disabled="!hasNextCategory"
-              @click="goToNextCategory"
-            >
-              {{ t("stepDishes.nextCategory") }}
-            </button>
-          </div>
-        </div>
-
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="ui-section-band space-y-3 rounded-[24px] p-4">
+        <div class="flex flex-wrap items-center gap-2">
           <button
             v-for="category in sortedCategoryOptions"
             :key="category.id"
             type="button"
-            class="rounded-2xl border p-4 text-start transition-all"
-            :class="String(category.id) === String(activeCategoryId)
-              ? 'border-brand-secondary bg-brand-secondary/10 shadow-[0_18px_45px_rgba(245,158,11,0.18)]'
-              : 'border-slate-800/90 bg-slate-950/55 hover:border-slate-600/80 hover:bg-slate-900/80'"
+            class="ui-pill-nav text-xs"
+            :class="String(category.id) === String(activeCategoryId) ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
             @click="setActiveCategory(category.id)"
           >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-white">{{ category.name }}</p>
-                <p class="mt-1 text-xs text-slate-400">
-                  {{ category.description || t("stepDishes.categoryDescriptionFallback") }}
-                </p>
-              </div>
-              <span
-                class="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em]"
-                :class="dishCountForCategory(category.id)
-                  ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
-                  : 'border-slate-700 bg-slate-900/80 text-slate-300'"
-              >
-                {{ dishCountForCategory(category.id) }} {{ t("common.dishes") }}
-              </span>
-            </div>
-            <p
-              class="mt-4 text-xs font-medium"
-              :class="dishCountForCategory(category.id) ? 'text-emerald-300' : 'text-amber-200'"
-            >
-              {{ dishCountForCategory(category.id) ? t("stepDishes.categoryReady") : t("stepDishes.categoryNeedsDishes") }}
-            </p>
+            {{ category.name }} ({{ dishCountForCategory(category.id) }})
           </button>
         </div>
-
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!hasPreviousCategory" @click="goToPreviousCategory">
+            {{ t("stepDishes.previousCategory") }}
+          </button>
+          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!hasNextCategory" @click="goToNextCategory">
+            {{ t("stepDishes.nextCategory") }}
+          </button>
+          <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
+          <span class="ui-data-strip">{{ activeCategoryDishes.length }} {{ t("common.dishes") }}</span>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+          <p class="text-xs text-slate-400">{{ t("stepDishes.translationsHint", { count: maxTranslationLocales }) }}</p>
+          <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
+            <button
+              v-for="locale in secondaryLocales"
+              :key="locale.code"
+              type="button"
+              class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+              :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
+              @click="toggleTranslationLocale(locale.code)"
+            >
+              {{ locale.nativeLabel }} ({{ locale.label }})
+            </button>
+          </div>
+          <p v-else class="text-xs text-slate-500">{{ t("stepDishes.translationsUnavailable") }}</p>
+        </div>
         <div v-if="unassignedDishCount" class="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           {{ t("stepDishes.unassignedWarning", { count: unassignedDishCount }) }}
         </div>
       </div>
 
-      <div class="ui-hero-stage rounded-[30px] p-5 sm:p-6">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div class="space-y-2">
-            <p class="ui-hero-ribbon">{{ t("stepDishes.currentCategory") }}</p>
-            <div>
-              <h3 class="text-2xl font-semibold text-white">{{ activeCategoryRecord?.name }}</h3>
-              <p class="mt-2 max-w-3xl text-sm text-slate-300">
-                {{ activeCategoryRecord?.description || t("stepDishes.categoryFillHint") }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="addDishForCategory()">
-              {{ t("stepDishes.addDishToCategory") }}
-            </button>
-            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="addStarterDishes">
-              {{ t("stepDishes.addSuggested") }}
-            </button>
-          </div>
-        </div>
-
-        <div class="ui-data-strip mt-5 grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
-          <div>
-            <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500">{{ t("stepDishes.dishesInCategory") }}</p>
-            <p class="mt-2 text-2xl font-semibold text-white">{{ activeCategoryDishes.length }}</p>
-          </div>
-          <div>
-            <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500">{{ t("stepDishes.categoriesReady") }}</p>
-            <p class="mt-2 text-2xl font-semibold text-white">{{ completedCategoryCount }}/{{ sortedCategoryOptions.length }}</p>
-          </div>
-          <div>
-            <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500">{{ t("stepDishes.nextStepHintTitle") }}</p>
-            <p class="mt-2 text-sm text-slate-300">{{ t("stepDishes.nextStepHint") }}</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr),320px] xl:items-start">
+      <div class="space-y-4">
         <div class="space-y-3">
           <template v-if="activeCategoryDishes.length">
             <div
@@ -340,91 +283,41 @@
           >
             <p class="text-sm font-semibold text-white">{{ t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</p>
             <p class="mt-2 text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
-            <button type="button" class="ui-btn-primary mt-4 px-4 py-2" @click="addDishForCategory()">
+            <button type="button" class="ui-btn-primary mt-4 px-4 py-2" @click="openQuickDishModal(activeCategoryId)">
               {{ t("stepDishes.addDishToCategory") }}
             </button>
           </div>
         </div>
 
-        <aside class="space-y-4 xl:sticky xl:top-24">
-          <div class="ui-command-deck space-y-4">
-            <div class="space-y-1.5">
-              <p class="ui-kicker">{{ t("stepDishes.currentCategory") }}</p>
-              <h4 class="text-lg font-semibold text-white">{{ activeCategoryRecord?.name }}</h4>
-              <p class="text-sm text-slate-300">{{ activeCategoryRecord?.description || t("stepDishes.categoryFillHint") }}</p>
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-              <article class="ui-orbit-card p-4">
-                <p class="ui-stat-label">{{ t("stepDishes.dishesInCategory") }}</p>
-                <p class="mt-2 text-2xl font-semibold text-white">{{ activeCategoryDishes.length }}</p>
-              </article>
-              <article class="ui-orbit-card p-4">
-                <p class="ui-stat-label">{{ t("stepDishes.categoriesReady") }}</p>
-                <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ completedCategoryCount }}/{{ sortedCategoryOptions.length }}</p>
-              </article>
-              <article class="ui-orbit-card p-4">
-                <p class="ui-stat-label">{{ t("common.next") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ hasNextCategory ? t("stepDishes.nextCategory") : t("common.saveAndNext") }}</p>
-                <p class="mt-1 text-xs text-slate-400">{{ t("stepDishes.nextStepHint") }}</p>
-              </article>
-            </div>
-
-            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <button
-                type="button"
-                class="ui-btn-outline justify-center px-4 py-2 text-sm"
-                :disabled="!hasPreviousCategory"
-                @click="goToPreviousCategory"
-              >
-                {{ t("stepDishes.previousCategory") }}
-              </button>
-              <button
-                type="button"
-                class="ui-btn-outline justify-center px-4 py-2 text-sm"
-                :disabled="!hasNextCategory"
-                @click="goToNextCategory"
-              >
-                {{ t("stepDishes.nextCategory") }}
-              </button>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-            <p class="text-sm text-slate-200">{{ t("stepDishes.quickStarters") }}</p>
-            <button
-              type="button"
-              class="ui-btn-outline px-4 py-2 text-sm"
-              @click="addStarterDishes"
-            >
-              {{ t("stepDishes.addSuggested") }}
-            </button>
-            <p class="text-xs text-slate-500">{{ t("stepDishes.quickStarterHint") }}</p>
-          </div>
-
-          <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-            <p class="text-sm text-slate-200">{{ t("stepDishes.translationsTitle") }}</p>
-            <p class="text-xs text-slate-400">
-              {{ t("stepDishes.translationsHint", { count: maxTranslationLocales }) }}
-            </p>
-            <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-              <button
-                v-for="locale in secondaryLocales"
-                :key="locale.code"
-                type="button"
-                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-                :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-                @click="toggleTranslationLocale(locale.code)"
-              >
-                {{ locale.nativeLabel }} ({{ locale.label }})
-              </button>
-            </div>
-            <p v-else class="text-xs text-slate-500">{{ t("stepDishes.translationsUnavailable") }}</p>
-          </div>
-        </aside>
       </div>
     </template>
+
+    <div
+      v-if="quickDishModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+      @click.self="closeQuickDishModal"
+    >
+      <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickDishModal">{{ t("common.close") }}</button>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <select v-model="quickDish.category" class="ui-input">
+            <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
+            <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+          </select>
+          <input v-model="quickDish.name" class="ui-input" :placeholder="t('stepDishes.dishNamePlaceholder')" />
+          <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
+          <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
+          <textarea v-model="quickDish.description" rows="2" class="ui-textarea sm:col-span-2" :placeholder="t('stepDishes.descriptionPlaceholder')"></textarea>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
+          <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
+        </div>
+      </div>
+    </div>
 
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
 
@@ -443,7 +336,6 @@ import { computed, reactive, ref, onMounted, watch } from "vue";
 import { categoryApi, dishApi, dishOptionApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
-import { suggestDishNameForCategory } from "./starterTemplates";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
@@ -464,6 +356,14 @@ const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
 const selectedTranslationLocales = ref([]);
 const activeCategoryId = ref("");
+const quickDishModalOpen = ref(false);
+const quickDish = reactive({
+  category: "",
+  name: "",
+  description: "",
+  price: 0,
+  image_url: "",
+});
 
 const hasActiveUploads = computed(() => Object.values(uploadingRows).some(Boolean));
 const maxTranslationLocales = computed(() =>
@@ -486,11 +386,6 @@ const activeCategoryIndex = computed(() =>
 );
 const activeCategoryDishes = computed(() =>
   dishes.filter((dish) => String(dish.category || "") === String(activeCategoryId.value))
-);
-const completedCategoryCount = computed(() =>
-  sortedCategoryOptions.value.filter((category) =>
-    dishes.some((dish) => String(dish.category || "") === String(category.id) && Boolean(String(dish.name || "").trim()))
-  ).length
 );
 const hasPreviousCategory = computed(() => activeCategoryIndex.value > 0);
 const hasNextCategory = computed(
@@ -796,40 +691,6 @@ const load = async () => {
   syncActiveCategory();
 };
 
-const addStarterDishes = () => {
-  if (!categoryOptions.value.length) {
-    toast.show(t("stepDishes.addCategoriesFirst"), "error");
-    return;
-  }
-
-  const categoryIdsWithDishes = new Set(
-    dishes
-      .filter((dish) => (dish.name || "").trim() && dish.category)
-      .map((dish) => String(dish.category))
-  );
-
-  const starters = categoryOptions.value
-    .filter((cat) => !categoryIdsWithDishes.has(String(cat.id)))
-    .map((cat, idx) =>
-      normalize({
-        name: suggestDishNameForCategory(cat.name),
-        category: cat.id,
-        price: 9.9,
-        description: t("stepDishes.starterDescription", { category: String(cat.name || "menu").toLowerCase() }),
-        position: dishes.length + idx,
-      })
-    );
-
-  if (!starters.length) {
-    toast.show(t("stepDishes.eachCategoryHasDish"), "success");
-    return;
-  }
-
-  dishes.push(...starters);
-  status.value = t("stepDishes.startersAddedStatus");
-  toast.show(t("stepDishes.startersAddedToast", { count: starters.length }), "success");
-};
-
 const setActiveCategory = (categoryId) => {
   activeCategoryId.value = String(categoryId || "");
 };
@@ -846,12 +707,51 @@ const goToNextCategory = () => {
   if (next) setActiveCategory(next.id);
 };
 
-const addDishForCategory = (categoryId = activeCategoryId.value) => {
-  if (!categoryId) {
+const resetQuickDish = (categoryId = activeCategoryId.value) => {
+  quickDish.category = categoryId ? String(categoryId) : "";
+  quickDish.name = "";
+  quickDish.description = "";
+  quickDish.price = 0;
+  quickDish.image_url = "";
+};
+
+const openQuickDishModal = (categoryId = activeCategoryId.value) => {
+  if (!sortedCategoryOptions.value.length) {
     toast.show(t("stepDishes.addCategoriesFirst"), "error");
     return;
   }
-  dishes.push(normalize({ category: categoryId, position: dishes.length }));
+  resetQuickDish(categoryId || sortedCategoryOptions.value[0]?.id || "");
+  quickDishModalOpen.value = true;
+};
+
+const closeQuickDishModal = () => {
+  quickDishModalOpen.value = false;
+};
+
+const quickAddDish = () => {
+  const name = String(quickDish.name || "").trim();
+  const category = String(quickDish.category || "");
+  if (!category) {
+    toast.show(t("stepDishes.selectCategoryError"), "error");
+    return;
+  }
+  if (name.length < 2) {
+    toast.show(t("stepDishes.nameMin"), "error");
+    return;
+  }
+  dishes.push(
+    normalize({
+      category,
+      name,
+      description: String(quickDish.description || "").trim(),
+      price: Number(quickDish.price) || 0,
+      image_url: String(quickDish.image_url || "").trim(),
+      position: dishes.length,
+    })
+  );
+  setActiveCategory(category);
+  closeQuickDishModal();
+  toast.show(t("stepDishes.savedToast"), "success");
 };
 
 const remove = async (idx) => {

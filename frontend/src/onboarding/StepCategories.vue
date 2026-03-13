@@ -1,104 +1,35 @@
 <template>
   <div class="ui-panel space-y-5 p-5">
-    <section class="ui-hero-stage rounded-[30px] p-5 sm:p-6">
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.12fr),320px]">
-        <div class="space-y-5">
-          <div class="space-y-2">
-            <p class="ui-hero-ribbon">{{ t("stepCategories.title") }}</p>
-            <h2 class="text-2xl font-semibold text-white sm:text-3xl">{{ t("stepCategories.description") }}</h2>
-            <p class="max-w-3xl text-sm leading-7 text-slate-300">
-              {{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}
-            </p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-data-strip">{{ categories.length }} {{ t("common.categories") }}</span>
-            <span class="ui-data-strip">{{ selectedTranslationLocales.length }}/{{ maxTranslationLocales }} {{ t("stepCategories.translationsTitle") }}</span>
-            <span class="ui-data-strip">{{ categoryTemplatePacks.length }} {{ t("stepCategories.quickTemplates") }}</span>
-          </div>
-
-          <div class="ui-section-band space-y-4 rounded-[28px] p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="ui-kicker">{{ t("stepCategories.quickTemplates") }}</p>
-                <p class="mt-1 text-sm text-slate-300">{{ t("stepCategories.description") }}</p>
-              </div>
-              <button class="ui-btn-outline px-4 py-2 text-sm" type="button" @click="applyTemplate">
-                {{ t("stepCategories.applyTemplate") }}
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="pack in categoryTemplatePacks"
-                :key="pack.id"
-                type="button"
-                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-                :class="selectedTemplate === pack.id ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary shadow-[0_12px_35px_rgba(245,158,11,0.15)]' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                @click="selectedTemplate = pack.id"
-              >
-                {{ pack.label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="rounded-2xl border border-slate-800/90 bg-slate-950/50 p-4 space-y-3">
-            <div>
-              <p class="ui-kicker">{{ t("stepCategories.translationsTitle") }}</p>
-              <p class="mt-1 text-xs text-slate-400">
-                {{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}
-              </p>
-            </div>
-            <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-              <button
-                v-for="locale in secondaryLocales"
-                :key="locale.code"
-                type="button"
-                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-                :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-                @click="toggleTranslationLocale(locale.code)"
-              >
-                {{ locale.nativeLabel }} ({{ locale.label }})
-              </button>
-            </div>
-            <p v-else class="text-xs text-slate-500">{{ t("stepCategories.translationsUnavailable") }}</p>
-          </div>
+    <section class="ui-section-band space-y-4 rounded-[26px] p-4 sm:p-5">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="space-y-1">
+          <p class="ui-kicker">{{ t("stepCategories.title") }}</p>
+          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("stepCategories.description") }}</h2>
         </div>
-
-        <aside class="ui-command-deck space-y-4">
-          <div class="space-y-1.5">
-            <p class="ui-kicker">{{ t("common.status") }}</p>
-            <h3 class="text-xl font-semibold text-white">{{ activeTemplateLabel }}</h3>
-            <p class="text-sm text-slate-300">{{ t("stepCategories.quickTemplates") }}</p>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <article class="ui-orbit-card p-4">
-              <p class="ui-stat-label">{{ t("common.categories") }}</p>
-              <p class="mt-2 text-2xl font-semibold text-white">{{ categories.length }}</p>
-              <p class="mt-1 text-xs text-slate-400">{{ t("stepCategories.addCategory") }}</p>
-            </article>
-            <article class="ui-orbit-card p-4">
-              <p class="ui-stat-label">{{ t("stepCategories.translationsTitle") }}</p>
-              <p class="mt-2 text-2xl font-semibold text-[var(--color-secondary)]">{{ selectedTranslationLocales.length }}</p>
-              <p class="mt-1 text-xs text-slate-400">{{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}</p>
-            </article>
-            <article class="ui-orbit-card p-4">
-              <p class="ui-stat-label">{{ t("common.next") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ t("common.dishes") }}</p>
-              <p class="mt-1 text-xs text-slate-400">{{ t("common.saveAndNext") }}</p>
-            </article>
-          </div>
-
-          <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-            <button class="ui-btn-primary justify-center px-4 py-2 text-sm" type="button" @click="add">
-              {{ t("stepCategories.addCategory") }}
-            </button>
-            <button class="ui-btn-outline justify-center px-4 py-2 text-sm" type="button" @click="applyTemplate">
-              {{ t("stepCategories.applyTemplate") }}
-            </button>
-          </div>
-        </aside>
+        <button class="ui-btn-primary px-4 py-2 text-sm" type="button" @click="openQuickCategoryModal">
+          {{ t("stepCategories.addCategory") }}
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ categories.length }} {{ t("common.categories") }}</span>
+        <span class="ui-data-strip">{{ selectedTranslationLocales.length }}/{{ maxTranslationLocales }} {{ t("stepCategories.translationsTitle") }}</span>
+      </div>
+      <div class="rounded-2xl border border-slate-800/90 bg-slate-950/50 p-3 space-y-2">
+        <p class="text-xs text-slate-400">{{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}</p>
+        <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
+          <button
+            v-for="locale in secondaryLocales"
+            :key="locale.code"
+            type="button"
+            class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+            :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+            :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
+            @click="toggleTranslationLocale(locale.code)"
+          >
+            {{ locale.nativeLabel }} ({{ locale.label }})
+          </button>
+        </div>
+        <p v-else class="text-xs text-slate-500">{{ t("stepCategories.translationsUnavailable") }}</p>
       </div>
     </section>
 
@@ -219,7 +150,51 @@
         <p v-if="rowError(cat, 'slug')" class="text-xs text-red-300">{{ rowError(cat, "slug") }}</p>
         <p v-if="rowError(cat, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(cat, "non_field_errors") }}</p>
       </div>
-      <button class="ui-btn-outline px-4 py-2 text-sm" @click="add">{{ t("stepCategories.addCategory") }}</button>
+      <button class="ui-btn-outline px-4 py-2 text-sm" @click="openQuickCategoryModal">{{ t("stepCategories.addCategory") }}</button>
+    </div>
+
+    <div
+      v-if="quickCategoryModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+      @click.self="closeQuickCategoryModal"
+    >
+      <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
+        </div>
+        <div class="mt-4 space-y-3">
+          <input
+            v-model="quickCategory.name"
+            class="ui-input"
+            :placeholder="t('stepCategories.categoryNamePlaceholder')"
+          />
+          <textarea
+            v-model="quickCategory.description"
+            rows="2"
+            class="ui-textarea"
+            :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+          ></textarea>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <input
+              v-model.number="quickCategory.position"
+              type="number"
+              min="0"
+              class="ui-input"
+              :placeholder="t('stepCategories.positionMin')"
+            />
+            <input
+              v-model="quickCategory.image_url"
+              class="ui-input"
+              :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
+            />
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
+          <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddCategory">{{ t("stepCategories.addCategory") }}</button>
+        </div>
+      </div>
     </div>
 
     <p v-if="globalError" class="text-sm text-red-300">{{ globalError }}</p>
@@ -239,7 +214,6 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { categoryApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
-import { CATEGORY_TEMPLATE_PACKS } from "./starterTemplates";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
@@ -257,9 +231,14 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
-const categoryTemplatePacks = CATEGORY_TEMPLATE_PACKS;
-const selectedTemplate = ref(categoryTemplatePacks[0]?.id || "restaurant");
 const selectedTranslationLocales = ref([]);
+const quickCategoryModalOpen = ref(false);
+const quickCategory = reactive({
+  name: "",
+  description: "",
+  position: 0,
+  image_url: "",
+});
 
 const hasActiveUploads = computed(() => Object.values(uploadingRows).some(Boolean));
 const maxTranslationLocales = computed(() =>
@@ -267,9 +246,6 @@ const maxTranslationLocales = computed(() =>
 );
 const defaultLocale = computed(() => normalizeLocale(tenant.resolvedMeta?.profile?.language || "en"));
 const secondaryLocales = computed(() => LOCALE_OPTIONS.filter((option) => option.code !== defaultLocale.value));
-const activeTemplateLabel = computed(
-  () => categoryTemplatePacks.find((pack) => pack.id === selectedTemplate.value)?.label || t("stepCategories.quickTemplates")
-);
 
 const localeLabel = (code) => {
   const match = LOCALE_OPTIONS.find((option) => option.code === code);
@@ -454,33 +430,34 @@ const load = async () => {
   }
 };
 
-const applyTemplate = () => {
-  const pack = categoryTemplatePacks.find((item) => item.id === selectedTemplate.value);
-  if (!pack) return;
-
-  const hasExisting = categories.some((cat) => (cat.name || "").trim() || cat.id);
-  if (hasExisting) {
-    const confirmed = window.confirm(t("stepCategories.confirmReplace"));
-    if (!confirmed) return;
-  }
-
-  for (const cat of categories) {
-    if (cat?.id) removedIds.value.push(cat.id);
-    queueCleanup(cat?.image_url || "");
-    delete rowErrors[cat?.local_id];
-    delete uploadingRows[cat?.local_id];
-    delete uploadProgressRows[cat?.local_id];
-    delete draggingRows[cat?.local_id];
-  }
-
-  const next = pack.categories.map((name, idx) => normalize({ name, position: idx }));
-  categories.splice(0, categories.length, ...next);
-  clearAllErrors();
-  status.value = t("stepCategories.templateApplied");
-  toast.show(t("stepCategories.templateAppliedWithName", { name: pack.label }), "success");
+const openQuickCategoryModal = () => {
+  quickCategory.name = "";
+  quickCategory.description = "";
+  quickCategory.position = categories.length;
+  quickCategory.image_url = "";
+  quickCategoryModalOpen.value = true;
 };
 
-const add = () => categories.push(normalize());
+const closeQuickCategoryModal = () => {
+  quickCategoryModalOpen.value = false;
+};
+
+const quickAddCategory = () => {
+  const name = String(quickCategory.name || "").trim();
+  if (name.length < 2) {
+    toast.show(t("stepCategories.nameMin"), "error");
+    return;
+  }
+  categories.push(
+    normalize({
+      name,
+      description: String(quickCategory.description || "").trim(),
+      position: Number(quickCategory.position) || 0,
+      image_url: String(quickCategory.image_url || "").trim(),
+    })
+  );
+  quickCategoryModalOpen.value = false;
+};
 
 const remove = async (idx) => {
   const [cat] = categories.splice(idx, 1);
