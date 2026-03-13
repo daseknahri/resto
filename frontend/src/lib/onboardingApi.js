@@ -157,14 +157,16 @@ export const categoryApi = {
       is_published: cat.is_published ?? true,
     };
     try {
+      if (cat.id) {
+        const slug = String(cat.slug || baseSlug || "").trim();
+        const updatePayload = slug ? { ...payload, slug } : payload;
+        const { data } = await api.put(`/categories/${cat.id}/`, updatePayload);
+        return data;
+      }
       return await withSlugRetry({
         baseSlug,
         maxLen: 160,
         requestFn: async (slug) => {
-          if (cat.id) {
-            const { data } = await api.put(`/categories/${cat.id}/`, { ...payload, slug });
-            return data;
-          }
           const { data } = await api.post("/categories/", { ...payload, slug });
           return data;
         },
@@ -199,14 +201,16 @@ export const dishApi = {
       is_published: dish.is_published ?? true,
     };
     try {
+      if (dish.id) {
+        const slug = String(dish.slug || baseSlug || "").trim();
+        const updatePayload = slug ? { ...payload, slug } : payload;
+        const { data } = await api.put(`/dishes/${dish.id}/`, updatePayload);
+        return data;
+      }
       return await withSlugRetry({
         baseSlug,
         maxLen: 210,
         requestFn: async (slug) => {
-          if (dish.id) {
-            const { data } = await api.put(`/dishes/${dish.id}/`, { ...payload, slug });
-            return data;
-          }
           const { data } = await api.post("/dishes/", { ...payload, slug });
           return data;
         },
