@@ -313,6 +313,67 @@
             <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
             <textarea v-model="quickDish.description" rows="2" class="ui-textarea sm:col-span-2" :placeholder="t('stepDishes.descriptionPlaceholder')"></textarea>
           </div>
+          <div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.variantsTitle") }}</p>
+              <button
+                type="button"
+                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                @click="addQuickOption"
+              >
+                {{ t("stepDishes.addVariant") }}
+              </button>
+            </div>
+            <p class="text-xs text-slate-500">{{ t("stepDishes.variantsHint") }}</p>
+
+            <div v-if="quickDish.options.length" class="space-y-2">
+              <div
+                v-for="(option, idx) in quickDish.options"
+                :key="option.local_id"
+                class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
+              >
+                <div class="grid gap-2 sm:grid-cols-[1fr,130px,130px,auto] sm:items-center">
+                  <input
+                    v-model="option.name"
+                    class="ui-input"
+                    :placeholder="t('stepDishes.variantNamePlaceholder')"
+                  />
+                  <input
+                    v-model.number="option.price_delta"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="ui-input"
+                    :placeholder="t('stepDishes.extraPricePlaceholder')"
+                  />
+                  <input
+                    v-model.number="option.max_select"
+                    type="number"
+                    min="1"
+                    step="1"
+                    class="ui-input"
+                    :placeholder="t('stepDishes.maxSelectPlaceholder')"
+                  />
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-700 px-3 py-2 text-xs text-red-200 hover:border-red-400/60"
+                    @click="removeQuickOption(idx)"
+                  >
+                    {{ t("stepDishes.remove") }}
+                  </button>
+                </div>
+                <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    v-model="option.is_required"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
+                  />
+                  {{ t("stepDishes.requiredBeforeAddToCart") }}
+                </label>
+              </div>
+            </div>
+            <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
+          </div>
           <div class="mt-4 flex justify-end gap-2">
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
@@ -365,6 +426,7 @@ const quickDish = reactive({
   description: "",
   price: 0,
   image_url: "",
+  options: [],
 });
 
 const hasActiveUploads = computed(() => Object.values(uploadingRows).some(Boolean));
@@ -709,12 +771,32 @@ const goToNextCategory = () => {
   if (next) setActiveCategory(next.id);
 };
 
+const resolveQuickDishCategory = (candidate = activeCategoryId.value) => {
+  if (!sortedCategoryOptions.value.length) return "";
+  const normalizedCandidate = String(candidate || "");
+  if (
+    normalizedCandidate &&
+    sortedCategoryOptions.value.some((category) => String(category.id) === normalizedCandidate)
+  ) {
+    return normalizedCandidate;
+  }
+  const normalizedActive = String(activeCategoryId.value || "");
+  if (
+    normalizedActive &&
+    sortedCategoryOptions.value.some((category) => String(category.id) === normalizedActive)
+  ) {
+    return normalizedActive;
+  }
+  return String(sortedCategoryOptions.value[0]?.id || "");
+};
+
 const resetQuickDish = (categoryId = activeCategoryId.value) => {
-  quickDish.category = categoryId ? String(categoryId) : "";
+  quickDish.category = resolveQuickDishCategory(categoryId);
   quickDish.name = "";
   quickDish.description = "";
   quickDish.price = 0;
   quickDish.image_url = "";
+  quickDish.options = [];
 };
 
 const openQuickDishModal = (categoryId = activeCategoryId.value) => {
@@ -722,7 +804,7 @@ const openQuickDishModal = (categoryId = activeCategoryId.value) => {
     toast.show(t("stepDishes.addCategoriesFirst"), "error");
     return;
   }
-  resetQuickDish(categoryId || sortedCategoryOptions.value[0]?.id || "");
+  resetQuickDish(categoryId);
   quickDishModalOpen.value = true;
 };
 
@@ -730,9 +812,17 @@ const closeQuickDishModal = () => {
   quickDishModalOpen.value = false;
 };
 
+const addQuickOption = () => {
+  quickDish.options.push(normalizeOption());
+};
+
+const removeQuickOption = (idx) => {
+  quickDish.options.splice(idx, 1);
+};
+
 const quickAddDish = () => {
   const name = String(quickDish.name || "").trim();
-  const category = String(quickDish.category || "");
+  const category = resolveQuickDishCategory(quickDish.category);
   if (!category) {
     toast.show(t("stepDishes.selectCategoryError"), "error");
     return;
@@ -749,6 +839,15 @@ const quickAddDish = () => {
       price: Number(quickDish.price) || 0,
       image_url: String(quickDish.image_url || "").trim(),
       position: dishes.length,
+      options: (Array.isArray(quickDish.options) ? quickDish.options : [])
+        .map((option) => normalizeOption(option))
+        .filter(
+          (option) =>
+            String(option.name || "").trim() ||
+            Number(option.price_delta || 0) !== 0 ||
+            option.is_required === true ||
+            Number(option.max_select || 1) !== 1
+        ),
     })
   );
   setActiveCategory(category);
