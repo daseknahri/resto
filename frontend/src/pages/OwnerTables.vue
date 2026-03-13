@@ -26,131 +26,6 @@
       </div>
     </header>
 
-    <div v-if="setupOpen" class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
-        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="setupOpen = false">{{ t("common.close") }}</button>
-      </div>
-      <div class="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <p class="ui-kicker mb-2">{{ t("common.apply") }}</p>
-          <ul class="space-y-2">
-            <li>
-              <button
-                class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
-                :class="formMode === 'create' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
-                @click="formMode = 'create'"
-              >
-                {{ t("ownerTables.createTable") }}
-              </button>
-            </li>
-            <li>
-              <button
-                class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
-                :class="formMode === 'bulk' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
-                @click="formMode = 'bulk'"
-              >
-                {{ t("ownerTables.bulkGenerate") }}
-              </button>
-            </li>
-          </ul>
-        </aside>
-
-        <article class="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <template v-if="formMode === 'create'">
-            <div class="space-y-1">
-              <p class="ui-kicker">{{ t("ownerTables.create") }}</p>
-              <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.createTable") }}</h3>
-            </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr,120px,120px,auto] lg:items-end">
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.tableLabel") }}
-                <input
-                  v-model.trim="newTable.label"
-                  maxlength="40"
-                  class="ui-input mt-1"
-                  :placeholder="t('ownerTables.tableLabelPlaceholder')"
-                />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.position") }}
-                <input
-                  v-model.number="newTable.position"
-                  type="number"
-                  min="0"
-                  class="ui-input mt-1"
-                />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.active") }}
-                <select v-model="newTable.is_active" class="ui-input mt-1">
-                  <option :value="true">{{ t("ownerTables.yes") }}</option>
-                  <option :value="false">{{ t("ownerTables.no") }}</option>
-                </select>
-              </label>
-              <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="creating" @click="createTable">
-                {{ creating ? t("ownerTables.adding") : t("ownerTables.addTable") }}
-              </button>
-            </div>
-          </template>
-
-          <template v-else>
-            <div class="space-y-1">
-              <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
-              <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
-              <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
-            </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,90px,90px,120px,120px,auto] xl:items-end">
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.prefix") }}
-                <input
-                  v-model.trim="bulk.prefix"
-                  maxlength="20"
-                  class="ui-input mt-1"
-                  :placeholder="t('ownerTables.prefixPlaceholder')"
-                />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.startNumber") }}
-                <input v-model.number="bulk.start" type="number" min="1" class="ui-input mt-1" />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.count") }}
-                <input v-model.number="bulk.count" type="number" min="1" max="120" class="ui-input mt-1" />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.positionFrom") }}
-                <input v-model.number="bulk.position_start" type="number" min="0" class="ui-input mt-1" />
-              </label>
-              <label class="text-sm text-slate-300">
-                {{ t("ownerTables.active") }}
-                <select v-model="bulk.is_active" class="ui-input mt-1">
-                  <option :value="true">{{ t("ownerTables.yes") }}</option>
-                  <option :value="false">{{ t("ownerTables.no") }}</option>
-                </select>
-              </label>
-              <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-60" :disabled="generating" @click="generateTables">
-                {{ generating ? t("ownerTables.generating") : t("ownerTables.generate") }}
-              </button>
-            </div>
-          </template>
-        </article>
-      </div>
-      <p v-if="error" class="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
-    </div>
-    <div
-      v-else
-      class="no-print rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/40 p-4 text-sm text-slate-300 md:p-5"
-    >
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p>{{ t("ownerTables.description") }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button class="ui-btn-primary px-3 py-1.5 text-xs" @click="openSetup('create')">{{ t("ownerTables.createTable") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openSetup('bulk')">{{ t("ownerTables.bulkGenerate") }}</button>
-        </div>
-      </div>
-    </div>
-
     <div class="no-print ui-toolbar-band p-4">
       <div class="ui-toolbar-grid">
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
@@ -276,6 +151,127 @@
         </div>
       </article>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="setupOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        @click.self="closeSetup"
+      >
+        <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">{{ t("common.close") }}</button>
+          </div>
+          <div class="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <aside class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+              <p class="ui-kicker mb-2">{{ t("common.apply") }}</p>
+              <ul class="space-y-2">
+                <li>
+                  <button
+                    class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
+                    :class="formMode === 'create' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
+                    @click="formMode = 'create'"
+                  >
+                    {{ t("ownerTables.createTable") }}
+                  </button>
+                </li>
+                <li>
+                  <button
+                    class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
+                    :class="formMode === 'bulk' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
+                    @click="formMode = 'bulk'"
+                  >
+                    {{ t("ownerTables.bulkGenerate") }}
+                  </button>
+                </li>
+              </ul>
+            </aside>
+
+            <article class="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <template v-if="formMode === 'create'">
+                <div class="space-y-1">
+                  <p class="ui-kicker">{{ t("ownerTables.create") }}</p>
+                  <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.createTable") }}</h3>
+                </div>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr,120px,120px,auto] lg:items-end">
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.tableLabel") }}
+                    <input
+                      v-model.trim="newTable.label"
+                      maxlength="40"
+                      class="ui-input mt-1"
+                      :placeholder="t('ownerTables.tableLabelPlaceholder')"
+                    />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.position") }}
+                    <input
+                      v-model.number="newTable.position"
+                      type="number"
+                      min="0"
+                      class="ui-input mt-1"
+                    />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.active") }}
+                    <select v-model="newTable.is_active" class="ui-input mt-1">
+                      <option :value="true">{{ t("ownerTables.yes") }}</option>
+                      <option :value="false">{{ t("ownerTables.no") }}</option>
+                    </select>
+                  </label>
+                  <button class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60" :disabled="creating" @click="createTable">
+                    {{ creating ? t("ownerTables.adding") : t("ownerTables.addTable") }}
+                  </button>
+                </div>
+              </template>
+
+              <template v-else>
+                <div class="space-y-1">
+                  <p class="ui-kicker">{{ t("ownerTables.bulk") }}</p>
+                  <h3 class="text-base font-semibold text-slate-100">{{ t("ownerTables.bulkGenerate") }}</h3>
+                  <p class="text-sm text-slate-400">{{ t("ownerTables.bulkHint") }}</p>
+                </div>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,90px,90px,120px,120px,auto] xl:items-end">
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.prefix") }}
+                    <input
+                      v-model.trim="bulk.prefix"
+                      maxlength="20"
+                      class="ui-input mt-1"
+                      :placeholder="t('ownerTables.prefixPlaceholder')"
+                    />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.startNumber") }}
+                    <input v-model.number="bulk.start" type="number" min="1" class="ui-input mt-1" />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.count") }}
+                    <input v-model.number="bulk.count" type="number" min="1" max="120" class="ui-input mt-1" />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.positionFrom") }}
+                    <input v-model.number="bulk.position_start" type="number" min="0" class="ui-input mt-1" />
+                  </label>
+                  <label class="text-sm text-slate-300">
+                    {{ t("ownerTables.active") }}
+                    <select v-model="bulk.is_active" class="ui-input mt-1">
+                      <option :value="true">{{ t("ownerTables.yes") }}</option>
+                      <option :value="false">{{ t("ownerTables.no") }}</option>
+                    </select>
+                  </label>
+                  <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-60" :disabled="generating" @click="generateTables">
+                    {{ generating ? t("ownerTables.generating") : t("ownerTables.generate") }}
+                  </button>
+                </div>
+              </template>
+              <p v-if="error" class="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <div class="no-print fixed bottom-4 left-3 right-3 z-20 grid grid-cols-3 gap-2 sm:hidden">
       <button class="ui-btn-primary justify-center" @click="openSetup('create')">{{ t("ownerTables.create") }}</button>
@@ -776,8 +772,14 @@ const printCards = () => {
 };
 
 const openSetup = (mode = "create") => {
+  error.value = "";
   formMode.value = mode;
   setupOpen.value = true;
+};
+
+const closeSetup = () => {
+  setupOpen.value = false;
+  error.value = "";
 };
 
 onMounted(fetchTables);
