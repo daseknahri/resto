@@ -34,124 +34,154 @@
     </section>
 
     <div class="space-y-3">
-      <div
+      <article
         v-for="(cat, idx) in categories"
         :key="cat.local_id"
-        class="rounded-[26px] border border-slate-800 bg-slate-950/82 p-4 shadow-[0_18px_45px_rgba(2,8,23,0.2)] space-y-4"
+        class="rounded-2xl border border-slate-800 bg-slate-950/75 p-4 shadow-[0_12px_28px_rgba(2,8,23,0.18)]"
       >
-        <div class="flex flex-col gap-3 border-b border-slate-800/80 pb-3 sm:flex-row sm:items-start sm:justify-between">
-          <div class="space-y-1">
-            <p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              {{ t("common.categories") }} {{ idx + 1 }}
-            </p>
-            <p class="text-sm text-slate-300">{{ t("stepCategories.description") }}</p>
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("common.categories") }} {{ idx + 1 }}</p>
+            <h3 class="mt-1 truncate text-base font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
+            <p class="mt-1 line-clamp-2 text-sm text-slate-400">{{ cat.description || t("stepCategories.categoryDescriptionPlaceholder") }}</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <span class="ui-data-strip">Pos: {{ Number(cat.position || 0) }}</span>
+              <span class="ui-data-strip">{{ t("stepCategories.translationsTitle") }}: {{ Object.keys(cat.name_i18n || {}).length }}</span>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="ui-data-strip">{{ Number(cat.position || 0) }}</span>
-            <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" @click="remove(idx)">
-              {{ t("stepCategories.remove") }}
-            </button>
-          </div>
+          <img
+            v-if="cat.image_url"
+            :src="cat.image_url"
+            alt=""
+            class="h-14 w-14 rounded-xl border border-slate-700 object-cover"
+          />
         </div>
-
-        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
-          <div class="space-y-1">
-            <input
-              v-model="cat.name"
-              class="ui-input"
-              :class="rowError(cat, 'name') ? 'border-red-400' : 'border-slate-700'"
-              :placeholder="t('stepCategories.categoryNamePlaceholder')"
-              @input="clearRowError(cat.local_id, 'name')"
-            />
-            <p v-if="rowError(cat, 'name')" class="text-xs text-red-300">{{ rowError(cat, "name") }}</p>
-          </div>
-          <div class="space-y-1">
-            <input
-              v-model.number="cat.position"
-              type="number"
-              min="0"
-              class="ui-input"
-              :class="rowError(cat, 'position') ? 'border-red-400' : 'border-slate-700'"
-              @input="clearRowError(cat.local_id, 'position')"
-            />
-            <p v-if="rowError(cat, 'position')" class="text-xs text-red-300">{{ rowError(cat, "position") }}</p>
-          </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openCategoryEditor(cat.local_id)">
+            Edit
+          </button>
+          <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" type="button" @click="remove(idx)">
+            {{ t("stepCategories.remove") }}
+          </button>
         </div>
-
-        <textarea
-          v-model="cat.description"
-          rows="2"
-          class="ui-textarea"
-          :class="rowError(cat, 'description') ? 'border-red-400' : 'border-slate-700'"
-          :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-          @input="clearRowError(cat.local_id, 'description')"
-        ></textarea>
-        <p v-if="rowError(cat, 'description')" class="text-xs text-red-300">{{ rowError(cat, "description") }}</p>
-
-        <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepCategories.translatedContent") }}</p>
-          <div
-            v-for="localeCode in selectedTranslationLocales"
-            :key="`${cat.local_id}-${localeCode}`"
-            class="grid gap-2 sm:grid-cols-2"
-          >
-            <input
-              v-model="cat.name_i18n[localeCode]"
-              class="ui-input"
-              :placeholder="t('stepCategories.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
-            />
-            <input
-              v-model="cat.description_i18n[localeCode]"
-              class="ui-input"
-              :placeholder="t('stepCategories.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
-            />
-          </div>
-        </div>
-
-        <div
-          class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
-          :class="draggingRows[cat.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
-          @dragenter="setDragState(cat.local_id, true)"
-          @dragleave="setDragState(cat.local_id, false)"
-          @dragover="preventDropDefaults"
-          @drop="dropImage(cat, $event)"
-        >
-          <div class="flex flex-wrap items-center gap-3">
-            <input
-              v-model="cat.image_url"
-              class="flex-1 rounded-xl bg-slate-900 border px-3 py-2 text-sm"
-              :class="rowError(cat, 'image_url') ? 'border-red-400' : 'border-slate-700'"
-              :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
-              @input="clearRowError(cat.local_id, 'image_url')"
-            />
-            <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-              {{ uploadingRows[cat.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[cat.local_id] || 0 }) : t("stepCategories.uploadImage") }}
-              <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[cat.local_id]" @change="uploadImage(cat, $event)" />
-            </label>
-            <button
-              v-if="cat.image_url"
-              type="button"
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
-              @click="clearImage(cat)"
-            >
-              {{ t("stepCategories.removeImage") }}
-            </button>
-            <img v-if="cat.image_url" :src="cat.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
-          </div>
-          <p class="text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
-        </div>
-        <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
-
-        <div v-if="uploadingRows[cat.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
-          <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[cat.local_id] || 0}%` }"></div>
-        </div>
-
-        <p v-if="rowError(cat, 'image_url')" class="text-xs text-red-300">{{ rowError(cat, "image_url") }}</p>
-        <p v-if="rowError(cat, 'slug')" class="text-xs text-red-300">{{ rowError(cat, "slug") }}</p>
-        <p v-if="rowError(cat, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(cat, "non_field_errors") }}</p>
-      </div>
+      </article>
       <button class="ui-btn-outline px-4 py-2 text-sm" @click="openQuickCategoryModal">{{ t("stepCategories.addCategory") }}</button>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="categoryEditorModalOpen && editingCategory"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        @click.self="closeCategoryEditor"
+      >
+        <div class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-5 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-lg font-semibold text-white">Edit {{ t("common.categories") }}</h3>
+            <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeCategoryEditor">{{ t("common.close") }}</button>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
+            <div class="space-y-1">
+              <input
+                v-model="editingCategory.name"
+                class="ui-input"
+                :class="rowError(editingCategory, 'name') ? 'border-red-400' : 'border-slate-700'"
+                :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                @input="clearRowError(editingCategory.local_id, 'name')"
+              />
+              <p v-if="rowError(editingCategory, 'name')" class="text-xs text-red-300">{{ rowError(editingCategory, "name") }}</p>
+            </div>
+            <div class="space-y-1">
+              <input
+                v-model.number="editingCategory.position"
+                type="number"
+                min="0"
+                class="ui-input"
+                :class="rowError(editingCategory, 'position') ? 'border-red-400' : 'border-slate-700'"
+                @input="clearRowError(editingCategory.local_id, 'position')"
+              />
+              <p v-if="rowError(editingCategory, 'position')" class="text-xs text-red-300">{{ rowError(editingCategory, "position") }}</p>
+            </div>
+          </div>
+
+          <textarea
+            v-model="editingCategory.description"
+            rows="2"
+            class="ui-textarea"
+            :class="rowError(editingCategory, 'description') ? 'border-red-400' : 'border-slate-700'"
+            :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+            @input="clearRowError(editingCategory.local_id, 'description')"
+          ></textarea>
+          <p v-if="rowError(editingCategory, 'description')" class="text-xs text-red-300">{{ rowError(editingCategory, "description") }}</p>
+
+          <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepCategories.translatedContent") }}</p>
+            <div
+              v-for="localeCode in selectedTranslationLocales"
+              :key="`${editingCategory.local_id}-${localeCode}`"
+              class="grid gap-2 sm:grid-cols-2"
+            >
+              <input
+                v-model="editingCategory.name_i18n[localeCode]"
+                class="ui-input"
+                :placeholder="t('stepCategories.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
+              />
+              <input
+                v-model="editingCategory.description_i18n[localeCode]"
+                class="ui-input"
+                :placeholder="t('stepCategories.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
+              />
+            </div>
+          </div>
+
+          <div
+            class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
+            :class="draggingRows[editingCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+            @dragenter="setDragState(editingCategory.local_id, true)"
+            @dragleave="setDragState(editingCategory.local_id, false)"
+            @dragover="preventDropDefaults"
+            @drop="dropImage(editingCategory, $event)"
+          >
+            <div class="flex flex-wrap items-center gap-3">
+              <input
+                v-model="editingCategory.image_url"
+                class="flex-1 rounded-xl bg-slate-900 border px-3 py-2 text-sm"
+                :class="rowError(editingCategory, 'image_url') ? 'border-red-400' : 'border-slate-700'"
+                :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
+                @input="clearRowError(editingCategory.local_id, 'image_url')"
+              />
+              <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                {{ uploadingRows[editingCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[editingCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
+                <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[editingCategory.local_id]" @change="uploadImage(editingCategory, $event)" />
+              </label>
+              <button
+                v-if="editingCategory.image_url"
+                type="button"
+                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                @click="clearImage(editingCategory)"
+              >
+                {{ t("stepCategories.removeImage") }}
+              </button>
+              <img v-if="editingCategory.image_url" :src="editingCategory.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+            </div>
+            <p class="text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
+          </div>
+          <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
+
+          <div v-if="uploadingRows[editingCategory.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+            <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[editingCategory.local_id] || 0}%` }"></div>
+          </div>
+
+          <p v-if="rowError(editingCategory, 'image_url')" class="text-xs text-red-300">{{ rowError(editingCategory, "image_url") }}</p>
+          <p v-if="rowError(editingCategory, 'slug')" class="text-xs text-red-300">{{ rowError(editingCategory, "slug") }}</p>
+          <p v-if="rowError(editingCategory, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingCategory, "non_field_errors") }}</p>
+
+          <div class="flex justify-end">
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeCategoryEditor">Done</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
@@ -235,12 +265,17 @@ const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
 const selectedTranslationLocales = ref([]);
 const quickCategoryModalOpen = ref(false);
+const categoryEditorModalOpen = ref(false);
+const categoryEditorLocalId = ref("");
 const quickCategory = reactive({
   name: "",
   description: "",
   position: 0,
   image_url: "",
 });
+const editingCategory = computed(
+  () => categories.find((cat) => String(cat.local_id) === String(categoryEditorLocalId.value)) || null
+);
 
 const hasActiveUploads = computed(() => Object.values(uploadingRows).some(Boolean));
 const maxTranslationLocales = computed(() =>
@@ -432,6 +467,16 @@ const load = async () => {
   }
 };
 
+const openCategoryEditor = (localId) => {
+  categoryEditorLocalId.value = String(localId || "");
+  categoryEditorModalOpen.value = true;
+};
+
+const closeCategoryEditor = () => {
+  categoryEditorModalOpen.value = false;
+  categoryEditorLocalId.value = "";
+};
+
 const openQuickCategoryModal = () => {
   quickCategory.name = "";
   quickCategory.description = "";
@@ -463,6 +508,9 @@ const quickAddCategory = () => {
 
 const remove = async (idx) => {
   const [cat] = categories.splice(idx, 1);
+  if (String(categoryEditorLocalId.value) === String(cat?.local_id || "")) {
+    closeCategoryEditor();
+  }
   if (cat?.id) removedIds.value.push(cat.id);
   delete rowErrors[cat?.local_id];
   delete uploadingRows[cat?.local_id];
