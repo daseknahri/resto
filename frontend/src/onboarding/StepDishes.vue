@@ -660,16 +660,24 @@ const normalize = (dish = {}) => ({
   options: Array.isArray(dish.options) ? dish.options.map((option) => normalizeOption(option)) : [],
 });
 
-const pickI18nMap = (input) => {
+const pickI18nMap = (input, allowedLocales = null) => {
   const out = {};
   if (!input || typeof input !== "object") return out;
+  const allowed = Array.isArray(allowedLocales) ? new Set(allowedLocales.map((locale) => String(locale || "").trim().toLowerCase())) : null;
   Object.entries(input).forEach(([rawLocale, rawValue]) => {
     const locale = String(rawLocale || "").trim().toLowerCase();
     const value = String(rawValue || "").trim();
     if (!locale) return;
+    if (allowed && !allowed.has(locale)) return;
     if (value) out[locale] = value;
   });
   return out;
+};
+
+const normalizeCurrency = (value) => {
+  const cleaned = String(value || "USD").trim().toUpperCase();
+  if (cleaned.length === 3 && /^[A-Z]{3}$/.test(cleaned)) return cleaned;
+  return "USD";
 };
 
 const optionFieldKey = (option, field) => `option_${option?.local_id || "new"}_${field}`;
@@ -921,13 +929,16 @@ const saveAndNext = async () => {
   }
   try {
     const validDishes = dishes.filter((d) => d.name?.trim() && d.category);
+    const allowedTranslationLocales = [...selectedTranslationLocales.value];
     for (const dish of validDishes) {
       try {
         const saved = await dishApi.upsert({
           ...dish,
+          category: Number(dish.category) || dish.category,
           price: Number(dish.price) || 0,
-          name_i18n: pickI18nMap(dish.name_i18n),
-          description_i18n: pickI18nMap(dish.description_i18n),
+          currency: normalizeCurrency(dish.currency),
+          name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
+          description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
         });
         dish.id = saved.id;
         dish.slug = saved.slug;
@@ -936,7 +947,7 @@ const saveAndNext = async () => {
           dish.id,
           desiredOptions.map((option) => ({
             ...option,
-            name_i18n: pickI18nMap(option.name_i18n),
+            name_i18n: pickI18nMap(option.name_i18n, allowedTranslationLocales),
           }))
         );
         dish.options = savedOptions.map((option) => normalizeOption(option));
