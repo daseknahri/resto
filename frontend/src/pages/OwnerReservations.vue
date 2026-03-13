@@ -1,11 +1,16 @@
 <template>
-  <section class="space-y-6 ui-safe-bottom pb-28 sm:pb-6">
+  <section class="space-y-6 ui-safe-bottom pb-6">
     <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
           <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
           <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerReservations.description") }}</p>
+          <p class="text-xs text-slate-400">
+            {{ t("ownerReservations.total") }}: {{ statusCounts.total }} -
+            {{ t("ownerReservations.new") }}: {{ statusCounts.new }} -
+            {{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}
+          </p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="ui-btn-primary justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
@@ -14,22 +19,15 @@
           <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
             {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
           </button>
-          <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
-            {{ t("common.clear") }}
+          <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+            {{ t("common.apply") }}
           </button>
         </div>
-      </div>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
-        <span class="ui-data-strip">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>
-        <span class="ui-data-strip">{{ t("ownerReservations.contacted") }}: {{ statusCounts.contacted }}</span>
-        <span class="ui-data-strip">{{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}</span>
-        <span class="ui-data-strip">{{ t("ownerReservations.overdue") }}: {{ statusCounts.overdue }}</span>
       </div>
     </header>
 
     <section class="ui-command-deck space-y-4">
-      <div class="ui-toolbar-band grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px_150px_150px_auto]">
+      <div class="ui-toolbar-band grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_96px_auto]">
         <input
           v-model.trim="searchQuery"
           class="ui-input"
@@ -42,28 +40,57 @@
             <option v-for="option in statusOptions" :key="option.value || 'all'" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
-        <label class="text-xs text-slate-400">
-          {{ t("ownerReservations.reminders") }}
-          <select v-model="reminderFilter" class="ui-input mt-1" @change="applyFilters">
-            <option v-for="option in reminderOptions" :key="option.value || 'all-reminders'" :value="option.value">{{ option.label }}</option>
-          </select>
-        </label>
-        <input v-model="dateFrom" type="date" class="ui-input" />
-        <input v-model="dateTo" type="date" class="ui-input" />
-        <div class="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-1 xl:justify-end">
-          <select v-model.number="pageSize" class="ui-input w-24" @change="onPageSizeChange">
+        <div class="text-xs text-slate-400">
+          Per page
+          <select v-model.number="pageSize" class="ui-input mt-1 w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
             <option :value="50">50</option>
           </select>
-          <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
-            {{ t("common.apply") }}
-          </button>
+        </div>
+        <div class="flex flex-wrap items-end gap-2 md:justify-end">
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
             {{ t("common.clear") }}
           </button>
+          <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+            {{ t("common.apply") }}
+          </button>
         </div>
       </div>
+
+      <details class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
+        <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+          {{ t("ownerReservations.reminders") }} / Date
+        </summary>
+        <div class="mt-3 grid gap-3 md:grid-cols-[220px_150px_150px_auto]">
+          <label class="text-xs text-slate-400">
+            {{ t("ownerReservations.reminders") }}
+            <select v-model="reminderFilter" class="ui-input mt-1" @change="applyFilters">
+              <option v-for="option in reminderOptions" :key="option.value || 'all-reminders'" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label class="text-xs text-slate-400">
+            From
+            <input v-model="dateFrom" type="date" class="ui-input mt-1" />
+          </label>
+          <label class="text-xs text-slate-400">
+            To
+            <input v-model="dateTo" type="date" class="ui-input mt-1" />
+          </label>
+          <div class="flex flex-wrap items-end gap-2 md:justify-end">
+            <button
+              class="ui-btn-outline px-3 py-1.5 text-xs"
+              :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
+              @click="toggleFailedRetryQueue"
+            >
+              {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
+            </button>
+            <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+              {{ t("common.apply") }}
+            </button>
+          </div>
+        </div>
+      </details>
 
       <div class="ui-toolbar-band">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -75,35 +102,25 @@
             <p class="text-xs text-slate-400">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
             <span class="ui-data-strip">{{ activeFilterSummary }}</span>
           </div>
-          <button
-            class="ui-btn-outline px-3 py-1.5 text-xs"
-            :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
-            @click="toggleFailedRetryQueue"
-          >
-            {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
-          </button>
-        </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button
-            class="ui-btn-outline px-3 py-1.5 text-xs"
-            :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
-            :disabled="!selectedCount || bulkReminderLoading"
-            @click="bulkRetryReminders"
-          >
-            {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('contacted')">
-            {{ t("ownerReservations.markContacted") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('won')">
-            {{ t("ownerReservations.markConfirmed") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('lost')">
-            {{ t("ownerReservations.markUnavailable") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="bulkUpdateStatus('new')">
-            {{ t("ownerReservations.resetNew") }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <select v-model="bulkAction" class="ui-input w-[160px] text-xs">
+              <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
+              <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
+              <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
+              <option value="new">{{ t("ownerReservations.resetNew") }}</option>
+            </select>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
+              {{ t("common.apply") }}
+            </button>
+            <button
+              class="ui-btn-outline px-3 py-1.5 text-xs"
+              :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
+              :disabled="!selectedCount || bulkReminderLoading"
+              @click="bulkRetryReminders"
+            >
+              {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
+            </button>
+          </div>
         </div>
         <div v-if="pendingReminderReconciliation.length" class="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs space-y-2">
           <p class="text-amber-200">
@@ -340,36 +357,6 @@
         </div>
       </div>
     </section>
-
-    <div
-      v-if="selectedCount"
-      class="fixed bottom-4 left-3 right-3 z-20 rounded-[1.4rem] border border-slate-700/80 bg-slate-950/92 p-3 shadow-xl shadow-black/40 backdrop-blur lg:hidden"
-    >
-      <div class="space-y-2">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <p class="text-[10px] uppercase tracking-[0.2em] text-slate-500">{{ activeFilterSummary }}</p>
-            <p class="mt-1 text-xs text-slate-300">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
-          </div>
-          <button class="text-xs text-slate-400 hover:text-slate-100" @click="selectedIds = []">
-            {{ t("common.clear") }}
-          </button>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">{{ t("ownerReservations.contacted") }}</button>
-          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">{{ t("ownerReservations.confirmed") }}</button>
-          <button class="ui-btn-outline justify-center text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('lost')">{{ t("ownerReservations.unavailable") }}</button>
-          <button
-            class="ui-btn-outline justify-center text-xs"
-            :disabled="bulkReminderLoading"
-            :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
-            @click="bulkRetryReminders"
-          >
-            {{ t("ownerReservations.retryQueue") }}
-          </button>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -404,6 +391,7 @@ const timelineNote = ref({});
 const timelineSubmitting = ref({});
 const page = ref(1);
 const pageSize = ref(20);
+const bulkAction = ref("contacted");
 const pagination = ref({
   page: 1,
   page_size: 20,
@@ -805,6 +793,11 @@ const bulkUpdateStatus = async (status) => {
   } finally {
     bulkUpdating.value = false;
   }
+};
+
+const runBulkAction = async () => {
+  if (!selectedIds.value.length) return;
+  await bulkUpdateStatus(bulkAction.value);
 };
 
 const toggleSelection = (id) => {

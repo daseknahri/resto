@@ -1,28 +1,24 @@
-<template>
-  <section class="space-y-6 ui-safe-bottom pb-24 sm:pb-0">
+﻿<template>
+  <section class="space-y-6 ui-safe-bottom pb-6">
     <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
           <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("ownerTables.title") }}</h2>
           <p class="text-sm text-slate-300">{{ t("ownerTables.description") }}</p>
+          <p class="text-xs text-slate-400">
+            {{ t("ownerTables.tableLinksCount", { count: tables.length }) }} -
+            {{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}
+          </p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 sm:justify-end">
           <button class="ui-btn-primary" @click="openSetup('create')">
             {{ t("ownerTables.create") }}
-          </button>
-          <button class="ui-btn-outline" @click="openSetup('bulk')">
-            {{ t("ownerTables.bulk") }}
           </button>
           <button class="ui-btn-outline" :disabled="loading" @click="fetchTables">
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
           </button>
         </div>
-      </div>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
-        <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>
-        <span class="ui-data-strip">{{ t("ownerTables.disabledTables") }}: {{ disabledTablesCount }}</span>
       </div>
     </header>
 
@@ -55,11 +51,11 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">{{ t("ownerTables.printCards") }}</button>
         </div>
       </div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</span>
-        <span v-if="searchQuery" class="ui-data-strip">{{ t("common.search") }}: {{ searchQuery }}</span>
-        <span v-if="statusFilter !== 'all'" class="ui-data-strip">
-          {{ statusFilter === 'active' ? t("ownerTables.activeTables") : t("ownerTables.disabledTables") }}
+      <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+        <span>{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</span>
+        <span v-if="searchQuery">- {{ t("common.search") }}: {{ searchQuery }}</span>
+        <span v-if="statusFilter !== 'all'">
+          - {{ statusFilter === 'active' ? t("ownerTables.activeTables") : t("ownerTables.disabledTables") }}
         </span>
       </div>
     </div>
@@ -75,7 +71,7 @@
     </p>
 
     <div v-else-if="!filteredTables.length && !loading" class="rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/30 p-5 text-sm text-slate-400">
-      {{ t("common.search") }} · 0 / {{ tables.length }}
+      {{ t("common.search") }} - 0 / {{ tables.length }}
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
@@ -273,13 +269,6 @@
       </div>
     </Teleport>
 
-    <div class="no-print fixed bottom-4 left-3 right-3 z-20 grid grid-cols-3 gap-2 sm:hidden">
-      <button class="ui-btn-primary justify-center" @click="openSetup('create')">{{ t("ownerTables.create") }}</button>
-      <button class="ui-btn-outline justify-center" @click="openSetup('bulk')">{{ t("ownerTables.bulk") }}</button>
-      <button class="ui-btn-outline justify-center" :disabled="loading" @click="fetchTables">
-        {{ loading ? t("ownerTables.loading") : t("common.refresh") }}
-      </button>
-    </div>
   </section>
 </template>
 
@@ -818,3 +807,5 @@ onMounted(fetchTables);
   }
 }
 </style>
+
+
