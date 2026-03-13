@@ -51,6 +51,53 @@ const localValidationError = (message, field = "image") => {
   return wrapped;
 };
 
+const normalizeOptionalUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("/")) return raw;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  return `https://${raw}`;
+};
+
+const sanitizeProfilePayload = (payload) => {
+  const next = { ...(payload || {}) };
+
+  const trimString = (key) => {
+    if (typeof next[key] === "string") next[key] = next[key].trim();
+  };
+
+  [
+    "tagline",
+    "description",
+    "phone",
+    "whatsapp",
+    "address",
+    "menu_disabled_note",
+    "language",
+    "primary_color",
+    "secondary_color",
+  ].forEach(trimString);
+
+  [
+    "google_maps_url",
+    "reservation_url",
+    "facebook_url",
+    "instagram_url",
+    "tiktok_url",
+    "logo_url",
+    "hero_url",
+  ].forEach((key) => {
+    next[key] = normalizeOptionalUrl(next[key]);
+  });
+
+  if (typeof next.language === "string" && next.language) {
+    next.language = next.language.toLowerCase().split("-")[0];
+  }
+
+  return next;
+};
+
 const isSlugConflict = (err) =>
   err?.response?.status === 400 &&
   Array.isArray(err?.response?.data?.slug) &&
@@ -79,7 +126,7 @@ export const profileApi = {
   },
   async save(payload) {
     try {
-      const { data } = await api.put("/profile/", payload);
+      const { data } = await api.put("/profile/", sanitizeProfilePayload(payload));
       return data;
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveProfileFailed"));

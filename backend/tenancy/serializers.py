@@ -141,6 +141,8 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        disabled_in_payload = "is_menu_temporarily_disabled" in attrs
+        note_in_payload = "menu_disabled_note" in attrs
         disabled_value = attrs.get(
             "is_menu_temporarily_disabled",
             self.instance.is_menu_temporarily_disabled if self.instance else False,
@@ -149,7 +151,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "menu_disabled_note",
             self.instance.menu_disabled_note if self.instance else "",
         )
-        if disabled_value and not (note_value or "").strip():
+        # Enforce disable-note only when disable/note fields are explicitly part of this update.
+        if (disabled_in_payload or note_in_payload) and disabled_value and not (note_value or "").strip():
             raise serializers.ValidationError(
                 {"menu_disabled_note": "Add a short message while menu is temporarily disabled."}
             )

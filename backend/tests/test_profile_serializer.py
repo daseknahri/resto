@@ -38,3 +38,19 @@ class ProfileSerializerTests(SimpleTestCase):
             serializer.data["logo_url"],
             "https://badr.menu.kepoli.com/media/uploads/badr/logo.webp",
         )
+
+    def test_partial_update_does_not_fail_on_existing_disabled_without_note(self):
+        tenant = Tenant(name="Demo", slug="demo", plan=Plan(code="basic", name="Basic"))
+        profile = Profile(
+            tenant=tenant,
+            is_menu_temporarily_disabled=True,
+            menu_disabled_note="",
+            tagline="Old",
+        )
+        serializer = ProfileSerializer(instance=profile, data={"tagline": "New"}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_disabling_menu_requires_note_when_disable_flag_provided(self):
+        serializer = ProfileSerializer(data={"is_menu_temporarily_disabled": True, "menu_disabled_note": ""}, partial=True)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("menu_disabled_note", serializer.errors)
