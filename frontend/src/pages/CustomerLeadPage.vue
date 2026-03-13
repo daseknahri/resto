@@ -1,58 +1,55 @@
 <template>
-  <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
+  <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <header class="ui-hero-stage ui-reveal overflow-hidden p-0">
-      <div class="grid gap-3 lg:grid-cols-[minmax(0,1.08fr),320px]">
-        <div class="relative min-h-[188px] overflow-hidden rounded-[1.35rem] border border-slate-800/60 bg-slate-950/60 md:min-h-[280px]">
-          <img
-            v-if="heroImage"
-            :src="heroImage"
-            :alt="`${tenantName} hero`"
-            class="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-          <div class="absolute inset-0 bg-slate-950/76"></div>
-          <div class="absolute inset-0 bg-gradient-to-br from-black/10 via-slate-950/60 to-black/80"></div>
+      <div class="relative min-h-[168px] overflow-hidden rounded-[1.2rem] border border-slate-800/60 bg-slate-950/60 md:min-h-[220px]">
+        <img
+          v-if="heroImage"
+          :src="heroImage"
+          :alt="`${tenantName} hero`"
+          class="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+        />
+        <div class="absolute inset-0 bg-slate-950/72"></div>
+        <div class="absolute inset-0 bg-gradient-to-br from-black/10 via-slate-950/60 to-black/80"></div>
 
-          <div class="relative flex min-h-[188px] flex-col justify-end gap-2.5 p-3 md:min-h-[280px] md:gap-3 md:p-5">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="ui-chip-strong">{{ statusLabel }}</span>
-              <span v-if="locationLine" class="ui-chip">{{ locationLine }}</span>
-            </div>
-
-            <div class="space-y-1.5">
-              <p class="ui-kicker">{{ t("customerLeadPage.kicker") }}</p>
-              <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-5xl">{{ tenantName }}</h1>
-              <p class="max-w-2xl text-sm text-slate-200 md:text-base">{{ tenantDescription }}</p>
-            </div>
+        <div class="relative flex min-h-[168px] flex-col justify-end gap-2.5 p-3 md:min-h-[220px] md:gap-3 md:p-5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="ui-chip-strong">{{ statusLabel }}</span>
+            <span v-if="locationLine" class="ui-chip">{{ locationLine }}</span>
           </div>
-        </div>
 
-        <aside class="ui-command-deck ui-reveal flex flex-col gap-3 p-3 lg:gap-4 lg:p-5" style="--ui-delay: 55ms">
           <div class="space-y-1.5">
-            <p class="ui-kicker">{{ t("customerLeadPage.quickContact") }}</p>
-            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
-            <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
+            <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-4xl">{{ tenantName }}</h1>
+            <p class="max-w-2xl text-sm text-slate-200 md:text-base">{{ tenantDescription }}</p>
           </div>
 
-          <div class="grid gap-2">
-            <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary justify-center">
+          <div class="flex flex-wrap gap-2">
+            <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary px-4 py-2 text-sm">
               {{ t("customerLayout.navMenu") }}
             </RouterLink>
-            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline justify-center">
+            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-4 py-2 text-sm">
               {{ t("customerLayout.navReserve") }}
             </RouterLink>
             <a
-              v-if="googleMapsUrl"
-              :href="googleMapsUrl"
+              v-if="whatsappHref"
+              :href="whatsappHref"
               target="_blank"
               rel="noopener noreferrer"
-              class="ui-btn-outline justify-center"
-              @click="trackContactClick('google_reviews')"
+              class="ui-btn-outline px-4 py-2 text-sm"
+              @click="trackContactClick('whatsapp_contact')"
             >
-              {{ t("customerLeadPage.googleReviews") }}
+              {{ t("customerLeadPage.whatsappNow") }}
             </a>
           </div>
+        </div>
+      </div>
+    </header>
 
+    <section class="ui-glass ui-reveal p-3 md:p-5" style="--ui-delay: 120ms">
+      <div class="grid gap-4 md:grid-cols-[0.92fr,1.08fr]">
+        <div class="space-y-3">
+          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
           <div class="flex flex-wrap gap-2">
             <a
               v-if="whatsappHref"
@@ -73,8 +70,18 @@
               {{ t("customerLeadPage.callNow") }}
             </a>
             <a
+              v-if="googleMapsUrl"
+              :href="googleMapsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-chip text-[11px]"
+              @click="trackContactClick('google_reviews')"
+            >
+              {{ t("customerLeadPage.googleReviews") }}
+            </a>
+            <a
               v-for="social in socialLinks"
-              :key="`hero-${social.key}`"
+              :key="`social-${social.key}`"
               :href="social.url"
               target="_blank"
               rel="noopener noreferrer"
@@ -83,27 +90,6 @@
             >
               {{ social.label }}
             </a>
-          </div>
-        </aside>
-      </div>
-    </header>
-
-    <section class="ui-glass ui-reveal p-3 md:p-5" style="--ui-delay: 120ms">
-      <div class="grid gap-4 md:grid-cols-[0.92fr,1.08fr]">
-        <div class="space-y-3">
-          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
-          <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
-          <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-            <article class="ui-story-card">
-              <p class="ui-stat-label">{{ t("customerLeadPage.response") }}</p>
-              <p class="mt-2 text-base font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</p>
-            </article>
-            <article class="ui-story-card">
-              <p class="ui-stat-label">{{ t("customerLeadPage.quickContact") }}</p>
-              <p class="mt-2 text-sm text-slate-200">
-                {{ whatsappHref ? t("customerLeadPage.whatsappNow") : phoneHref ? t("customerLeadPage.callNow") : t("customerLeadPage.directBooking") }}
-              </p>
-            </article>
           </div>
           <div v-if="lead.success" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
             {{ t("customerLeadPage.leadSuccess") }}
@@ -116,16 +102,7 @@
           >
             {{ t("customerLeadPage.leadSuccessCta") }}
           </button>
-          <a
-            v-if="reservationUrl"
-            :href="reservationUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex text-sm text-[var(--color-secondary)] hover:underline"
-            @click="trackContactClick('reservation_url')"
-          >
-            {{ t("customerLeadPage.directBooking") }}
-          </a>
+          <a v-if="reservationUrl" :href="reservationUrl" target="_blank" rel="noopener noreferrer" class="inline-flex text-sm text-[var(--color-secondary)] hover:underline" @click="trackContactClick('reservation_url')">{{ t("customerLeadPage.directBooking") }}</a>
         </div>
 
         <form class="space-y-3 rounded-[1.2rem] border border-slate-800/70 bg-slate-950/35 p-3 md:rounded-[1.4rem] md:p-4" @submit.prevent="submitLead">

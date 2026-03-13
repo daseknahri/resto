@@ -1,27 +1,26 @@
 <template>
   <div class="ui-shell">
-    <header class="ui-header">
-      <div class="mx-auto w-full max-w-5xl px-4 py-3">
-        <div class="ui-hero-ribbon flex flex-col gap-3 px-4 py-3 sm:px-5">
+    <header class="ui-header static md:sticky md:top-0 md:z-30">
+      <div class="mx-auto w-full max-w-5xl px-4 py-2">
+        <div class="ui-workspace-stage flex flex-col gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5">
           <div class="flex items-start justify-between gap-3">
             <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
               <img
                 v-if="tenantLogo"
                 :src="tenantLogo"
                 :alt="`${tenantName} logo`"
-                class="h-10 w-10 rounded-2xl border border-slate-700/70 object-cover shadow-lg shadow-black/30"
+                class="h-9 w-9 rounded-xl border border-slate-700/70 object-cover shadow-lg shadow-black/30"
                 loading="lazy"
               />
               <div class="min-w-0">
-                <p class="ui-kicker">{{ t("customerLeadPage.kicker") }}</p>
-                <p class="truncate text-lg font-semibold text-slate-100">{{ tenantName }}</p>
-                <p v-if="tenantTagline" class="truncate text-xs text-slate-400">{{ tenantTagline }}</p>
+                <p class="truncate text-base font-semibold text-slate-100 md:text-lg">{{ tenantName }}</p>
+                <p v-if="tenantTagline" class="truncate text-[11px] text-slate-400">{{ tenantTagline }}</p>
               </div>
             </RouterLink>
 
             <div class="flex items-center gap-2">
               <LanguageSwitcher />
-              <RouterLink to="/cart" class="relative inline-flex ui-touch-target min-w-[2.5rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-3 text-sm text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
+              <RouterLink to="/cart" class="relative inline-flex min-h-[2.4rem] min-w-[2.4rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-3 text-sm text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
                 {{ t("common.cart") }}
                 <span
                   v-if="cart.count"
@@ -38,17 +37,8 @@
               <span class="ui-live-dot" :class="serviceDotClass"></span>
               {{ serviceStateLabel }}
             </span>
-            <span class="ui-status-pill">{{ orderingModeLabel }}</span>
+            <span class="ui-status-pill hidden sm:inline-flex">{{ orderingModeLabel }}</span>
             <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
-            <a
-              v-if="googleMapsUrl"
-              :href="googleMapsUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ui-chip text-[11px]"
-            >
-              {{ t("customerLeadPage.googleReviews") }}
-            </a>
           </div>
         </div>
 
@@ -91,7 +81,7 @@
 
     <CustomerFlowRail />
 
-    <main class="mx-auto w-full max-w-5xl pb-28 md:pb-8">
+    <main class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">
@@ -101,26 +91,13 @@
       </RouterView>
     </main>
 
-    <section class="mx-auto w-full max-w-5xl px-4 pt-3 md:hidden">
-      <div class="ui-hero-ribbon flex flex-wrap items-center gap-2 px-3 py-2.5 text-[11px] text-slate-300">
-        <span class="ui-status-pill">
-          <span class="ui-live-dot" :class="serviceDotClass"></span>
-          {{ currentSectionLabel }}
-        </span>
-        <span v-if="cart.tableLabel" class="ui-status-pill">
-          {{ t("customerLayout.table") }} {{ cart.tableLabel }}
-        </span>
-        <span class="ui-status-pill">{{ orderingModeLabel }}</span>
-      </div>
-    </section>
-
     <nav class="ui-bottom-dock md:hidden">
       <div class="ui-bottom-dock-grid grid-cols-4 text-xs">
         <RouterLink
           v-for="item in navItems"
           :key="item.key"
           :to="item.to"
-          class="ui-press flex min-h-[3.1rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center transition"
+          class="ui-press flex min-h-[2.85rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center transition"
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >
@@ -156,7 +133,6 @@ const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(meta.value?.profile?.logo_url || "").trim());
 const tenantTagline = computed(() => String(meta.value?.profile?.tagline || meta.value?.profile?.description || "").trim());
-const googleMapsUrl = computed(() => String(meta.value?.profile?.google_maps_url || "").trim());
 const orderingModeLabel = computed(() => {
   const mode = String(tenant.entitlements?.ordering_mode || "browse").toLowerCase();
   if (mode === "checkout") return t("customerLeadPage.checkout");

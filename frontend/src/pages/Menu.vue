@@ -1,30 +1,27 @@
 <template>
-  <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
-    <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-5">
-      <div class="space-y-2.5">
-          <div class="space-y-1">
-            <p class="ui-kicker">{{ t('menu.kicker') }}</p>
-            <h1
-              class="ui-display text-lg font-semibold tracking-tight text-white md:text-3xl"
-            >
-              {{ tenantName }}
-            </h1>
-          </div>
+  <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
+    <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
+      <div class="space-y-2">
+        <div class="space-y-1">
+          <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
+            {{ tenantName }}
+          </h1>
+          <p class="text-xs text-slate-400 md:text-sm">{{ t('menu.intro') }}</p>
+        </div>
 
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong"
+        <div class="flex flex-wrap gap-2">
+          <span class="ui-chip-strong"
             >{{ categories.length }} {{ t('common.categories') }}</span
-            >
-            <span class="ui-chip"
+          >
+          <span class="ui-chip"
             >{{ totalDishes }} {{ t('common.dishes') }}</span
-            >
-          </div>
-
+          >
+        </div>
       </div>
     </header>
 
     <section
-      class="ui-glass ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+4.5rem)] z-10 space-y-2.5 p-3 md:static md:space-y-3 md:p-4"
+      class="ui-glass ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+3.8rem)] z-10 space-y-2.5 p-3 md:static md:space-y-3 md:p-4"
       style="--ui-delay: 50ms"
     >
       <div class="grid gap-2.5 md:grid-cols-[1fr,auto] md:items-center">
