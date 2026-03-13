@@ -1,6 +1,6 @@
 <template>
   <section class="space-y-6 ui-safe-bottom pb-28 sm:pb-6">
-    <header class="ui-workspace-stage ui-fade-up p-4 md:p-5">
+    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
@@ -19,55 +19,38 @@
           </button>
         </div>
       </div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="ui-data-strip">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
+        <span class="ui-data-strip">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>
+        <span class="ui-data-strip">{{ t("ownerReservations.contacted") }}: {{ statusCounts.contacted }}</span>
+        <span class="ui-data-strip">{{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}</span>
+        <span class="ui-data-strip">{{ t("ownerReservations.overdue") }}: {{ statusCounts.overdue }}</span>
+      </div>
     </header>
 
     <section class="ui-command-deck space-y-4">
-      <div class="ui-toolbar-band flex flex-wrap items-center justify-between gap-3">
-        <div class="ui-scroll-row">
-          <button
-            v-for="option in statusOptions"
-            :key="option.value"
-            class="ui-pill-nav text-xs"
-            :class="statusFilter === option.value ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
-            @click="setFilter(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <span class="text-xs text-slate-500">{{ t("ownerReservations.statusFilter") }}</span>
-      </div>
-
-      <div class="ui-toolbar-band flex flex-wrap items-center justify-between gap-3">
-        <div class="ui-scroll-row">
-          <button
-            v-for="option in reminderOptions"
-            :key="option.value"
-            class="ui-pill-nav text-xs"
-            :class="reminderFilter === option.value ? reminderFilterClass(option.value) : ''"
-            @click="setReminderFilter(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <button
-          class="ui-btn-outline px-3 py-1.5 text-xs"
-          :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
-          @click="setReminderFilter(reminderFilter === 'failed' ? '' : 'failed')"
-        >
-          {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
-        </button>
-      </div>
-
-      <div class="ui-toolbar-band grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr,auto,auto,auto]">
+      <div class="ui-toolbar-band grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px_150px_150px_auto]">
         <input
           v-model.trim="searchQuery"
           class="ui-input"
           :placeholder="t('ownerReservations.searchPlaceholder')"
           @keyup.enter="applyFilters"
         />
+        <label class="text-xs text-slate-400">
+          {{ t("ownerReservations.statusFilter") }}
+          <select v-model="statusFilter" class="ui-input mt-1" @change="applyFilters">
+            <option v-for="option in statusOptions" :key="option.value || 'all'" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+        <label class="text-xs text-slate-400">
+          {{ t("ownerReservations.reminders") }}
+          <select v-model="reminderFilter" class="ui-input mt-1" @change="applyFilters">
+            <option v-for="option in reminderOptions" :key="option.value || 'all-reminders'" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
         <input v-model="dateFrom" type="date" class="ui-input" />
         <input v-model="dateTo" type="date" class="ui-input" />
-        <div class="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-1">
+        <div class="flex flex-wrap items-center gap-2 sm:col-span-2 xl:col-span-1 xl:justify-end">
           <select v-model.number="pageSize" class="ui-input w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
@@ -83,12 +66,22 @@
       </div>
 
       <div class="ui-toolbar-band">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <label class="inline-flex items-center gap-2 text-xs text-slate-300">
-            <input type="checkbox" :checked="allSelectedOnPage" @change="toggleSelectAllOnPage" />
-            {{ t("ownerReservations.selectPage") }}
-          </label>
-          <p class="text-xs text-slate-400">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" :checked="allSelectedOnPage" @change="toggleSelectAllOnPage" />
+              {{ t("ownerReservations.selectPage") }}
+            </label>
+            <p class="text-xs text-slate-400">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</p>
+            <span class="ui-data-strip">{{ activeFilterSummary }}</span>
+          </div>
+          <button
+            class="ui-btn-outline px-3 py-1.5 text-xs"
+            :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
+            @click="toggleFailedRetryQueue"
+          >
+            {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
+          </button>
         </div>
         <div class="mt-2 flex flex-wrap gap-2">
           <button
@@ -142,45 +135,6 @@
           </div>
         </div>
       </div>
-
-      <article v-if="selectedCount" class="ui-hero-ribbon space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p class="ui-kicker">{{ activeFilterSummary }}</p>
-            <h3 class="text-lg font-semibold text-white">{{ t("ownerReservations.selectedCount", { count: selectedCount }) }}</h3>
-            <p class="text-sm text-slate-300">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              class="ui-btn-outline px-3 py-1.5 text-xs"
-              :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
-              :disabled="bulkReminderLoading"
-              @click="bulkRetryReminders"
-            >
-              {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
-            </button>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('contacted')">
-              {{ t("ownerReservations.markContacted") }}
-            </button>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="bulkUpdating" @click="bulkUpdateStatus('won')">
-              {{ t("ownerReservations.markConfirmed") }}
-            </button>
-          </div>
-        </div>
-        <div class="ui-state-strip">
-          <div class="relative z-[1] flex flex-wrap items-center gap-2 text-xs">
-            <span class="ui-state-chip" data-active="true">
-              {{ t("ownerReservations.selectedCount", { count: selectedCount }) }}
-            </span>
-            <span class="ui-state-chip" :data-active="statusFilter !== 'all'">
-              {{ statusFilterLabel(statusFilter) }}
-            </span>
-            <span class="ui-state-chip" :data-active="reminderFilter !== 'all'">
-              {{ reminderFilterLabel(reminderFilter) }}
-            </span>
-          </div>
-        </div>
-      </article>
 
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
       <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
@@ -474,11 +428,19 @@ const reminderOptions = computed(() => [
   { value: "opened", label: t("ownerReservations.opened") },
   { value: "none", label: t("ownerReservations.noReminders") },
 ]);
+const statusCounts = computed(() => {
+  const rows = Array.isArray(reservations.value) ? reservations.value : [];
+  return {
+    total: rows.length,
+    new: rows.filter((item) => item?.status === "new").length,
+    contacted: rows.filter((item) => item?.status === "contacted").length,
+    won: rows.filter((item) => item?.status === "won").length,
+    overdue: rows.filter((item) => item?.sla_state === "overdue").length,
+  };
+});
 const activeStatusLabel = computed(() => statusOptions.value.find((option) => option.value === statusFilter.value)?.label || t("ownerReservations.allStatuses"));
 const activeReminderLabel = computed(() => reminderOptions.value.find((option) => option.value === reminderFilter.value)?.label || t("ownerReservations.allReminders"));
 const activeFilterSummary = computed(() => `${activeStatusLabel.value} / ${activeReminderLabel.value}`);
-const statusFilterLabel = (value) => statusOptions.value.find((option) => option.value === value)?.label || t("ownerReservations.allStatuses");
-const reminderFilterLabel = (value) => reminderOptions.value.find((option) => option.value === value)?.label || t("ownerReservations.allReminders");
 
 const selectedCount = computed(() => selectedIds.value.length);
 const allSelectedOnPage = computed(() => {
@@ -571,14 +533,6 @@ const timelineActionLabel = (action) => {
   if (normalized.includes("note")) return t("ownerReservations.timelineActionNote");
   if (normalized.includes("reminder")) return t("ownerReservations.timelineActionReminder");
   return action ? String(action) : t("ownerReservations.timelineActionUnknown");
-};
-
-const reminderFilterClass = (value) => {
-  if (value === "failed") return "border-rose-400 bg-rose-500/10 text-rose-200";
-  if (value === "sent") return "border-amber-400 bg-amber-500/10 text-amber-200";
-  if (value === "opened") return "border-emerald-400 bg-emerald-500/10 text-emerald-200";
-  if (value === "none") return "border-slate-500 bg-slate-500/10 text-slate-200";
-  return "border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]";
 };
 
 const reservationCardClass = (reservation) => {
@@ -872,14 +826,8 @@ const toggleSelectAllOnPage = () => {
   selectedIds.value = Array.from(merged);
 };
 
-const setFilter = async (value) => {
-  statusFilter.value = value;
-  page.value = 1;
-  await fetchReservations();
-};
-
-const setReminderFilter = async (value) => {
-  reminderFilter.value = value;
+const toggleFailedRetryQueue = async () => {
+  reminderFilter.value = reminderFilter.value === "failed" ? "" : "failed";
   page.value = 1;
   await fetchReservations();
 };
