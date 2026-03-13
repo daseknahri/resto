@@ -101,7 +101,13 @@ const sanitizeProfilePayload = (payload) => {
 const isSlugConflict = (err) =>
   err?.response?.status === 400 &&
   Array.isArray(err?.response?.data?.slug) &&
-  err.response.data.slug.some((m) => String(m).toLowerCase().includes("already exists"));
+  err.response.data.slug.length > 0;
+
+const normalizeCurrency = (value) => {
+  const cleaned = String(value || "USD").trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(cleaned)) return cleaned;
+  return "USD";
+};
 
 const withSlugRetry = async ({ requestFn, baseSlug, maxLen }) => {
   const cleanBase = (baseSlug || "item").replace(/^-+|-+$/g, "") || "item";
@@ -146,7 +152,7 @@ export const categoryApi = {
       name_i18n: normalizeI18nMap(cat.name_i18n),
       description: cat.description || "",
       description_i18n: normalizeI18nMap(cat.description_i18n),
-      image_url: cat.image_url || "",
+      image_url: normalizeOptionalUrl(cat.image_url),
       position: Number(cat.position) || 0,
       is_published: cat.is_published ?? true,
     };
@@ -179,15 +185,16 @@ export const dishApi = {
   },
   async upsert(dish) {
     const baseSlug = slugify(dish.name || dish.slug || "dish");
+    const categoryId = Number(dish.category);
     const payload = {
-      category: dish.category,
-      name: dish.name || "",
+      category: Number.isFinite(categoryId) && categoryId > 0 ? categoryId : dish.category,
+      name: String(dish.name || "").trim(),
       name_i18n: normalizeI18nMap(dish.name_i18n),
-      description: dish.description || "",
+      description: String(dish.description || "").trim(),
       description_i18n: normalizeI18nMap(dish.description_i18n),
       price: Number(dish.price) || 0,
-      currency: dish.currency || "USD",
-      image_url: dish.image_url || "",
+      currency: normalizeCurrency(dish.currency),
+      image_url: normalizeOptionalUrl(dish.image_url),
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
     };
