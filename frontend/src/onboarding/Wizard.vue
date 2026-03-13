@@ -1,40 +1,13 @@
 ﻿<template>
   <div class="min-h-screen bg-slate-950 px-4 py-6 text-slate-50 ui-safe-bottom">
     <div class="mx-auto max-w-6xl space-y-6">
-      <header class="ui-workspace-stage ui-fade-up overflow-hidden p-0">
-        <div class="grid gap-6 p-5 md:grid-cols-[1.15fr,0.85fr] md:p-6">
-          <div class="space-y-3">
-            <span class="ui-chip-strong w-fit">{{ t("onboardingWizard.kicker") }}</span>
-            <div>
-              <h1 class="ui-display text-3xl font-semibold text-white md:text-4xl">{{ t("onboardingWizard.title") }}</h1>
-              <p class="mt-2 max-w-2xl text-sm leading-7 text-slate-300">{{ t("onboardingWizard.footerHint") }}</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="ui-data-strip">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</span>
-              <span class="ui-data-strip">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</span>
-            </div>
-            <div class="h-2 overflow-hidden rounded-full bg-slate-900/80">
-              <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${progressPct}%` }"></div>
-            </div>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
-            <article class="ui-stat-tile">
-              <p class="ui-stat-label">{{ t("common.status") }}</p>
-              <p class="ui-stat-value text-2xl">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</p>
-              <p class="ui-stat-note">{{ t("onboardingWizard.steps.publish.title") }}</p>
-            </article>
-            <article class="ui-stat-tile">
-              <p class="ui-stat-label">{{ t("common.next") }}</p>
-              <p class="ui-stat-value text-2xl">{{ current }}/{{ steps.length }}</p>
-              <p class="ui-stat-note">{{ t(steps[Math.max(current - 1, 0)]?.titleKey || steps[0].titleKey) }}</p>
-            </article>
-            <article class="ui-stat-tile">
-              <p class="ui-stat-label">{{ t("common.saved") }}</p>
-              <p class="ui-stat-value text-2xl">{{ progressPct }}%</p>
-              <p class="ui-stat-note">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</p>
-            </article>
-          </div>
+      <header class="ui-fade-up space-y-2 px-1">
+        <p class="ui-kicker">{{ t("onboardingWizard.kicker") }}</p>
+        <h1 class="ui-display text-3xl font-semibold text-white md:text-4xl">{{ t("onboardingWizard.title") }}</h1>
+        <p class="max-w-3xl text-sm text-slate-300">{{ t("onboardingWizard.footerHint") }}</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="ui-data-strip">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</span>
+          <span class="ui-data-strip">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</span>
         </div>
       </header>
 
@@ -47,25 +20,7 @@
             </button>
           </div>
 
-          <div class="ui-command-deck mt-4 space-y-3">
-            <div class="space-y-1.5">
-              <p class="ui-kicker">{{ t("common.next") }}</p>
-              <h2 class="text-lg font-semibold text-white">{{ currentStepTitle }}</h2>
-              <p class="text-sm text-slate-300">{{ currentStepDescription }}</p>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              <article class="ui-orbit-card p-3.5">
-                <p class="ui-stat-label">{{ t("common.status") }}</p>
-                <p class="mt-2 text-lg font-semibold text-white">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</p>
-              </article>
-              <article class="ui-orbit-card p-3.5">
-                <p class="ui-stat-label">{{ t("common.saved") }}</p>
-                <p class="mt-2 text-lg font-semibold text-[var(--color-secondary)]">{{ progressPct }}%</p>
-              </article>
-            </div>
-          </div>
-
-          <div class="ui-scroll-row max-w-full lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
+          <div class="ui-scroll-row mt-4 max-w-full lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
             <button
               v-for="step in steps"
               :key="step.id"
@@ -132,9 +87,6 @@ const mapping = {
 };
 const currentComponent = computed(() => mapping[current.value]);
 const progressPct = computed(() => Math.round((current.value / steps.length) * 100));
-const currentStep = computed(() => steps.find((step) => step.id === current.value) || steps[0]);
-const currentStepTitle = computed(() => t(currentStep.value?.titleKey || steps[0].titleKey));
-const currentStepDescription = computed(() => t(currentStep.value?.descriptionKey || steps[0].descriptionKey));
 const stepStorageKey = computed(() => {
   const slug = tenant.meta?.slug || "tenant";
   return `resto:onboarding-step:${slug}`;
