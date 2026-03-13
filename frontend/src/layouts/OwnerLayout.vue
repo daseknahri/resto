@@ -2,8 +2,8 @@
   <div class="ui-shell">
     <header class="ui-header static md:sticky md:top-0 md:z-30">
       <div class="mx-auto w-full max-w-7xl px-4 py-2 md:py-3 ui-fade-up">
-        <div class="ui-workspace-stage space-y-3 p-3 md:p-4">
-          <div class="relative flex items-center justify-between gap-2 md:gap-3">
+        <div class="ui-workspace-stage p-3 md:p-4">
+          <div class="relative flex items-center justify-between gap-2 md:grid md:grid-cols-[minmax(0,1fr)_minmax(420px,2fr)_auto] md:items-center md:gap-4">
             <div class="flex min-w-0 items-center gap-3">
               <img
                 v-if="tenantLogo"
@@ -20,25 +20,25 @@
               </div>
             </div>
 
+            <div class="owner-main-nav hidden md:grid">
+              <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'">
+                {{ t("ownerLayout.dashboard") }}
+              </RouterLink>
+              <RouterLink to="/owner/onboarding" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/onboarding')">
+                {{ t("ownerLayout.menuBuilder") }}
+              </RouterLink>
+              <RouterLink to="/owner/tables" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/tables')">
+                {{ t("ownerLayout.tablesQr") }}
+              </RouterLink>
+              <RouterLink to="/owner/reservations" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/reservations')">
+                {{ t("ownerLayout.reservations") }}
+              </RouterLink>
+            </div>
+
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <LanguageSwitcher compact dropdown />
               <button class="owner-signout-btn" @click="signOut">{{ t("common.signOut") }}</button>
             </div>
-          </div>
-
-          <div class="owner-main-nav hidden md:grid">
-            <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'">
-              {{ t("ownerLayout.dashboard") }}
-            </RouterLink>
-            <RouterLink to="/owner/onboarding" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/onboarding')">
-              {{ t("ownerLayout.menuBuilder") }}
-            </RouterLink>
-            <RouterLink to="/owner/tables" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/tables')">
-              {{ t("ownerLayout.tablesQr") }}
-            </RouterLink>
-            <RouterLink to="/owner/reservations" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/reservations')">
-              {{ t("ownerLayout.reservations") }}
-            </RouterLink>
           </div>
         </div>
       </div>

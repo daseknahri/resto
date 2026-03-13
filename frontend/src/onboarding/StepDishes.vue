@@ -18,25 +18,23 @@
 
     <template v-else>
       <div class="ui-section-band space-y-3 rounded-[24px] p-4">
-        <div class="flex flex-wrap items-center gap-2">
-          <button
-            v-for="category in sortedCategoryOptions"
-            :key="category.id"
-            type="button"
-            class="ui-pill-nav text-xs"
-            :class="String(category.id) === String(activeCategoryId) ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
-            @click="setActiveCategory(category.id)"
-          >
-            {{ category.name }} ({{ dishCountForCategory(category.id) }})
+        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+          <div class="space-y-1">
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
+            <select v-model="activeCategoryId" class="ui-input border-slate-700 bg-slate-950/70">
+              <option v-for="category in sortedCategoryOptions" :key="category.id" :value="String(category.id)">
+                {{ category.name }} ({{ dishCountForCategory(category.id) }})
+              </option>
+            </select>
+          </div>
+          <button type="button" class="ui-btn-outline px-3 py-2 text-xs" :disabled="!hasPreviousCategory" @click="goToPreviousCategory">
+            {{ t("stepDishes.previousCategory") }}
+          </button>
+          <button type="button" class="ui-btn-outline px-3 py-2 text-xs" :disabled="!hasNextCategory" @click="goToNextCategory">
+            {{ t("stepDishes.nextCategory") }}
           </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!hasPreviousCategory" @click="goToPreviousCategory">
-            {{ t("stepDishes.previousCategory") }}
-          </button>
-          <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!hasNextCategory" @click="goToNextCategory">
-            {{ t("stepDishes.nextCategory") }}
-          </button>
           <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
           <span class="ui-data-strip">{{ activeCategoryDishes.length }} {{ t("common.dishes") }}</span>
         </div>
