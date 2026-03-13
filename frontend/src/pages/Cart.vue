@@ -479,41 +479,6 @@
       </aside>
     </div>
 
-    <div
-      v-if="!isBrowseOnlyPlan && cart.items.length"
-      class="fixed bottom-[5.15rem] left-2.5 right-2.5 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-2.5 shadow-xl shadow-black/40 backdrop-blur sm:hidden"
-    >
-      <div class="flex items-center justify-between gap-2">
-        <div>
-          <p class="text-xs text-slate-400">{{ t('cartPage.total') }}</p>
-          <p class="text-lg font-semibold text-[var(--color-secondary)]">
-            {{ formatCurrency(cart.total, currency) }}
-          </p>
-          <p class="text-[11px] text-slate-500">
-            {{ itemCountLabel(cart.count) }}
-          </p>
-        </div>
-        <button
-          v-if="cart.canCheckout"
-          class="ui-btn-primary px-4 py-2 text-sm"
-          :disabled="processingCheckout"
-          @click="startCheckout"
-        >
-          {{
-            processingCheckout ? t('common.loading') : t('cartPage.checkout')
-          }}
-        </button>
-        <button
-          v-else-if="cart.canWhatsapp"
-          class="ui-btn-primary px-4 py-2 text-sm"
-          :disabled="sendingWhatsapp"
-          @click="openWhatsApp"
-        >
-          {{ sendingWhatsapp ? t('common.loading') : t('cartPage.whatsapp') }}
-        </button>
-      </div>
-    </div>
-
     <Teleport to="body">
       <div
         v-if="showMapModal"

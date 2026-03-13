@@ -1,62 +1,32 @@
 <template>
-  <div class="space-y-4 px-4 py-4 ui-safe-bottom">
+  <div class="space-y-3 px-3 py-3 pb-24 sm:space-y-4 sm:px-4 sm:py-4 ui-safe-bottom">
     <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
-      <div class="relative overflow-hidden rounded-[1.4rem] border border-slate-800/60 bg-slate-950/60">
-        <img
-          v-if="categoryImage"
-          :src="categoryImage"
-          :alt="categoryName"
-          class="absolute inset-0 h-full w-full object-cover opacity-35"
-          loading="lazy"
-        />
-        <div class="relative space-y-2 p-4">
-          <p class="ui-kicker">{{ t("category.kicker") }}</p>
-          <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-          <p class="text-sm text-slate-300">{{ categoryDescription }}</p>
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong">{{ t("category.dishesAvailable", { count: filteredDishes.length }) }}</span>
-            <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline px-3 py-1.5 text-xs">
-              {{ t("customerLayout.navMenu") }}
-            </RouterLink>
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p class="ui-kicker">{{ t("category.kicker") }}</p>
+            <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
+            <p class="text-sm text-slate-300">{{ categoryDescription }}</p>
           </div>
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline px-3 py-1.5 text-xs">
+            {{ t("customerLayout.navMenu") }}
+          </RouterLink>
+        </div>
+
+        <div class="relative">
+          <input v-model.trim="search" class="ui-input pr-12" :placeholder="t('category.searchPlaceholder')" />
+          <button
+            v-if="search"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+            @click="search = ''"
+          >
+            {{ t("common.clear") }}
+          </button>
         </div>
       </div>
     </header>
 
-    <section class="ui-glass ui-reveal p-3 md:p-4" style="--ui-delay: 60ms">
-      <div class="grid gap-3 md:grid-cols-[1fr,auto]">
-        <input
-          v-model.trim="search"
-          class="ui-input"
-          :placeholder="t('category.searchPlaceholder')"
-        />
-        <div class="ui-scroll-row">
-          <button
-            v-for="filter in filterOptions"
-            :key="filter.key"
-            class="ui-pill-nav inline-flex items-center gap-2 whitespace-nowrap"
-            :class="activeFilter === filter.key ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
-            @click="activeFilter = filter.key"
-          >
-            <span>{{ filter.label }}</span>
-            <span class="ui-chip bg-slate-950/75 text-[10px]">{{ filter.count }}</span>
-          </button>
-        </div>
-      </div>
-      <div class="mt-3 ui-scroll-row">
-        <RouterLink
-          v-for="category in menuCategories"
-          :key="category.slug"
-          :to="{ name: 'category', params: { slug: category.slug } }"
-          class="ui-pill-nav whitespace-nowrap"
-          :data-active="category.slug === props.slug"
-        >
-          {{ category.name }}
-        </RouterLink>
-      </div>
-    </section>
-
-    <div class="grid gap-4">
+    <div class="grid gap-3">
       <article
         v-for="dish in filteredDishes"
         :key="dish.slug"
@@ -70,19 +40,20 @@
                 <p class="truncate text-lg font-semibold text-white">{{ dish.name }}</p>
                 <p class="line-clamp-2 text-sm text-slate-300">{{ dish.description || t("dishPage.noDescription") }}</p>
               </div>
-              <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">
-                {{ formatCurrency(dish.price, dish.currency) }}
-              </p>
+              <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(dish.price, dish.currency) }}</p>
             </div>
 
             <div class="mt-auto flex items-center justify-between gap-2">
-              <span v-if="dish.variants?.length" class="ui-data-strip">
-                {{ t("dishPage.optionsCount", { count: dish.variants.length }) }}
-              </span>
-              <RouterLink
-                :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
-                class="ui-btn-outline justify-center"
+              <button
+                class="ui-btn-primary inline-flex items-center gap-2 px-3 py-2 text-sm"
+                :disabled="quickAddDisabled"
+                :class="quickAddDisabled ? 'cursor-not-allowed opacity-50' : ''"
+                @click="addDishQuick(dish)"
               >
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>{{ t("dishPage.add") }}</span>
+              </button>
+              <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="ui-btn-outline justify-center">
                 {{ t("category.viewDish") }}
               </RouterLink>
             </div>
@@ -110,13 +81,18 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
+import { useCartStore } from "../stores/cart";
 import { useMenuStore } from "../stores/menu";
+import { useTenantStore } from "../stores/tenant";
+import { useToastStore } from "../stores/toast";
 
 const props = defineProps({ slug: String });
 const menu = useMenuStore();
+const cart = useCartStore();
+const tenant = useTenantStore();
+const toast = useToastStore();
 const { formatCurrency, t } = useI18n();
 const search = ref("");
-const activeFilter = ref("all");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);
 const menuCategories = computed(() => (Array.isArray(menu.categories) ? menu.categories : []));
@@ -126,40 +102,71 @@ const categoryDescription = computed(() => {
   const description = String(currentCategory.value?.description || "").trim();
   return description || t("category.helper");
 });
-const categoryImage = computed(() => String(currentCategory.value?.image_url || "").trim());
-const hasSearch = computed(() => Boolean(search.value.trim()));
-const filterOptions = computed(() => [
-  { key: "all", label: categoryName.value, count: dishes.value.length },
-  { key: "vegan", label: t("dishPage.vegan"), count: dishes.value.filter((dish) => dish.is_vegan).length },
-  { key: "spicy", label: t("dishPage.spicy"), count: dishes.value.filter((dish) => dish.is_spicy).length },
-  { key: "options", label: t("dishPage.options"), count: dishes.value.filter((dish) => Array.isArray(dish.options) && dish.options.length > 0).length },
-]);
+
+const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
+const isRestaurantOpen = computed(() => tenant.resolvedMeta?.profile?.is_open !== false);
+const quickAddDisabled = computed(() => isBrowseOnlyPlan.value || !isRestaurantOpen.value);
+
 const filteredDishes = computed(() => {
   const term = search.value.toLowerCase();
   return dishes.value.filter((dish) => {
     const name = String(dish.name || "").toLowerCase();
     const description = String(dish.description || "").toLowerCase();
-    const matchesSearch = !term || name.includes(term) || description.includes(term);
-    if (!matchesSearch) return false;
-    if (activeFilter.value === "vegan") return Boolean(dish.is_vegan);
-    if (activeFilter.value === "spicy") return Boolean(dish.is_spicy);
-    if (activeFilter.value === "options") return Array.isArray(dish.options) && dish.options.length > 0;
-    return true;
+    return !term || name.includes(term) || description.includes(term);
   });
 });
+
 const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80";
+
+const addDishQuick = (dish) => {
+  if (isBrowseOnlyPlan.value) {
+    toast.show(t("dishPage.orderingDisabledForPlan"), "info");
+    return;
+  }
+  if (!isRestaurantOpen.value) {
+    toast.show(t("dishPage.restaurantCurrentlyClosed"), "error");
+    return;
+  }
+
+  const requiredOptions = Array.isArray(dish.options)
+    ? dish.options.filter((opt) => Boolean(opt.is_required))
+    : [];
+  const optionIds = requiredOptions
+    .map((opt) => Number(opt.id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b);
+  const optionSig = optionIds.join(",");
+  const extras = requiredOptions.reduce((sum, opt) => sum + Number(opt.price_delta || 0), 0);
+  const unitPrice = Number(dish.price || 0) + extras;
+  const note = requiredOptions.length
+    ? `${t("dishPage.options")}: ${requiredOptions.map((opt) => opt.name).join(", ")}`
+    : "";
+
+  cart.add({
+    key: `${dish.slug}::${optionSig}`,
+    slug: dish.slug,
+    name: dish.name,
+    price: Number(unitPrice),
+    currency: dish.currency,
+    qty: 1,
+    note,
+    option_ids: optionIds,
+    option_labels: requiredOptions.map((opt) => opt.name),
+  });
+
+  toast.show(t("dishPage.addedToCart"), "success");
+};
 
 onMounted(() => {
   if (!menuCategories.value.length) menu.fetchCategories();
-  menu.fetchDishesByCategory(props.slug);
 });
 
 watch(
   () => props.slug,
   (slug) => {
     if (!slug) return;
-    activeFilter.value = "all";
     search.value = "";
+    menu.fetchDishesByCategory(slug);
     trackEvent("category_view", { source: "customer_category", category_slug: slug }, { onceKey: `category:${slug}` });
   },
   { immediate: true }

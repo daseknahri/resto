@@ -1,19 +1,14 @@
 <template>
   <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
     <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
-      <div class="space-y-1">
-        <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
-          {{ tenantName }}
-        </h1>
-        <p class="text-xs text-slate-400 md:text-sm">{{ t('menu.intro') }}</p>
-      </div>
-    </header>
+      <div class="space-y-3">
+        <div class="space-y-1">
+          <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
+            {{ tenantName }}
+          </h1>
+          <p class="text-xs text-slate-400 md:text-sm">{{ t('menu.intro') }}</p>
+        </div>
 
-    <section
-      class="ui-glass ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+3.8rem)] z-10 space-y-2.5 p-3 md:static md:space-y-3 md:p-4"
-      style="--ui-delay: 50ms"
-    >
-      <div class="grid gap-2.5">
         <div class="relative">
           <input
             v-model.trim="search"
@@ -28,21 +23,22 @@
             {{ t('common.clear') }}
           </button>
         </div>
-      </div>
-      <div
-        v-if="categories.length"
-        class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <button
-          v-for="cat in categories.slice(0, 8)"
-          :key="`quick-${cat.slug}`"
-          class="ui-state-chip whitespace-nowrap"
-          @click="goToCategory(cat.slug)"
+
+        <div
+          v-if="categories.length"
+          class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {{ cat.name }}
-        </button>
+          <button
+            v-for="cat in categories.slice(0, 8)"
+            :key="`quick-${cat.slug}`"
+            class="ui-state-chip whitespace-nowrap"
+            @click="goToCategory(cat.slug)"
+          >
+            {{ cat.name }}
+          </button>
+        </div>
       </div>
-    </section>
+    </header>
 
     <div class="grid gap-4 sm:grid-cols-2">
       <CategoryCard
