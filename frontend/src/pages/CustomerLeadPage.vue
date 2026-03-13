@@ -45,7 +45,6 @@
     <section class="ui-glass ui-reveal p-3 md:p-5" style="--ui-delay: 120ms">
       <div class="grid gap-4 md:grid-cols-[0.92fr,1.08fr]">
         <div class="space-y-3">
-          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.helpTitle") }}</h2>
           <p class="text-sm text-slate-300">{{ t("customerLeadPage.helpText") }}</p>
           <div class="flex flex-wrap gap-2">
             <a
@@ -76,6 +75,8 @@
             >
               {{ t("customerLeadPage.googleReviews") }}
             </a>
+          </div>
+          <div v-if="socialLinks.length" class="flex flex-wrap gap-2">
             <a
               v-for="social in socialLinks"
               :key="`social-${social.key}`"
@@ -91,15 +92,7 @@
           <div v-if="lead.success" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
             {{ t("customerLeadPage.leadSuccess") }}
           </div>
-          <button
-            v-if="lead.success"
-            type="button"
-            class="ui-btn-primary ui-touch-target w-full justify-center opacity-90 sm:w-auto"
-            disabled
-          >
-            {{ t("customerLeadPage.leadSuccessCta") }}
-          </button>
-          <a v-if="reservationUrl" :href="reservationUrl" target="_blank" rel="noopener noreferrer" class="inline-flex text-sm text-[var(--color-secondary)] hover:underline" @click="trackContactClick('reservation_url')">{{ t("customerLeadPage.directBooking") }}</a>
+          <a v-if="reservationUrl" :href="reservationUrl" target="_blank" rel="noopener noreferrer" class="ui-btn-outline w-full justify-center sm:w-auto" @click="trackContactClick('reservation_url')">{{ t("customerLeadPage.directBooking") }}</a>
         </div>
 
         <form class="space-y-3 rounded-[1.2rem] border border-slate-800/70 bg-slate-950/35 p-3 md:rounded-[1.4rem] md:p-4" @submit.prevent="submitLead">

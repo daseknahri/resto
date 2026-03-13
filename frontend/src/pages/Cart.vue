@@ -21,13 +21,6 @@
           {{ t('common.clear') }}
         </button>
       </div>
-      <div class="mt-3 ui-divider"></div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ itemCountLabel(cart.count) }}</span>
-        <span v-if="tableLabelModel" class="ui-data-strip">{{
-          t('cartPage.table', { table: tableLabelModel })
-        }}</span>
-      </div>
     </header>
 
     <div
@@ -57,27 +50,6 @@
       class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),minmax(21rem,0.85fr)] xl:items-start"
     >
       <div class="space-y-2.5 sm:space-y-3">
-        <div
-          class="ui-section-band flex flex-wrap items-center justify-between gap-2.5 p-3.5 sm:p-4"
-        >
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-data-strip">{{ itemCountLabel(cart.count) }}</span>
-            <span class="ui-data-strip">{{
-              formatCurrency(cart.total, currency)
-            }}</span>
-            <span class="ui-data-strip">
-              {{
-                cart.canCheckout
-                  ? t('cartPage.checkout')
-                  : cart.canWhatsapp
-                    ? t('cartPage.whatsappHandoff')
-                    : t('cartPage.orderingDisabled')
-              }}
-            </span>
-          </div>
-          <span class="text-xs text-slate-500">{{ planLabel }}</span>
-        </div>
-
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
@@ -339,7 +311,7 @@
                   }}
                 </p>
               </div>
-              <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button
                   class="ui-btn-outline px-3 py-1.5 text-xs"
                   @click="openInAppMapPicker"
@@ -348,23 +320,13 @@
                 </button>
                 <button
                   class="ui-btn-outline px-3 py-1.5 text-xs"
-                  @click="openExternalMap"
-                >
-                  {{ t('cartPage.openExternalMap') }}
-                </button>
-                <button
-                  class="ui-btn-outline px-3 py-1.5 text-xs"
                   :disabled="!hasLocationCoords && !deliveryLocationUrl"
                   @click="clearLocation"
                 >
                   {{ t('cartPage.clearLocation') }}
                 </button>
-                <button
-                  class="ui-btn-outline px-3 py-1.5 text-xs"
-                  :disabled="!hasLocationCoords"
-                  @click="copyCoordinates"
-                >
-                  {{ t('cartPage.copyCoordinates') }}
+                <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openExternalMap">
+                  {{ t('cartPage.openExternalMap') }}
                 </button>
               </div>
               <p v-if="locationError" class="text-xs text-red-300">
@@ -463,16 +425,6 @@
               >{{ formatCurrency(cart.total, currency) }}</span
               >
             </div>
-            <p class="mt-1 text-xs text-slate-500">
-              {{ t('cartPage.channel') }}:
-              {{
-                cart.canCheckout
-                  ? t('cartPage.checkout')
-                  : cart.canWhatsapp
-                    ? t('cartPage.whatsappHandoff')
-                    : t('cartPage.orderingDisabled')
-              }}
-            </p>
           </div>
 
           <button
@@ -902,18 +854,6 @@ const clearLocation = () => {
   clearFieldError('delivery_location_url');
   clearFieldError('delivery_lat');
   clearFieldError('delivery_lng');
-};
-
-const copyCoordinates = async () => {
-  const lat = parseCoordinateValue(deliveryLat.value);
-  const lng = parseCoordinateValue(deliveryLng.value);
-  if (lat === null || lng === null) return;
-  try {
-    await navigator.clipboard.writeText(`${lat},${lng}`);
-    toast.show(t('cartPage.coordinatesCopied'), 'success');
-  } catch {
-    toast.show(t('cartPage.unableToCopyCoordinates'), 'error');
-  }
 };
 
 watch(deliveryLocationUrl, (value) => {

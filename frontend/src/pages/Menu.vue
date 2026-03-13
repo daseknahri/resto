@@ -1,22 +1,11 @@
 <template>
   <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
     <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
-      <div class="space-y-2">
-        <div class="space-y-1">
-          <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
-            {{ tenantName }}
-          </h1>
-          <p class="text-xs text-slate-400 md:text-sm">{{ t('menu.intro') }}</p>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          <span class="ui-chip-strong"
-            >{{ categories.length }} {{ t('common.categories') }}</span
-          >
-          <span class="ui-chip"
-            >{{ totalDishes }} {{ t('common.dishes') }}</span
-          >
-        </div>
+      <div class="space-y-1">
+        <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
+          {{ tenantName }}
+        </h1>
+        <p class="text-xs text-slate-400 md:text-sm">{{ t('menu.intro') }}</p>
       </div>
     </header>
 
@@ -24,7 +13,7 @@
       class="ui-glass ui-reveal ui-surface-lift sticky top-[calc(var(--safe-top)+3.8rem)] z-10 space-y-2.5 p-3 md:static md:space-y-3 md:p-4"
       style="--ui-delay: 50ms"
     >
-      <div class="grid gap-2.5 md:grid-cols-[1fr,auto] md:items-center">
+      <div class="grid gap-2.5">
         <div class="relative">
           <input
             v-model.trim="search"
@@ -37,33 +26,6 @@
             @click="clearSearch"
           >
             {{ t('common.clear') }}
-          </button>
-        </div>
-
-        <div
-          class="grid grid-cols-2 gap-1.5 text-xs text-slate-400 md:flex md:flex-wrap md:items-center md:gap-2"
-        >
-          <button
-            class="ui-pill-nav text-xs md:min-w-[7rem]"
-            :class="
-              sortBy === 'position'
-                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                : ''
-            "
-            @click="sortBy = 'position'"
-          >
-            {{ t('menu.sortOrder') }}
-          </button>
-          <button
-            class="ui-pill-nav text-xs md:min-w-[7rem]"
-            :class="
-              sortBy === 'count'
-                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                : ''
-            "
-            @click="sortBy = 'count'"
-          >
-            {{ t('menu.sortItems') }}
           </button>
         </div>
       </div>
@@ -113,11 +75,6 @@
           :key="n"
           class="ui-skeleton h-56 rounded-[1.8rem]"
         ></div>
-        <div class="ui-empty-state sm:col-span-2">
-          <p class="ui-kicker">{{ t('menu.kicker') }}</p>
-          <p class="mt-1 text-base font-semibold text-white">{{ t('menu.intro') }}</p>
-          <p class="mt-2 text-sm text-slate-400">{{ t('menu.tip') }}</p>
-        </div>
       </div>
 
       <p v-if="menu.error" class="text-sm text-red-400 sm:col-span-2">
@@ -158,7 +115,6 @@ const router = useRouter();
 const { formatCurrency, t } = useI18n();
 
 const search = ref('');
-const sortBy = ref('position');
 const placeholder =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
 const meta = computed(() => tenant.resolvedMeta || null);
@@ -180,21 +136,8 @@ const categories = computed(() => {
     return !term || name.includes(term);
   });
 
-  const sorted = [...filtered];
-  if (sortBy.value === 'count') {
-    sorted.sort((a, b) => (b.dishes?.length || 0) - (a.dishes?.length || 0));
-  } else {
-    sorted.sort((a, b) => (a.position || 0) - (b.position || 0));
-  }
-  return sorted;
+  return [...filtered].sort((a, b) => (a.position || 0) - (b.position || 0));
 });
-
-const totalDishes = computed(() =>
-  categories.value.reduce(
-    (sum, cat) => sum + Number(cat?.dishes?.length || 0),
-    0
-  )
-);
 const goToCategory = (slug) =>
   router.push({ name: 'category', params: { slug } });
 const clearSearch = () => {

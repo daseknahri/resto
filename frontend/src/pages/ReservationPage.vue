@@ -8,12 +8,6 @@
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_24%),radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_22%)]"></div>
 
             <div class="relative flex min-h-[188px] flex-col justify-end gap-2.5 p-3 md:min-h-[224px] md:gap-3 md:p-5">
-              <div class="flex flex-wrap gap-2">
-                <span class="ui-chip-strong">{{ cart.tableLabel ? t("common.reserve") : t("reservationPage.directBooking") }}</span>
-                <span class="ui-chip">{{ t("reservationPage.partySize") }} / {{ form.party_size }}</span>
-                <span v-if="form.date" class="ui-chip">{{ form.date }}</span>
-              </div>
-
               <div class="space-y-1.5">
                 <p class="ui-kicker">{{ t("reservationPage.kicker") }}</p>
                 <h1 class="ui-display text-2xl font-semibold tracking-tight text-white md:text-4xl">{{ t("reservationPage.title") }}</h1>
@@ -32,13 +26,6 @@
         </header>
 
         <section class="ui-glass ui-reveal p-3 md:p-5" style="--ui-delay: 130ms">
-          <div class="mb-4 flex flex-wrap gap-2">
-            <span class="ui-data-strip">{{ t("reservationPage.partySize") }}: {{ form.party_size }}</span>
-            <span v-if="form.date" class="ui-data-strip">{{ form.date }}</span>
-            <span v-if="form.time" class="ui-data-strip">{{ form.time }}</span>
-            <span class="ui-data-strip">{{ reservationModeLabel }}</span>
-          </div>
-
           <div class="grid gap-3 md:grid-cols-2 md:gap-4">
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.name") }}

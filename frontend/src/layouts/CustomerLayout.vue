@@ -2,25 +2,25 @@
   <div class="ui-shell">
     <header class="ui-header static md:sticky md:top-0 md:z-30">
       <div class="mx-auto w-full max-w-5xl px-4 py-2">
-        <div class="ui-workspace-stage flex flex-col gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5">
-          <div class="flex items-start justify-between gap-3">
+        <div class="ui-workspace-stage px-3 py-2.5 sm:px-4 sm:py-3">
+          <div class="flex items-center justify-between gap-3">
             <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
               <img
                 v-if="tenantLogo"
                 :src="tenantLogo"
                 :alt="`${tenantName} logo`"
-                class="h-9 w-9 rounded-xl border border-slate-700/70 object-cover shadow-lg shadow-black/30"
+                class="h-8 w-8 rounded-xl border border-slate-700/70 object-cover shadow-lg shadow-black/30 sm:h-9 sm:w-9"
                 loading="lazy"
               />
               <div class="min-w-0">
                 <p class="truncate text-base font-semibold text-slate-100 md:text-lg">{{ tenantName }}</p>
-                <p v-if="tenantTagline" class="truncate text-[11px] text-slate-400">{{ tenantTagline }}</p>
+                <p v-if="tenantTagline" class="truncate text-[10px] text-slate-400 md:text-[11px]">{{ tenantTagline }}</p>
               </div>
             </RouterLink>
 
             <div class="flex items-center gap-2">
-              <LanguageSwitcher />
-              <RouterLink to="/cart" class="relative inline-flex min-h-[2.4rem] min-w-[2.4rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-3 text-sm text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
+              <LanguageSwitcher compact dropdown />
+              <RouterLink to="/cart" class="relative inline-flex min-h-[2.15rem] min-w-[2.15rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2.5 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
                 {{ t("common.cart") }}
                 <span
                   v-if="cart.count"
@@ -31,18 +31,9 @@
               </RouterLink>
             </div>
           </div>
-
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-status-pill">
-              <span class="ui-live-dot" :class="serviceDotClass"></span>
-              {{ serviceStateLabel }}
-            </span>
-            <span class="ui-status-pill hidden sm:inline-flex">{{ orderingModeLabel }}</span>
-            <span v-if="cart.tableLabel" class="ui-data-strip">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
-          </div>
         </div>
 
-        <div class="mt-3 hidden items-center justify-between gap-4 md:flex">
+        <div class="mt-2 hidden items-center gap-4 md:flex">
           <nav class="ui-segmented max-w-fit">
             <RouterLink
               v-for="item in navItems"
@@ -57,18 +48,6 @@
               </span>
             </RouterLink>
           </nav>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-status-pill">
-              <span class="ui-live-dot bg-[var(--color-secondary)]"></span>
-              {{ currentSectionLabel }}
-            </span>
-            <span class="ui-status-pill">{{ orderingModeLabel }}</span>
-            <span v-if="cart.tableLabel" class="ui-status-pill">{{ t("customerLayout.table") }} {{ cart.tableLabel }}</span>
-            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-4 py-2 text-xs">
-              {{ t("customerLayout.navReserve") }}
-            </RouterLink>
-          </div>
         </div>
       </div>
     </header>
@@ -78,8 +57,6 @@
         {{ tenantNotice.text }}
       </div>
     </div>
-
-    <CustomerFlowRail />
 
     <main class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
@@ -119,7 +96,6 @@ import { computed, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
-import CustomerFlowRail from "../components/CustomerFlowRail.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
 import { useTenantStore } from "../stores/tenant";
@@ -133,26 +109,6 @@ const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(meta.value?.profile?.logo_url || "").trim());
 const tenantTagline = computed(() => String(meta.value?.profile?.tagline || meta.value?.profile?.description || "").trim());
-const orderingModeLabel = computed(() => {
-  const mode = String(tenant.entitlements?.ordering_mode || "browse").toLowerCase();
-  if (mode === "checkout") return t("customerLeadPage.checkout");
-  if (mode === "whatsapp") return t("customerLeadPage.whatsapp");
-  return t("customerLeadPage.browseOnly");
-});
-const serviceStateLabel = computed(() => {
-  const profile = meta.value?.profile;
-  if (!profile) return orderingModeLabel.value;
-  if (profile.is_menu_temporarily_disabled) return t("customerLayout.menuDisabledFallback");
-  return profile.is_open === false ? t("customerLeadPage.closedNow") : t("customerLeadPage.openNow");
-});
-const serviceDotClass = computed(() => {
-  const profile = meta.value?.profile;
-  if (!profile) return "bg-[var(--color-secondary)]";
-  if (profile.is_menu_temporarily_disabled) return "bg-rose-400";
-  if (profile.is_open === false) return "bg-amber-400";
-  return "bg-emerald-400";
-});
-
 const activeCustomerSection = computed(() => {
   const name = String(route.name || "");
   if (name === "customer-home") return "info";
@@ -160,13 +116,6 @@ const activeCustomerSection = computed(() => {
   if (name === "cart") return "cart";
   if (name === "reserve") return "reserve";
   return "info";
-});
-
-const currentSectionLabel = computed(() => {
-  if (activeCustomerSection.value === "menu") return t("customerLayout.navMenu");
-  if (activeCustomerSection.value === "cart") return t("customerLayout.navCart");
-  if (activeCustomerSection.value === "reserve") return t("customerLayout.navReserve");
-  return t("customerLayout.navInfo");
 });
 
 const navItems = computed(() => [
