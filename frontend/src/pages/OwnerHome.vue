@@ -1,172 +1,41 @@
 <template>
-  <section class="space-y-6 pb-24 sm:pb-6">
-    <header class="ui-workspace-stage ui-fade-up">
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.14fr),360px]">
-        <div class="space-y-5">
-          <div class="space-y-2">
-            <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-            <h2 class="ui-page-title ui-display">{{ t("ownerHome.title") }}</h2>
-            <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ t("ownerHome.description") }}</p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-            <span class="ui-chip">{{ planModeLabel }}</span>
-            <span class="ui-data-strip">{{ t("ownerHome.readiness") }}: {{ readinessScore }}%</span>
-            <span class="ui-data-strip">{{ categoriesCount }} {{ t("common.categories") }}</span>
-            <span class="ui-data-strip">{{ dishesCount }} {{ t("common.dishes") }}</span>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
-            <RouterLink to="/owner/onboarding" class="ui-btn-primary px-5 py-2.5">
-              {{ t("ownerHome.openMenuBuilder") }}
-            </RouterLink>
-            <RouterLink to="/menu" class="ui-btn-outline px-5 py-2.5">
-              {{ t("ownerLayout.publicPreview") }}
-            </RouterLink>
-            <button class="ui-btn-outline px-5 py-2.5" @click="copyMenuUrl">
-              {{ t("ownerHome.copyPublicUrl") }}
-            </button>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <div class="ui-action-tile">
-              <p class="ui-stat-label">{{ t("ownerHome.launchProgress") }}</p>
-              <div class="mt-3 flex items-center justify-between gap-3">
-                <p class="text-3xl font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</p>
-                <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'">
-                  {{ published ? t("ownerHome.published") : t("ownerHome.draft") }}
-                </span>
-              </div>
-              <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
-                <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${readinessScore}%` }"></div>
-              </div>
-            </div>
-
-            <div class="ui-action-tile">
-              <p class="ui-stat-label">{{ t("ownerHome.state") }}</p>
-              <p class="mt-3 text-xl font-semibold" :class="published ? 'text-emerald-300' : 'text-amber-300'">
-                {{ published ? t("ownerHome.published") : t("ownerHome.draft") }}
-              </p>
-              <p class="mt-2 text-sm text-slate-300">{{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}</p>
-              <p class="mt-1 text-xs" :class="isBrowseOnlyPlan ? 'text-sky-300' : 'text-slate-400'">
-                {{ planModeLabel }}
-              </p>
-            </div>
-
-            <div class="ui-action-tile">
-              <p class="ui-stat-label">{{ t("ownerHome.quickActions") }}</p>
-              <div class="mt-3 flex flex-col gap-2">
-                <button class="ui-btn-outline w-full justify-between px-4 py-2 text-xs" :disabled="loading" @click="refresh">
-                  <span>{{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}</span>
-                  <span class="text-slate-400">{{ t("ownerHome.readiness") }}</span>
-                </button>
-                <button class="ui-btn-outline w-full justify-between px-4 py-2 text-xs" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
-                  <span>{{ upgradeLoading ? t("ownerHome.loadingRequests") : t("ownerHome.refreshRequests") }}</span>
-                  <span class="text-slate-400">{{ upgradeRequests.length }}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
-          <p v-if="copied" class="text-xs text-emerald-300">{{ t("ownerHome.menuUrlCopied") }}</p>
-        </div>
-
-        <aside class="ui-command-deck ui-fade-up space-y-4">
-          <div class="space-y-1.5">
-            <p class="ui-kicker">{{ t("ownerHome.quickActions") }}</p>
-            <h3 class="text-xl font-semibold text-white">{{ t("ownerHome.launchChecklist") }}</h3>
-            <p class="text-sm text-slate-300">{{ t("ownerHome.readinessHint") }}</p>
-          </div>
-
-          <article class="ui-action-tile space-y-3">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="ui-stat-label">{{ t("ownerLayout.publicPreview") }}</p>
-                <p class="mt-2 break-all text-sm font-medium text-white">{{ menuUrl }}</p>
-              </div>
-              <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'">
-                {{ published ? t("ownerHome.published") : t("ownerHome.draft") }}
-              </span>
-            </div>
-            <div class="grid gap-2 sm:grid-cols-2">
-              <RouterLink to="/menu" class="ui-btn-outline justify-center text-xs">
-                {{ t("ownerLayout.publicPreview") }}
-              </RouterLink>
-              <button class="ui-btn-outline justify-center text-xs" @click="copyMenuUrl">
-                {{ t("ownerHome.copyPublicUrl") }}
-              </button>
-            </div>
-          </article>
-
-          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <RouterLink to="/owner/onboarding" class="ui-orbit-card ui-surface-lift block p-4">
-              <p class="ui-kicker">{{ t("ownerLayout.menuBuilder") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ categoriesCount }} / {{ dishesCount }}</p>
-              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.launchProgress") }}</p>
-            </RouterLink>
-            <RouterLink to="/owner/tables" class="ui-orbit-card ui-surface-lift block p-4">
-              <p class="ui-kicker">{{ t("ownerLayout.tablesQr") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ published ? t("ownerHome.ready") : t("ownerHome.pending") }}</p>
-              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.menuPublished") }}</p>
-            </RouterLink>
-            <RouterLink to="/owner/reservations" class="ui-orbit-card ui-surface-lift block p-4">
-              <p class="ui-kicker">{{ t("ownerLayout.reservations") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ upgradeRequests.length }}</p>
-              <p class="mt-1 text-sm text-slate-400">{{ t("ownerHome.recentRequests") }}</p>
-            </RouterLink>
-          </div>
-        </aside>
+  <section class="space-y-5 pb-20 sm:pb-6">
+    <article class="ui-workspace-stage ui-fade-up space-y-4 p-4 md:p-5">
+      <div class="space-y-2">
+        <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
+        <h2 class="ui-page-title ui-display">{{ t("ownerHome.title") }}</h2>
+        <p class="max-w-3xl text-sm leading-6 text-slate-300">{{ t("ownerHome.description") }}</p>
       </div>
-    </header>
 
-    <article class="ui-hero-ribbon ui-fade-up overflow-hidden">
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr),380px]">
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <p class="ui-kicker">{{ nextWorkspaceAction.kicker }}</p>
-            <h3 class="text-2xl font-semibold text-white">{{ nextWorkspaceAction.title }}</h3>
-            <p class="max-w-3xl text-sm leading-7 text-slate-300">{{ nextWorkspaceAction.description }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-            <span class="ui-chip">{{ planModeLabel }}</span>
-            <span class="ui-data-strip">{{ t("ownerHome.readiness") }} {{ readinessScore }}%</span>
-          </div>
-          <div class="flex flex-wrap gap-3">
-            <RouterLink :to="nextWorkspaceAction.to" class="ui-btn-primary px-5 py-2.5">
-              {{ nextWorkspaceAction.cta }}
-            </RouterLink>
-            <RouterLink to="/menu" class="ui-btn-outline px-5 py-2.5">
-              {{ t("ownerLayout.publicPreview") }}
-            </RouterLink>
-          </div>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-          <article
-            v-for="card in commandDeckCards"
-            :key="card.label"
-            class="ui-focus-card"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="ui-kicker">{{ card.label }}</p>
-                <p class="mt-2 text-lg font-semibold text-white">{{ card.value }}</p>
-                <p class="mt-1 text-sm text-slate-400">{{ card.note }}</p>
-              </div>
-              <RouterLink :to="card.to" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
-                {{ card.actionLabel }}
-              </RouterLink>
-            </div>
-          </article>
-        </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+        <span class="ui-chip">{{ planModeLabel }}</span>
+        <span class="ui-data-strip">{{ t("ownerHome.readiness") }}: {{ readinessScore }}%</span>
+        <span class="ui-data-strip hidden sm:inline-flex">{{ categoriesCount }} {{ t("common.categories") }}</span>
+        <span class="ui-data-strip hidden sm:inline-flex">{{ dishesCount }} {{ t("common.dishes") }}</span>
       </div>
+
+      <div class="flex flex-wrap gap-3">
+        <RouterLink to="/owner/onboarding" class="ui-btn-primary px-5 py-2.5">
+          {{ t("ownerHome.openMenuBuilder") }}
+        </RouterLink>
+        <RouterLink to="/menu" class="ui-btn-outline px-5 py-2.5">
+          {{ t("ownerLayout.publicPreview") }}
+        </RouterLink>
+        <button class="ui-btn-outline px-5 py-2.5" @click="copyMenuUrl">
+          {{ t("ownerHome.copyPublicUrl") }}
+        </button>
+        <button class="ui-btn-outline hidden sm:inline-flex px-5 py-2.5" :disabled="loading" @click="refresh">
+          {{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}
+        </button>
+      </div>
+
+      <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
+      <p v-if="copied" class="text-xs text-emerald-300">{{ t("ownerHome.menuUrlCopied") }}</p>
     </article>
 
-    <article class="ui-section-band space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+    <article class="ui-section-band space-y-4 p-4">
+      <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
           <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
@@ -201,43 +70,7 @@
       </div>
     </article>
 
-    <article class="ui-context-band">
-      <div class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),420px]">
-        <div class="space-y-3">
-          <div class="space-y-1">
-            <p class="ui-kicker">{{ nextWorkspaceAction.kicker }}</p>
-            <p class="text-lg font-semibold text-white">{{ nextWorkspaceAction.title }}</p>
-            <p class="text-sm text-slate-300">{{ nextWorkspaceAction.description }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-route-badge">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-            <span class="ui-route-badge">{{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}</span>
-            <span class="ui-route-badge">{{ planModeLabel }}</span>
-          </div>
-        </div>
-        <div class="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-          <article class="ui-context-stat">
-            <p class="ui-kicker">{{ t("ownerHome.launchProgress") }}</p>
-            <p class="mt-1 text-sm font-semibold text-white">{{ readinessScore }}%</p>
-            <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
-          </article>
-          <article class="ui-context-stat">
-            <p class="ui-kicker">{{ t("ownerLayout.publicPreview") }}</p>
-            <p class="mt-1 truncate text-sm font-semibold text-white">{{ menuUrl }}</p>
-            <button class="mt-2 inline-flex text-xs text-brand-secondary hover:underline" @click="copyMenuUrl">{{ t("ownerHome.copyPublicUrl") }}</button>
-          </article>
-          <article class="ui-context-stat">
-            <p class="ui-kicker">{{ t("ownerHome.quickActions") }}</p>
-            <RouterLink :to="nextWorkspaceAction.to" class="mt-1 inline-flex text-sm font-semibold text-brand-secondary hover:underline">
-              {{ nextWorkspaceAction.cta }}
-            </RouterLink>
-            <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.analyticsSubtitle") }}</p>
-          </article>
-        </div>
-      </div>
-    </article>
-
-    <article class="ui-command-deck space-y-4">
+    <article class="ui-command-deck space-y-4 p-4">
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-lg font-semibold">{{ t("ownerHome.analyticsTitle") }}</h3>
         <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
@@ -264,17 +97,9 @@
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
           <ul class="mt-3 space-y-2 text-sm text-slate-200">
-            <li v-for="item in topCategories" :key="item.category_slug" class="space-y-1.5">
-              <div class="flex items-center justify-between gap-3">
-                <span>{{ humanizeSlug(item.category_slug) }}</span>
-                <span class="text-slate-400">{{ item.count }}</span>
-              </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <div
-                  class="h-full rounded-full bg-[var(--color-secondary)]"
-                  :style="{ width: `${scaledCount(item.count, topCategoryPeak)}%` }"
-                ></div>
-              </div>
+            <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between gap-3">
+              <span>{{ humanizeSlug(item.category_slug) }}</span>
+              <span class="text-slate-400">{{ item.count }}</span>
             </li>
             <li v-if="!topCategories.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
@@ -282,17 +107,9 @@
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
           <ul class="mt-3 space-y-2 text-sm text-slate-200">
-            <li v-for="item in topDishes" :key="item.dish_slug" class="space-y-1.5">
-              <div class="flex items-center justify-between gap-3">
-                <span>{{ humanizeSlug(item.dish_slug) }}</span>
-                <span class="text-slate-400">{{ item.count }}</span>
-              </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <div
-                  class="h-full rounded-full bg-cyan-400/80"
-                  :style="{ width: `${scaledCount(item.count, topDishPeak)}%` }"
-                ></div>
-              </div>
+            <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between gap-3">
+              <span>{{ humanizeSlug(item.dish_slug) }}</span>
+              <span class="text-slate-400">{{ item.count }}</span>
             </li>
             <li v-if="!topDishes.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
@@ -300,7 +117,7 @@
       </div>
     </article>
 
-    <article class="ui-command-deck space-y-4">
+    <article class="ui-command-deck space-y-4 p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 class="text-lg font-semibold">{{ t("ownerHome.purchaseUpgrade") }}</h3>
@@ -444,10 +261,8 @@ const analyticsSummary = ref({
 
 const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);
-const isOpen = computed(() => profile.value?.is_open !== false);
 const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsapp = computed(() => tenant.entitlements?.can_whatsapp_order === true);
-const isBrowseOnlyPlan = computed(() => !canCheckout.value && !canWhatsapp.value);
 const planModeLabel = computed(() => {
   if (canCheckout.value) return t("ownerHome.checkoutEnabled");
   if (canWhatsapp.value) return t("ownerHome.whatsappEnabled");
@@ -480,12 +295,10 @@ const interactionRateLabel = computed(() =>
     maximumFractionDigits: 1,
   })}%`
 );
-const topCategories = computed(() => analyticsSummary.value?.top_categories || []);
-const topDishes = computed(() => analyticsSummary.value?.top_dishes || []);
+const topCategories = computed(() => (analyticsSummary.value?.top_categories || []).slice(0, 6));
+const topDishes = computed(() => (analyticsSummary.value?.top_dishes || []).slice(0, 6));
 const pendingUpgrade = computed(() => upgradeRequests.value.find((request) => request.status === "pending") || null);
 const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgradeMeta.value.has_pending_request === true);
-const topCategoryPeak = computed(() => Math.max(1, ...topCategories.value.map((item) => Number(item?.count || 0))));
-const topDishPeak = computed(() => Math.max(1, ...topDishes.value.map((item) => Number(item?.count || 0))));
 const readinessItems = computed(() => [
   {
     label: t("ownerHome.brandContactPresent"),
@@ -524,52 +337,6 @@ const readinessItems = computed(() => [
   },
 ]);
 
-const nextWorkspaceAction = computed(() => {
-  if (!hasContact.value || !hasTheme.value) {
-    return {
-      kicker: t("ownerLayout.menuBuilder"),
-      title: t("ownerHome.brandContactPresent"),
-      description: t("ownerHome.readinessHint"),
-      cta: t("ownerHome.openMenuBuilder"),
-      to: "/owner/onboarding",
-    };
-  }
-  if (categoriesCount.value === 0) {
-    return {
-      kicker: t("ownerLayout.menuBuilder"),
-      title: t("ownerHome.categoriesAdded"),
-      description: t("ownerHome.pushTo100"),
-      cta: t("ownerHome.openMenuBuilder"),
-      to: "/owner/onboarding",
-    };
-  }
-  if (dishesCount.value === 0) {
-    return {
-      kicker: t("ownerLayout.menuBuilder"),
-      title: t("ownerHome.dishesAdded"),
-      description: t("ownerHome.pushTo100"),
-      cta: t("ownerHome.openMenuBuilder"),
-      to: "/owner/onboarding",
-    };
-  }
-  if (!published.value) {
-    return {
-      kicker: t("ownerHome.launchProgress"),
-      title: t("ownerHome.menuPublished"),
-      description: t("ownerHome.readinessHint"),
-      cta: t("ownerHome.openMenuBuilder"),
-      to: "/owner/onboarding",
-    };
-  }
-  return {
-    kicker: t("ownerLayout.tablesQr"),
-    title: t("ownerHome.ready"),
-    description: t("ownerHome.menuPublished"),
-    cta: t("ownerLayout.tablesQr"),
-    to: "/owner/tables",
-  };
-});
-
 const refresh = async () => {
   loading.value = true;
   error.value = "";
@@ -606,29 +373,6 @@ const hydrateOwnerInsights = async () => {
 };
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
-const commandDeckCards = computed(() => [
-  {
-    label: t("ownerLayout.publicPreview"),
-    value: published.value ? t("ownerHome.published") : t("ownerHome.draft"),
-    note: menuUrl.value,
-    actionLabel: t("ownerLayout.publicPreview"),
-    to: "/menu",
-  },
-  {
-    label: t("ownerLayout.reservations"),
-    value: String(upgradeRequests.value.length),
-    note: t("ownerHome.recentRequests"),
-    actionLabel: t("ownerLayout.reservations"),
-    to: "/owner/reservations",
-  },
-  {
-    label: t("ownerHome.purchaseUpgrade"),
-    value: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic",
-    note: t("ownerHome.currentPlan", { plan: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }),
-    actionLabel: t("ownerHome.purchaseTier"),
-    to: "/owner",
-  },
-]);
 
 const copyMenuUrl = async () => {
   try {
@@ -732,13 +476,6 @@ const humanizeSlug = (value) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-
-const scaledCount = (value, max) => {
-  const numeric = Number(value || 0);
-  const denominator = Number(max || 1);
-  if (!numeric || denominator <= 0) return 6;
-  return Math.max(10, Math.min(100, Math.round((numeric / denominator) * 100)));
-};
 
 onMounted(async () => {
   await refresh();

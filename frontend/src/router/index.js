@@ -25,7 +25,6 @@ const ReservationPage = () => import("../pages/ReservationPage.vue");
 const LeadCapture = () => import("../pages/LeadCapture.vue");
 
 const OwnerHome = () => import("../pages/OwnerHome.vue");
-const OwnerTables = () => import("../pages/OwnerTables.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 
@@ -93,9 +92,7 @@ const routes = [
       },
       {
         path: "tables",
-        name: "owner-tables",
-        component: OwnerTables,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+        redirect: { name: "owner-home" },
       },
       {
         path: "reservations",
