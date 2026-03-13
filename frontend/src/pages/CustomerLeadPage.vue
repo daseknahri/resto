@@ -13,9 +13,9 @@
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.18),transparent_24%)]"></div>
 
         <div class="relative flex min-h-[calc(100vh-9.5rem)] flex-col justify-between gap-4 p-4 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)] md:p-6">
-          <div class="space-y-4">
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex min-w-0 items-center gap-3">
+          <div class="mx-auto w-full max-w-3xl space-y-4 text-center">
+            <div class="flex flex-col items-center gap-3">
+              <div class="flex min-w-0 items-center justify-center gap-3">
                 <img
                   v-if="logoImage"
                   :src="logoImage"
@@ -24,14 +24,14 @@
                   loading="lazy"
                 />
                 <div class="min-w-0 space-y-1">
-                  <h1 class="ui-display truncate text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ tenantName }}</h1>
-                  <p class="truncate text-sm text-slate-300">{{ tenantDescription }}</p>
+                  <h1 class="ui-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ tenantName }}</h1>
+                  <p class="text-sm text-slate-300">{{ tenantDescription }}</p>
                 </div>
               </div>
               <span class="ui-chip-strong shrink-0">{{ statusLabel }}</span>
             </div>
 
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-wrap justify-center gap-2">
               <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm">
                 <span aria-hidden="true">
                   <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M6 12h12M9 17h6"/></svg>
@@ -59,9 +59,9 @@
               </a>
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-2 text-center">
               <p class="text-sm text-slate-200">{{ t("customerLeadPage.helpText") }}</p>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap justify-center gap-2">
                 <a
                   v-if="whatsappHref"
                   :href="whatsappHref"
@@ -95,7 +95,7 @@
                 </a>
               </div>
 
-              <div v-if="socialLinks.length" class="flex flex-wrap gap-2">
+              <div v-if="socialLinks.length" class="flex flex-wrap justify-center gap-2">
                 <a
                   v-for="social in socialLinks"
                   :key="`social-${social.key}`"
@@ -116,7 +116,7 @@
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+          <div class="flex flex-wrap items-center justify-center gap-2 text-center text-xs text-slate-300">
             <span>{{ locationLine || t("customerLeadPage.fallbackDescription") }}</span>
             <span class="ui-chip">{{ t("customerLeadPage.responseValue") }}</span>
           </div>

@@ -14,7 +14,7 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <RouterLink :to="{ name: 'category', params: { slug: props.category } }" class="ui-btn-outline justify-center">
-          {{ t('common.backTo') }} {{ categoryName }}
+          {{ t('dishPage.backToCategory', { category: categoryName }) }}
         </RouterLink>
         <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary justify-center">
           {{ t('customerLayout.navMenu') }}
@@ -52,7 +52,7 @@
         <section class="space-y-4">
           <div class="flex flex-wrap gap-2">
             <RouterLink :to="{ name: 'category', params: { slug: props.category } }" class="ui-btn-outline justify-center text-xs sm:text-sm">
-              {{ t('common.backTo') }} {{ categoryName }}
+              {{ t('dishPage.backToCategory', { category: categoryName }) }}
             </RouterLink>
             <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
               {{ t('customerLayout.navMenu') }}
