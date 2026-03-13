@@ -1,5 +1,5 @@
 <template>
-  <div v-if="dropdown" ref="rootRef" class="relative" :aria-label="t('common.language')">
+  <div v-if="dropdown" ref="rootRef" class="relative z-[70]" :aria-label="t('common.language')">
     <button
       type="button"
       class="inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
@@ -13,7 +13,7 @@
 
     <div
       v-if="open"
-      class="absolute right-0 z-40 mt-2 min-w-[7.5rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/40 backdrop-blur"
+      class="absolute right-0 z-[80] mt-2 min-w-[8.25rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/40 backdrop-blur"
     >
       <button
         v-for="option in localeOptions"
@@ -75,11 +75,11 @@ const rootRef = ref(null);
 
 const localeFlag = (code) => {
   const map = {
-    en: "🇬🇧",
-    fr: "🇫🇷",
-    ar: "🇲🇦",
+    en: "\uD83C\uDDEC\uD83C\uDDE7",
+    fr: "\uD83C\uDDEB\uD83C\uDDF7",
+    ar: "\uD83C\uDDF2\uD83C\uDDE6",
   };
-  return map[String(code || "").toLowerCase()] || "🌐";
+  return map[String(code || "").toLowerCase()] || "\uD83C\uDF10";
 };
 
 const selectLocale = (code) => {

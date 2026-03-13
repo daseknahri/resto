@@ -208,23 +208,6 @@
       </aside>
     </div>
 
-    <div
-      v-if="!submitted"
-      class="fixed bottom-[5.15rem] left-2.5 right-2.5 z-20 rounded-2xl border border-slate-700/80 bg-slate-950/92 p-2.5 shadow-xl shadow-black/40 backdrop-blur sm:hidden"
-    >
-      <div class="mb-3 flex items-center justify-between gap-3 text-xs text-slate-300">
-        <span class="ui-state-chip" data-active="true">{{ reservationModeLabel }}</span>
-        <span class="truncate text-right">{{ reservationStateLabel }}</span>
-      </div>
-      <button
-        type="button"
-        class="ui-btn-primary w-full justify-center"
-        :disabled="lead.submitting"
-        @click="submitReservation"
-      >
-        {{ lead.submitting ? t("reservationPage.sending") : t("reservationPage.submitReservation") }}
-      </button>
-    </div>
   </div>
 </template>
 
@@ -264,11 +247,6 @@ const errors = reactive({
 
 const profile = computed(() => meta.value?.profile || {});
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
-const reservationModeLabel = computed(() => (reservationUrl.value ? t("reservationPage.directBooking") : t("customerLeadPage.responseValue")));
-const reservationStateLabel = computed(() => {
-  if (submitted.value) return t("reservationPage.requestSent");
-  return t("reservationPage.submitReservation");
-});
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
