@@ -3,7 +3,7 @@
     <header class="ui-header static md:sticky md:top-0 md:z-30">
       <div class="mx-auto w-full max-w-7xl px-4 py-2 md:py-3 ui-fade-up">
         <div class="ui-workspace-stage space-y-3 p-3 md:p-4">
-          <div class="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div class="relative flex items-center justify-between gap-2 md:gap-3">
             <div class="flex min-w-0 items-center gap-3">
               <img
                 v-if="tenantLogo"
@@ -25,12 +25,9 @@
               </div>
             </div>
 
-            <div class="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto md:justify-end">
-              <LanguageSwitcher />
-              <div class="flex items-center gap-2">
-                <RouterLink to="/menu" class="ui-btn-outline hidden md:inline-flex">{{ t("ownerLayout.publicPreview") }}</RouterLink>
-                <button class="ui-pill-nav" @click="signOut">{{ t("common.signOut") }}</button>
-              </div>
+            <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <LanguageSwitcher compact />
+              <button class="owner-signout-btn" @click="signOut">{{ t("common.signOut") }}</button>
             </div>
           </div>
 
@@ -38,7 +35,6 @@
             <RouterLink to="/owner" class="ui-segmented-button" :data-active="$route.path === '/owner'">{{ t("ownerLayout.dashboard") }}</RouterLink>
             <RouterLink to="/owner/onboarding" class="ui-segmented-button" :data-active="$route.path.startsWith('/owner/onboarding')">{{ t("ownerLayout.menuBuilder") }}</RouterLink>
             <RouterLink to="/owner/reservations" class="ui-segmented-button" :data-active="$route.path.startsWith('/owner/reservations')">{{ t("ownerLayout.reservations") }}</RouterLink>
-            <RouterLink to="/menu" class="ui-segmented-button" :data-active="$route.path === '/menu'">{{ t("ownerLayout.publicPreview") }}</RouterLink>
           </div>
         </div>
       </div>
@@ -126,5 +122,22 @@ onMounted(async () => {
 
 .owner-dock-link {
   min-height: 2.2rem;
+}
+
+.owner-signout-btn {
+  min-height: 2.1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(51, 65, 85, 0.85);
+  background: rgba(15, 23, 42, 0.6);
+  color: rgb(226, 232, 240);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.owner-signout-btn:hover {
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
 }
 </style>
