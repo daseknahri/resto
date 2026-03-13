@@ -16,25 +16,29 @@
                 <h1 class="ui-display truncate text-xl font-semibold text-white md:text-2xl">{{ tenantName }}</h1>
                 <div class="mt-1 flex flex-wrap items-center gap-2">
                   <span class="ui-data-strip hidden sm:inline-flex">{{ tenant.meta?.slug || "tenant" }}</span>
-                  <span v-if="tenant.meta?.plan?.name" class="ui-chip">
-                    {{ t("common.plan") }}:
-                    <span class="font-semibold text-slate-100">{{ tenant.meta.plan.name }}</span>
-                  </span>
-                  <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="planModeClass">{{ planModeLabel }}</span>
                 </div>
               </div>
             </div>
 
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
-              <LanguageSwitcher compact />
+              <LanguageSwitcher compact dropdown />
               <button class="owner-signout-btn" @click="signOut">{{ t("common.signOut") }}</button>
             </div>
           </div>
 
-          <div class="ui-segmented hidden md:flex">
-            <RouterLink to="/owner" class="ui-segmented-button" :data-active="$route.path === '/owner'">{{ t("ownerLayout.dashboard") }}</RouterLink>
-            <RouterLink to="/owner/onboarding" class="ui-segmented-button" :data-active="$route.path.startsWith('/owner/onboarding')">{{ t("ownerLayout.menuBuilder") }}</RouterLink>
-            <RouterLink to="/owner/reservations" class="ui-segmented-button" :data-active="$route.path.startsWith('/owner/reservations')">{{ t("ownerLayout.reservations") }}</RouterLink>
+          <div class="owner-main-nav hidden md:grid">
+            <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'">
+              {{ t("ownerLayout.dashboard") }}
+            </RouterLink>
+            <RouterLink to="/owner/onboarding" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/onboarding')">
+              {{ t("ownerLayout.menuBuilder") }}
+            </RouterLink>
+            <RouterLink to="/owner/tables" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/tables')">
+              {{ t("ownerLayout.tablesQr") }}
+            </RouterLink>
+            <RouterLink to="/owner/reservations" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/reservations')">
+              {{ t("ownerLayout.reservations") }}
+            </RouterLink>
           </div>
         </div>
       </div>
@@ -63,14 +67,18 @@
           {{ t("ownerLayout.menuBuilder") }}
         </RouterLink>
         <RouterLink
+          to="/owner/tables"
+          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[11px] leading-tight"
+          :data-active="$route.path.startsWith('/owner/tables')"
+        >
+          {{ t("ownerLayout.tablesQr") }}
+        </RouterLink>
+        <RouterLink
           to="/owner/reservations"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[11px] leading-tight"
           :data-active="$route.path.startsWith('/owner/reservations')"
         >
           {{ t("ownerLayout.reservations") }}
-        </RouterLink>
-        <RouterLink to="/menu" class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[11px] leading-tight" :data-active="$route.path === '/menu'">
-          {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
       </div>
     </nav>
@@ -91,16 +99,6 @@ const router = useRouter();
 const { t } = useI18n();
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
-const planModeLabel = computed(() => {
-  if (tenant.entitlements?.ordering_mode === "checkout") return t("ownerLayout.checkout");
-  if (tenant.entitlements?.ordering_mode === "whatsapp") return t("ownerLayout.whatsapp");
-  return t("ownerLayout.browseOnly");
-});
-const planModeClass = computed(() => {
-  if (tenant.entitlements?.ordering_mode === "checkout") return "bg-emerald-500/20 text-emerald-300";
-  if (tenant.entitlements?.ordering_mode === "whatsapp") return "bg-amber-500/20 text-amber-300";
-  return "bg-sky-500/20 text-sky-300";
-});
 
 const signOut = async () => {
   await session.signOut();
@@ -139,5 +137,41 @@ onMounted(async () => {
 .owner-signout-btn:hover {
   border-color: var(--color-secondary);
   color: var(--color-secondary);
+}
+
+.owner-main-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(3, 15, 35, 0.78));
+  padding: 0.4rem;
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.15);
+}
+
+.owner-main-nav-item {
+  min-height: 2.6rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(51, 65, 85, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgb(203, 213, 225);
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.owner-main-nav-item:hover {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(15, 23, 42, 0.72);
+  color: rgb(245, 158, 11);
+}
+
+.owner-main-nav-item[data-active="true"] {
+  border-color: rgba(245, 158, 11, 0.85);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.08));
+  color: rgb(245, 158, 11);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12) inset;
 }
 </style>
