@@ -138,14 +138,10 @@
                 {{ selectionStateLabel }}
               </span>
               <span class="ui-data-strip">{{ t('common.cart') }} / {{ cart.count }}</span>
-              <span v-if="cart.tableLabel" class="ui-data-strip">{{ t('common.reserve') }} / {{ cart.tableLabel }}</span>
             </div>
             <div class="flex flex-wrap gap-2">
               <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
                 {{ t('customerLayout.navCart') }}
-              </RouterLink>
-              <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
-                {{ t('customerLayout.navReserve') }}
               </RouterLink>
             </div>
           </div>
@@ -402,14 +398,8 @@
                     : cart.canCheckout || cart.canWhatsapp
                       ? t('dishPage.addToCart')
                       : t('dishPage.addContactToOrder')
-                }}
+                  }}
               </button>
-              <RouterLink
-                :to="{ name: 'reserve' }"
-                class="ui-btn-outline w-full justify-center"
-              >
-                {{ t('customerLayout.navReserve') }}
-              </RouterLink>
               <RouterLink
                 :to="{ name: 'cart' }"
                 class="ui-btn-outline w-full justify-center"

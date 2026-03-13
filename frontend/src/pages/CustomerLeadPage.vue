@@ -27,9 +27,6 @@
             <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary px-4 py-2 text-sm">
               {{ t("customerLayout.navMenu") }}
             </RouterLink>
-            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-outline px-4 py-2 text-sm">
-              {{ t("customerLayout.navReserve") }}
-            </RouterLink>
             <a
               v-if="whatsappHref"
               :href="whatsappHref"

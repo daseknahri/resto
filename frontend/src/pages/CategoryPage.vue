@@ -29,9 +29,7 @@
 
         <aside class="ui-command-deck ui-reveal flex flex-col gap-4 p-4 lg:sticky lg:top-24 lg:h-fit lg:p-5" style="--ui-delay: 60ms">
           <div class="space-y-1.5">
-            <p class="ui-kicker">{{ t("menu.kicker") }}</p>
             <h2 class="text-xl font-semibold text-white">{{ t("category.helper") }}</h2>
-            <p class="text-sm text-slate-300">{{ t("menu.intro") }}</p>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
@@ -95,15 +93,12 @@
             </div>
           </div>
 
-          <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
             <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
               {{ t("customerLayout.navMenu") }}
             </RouterLink>
             <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
               {{ t("customerLayout.navCart") }}
-            </RouterLink>
-            <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
-              {{ t("customerLayout.navReserve") }}
             </RouterLink>
           </div>
         </aside>
@@ -160,20 +155,17 @@
 
       <aside class="ui-command-deck ui-reveal p-4 md:p-5" style="--ui-delay: 110ms">
         <div class="space-y-1">
-          <p class="ui-kicker">{{ t("customerLeadPage.stepTwo") }}</p>
-          <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.reserveTitle") }}</h2>
-          <p class="text-sm text-slate-300">{{ t("customerLeadPage.reserveText") }}</p>
+          <p class="ui-kicker">{{ t("common.cart") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("customerLayout.navCart") }}</h2>
+          <p class="text-sm text-slate-300">{{ t("category.helper") }}</p>
         </div>
 
         <div class="mt-4 grid gap-2">
-          <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
-            {{ t("customerLayout.navReserve") }}
+          <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-primary justify-center">
+            {{ t("customerLayout.navCart") }}
           </RouterLink>
           <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
             {{ t("customerLayout.navMenu") }}
-          </RouterLink>
-          <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-outline justify-center">
-            {{ t("customerLayout.navCart") }}
           </RouterLink>
         </div>
       </aside>
@@ -235,9 +227,6 @@
         <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
           {{ t("customerLayout.navMenu") }}
         </RouterLink>
-        <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
-          {{ t("customerLayout.navReserve") }}
-        </RouterLink>
       </div>
     </div>
     <div v-if="filteredDishes.length > 1" class="ui-section-band space-y-3">
@@ -246,9 +235,6 @@
           <p class="ui-kicker">{{ categoryName }}</p>
           <h2 class="text-xl font-semibold text-white">{{ t("category.helper") }}</h2>
         </div>
-        <RouterLink :to="{ name: 'reserve' }" class="ui-btn-primary justify-center">
-          {{ t("common.reserve") }}
-        </RouterLink>
       </div>
       <div class="ui-scroll-row">
         <RouterLink
