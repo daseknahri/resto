@@ -8,6 +8,12 @@
           <p class="text-sm text-slate-300">{{ t("ownerTables.description") }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-primary" @click="openSetup('create')">
+            {{ t("ownerTables.create") }}
+          </button>
+          <button class="ui-btn-outline" @click="openSetup('bulk')">
+            {{ t("ownerTables.bulk") }}
+          </button>
           <button class="ui-btn-outline" :disabled="loading" @click="fetchTables">
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
           </button>
@@ -20,7 +26,11 @@
       </div>
     </header>
 
-    <div class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
+    <div v-if="setupOpen" class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
+        <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="setupOpen = false">{{ t("common.close") }}</button>
+      </div>
       <div class="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
           <p class="ui-kicker mb-2">{{ t("common.apply") }}</p>
@@ -127,6 +137,18 @@
         </article>
       </div>
       <p v-if="error" class="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</p>
+    </div>
+    <div
+      v-else
+      class="no-print rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/40 p-4 text-sm text-slate-300 md:p-5"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p>{{ t("ownerTables.description") }}</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-primary px-3 py-1.5 text-xs" @click="openSetup('create')">{{ t("ownerTables.createTable") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openSetup('bulk')">{{ t("ownerTables.bulkGenerate") }}</button>
+        </div>
+      </div>
     </div>
 
     <div class="no-print ui-toolbar-band p-4">
@@ -256,8 +278,8 @@
     </div>
 
     <div class="no-print fixed bottom-4 left-3 right-3 z-20 grid grid-cols-3 gap-2 sm:hidden">
-      <button class="ui-btn-primary justify-center" @click="formMode = 'create'">{{ t("ownerTables.create") }}</button>
-      <button class="ui-btn-outline justify-center" @click="formMode = 'bulk'">{{ t("ownerTables.bulk") }}</button>
+      <button class="ui-btn-primary justify-center" @click="openSetup('create')">{{ t("ownerTables.create") }}</button>
+      <button class="ui-btn-outline justify-center" @click="openSetup('bulk')">{{ t("ownerTables.bulk") }}</button>
       <button class="ui-btn-outline justify-center" :disabled="loading" @click="fetchTables">
         {{ loading ? t("ownerTables.loading") : t("common.refresh") }}
       </button>
@@ -282,6 +304,7 @@ const generating = ref(false);
 const tables = ref([]);
 const qrDataUrls = ref({});
 const error = ref("");
+const setupOpen = ref(false);
 const formMode = ref("create");
 const searchQuery = ref("");
 const statusFilter = ref("all");
@@ -415,6 +438,7 @@ const createTable = async () => {
     newTable.is_active = true;
     toast.show(t("ownerTables.created"), "success");
     await fetchTables();
+    setupOpen.value = false;
   } catch (err) {
     error.value = parseError(err, t("ownerTables.createFailed"));
     toast.show(error.value, "error");
@@ -441,6 +465,7 @@ const generateTables = async () => {
     const { data } = await api.post("/tables/bulk-generate/", payload);
     toast.show(data?.detail || t("ownerTables.generated"), "success");
     await fetchTables();
+    setupOpen.value = false;
   } catch (err) {
     error.value = parseError(err, t("ownerTables.generateFailed"));
     toast.show(error.value, "error");
@@ -748,6 +773,11 @@ const downloadHtmlPack = async () => {
 const printCards = () => {
   if (typeof window === "undefined") return;
   window.print();
+};
+
+const openSetup = (mode = "create") => {
+  formMode.value = mode;
+  setupOpen.value = true;
 };
 
 onMounted(fetchTables);
