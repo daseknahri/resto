@@ -68,10 +68,13 @@ class Domain(DomainMixin):
 class Profile(models.Model):
     tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="profile")
     tagline = models.CharField(max_length=150, blank=True)
+    tagline_i18n = models.JSONField(default=dict, blank=True)
     description = models.TextField(blank=True)
+    description_i18n = models.JSONField(default=dict, blank=True)
     phone = models.CharField(max_length=50, blank=True)
     whatsapp = models.CharField(max_length=50, blank=True)
     address = models.CharField(max_length=255, blank=True)
+    address_i18n = models.JSONField(default=dict, blank=True)
     google_maps_url = models.URLField(blank=True)
     reservation_url = models.URLField(blank=True)
     facebook_url = models.URLField(blank=True)

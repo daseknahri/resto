@@ -38,22 +38,10 @@
           <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
           <span class="ui-data-strip">{{ activeCategoryDishes.length }} {{ t("common.dishes") }}</span>
         </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
-          <p class="text-xs text-slate-400">{{ t("stepDishes.translationsHint", { count: maxTranslationLocales }) }}</p>
-          <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-            <button
-              v-for="locale in secondaryLocales"
-              :key="locale.code"
-              type="button"
-              class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-              :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-              :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-              @click="toggleTranslationLocale(locale.code)"
-            >
-              {{ locale.nativeLabel }} ({{ locale.label }})
-            </button>
-          </div>
-          <p v-else class="text-xs text-slate-500">{{ t("stepDishes.translationsUnavailable") }}</p>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <p class="text-xs text-slate-400">
+            {{ t("stepDishes.translationsHint", { count: Math.max(0, availableContentLocales.length - 1) }) }}
+          </p>
         </div>
         <div v-if="unassignedDishCount" class="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           {{ t("stepDishes.unassignedWarning", { count: unassignedDishCount }) }}
@@ -122,12 +110,27 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-400">{{ t("stepDishes.dishNamePlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`dish-name-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                    :class="dishFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="dishFieldLocales.name = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
               <input
-                v-model="editingDish.name"
+                :value="localizedDishFieldValue(editingDish, 'name', dishFieldLocales.name)"
                 class="ui-input"
                 :class="rowError(editingDish, 'name') ? 'border-red-400' : 'border-slate-700'"
                 :placeholder="t('stepDishes.dishNamePlaceholder')"
-                @input="clearRowError(editingDish.local_id, 'name')"
+                @input="setLocalizedDishFieldValue(editingDish, 'name', dishFieldLocales.name, $event.target.value)"
               />
               <p v-if="rowError(editingDish, 'name')" class="text-xs text-red-300">{{ rowError(editingDish, "name") }}</p>
             </div>
@@ -200,35 +203,32 @@
             </div>
           </div>
 
-          <textarea
-            v-model="editingDish.description"
-            rows="2"
-            class="ui-textarea"
-            :class="rowError(editingDish, 'description') ? 'border-red-400' : 'border-slate-700'"
-            :placeholder="t('stepDishes.descriptionPlaceholder')"
-            @input="clearRowError(editingDish.local_id, 'description')"
-          ></textarea>
-          <p v-if="rowError(editingDish, 'description')" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
-
-          <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepDishes.translatedContent") }}</p>
-            <div
-              v-for="localeCode in selectedTranslationLocales"
-              :key="`${editingDish.local_id}-${localeCode}`"
-              class="grid gap-2 sm:grid-cols-2"
-            >
-              <input
-                v-model="editingDish.name_i18n[localeCode]"
-                class="ui-input"
-                :placeholder="t('stepDishes.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
-              />
-              <input
-                v-model="editingDish.description_i18n[localeCode]"
-                class="ui-input"
-                :placeholder="t('stepDishes.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
-              />
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs text-slate-400">{{ t("stepDishes.descriptionPlaceholder") }}</p>
+              <div class="flex flex-wrap gap-1">
+                <button
+                  v-for="locale in availableContentLocales"
+                  :key="`dish-description-${locale.code}`"
+                  type="button"
+                  class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                  :class="dishFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                  @click="dishFieldLocales.description = locale.code"
+                >
+                  {{ locale.nativeLabel }}
+                </button>
+              </div>
             </div>
+            <textarea
+              :value="localizedDishFieldValue(editingDish, 'description', dishFieldLocales.description)"
+              rows="2"
+              class="ui-textarea"
+              :class="rowError(editingDish, 'description') ? 'border-red-400' : 'border-slate-700'"
+              :placeholder="t('stepDishes.descriptionPlaceholder')"
+              @input="setLocalizedDishFieldValue(editingDish, 'description', dishFieldLocales.description, $event.target.value)"
+            ></textarea>
           </div>
+          <p v-if="rowError(editingDish, 'description')" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
 
           <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -250,13 +250,30 @@
                 class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
               >
                 <div class="grid gap-2 sm:grid-cols-[1fr,130px,130px,auto] sm:items-center">
-                  <input
-                    v-model="option.name"
-                    class="ui-input"
-                    :class="rowError(editingDish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
-                    :placeholder="t('stepDishes.variantNamePlaceholder')"
-                    @input="clearRowError(editingDish.local_id, optionFieldKey(option, 'name'))"
-                  />
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <p class="text-[11px] text-slate-400">{{ t("stepDishes.variantNamePlaceholder") }}</p>
+                      <div class="flex flex-wrap gap-1">
+                        <button
+                          v-for="locale in availableContentLocales"
+                          :key="`variant-name-${option.local_id}-${locale.code}`"
+                          type="button"
+                          class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                          :class="dishFieldLocales.variantName === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                          @click="dishFieldLocales.variantName = locale.code"
+                        >
+                          {{ locale.nativeLabel }}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      :value="localizedVariantNameValue(option, dishFieldLocales.variantName)"
+                      class="ui-input"
+                      :class="rowError(editingDish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
+                      :placeholder="t('stepDishes.variantNamePlaceholder')"
+                      @input="setLocalizedVariantNameValue(editingDish, option, dishFieldLocales.variantName, $event.target.value)"
+                    />
+                  </div>
                   <input
                     v-model.number="option.price_delta"
                     type="number"
@@ -289,15 +306,6 @@
                   <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
                   {{ t("stepDishes.requiredBeforeAddToCart") }}
                 </label>
-                <div v-if="selectedTranslationLocales.length" class="mt-2 grid gap-2 sm:grid-cols-2">
-                  <input
-                    v-for="localeCode in selectedTranslationLocales"
-                    :key="`${option.local_id}-${localeCode}`"
-                    v-model="option.name_i18n[localeCode]"
-                    class="ui-input"
-                    :placeholder="t('stepDishes.translatedVariantPlaceholder', { locale: localeLabel(localeCode) })"
-                  />
-                </div>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
@@ -442,10 +450,14 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
-const selectedTranslationLocales = ref([]);
 const activeCategoryId = ref("");
 const dishEditorModalOpen = ref(false);
 const dishEditorLocalId = ref("");
+const dishFieldLocales = reactive({
+  name: "en",
+  description: "en",
+  variantName: "en",
+});
 const quickDishModalOpen = ref(false);
 const quickDish = reactive({
   category: "",
@@ -464,7 +476,11 @@ const maxTranslationLocales = computed(() =>
   Math.max(0, Number(tenant.entitlements?.max_languages || 1) - 1)
 );
 const defaultLocale = computed(() => normalizeLocale(tenant.resolvedMeta?.profile?.language || "en"));
-const secondaryLocales = computed(() => LOCALE_OPTIONS.filter((option) => option.code !== defaultLocale.value));
+const availableContentLocales = computed(() => {
+  const primary = LOCALE_OPTIONS.find((option) => option.code === defaultLocale.value) || LOCALE_OPTIONS[0];
+  const secondary = LOCALE_OPTIONS.filter((option) => option.code !== primary.code).slice(0, maxTranslationLocales.value);
+  return [primary, ...secondary];
+});
 const sortedCategoryOptions = computed(() =>
   [...categoryOptions.value].sort(
     (left, right) =>
@@ -485,11 +501,6 @@ const hasPreviousCategory = computed(() => activeCategoryIndex.value > 0);
 const hasNextCategory = computed(
   () => activeCategoryIndex.value >= 0 && activeCategoryIndex.value < sortedCategoryOptions.value.length - 1
 );
-
-const localeLabel = (code) => {
-  const match = LOCALE_OPTIONS.find((option) => option.code === code);
-  return match ? `${match.nativeLabel}` : String(code || "").toUpperCase();
-};
 
 const hasMeaningfulDishContent = (dish) =>
   Boolean(
@@ -522,62 +533,66 @@ const syncActiveCategory = () => {
 
 watch(sortedCategoryOptions, syncActiveCategory, { immediate: true });
 
-const enforceTranslationLocaleSelection = () => {
-  const allowed = new Set(secondaryLocales.value.map((item) => item.code));
-  let next = selectedTranslationLocales.value.filter((code) => allowed.has(code));
-  if (next.length > maxTranslationLocales.value) {
-    next = next.slice(0, maxTranslationLocales.value);
-  }
-  if (!next.length && maxTranslationLocales.value > 0) {
-    next = secondaryLocales.value.slice(0, maxTranslationLocales.value).map((item) => item.code);
-  }
-  selectedTranslationLocales.value = next;
+const syncDishFieldLocales = () => {
+  const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
+  if (!allowed.has(dishFieldLocales.name)) dishFieldLocales.name = defaultLocale.value;
+  if (!allowed.has(dishFieldLocales.description)) dishFieldLocales.description = defaultLocale.value;
+  if (!allowed.has(dishFieldLocales.variantName)) dishFieldLocales.variantName = defaultLocale.value;
 };
 
-watch([secondaryLocales, maxTranslationLocales], enforceTranslationLocaleSelection, { immediate: true });
+watch([availableContentLocales, defaultLocale], syncDishFieldLocales, { immediate: true });
 
-const hydrateTranslationLocalesFromRows = (rows = []) => {
-  const allowed = new Set(secondaryLocales.value.map((item) => item.code));
-  const discovered = [];
-  rows.forEach((row) => {
-    const maps = [row?.name_i18n, row?.description_i18n];
-    maps.forEach((entry) => {
-      if (!entry || typeof entry !== "object") return;
-      Object.keys(entry).forEach((raw) => {
-        const locale = String(raw || "").trim().toLowerCase();
-        if (!locale || !allowed.has(locale)) return;
-        if (!discovered.includes(locale)) discovered.push(locale);
-      });
-    });
-    const options = Array.isArray(row?.options) ? row.options : [];
-    options.forEach((option) => {
-      if (!option?.name_i18n || typeof option.name_i18n !== "object") return;
-      Object.keys(option.name_i18n).forEach((raw) => {
-        const locale = String(raw || "").trim().toLowerCase();
-        if (!locale || !allowed.has(locale)) return;
-        if (!discovered.includes(locale)) discovered.push(locale);
-      });
-    });
-  });
-  if (!discovered.length) {
-    enforceTranslationLocaleSelection();
-    return;
-  }
-  const merged = [...selectedTranslationLocales.value, ...discovered].filter(
-    (locale, index, source) => source.indexOf(locale) === index
-  );
-  selectedTranslationLocales.value = merged.slice(0, maxTranslationLocales.value);
-  if (!selectedTranslationLocales.value.length) enforceTranslationLocaleSelection();
+const localizedDishFieldValue = (dish, field, localeCode) => {
+  if (!dish) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(dish[field] || "");
+  const map = dish[`${field}_i18n`];
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
 };
 
-const toggleTranslationLocale = (code) => {
-  const idx = selectedTranslationLocales.value.indexOf(code);
-  if (idx >= 0) {
-    selectedTranslationLocales.value.splice(idx, 1);
-    return;
+const setLocalizedDishFieldValue = (dish, field, localeCode, value) => {
+  if (!dish) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    dish[field] = nextValue;
+  } else {
+    const mapField = `${field}_i18n`;
+    if (!dish[mapField] || typeof dish[mapField] !== "object") dish[mapField] = {};
+    if (nextValue.trim()) {
+      dish[mapField][locale] = nextValue;
+    } else {
+      delete dish[mapField][locale];
+    }
   }
-  if (selectedTranslationLocales.value.length >= maxTranslationLocales.value) return;
-  selectedTranslationLocales.value.push(code);
+  clearRowError(dish.local_id, field);
+};
+
+const localizedVariantNameValue = (option, localeCode) => {
+  if (!option) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(option.name || "");
+  const map = option.name_i18n;
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedVariantNameValue = (dish, option, localeCode, value) => {
+  if (!dish || !option) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    option.name = nextValue;
+  } else {
+    if (!option.name_i18n || typeof option.name_i18n !== "object") option.name_i18n = {};
+    if (nextValue.trim()) {
+      option.name_i18n[locale] = nextValue;
+    } else {
+      delete option.name_i18n[locale];
+    }
+  }
+  clearRowError(dish.local_id, optionFieldKey(option, "name"));
 };
 const isManagedUpload = (value = "") => /\/uploads\//.test(String(value));
 const cleanupManagedUpload = async (value) => {
@@ -776,11 +791,9 @@ const load = async () => {
     const data = await dishApi.list();
     const rows = data.length ? data.map(normalize) : [];
     dishes.splice(0, dishes.length, ...rows);
-    hydrateTranslationLocalesFromRows(rows);
   } catch {
     status.value = t("common.loadFailed");
     dishes.splice(0, dishes.length);
-    enforceTranslationLocaleSelection();
   }
   syncActiveCategory();
 };
@@ -973,7 +986,9 @@ const saveAndNext = async () => {
   }
   try {
     const validDishes = dishes.filter((d) => d.name?.trim() && d.category);
-    const allowedTranslationLocales = [...selectedTranslationLocales.value];
+    const allowedTranslationLocales = availableContentLocales.value
+      .map((locale) => locale.code)
+      .filter((locale) => locale !== defaultLocale.value);
     for (const dish of validDishes) {
       try {
         const saved = await dishApi.upsert({

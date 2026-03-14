@@ -1,3 +1,4 @@
+import re
 from urllib.parse import urlparse
 
 from django.core.exceptions import DisallowedHost
@@ -8,6 +9,7 @@ from .models import Plan, Profile, Tenant
 from .tiering import external_plan_code, plan_display_name, plan_entitlements
 
 SUPPORTED_PROFILE_LANGUAGES = {"en", "fr", "ar"}
+_LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
 
 
 def _normalize_local_media_url(value: str, request) -> str:
@@ -60,17 +62,129 @@ class PlanSerializer(serializers.ModelSerializer):
         return plan_display_name(getattr(obj, "code", ""), fallback=getattr(obj, "name", ""))
 
 
-class ProfileSerializer(serializers.ModelSerializer):
+class LocalizedProfileContentMixin:
+    def _tenant_max_languages(self) -> int:
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None) if request is not None else None
+        plan = getattr(tenant, "plan", None) if tenant is not None else None
+        try:
+            max_languages = int(getattr(plan, "max_languages", 1) or 1)
+        except (TypeError, ValueError):
+            max_languages = 1
+        return max(max_languages, 1)
+
+    def _normalize_locale(self, value) -> str:
+        cleaned = str(value or "").strip().lower().replace("_", "-")
+        if not cleaned:
+            return ""
+        primary = cleaned.split("-", 1)[0]
+        if primary not in SUPPORTED_PROFILE_LANGUAGES:
+            return ""
+        if _LOCALE_RE.match(cleaned):
+            return cleaned
+        return primary
+
+    def _validate_i18n_map(self, value, *, field_label: str, max_length: int):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError(f"{field_label} translations must be a JSON object.")
+
+        cleaned = {}
+        for raw_locale, raw_text in value.items():
+            locale = self._normalize_locale(raw_locale)
+            if not locale:
+                raise serializers.ValidationError(
+                    f"{field_label} translation locale must be like 'en', 'fr', or 'ar'."
+                )
+            text = str(raw_text or "").strip()
+            if not text:
+                continue
+            if len(text) > max_length:
+                raise serializers.ValidationError(
+                    f"{field_label} translation for '{locale}' must be {max_length} characters or fewer."
+                )
+            cleaned[locale] = text
+
+        max_languages = self._tenant_max_languages()
+        if len(cleaned) > max_languages:
+            raise serializers.ValidationError(
+                f"Current plan supports up to {max_languages} translated language entries for {field_label}."
+            )
+        return cleaned
+
+    def _request_locale(self) -> str:
+        request = self.context.get("request")
+        if request is None:
+            return ""
+
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            # Keep owner/admin editing payloads in canonical base fields.
+            return ""
+
+        query_params = getattr(request, "query_params", None)
+        if query_params is None:
+            query_params = getattr(request, "GET", {})
+
+        query_locale = self._normalize_locale(query_params.get("lang", ""))
+        if query_locale:
+            return query_locale
+
+        header = ""
+        if hasattr(request, "headers"):
+            header = str(request.headers.get("Accept-Language", "") or "")
+        if not header:
+            header = str(request.META.get("HTTP_ACCEPT_LANGUAGE", "") or "")
+
+        for raw_part in header.split(","):
+            token = raw_part.split(";", 1)[0].strip()
+            candidate = self._normalize_locale(token)
+            if candidate:
+                return candidate
+        return ""
+
+    def _localized_text(self, base_value: str, translations):
+        base = str(base_value or "")
+        if not isinstance(translations, dict) or not translations:
+            return base
+
+        locale = self._request_locale()
+        candidates = []
+        if locale:
+            candidates.append(locale)
+            if "-" in locale:
+                candidates.append(locale.split("-", 1)[0])
+
+        for candidate in candidates:
+            resolved = str(translations.get(candidate, "") or "").strip()
+            if resolved:
+                return resolved
+
+        if base.strip():
+            return base
+
+        for key in sorted(translations.keys()):
+            resolved = str(translations.get(key, "") or "").strip()
+            if resolved:
+                return resolved
+        return base
+
+
+class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerializer):
     published_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Profile
         fields = [
             "tagline",
+            "tagline_i18n",
             "description",
+            "description_i18n",
             "phone",
             "whatsapp",
             "address",
+            "address_i18n",
             "google_maps_url",
             "reservation_url",
             "facebook_url",
@@ -139,6 +253,15 @@ class ProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Language must be one of: en, fr, ar.")
         return primary
 
+    def validate_tagline_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Tagline", max_length=150)
+
+    def validate_address_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Address", max_length=255)
+
+    def validate_description_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Description", max_length=2000)
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         disabled_in_payload = "is_menu_temporarily_disabled" in attrs
@@ -195,6 +318,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         data["logo_url"] = _normalize_local_media_url(data.get("logo_url", ""), request)
         data["hero_url"] = _normalize_local_media_url(data.get("hero_url", ""), request)
+        data["tagline"] = self._localized_text(data.get("tagline", ""), data.get("tagline_i18n"))
+        data["address"] = self._localized_text(data.get("address", ""), data.get("address_i18n"))
+        data["description"] = self._localized_text(data.get("description", ""), data.get("description_i18n"))
         return data
 
 

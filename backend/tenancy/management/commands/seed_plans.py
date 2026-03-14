@@ -22,7 +22,7 @@ class Command(BaseCommand):
                 "description": "QR menu + WhatsApp ordering for launch and validation",
                 "can_checkout": False,
                 "can_whatsapp_order": True,
-                "max_languages": 1,
+                "max_languages": 3,
                 "is_active": True,
             },
         )

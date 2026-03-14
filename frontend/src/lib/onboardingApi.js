@@ -79,6 +79,10 @@ const sanitizeProfilePayload = (payload) => {
     "secondary_color",
   ].forEach(trimString);
 
+  ["tagline_i18n", "description_i18n", "address_i18n"].forEach((key) => {
+    next[key] = normalizeI18nMap(next[key]);
+  });
+
   [
     "google_maps_url",
     "reservation_url",

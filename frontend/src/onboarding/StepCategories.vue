@@ -12,24 +12,7 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <span class="ui-data-strip">{{ categories.length }} {{ t("common.categories") }}</span>
-        <span class="ui-data-strip">{{ selectedTranslationLocales.length }}/{{ maxTranslationLocales }} {{ t("stepCategories.translationsTitle") }}</span>
-      </div>
-      <div class="rounded-2xl border border-slate-800/90 bg-slate-950/50 p-3 space-y-2">
-        <p class="text-xs text-slate-400">{{ t("stepCategories.translationsHint", { count: maxTranslationLocales }) }}</p>
-        <div v-if="maxTranslationLocales > 0" class="flex flex-wrap gap-2">
-          <button
-            v-for="locale in secondaryLocales"
-            :key="locale.code"
-            type="button"
-            class="rounded-full border px-3 py-1.5 text-xs transition-colors"
-            :class="selectedTranslationLocales.includes(locale.code) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-            :disabled="!selectedTranslationLocales.includes(locale.code) && selectedTranslationLocales.length >= maxTranslationLocales"
-            @click="toggleTranslationLocale(locale.code)"
-          >
-            {{ locale.nativeLabel }} ({{ locale.label }})
-          </button>
-        </div>
-        <p v-else class="text-xs text-slate-500">{{ t("stepCategories.translationsUnavailable") }}</p>
+        <span class="ui-data-strip">{{ availableContentLocales.length }} {{ t("stepCategories.translationsTitle") }}</span>
       </div>
     </section>
 
@@ -82,12 +65,27 @@
 
           <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
             <div class="space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`cat-name-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                    :class="categoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="categoryFieldLocales.name = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
               <input
-                v-model="editingCategory.name"
+                :value="localizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name)"
                 class="ui-input"
                 :class="rowError(editingCategory, 'name') ? 'border-red-400' : 'border-slate-700'"
                 :placeholder="t('stepCategories.categoryNamePlaceholder')"
-                @input="clearRowError(editingCategory.local_id, 'name')"
+                @input="setLocalizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name, $event.target.value)"
               />
               <p v-if="rowError(editingCategory, 'name')" class="text-xs text-red-300">{{ rowError(editingCategory, "name") }}</p>
             </div>
@@ -104,35 +102,32 @@
             </div>
           </div>
 
-          <textarea
-            v-model="editingCategory.description"
-            rows="2"
-            class="ui-textarea"
-            :class="rowError(editingCategory, 'description') ? 'border-red-400' : 'border-slate-700'"
-            :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-            @input="clearRowError(editingCategory.local_id, 'description')"
-          ></textarea>
-          <p v-if="rowError(editingCategory, 'description')" class="text-xs text-red-300">{{ rowError(editingCategory, "description") }}</p>
-
-          <div v-if="selectedTranslationLocales.length" class="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ t("stepCategories.translatedContent") }}</p>
-            <div
-              v-for="localeCode in selectedTranslationLocales"
-              :key="`${editingCategory.local_id}-${localeCode}`"
-              class="grid gap-2 sm:grid-cols-2"
-            >
-              <input
-                v-model="editingCategory.name_i18n[localeCode]"
-                class="ui-input"
-                :placeholder="t('stepCategories.translatedNamePlaceholder', { locale: localeLabel(localeCode) })"
-              />
-              <input
-                v-model="editingCategory.description_i18n[localeCode]"
-                class="ui-input"
-                :placeholder="t('stepCategories.translatedDescriptionPlaceholder', { locale: localeLabel(localeCode) })"
-              />
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
+              <div class="flex flex-wrap gap-1">
+                <button
+                  v-for="locale in availableContentLocales"
+                  :key="`cat-desc-${locale.code}`"
+                  type="button"
+                  class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                  :class="categoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                  @click="categoryFieldLocales.description = locale.code"
+                >
+                  {{ locale.nativeLabel }}
+                </button>
+              </div>
             </div>
+            <textarea
+              :value="localizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description)"
+              rows="2"
+              class="ui-textarea"
+              :class="rowError(editingCategory, 'description') ? 'border-red-400' : 'border-slate-700'"
+              :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+              @input="setLocalizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description, $event.target.value)"
+            ></textarea>
           </div>
+          <p v-if="rowError(editingCategory, 'description')" class="text-xs text-red-300">{{ rowError(editingCategory, "description") }}</p>
 
           <div
             class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
@@ -263,10 +258,13 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
-const selectedTranslationLocales = ref([]);
 const quickCategoryModalOpen = ref(false);
 const categoryEditorModalOpen = ref(false);
 const categoryEditorLocalId = ref("");
+const categoryFieldLocales = reactive({
+  name: "en",
+  description: "en",
+});
 const quickCategory = reactive({
   name: "",
   description: "",
@@ -282,60 +280,45 @@ const maxTranslationLocales = computed(() =>
   Math.max(0, Number(tenant.entitlements?.max_languages || 1) - 1)
 );
 const defaultLocale = computed(() => normalizeLocale(tenant.resolvedMeta?.profile?.language || "en"));
-const secondaryLocales = computed(() => LOCALE_OPTIONS.filter((option) => option.code !== defaultLocale.value));
+const availableContentLocales = computed(() => {
+  const primary = LOCALE_OPTIONS.find((option) => option.code === defaultLocale.value) || LOCALE_OPTIONS[0];
+  const secondary = LOCALE_OPTIONS.filter((option) => option.code !== primary.code).slice(0, maxTranslationLocales.value);
+  return [primary, ...secondary];
+});
 
-const localeLabel = (code) => {
-  const match = LOCALE_OPTIONS.find((option) => option.code === code);
-  return match ? `${match.nativeLabel}` : String(code || "").toUpperCase();
+const syncCategoryFieldLocales = () => {
+  const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
+  if (!allowed.has(categoryFieldLocales.name)) categoryFieldLocales.name = defaultLocale.value;
+  if (!allowed.has(categoryFieldLocales.description)) categoryFieldLocales.description = defaultLocale.value;
 };
 
-const enforceTranslationLocaleSelection = () => {
-  const allowed = new Set(secondaryLocales.value.map((item) => item.code));
-  let next = selectedTranslationLocales.value.filter((code) => allowed.has(code));
-  if (next.length > maxTranslationLocales.value) {
-    next = next.slice(0, maxTranslationLocales.value);
-  }
-  if (!next.length && maxTranslationLocales.value > 0) {
-    next = secondaryLocales.value.slice(0, maxTranslationLocales.value).map((item) => item.code);
-  }
-  selectedTranslationLocales.value = next;
+watch([availableContentLocales, defaultLocale], syncCategoryFieldLocales, { immediate: true });
+
+const localizedCategoryFieldValue = (cat, field, localeCode) => {
+  if (!cat) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(cat[field] || "");
+  const map = cat[`${field}_i18n`];
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
 };
 
-watch([secondaryLocales, maxTranslationLocales], enforceTranslationLocaleSelection, { immediate: true });
-
-const hydrateTranslationLocalesFromRows = (rows = []) => {
-  const allowed = new Set(secondaryLocales.value.map((item) => item.code));
-  const discovered = [];
-  rows.forEach((row) => {
-    const maps = [row?.name_i18n, row?.description_i18n];
-    maps.forEach((entry) => {
-      if (!entry || typeof entry !== "object") return;
-      Object.keys(entry).forEach((raw) => {
-        const locale = String(raw || "").trim().toLowerCase();
-        if (!locale || !allowed.has(locale)) return;
-        if (!discovered.includes(locale)) discovered.push(locale);
-      });
-    });
-  });
-  if (!discovered.length) {
-    enforceTranslationLocaleSelection();
-    return;
+const setLocalizedCategoryFieldValue = (cat, field, localeCode, value) => {
+  if (!cat) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    cat[field] = nextValue;
+  } else {
+    const mapField = `${field}_i18n`;
+    if (!cat[mapField] || typeof cat[mapField] !== "object") cat[mapField] = {};
+    if (nextValue.trim()) {
+      cat[mapField][locale] = nextValue;
+    } else {
+      delete cat[mapField][locale];
+    }
   }
-  const merged = [...selectedTranslationLocales.value, ...discovered].filter(
-    (locale, index, source) => source.indexOf(locale) === index
-  );
-  selectedTranslationLocales.value = merged.slice(0, maxTranslationLocales.value);
-  if (!selectedTranslationLocales.value.length) enforceTranslationLocaleSelection();
-};
-
-const toggleTranslationLocale = (code) => {
-  const idx = selectedTranslationLocales.value.indexOf(code);
-  if (idx >= 0) {
-    selectedTranslationLocales.value.splice(idx, 1);
-    return;
-  }
-  if (selectedTranslationLocales.value.length >= maxTranslationLocales.value) return;
-  selectedTranslationLocales.value.push(code);
+  clearRowError(cat.local_id, field);
 };
 const isManagedUpload = (value = "") => /\/uploads\//.test(String(value));
 const cleanupManagedUpload = async (value) => {
@@ -393,13 +376,17 @@ const normalize = (cat = {}) => ({
   is_published: cat.is_published ?? true,
 });
 
-const pickI18nMap = (input) => {
+const pickI18nMap = (input, allowedLocales = null) => {
   const out = {};
   if (!input || typeof input !== "object") return out;
+  const allowed = Array.isArray(allowedLocales)
+    ? new Set(allowedLocales.map((locale) => String(locale || "").trim().toLowerCase()))
+    : null;
   Object.entries(input).forEach(([rawLocale, rawValue]) => {
     const locale = String(rawLocale || "").trim().toLowerCase();
     const value = String(rawValue || "").trim();
     if (!locale) return;
+    if (allowed && !allowed.has(locale)) return;
     if (value) out[locale] = value;
   });
   return out;
@@ -459,11 +446,9 @@ const load = async () => {
     const data = await categoryApi.list();
     const rows = data.length ? data.map(normalize) : [normalize()];
     categories.splice(0, categories.length, ...rows);
-    hydrateTranslationLocalesFromRows(rows);
   } catch {
     status.value = t("common.loadFailed");
     categories.splice(0, categories.length, normalize());
-    enforceTranslationLocaleSelection();
   }
 };
 
@@ -582,13 +567,16 @@ const saveAndNext = async () => {
 
   try {
     const validCats = categories.filter((c) => c.name?.trim());
+    const allowedTranslationLocales = availableContentLocales.value
+      .map((locale) => locale.code)
+      .filter((locale) => locale !== defaultLocale.value);
     for (const cat of validCats) {
       try {
         const saved = await categoryApi.upsert({
           ...cat,
           position: Number(cat.position) || 0,
-          name_i18n: pickI18nMap(cat.name_i18n),
-          description_i18n: pickI18nMap(cat.description_i18n),
+          name_i18n: pickI18nMap(cat.name_i18n, allowedTranslationLocales),
+          description_i18n: pickI18nMap(cat.description_i18n, allowedTranslationLocales),
         });
         cat.id = saved.id;
         cat.slug = saved.slug;

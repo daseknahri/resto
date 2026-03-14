@@ -7,11 +7,30 @@
     </div>
 
     <div class="grid sm:grid-cols-2 gap-3">
-      <label class="space-y-1 text-sm text-slate-200">
-        {{ t("stepBrand.tagline") }}
-        <input v-model="form.tagline" :class="inputClass('tagline')" @input="clearField('tagline')" />
+      <div class="space-y-1 text-sm text-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span>{{ t("stepBrand.tagline") }}</span>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="localeCode in contentLocaleCodes"
+              :key="`tagline-${localeCode}`"
+              type="button"
+              class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+              :class="fieldLocales.tagline === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              @click="fieldLocales.tagline = localeCode"
+            >
+              {{ localeChipLabel(localeCode) }}
+            </button>
+          </div>
+        </div>
+        <input
+          :value="localizedFieldValue('tagline', fieldLocales.tagline)"
+          :class="inputClass('tagline')"
+          :aria-label="t('stepBrand.tagline')"
+          @input="onLocalizedFieldInput('tagline', fieldLocales.tagline, $event.target.value)"
+        />
         <p v-if="fieldError('tagline')" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
-      </label>
+      </div>
       <label class="space-y-1 text-sm text-slate-200">
         {{ t("stepBrand.phone") }}
         <input v-model="form.phone" :class="inputClass('phone')" @input="clearField('phone')" />
@@ -23,23 +42,57 @@
         <p v-if="fieldError('whatsapp')" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
         <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
       </label>
-      <label class="space-y-1 text-sm text-slate-200">
-        {{ t("common.address") }}
-        <input v-model="form.address" :class="inputClass('address')" @input="clearField('address')" />
+      <div class="space-y-1 text-sm text-slate-200">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span>{{ t("common.address") }}</span>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="localeCode in contentLocaleCodes"
+              :key="`address-${localeCode}`"
+              type="button"
+              class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+              :class="fieldLocales.address === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              @click="fieldLocales.address = localeCode"
+            >
+              {{ localeChipLabel(localeCode) }}
+            </button>
+          </div>
+        </div>
+        <input
+          :value="localizedFieldValue('address', fieldLocales.address)"
+          :class="inputClass('address')"
+          :aria-label="t('common.address')"
+          @input="onLocalizedFieldInput('address', fieldLocales.address, $event.target.value)"
+        />
         <p v-if="fieldError('address')" class="text-xs text-red-300">{{ fieldError("address") }}</p>
-      </label>
+      </div>
     </div>
 
-    <label class="space-y-1 text-sm text-slate-200">
-      {{ t("common.description") }}
+    <div class="space-y-1 text-sm text-slate-200">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span>{{ t("common.description") }}</span>
+        <div class="flex flex-wrap gap-1">
+          <button
+            v-for="localeCode in contentLocaleCodes"
+            :key="`description-${localeCode}`"
+            type="button"
+            class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+            :class="fieldLocales.description === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+            @click="fieldLocales.description = localeCode"
+          >
+            {{ localeChipLabel(localeCode) }}
+          </button>
+        </div>
+      </div>
       <textarea
-        v-model="form.description"
+        :value="localizedFieldValue('description', fieldLocales.description)"
         rows="3"
         :class="inputClass('description')"
-        @input="clearField('description')"
+        :aria-label="t('common.description')"
+        @input="onLocalizedFieldInput('description', fieldLocales.description, $event.target.value)"
       ></textarea>
       <p v-if="fieldError('description')" class="text-xs text-red-300">{{ fieldError("description") }}</p>
-    </label>
+    </div>
 
     <div class="grid sm:grid-cols-2 gap-3">
       <label class="space-y-1 text-sm text-slate-200">
@@ -96,8 +149,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
+import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { profileApi } from "../lib/onboardingApi";
 import { useLocaleStore } from "../stores/locale";
 import { useTenantStore } from "../stores/tenant";
@@ -105,10 +159,13 @@ import { useToastStore } from "../stores/toast";
 
 const form = reactive({
   tagline: "",
+  tagline_i18n: {},
   description: "",
+  description_i18n: {},
   phone: "",
   whatsapp: "",
   address: "",
+  address_i18n: {},
   google_maps_url: "",
   reservation_url: "",
   facebook_url: "",
@@ -132,6 +189,22 @@ const introText = computed(() =>
     : t("stepBrand.introDefault")
 );
 const whatsappLabel = computed(() => (canWhatsappOrder.value ? t("stepBrand.whatsappOrdering") : t("stepBrand.whatsappContact")));
+const maxTranslationLocales = computed(() =>
+  Math.max(0, Number(tenant.entitlements?.max_languages || 1) - 1)
+);
+const defaultContentLocale = computed(() => normalizeLocale(form.language || "en"));
+const contentLocaleCodes = computed(() => {
+  const fallback = defaultContentLocale.value;
+  const secondary = LOCALE_OPTIONS.filter((option) => option.code !== fallback)
+    .slice(0, maxTranslationLocales.value)
+    .map((option) => option.code);
+  return [fallback, ...secondary];
+});
+const fieldLocales = reactive({
+  tagline: defaultContentLocale.value,
+  address: defaultContentLocale.value,
+  description: defaultContentLocale.value,
+});
 
 const inputClass = (field) =>
   `w-full rounded-xl bg-slate-900 px-3 py-2 border ${errors.value[field] ? "border-red-400" : "border-slate-700"}`;
@@ -145,10 +218,70 @@ const clearField = (field) => {
   }
 };
 
+const normalizeI18nMap = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  Object.entries(value).forEach(([rawLocale, rawText]) => {
+    const locale = normalizeLocale(rawLocale);
+    const text = String(rawText || "").trim();
+    if (!locale || !text) return;
+    out[locale] = text;
+  });
+  return out;
+};
+
+const i18nFieldName = (field) => `${field}_i18n`;
+
+const localizedFieldValue = (field, localeCode) => {
+  const localeCodeNormalized = normalizeLocale(localeCode || defaultContentLocale.value);
+  if (localeCodeNormalized === defaultContentLocale.value) return String(form[field] || "");
+  const map = form[i18nFieldName(field)];
+  if (!map || typeof map !== "object") return "";
+  return String(map[localeCodeNormalized] || "");
+};
+
+const onLocalizedFieldInput = (field, localeCode, value) => {
+  const localeCodeNormalized = normalizeLocale(localeCode || defaultContentLocale.value);
+  const nextValue = String(value || "");
+  if (localeCodeNormalized === defaultContentLocale.value) {
+    form[field] = nextValue;
+  } else {
+    if (!form[i18nFieldName(field)] || typeof form[i18nFieldName(field)] !== "object") {
+      form[i18nFieldName(field)] = {};
+    }
+    if (nextValue.trim()) {
+      form[i18nFieldName(field)][localeCodeNormalized] = nextValue;
+    } else {
+      delete form[i18nFieldName(field)][localeCodeNormalized];
+    }
+  }
+  clearField(field);
+};
+
+const localeChipLabel = (localeCode) => {
+  const locale = LOCALE_OPTIONS.find((item) => item.code === normalizeLocale(localeCode));
+  return locale?.nativeLabel || String(localeCode || "").toUpperCase();
+};
+
+const syncFieldLocales = () => {
+  const allowed = new Set(contentLocaleCodes.value);
+  const fallback = defaultContentLocale.value;
+  ["tagline", "address", "description"].forEach((field) => {
+    if (!allowed.has(fieldLocales[field])) {
+      fieldLocales[field] = fallback;
+    }
+  });
+};
+
+watch([contentLocaleCodes, defaultContentLocale], syncFieldLocales, { immediate: true });
+
 const load = async () => {
   try {
     const data = await profileApi.get();
     Object.assign(form, data || {});
+    form.tagline_i18n = normalizeI18nMap(data?.tagline_i18n);
+    form.address_i18n = normalizeI18nMap(data?.address_i18n);
+    form.description_i18n = normalizeI18nMap(data?.description_i18n);
   } catch {
     status.value = t("stepBrand.statusLoadFailed");
   }
