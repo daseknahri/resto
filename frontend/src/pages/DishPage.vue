@@ -23,7 +23,7 @@
     </div>
 
     <div v-else class="ui-hero-stage ui-reveal overflow-hidden shadow-2xl shadow-black/30">
-      <div class="relative h-[32vh] min-h-[190px] max-h-[300px] w-full sm:h-72">
+      <div class="relative h-[30vh] min-h-[176px] max-h-[280px] w-full sm:h-72">
         <img
           :src="dish.image_url || placeholder"
           :alt="dish.name"
@@ -50,12 +50,9 @@
 
       <div class="grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr),19rem]">
         <section class="space-y-4">
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <RouterLink :to="{ name: 'category', params: { slug: props.category } }" class="ui-btn-outline justify-center text-xs sm:text-sm">
               {{ t('dishPage.backToCategory', { category: categoryName }) }}
-            </RouterLink>
-            <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
-              {{ t('customerLayout.navMenu') }}
             </RouterLink>
             <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
               {{ t('common.cart') }} / {{ cart.count }}
@@ -125,7 +122,7 @@
           </div>
         </section>
 
-        <aside class="space-y-3 lg:sticky lg:top-[calc(var(--safe-top)+5.5rem)] lg:self-start">
+        <aside class="hidden space-y-3 sm:block lg:sticky lg:top-[calc(var(--safe-top)+5.5rem)] lg:self-start">
           <div class="ui-spotlight-card space-y-3 p-4">
             <div>
               <p class="ui-kicker">{{ t('dishPage.total') }}</p>
@@ -189,31 +186,41 @@
 
     <div
       v-if="dish"
-      class="fixed bottom-20 left-3 right-3 z-20 flex items-center justify-between rounded-2xl border border-slate-800/80 bg-slate-900/90 px-4 py-3 backdrop-blur sm:hidden"
+      class="fixed bottom-20 left-3 right-3 z-20 rounded-2xl border border-slate-800/80 bg-slate-900/92 px-3.5 py-2.5 backdrop-blur sm:hidden"
     >
-      <div class="min-w-0">
-        <p class="truncate text-sm text-slate-200">{{ dish.name }}</p>
-        <p class="text-xs text-slate-400">
-          {{
-            hasRequiredMissing
-              ? t('dishPage.selectRequiredOptions')
-              : `${selectedOptionObjects.length} ${t('dishPage.options')} / ${qty} ${t('dishPage.qty')}`
-          }}
-        </p>
-        <p class="text-lg font-semibold text-[var(--color-secondary)]">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold text-slate-100">{{ dish.name }}</p>
+          <p class="text-xs text-slate-400">
+            {{
+              hasRequiredMissing
+                ? t('dishPage.selectRequiredOptions')
+                : `${selectedOptionObjects.length} ${t('dishPage.options')}`
+            }}
+          </p>
+        </div>
+        <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">
           {{ formatCurrency(totalWithOptions, dish.currency) }}
         </p>
       </div>
-      <button
-        class="ui-btn-primary px-4 py-2"
-        :disabled="orderingDisabled"
-        :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
-        @click="addToCart"
-        @keydown.enter.prevent="addToCart"
-        @keydown.space.prevent="addToCart"
-      >
-        {{ isBrowseOnlyPlan ? t('dishPage.viewOnly') : t('dishPage.add') }}
-      </button>
+
+      <div class="mt-2.5 flex items-center gap-2">
+        <span class="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 p-1">
+          <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">-</button>
+          <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
+          <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
+        </span>
+        <button
+          class="ui-btn-primary ml-auto px-4 py-2"
+          :disabled="orderingDisabled"
+          :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
+          @click="addToCart"
+          @keydown.enter.prevent="addToCart"
+          @keydown.space.prevent="addToCart"
+        >
+          {{ isBrowseOnlyPlan ? t('dishPage.viewOnly') : t('dishPage.add') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

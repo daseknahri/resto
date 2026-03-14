@@ -10,13 +10,16 @@
       <span class="absolute right-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-100">
         {{ itemCountLabel(count) }}
       </span>
-      <div class="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+      <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between sm:bottom-4 sm:left-4 sm:right-4">
         <div>
           <p class="text-lg font-semibold text-white drop-shadow sm:text-xl">{{ title }}</p>
           <p class="text-xs text-slate-200">{{ t("categoryCard.openCategory") }}</p>
         </div>
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-900 font-semibold transition-transform group-hover:translate-x-0.5">
-          {{ t("categoryCard.go") }}
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-900 font-semibold transition-transform group-hover:translate-x-0.5">
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M13 5l7 7-7 7" />
+          </svg>
+          <span class="sr-only">{{ t("categoryCard.go") }}</span>
         </span>
       </div>
     </div>

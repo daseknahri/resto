@@ -1,18 +1,18 @@
 <template>
   <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
     <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/82 p-3 md:p-4">
-      <div class="space-y-3">
-        <div class="space-y-1.5">
+      <div class="space-y-2.5">
+        <div class="space-y-1">
           <p class="ui-kicker">{{ t('menu.kicker') }}</p>
-          <h1 class="ui-display text-lg font-semibold tracking-tight text-white md:text-2xl">
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">
             {{ tenantName }}
           </h1>
           <p class="max-w-2xl text-xs text-slate-300 md:text-sm">{{ t('menu.intro') }}</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="ui-chip">{{ categories.length }} {{ t("customerLeadPage.categories") }}</span>
-          <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="ui-chip text-[11px]">{{ categories.length }} {{ t("customerLeadPage.categories") }}</span>
+          <span class="ui-chip text-[11px]">{{ itemCountLabel(cart.count) }}</span>
         </div>
 
         <div class="relative">
@@ -38,9 +38,9 @@
           class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <button
-            v-for="cat in categories.slice(0, 8)"
+            v-for="cat in categories.slice(0, 7)"
             :key="`quick-${cat.slug}`"
-            class="ui-state-chip whitespace-nowrap"
+            class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs"
             @click="goToCategory(cat.slug)"
           >
             {{ cat.name }}
