@@ -268,7 +268,6 @@
         </div>
       </div>
     </Teleport>
-
   </section>
 </template>
 
@@ -317,7 +316,6 @@ const tenantName = computed(() => {
 const logoUrl = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
 const generatedAt = computed(() => new Date().toLocaleString());
 const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
-const disabledTablesCount = computed(() => Math.max(0, tables.value.length - activeTablesCount.value));
 const filteredTables = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   return tables.value.filter((table) => {
@@ -555,26 +553,6 @@ const downloadBlob = (filename, blob) => {
   URL.revokeObjectURL(url);
 };
 
-const downloadServerQrExport = async (format) => {
-  const normalized = String(format || "zip").trim().toLowerCase();
-  const ext = normalized === "pdf" ? "pdf" : "zip";
-  try {
-    const response = await api.get("/tables/qr-export/", {
-      params: { export_format: normalized },
-      responseType: "blob",
-    });
-    const fallback = `${safeFileBase(tenantName.value)}-qr-export.${ext}`;
-    const filename = parseFilenameFromDisposition(response?.headers?.["content-disposition"], fallback);
-    downloadBlob(filename, response?.data);
-    toast.show(t("ownerTables.serverDownloadSuccess", { format: ext.toUpperCase() }), "success");
-  } catch (err) {
-    toast.show(parseError(err, t("ownerTables.serverDownloadFailed", { format: ext.toUpperCase() })), "error");
-  }
-};
-
-const downloadServerQrZip = () => downloadServerQrExport("zip");
-const downloadServerQrPdf = () => downloadServerQrExport("pdf");
-
 const downloadQrPng = async (table) => {
   if (!table?.id) return;
   try {
@@ -601,30 +579,6 @@ const downloadQrPng = async (table) => {
   const fallbackName = `${safeFileBase(tenantName.value)}-${safeFileBase(table.label)}-qr.png`;
   downloadDataUrl(fallbackName, src);
   toast.show(t("ownerTables.downloadSuccess", { label: table.label }), "success");
-};
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const downloadAllQrPng = async () => {
-  if (!tables.value.length) return;
-  if (Object.keys(qrDataUrls.value).length < tables.value.length) {
-    await generateQrBatch();
-  }
-
-  let downloaded = 0;
-  for (const table of tables.value) {
-    const src = tableQrSrc(table);
-    if (!src) continue;
-    const filename = `${safeFileBase(tenantName.value)}-${safeFileBase(table.label)}-qr.png`;
-    downloadDataUrl(filename, src);
-    downloaded += 1;
-    await sleep(120);
-  }
-  if (downloaded) {
-    toast.show(t("ownerTables.downloadAllStarted", { count: downloaded }), "success");
-  } else {
-    toast.show(t("ownerTables.noQrAvailable"), "error");
-  }
 };
 
 const downloadFile = (filename, content, mimeType) => {

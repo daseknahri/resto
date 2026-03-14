@@ -53,7 +53,7 @@
                 :class="quickAddDisabled ? 'cursor-not-allowed opacity-50' : ''"
                 @click="addDishQuick(dish)"
               >
-                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
                 <span>{{ t("dishPage.add") }}</span>
               </button>
               <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="ui-btn-outline justify-center">

@@ -160,7 +160,6 @@
           >
             {{ t("reservationPage.contactSoon") }}
           </button>
-
         </section>
       </div>
 
@@ -207,7 +206,6 @@
         </section>
       </aside>
     </div>
-
   </div>
 </template>
 
