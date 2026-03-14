@@ -227,7 +227,6 @@
 
 <script setup>
 import { computed, onMounted, ref, watch, watchEffect } from 'vue';
-import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useMenuStore } from '../stores/menu';
 import { useCartStore } from '../stores/cart';
@@ -238,12 +237,11 @@ import { trackEvent } from '../lib/analytics';
 
 const props = defineProps({ category: String, dish: String });
 
-const route = useRoute();
 const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
+const { currentLocale, formatCurrency, t } = useI18n();
 const similarVis = useVisibility();
 const qty = ref(1);
 const selectedOptionIds = ref([]);
@@ -251,7 +249,6 @@ const whatsappPhone = (import.meta.env.VITE_CONTACT_PHONE || '').replace(
   /[^\d+]/g,
   ''
 );
-const copyStatus = ref('');
 const meta = computed(() => tenant.resolvedMeta || null);
 
 const dishes = computed(() => menu.dishes[props.category] || []);
@@ -280,31 +277,6 @@ const visibleSimilarDishes = computed(() =>
 );
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
-const orderingStateLabel = computed(() => {
-  if (isBrowseOnlyPlan.value) return t('dishPage.menuOnly');
-  return isRestaurantOpen.value ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow');
-});
-const selectionStateLabel = computed(() => {
-  if (hasRequiredMissing.value) return t('dishPage.selectRequiredOptions');
-  if (selectedOptionObjects.value.length) {
-    return t('dishPage.optionsCount', { count: selectedOptionObjects.value.length });
-  }
-  return orderingStateLabel.value;
-});
-const selectionDotClass = computed(() => {
-  if (hasRequiredMissing.value) return 'bg-amber-400';
-  if (selectedOptionObjects.value.length) return 'bg-emerald-400';
-  return isRestaurantOpen.value ? 'bg-[var(--color-secondary)]' : 'bg-rose-400';
-});
-const shareUrl = computed(() => {
-  if (typeof window === 'undefined') return route.fullPath;
-  return `${window.location.origin}${route.fullPath}`;
-});
-
-const prefMotionReduce =
-  typeof window !== 'undefined' &&
-  window.matchMedia &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const selectedOptionObjects = computed(() => {
   if (!dish.value?.options) return [];
@@ -450,56 +422,6 @@ const shareWhatsapp = () => {
     'noopener,noreferrer'
   );
   toast.show(t('dishPage.openingWhatsApp'), 'info');
-};
-
-const summaryText = computed(() => {
-  if (!dish.value) return '';
-  const parts = [
-    `${qty.value} x ${dish.value.name} (${formatCurrency(totalWithOptions.value, dish.value.currency)})`,
-    ...selectedOptionObjects.value.map(
-      (opt) =>
-        `- ${opt.name} (+${formatCurrency(opt.price_delta, dish.value.currency)})`
-    ),
-  ];
-  return parts.join('\n');
-});
-
-const copySummary = async () => {
-  if (!summaryText.value) return;
-  try {
-    await navigator.clipboard.writeText(summaryText.value);
-    copyStatus.value = t('dishPage.summaryCopied');
-    toast.show(t('dishPage.summaryCopiedToClipboard'), 'success');
-  } catch {
-    copyStatus.value = t('dishPage.copyFailed');
-    toast.show(t('dishPage.copyFailed'), 'error');
-  }
-  setTimeout(() => (copyStatus.value = ''), 2000);
-};
-
-const copyLink = async () => {
-  if (!shareUrl.value) return;
-  try {
-    await navigator.clipboard.writeText(shareUrl.value);
-    toast.show(t('dishPage.linkCopied'), 'success');
-  } catch {
-    toast.show(t('dishPage.copyFailed'), 'error');
-  }
-};
-
-const resetOptions = () => {
-  selectedOptionIds.value = [];
-  if (dish.value?.options?.length) {
-    dish.value.options.forEach((opt) => {
-      if (opt.is_required && !selectedOptionIds.value.includes(opt.id)) {
-        selectedOptionIds.value.push(opt.id);
-      }
-    });
-  }
-};
-
-const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: prefMotionReduce ? 'auto' : 'smooth' });
 };
 
 watch(
