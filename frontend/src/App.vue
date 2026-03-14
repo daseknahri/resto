@@ -10,6 +10,7 @@ import { useTenantStore } from "./stores/tenant";
 import { useLocaleStore } from "./stores/locale";
 import { useThemeStore } from "./stores/theme";
 import { useSessionStore } from "./stores/session";
+import { useSeoMeta } from "./composables/useSeoMeta";
 import {
   hasPublicDemoTenant,
   isPlatformAdminHost,
@@ -22,6 +23,7 @@ const locale = useLocaleStore();
 const theme = useThemeStore();
 const session = useSessionStore();
 const route = useRoute();
+useSeoMeta();
 
 watch(
   () => tenant.resolvedMeta?.profile?.language,

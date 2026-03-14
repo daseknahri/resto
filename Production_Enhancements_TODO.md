@@ -214,6 +214,9 @@
 - [x] Implement executable customer-flow smoke script (`infra/customer_flow_smoke.ps1`) and document run command in `infra/README.md`.
 - [x] Harden customer-flow smoke to discover a test dish robustly (category scan + `/api/dishes/` fallback) so QA is stable with uneven seed data.
 - [x] Reduce frontend main bundle size (currently >500KB warning) via route-level code splitting/lazy loading for admin/owner-heavy modules.
+- [x] Add customer-host dynamic SEO metadata (title, description, canonical, OpenGraph/Twitter) with route-aware indexing rules.
+- [x] Add customer local-business JSON-LD (`Restaurant`) with tenant contact/social/address data.
+- [x] Add mobile rendering/perceived-performance pass (image priority strategy + `content-visibility` on heavy list cards).
 
 ### 4. Future-Proofing Foundation
 - [x] Add frontend i18n foundation (message catalogs, locale store, route-aware language switching, fallback strategy).

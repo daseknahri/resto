@@ -7,7 +7,9 @@
           :src="heroImage"
           :alt="`${tenantName} hero`"
           class="absolute inset-0 h-full w-full object-cover"
-          loading="lazy"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
         />
         <div class="absolute inset-0 bg-slate-950/92"></div>
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.11),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]"></div>
@@ -21,7 +23,8 @@
                   :src="logoImage"
                   :alt="`${tenantName} logo`"
                   class="h-14 w-14 rounded-2xl border border-slate-700/70 object-cover shadow-xl shadow-black/35"
-                  loading="lazy"
+                  loading="eager"
+                  decoding="async"
                 />
                 <div class="min-w-0 space-y-1">
                   <h1 class="ui-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ tenantName }}</h1>

@@ -62,6 +62,7 @@
         :image="cat.image_url || placeholder"
         :count="cat.dishes?.length || 0"
         :index="index"
+        :eager="index < 2"
         @click="goToCategory(cat.slug)"
       />
 

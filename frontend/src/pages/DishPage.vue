@@ -28,7 +28,9 @@
           :src="dish.image_url || placeholder"
           :alt="dish.name"
           class="h-full w-full object-cover"
-          loading="lazy"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
           referrerpolicy="no-referrer"
         />
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
@@ -111,7 +113,7 @@
                 class="group ui-surface-lift overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60"
               >
                 <div class="relative h-24 w-full overflow-hidden">
-                  <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" />
+                  <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" decoding="async" />
                 </div>
                 <div class="space-y-1 p-3">
                   <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
