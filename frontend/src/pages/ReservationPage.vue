@@ -141,6 +141,7 @@
               :disabled="lead.submitting || submitted"
               @click="submitReservation"
             >
+              <AppIcon name="calendar" class="h-4 w-4" />
               {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
             </button>
             <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
@@ -158,6 +159,7 @@
             class="ui-btn-primary mt-3 w-full justify-center opacity-90 sm:w-auto"
             disabled
           >
+            <AppIcon name="check" class="h-4 w-4" />
             {{ t("reservationPage.contactSoon") }}
           </button>
         </section>
@@ -178,6 +180,7 @@
               class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
               @click="trackContactClick('phone_call')"
             >
+              <AppIcon name="phone" class="h-4 w-4 text-slate-200" />
               <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
               <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
             </a>
@@ -189,6 +192,7 @@
               class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
               @click="trackContactClick('whatsapp_contact')"
             >
+              <AppIcon name="chat" class="h-4 w-4 text-slate-200" />
               <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
               <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
             </a>
@@ -200,6 +204,7 @@
               class="ui-btn-outline justify-center"
               @click="trackContactClick('reservation_url')"
             >
+              <AppIcon name="calendar" class="h-3.5 w-3.5" />
               {{ t("reservationPage.directBooking") }}
             </a>
           </div>
@@ -211,6 +216,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";

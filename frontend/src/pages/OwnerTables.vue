@@ -1,6 +1,6 @@
 ﻿<template>
-  <section class="space-y-6 ui-safe-bottom pb-6">
-    <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
+  <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
+    <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
@@ -11,18 +11,20 @@
             {{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}
           </p>
         </div>
-        <div class="flex flex-wrap gap-2 sm:justify-end">
-          <button class="ui-btn-primary" @click="openSetup('create')">
+        <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+          <button class="ui-btn-primary w-full sm:w-auto" @click="openSetup('create')">
+            <AppIcon name="plus" class="owner-table-icon" />
             {{ t("ownerTables.create") }}
           </button>
-          <button class="ui-btn-outline" :disabled="loading" @click="fetchTables">
+          <button class="ui-btn-outline w-full sm:w-auto" :disabled="loading" @click="fetchTables">
+            <AppIcon name="refresh" class="owner-table-icon" />
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
           </button>
         </div>
       </div>
     </header>
 
-    <div class="no-print ui-toolbar-band p-4">
+    <div class="no-print ui-toolbar-band p-3 sm:p-4">
       <div class="ui-toolbar-grid">
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
           <label class="text-sm text-slate-300">
@@ -44,11 +46,21 @@
         </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
+            <AppIcon name="refresh" class="owner-table-icon" />
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">{{ t("ownerTables.exportCsv") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadHtmlPack">{{ t("ownerTables.htmlPack") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">{{ t("ownerTables.printCards") }}</button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">
+            <AppIcon name="download" class="owner-table-icon" />
+            {{ t("ownerTables.exportCsv") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadHtmlPack">
+            <AppIcon name="menu" class="owner-table-icon" />
+            {{ t("ownerTables.htmlPack") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">
+            <AppIcon name="print" class="owner-table-icon" />
+            {{ t("ownerTables.printCards") }}
+          </button>
         </div>
       </div>
       <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
@@ -74,7 +86,7 @@
       {{ t("common.search") }} - 0 / {{ tables.length }}
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+    <div class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
       <article
         v-for="table in filteredTables"
         :key="table.id"
@@ -133,11 +145,54 @@
           <p class="print-only text-[10px] uppercase tracking-[0.15em] text-slate-600">{{ t("ownerTables.poweredBy", { name: tenantName }) }}</p>
         </div>
 
-        <div class="no-print grid grid-cols-2 gap-2 lg:grid-cols-3">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">{{ t("ownerTables.copyShort") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">{{ t("ownerTables.copyFull") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">{{ t("ownerTables.copyQr") }}</button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">{{ t("ownerTables.downloadQr") }}</button>
+        <div class="no-print grid grid-cols-2 gap-2 sm:hidden">
+          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">
+            <AppIcon name="link" class="owner-table-icon" />
+            {{ t("ownerTables.copyShort") }}
+          </button>
+          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">
+            <AppIcon name="download" class="owner-table-icon" />
+            {{ t("ownerTables.downloadQr") }}
+          </button>
+          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
+            {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+          </button>
+          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
+            {{ t("ownerTables.delete") }}
+          </button>
+        </div>
+
+        <details class="no-print sm:hidden rounded-xl border border-slate-800/80 bg-slate-950/45 p-2.5">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-200">{{ t("ownerTables.cardsTitle") }}</summary>
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
+              <AppIcon name="copy" class="owner-table-icon" />
+              {{ t("ownerTables.copyFull") }}
+            </button>
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
+              <AppIcon name="copy" class="owner-table-icon" />
+              {{ t("ownerTables.copyQr") }}
+            </button>
+          </div>
+        </details>
+
+        <div class="no-print hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">
+            <AppIcon name="link" class="owner-table-icon" />
+            {{ t("ownerTables.copyShort") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
+            <AppIcon name="copy" class="owner-table-icon" />
+            {{ t("ownerTables.copyFull") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
+            <AppIcon name="copy" class="owner-table-icon" />
+            {{ t("ownerTables.copyQr") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">
+            <AppIcon name="download" class="owner-table-icon" />
+            {{ t("ownerTables.downloadQr") }}
+          </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
             {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
@@ -157,7 +212,10 @@
         <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <p class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">{{ t("common.close") }}</button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">
+              <AppIcon name="close" class="owner-table-icon" />
+              {{ t("common.close") }}
+            </button>
           </div>
           <div class="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
             <aside class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
@@ -165,7 +223,7 @@
               <ul class="space-y-2">
                 <li>
                   <button
-                    class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
+                    class="w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition"
                     :class="formMode === 'create' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
                     @click="formMode = 'create'"
                   >
@@ -174,7 +232,7 @@
                 </li>
                 <li>
                   <button
-                    class="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold transition"
+                    class="w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition"
                     :class="formMode === 'bulk' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
                     @click="formMode = 'bulk'"
                   >
@@ -274,6 +332,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import QRCode from "qrcode";
+import AppIcon from "../components/AppIcon.vue";
 import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
@@ -729,6 +788,11 @@ onMounted(fetchTables);
 </script>
 
 <style scoped>
+.owner-table-icon {
+  width: 0.84rem;
+  height: 0.84rem;
+}
+
 .print-only {
   display: none;
 }
@@ -758,6 +822,13 @@ onMounted(fetchTables);
     border-color: #cbd5e1 !important;
     background: #ffffff !important;
     color: #0f172a !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .owner-table-btn {
+    min-height: 2.35rem;
+    font-size: 0.74rem;
   }
 }
 </style>

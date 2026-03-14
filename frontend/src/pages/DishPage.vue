@@ -14,9 +14,11 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <RouterLink :to="{ name: 'category', params: { slug: props.category } }" class="ui-btn-outline justify-center">
+          <AppIcon name="menu" class="h-3.5 w-3.5" />
           {{ t('dishPage.backToCategory', { category: categoryName }) }}
         </RouterLink>
         <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary justify-center">
+          <AppIcon name="menu" class="h-3.5 w-3.5" />
           {{ t('customerLayout.navMenu') }}
         </RouterLink>
       </div>
@@ -54,9 +56,11 @@
         <section class="space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <RouterLink :to="{ name: 'category', params: { slug: props.category } }" class="ui-btn-outline justify-center text-xs sm:text-sm">
+              <AppIcon name="menu" class="h-3.5 w-3.5" />
               {{ t('dishPage.backToCategory', { category: categoryName }) }}
             </RouterLink>
             <RouterLink v-if="cart.count" :to="{ name: 'cart' }" class="ui-btn-outline justify-center text-xs sm:text-sm">
+              <AppIcon name="cart" class="h-3.5 w-3.5" />
               {{ t('common.cart') }} / {{ cart.count }}
             </RouterLink>
           </div>
@@ -158,6 +162,7 @@
                 }}
               </button>
               <RouterLink :to="{ name: 'cart' }" class="ui-btn-outline w-full justify-center">
+                <AppIcon name="cart" class="h-3.5 w-3.5" />
                 {{ t('common.cart') }}
               </RouterLink>
               <button
@@ -169,6 +174,7 @@
                 @keydown.enter.prevent="canWhatsappShare ? shareWhatsapp() : null"
                 @keydown.space.prevent="canWhatsappShare ? shareWhatsapp() : null"
               >
+                <AppIcon name="chat" class="h-3.5 w-3.5" />
                 {{
                   !isRestaurantOpen
                     ? t('dishPage.restaurantClosed')
@@ -220,6 +226,7 @@
           @keydown.enter.prevent="addToCart"
           @keydown.space.prevent="addToCart"
         >
+          <AppIcon name="plus" class="h-3.5 w-3.5" />
           {{ isBrowseOnlyPlan ? t('dishPage.viewOnly') : t('dishPage.add') }}
         </button>
       </div>
@@ -229,6 +236,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch, watchEffect } from 'vue';
+import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useMenuStore } from '../stores/menu';
 import { useCartStore } from '../stores/cart';

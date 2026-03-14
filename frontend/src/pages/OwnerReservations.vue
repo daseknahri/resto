@@ -1,6 +1,6 @@
 <template>
-  <section class="space-y-6 ui-safe-bottom pb-6">
-    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
+  <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
+    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
@@ -12,22 +12,25 @@
             {{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button class="ui-btn-primary justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
+        <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <button class="ui-btn-primary w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="loading" @click="fetchReservations">
+            <AppIcon name="refresh" class="owner-res-icon" />
             {{ loading ? t("common.loading") : t("common.refresh") }}
           </button>
-          <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
+          <button class="ui-btn-outline w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="exporting" @click="exportCsv">
+            <AppIcon name="download" class="owner-res-icon" />
             {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
           </button>
-          <button class="ui-btn-outline justify-center px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+          <button class="ui-btn-outline hidden justify-center px-4 py-2 text-sm sm:inline-flex" :disabled="loading" @click="applyFilters">
+            <AppIcon name="filter" class="owner-res-icon" />
             {{ t("common.apply") }}
           </button>
         </div>
       </div>
     </header>
 
-    <section class="ui-command-deck space-y-4">
-      <div class="ui-toolbar-band grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_96px_auto]">
+    <section class="ui-command-deck space-y-3 sm:space-y-4">
+      <div class="ui-toolbar-band grid gap-3 p-3 sm:p-4 md:grid-cols-[minmax(0,1fr)_220px_96px_auto]">
         <input
           v-model.trim="searchQuery"
           class="ui-input"
@@ -40,19 +43,31 @@
             <option v-for="option in statusOptions" :key="option.value || 'all'" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
-        <div class="text-xs text-slate-400">
-          Per page
+        <div class="hidden text-xs text-slate-400 md:block">
+          {{ t("adminConsole.pageSize") }}
           <select v-model.number="pageSize" class="ui-input mt-1 w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
             <option :value="50">50</option>
           </select>
         </div>
-        <div class="flex flex-wrap items-end gap-2 md:justify-end">
+        <div class="hidden flex-wrap items-end gap-2 md:flex md:justify-end">
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
+            <AppIcon name="close" class="owner-res-icon" />
             {{ t("common.clear") }}
           </button>
           <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+            <AppIcon name="filter" class="owner-res-icon" />
+            {{ t("common.apply") }}
+          </button>
+        </div>
+        <div class="flex items-center gap-2 md:hidden">
+          <button class="ui-btn-outline flex-1 justify-center px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
+            <AppIcon name="close" class="owner-res-icon" />
+            {{ t("common.clear") }}
+          </button>
+          <button class="ui-btn-primary flex-1 justify-center px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+            <AppIcon name="filter" class="owner-res-icon" />
             {{ t("common.apply") }}
           </button>
         </div>
@@ -70,11 +85,11 @@
             </select>
           </label>
           <label class="text-xs text-slate-400">
-            From
+            {{ t("ownerHome.from") }}
             <input v-model="dateFrom" type="date" class="ui-input mt-1" />
           </label>
           <label class="text-xs text-slate-400">
-            To
+            {{ t("ownerHome.to") }}
             <input v-model="dateTo" type="date" class="ui-input mt-1" />
           </label>
           <div class="flex flex-wrap items-end gap-2 md:justify-end">
@@ -83,16 +98,18 @@
               :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
               @click="toggleFailedRetryQueue"
             >
+              <AppIcon name="refresh" class="owner-res-icon" />
               {{ reminderFilter === "failed" ? t("ownerReservations.exitRetryQueue") : t("ownerReservations.retryQueue") }}
             </button>
             <button class="ui-btn-primary px-4 py-2 text-sm" :disabled="loading" @click="applyFilters">
+              <AppIcon name="filter" class="owner-res-icon" />
               {{ t("common.apply") }}
             </button>
           </div>
         </div>
       </details>
 
-      <div class="ui-toolbar-band">
+      <div class="ui-toolbar-band hidden md:block">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-3">
             <label class="inline-flex items-center gap-2 text-xs text-slate-300">
@@ -109,15 +126,17 @@
               <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
               <option value="new">{{ t("ownerReservations.resetNew") }}</option>
             </select>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
+            <button class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
+              <AppIcon name="filter" class="owner-res-icon" />
               {{ t("common.apply") }}
             </button>
             <button
-              class="ui-btn-outline px-3 py-1.5 text-xs"
+              class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs"
               :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
               :disabled="!selectedCount || bulkReminderLoading"
               @click="bulkRetryReminders"
             >
+              <AppIcon name="refresh" class="owner-res-icon" />
               {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
             </button>
           </div>
@@ -129,21 +148,21 @@
           <p class="text-amber-100/80">{{ t("ownerReservations.pendingReminderHelp") }}</p>
           <div class="flex flex-wrap gap-2">
             <button
-              class="rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="reconcilePendingReminders('opened')"
             >
               {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markOpened") }}
             </button>
             <button
-              class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="reconcilePendingReminders('failed')"
             >
               {{ bulkReconcileLoading ? t("ownerReservations.saving") : t("ownerReservations.markFailed") }}
             </button>
             <button
-              class="rounded-full border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-300 disabled:opacity-60"
               :disabled="bulkReconcileLoading"
               @click="clearPendingReminderReconciliation"
             >
@@ -152,6 +171,42 @@
           </div>
         </div>
       </div>
+
+      <details class="ui-toolbar-band md:hidden">
+        <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+          {{ t("ownerReservations.selectedCount", { count: selectedCount }) }}
+        </summary>
+        <div class="mt-3 space-y-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+              <input type="checkbox" :checked="allSelectedOnPage" @change="toggleSelectAllOnPage" />
+              {{ t("ownerReservations.selectPage") }}
+            </label>
+            <span class="ui-data-strip">{{ activeFilterSummary }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <select v-model="bulkAction" class="ui-input col-span-2 text-xs">
+              <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
+              <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
+              <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
+              <option value="new">{{ t("ownerReservations.resetNew") }}</option>
+            </select>
+            <button class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
+              <AppIcon name="filter" class="owner-res-icon" />
+              {{ t("common.apply") }}
+            </button>
+            <button
+              class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs"
+              :class="reminderFilter === 'failed' ? 'border-rose-400 text-rose-200' : ''"
+              :disabled="!selectedCount || bulkReminderLoading"
+              @click="bulkRetryReminders"
+            >
+              <AppIcon name="refresh" class="owner-res-icon" />
+              {{ bulkReminderLoading ? t("ownerReservations.preparing") : t("ownerReservations.bulkRetryReminders") }}
+            </button>
+          </div>
+        </div>
+      </details>
 
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
       <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
@@ -207,9 +262,9 @@
             </span>
           </div>
 
-          <div class="space-y-1 text-sm">
-            <p class="text-slate-200">{{ reservation.phone || "-" }}</p>
-            <p class="text-slate-400">{{ reservation.email || "-" }}</p>
+          <div class="space-y-1 text-sm text-start">
+            <p class="text-slate-200 break-all">{{ reservation.phone || "-" }}</p>
+            <p class="text-slate-400 break-all">{{ reservation.email || "-" }}</p>
           </div>
 
           <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-line">
@@ -244,6 +299,7 @@
               :href="telHref(reservation)"
               class="ui-btn-outline px-3 py-1.5 text-xs"
             >
+              <AppIcon name="phone" class="owner-res-icon" />
               {{ t("common.call") }}
             </a>
             <a
@@ -253,51 +309,53 @@
               rel="noopener noreferrer"
               class="ui-btn-outline px-3 py-1.5 text-xs"
             >
+              <AppIcon name="chat" class="owner-res-icon" />
               {{ t("ownerReservations.quickChat") }}
             </a>
           </div>
 
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <button
-              class="rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
               @click="sendReminder(reservation)"
             >
               {{ isReminderSending(reservation.id) ? t("ownerReservations.opening") : t("ownerReservations.reminder") }}
             </button>
             <button
-              class="rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              class="owner-action-btn rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'contacted')"
             >
               {{ t("ownerReservations.contacted") }}
             </button>
             <button
-              class="rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              class="owner-action-btn rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'won')"
             >
               {{ t("ownerReservations.confirmed") }}
             </button>
             <button
-              class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'lost')"
             >
               {{ t("ownerReservations.unavailable") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'new')"
             >
               {{ t("ownerReservations.resetNew") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
+              class="owner-action-btn rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isTimelineLoading(reservation.id)"
               @click="toggleTimeline(reservation.id)"
             >
+              <AppIcon name="calendar" class="owner-res-icon" />
               {{ isTimelineOpen(reservation.id) ? t("ownerReservations.hideTimeline") : t("ownerReservations.timeline") }}
             </button>
           </div>
@@ -362,6 +420,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
@@ -950,3 +1009,18 @@ const exportCsv = async () => {
 
 onMounted(fetchReservations);
 </script>
+
+<style scoped>
+.owner-res-icon {
+  width: 0.84rem;
+  height: 0.84rem;
+}
+
+@media (max-width: 640px) {
+  .owner-action-btn {
+    min-height: 2.35rem;
+    font-size: 0.74rem;
+    letter-spacing: 0.01em;
+  }
+}
+</style>

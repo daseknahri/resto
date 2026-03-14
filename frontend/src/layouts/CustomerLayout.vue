@@ -22,13 +22,7 @@
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
               <RouterLink to="/cart" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
-                <span class="sm:hidden" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="9" cy="20" r="1" />
-                    <circle cx="18" cy="20" r="1" />
-                    <path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L21 7H7" />
-                  </svg>
-                </span>
+                <AppIcon name="cart" class="h-4 w-4 sm:hidden" />
                 <span class="hidden sm:inline">{{ t("common.cart") }}</span>
                 <span
                   v-if="cart.count"
@@ -50,6 +44,7 @@
               class="ui-segmented-button min-w-[7rem]"
               :data-active="activeCustomerSection === item.key"
             >
+              <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
               <span>{{ item.label }}</span>
               <span v-if="item.badge" class="ml-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
                 {{ item.badge }}
@@ -86,6 +81,7 @@
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >
+          <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
           <span class="text-[11px] font-semibold leading-none">{{ item.label }}</span>
           <span
             v-if="item.badge"
@@ -103,6 +99,7 @@
 import { computed, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
+import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
@@ -127,10 +124,10 @@ const activeCustomerSection = computed(() => {
 });
 
 const navItems = computed(() => [
-  { key: "info", label: t("customerLayout.navInfo"), to: { name: "customer-home" }, badge: "" },
-  { key: "menu", label: t("customerLayout.navMenu"), to: { name: "menu" }, badge: "" },
-  { key: "cart", label: t("customerLayout.navCart"), to: { name: "cart" }, badge: cart.count ? String(cart.count) : "" },
-  { key: "reserve", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" },
+  { key: "info", icon: "info", label: t("customerLayout.navInfo"), to: { name: "customer-home" }, badge: "" },
+  { key: "menu", icon: "menu", label: t("customerLayout.navMenu"), to: { name: "menu" }, badge: "" },
+  { key: "cart", icon: "cart", label: t("customerLayout.navCart"), to: { name: "cart" }, badge: cart.count ? String(cart.count) : "" },
+  { key: "reserve", icon: "calendar", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" },
 ]);
 
 const navItemClass = (key) =>

@@ -1,31 +1,35 @@
 <template>
-  <section class="space-y-5 pb-20 sm:pb-6">
-    <article class="ui-workspace-stage ui-fade-up space-y-4 p-4 md:p-5">
-      <div class="space-y-2">
+  <section class="space-y-4 pb-24 sm:space-y-5 sm:pb-6">
+    <article class="ui-workspace-stage ui-fade-up space-y-3 p-3 sm:space-y-4 sm:p-4 md:p-5">
+      <div class="space-y-1.5">
         <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-        <h2 class="ui-page-title ui-display">{{ t("ownerHome.title") }}</h2>
-        <p class="max-w-3xl text-sm leading-6 text-slate-300">{{ t("ownerHome.description") }}</p>
+        <h2 class="ui-page-title ui-display text-[1.7rem] leading-tight sm:text-4xl">{{ t("ownerHome.title") }}</h2>
+        <p class="max-w-3xl text-sm leading-5 text-slate-300 sm:leading-6">{{ t("ownerHome.description") }}</p>
       </div>
 
-      <div class="flex flex-wrap gap-2">
+      <div class="ui-scroll-row sm:flex sm:flex-wrap">
         <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
         <span class="ui-chip">{{ planModeLabel }}</span>
         <span class="ui-data-strip">{{ t("ownerHome.readiness") }}: {{ readinessScore }}%</span>
-        <span class="ui-data-strip hidden sm:inline-flex">{{ categoriesCount }} {{ t("common.categories") }}</span>
-        <span class="ui-data-strip hidden sm:inline-flex">{{ dishesCount }} {{ t("common.dishes") }}</span>
+        <span class="ui-data-strip hidden md:inline-flex">{{ categoriesCount }} {{ t("common.categories") }}</span>
+        <span class="ui-data-strip hidden md:inline-flex">{{ dishesCount }} {{ t("common.dishes") }}</span>
       </div>
 
-      <div class="flex flex-wrap gap-3">
-        <RouterLink to="/owner/onboarding" class="ui-btn-primary px-5 py-2.5">
+      <div class="grid gap-2 sm:flex sm:flex-wrap sm:gap-3">
+        <RouterLink to="/owner/onboarding" class="ui-btn-primary w-full px-5 py-2.5 sm:w-auto">
+          <AppIcon name="menu" class="owner-home-btn-icon" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline px-5 py-2.5">
+        <RouterLink to="/menu" class="ui-btn-outline w-full px-5 py-2.5 sm:w-auto">
+          <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
-        <button class="ui-btn-outline px-5 py-2.5" @click="copyMenuUrl">
+        <button class="ui-btn-outline w-full px-5 py-2.5 sm:w-auto" @click="copyMenuUrl">
+          <AppIcon name="copy" class="owner-home-btn-icon" />
           {{ t("ownerHome.copyPublicUrl") }}
         </button>
-        <button class="ui-btn-outline hidden sm:inline-flex px-5 py-2.5" :disabled="loading" @click="refresh">
+        <button class="ui-btn-outline hidden px-5 py-2.5 sm:inline-flex" :disabled="loading" @click="refresh">
+          <AppIcon name="refresh" class="owner-home-btn-icon" />
           {{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}
         </button>
       </div>
@@ -34,7 +38,7 @@
       <p v-if="copied" class="text-xs text-emerald-300">{{ t("ownerHome.menuUrlCopied") }}</p>
     </article>
 
-    <article class="ui-section-band space-y-4 p-4">
+    <article class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
@@ -45,7 +49,7 @@
       <div class="h-2 overflow-hidden rounded-full bg-slate-800">
         <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${readinessScore}%` }"></div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <article
           v-for="item in readinessItems"
           :key="item.label"
@@ -56,7 +60,7 @@
           <div class="flex min-w-0 items-start gap-3">
             <span class="ui-readiness-dot mt-1 shrink-0"></span>
             <div class="min-w-0">
-              <p class="text-sm font-medium text-slate-100">{{ item.label }}</p>
+              <p class="text-[13px] font-medium text-slate-100 sm:text-sm">{{ item.label }}</p>
               <p class="mt-1 text-xs text-slate-500">{{ item.note }}</p>
               <RouterLink v-if="item.to" :to="item.to" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline">
                 {{ item.actionLabel }}
@@ -70,12 +74,15 @@
       </div>
     </article>
 
-    <article class="ui-command-deck space-y-4 p-4">
-      <div class="flex items-center justify-between gap-2">
-        <h3 class="text-lg font-semibold">{{ t("ownerHome.analyticsTitle") }}</h3>
+    <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+          <AppIcon name="chart" class="owner-home-section-icon" />
+          <span>{{ t("ownerHome.analyticsTitle") }}</span>
+        </h3>
         <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
           <p class="ui-stat-value text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
@@ -93,7 +100,7 @@
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
           <ul class="mt-3 space-y-2 text-sm text-slate-200">
@@ -117,13 +124,17 @@
       </div>
     </article>
 
-    <article class="ui-command-deck space-y-4 p-4">
+    <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 class="text-lg font-semibold">{{ t("ownerHome.purchaseUpgrade") }}</h3>
+          <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+            <AppIcon name="plus" class="owner-home-section-icon" />
+            <span>{{ t("ownerHome.purchaseUpgrade") }}</span>
+          </h3>
           <p class="text-xs text-slate-400">{{ t("ownerHome.currentPlan", { plan: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }) }}</p>
         </div>
         <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
+          <AppIcon name="refresh" class="owner-home-btn-icon" />
           {{ upgradeLoading ? t("ownerHome.loadingRequests") : t("ownerHome.refreshRequests") }}
         </button>
       </div>
@@ -136,7 +147,7 @@
         }}
       </p>
 
-      <div v-if="upgradeTargets.length" class="grid gap-3 lg:grid-cols-[1fr,2fr,auto]">
+      <div v-if="upgradeTargets.length" class="grid gap-2 sm:gap-3 lg:grid-cols-[1fr,2fr,auto]">
         <label class="text-sm text-slate-300">
           {{ t("ownerHome.targetTier") }}
           <select v-model="upgradeTargetCode" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
@@ -174,11 +185,11 @@
           <table class="min-w-full text-sm">
             <thead class="bg-slate-900/80 text-slate-400">
               <tr>
-                <th class="px-3 py-2 text-left">{{ t("ownerHome.when") }}</th>
-                <th class="px-3 py-2 text-left">{{ t("ownerHome.from") }}</th>
-                <th class="px-3 py-2 text-left">{{ t("ownerHome.to") }}</th>
-                <th class="px-3 py-2 text-left">{{ t("common.status") }}</th>
-                <th class="px-3 py-2 text-left">{{ t("ownerHome.adminNote") }}</th>
+                <th class="px-3 py-2 text-start">{{ t("ownerHome.when") }}</th>
+                <th class="px-3 py-2 text-start">{{ t("ownerHome.from") }}</th>
+                <th class="px-3 py-2 text-start">{{ t("ownerHome.to") }}</th>
+                <th class="px-3 py-2 text-start">{{ t("common.status") }}</th>
+                <th class="px-3 py-2 text-start">{{ t("ownerHome.adminNote") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -226,6 +237,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useTenantStore } from "../stores/tenant";
@@ -481,3 +493,16 @@ onMounted(async () => {
   await refresh();
 });
 </script>
+
+<style scoped>
+.owner-home-btn-icon {
+  width: 0.86rem;
+  height: 0.86rem;
+}
+
+.owner-home-section-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-secondary);
+}
+</style>

@@ -32,9 +32,7 @@
             @click="clearSearch"
           >
             <span class="sr-only">{{ t('common.clear') }}</span>
-            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <AppIcon name="close" class="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -76,6 +74,7 @@
           <p class="text-sm text-slate-400">{{ t('menu.noMatchText') }}</p>
         </div>
         <button class="ui-btn-outline justify-center" @click="clearSearch">
+          <AppIcon name="close" class="h-3.5 w-3.5" />
           {{ t('common.clear') }}
         </button>
       </div>
@@ -102,9 +101,12 @@
         <p class="text-xs text-slate-400">{{ t('common.cart') }}</p>
         <p class="font-semibold">{{ itemCountLabel(cart.count) }}</p>
       </div>
-      <p class="text-base font-semibold text-[var(--color-secondary)]">
-        {{ formatCurrency(cart.total, cartCurrency) }}
-      </p>
+      <div class="flex items-center gap-2">
+        <p class="text-base font-semibold text-[var(--color-secondary)]">
+          {{ formatCurrency(cart.total, cartCurrency) }}
+        </p>
+        <AppIcon name="cart" class="h-4 w-4 text-slate-200" />
+      </div>
     </RouterLink>
   </div>
 </template>
@@ -112,6 +114,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import AppIcon from '../components/AppIcon.vue';
 import CategoryCard from '../components/CategoryCard.vue';
 import { useI18n } from '../composables/useI18n';
 import { trackEvent } from '../lib/analytics';

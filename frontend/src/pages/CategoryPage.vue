@@ -9,6 +9,7 @@
             <p class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
           </div>
           <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
+            <AppIcon name="menu" class="h-3.5 w-3.5" />
             {{ t("customerLayout.navMenu") }}
           </RouterLink>
         </div>
@@ -21,9 +22,7 @@
             @click="search = ''"
           >
             <span class="sr-only">{{ t("common.clear") }}</span>
-            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <AppIcon name="close" class="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -60,10 +59,11 @@
                 :class="quickAddDisabled ? 'cursor-not-allowed opacity-50' : ''"
                 @click="addDishQuick(dish)"
               >
-                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+                <AppIcon name="plus" class="h-4 w-4" />
                 <span>{{ t("dishPage.add") }}</span>
               </button>
               <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="ui-btn-outline justify-center">
+                <AppIcon name="eye" class="h-3.5 w-3.5" />
                 {{ t("category.viewDish") }}
               </RouterLink>
             </div>
@@ -75,8 +75,14 @@
     <div v-if="!menu.loading && !filteredDishes.length" class="ui-empty-state space-y-3 text-center">
       <p class="text-lg font-semibold text-white">{{ t("category.noMatch") }}</p>
       <div class="flex flex-wrap justify-center gap-2">
-        <button class="ui-btn-outline justify-center" @click="search = ''">{{ t("common.clear") }}</button>
-        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">{{ t("customerLayout.navMenu") }}</RouterLink>
+        <button class="ui-btn-outline justify-center" @click="search = ''">
+          <AppIcon name="close" class="h-3.5 w-3.5" />
+          {{ t("common.clear") }}
+        </button>
+        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
+          <AppIcon name="menu" class="h-3.5 w-3.5" />
+          {{ t("customerLayout.navMenu") }}
+        </RouterLink>
       </div>
     </div>
 
@@ -89,6 +95,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";

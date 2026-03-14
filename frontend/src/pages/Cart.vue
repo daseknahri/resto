@@ -28,6 +28,7 @@
           class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50"
           @click="clearCart"
         >
+          <AppIcon name="close" class="h-3.5 w-3.5" />
           {{ t('common.clear') }}
         </button>
       </div>
@@ -127,6 +128,7 @@
               class="text-xs text-red-300 hover:text-red-200"
               @click="cart.remove(item.key)"
             >
+              <AppIcon name="close" class="h-3.5 w-3.5" />
               {{ t('cartPage.remove') }}
             </button>
           </div>
@@ -147,6 +149,7 @@
             class="ui-btn-outline px-3 py-1.5 text-xs"
             @click="removeUnavailable"
           >
+            <AppIcon name="close" class="h-3.5 w-3.5" />
             {{ t('cartPage.removeUnavailableItems') }}
           </button>
         </div>
@@ -211,6 +214,7 @@
                 "
                 @click="fulfillmentType = 'pickup'"
               >
+                <AppIcon name="menu" class="h-3.5 w-3.5" />
                 {{ t('cartPage.pickup') }}
               </button>
               <button
@@ -222,6 +226,7 @@
                 "
                 @click="fulfillmentType = 'delivery'"
               >
+                <AppIcon name="table" class="h-3.5 w-3.5" />
                 {{ t('cartPage.delivery') }}
               </button>
             </div>
@@ -317,6 +322,7 @@
                   :disabled="locating"
                   @click="useCurrentLocation"
                 >
+                  <AppIcon name="info" class="h-3.5 w-3.5" />
                   {{
                     locating
                       ? t('cartPage.locating')
@@ -339,6 +345,7 @@
                   class="ui-btn-outline px-3 py-1.5 text-xs"
                   @click="openInAppMapPicker"
                 >
+                  <AppIcon name="table" class="h-3.5 w-3.5" />
                   {{ t('cartPage.pickPinInApp') }}
                 </button>
                 <button
@@ -346,9 +353,11 @@
                   :disabled="!hasLocationCoords && !deliveryLocationUrl"
                   @click="clearLocation"
                 >
+                  <AppIcon name="close" class="h-3.5 w-3.5" />
                   {{ t('cartPage.clearLocation') }}
                 </button>
                 <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openExternalMap">
+                  <AppIcon name="link" class="h-3.5 w-3.5" />
                   {{ t('cartPage.openExternalMap') }}
                 </button>
               </div>
@@ -459,6 +468,7 @@
               :disabled="processingCheckout"
               @click="startCheckout"
             >
+              <AppIcon name="cart" class="h-3.5 w-3.5" />
               {{
                 processingCheckout
                   ? t('cartPage.preparingCheckout')
@@ -472,6 +482,7 @@
               :disabled="sendingWhatsapp"
               @click="openWhatsApp"
             >
+              <AppIcon name="chat" class="h-3.5 w-3.5" />
               {{
                 sendingWhatsapp
                   ? t('cartPage.preparingWhatsApp')
@@ -527,6 +538,7 @@
               class="ui-btn-outline px-3 py-1.5 text-xs"
               @click="closeMapModal"
             >
+              <AppIcon name="close" class="h-3.5 w-3.5" />
               {{ t('common.close') }}
             </button>
           </header>
@@ -549,6 +561,7 @@
                 class="ui-btn-outline px-3 py-1.5 text-xs"
                 @click="closeMapModal"
               >
+                <AppIcon name="close" class="h-3.5 w-3.5" />
                 {{ t('cartPage.cancel') }}
               </button>
               <button
@@ -556,6 +569,7 @@
                 :disabled="!hasTemporaryMapSelection"
                 @click="applyMapSelection"
               >
+                <AppIcon name="check" class="h-3.5 w-3.5" />
                 {{ t('cartPage.useSelectedPin') }}
               </button>
             </div>
@@ -575,6 +589,7 @@ import {
   ref,
   watch,
 } from 'vue';
+import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useTenantStore } from '../stores/tenant';
