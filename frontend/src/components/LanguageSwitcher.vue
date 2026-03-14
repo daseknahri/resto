@@ -1,5 +1,5 @@
 <template>
-  <div v-if="dropdown" ref="rootRef" class="relative z-[200]" :aria-label="t('common.language')">
+  <div v-if="dropdown" ref="rootRef" class="relative z-[400]" :aria-label="t('common.language')">
     <button
       type="button"
       class="inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
@@ -13,13 +13,13 @@
 
     <div
       v-if="open"
-      class="absolute right-0 top-full z-[210] mt-1.5 min-w-[6.5rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/40 backdrop-blur"
+      class="absolute right-0 bottom-full z-[420] mb-1.5 min-w-[5.25rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
     >
       <button
         v-for="option in localeOptions"
         :key="option.code"
         type="button"
-        class="flex w-full items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1 text-left text-[11px] text-slate-200 transition hover:bg-slate-800/80"
+        class="flex w-full items-center gap-1 whitespace-nowrap rounded-lg px-1.5 py-1 text-left text-[10px] text-slate-200 transition hover:bg-slate-800/80"
         :class="currentLocaleValue === option.code ? 'bg-slate-800/70 text-[var(--color-secondary)]' : ''"
         @click="selectLocale(option.code)"
       >
