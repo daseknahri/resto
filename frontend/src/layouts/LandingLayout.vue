@@ -29,7 +29,7 @@
             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
             {{ t("home.heroLive") }}
           </div>
-          <LanguageSwitcher />
+          <LanguageSwitcher dropdown />
           <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.admin") }}</RouterLink>
           <RouterLink v-if="session.canEditTenantMenu" to="/owner" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.workspace") }}</RouterLink>
           <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target text-sm">{{ t("common.signIn") }}</RouterLink>

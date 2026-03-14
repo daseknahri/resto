@@ -1,7 +1,7 @@
 <template>
   <div class="px-3 py-2 pb-24 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <section class="ui-hero-stage ui-reveal relative overflow-hidden p-0">
-      <div class="relative min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-[1.35rem] border border-slate-800/60 bg-slate-950/70 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)]">
+      <div class="relative min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-[1.35rem] border border-slate-800/70 bg-slate-950/90 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)]">
         <img
           v-if="heroImage"
           :src="heroImage"
@@ -9,8 +9,8 @@
           class="absolute inset-0 h-full w-full object-cover"
           loading="lazy"
         />
-        <div class="absolute inset-0 bg-slate-950/74"></div>
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.2),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.18),transparent_24%)]"></div>
+        <div class="absolute inset-0 bg-slate-950/86"></div>
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_26%)]"></div>
 
         <div class="relative flex min-h-[calc(100vh-9.5rem)] flex-col justify-between gap-4 p-4 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)] md:p-6">
           <div class="mx-auto w-full max-w-3xl space-y-4 text-center">
@@ -32,13 +32,13 @@
             </div>
 
             <div class="flex flex-wrap justify-center gap-2">
-              <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm">
+              <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2 text-sm">
                 <span aria-hidden="true">
                   <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M6 12h12M9 17h6"/></svg>
                 </span>
                 <span>{{ t("customerLayout.navMenu") }}</span>
               </RouterLink>
-              <button type="button" class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2 text-sm" @click="openLeadModal">
+              <button type="button" class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm" @click="openLeadModal">
                 <span aria-hidden="true">
                   <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.17L4 17.17V4z"/><path d="M8 8h8M8 12h6"/></svg>
                 </span>
@@ -191,7 +191,7 @@
             <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
 
             <div class="flex flex-wrap items-center gap-3">
-              <button type="submit" class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65" :disabled="lead.submitting || lead.success">
+              <button type="submit" class="ui-btn-primary ui-touch-target w-full justify-center disabled:cursor-not-allowed disabled:opacity-65 sm:w-auto" :disabled="lead.submitting || lead.success">
                 {{ lead.submitting ? t("customerLeadPage.sending") : lead.success ? t("customerLeadPage.sent") : t("customerLeadPage.contactMe") }}
               </button>
               <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
