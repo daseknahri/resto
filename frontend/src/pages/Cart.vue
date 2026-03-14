@@ -2,14 +2,24 @@
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
     <header class="ui-hero-ribbon ui-reveal p-3 md:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div class="space-y-1.5">
           <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
           <h1
             class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl"
           >
             {{ t('common.cart') }}
           </h1>
-          <p v-if="tableLabelModel" class="mt-1 text-xs text-slate-300">
+          <p v-if="cart.items.length" class="text-xs text-slate-300">
+            {{ t('cartPage.reviewAdjustSend') }}
+          </p>
+          <div v-if="cart.items.length" class="flex flex-wrap items-center gap-2">
+            <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
+            <span class="ui-chip">{{ planLabel }}</span>
+            <span v-if="tableLabelModel" class="ui-chip">
+              {{ t('cartPage.table', { table: tableLabelModel }) }}
+            </span>
+          </div>
+          <p v-else-if="tableLabelModel" class="text-xs text-slate-300">
             {{ t('cartPage.table', { table: tableLabelModel }) }}
           </p>
         </div>
@@ -147,6 +157,19 @@
         class="xl:sticky xl:top-[calc(var(--safe-top)+5.75rem)] xl:self-start"
       >
         <section class="ui-glass space-y-3 p-4 sm:space-y-4 sm:p-5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="ui-chip">{{ planLabel }}</span>
+            <span class="ui-chip">
+              {{
+                cart.canCheckout
+                  ? t('cartPage.checkout')
+                  : cart.canWhatsapp
+                    ? t('cartPage.whatsappHandoff')
+                    : t('cartPage.orderingDisabledPlan')
+              }}
+            </span>
+          </div>
+
           <div class="ui-spotlight-card space-y-3 p-3.5 sm:p-4">
             <div class="flex items-center justify-between gap-3">
               <div>
@@ -157,7 +180,7 @@
               </div>
               <div class="text-right text-xs text-slate-400">
                 <p>{{ itemCountLabel(cart.count) }}</p>
-                <p>{{ planLabel }}</p>
+                <p>{{ t('cartPage.channel') }}</p>
               </div>
             </div>
           </div>
