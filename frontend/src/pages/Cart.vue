@@ -450,47 +450,51 @@
             </div>
           </div>
 
-          <button
-            v-if="cart.canCheckout"
-            class="ui-btn-primary w-full justify-center"
-            :disabled="processingCheckout"
-            @click="startCheckout"
-          >
-            {{
-              processingCheckout
-                ? t('cartPage.preparingCheckout')
-                : t('cartPage.proceedCheckout')
-            }}
-          </button>
+          <div class="ui-section-band space-y-2.5 px-3 py-3">
+            <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
 
-          <button
-            v-else-if="cart.canWhatsapp"
-            class="ui-btn-primary w-full justify-center"
-            :disabled="sendingWhatsapp"
-            @click="openWhatsApp"
-          >
-            {{
-              sendingWhatsapp
-                ? t('cartPage.preparingWhatsApp')
-                : t('cartPage.sendViaWhatsApp')
-            }}
-          </button>
+            <button
+              v-if="cart.canCheckout"
+              class="ui-btn-primary w-full justify-center"
+              :disabled="processingCheckout"
+              @click="startCheckout"
+            >
+              {{
+                processingCheckout
+                  ? t('cartPage.preparingCheckout')
+                  : t('cartPage.proceedCheckout')
+              }}
+            </button>
 
-          <button
-            v-else
-            class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50"
-            disabled
-          >
-            {{ t('cartPage.orderingDisabledPlan') }}
-          </button>
+            <button
+              v-else-if="cart.canWhatsapp"
+              class="ui-btn-primary w-full justify-center"
+              :disabled="sendingWhatsapp"
+              @click="openWhatsApp"
+            >
+              {{
+                sendingWhatsapp
+                  ? t('cartPage.preparingWhatsApp')
+                  : t('cartPage.sendViaWhatsApp')
+              }}
+            </button>
 
-          <p v-if="!cart.canCheckout" class="text-xs text-slate-400">
-            {{
-              cart.canWhatsapp
-                ? t('cartPage.whatsappEnabledCurrentPlan')
-                : t('cartPage.orderingDisabledCurrentPlan')
-            }}
-          </p>
+            <button
+              v-else
+              class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50"
+              disabled
+            >
+              {{ t('cartPage.orderingDisabledPlan') }}
+            </button>
+
+            <p v-if="!cart.canCheckout" class="text-xs text-slate-400">
+              {{
+                cart.canWhatsapp
+                  ? t('cartPage.whatsappEnabledCurrentPlan')
+                  : t('cartPage.orderingDisabledCurrentPlan')
+              }}
+            </p>
+          </div>
 
           <p v-if="checkoutError" class="text-xs text-red-300">
             {{ checkoutError }}

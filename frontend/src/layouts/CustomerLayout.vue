@@ -1,27 +1,34 @@
 <template>
   <div class="ui-shell">
     <header class="ui-header static md:sticky md:top-0 md:z-30">
-      <div class="mx-auto w-full max-w-5xl px-4 py-2">
-        <div class="ui-workspace-stage overflow-visible px-3 py-2.5 sm:px-4 sm:py-3">
+      <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
+        <div class="ui-workspace-stage overflow-visible px-2.5 py-2 sm:px-3.5 sm:py-2.5">
           <div class="flex items-center justify-between gap-3">
             <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
               <img
                 v-if="tenantLogo"
                 :src="tenantLogo"
                 :alt="`${tenantName} logo`"
-                class="h-8 w-8 rounded-xl border border-slate-700/70 object-cover shadow-lg shadow-black/30 sm:h-9 sm:w-9"
+                class="h-7 w-7 rounded-lg border border-slate-700/70 object-cover shadow-lg shadow-black/30 sm:h-9 sm:w-9"
                 loading="lazy"
               />
               <div class="min-w-0">
                 <p class="truncate text-base font-semibold text-slate-100 md:text-lg">{{ tenantName }}</p>
-                <p v-if="tenantTagline" class="truncate text-[10px] text-slate-400 md:text-[11px]">{{ tenantTagline }}</p>
+                <p v-if="tenantTagline" class="hidden truncate text-[10px] text-slate-400 md:block md:text-[11px]">{{ tenantTagline }}</p>
               </div>
             </RouterLink>
 
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
-              <RouterLink to="/cart" class="relative inline-flex min-h-[2.15rem] min-w-[2.15rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2.5 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
-                {{ t("common.cart") }}
+              <RouterLink to="/cart" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
+                <span class="sm:hidden" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="9" cy="20" r="1" />
+                    <circle cx="18" cy="20" r="1" />
+                    <path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L21 7H7" />
+                  </svg>
+                </span>
+                <span class="hidden sm:inline">{{ t("common.cart") }}</span>
                 <span
                   v-if="cart.count"
                   class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
@@ -33,7 +40,7 @@
           </div>
         </div>
 
-        <div class="mt-2 hidden items-center gap-4 md:flex">
+        <div class="mt-2 hidden items-center justify-center gap-4 md:flex">
           <nav class="ui-segmented max-w-fit">
             <RouterLink
               v-for="item in navItems"
