@@ -9,8 +9,8 @@
           class="absolute inset-0 h-full w-full object-cover"
           loading="lazy"
         />
-        <div class="absolute inset-0 bg-slate-950/86"></div>
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_26%)]"></div>
+        <div class="absolute inset-0 bg-slate-950/92"></div>
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.11),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]"></div>
 
         <div class="relative flex min-h-[calc(100vh-9.5rem)] flex-col justify-between gap-4 p-4 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)] md:p-6">
           <div class="mx-auto w-full max-w-4xl space-y-5 text-center">
@@ -59,64 +59,66 @@
               </a>
             </div>
 
-            <div class="space-y-3 text-center">
-              <p class="text-sm text-slate-200">{{ t("customerLeadPage.helpText") }}</p>
-              <div class="flex flex-wrap justify-center gap-2">
-                <a
-                  v-if="whatsappHref"
-                  :href="whatsappHref"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                  @click="trackContactClick('whatsapp_contact')"
-                >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.05 4.94A9.86 9.86 0 0 0 12.03 2C6.55 2 2.1 6.45 2.1 11.93c0 1.75.46 3.46 1.33 4.97L2 22l5.25-1.38a9.9 9.9 0 0 0 4.77 1.22h.01c5.48 0 9.93-4.45 9.93-9.93 0-2.65-1.03-5.13-2.91-6.97zM12.03 20.1h-.01a8.13 8.13 0 0 1-4.15-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.13 8.13 0 0 1-1.24-4.32c0-4.5 3.66-8.16 8.17-8.16 2.18 0 4.23.85 5.76 2.38a8.1 8.1 0 0 1 2.39 5.76c0 4.5-3.66 8.17-8.14 8.17zm4.47-6.1c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.55.12-.16.23-.63.78-.77.94-.14.16-.29.18-.53.06a6.6 6.6 0 0 1-1.95-1.2 7.22 7.22 0 0 1-1.33-1.65c-.14-.23-.01-.36.11-.48.11-.11.24-.29.36-.43.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.43-.06-.12-.55-1.32-.75-1.8-.2-.48-.4-.41-.55-.41h-.47c-.16 0-.43.06-.66.3-.23.24-.86.84-.86 2.04 0 1.2.88 2.36 1 2.52.12.16 1.73 2.64 4.18 3.7.58.25 1.03.4 1.38.51.58.18 1.1.16 1.52.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z" /></svg>
-                  <span>{{ t("customerLeadPage.whatsappNow") }}</span>
-                </a>
-                <a
-                  v-if="phoneHref"
-                  :href="phoneHref"
-                  class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                  @click="trackContactClick('phone_call')"
-                >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07A19.5 19.5 0 0 1 5.15 12.8 19.86 19.86 0 0 1 2.08 4.1 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.62a2 2 0 0 1-.45 2.11L8 9.93a16 16 0 0 0 6.07 6.07l1.48-1.23a2 2 0 0 1 2.11-.45c.84.29 1.72.5 2.62.62A2 2 0 0 1 22 16.92z" /></svg>
-                  <span>{{ t("customerLeadPage.callNow") }}</span>
-                </a>
-                <a
-                  v-if="googleMapsUrl"
-                  :href="googleMapsUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                  @click="trackContactClick('google_reviews')"
-                >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                  <span>{{ t("customerLeadPage.googleReviews") }}</span>
-                </a>
-              </div>
+            <div class="mx-auto w-full max-w-3xl rounded-2xl border border-slate-700/80 bg-slate-950/78 p-3.5 text-center shadow-xl shadow-black/35 backdrop-blur-sm sm:p-4">
+              <div class="space-y-3">
+                <p class="text-sm text-slate-200">{{ t("customerLeadPage.helpText") }}</p>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <a
+                    v-if="whatsappHref"
+                    :href="whatsappHref"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                    @click="trackContactClick('whatsapp_contact')"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.05 4.94A9.86 9.86 0 0 0 12.03 2C6.55 2 2.1 6.45 2.1 11.93c0 1.75.46 3.46 1.33 4.97L2 22l5.25-1.38a9.9 9.9 0 0 0 4.77 1.22h.01c5.48 0 9.93-4.45 9.93-9.93 0-2.65-1.03-5.13-2.91-6.97zM12.03 20.1h-.01a8.13 8.13 0 0 1-4.15-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.13 8.13 0 0 1-1.24-4.32c0-4.5 3.66-8.16 8.17-8.16 2.18 0 4.23.85 5.76 2.38a8.1 8.1 0 0 1 2.39 5.76c0 4.5-3.66 8.17-8.14 8.17zm4.47-6.1c-.24-.12-1.42-.7-1.64-.78-.22-.08-.38-.12-.55.12-.16.23-.63.78-.77.94-.14.16-.29.18-.53.06a6.6 6.6 0 0 1-1.95-1.2 7.22 7.22 0 0 1-1.33-1.65c-.14-.23-.01-.36.11-.48.11-.11.24-.29.36-.43.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.43-.06-.12-.55-1.32-.75-1.8-.2-.48-.4-.41-.55-.41h-.47c-.16 0-.43.06-.66.3-.23.24-.86.84-.86 2.04 0 1.2.88 2.36 1 2.52.12.16 1.73 2.64 4.18 3.7.58.25 1.03.4 1.38.51.58.18 1.1.16 1.52.1.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28z" /></svg>
+                    <span>{{ t("customerLeadPage.whatsappNow") }}</span>
+                  </a>
+                  <a
+                    v-if="phoneHref"
+                    :href="phoneHref"
+                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                    @click="trackContactClick('phone_call')"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07A19.5 19.5 0 0 1 5.15 12.8 19.86 19.86 0 0 1 2.08 4.1 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.62a2 2 0 0 1-.45 2.11L8 9.93a16 16 0 0 0 6.07 6.07l1.48-1.23a2 2 0 0 1 2.11-.45c.84.29 1.72.5 2.62.62A2 2 0 0 1 22 16.92z" /></svg>
+                    <span>{{ t("customerLeadPage.callNow") }}</span>
+                  </a>
+                  <a
+                    v-if="googleMapsUrl"
+                    :href="googleMapsUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                    @click="trackContactClick('google_reviews')"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                    <span>{{ t("customerLeadPage.googleReviews") }}</span>
+                  </a>
+                </div>
 
-              <div v-if="socialLinks.length" class="flex flex-wrap justify-center gap-2">
-                <a
-                  v-for="social in socialLinks"
-                  :key="`social-${social.key}`"
-                  :href="social.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="ui-chip inline-flex items-center gap-2 text-[11px]"
-                  @click="trackContactClick(`social_${social.key}`)"
-                >
-                  <span aria-hidden="true">
-                    <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
-                    <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V4.98C16.7 4.94 15.74 4.85 14.62 4.85c-2.34 0-3.94 1.43-3.94 4.06V11H8v3h2.68v8h2.82z" /></svg>
-                    <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.59 6.69A4.83 4.83 0 0 1 22 10.4V18a4 4 0 0 1-4 4h-6.2a6 6 0 0 1-6-6V9.5a4 4 0 0 1 4-4h5.9a4.83 4.83 0 0 1 3.89 1.19zM14 10a1 1 0 1 0 1 1 1 1 0 0 0-1-1zm-5 3.2a3 3 0 1 0 3 3 3 3 0 0 0-3-3z" /></svg>
-                  </span>
-                  <span>{{ social.label }}</span>
-                </a>
-              </div>
+                <div v-if="socialLinks.length" class="flex flex-wrap justify-center gap-2">
+                  <a
+                    v-for="social in socialLinks"
+                    :key="`social-${social.key}`"
+                    :href="social.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ui-chip inline-flex items-center gap-2 text-[11px]"
+                    @click="trackContactClick(`social_${social.key}`)"
+                  >
+                    <span aria-hidden="true">
+                      <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
+                      <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V4.98C16.7 4.94 15.74 4.85 14.62 4.85c-2.34 0-3.94 1.43-3.94 4.06V11H8v3h2.68v8h2.82z" /></svg>
+                      <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.59 6.69A4.83 4.83 0 0 1 22 10.4V18a4 4 0 0 1-4 4h-6.2a6 6 0 0 1-6-6V9.5a4 4 0 0 1 4-4h5.9a4.83 4.83 0 0 1 3.89 1.19zM14 10a1 1 0 1 0 1 1 1 1 0 0 0-1-1zm-5 3.2a3 3 0 1 0 3 3 3 3 0 0 0-3-3z" /></svg>
+                    </span>
+                    <span>{{ social.label }}</span>
+                  </a>
+                </div>
 
-              <div class="flex flex-wrap justify-center gap-2 pt-1">
-                <span class="ui-chip">{{ locationLine || t("customerLeadPage.fallbackDescription") }}</span>
-                <span class="ui-chip">{{ t("customerLeadPage.responseValue") }}</span>
+                <div class="flex flex-wrap justify-center gap-2 pt-1">
+                  <span class="ui-chip">{{ locationLine || t("customerLeadPage.fallbackDescription") }}</span>
+                  <span class="ui-chip">{{ t("customerLeadPage.responseValue") }}</span>
+                </div>
               </div>
             </div>
           </div>

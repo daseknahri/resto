@@ -1,5 +1,10 @@
 <template>
-  <div class="space-y-3 px-3 py-2 pb-24 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom">
+  <div
+    :class="[
+      'space-y-3 px-3 py-2 sm:space-y-4 sm:px-4 sm:py-3 sm:pb-8 ui-safe-bottom',
+      cart.count ? 'pb-44' : 'pb-24',
+    ]"
+  >
     <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/82 p-3 md:p-4">
       <div class="space-y-2.5">
         <div class="space-y-1">

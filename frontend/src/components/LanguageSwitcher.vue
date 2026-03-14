@@ -1,5 +1,5 @@
 <template>
-  <div v-if="dropdown" ref="rootRef" class="relative z-[900]" :aria-label="t('common.language')">
+  <div v-if="dropdown" ref="rootRef" class="relative z-[1200]" :aria-label="t('common.language')">
     <button
       type="button"
       class="inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
@@ -13,7 +13,7 @@
 
     <div
       v-if="open"
-      class="absolute right-0 top-full z-[950] mt-1.5 min-w-[5.25rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
+      class="absolute right-0 top-full z-[1300] mt-1.5 min-w-[5.25rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
     >
       <button
         v-for="option in localeOptions"

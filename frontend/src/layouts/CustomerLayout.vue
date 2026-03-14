@@ -1,6 +1,6 @@
 <template>
   <div class="ui-shell">
-    <header class="ui-header static md:sticky md:top-0 md:z-30">
+    <header class="ui-header relative z-[100] static md:sticky md:top-0 md:z-[100]">
       <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
         <div class="ui-workspace-stage overflow-visible px-2.5 py-2 sm:px-3.5 sm:py-2.5">
           <div class="flex items-center justify-between gap-3">
