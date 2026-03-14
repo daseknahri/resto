@@ -1,14 +1,14 @@
 <template>
   <div class="space-y-3 px-3 py-3 pb-24 sm:space-y-4 sm:px-4 sm:py-4 ui-safe-bottom">
-    <header class="ui-hero-stage ui-reveal overflow-hidden p-3 md:p-4">
+    <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/84 p-3 md:p-4">
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0 space-y-1">
             <p class="ui-kicker">{{ t("category.kicker") }}</p>
             <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-            <p class="text-sm text-slate-300">{{ categoryDescription }}</p>
+            <p class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
           </div>
-          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline px-3 py-1.5 text-xs">
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
             {{ t("customerLayout.navMenu") }}
           </RouterLink>
         </div>
@@ -20,7 +20,10 @@
             class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
             @click="search = ''"
           >
-            {{ t("common.clear") }}
+            <span class="sr-only">{{ t("common.clear") }}</span>
+            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
           </button>
         </div>
       </div>
