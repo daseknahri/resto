@@ -81,6 +81,12 @@
   - `infra/coolify/backup_postgres.sh`
   - `infra/coolify/restore_postgres.sh`
 
+## Coolify full-stack backup + wildcard verification
+- Runbook: `infra/COOLIFY_FULL_STACK_BACKUP.md`
+- Scripts:
+  - `infra/coolify/backup_full_stack.sh`
+  - `infra/coolify/check_live_wildcard.sh`
+
 ## Coolify email verification
 - Runbook: `infra/COOLIFY_EMAIL_VERIFICATION.md`
 - DNS deliverability check: `infra/COOLIFY_EMAIL_DNS_CHECK.md`
