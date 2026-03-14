@@ -2,7 +2,7 @@
   <div class="ui-shell">
     <header class="ui-header static md:sticky md:top-0 md:z-30">
       <div class="mx-auto w-full max-w-7xl px-4 py-2 md:py-3 ui-fade-up">
-        <div class="ui-workspace-stage p-3 md:p-4">
+        <div class="ui-workspace-stage overflow-visible p-3 md:p-4">
           <div class="relative flex items-center justify-between gap-2 md:grid md:grid-cols-[minmax(0,1fr)_minmax(420px,2fr)_auto] md:items-center md:gap-4">
             <div class="flex min-w-0 items-center gap-3">
               <img
