@@ -37,6 +37,13 @@ class MenuI18nSerializerTests(SimpleTestCase):
         value = serializer._localized_text("Salad", {"fr": "Salade"})
         self.assertEqual(value, "Salad")
 
+    def test_localized_text_can_be_forced_for_authenticated_context(self):
+        request = self._request("/api/categories/?lang=fr&force_locale=1")
+        request.user = SimpleNamespace(is_authenticated=True)
+        serializer = CategorySerializer(context={"request": request})
+        value = serializer._localized_text("Salad", {"fr": "Salade"})
+        self.assertEqual(value, "Salade")
+
     def test_validate_name_i18n_rejects_invalid_locale(self):
         serializer = CategorySerializer(context={"request": self._request()})
         with self.assertRaisesMessage(ValidationError, "Category name translation locale must be like 'en', 'fr', or 'ar'."):

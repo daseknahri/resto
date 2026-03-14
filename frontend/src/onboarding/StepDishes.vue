@@ -341,10 +341,55 @@
               <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
               <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ cat.name }}</option>
             </select>
-            <input v-model="quickDish.name" class="ui-input" :placeholder="t('stepDishes.dishNamePlaceholder')" />
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishNamePlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`quick-dish-name-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                    :class="quickDishFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="quickDishFieldLocales.name = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
+              <input
+                :value="localizedQuickDishFieldValue('name', quickDishFieldLocales.name)"
+                class="ui-input"
+                :placeholder="t('stepDishes.dishNamePlaceholder')"
+                @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value)"
+              />
+            </div>
             <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
             <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
-            <textarea v-model="quickDish.description" rows="2" class="ui-textarea sm:col-span-2" :placeholder="t('stepDishes.descriptionPlaceholder')"></textarea>
+            <div class="space-y-1 sm:col-span-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-[11px] text-slate-400">{{ t("stepDishes.descriptionPlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`quick-dish-description-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                    :class="quickDishFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="quickDishFieldLocales.description = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                :value="localizedQuickDishFieldValue('description', quickDishFieldLocales.description)"
+                rows="2"
+                class="ui-textarea"
+                :placeholder="t('stepDishes.descriptionPlaceholder')"
+                @input="setLocalizedQuickDishFieldValue('description', quickDishFieldLocales.description, $event.target.value)"
+              ></textarea>
+            </div>
           </div>
           <div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -366,11 +411,29 @@
                 class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"
               >
                 <div class="grid gap-2 sm:grid-cols-[1fr,130px,130px,auto] sm:items-center">
-                  <input
-                    v-model="option.name"
-                    class="ui-input"
-                    :placeholder="t('stepDishes.variantNamePlaceholder')"
-                  />
+                  <div class="space-y-1">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <p class="text-[11px] text-slate-400">{{ t("stepDishes.variantNamePlaceholder") }}</p>
+                      <div class="flex flex-wrap gap-1">
+                        <button
+                          v-for="locale in availableContentLocales"
+                          :key="`quick-variant-name-${option.local_id}-${locale.code}`"
+                          type="button"
+                          class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                          :class="quickDishFieldLocales.variantName === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                          @click="quickDishFieldLocales.variantName = locale.code"
+                        >
+                          {{ locale.nativeLabel }}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      :value="localizedQuickVariantNameValue(option, quickDishFieldLocales.variantName)"
+                      class="ui-input"
+                      :placeholder="t('stepDishes.variantNamePlaceholder')"
+                      @input="setLocalizedQuickVariantNameValue(option, quickDishFieldLocales.variantName, $event.target.value)"
+                    />
+                  </div>
                   <input
                     v-model.number="option.price_delta"
                     type="number"
@@ -462,10 +525,17 @@ const quickDishModalOpen = ref(false);
 const quickDish = reactive({
   category: "",
   name: "",
+  name_i18n: {},
   description: "",
+  description_i18n: {},
   price: 0,
   image_url: "",
   options: [],
+});
+const quickDishFieldLocales = reactive({
+  name: "en",
+  description: "en",
+  variantName: "en",
 });
 const editingDish = computed(
   () => dishes.find((dish) => String(dish.local_id) === String(dishEditorLocalId.value)) || null
@@ -538,6 +608,9 @@ const syncDishFieldLocales = () => {
   if (!allowed.has(dishFieldLocales.name)) dishFieldLocales.name = defaultLocale.value;
   if (!allowed.has(dishFieldLocales.description)) dishFieldLocales.description = defaultLocale.value;
   if (!allowed.has(dishFieldLocales.variantName)) dishFieldLocales.variantName = defaultLocale.value;
+  if (!allowed.has(quickDishFieldLocales.name)) quickDishFieldLocales.name = defaultLocale.value;
+  if (!allowed.has(quickDishFieldLocales.description)) quickDishFieldLocales.description = defaultLocale.value;
+  if (!allowed.has(quickDishFieldLocales.variantName)) quickDishFieldLocales.variantName = defaultLocale.value;
 };
 
 watch([availableContentLocales, defaultLocale], syncDishFieldLocales, { immediate: true });
@@ -593,6 +666,55 @@ const setLocalizedVariantNameValue = (dish, option, localeCode, value) => {
     }
   }
   clearRowError(dish.local_id, optionFieldKey(option, "name"));
+};
+
+const localizedQuickDishFieldValue = (field, localeCode) => {
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(quickDish[field] || "");
+  const map = quickDish[`${field}_i18n`];
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedQuickDishFieldValue = (field, localeCode, value) => {
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    quickDish[field] = nextValue;
+  } else {
+    const mapField = `${field}_i18n`;
+    if (!quickDish[mapField] || typeof quickDish[mapField] !== "object") quickDish[mapField] = {};
+    if (nextValue.trim()) {
+      quickDish[mapField][locale] = nextValue;
+    } else {
+      delete quickDish[mapField][locale];
+    }
+  }
+};
+
+const localizedQuickVariantNameValue = (option, localeCode) => {
+  if (!option) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(option.name || "");
+  const map = option.name_i18n;
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedQuickVariantNameValue = (option, localeCode, value) => {
+  if (!option) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    option.name = nextValue;
+  } else {
+    if (!option.name_i18n || typeof option.name_i18n !== "object") option.name_i18n = {};
+    if (nextValue.trim()) {
+      option.name_i18n[locale] = nextValue;
+    } else {
+      delete option.name_i18n[locale];
+    }
+  }
 };
 const isManagedUpload = (value = "") => /\/uploads\//.test(String(value));
 const cleanupManagedUpload = async (value) => {
@@ -846,10 +968,15 @@ const resolveQuickDishCategory = (candidate = activeCategoryId.value) => {
 const resetQuickDish = (categoryId = activeCategoryId.value) => {
   quickDish.category = resolveQuickDishCategory(categoryId);
   quickDish.name = "";
+  quickDish.name_i18n = {};
   quickDish.description = "";
+  quickDish.description_i18n = {};
   quickDish.price = 0;
   quickDish.image_url = "";
   quickDish.options = [];
+  quickDishFieldLocales.name = defaultLocale.value;
+  quickDishFieldLocales.description = defaultLocale.value;
+  quickDishFieldLocales.variantName = defaultLocale.value;
 };
 
 const openQuickDishModal = (categoryId = activeCategoryId.value) => {
@@ -876,6 +1003,9 @@ const removeQuickOption = (idx) => {
 const quickAddDish = () => {
   const name = String(quickDish.name || "").trim();
   const category = resolveQuickDishCategory(quickDish.category);
+  const allowedTranslationLocales = availableContentLocales.value
+    .map((locale) => locale.code)
+    .filter((locale) => locale !== defaultLocale.value);
   if (!category) {
     toast.show(t("stepDishes.selectCategoryError"), "error");
     return;
@@ -888,12 +1018,19 @@ const quickAddDish = () => {
     normalize({
       category,
       name,
+      name_i18n: pickI18nMap(quickDish.name_i18n, allowedTranslationLocales),
       description: String(quickDish.description || "").trim(),
+      description_i18n: pickI18nMap(quickDish.description_i18n, allowedTranslationLocales),
       price: Number(quickDish.price) || 0,
       image_url: String(quickDish.image_url || "").trim(),
       position: dishes.length,
       options: (Array.isArray(quickDish.options) ? quickDish.options : [])
-        .map((option) => normalizeOption(option))
+        .map((option) =>
+          normalizeOption({
+            ...option,
+            name_i18n: pickI18nMap(option?.name_i18n, allowedTranslationLocales),
+          })
+        )
         .filter(
           (option) =>
             String(option.name || "").trim() ||

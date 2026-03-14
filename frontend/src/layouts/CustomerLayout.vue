@@ -103,7 +103,7 @@ import { useTenantStore } from "../stores/tenant";
 const cart = useCartStore();
 const tenant = useTenantStore();
 const route = useRoute();
-const { t } = useI18n();
+const { currentLocale, t } = useI18n();
 
 const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
@@ -197,4 +197,10 @@ onMounted(syncTableFromQuery);
 watch(() => route.query?.table, syncTableFromQuery);
 watch(() => route.query?.t, syncTableFromQuery);
 watch(() => route.params?.tableSlug, syncTableFromQuery);
+watch(
+  () => currentLocale.value,
+  () => {
+    tenant.fetchMeta();
+  }
+);
 </script>

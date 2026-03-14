@@ -46,6 +46,16 @@ def _normalize_locale(value) -> str:
 
 
 class LocalizedContentMixin:
+    def _force_locale_enabled(self) -> bool:
+        request = self.context.get("request")
+        if request is None:
+            return False
+        query_params = getattr(request, "query_params", None)
+        if query_params is None:
+            query_params = getattr(request, "GET", {})
+        raw = str(query_params.get("force_locale", "") or "").strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
     def _tenant_max_languages(self) -> int:
         request = self.context.get("request")
         tenant = getattr(request, "tenant", None) if request is not None else None
@@ -88,7 +98,11 @@ class LocalizedContentMixin:
         if request is None:
             return ""
         user = getattr(request, "user", None)
-        if user is not None and getattr(user, "is_authenticated", False):
+        if (
+            user is not None
+            and getattr(user, "is_authenticated", False)
+            and not self._force_locale_enabled()
+        ):
             # Keep owner/admin editing payloads in canonical base fields.
             # Public/anonymous menu responses remain locale-aware.
             return ""

@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import CategoryCard from '../components/CategoryCard.vue';
 import { useI18n } from '../composables/useI18n';
@@ -108,7 +108,7 @@ const menu = useMenuStore();
 const tenant = useTenantStore();
 const cart = useCartStore();
 const router = useRouter();
-const { formatCurrency, t } = useI18n();
+const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
 
 const search = ref('');
 const placeholder =
@@ -144,4 +144,11 @@ onMounted(async () => {
   if (!menuCategories.value.length) await menu.fetchCategories();
   trackEvent('menu_view', { source: 'customer_menu_browse' });
 });
+
+watch(
+  () => currentLocale.value,
+  () => {
+    menu.fetchCategories(true);
+  }
+);
 </script>

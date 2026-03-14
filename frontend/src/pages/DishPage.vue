@@ -236,7 +236,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { formatCurrency, itemCountLabel, t } = useI18n();
+const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
 const similarVis = useVisibility();
 const qty = ref(1);
 const selectedOptionIds = ref([]);
@@ -547,5 +547,14 @@ watchEffect(() => {
     });
   }
 });
+
+watch(
+  () => currentLocale.value,
+  () => {
+    if (!props.category) return;
+    menu.fetchCategories(true);
+    menu.fetchDishesByCategory(props.category, true);
+  }
+);
 </script>
 

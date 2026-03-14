@@ -81,6 +81,18 @@ class ProfileSerializerTests(SimpleTestCase):
         serializer = ProfileSerializer(instance=profile, context={"request": request})
         self.assertEqual(serializer.data["tagline"], "Fast menu")
 
+    def test_profile_i18n_can_be_forced_for_authenticated_owner(self):
+        request = RequestFactory().get("/api/meta/?lang=fr&force_locale=1", HTTP_HOST="demo.menu.kepoli.com")
+        request.user = SimpleNamespace(is_authenticated=True)
+        request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
+        profile = Profile(
+            tenant=Tenant(name="Demo", slug="demo", plan=Plan(code="starter", name="Basic")),
+            tagline="Fast menu",
+            tagline_i18n={"fr": "Menu rapide"},
+        )
+        serializer = ProfileSerializer(instance=profile, context={"request": request})
+        self.assertEqual(serializer.data["tagline"], "Menu rapide")
+
     def test_profile_i18n_enforces_plan_limit(self):
         request = RequestFactory().get("/api/profile/", HTTP_HOST="demo.menu.kepoli.com")
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))

@@ -91,7 +91,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { formatCurrency, t } = useI18n();
+const { currentLocale, formatCurrency, t } = useI18n();
 const search = ref("");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);
@@ -160,6 +160,15 @@ const addDishQuick = (dish) => {
 onMounted(() => {
   if (!menuCategories.value.length) menu.fetchCategories();
 });
+
+watch(
+  () => currentLocale.value,
+  () => {
+    if (!props.slug) return;
+    menu.fetchCategories(true);
+    menu.fetchDishesByCategory(props.slug, true);
+  }
+);
 
 watch(
   () => props.slug,

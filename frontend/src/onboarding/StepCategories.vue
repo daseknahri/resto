@@ -190,17 +190,54 @@
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
           </div>
           <div class="mt-4 space-y-3">
-            <input
-              v-model="quickCategory.name"
-              class="ui-input"
-              :placeholder="t('stepCategories.categoryNamePlaceholder')"
-            />
-            <textarea
-              v-model="quickCategory.description"
-              rows="2"
-              class="ui-textarea"
-              :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-            ></textarea>
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`quick-cat-name-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                    :class="quickCategoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="quickCategoryFieldLocales.name = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
+              <input
+                :value="localizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name)"
+                class="ui-input"
+                :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                @input="setLocalizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name, $event.target.value)"
+              />
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="locale in availableContentLocales"
+                    :key="`quick-cat-description-${locale.code}`"
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                    :class="quickCategoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                    @click="quickCategoryFieldLocales.description = locale.code"
+                  >
+                    {{ locale.nativeLabel }}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                :value="localizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description)"
+                rows="2"
+                class="ui-textarea"
+                :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+                @input="setLocalizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description, $event.target.value)"
+              ></textarea>
+            </div>
             <div class="grid gap-3 sm:grid-cols-2">
               <input
                 v-model.number="quickCategory.position"
@@ -267,9 +304,15 @@ const categoryFieldLocales = reactive({
 });
 const quickCategory = reactive({
   name: "",
+  name_i18n: {},
   description: "",
+  description_i18n: {},
   position: 0,
   image_url: "",
+});
+const quickCategoryFieldLocales = reactive({
+  name: "en",
+  description: "en",
 });
 const editingCategory = computed(
   () => categories.find((cat) => String(cat.local_id) === String(categoryEditorLocalId.value)) || null
@@ -290,6 +333,8 @@ const syncCategoryFieldLocales = () => {
   const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
   if (!allowed.has(categoryFieldLocales.name)) categoryFieldLocales.name = defaultLocale.value;
   if (!allowed.has(categoryFieldLocales.description)) categoryFieldLocales.description = defaultLocale.value;
+  if (!allowed.has(quickCategoryFieldLocales.name)) quickCategoryFieldLocales.name = defaultLocale.value;
+  if (!allowed.has(quickCategoryFieldLocales.description)) quickCategoryFieldLocales.description = defaultLocale.value;
 };
 
 watch([availableContentLocales, defaultLocale], syncCategoryFieldLocales, { immediate: true });
@@ -319,6 +364,30 @@ const setLocalizedCategoryFieldValue = (cat, field, localeCode, value) => {
     }
   }
   clearRowError(cat.local_id, field);
+};
+
+const localizedQuickCategoryFieldValue = (field, localeCode) => {
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(quickCategory[field] || "");
+  const map = quickCategory[`${field}_i18n`];
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedQuickCategoryFieldValue = (field, localeCode, value) => {
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    quickCategory[field] = nextValue;
+  } else {
+    const mapField = `${field}_i18n`;
+    if (!quickCategory[mapField] || typeof quickCategory[mapField] !== "object") quickCategory[mapField] = {};
+    if (nextValue.trim()) {
+      quickCategory[mapField][locale] = nextValue;
+    } else {
+      delete quickCategory[mapField][locale];
+    }
+  }
 };
 const isManagedUpload = (value = "") => /\/uploads\//.test(String(value));
 const cleanupManagedUpload = async (value) => {
@@ -464,9 +533,13 @@ const closeCategoryEditor = () => {
 
 const openQuickCategoryModal = () => {
   quickCategory.name = "";
+  quickCategory.name_i18n = {};
   quickCategory.description = "";
+  quickCategory.description_i18n = {};
   quickCategory.position = categories.length;
   quickCategory.image_url = "";
+  quickCategoryFieldLocales.name = defaultLocale.value;
+  quickCategoryFieldLocales.description = defaultLocale.value;
   quickCategoryModalOpen.value = true;
 };
 
@@ -483,7 +556,19 @@ const quickAddCategory = () => {
   categories.push(
     normalize({
       name,
+      name_i18n: pickI18nMap(
+        quickCategory.name_i18n,
+        availableContentLocales.value
+          .map((locale) => locale.code)
+          .filter((locale) => locale !== defaultLocale.value)
+      ),
       description: String(quickCategory.description || "").trim(),
+      description_i18n: pickI18nMap(
+        quickCategory.description_i18n,
+        availableContentLocales.value
+          .map((locale) => locale.code)
+          .filter((locale) => locale !== defaultLocale.value)
+      ),
       position: Number(quickCategory.position) || 0,
       image_url: String(quickCategory.image_url || "").trim(),
     })

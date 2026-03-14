@@ -61,7 +61,7 @@ export const useTenantStore = defineStore("tenant", {
       this.loading = true;
       this.error = null;
       try {
-        const res = await api.get("/meta/");
+        const res = await api.get("/meta/", { params: { force_locale: 1 } });
         this.meta = res.data;
         this.syncCartEntitlements();
       } catch (err) {

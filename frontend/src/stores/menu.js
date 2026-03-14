@@ -57,16 +57,18 @@ export const useMenuStore = defineStore("menu", {
       this.dishes = demoDishesByCategory();
       this.error = null;
     },
-    async fetchCategories() {
+    async fetchCategories(force = false) {
       this.loading = true;
       this.error = null;
       try {
-        const res = await api.get("/categories/");
+        const res = await api.get("/categories/", { params: { force_locale: 1 } });
         const normalized = normalizeCategories(res.data);
         if (normalized.length || !isPublicDemoHost() || hasPublicDemoTenant()) {
           this.categories = normalized;
-          if (!Object.keys(this.dishes).length) {
-            this.dishes = Object.fromEntries(normalized.map((category) => [category.slug, category.dishes || []]));
+          if (force || !Object.keys(this.dishes).length) {
+            this.dishes = Object.fromEntries(
+              normalized.map((category) => [category.slug, category.dishes || []])
+            );
           }
         } else {
           this.applyDemoMenuData();
@@ -83,12 +85,12 @@ export const useMenuStore = defineStore("menu", {
         this.loading = false;
       }
     },
-    async fetchDishesByCategory(slug) {
-      if (this.dishes[slug]?.length) return;
+    async fetchDishesByCategory(slug, force = false) {
+      if (!force && this.dishes[slug]?.length) return;
       this.loading = true;
       this.error = null;
       try {
-        const res = await api.get("/dishes/", { params: { category: slug } });
+        const res = await api.get("/dishes/", { params: { category: slug, force_locale: 1 } });
         this.dishes[slug] = normalizeDishes(res.data);
       } catch (err) {
         if (isPublicDemoHost() && !hasPublicDemoTenant()) {
