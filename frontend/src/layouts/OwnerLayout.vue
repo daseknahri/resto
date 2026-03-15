@@ -1,6 +1,6 @@
 <template>
   <div class="ui-shell">
-    <header class="ui-header relative z-[200] overflow-visible md:top-0 md:z-[200]">
+    <header class="ui-header relative z-[2000] overflow-visible md:top-0 md:z-[2000]">
       <div class="mx-auto w-full max-w-7xl px-3 py-1.5 sm:px-4 md:py-3 ui-fade-up">
         <div class="ui-workspace-stage overflow-visible p-2.5 md:p-4 owner-workspace-stage">
           <div class="relative flex items-center justify-between gap-2 md:grid md:grid-cols-[minmax(0,1fr)_minmax(420px,2fr)_auto] md:items-center md:gap-4">
@@ -21,19 +21,37 @@
             </div>
 
             <div class="owner-main-nav hidden md:grid">
-              <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'">
+              <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'" active-class="" exact-active-class="">
                 <AppIcon name="home" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.dashboard") }}</span>
               </RouterLink>
-              <RouterLink to="/owner/onboarding" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/onboarding')">
+              <RouterLink
+                to="/owner/onboarding"
+                class="owner-main-nav-item"
+                :data-active="$route.path.startsWith('/owner/onboarding')"
+                active-class=""
+                exact-active-class=""
+              >
                 <AppIcon name="menu" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.menuBuilder") }}</span>
               </RouterLink>
-              <RouterLink to="/owner/tables" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/tables')">
+              <RouterLink
+                to="/owner/tables"
+                class="owner-main-nav-item"
+                :data-active="$route.path.startsWith('/owner/tables')"
+                active-class=""
+                exact-active-class=""
+              >
                 <AppIcon name="table" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.tablesQr") }}</span>
               </RouterLink>
-              <RouterLink to="/owner/reservations" class="owner-main-nav-item" :data-active="$route.path.startsWith('/owner/reservations')">
+              <RouterLink
+                to="/owner/reservations"
+                class="owner-main-nav-item"
+                :data-active="$route.path.startsWith('/owner/reservations')"
+                active-class=""
+                exact-active-class=""
+              >
                 <AppIcon name="calendar" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.reservations") }}</span>
               </RouterLink>
@@ -63,7 +81,13 @@
 
     <nav class="ui-bottom-dock owner-bottom-dock md:hidden">
       <div class="ui-bottom-dock-grid grid-cols-4">
-        <RouterLink to="/owner" class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight" :data-active="$route.path === '/owner'">
+        <RouterLink
+          to="/owner"
+          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
+          :data-active="$route.path === '/owner'"
+          active-class=""
+          exact-active-class=""
+        >
           <AppIcon name="home" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.dashboard") }}</span>
         </RouterLink>
@@ -71,6 +95,8 @@
           to="/owner/onboarding"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/onboarding')"
+          active-class=""
+          exact-active-class=""
         >
           <AppIcon name="menu" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.menuBuilder") }}</span>
@@ -79,6 +105,8 @@
           to="/owner/tables"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/tables')"
+          active-class=""
+          exact-active-class=""
         >
           <AppIcon name="table" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.tablesQr") }}</span>
@@ -87,6 +115,8 @@
           to="/owner/reservations"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/reservations')"
+          active-class=""
+          exact-active-class=""
         >
           <AppIcon name="calendar" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.reservations") }}</span>

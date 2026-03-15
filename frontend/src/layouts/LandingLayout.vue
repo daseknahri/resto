@@ -5,7 +5,7 @@
       <div class="absolute -right-20 top-10 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl"></div>
     </div>
 
-    <header class="ui-header ui-fade-up">
+    <header class="ui-header ui-fade-up relative z-[2000] overflow-visible">
       <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <RouterLink to="/" class="flex min-w-0 items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle">
@@ -18,10 +18,10 @@
         </RouterLink>
 
         <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex">
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/">{{ t("common.landing") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/menu">{{ t("common.liveDemo") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started">{{ t("common.getStarted") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact">{{ t("common.contact") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">{{ t("common.getStarted") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
         </nav>
 
         <div class="flex items-center gap-2">
@@ -31,19 +31,20 @@
           </div>
           <LanguageSwitcher dropdown />
           <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.admin") }}</RouterLink>
-          <RouterLink v-if="session.canEditTenantMenu" to="/owner" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.workspace") }}</RouterLink>
-          <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target text-sm">{{ t("common.signIn") }}</RouterLink>
-          <button v-else class="ui-btn-outline ui-touch-target text-sm" @click="signOut">{{ t("common.signOut") }}</button>
+          <RouterLink
+            v-if="session.canEditTenantMenu"
+            to="/owner"
+            class="ui-btn-outline ui-touch-target inline-flex text-[11px] sm:text-sm"
+          >
+            {{ t("common.workspace") }}
+          </RouterLink>
+          <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target text-[11px] sm:text-sm px-3 py-1.5 sm:px-5 sm:py-2.5">{{ t("common.signIn") }}</RouterLink>
+          <button v-else class="ui-btn-outline ui-touch-target text-[11px] sm:text-sm px-3 py-1.5 sm:px-5 sm:py-2.5" @click="signOut">
+            {{ t("common.signOut") }}
+          </button>
         </div>
       </div>
       <div class="ui-divider"></div>
-      <div class="mx-auto flex w-full max-w-6xl items-center gap-2 overflow-x-auto px-4 py-2 text-xs lg:hidden ui-safe-bottom">
-        <RouterLink class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs" to="/">{{ t("common.landing") }}</RouterLink>
-        <RouterLink class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs" to="/menu">{{ t("common.demo") }}</RouterLink>
-        <RouterLink class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs" to="/get-started">{{ t("common.getStarted") }}</RouterLink>
-        <RouterLink class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs" to="/contact">{{ t("common.contact") }}</RouterLink>
-        <RouterLink v-if="session.isPlatformAdmin" class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs" to="/admin-console">{{ t("common.admin") }}</RouterLink>
-      </div>
     </header>
 
     <main class="mx-auto w-full max-w-6xl ui-fade-up">
