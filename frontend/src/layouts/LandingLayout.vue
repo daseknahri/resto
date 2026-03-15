@@ -49,17 +49,21 @@
 
     <nav class="ui-bottom-dock lg:hidden">
       <div class="ui-bottom-dock-grid grid-cols-4">
-        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">
-          {{ t("common.landing") }}
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">
+          <AppIcon name="home" class="h-4 w-4" />
+          <span>{{ t("common.landing") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">
-          {{ t("common.demo") }}
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">
+          <AppIcon name="menu" class="h-4 w-4" />
+          <span>{{ t("common.demo") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">
-          {{ t("common.getStarted") }}
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">
+          <AppIcon name="plus" class="h-4 w-4" />
+          <span>{{ t("common.getStarted") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">
-          {{ t("common.contact") }}
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">
+          <AppIcon name="chat" class="h-4 w-4" />
+          <span>{{ t("common.contact") }}</span>
         </RouterLink>
       </div>
     </nav>
@@ -121,6 +125,7 @@
 <script setup>
 import { computed } from "vue";
 import { useRouter } from "vue-router";
+import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";

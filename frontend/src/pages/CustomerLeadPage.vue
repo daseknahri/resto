@@ -1,5 +1,16 @@
 <template>
   <div class="px-3 py-2 pb-24 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
+    <section v-if="showPlatformDemo" class="ui-hero-ribbon ui-reveal mb-3 p-4 text-center">
+      <p class="ui-kicker">{{ t("common.demo") }}</p>
+      <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("home.heroTitle") }}</h2>
+      <p class="mt-2 text-sm text-slate-300">{{ t("home.heroSubtitle") }}</p>
+      <div class="mt-4 flex flex-wrap justify-center gap-2">
+        <a :href="demoMenuUrl" class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm" target="_blank" rel="noopener noreferrer">
+          <AppIcon name="menu" class="h-4 w-4" />
+          <span>{{ t("home.viewLiveDemo") }}</span>
+        </a>
+      </div>
+    </section>
     <section class="ui-hero-stage ui-reveal relative overflow-hidden p-0">
       <div class="relative min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-[1.35rem] border border-slate-800/70 bg-slate-950/90 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)]">
         <img
@@ -212,6 +223,7 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
+import { isPublicDemoHost } from "../lib/runtimeHost";
 import { useTenantStore } from "../stores/tenant";
 
 const tenant = useTenantStore();
@@ -219,6 +231,8 @@ const lead = useLeadStore();
 const { t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
+const showPlatformDemo = computed(() => isPublicDemoHost());
+const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.kepoli.com/menu");
 
 const form = reactive({
   name: "",
