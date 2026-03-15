@@ -1,8 +1,8 @@
 <template>
   <div class="ui-shell">
-    <header class="ui-header static z-40 md:sticky md:top-0 md:z-40">
+    <header class="ui-header relative z-[200] overflow-visible md:top-0 md:z-[200]">
       <div class="mx-auto w-full max-w-7xl px-3 py-1.5 sm:px-4 md:py-3 ui-fade-up">
-        <div class="ui-workspace-stage overflow-visible p-2.5 md:p-4">
+        <div class="ui-workspace-stage overflow-visible p-2.5 md:p-4 owner-workspace-stage">
           <div class="relative flex items-center justify-between gap-2 md:grid md:grid-cols-[minmax(0,1fr)_minmax(420px,2fr)_auto] md:items-center md:gap-4">
             <div class="flex min-w-0 items-center gap-2.5 md:gap-3">
               <img
@@ -169,6 +169,10 @@ onMounted(async () => {
 .owner-signout-btn:hover {
   border-color: var(--color-secondary);
   color: var(--color-secondary);
+}
+
+.owner-workspace-stage {
+  z-index: 50;
 }
 
 .owner-main-nav {
