@@ -7,6 +7,7 @@ import {
   currentHostname,
   getPlatformAdminHost,
   hasPublicDemoTenant,
+  isPlatformPublicHost,
   isPlatformAdminHost,
   isPublicDemoHost,
 } from "../lib/runtimeHost";
