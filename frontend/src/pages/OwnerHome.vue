@@ -4,7 +4,6 @@
       <div class="space-y-1.5">
         <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
         <h2 class="ui-page-title ui-display text-[1.7rem] leading-tight sm:text-4xl">{{ t("ownerHome.title") }}</h2>
-        <p class="max-w-3xl text-sm leading-5 text-slate-300 sm:leading-6">{{ t("ownerHome.description") }}</p>
       </div>
 
       <div class="ui-scroll-row sm:flex sm:flex-wrap">
@@ -42,7 +41,6 @@
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
-          <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.pushTo100") }}</p>
         </div>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</span>
       </div>
@@ -61,7 +59,6 @@
             <span class="ui-readiness-dot mt-1 shrink-0"></span>
             <div class="min-w-0">
               <p class="text-[13px] font-medium text-slate-100 sm:text-sm">{{ item.label }}</p>
-              <p class="mt-1 text-xs text-slate-500">{{ item.note }}</p>
               <RouterLink v-if="item.to" :to="item.to" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline">
                 {{ item.actionLabel }}
               </RouterLink>

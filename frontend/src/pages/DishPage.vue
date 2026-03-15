@@ -104,28 +104,6 @@
             </p>
           </div>
 
-          <div v-if="similarDishes.length || menu.loading" ref="similarVis.target" class="space-y-2 pt-1">
-            <p class="text-sm text-slate-300">{{ t('dishPage.similarDishes') }}</p>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <template v-if="showSimilarSkeletons">
-                <div v-for="n in 2" :key="'sk-' + n" class="h-28 animate-pulse rounded-2xl bg-slate-800/50"></div>
-              </template>
-              <RouterLink
-                v-for="item in visibleSimilarDishes"
-                :key="item.slug"
-                :to="{ name: 'dish', params: { category: props.category, dish: item.slug } }"
-                class="group ui-surface-lift overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60"
-              >
-                <div class="relative h-24 w-full overflow-hidden">
-                  <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" decoding="async" />
-                </div>
-                <div class="space-y-1 p-3">
-                  <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
-                  <p class="text-sm font-semibold text-[var(--color-secondary)]">{{ formatCurrency(item.price, item.currency) }}</p>
-                </div>
-              </RouterLink>
-            </div>
-          </div>
         </section>
 
         <aside class="hidden space-y-3 sm:block lg:sticky lg:top-[calc(var(--safe-top)+5.5rem)] lg:self-start">
@@ -189,6 +167,29 @@
             <p v-if="!isRestaurantOpen" class="text-xs text-amber-300">{{ t('dishPage.restaurantClosedNotice') }}</p>
           </div>
         </aside>
+      </div>
+    </div>
+
+    <div v-if="dish && (similarDishes.length || menu.loading)" ref="similarVis.target" class="space-y-2 pb-6">
+      <p class="text-sm text-slate-300">{{ t('dishPage.similarDishes') }}</p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <template v-if="showSimilarSkeletons">
+          <div v-for="n in 2" :key="'sk-' + n" class="h-28 animate-pulse rounded-2xl bg-slate-800/50"></div>
+        </template>
+        <RouterLink
+          v-for="item in visibleSimilarDishes"
+          :key="item.slug"
+          :to="{ name: 'dish', params: { category: props.category, dish: item.slug } }"
+          class="group ui-surface-lift overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60"
+        >
+          <div class="relative h-24 w-full overflow-hidden">
+            <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" decoding="async" />
+          </div>
+          <div class="space-y-1 p-3">
+            <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
+            <p class="text-sm font-semibold text-[var(--color-secondary)]">{{ formatCurrency(item.price, item.currency) }}</p>
+          </div>
+        </RouterLink>
       </div>
     </div>
 

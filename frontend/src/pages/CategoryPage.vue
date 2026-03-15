@@ -35,14 +35,16 @@
         class="ui-content-auto ui-orbit-card ui-surface-lift ui-reveal p-3 sm:p-4"
       >
         <div class="grid gap-4 sm:grid-cols-[112px,minmax(0,1fr)] sm:items-start">
-          <img
-            :src="dish.image_url || placeholder"
-            :alt="dish.name"
-            class="h-32 w-full rounded-xl object-cover sm:h-36"
-            :loading="dishIndex < 2 ? 'eager' : 'lazy'"
-            :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
-            decoding="async"
-          />
+          <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block">
+            <img
+              :src="dish.image_url || placeholder"
+              :alt="dish.name"
+              class="h-32 w-full rounded-xl object-cover sm:h-36"
+              :loading="dishIndex < 2 ? 'eager' : 'lazy'"
+              :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
+              decoding="async"
+            />
+          </RouterLink>
           <div class="flex min-h-full flex-col gap-3">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 space-y-1">
