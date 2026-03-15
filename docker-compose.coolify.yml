@@ -74,14 +74,14 @@ services:
       - "traefik.enable=true"
       - "traefik.http.services.kepoli-api.loadbalancer.server.port=8000"
       - "traefik.http.routers.kepoli-api-menu.rule=Host(`menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-menu.entrypoints=https"
       - "traefik.http.routers.kepoli-api-menu.tls=true"
+      - "traefik.http.routers.kepoli-api-menu.service=kepoli-api"
       - "traefik.http.routers.kepoli-api-admin.rule=Host(`admin.menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-admin.entrypoints=https"
       - "traefik.http.routers.kepoli-api-admin.tls=true"
+      - "traefik.http.routers.kepoli-api-admin.service=kepoli-api"
       - "traefik.http.routers.kepoli-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-tenant.entrypoints=https"
       - "traefik.http.routers.kepoli-api-tenant.tls=true"
+      - "traefik.http.routers.kepoli-api-tenant.service=kepoli-api"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG}
