@@ -6,7 +6,7 @@
           <div class="min-w-0 space-y-1">
             <p class="ui-kicker">{{ t("category.kicker") }}</p>
             <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-            <p class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
+            <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
           </div>
           <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
             <AppIcon name="menu" class="h-3.5 w-3.5" />
@@ -38,7 +38,7 @@
           <img
             :src="dish.image_url || placeholder"
             :alt="dish.name"
-            class="h-28 w-full rounded-xl object-cover sm:h-[112px]"
+            class="h-32 w-full rounded-xl object-cover sm:h-36"
             :loading="dishIndex < 2 ? 'eager' : 'lazy'"
             :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
             decoding="async"
@@ -117,7 +117,7 @@ const currentCategory = computed(() => menuCategories.value.find((c) => c.slug =
 const categoryName = computed(() => currentCategory.value?.name || props.slug);
 const categoryDescription = computed(() => {
   const description = String(currentCategory.value?.description || "").trim();
-  return description || t("category.helper");
+  return description;
 });
 
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);

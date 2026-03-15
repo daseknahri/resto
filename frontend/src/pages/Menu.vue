@@ -12,7 +12,6 @@
           <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">
             {{ tenantName }}
           </h1>
-          <p class="max-w-2xl text-xs text-slate-300 md:text-sm">{{ t('menu.intro') }}</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-1.5">

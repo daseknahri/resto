@@ -4,7 +4,7 @@
     :style="{ '--ui-delay': `${Math.min(index || 0, 10) * 36}ms` }"
     @click="$emit('click')"
   >
-    <div class="relative h-36 w-full overflow-hidden sm:h-44">
+    <div class="relative h-40 w-full overflow-hidden sm:h-52">
       <img
         :src="image"
         :alt="title"

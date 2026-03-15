@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-3 px-3 py-3 pb-36 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
+  <div class="space-y-3 px-3 py-3 pb-44 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <div v-if="menu.loading" class="space-y-3" role="status" aria-live="polite">
       <div class="ui-skeleton h-64 rounded-[1.6rem]"></div>
       <div class="ui-skeleton h-48 rounded-[1.4rem]"></div>
