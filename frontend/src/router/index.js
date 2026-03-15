@@ -16,6 +16,7 @@ const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
 const OwnerLayout = () => import("../layouts/OwnerLayout.vue");
 
 const Home = () => import("../pages/Home.vue");
+const DemoLanding = () => import("../pages/DemoLanding.vue");
 const CustomerLeadPage = () => import("../pages/CustomerLeadPage.vue");
 const Menu = () => import("../pages/Menu.vue");
 const CategoryPage = () => import("../pages/CategoryPage.vue");
@@ -47,6 +48,7 @@ const routes = [
     component: LandingLayout,
     children: [
       { path: "", name: "home", component: Home, meta: { interface: "landing" } },
+      { path: "demo", name: "demo", component: DemoLanding, meta: { interface: "landing" } },
       { path: "get-started", name: "lead", component: LeadCapture, meta: { interface: "landing" } },
       { path: "privacy", name: "privacy", component: PrivacyPolicy, meta: { interface: "landing" } },
       { path: "terms", name: "terms", component: TermsOfService, meta: { interface: "landing" } },
@@ -131,6 +133,9 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const toast = useToastStore();
   const needsCustomerInterface = to.matched.some((route) => route.meta?.interface === "customer");
+  if (needsCustomerInterface && isPlatformPublicHost()) {
+    return { name: "demo" };
+  }
   if (needsCustomerInterface && isPublicDemoHost() && !hasPublicDemoTenant()) {
     return { name: "home" };
   }

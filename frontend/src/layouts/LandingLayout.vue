@@ -19,7 +19,7 @@
 
         <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex">
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/demo" :data-active="$route.path === '/demo'" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">{{ t("common.getStarted") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
         </nav>
@@ -53,7 +53,7 @@
           <AppIcon name="home" class="h-4 w-4" />
           <span>{{ t("common.landing") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/demo" :data-active="$route.path === '/demo'" active-class="" exact-active-class="">
           <AppIcon name="menu" class="h-4 w-4" />
           <span>{{ t("common.demo") }}</span>
         </RouterLink>

@@ -28,7 +28,7 @@
 
           <div class="flex flex-wrap gap-2 pt-1 sm:gap-3">
             <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.getMyMenu") }}</RouterLink>
-            <RouterLink to="/menu" class="ui-btn-outline ui-touch-target">{{ t("home.viewLiveDemo") }}</RouterLink>
+            <RouterLink to="/demo" class="ui-btn-outline ui-touch-target">{{ t("home.viewLiveDemo") }}</RouterLink>
             <RouterLink v-if="session.canEditTenantMenu" to="/owner" class="ui-btn-outline ui-touch-target">{{ t("home.openWorkspace") }}</RouterLink>
           </div>
 
