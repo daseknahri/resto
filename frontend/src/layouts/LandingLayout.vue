@@ -29,18 +29,6 @@
             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
             {{ t("home.heroLive") }}
           </div>
-          <details class="relative lg:hidden">
-            <summary class="ui-pill-nav cursor-pointer list-none px-3 py-1 text-xs">
-              {{ t("common.menu") }}
-            </summary>
-            <div class="absolute right-0 mt-2 w-44 rounded-2xl border border-slate-800/80 bg-slate-950/95 p-2 text-xs shadow-xl shadow-black/40 backdrop-blur">
-              <RouterLink class="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70" to="/">{{ t("common.landing") }}</RouterLink>
-              <RouterLink class="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70" to="/menu">{{ t("common.demo") }}</RouterLink>
-              <RouterLink class="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70" to="/get-started">{{ t("common.getStarted") }}</RouterLink>
-              <RouterLink class="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70" to="/contact">{{ t("common.contact") }}</RouterLink>
-              <RouterLink v-if="session.isPlatformAdmin" class="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70" to="/admin-console">{{ t("common.admin") }}</RouterLink>
-            </div>
-          </details>
           <LanguageSwitcher dropdown />
           <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.admin") }}</RouterLink>
           <RouterLink
@@ -58,6 +46,23 @@
       </div>
       <div class="ui-divider"></div>
     </header>
+
+    <nav class="ui-bottom-dock lg:hidden">
+      <div class="ui-bottom-dock-grid grid-cols-4">
+        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">
+          {{ t("common.landing") }}
+        </RouterLink>
+        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/menu" :data-active="$route.path === '/menu'" active-class="" exact-active-class="">
+          {{ t("common.demo") }}
+        </RouterLink>
+        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">
+          {{ t("common.getStarted") }}
+        </RouterLink>
+        <RouterLink class="ui-pill-nav justify-center px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">
+          {{ t("common.contact") }}
+        </RouterLink>
+      </div>
+    </nav>
 
     <main class="mx-auto w-full max-w-6xl ui-fade-up">
       <RouterView v-slot="{ Component, route: viewRoute }">
