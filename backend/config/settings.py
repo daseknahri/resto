@@ -163,6 +163,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
 TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", ""))
+if TENANT_DOMAIN_SUFFIX:
+    csrf_trusted_origins.add(f"https://{TENANT_DOMAIN_SUFFIX}")
+    csrf_trusted_origins.add(f"https://*.{TENANT_DOMAIN_SUFFIX}")
+    CSRF_TRUSTED_ORIGINS = sorted(csrf_trusted_origins)
 public_schema_hosts = set(parse_csv_env("DJANGO_PUBLIC_SCHEMA_HOSTS", "localhost,127.0.0.1"))
 public_schema_hosts.update({"localhost", "127.0.0.1"})
 for inferred_host in (
