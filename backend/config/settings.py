@@ -279,8 +279,19 @@ SESSION_COOKIE_HTTPONLY = parse_bool_env("DJANGO_SESSION_COOKIE_HTTPONLY", True)
 CSRF_COOKIE_HTTPONLY = parse_bool_env("DJANGO_CSRF_COOKIE_HTTPONLY", False)
 SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")
-SESSION_COOKIE_DOMAIN = os.getenv("DJANGO_SESSION_COOKIE_DOMAIN") or None
-CSRF_COOKIE_DOMAIN = os.getenv("DJANGO_CSRF_COOKIE_DOMAIN") or None
+def normalize_cookie_domain(value: str | None):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if raw in {"localhost", "127.0.0.1"}:
+        return raw
+    if raw.startswith("."):
+        return raw
+    return f".{raw}"
+
+
+SESSION_COOKIE_DOMAIN = normalize_cookie_domain(os.getenv("DJANGO_SESSION_COOKIE_DOMAIN"))
+CSRF_COOKIE_DOMAIN = normalize_cookie_domain(os.getenv("DJANGO_CSRF_COOKIE_DOMAIN"))
 USE_X_FORWARDED_HOST = parse_bool_env("DJANGO_USE_X_FORWARDED_HOST", not DEBUG)
 if parse_bool_env("DJANGO_SECURE_PROXY_SSL_HEADER", not DEBUG):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
