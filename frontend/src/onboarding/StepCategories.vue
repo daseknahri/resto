@@ -138,13 +138,6 @@
             @drop="dropImage(editingCategory, $event)"
           >
             <div class="flex flex-wrap items-center gap-3">
-              <input
-                v-model="editingCategory.image_url"
-                class="flex-1 rounded-xl bg-slate-900 border px-3 py-2 text-sm"
-                :class="rowError(editingCategory, 'image_url') ? 'border-red-400' : 'border-slate-700'"
-                :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
-                @input="clearRowError(editingCategory.local_id, 'image_url')"
-              />
               <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
                 {{ uploadingRows[editingCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[editingCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
                 <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[editingCategory.local_id]" @change="uploadImage(editingCategory, $event)" />
@@ -246,11 +239,35 @@
                 class="ui-input"
                 :placeholder="t('stepCategories.positionMin')"
               />
-              <input
-                v-model="quickCategory.image_url"
-                class="ui-input"
-                :placeholder="t('stepCategories.categoryImageUrlPlaceholder')"
-              />
+              <div
+                class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
+                :class="draggingRows[quickCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+                @dragenter="setDragState(quickCategory.local_id, true)"
+                @dragleave="setDragState(quickCategory.local_id, false)"
+                @dragover="preventDropDefaults"
+                @drop="dropImage(quickCategory, $event)"
+              >
+                <div class="flex flex-wrap items-center gap-3">
+                  <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                    {{ uploadingRows[quickCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[quickCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
+                    <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[quickCategory.local_id]" @change="uploadImage(quickCategory, $event)" />
+                  </label>
+                  <button
+                    v-if="quickCategory.image_url"
+                    type="button"
+                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                    @click="clearImage(quickCategory)"
+                  >
+                    {{ t("stepCategories.removeImage") }}
+                  </button>
+                  <img v-if="quickCategory.image_url" :src="quickCategory.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+                </div>
+                <p class="text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
+            <div v-if="uploadingRows[quickCategory.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+              <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[quickCategory.local_id] || 0}%` }"></div>
             </div>
           </div>
           <div class="mt-4 flex justify-end gap-2">
@@ -303,6 +320,7 @@ const categoryFieldLocales = reactive({
   description: "en",
 });
 const quickCategory = reactive({
+  local_id: "quick-category",
   name: "",
   name_i18n: {},
   description: "",
@@ -538,12 +556,19 @@ const openQuickCategoryModal = () => {
   quickCategory.description_i18n = {};
   quickCategory.position = categories.length;
   quickCategory.image_url = "";
+  uploadingRows[quickCategory.local_id] = false;
+  uploadProgressRows[quickCategory.local_id] = 0;
+  draggingRows[quickCategory.local_id] = false;
   quickCategoryFieldLocales.name = defaultLocale.value;
   quickCategoryFieldLocales.description = defaultLocale.value;
   quickCategoryModalOpen.value = true;
 };
 
 const closeQuickCategoryModal = () => {
+  if (quickCategory.image_url && isManagedUpload(quickCategory.image_url)) {
+    cleanupManagedUpload(quickCategory.image_url);
+    quickCategory.image_url = "";
+  }
   quickCategoryModalOpen.value = false;
 };
 

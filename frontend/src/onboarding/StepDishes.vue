@@ -171,14 +171,6 @@
                 @dragover="preventDropDefaults"
                 @drop="dropImage(editingDish, $event)"
               >
-                <input
-                  v-model="editingDish.image_url"
-                  class="ui-input"
-                  :class="rowError(editingDish, 'image_url') ? 'border-red-400' : 'border-slate-700'"
-                  :placeholder="t('stepDishes.imageUrlPlaceholder')"
-                  @input="clearRowError(editingDish.local_id, 'image_url')"
-                />
-                <p v-if="rowError(editingDish, 'image_url')" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
                 <div class="flex flex-wrap items-center gap-3">
                   <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
                     {{ uploadingRows[editingDish.local_id] ? t("stepDishes.uploadingProgress", { progress: uploadProgressRows[editingDish.local_id] || 0 }) : t("stepDishes.uploadImage") }}
@@ -196,6 +188,7 @@
                 </div>
                 <p class="text-xs text-slate-500">{{ t("stepDishes.dropImageHint") }}</p>
               </div>
+              <p v-if="rowError(editingDish, 'image_url')" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
               <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>
               <div v-if="uploadingRows[editingDish.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
                 <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[editingDish.local_id] || 0}%` }"></div>
@@ -365,7 +358,31 @@
               />
             </div>
             <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
-            <input v-model="quickDish.image_url" class="ui-input" :placeholder="t('stepDishes.imageUrlPlaceholder')" />
+            <div
+              class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
+              :class="draggingRows[quickDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+              @dragenter="setDragState(quickDish.local_id, true)"
+              @dragleave="setDragState(quickDish.local_id, false)"
+              @dragover="preventDropDefaults"
+              @drop="dropImage(quickDish, $event)"
+            >
+              <div class="flex flex-wrap items-center gap-3">
+                <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                  {{ uploadingRows[quickDish.local_id] ? t("stepDishes.uploadingProgress", { progress: uploadProgressRows[quickDish.local_id] || 0 }) : t("stepDishes.uploadImage") }}
+                  <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[quickDish.local_id]" @change="uploadImage(quickDish, $event)" />
+                </label>
+                <button
+                  v-if="quickDish.image_url"
+                  type="button"
+                  class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                  @click="clearImage(quickDish)"
+                >
+                  {{ t("stepDishes.removeImage") }}
+                </button>
+                <img v-if="quickDish.image_url" :src="quickDish.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+              </div>
+              <p class="text-xs text-slate-500">{{ t("stepDishes.dropImageHint") }}</p>
+            </div>
             <div class="space-y-1 sm:col-span-2">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-[11px] text-slate-400">{{ t("stepDishes.descriptionPlaceholder") }}</p>
@@ -390,6 +407,10 @@
                 @input="setLocalizedQuickDishFieldValue('description', quickDishFieldLocales.description, $event.target.value)"
               ></textarea>
             </div>
+          </div>
+          <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>
+          <div v-if="uploadingRows[quickDish.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+            <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[quickDish.local_id] || 0}%` }"></div>
           </div>
           <div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -523,6 +544,7 @@ const dishFieldLocales = reactive({
 });
 const quickDishModalOpen = ref(false);
 const quickDish = reactive({
+  local_id: "quick-dish",
   category: "",
   name: "",
   name_i18n: {},
@@ -974,6 +996,9 @@ const resetQuickDish = (categoryId = activeCategoryId.value) => {
   quickDish.price = 0;
   quickDish.image_url = "";
   quickDish.options = [];
+  uploadingRows[quickDish.local_id] = false;
+  uploadProgressRows[quickDish.local_id] = 0;
+  draggingRows[quickDish.local_id] = false;
   quickDishFieldLocales.name = defaultLocale.value;
   quickDishFieldLocales.description = defaultLocale.value;
   quickDishFieldLocales.variantName = defaultLocale.value;
@@ -989,6 +1014,10 @@ const openQuickDishModal = (categoryId = activeCategoryId.value) => {
 };
 
 const closeQuickDishModal = () => {
+  if (quickDish.image_url && isManagedUpload(quickDish.image_url)) {
+    cleanupManagedUpload(quickDish.image_url);
+    quickDish.image_url = "";
+  }
   quickDishModalOpen.value = false;
 };
 
