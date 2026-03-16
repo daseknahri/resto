@@ -162,7 +162,7 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
-TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", ""))
+TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", "")) or hostname_from_url(PUBLIC_MENU_BASE_URL)
 if TENANT_DOMAIN_SUFFIX:
     csrf_trusted_origins.add(f"https://{TENANT_DOMAIN_SUFFIX}")
     csrf_trusted_origins.add(f"https://*.{TENANT_DOMAIN_SUFFIX}")
@@ -296,6 +296,11 @@ def normalize_cookie_domain(value: str | None):
 
 SESSION_COOKIE_DOMAIN = normalize_cookie_domain(os.getenv("DJANGO_SESSION_COOKIE_DOMAIN"))
 CSRF_COOKIE_DOMAIN = normalize_cookie_domain(os.getenv("DJANGO_CSRF_COOKIE_DOMAIN"))
+if TENANT_DOMAIN_SUFFIX:
+    if not SESSION_COOKIE_DOMAIN:
+        SESSION_COOKIE_DOMAIN = f".{TENANT_DOMAIN_SUFFIX}"
+    if not CSRF_COOKIE_DOMAIN:
+        CSRF_COOKIE_DOMAIN = f".{TENANT_DOMAIN_SUFFIX}"
 USE_X_FORWARDED_HOST = parse_bool_env("DJANGO_USE_X_FORWARDED_HOST", not DEBUG)
 if parse_bool_env("DJANGO_SECURE_PROXY_SSL_HEADER", not DEBUG):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
