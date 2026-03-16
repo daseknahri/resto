@@ -49,6 +49,12 @@ const adminApi = axios.create({
 
 const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
 
+const readCookie = (name) => {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()\\[\\]\\/\\+^])/g, "\\$1")}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : "";
+};
+
 const isCsrfMismatchError = (error) => {
   if (error?.response?.status !== 403) return false;
   const body = error?.response?.data;
@@ -106,6 +112,13 @@ adminApi.interceptors.request.use((config) => {
       if (!config.params.lang) {
         config.params.lang = locale;
       }
+    }
+  }
+  if (isUnsafeMethod(method)) {
+    config.headers = config.headers || {};
+    if (!config.headers["X-CSRFToken"] && !config.headers["X-Csrftoken"] && !config.headers["x-csrftoken"]) {
+      const token = readCookie("csrftoken");
+      if (token) config.headers["X-CSRFToken"] = token;
     }
   }
   return config;
