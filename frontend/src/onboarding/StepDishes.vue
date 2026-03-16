@@ -33,7 +33,7 @@
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
             <select v-model="activeCategoryId" class="ui-input border-slate-700 bg-slate-950/70">
               <option v-for="category in sortedCategoryOptions" :key="category.id" :value="String(category.id)">
-                {{ category.name }} ({{ dishCountForCategory(category.id) }})
+                {{ categoryLabel(category) }} ({{ dishCountForCategory(category.id) }})
               </option>
             </select>
           </div>
@@ -160,7 +160,7 @@
                     @change="clearRowError(editingDish.local_id, 'category')"
                   >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ cat.name }}</option>
+                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                   </select>
                   <p v-if="rowError(editingDish, 'category')" class="text-xs text-red-300">{{ rowError(editingDish, "category") }}</p>
                 </div>
@@ -362,7 +362,7 @@
               <div class="grid gap-3 sm:grid-cols-2">
                 <select v-model="quickDish.category" class="ui-input">
                   <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-                  <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ cat.name }}</option>
+                  <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                 </select>
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center justify-between gap-2">
@@ -622,9 +622,16 @@ const availableContentLocales = computed(() => {
   const secondary = LOCALE_OPTIONS.filter((option) => option.code !== primary.code).slice(0, maxTranslationLocales.value);
   return [primary, ...secondary];
 });
+const categoryLabel = (category) => {
+  const superCategoryName = String(category?.super_category_name || "").trim();
+  const categoryName = String(category?.name || "").trim();
+  if (!superCategoryName || !categoryName) return categoryName || superCategoryName;
+  return `${superCategoryName} • ${categoryName}`;
+};
 const sortedCategoryOptions = computed(() =>
   [...categoryOptions.value].sort(
     (left, right) =>
+      String(left?.super_category_name || "").localeCompare(String(right?.super_category_name || "")) ||
       Number(left?.position ?? 0) - Number(right?.position ?? 0) ||
       String(left?.name || "").localeCompare(String(right?.name || ""))
   )

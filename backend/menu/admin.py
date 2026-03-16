@@ -1,14 +1,22 @@
 ﻿from django.contrib import admin
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, SuperCategory, TableLink
+
+
+@admin.register(SuperCategory)
+class SuperCategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "position", "is_published", "is_temporarily_disabled")
+    list_filter = ("is_published", "is_temporarily_disabled")
+    prepopulated_fields = {"slug": ("name",)}
+    ordering = ("position", "name")
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug", "position", "is_published")
-    list_filter = ("is_published",)
+    list_display = ("name", "super_category", "slug", "position", "is_published")
+    list_filter = ("super_category", "is_published")
     prepopulated_fields = {"slug": ("name",)}
-    ordering = ("position", "name")
+    ordering = ("super_category", "position", "name")
 
 
 @admin.register(Dish)

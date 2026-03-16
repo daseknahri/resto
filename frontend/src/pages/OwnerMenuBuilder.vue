@@ -31,6 +31,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
 import StepDishes from "../onboarding/StepDishes.vue";
 
@@ -39,6 +40,13 @@ const router = useRouter();
 const { t } = useI18n();
 
 const tabs = computed(() => [
+  {
+    key: "super-categories",
+    label: t("stepSuperCategories.heading"),
+    description: t("stepSuperCategories.description"),
+    icon: "filter",
+    component: StepSuperCategories,
+  },
   {
     key: "categories",
     label: t("onboardingWizard.steps.categories.title"),
@@ -57,8 +65,8 @@ const tabs = computed(() => [
 
 const validTabKeys = computed(() => tabs.value.map((tab) => tab.key));
 const activeTab = computed(() => {
-  const tab = String(route.query.tab || "categories").toLowerCase();
-  return validTabKeys.value.includes(tab) ? tab : "categories";
+  const tab = String(route.query.tab || "super-categories").toLowerCase();
+  return validTabKeys.value.includes(tab) ? tab : "super-categories";
 });
 const activeTabConfig = computed(() => tabs.value.find((tab) => tab.key === activeTab.value) || tabs.value[0]);
 const activeComponent = computed(() => activeTabConfig.value.component);
@@ -76,10 +84,10 @@ const setTab = (tab) => {
 <style scoped>
 .owner-menu-builder-nav {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
   width: 100%;
-  max-width: 22rem;
+  max-width: 32rem;
   border: 1px solid rgba(51, 65, 85, 0.72);
   border-radius: 1rem;
   background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(3, 15, 35, 0.78));

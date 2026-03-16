@@ -97,13 +97,33 @@
       <p class="mt-1 text-xs text-slate-500">{{ t("ownerTables.generatedAt", { date: generatedAt }) }}</p>
     </header>
 
-    <p v-if="!tables.length && !loading" class="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
-      {{ t("ownerTables.noLinks") }}
-    </p>
+    <article v-if="!tables.length && !loading" class="ui-empty-state space-y-3 text-center">
+      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
+        <AppIcon name="qr" class="h-5 w-5" />
+      </div>
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ t("ownerTables.cardsTitle") }}</p>
+        <p class="text-lg font-semibold text-white">{{ t("ownerTables.noLinks") }}</p>
+      </div>
+      <button class="ui-btn-primary mx-auto justify-center px-4 py-2 text-sm" @click="openSetup('create')">
+        <AppIcon name="plus" class="owner-table-icon" />
+        {{ t("ownerTables.create") }}
+      </button>
+    </article>
 
-    <div v-else-if="!filteredTables.length && !loading" class="rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/30 p-5 text-sm text-slate-400">
-      {{ t("common.search") }} - 0 / {{ tables.length }}
-    </div>
+    <article v-else-if="!filteredTables.length && !loading" class="ui-empty-state space-y-3 text-center">
+      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
+        <AppIcon name="search" class="h-5 w-5" />
+      </div>
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ t("common.search") }}</p>
+        <p class="text-lg font-semibold text-white">0 / {{ tables.length }}</p>
+      </div>
+      <button class="ui-btn-outline mx-auto justify-center px-4 py-2 text-sm" @click="searchQuery = ''; statusFilter = 'all'">
+        <AppIcon name="close" class="owner-table-icon" />
+        {{ t("common.clear") }}
+      </button>
+    </article>
 
     <div class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
       <article

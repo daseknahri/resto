@@ -108,7 +108,13 @@
     </div>
 
     <div v-if="!menu.loading && !filteredDishes.length" class="ui-empty-state space-y-3 text-center">
-      <p class="text-lg font-semibold text-white">{{ t("category.noMatch") }}</p>
+      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
+        <AppIcon name="search" class="h-5 w-5" />
+      </div>
+      <div class="space-y-1">
+        <p class="ui-kicker">{{ categoryName }}</p>
+        <p class="text-lg font-semibold text-white">{{ t("category.noMatch") }}</p>
+      </div>
       <div class="flex flex-wrap justify-center gap-2">
         <button class="ui-btn-outline justify-center" @click="search = ''">
           <AppIcon name="close" class="h-3.5 w-3.5" />

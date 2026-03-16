@@ -213,17 +213,22 @@
       <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
         <article v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]"></article>
       </div>
-      <article v-else-if="!reservations.length" class="ui-section-band space-y-3 text-sm">
+      <article v-else-if="!reservations.length" class="ui-empty-state space-y-3 text-center text-sm">
+        <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
+          <AppIcon name="calendar" class="h-5 w-5" />
+        </div>
         <div class="space-y-1">
           <p class="ui-kicker">{{ activeFilterSummary }}</p>
           <h3 class="text-lg font-semibold text-white">{{ t("ownerReservations.noReservations") }}</h3>
           <p class="text-slate-400">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap justify-center gap-2">
           <button class="ui-btn-outline px-4 py-2 text-sm" @click="clearFilters">
+            <AppIcon name="close" class="owner-res-icon" />
             {{ t("common.clear") }}
           </button>
           <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchReservations">
+            <AppIcon name="refresh" class="owner-res-icon" />
             {{ t("common.refresh") }}
           </button>
         </div>

@@ -149,6 +149,45 @@ export const profileApi = {
   },
 };
 
+export const superCategoryApi = {
+  async list() {
+    const { data } = await api.get("/super-categories/");
+    return data;
+  },
+  async upsert(group) {
+    const baseSlug = slugify(group.name || group.slug || "menu");
+    const payload = {
+      name: group.name || "",
+      name_i18n: normalizeI18nMap(group.name_i18n),
+      position: Number(group.position) || 0,
+      is_published: group.is_published ?? true,
+      is_temporarily_disabled: group.is_temporarily_disabled === true,
+      disabled_note: String(group.disabled_note || "").trim(),
+    };
+    try {
+      if (group.id) {
+        const slug = String(group.slug || baseSlug || "").trim();
+        const updatePayload = slug ? { ...payload, slug } : payload;
+        const { data } = await api.put(`/super-categories/${group.id}/`, updatePayload);
+        return data;
+      }
+      return await withSlugRetry({
+        baseSlug,
+        maxLen: 160,
+        requestFn: async (slug) => {
+          const { data } = await api.post("/super-categories/", { ...payload, slug });
+          return data;
+        },
+      });
+    } catch (err) {
+      throw asValidationError(err, translate("onboardingApi.saveSuperCategoryFailed"));
+    }
+  },
+  async remove(id) {
+    await api.delete(`/super-categories/${id}/`);
+  },
+};
+
 export const categoryApi = {
   async list() {
     const { data } = await api.get("/categories/");
@@ -162,6 +201,7 @@ export const categoryApi = {
       description: cat.description || "",
       description_i18n: normalizeI18nMap(cat.description_i18n),
       image_url: normalizeOptionalUrl(cat.image_url),
+      super_category: Number(cat.super_category) || cat.super_category || null,
       position: Number(cat.position) || 0,
       is_published: cat.is_published ?? true,
     };

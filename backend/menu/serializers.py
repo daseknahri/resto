@@ -1,10 +1,10 @@
-import re
+﻿import re
 from urllib.parse import urlparse
 
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, Dish, DishOption, TableLink
+from .models import Category, Dish, DishOption, SuperCategory, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
@@ -103,8 +103,6 @@ class LocalizedContentMixin:
             and getattr(user, "is_authenticated", False)
             and not self._force_locale_enabled()
         ):
-            # Keep owner/admin editing payloads in canonical base fields.
-            # Public/anonymous menu responses remain locale-aware.
             return ""
         query_params = getattr(request, "query_params", None)
         if query_params is None:
@@ -147,6 +145,46 @@ class LocalizedContentMixin:
         return base
 
 
+class SuperCategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
+    category_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SuperCategory
+        fields = [
+            "id",
+            "name",
+            "name_i18n",
+            "slug",
+            "position",
+            "is_published",
+            "is_temporarily_disabled",
+            "disabled_note",
+            "category_count",
+        ]
+
+    def validate_name(self, value):
+        cleaned = (value or "").strip()
+        if len(cleaned) < 2:
+            raise serializers.ValidationError("Menu section name must be at least 2 characters.")
+        if len(cleaned) > 150:
+            raise serializers.ValidationError("Menu section name must be 150 characters or fewer.")
+        return cleaned
+
+    def validate_name_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Menu section name", max_length=150)
+
+    def validate_disabled_note(self, value):
+        text = (value or "").strip()
+        if len(text) > 180:
+            raise serializers.ValidationError("Disabled note must be 180 characters or fewer.")
+        return text
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
+        return data
+
+
 class DishOptionSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     dish = serializers.PrimaryKeyRelatedField(queryset=Dish.objects.all(), write_only=True)
 
@@ -183,12 +221,20 @@ class DishOptionSerializer(LocalizedContentMixin, serializers.ModelSerializer):
 
 class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     options = DishOptionSerializer(many=True, read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
+    category_name = serializers.SerializerMethodField()
+    super_category_slug = serializers.CharField(source="category.super_category.slug", read_only=True)
+    super_category_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Dish
         fields = [
             "id",
             "category",
+            "category_slug",
+            "category_name",
+            "super_category_slug",
+            "super_category_name",
             "name",
             "name_i18n",
             "slug",
@@ -231,6 +277,18 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             raise serializers.ValidationError("Currency must be a 3-letter code (for example, USD).")
         return cleaned
 
+    def get_category_name(self, instance):
+        category = getattr(instance, "category", None)
+        if category is None:
+            return ""
+        return self._localized_text(category.name, category.name_i18n)
+
+    def get_super_category_name(self, instance):
+        super_category = getattr(getattr(instance, "category", None), "super_category", None)
+        if super_category is None:
+            return ""
+        return self._localized_text(super_category.name, super_category.name_i18n)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
@@ -241,11 +299,16 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
 
 class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
     dishes = DishSerializer(many=True, read_only=True)
+    super_category_slug = serializers.CharField(source="super_category.slug", read_only=True)
+    super_category_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = [
             "id",
+            "super_category",
+            "super_category_slug",
+            "super_category_name",
             "name",
             "name_i18n",
             "slug",
@@ -274,6 +337,12 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
 
     def validate_description_i18n(self, value):
         return self._validate_i18n_map(value, field_label="Category description", max_length=1000)
+
+    def get_super_category_name(self, instance):
+        super_category = getattr(instance, "super_category", None)
+        if super_category is None:
+            return ""
+        return self._localized_text(super_category.name, super_category.name_i18n)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

@@ -24,9 +24,15 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, SuperCategory, TableLink
 from .permissions import IsTenantEditorOrReadOnly
-from .serializers import CategorySerializer, DishOptionSerializer, DishSerializer, TableLinkSerializer
+from .serializers import (
+    CategorySerializer,
+    DishOptionSerializer,
+    DishSerializer,
+    SuperCategorySerializer,
+    TableLinkSerializer,
+)
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle
 
 
@@ -96,15 +102,54 @@ class PublishAccessMixin:
         return super().retrieve(request, *args, **kwargs)
 
 
+def _filter_by_reference(qs, raw_value, *, id_field, slug_field):
+    reference = str(raw_value or "").strip()
+    if not reference:
+        return qs
+    if reference.isdigit():
+        return qs.filter(**{id_field: int(reference)})
+    return qs.filter(**{slug_field: reference})
+
+
+class SuperCategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
+    serializer_class = SuperCategorySerializer
+    permission_classes = [IsTenantEditorOrReadOnly]
+
+    def get_queryset(self):
+        qs = SuperCategory.objects.annotate(category_count=Count("categories")).all().order_by("position", "name")
+        if self.request.method in ("GET", "HEAD", "OPTIONS") and not self._can_preview_unpublished():
+            qs = qs.filter(is_published=True, is_temporarily_disabled=False)
+        return qs
+
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [AllowAny()]
+        return super().get_permissions()
+
+
 class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
-        qs = Category.objects.all().order_by("position", "name")
+        qs = (
+            Category.objects.select_related("super_category")
+            .prefetch_related("dishes__options")
+            .all()
+        )
+        qs = _filter_by_reference(
+            qs,
+            self.request.query_params.get("super_category"),
+            id_field="super_category_id",
+            slug_field="super_category__slug",
+        )
         if self.request.method in ("GET", "HEAD", "OPTIONS") and not self._can_preview_unpublished():
-            qs = qs.filter(is_published=True)
-        return qs
+            qs = qs.filter(
+                is_published=True,
+                super_category__is_published=True,
+                super_category__is_temporarily_disabled=False,
+            )
+        return qs.order_by("super_category__position", "position", "name")
 
     def get_permissions(self):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):
@@ -117,13 +162,24 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     permission_classes = [IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
-        qs = Dish.objects.select_related("category").prefetch_related("options").all()
+        qs = Dish.objects.select_related("category", "category__super_category").prefetch_related("options").all()
         category_slug = self.request.query_params.get("category")
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
+        qs = _filter_by_reference(
+            qs,
+            self.request.query_params.get("super_category"),
+            id_field="category__super_category_id",
+            slug_field="category__super_category__slug",
+        )
         if self.request.method in ("GET", "HEAD", "OPTIONS") and not self._can_preview_unpublished():
-            qs = qs.filter(is_published=True, category__is_published=True)
-        return qs.order_by("category__position", "position", "name")
+            qs = qs.filter(
+                is_published=True,
+                category__is_published=True,
+                category__super_category__is_published=True,
+                category__super_category__is_temporarily_disabled=False,
+            )
+        return qs.order_by("category__super_category__position", "category__position", "position", "name")
 
     def get_permissions(self):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):
@@ -136,13 +192,18 @@ class DishOptionViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     permission_classes = [IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
-        qs = DishOption.objects.select_related("dish", "dish__category").all()
+        qs = DishOption.objects.select_related("dish", "dish__category", "dish__category__super_category").all()
         dish_id = self.request.query_params.get("dish")
         if dish_id:
             qs = qs.filter(dish_id=dish_id)
         if self.request.method in ("GET", "HEAD", "OPTIONS") and not self._can_preview_unpublished():
-            qs = qs.filter(dish__is_published=True, dish__category__is_published=True)
-        return qs.order_by("dish__position", "name")
+            qs = qs.filter(
+                dish__is_published=True,
+                dish__category__is_published=True,
+                dish__category__super_category__is_published=True,
+                dish__category__super_category__is_temporarily_disabled=False,
+            )
+        return qs.order_by("dish__category__super_category__position", "dish__category__position", "dish__position", "name")
 
     def get_permissions(self):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):

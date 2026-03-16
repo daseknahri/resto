@@ -20,6 +20,26 @@ const normalizeCategories = (value) => {
   }));
 };
 
+const normalizeSuperCategories = (value) => {
+  const rows = Array.isArray(value) ? value : Array.isArray(value?.results) ? value.results : [];
+  return rows.map((item) => ({
+    ...item,
+  }));
+};
+
+const demoSuperCategories = () => [
+  {
+    id: 1,
+    slug: "menu",
+    name: "Menu",
+    position: 0,
+    is_published: true,
+    is_temporarily_disabled: false,
+    disabled_note: "",
+    category_count: DEMO_CATEGORIES.length,
+  },
+];
+
 const demoCategories = () => normalizeCategories(DEMO_CATEGORIES);
 const demoDishesByCategory = () => buildDemoDishesByCategory();
 
@@ -46,6 +66,7 @@ const isExpectedPublicStateError = (err) => {
 
 export const useMenuStore = defineStore("menu", {
   state: () => ({
+    superCategories: [],
     categories: [],
     dishes: {},
     loading: false,
@@ -53,14 +74,41 @@ export const useMenuStore = defineStore("menu", {
   }),
   actions: {
     applyDemoMenuData() {
+      this.superCategories = demoSuperCategories();
       this.categories = demoCategories();
+      this.categories = this.categories.map((category) => ({
+        ...category,
+        super_category: 1,
+        super_category_slug: "menu",
+        super_category_name: "Menu",
+      }));
       this.dishes = demoDishesByCategory();
       this.error = null;
+    },
+    async fetchSuperCategories(force = false) {
+      if (!force && this.superCategories.length) return;
+      try {
+        const res = await api.get("/super-categories/", { params: { force_locale: 1 } });
+        const normalized = normalizeSuperCategories(res.data);
+        if (normalized.length || !isPublicDemoHost() || hasPublicDemoTenant()) {
+          this.superCategories = normalized;
+        } else {
+          this.superCategories = demoSuperCategories();
+        }
+      } catch (err) {
+        if (isPublicDemoHost() && !hasPublicDemoTenant()) {
+          this.superCategories = demoSuperCategories();
+        } else {
+          this.superCategories = [];
+          if (!isExpectedPublicStateError(err)) console.error(err);
+        }
+      }
     },
     async fetchCategories(force = false) {
       this.loading = true;
       this.error = null;
       try {
+        await this.fetchSuperCategories(force);
         const res = await api.get("/categories/", { params: { force_locale: 1 } });
         const normalized = normalizeCategories(res.data);
         if (normalized.length || !isPublicDemoHost() || hasPublicDemoTenant()) {
@@ -77,6 +125,7 @@ export const useMenuStore = defineStore("menu", {
         if (isPublicDemoHost() && !hasPublicDemoTenant()) {
           this.applyDemoMenuData();
         } else {
+          this.superCategories = [];
           this.categories = [];
           this.error = extractErrorMessage(err, translate("menuStore.loadCategoriesFailed"));
           if (!isExpectedPublicStateError(err)) console.error(err);

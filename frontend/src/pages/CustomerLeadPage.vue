@@ -185,7 +185,10 @@
                         <AppIcon name="calendar" class="h-4 w-4 text-[var(--color-secondary)]" />
                         <span>{{ businessHoursSummary }}</span>
                       </span>
-                      <span class="text-xs text-slate-400 transition group-open:rotate-180">?</span>
+                      <AppIcon
+                        name="chevronDown"
+                        class="h-4 w-4 text-slate-400 transition group-open:rotate-180"
+                      />
                     </summary>
                     <div class="mt-3 grid gap-1 sm:grid-cols-2">
                       <div

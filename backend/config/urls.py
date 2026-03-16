@@ -13,6 +13,7 @@ from menu.views import (
     DishOptionViewSet,
     DishViewSet,
     OrderHandoffView,
+    SuperCategoryViewSet,
     TableBulkGenerateView,
     TableContextView,
     TableLinkViewSet,
@@ -34,6 +35,7 @@ from sales.views import (
 from tenancy.api import ImageDeleteView, ImageUploadView, ProfileView, TenantMetaView
 
 tenant_router = routers.DefaultRouter()
+tenant_router.register(r"super-categories", SuperCategoryViewSet, basename="super-category")
 tenant_router.register(r"categories", CategoryViewSet, basename="category")
 tenant_router.register(r"dishes", DishViewSet, basename="dish")
 tenant_router.register(r"dish-options", DishOptionViewSet, basename="dish-option")

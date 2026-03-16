@@ -1,7 +1,30 @@
 ﻿from django.db import models
 
 
+class SuperCategory(models.Model):
+    name = models.CharField(max_length=150)
+    name_i18n = models.JSONField(default=dict, blank=True)
+    slug = models.SlugField(max_length=160, unique=True)
+    position = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=True)
+    is_temporarily_disabled = models.BooleanField(default=False)
+    disabled_note = models.CharField(max_length=180, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("position", "name")
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Category(models.Model):
+    super_category = models.ForeignKey(
+        SuperCategory,
+        on_delete=models.CASCADE,
+        related_name="categories",
+    )
     name = models.CharField(max_length=150)
     name_i18n = models.JSONField(default=dict, blank=True)
     slug = models.SlugField(max_length=160, unique=True)
