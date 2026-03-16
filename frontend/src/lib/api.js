@@ -1,10 +1,7 @@
 import axios from "axios";
 import {
-  getPublicDemoTenantSlug,
-  hasPublicDemoTenant,
   isLocalTenantHost,
   isPlatformPublicHost,
-  isPublicDemoHost,
 } from "./runtimeHost";
 import { translate } from "../i18n/translate";
 
@@ -12,9 +9,6 @@ const runtimeApiBase = () => {
   if (typeof window === "undefined") return "http://localhost:8000/api";
   const protocol = window.location.protocol === "https:" ? "https" : "http";
   const host = window.location.hostname;
-  if (isPublicDemoHost(host) && hasPublicDemoTenant()) {
-    return `${protocol}://${getPublicDemoTenantSlug()}.${host}/api`;
-  }
   if (isLocalTenantHost(host)) return `${protocol}://${host}:8000/api`;
   return `${protocol}://${host}/api`;
 };

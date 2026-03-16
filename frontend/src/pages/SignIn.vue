@@ -94,6 +94,7 @@
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
+import { currentHostname, isPlatformPublicHost } from "../lib/runtimeHost";
 import { useSessionStore } from "../stores/session";
 
 const route = useRoute();
@@ -121,10 +122,24 @@ const fallbackRoute = () => {
   return { name: "home" };
 };
 
+const redirectOwnerToTenantHost = (user) => {
+  if (typeof window === "undefined") return false;
+  const host = currentHostname();
+  const tenantSlug = String(user?.tenant?.slug || "").trim().toLowerCase();
+  if (!tenantSlug || !isPlatformPublicHost(host)) return false;
+  const targetHost = `${tenantSlug}.${host}`;
+  const next = typeof route.query.next === "string" && route.query.next ? route.query.next : "/owner";
+  window.location.assign(`${window.location.protocol}//${targetHost}${next}`);
+  return true;
+};
+
 const submit = async () => {
   error.value = "";
   try {
-    await session.signIn(identifier.value, password.value);
+    const user = await session.signIn(identifier.value, password.value);
+    if (session.canEditTenantMenu && redirectOwnerToTenantHost(user)) {
+      return;
+    }
     const next = typeof route.query.next === "string" ? route.query.next : "";
     if (next) {
       router.push(next);
