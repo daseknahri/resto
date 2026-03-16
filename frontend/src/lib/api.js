@@ -66,8 +66,9 @@ const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(S
 
 const readCookie = (name) => {
   if (typeof document === "undefined") return "";
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()\\[\\]\\/\\+^])/g, "\\$1")}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : "";
+  const prefix = `${name}=`;
+  const entry = document.cookie.split("; ").find((row) => row.startsWith(prefix));
+  return entry ? decodeURIComponent(entry.slice(prefix.length)) : "";
 };
 
 const isCsrfMismatchError = (error) => {

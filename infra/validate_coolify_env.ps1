@@ -170,6 +170,22 @@ if ($mediaBackend -in @("s3", "s3boto3", "object")) {
         exit 1
     }
 }
+else {
+    foreach ($key in @(
+        "AWS_STORAGE_BUCKET_NAME",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_S3_REGION_NAME",
+        "AWS_S3_ENDPOINT_URL",
+        "AWS_S3_CUSTOM_DOMAIN",
+        "AWS_S3_SIGNATURE_VERSION",
+        "AWS_S3_OBJECT_CACHE_CONTROL"
+    )) {
+        if ($envMap.ContainsKey($key) -and [string]$envMap[$key]) {
+            $warnings += "$key is set while DJANGO_MEDIA_STORAGE_BACKEND=local. Leave AWS_* values blank for local media to avoid Coolify env parsing/build-arg issues."
+        }
+    }
+}
 
 $placeholderKeys = @(
     "DJANGO_SECRET_KEY",

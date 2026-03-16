@@ -137,6 +137,12 @@ Verify after deploy:
 
 Default is local disk (`DJANGO_MEDIA_STORAGE_BACKEND=local`) using the `media_data` Docker volume.
 
+When staying on local media:
+
+- leave all `AWS_*` values blank
+- especially leave `AWS_S3_OBJECT_CACHE_CONTROL` empty
+- if Coolify already created a stray environment variable like `max-age`, delete it manually from the resource before redeploying
+
 To switch uploads to object storage:
 
 1. Set `DJANGO_MEDIA_STORAGE_BACKEND=s3`

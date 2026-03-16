@@ -127,6 +127,8 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
 
 - Optional media object storage:
   - `DJANGO_MEDIA_STORAGE_BACKEND=local` (default) or `s3`
+  - If using `local`, leave all `AWS_*` values blank in Coolify.
+  - In particular, do not set `AWS_S3_OBJECT_CACHE_CONTROL` unless `DJANGO_MEDIA_STORAGE_BACKEND=s3`.
   - For `s3`, set `AWS_STORAGE_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
   - Signed URL TTL: `AWS_QUERYSTRING_EXPIRE=900`
   - Optional provider tuning: `AWS_S3_ENDPOINT_URL`, `AWS_S3_CUSTOM_DOMAIN`, `AWS_S3_REGION_NAME`
