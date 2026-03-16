@@ -32,8 +32,16 @@
                 </span>
               </RouterLink>
             </div>
+            </div>
           </div>
-        </div>
+
+          <div class="mt-2 flex items-center justify-between gap-2 md:hidden">
+            <span class="ui-chip inline-flex items-center gap-1.5 text-[10px]">
+              <AppIcon :name="navItems.find((item) => item.key === activeCustomerSection)?.icon || 'info'" class="h-3.5 w-3.5" />
+              <span>{{ navItems.find((item) => item.key === activeCustomerSection)?.label }}</span>
+            </span>
+            <span v-if="tenantTagline" class="truncate text-[10px] text-slate-500">{{ tenantTagline }}</span>
+          </div>
 
         <div class="mt-2 hidden items-center justify-center gap-4 md:flex">
           <nav class="ui-segmented max-w-fit">
@@ -77,7 +85,7 @@
           v-for="item in navItems"
           :key="item.key"
           :to="item.to"
-          class="ui-press flex min-h-[2.85rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center transition"
+          class="ui-press flex min-h-[2.8rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center transition"
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >

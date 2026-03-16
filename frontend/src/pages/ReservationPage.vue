@@ -153,15 +153,6 @@
           >
             {{ t("reservationPage.reservationReceived") }}
           </div>
-          <button
-            v-if="submitted"
-            type="button"
-            class="ui-btn-primary mt-3 w-full justify-center opacity-90 sm:w-auto"
-            disabled
-          >
-            <AppIcon name="check" class="h-4 w-4" />
-            {{ t("reservationPage.contactSoon") }}
-          </button>
         </section>
       </div>
 
@@ -170,10 +161,14 @@
           <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
             <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</h2>
-            <p class="text-sm text-slate-300">{{ t("reservationPage.description") }}</p>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <span v-if="reservationUrl" class="ui-chip">{{ t("reservationPage.directBooking") }}</span>
+              <span v-if="phoneHref" class="ui-chip">{{ t("reservationPage.phoneSupport") }}</span>
+              <span v-if="whatsappHref" class="ui-chip">{{ t("reservationPage.quickConfirm") }}</span>
+            </div>
           </div>
 
-          <div class="mt-4 grid gap-3">
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <a
               v-if="phoneHref"
               :href="phoneHref"
@@ -182,7 +177,7 @@
             >
               <AppIcon name="phone" class="h-4 w-4 text-slate-200" />
               <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
-              <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
+              <p class="mt-1 text-base font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
             </a>
             <a
               v-if="whatsappHref"
@@ -194,20 +189,21 @@
             >
               <AppIcon name="chat" class="h-4 w-4 text-slate-200" />
               <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
-              <p class="mt-1 text-lg font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
-            </a>
-            <a
-              v-if="reservationUrl"
-              :href="reservationUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ui-btn-outline justify-center"
-              @click="trackContactClick('reservation_url')"
-            >
-              <AppIcon name="calendar" class="h-3.5 w-3.5" />
-              {{ t("reservationPage.directBooking") }}
+              <p class="mt-1 text-base font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
             </a>
           </div>
+
+          <a
+            v-if="reservationUrl"
+            :href="reservationUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-outline mt-3 justify-center"
+            @click="trackContactClick('reservation_url')"
+          >
+            <AppIcon name="calendar" class="h-3.5 w-3.5" />
+            {{ t("reservationPage.directBooking") }}
+          </a>
         </section>
       </aside>
     </div>

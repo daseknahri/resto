@@ -67,65 +67,139 @@
               </a>
             </div>
 
-            <div class="mx-auto w-full max-w-3xl rounded-2xl border border-slate-700/80 bg-slate-950/78 p-3.5 text-center shadow-xl shadow-black/35 backdrop-blur-sm sm:p-4">
-              <div class="space-y-3">
-                <p class="text-sm text-slate-200">{{ t("customerLeadPage.helpText") }}</p>
-                <div class="flex flex-wrap justify-center gap-2">
-                  <a
-                    v-if="whatsappHref"
-                    :href="whatsappHref"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                    @click="trackContactClick('whatsapp_contact')"
-                  >
-                    <AppIcon name="chat" class="h-3.5 w-3.5" />
-                    <span>{{ t("customerLeadPage.whatsappNow") }}</span>
-                  </a>
-                  <a
-                    v-if="phoneHref"
-                    :href="phoneHref"
-                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                    @click="trackContactClick('phone_call')"
-                  >
-                    <AppIcon name="phone" class="h-3.5 w-3.5" />
-                    <span>{{ t("customerLeadPage.callNow") }}</span>
-                  </a>
-                  <a
-                    v-if="googleMapsUrl"
-                    :href="googleMapsUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                    @click="trackContactClick('google_reviews')"
-                  >
-                    <AppIcon name="info" class="h-3.5 w-3.5" />
-                    <span>{{ t("customerLeadPage.googleReviews") }}</span>
-                  </a>
+            <div class="mx-auto w-full max-w-4xl rounded-2xl border border-slate-700/80 bg-slate-950/80 p-3.5 text-left shadow-xl shadow-black/35 backdrop-blur-sm sm:p-4">
+              <div class="mb-3 grid gap-2 sm:grid-cols-3">
+                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
+                    <AppIcon name="info" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                    <span>{{ t("common.status") }}</span>
+                  </p>
+                  <p class="text-sm font-medium text-slate-100">{{ statusLabel }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
+                    <AppIcon name="home" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                    <span>{{ t("common.location") }}</span>
+                  </p>
+                  <p class="text-sm font-medium text-slate-100">{{ locationLine || t("customerLeadPage.fallbackDescription") }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
+                    <AppIcon name="calendar" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                    <span>{{ t("stepBrand.businessHoursSummary") }}</span>
+                  </p>
+                  <p class="text-sm font-medium text-slate-100">{{ businessHoursSummary || t("stepBrand.closedAllDay") }}</p>
+                </div>
+              </div>
+              <div class="grid gap-3 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
+                <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
+                  <div class="space-y-1">
+                    <p class="ui-kicker">{{ t("customerLeadPage.contactMe") }}</p>
+                    <p class="text-sm text-slate-200">{{ tenantDescription }}</p>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <button type="button" class="ui-btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm" @click="openLeadModal">
+                      <AppIcon name="chat" class="h-4 w-4" />
+                      <span>{{ t("customerLeadPage.contactMe") }}</span>
+                    </button>
+                    <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm">
+                      <AppIcon name="menu" class="h-4 w-4" />
+                      <span>{{ t("customerLayout.navMenu") }}</span>
+                    </RouterLink>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <a
+                      v-if="whatsappHref"
+                      :href="whatsappHref"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                      @click="trackContactClick('whatsapp_contact')"
+                    >
+                      <AppIcon name="chat" class="h-3.5 w-3.5" />
+                      <span>{{ t("customerLeadPage.whatsappNow") }}</span>
+                    </a>
+                    <a
+                      v-if="phoneHref"
+                      :href="phoneHref"
+                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                      @click="trackContactClick('phone_call')"
+                    >
+                      <AppIcon name="phone" class="h-3.5 w-3.5" />
+                      <span>{{ t("customerLeadPage.callNow") }}</span>
+                    </a>
+                    <a
+                      v-if="googleMapsUrl"
+                      :href="googleMapsUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+                      @click="trackContactClick('google_reviews')"
+                    >
+                      <AppIcon name="info" class="h-3.5 w-3.5" />
+                      <span>{{ t("customerLeadPage.googleReviews") }}</span>
+                    </a>
+                  </div>
                 </div>
 
-                <div v-if="socialLinks.length" class="flex flex-wrap justify-center gap-2">
-                  <a
-                    v-for="social in socialLinks"
-                    :key="`social-${social.key}`"
-                    :href="social.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="ui-chip inline-flex items-center gap-2 text-[11px]"
-                    @click="trackContactClick(`social_${social.key}`)"
-                  >
-                    <span aria-hidden="true">
-                      <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
-                      <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V4.98C16.7 4.94 15.74 4.85 14.62 4.85c-2.34 0-3.94 1.43-3.94 4.06V11H8v3h2.68v8h2.82z" /></svg>
-                      <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.59 6.69A4.83 4.83 0 0 1 22 10.4V18a4 4 0 0 1-4 4h-6.2a6 6 0 0 1-6-6V9.5a4 4 0 0 1 4-4h5.9a4.83 4.83 0 0 1 3.89 1.19zM14 10a1 1 0 1 0 1 1 1 1 0 0 0-1-1zm-5 3.2a3 3 0 1 0 3 3 3 3 0 0 0-3-3z" /></svg>
-                    </span>
-                    <span>{{ social.label }}</span>
-                  </a>
-                </div>
+                <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
+                  <div class="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+                    <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                      <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
+                        <AppIcon name="menu" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                        <span>{{ t("customerLayout.navMenu") }}</span>
+                      </p>
+                      <p class="text-sm text-slate-100">{{ t("customerLeadPage.helpText") }}</p>
+                    </div>
+                    <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                      <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
+                        <AppIcon name="chat" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                        <span>{{ t("customerLeadPage.contactMe") }}</span>
+                      </p>
+                      <p class="text-sm text-slate-100">{{ t("customerLeadPage.helpText") }}</p>
+                    </div>
+                  </div>
 
-                <div class="flex flex-wrap justify-center gap-2 pt-1">
-                  <span class="ui-chip">{{ locationLine || t("customerLeadPage.fallbackDescription") }}</span>
-                  <span class="ui-chip">{{ t("customerLeadPage.responseValue") }}</span>
+                  <div v-if="socialLinks.length" class="flex flex-wrap gap-2">
+                    <a
+                      v-for="social in socialLinks"
+                      :key="`social-${social.key}`"
+                      :href="social.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ui-chip inline-flex items-center gap-2 text-[11px]"
+                      @click="trackContactClick(`social_${social.key}`)"
+                    >
+                      <span aria-hidden="true">
+                        <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
+                        <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V4.98C16.7 4.94 15.74 4.85 14.62 4.85c-2.34 0-3.94 1.43-3.94 4.06V11H8v3h2.68v8h2.82z" /></svg>
+                        <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.59 6.69A4.83 4.83 0 0 1 22 10.4V18a4 4 0 0 1-4 4h-6.2a6 6 0 0 1-6-6V9.5a4 4 0 0 1 4-4h5.9a4.83 4.83 0 0 1 3.89 1.19zM14 10a1 1 0 1 0 1 1 1 1 0 0 0-1-1zm-5 3.2a3 3 0 1 0 3 3 3 3 0 0 0-3-3z" /></svg>
+                      </span>
+                      <span>{{ social.label }}</span>
+                    </a>
+                  </div>
+
+                  <details v-if="businessHoursRows.length" class="group rounded-2xl border border-slate-800/80 bg-slate-950/52 p-3 text-left">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-slate-100">
+                      <span class="inline-flex items-center gap-2">
+                        <AppIcon name="calendar" class="h-4 w-4 text-[var(--color-secondary)]" />
+                        <span>{{ businessHoursSummary }}</span>
+                      </span>
+                      <span class="text-xs text-slate-400 transition group-open:rotate-180">?</span>
+                    </summary>
+                    <div class="mt-3 grid gap-1 sm:grid-cols-2">
+                      <div
+                        v-for="row in businessHoursRows"
+                        :key="`hours-${row.key}`"
+                        class="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 px-3 py-2 text-xs"
+                      >
+                        <span class="text-slate-300">{{ row.label }}</span>
+                        <span :class="row.enabled ? 'text-slate-100' : 'text-slate-500'">
+                          {{ row.enabled ? row.value : t("stepBrand.closedAllDay") }}
+                        </span>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -221,6 +295,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { formatBusinessHoursRows, formatBusinessHoursSummary, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
 import { isPublicDemoHost } from "../lib/runtimeHost";
@@ -228,7 +303,7 @@ import { useTenantStore } from "../stores/tenant";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
-const { t } = useI18n();
+const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
 const showPlatformDemo = computed(() => isPublicDemoHost());
@@ -268,6 +343,15 @@ const heroImage = computed(() => String(profile.value?.hero_url || "").trim());
 const logoImage = computed(() => String(profile.value?.logo_url || "").trim());
 const googleMapsUrl = computed(() => String(profile.value?.google_maps_url || "").trim());
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
+const businessHoursSchedule = computed(() => normalizeBusinessHoursSchedule(profile.value?.business_hours_schedule));
+const businessHoursRows = computed(() =>
+  formatBusinessHoursRows(businessHoursSchedule.value, currentLocale.value).filter((row) => row.enabled)
+);
+const businessHoursSummary = computed(() => {
+  const summary = formatBusinessHoursSummary(businessHoursSchedule.value, currentLocale.value);
+  if (summary) return summary;
+  return String(profile.value?.business_hours || "").trim();
+});
 
 const sanitizePhoneForTel = (value) =>
   String(value || "")
@@ -385,3 +469,4 @@ onBeforeUnmount(() => {
   }
 });
 </script>
+

@@ -147,8 +147,8 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-metric-card {
-    @apply relative overflow-hidden rounded-[1.4rem] border bg-slate-950/50 p-4;
-    border-color: rgba(148, 163, 184, 0.16);
+    @apply relative overflow-hidden rounded-[1.4rem] border bg-slate-950/60 p-4 shadow-lg shadow-black/20 backdrop-blur-xl;
+    border-color: rgba(148, 163, 184, 0.17);
     transition: transform var(--motion-base) var(--ease-fluid), border-color var(--motion-base) var(--ease-fluid),
       box-shadow var(--motion-base) var(--ease-fluid);
   }
@@ -172,6 +172,13 @@ body[dir="rtl"] .ui-kicker {
     background: radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 32%);
   }
 
+  .ui-spotlight-card::after,
+  .ui-metric-card::after {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.32), transparent);
+  }
+
   .ui-hero-ribbon {
     @apply relative overflow-hidden rounded-[1.75rem] border bg-slate-950/60 p-4 shadow-xl shadow-black/30;
     border-color: rgba(148, 163, 184, 0.18);
@@ -188,10 +195,16 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-section-band {
-    @apply rounded-[1.6rem] border bg-slate-950/50 p-4 shadow-lg shadow-black/25 backdrop-blur-xl;
-    border-color: rgba(148, 163, 184, 0.16);
+    @apply relative overflow-hidden rounded-[1.6rem] border bg-slate-950/55 p-4 shadow-lg shadow-black/25 backdrop-blur-xl;
+    border-color: rgba(148, 163, 184, 0.17);
     transition: transform var(--motion-base) var(--ease-fluid), border-color var(--motion-base) var(--ease-fluid),
       box-shadow var(--motion-base) var(--ease-fluid);
+  }
+
+  .ui-section-band::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.28), transparent);
   }
 
   .ui-workspace-stage {
@@ -215,8 +228,9 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-command-deck {
-    @apply relative overflow-hidden rounded-[1.75rem] border bg-slate-950/65 p-4 shadow-xl shadow-black/30 backdrop-blur-xl;
-    border-color: rgba(148, 163, 184, 0.18);
+    @apply relative overflow-hidden rounded-[1.75rem] border p-4 shadow-xl shadow-black/30 backdrop-blur-xl;
+    background: rgba(2, 6, 23, 0.68);
+    border-color: rgba(148, 163, 184, 0.19);
     transition: transform var(--motion-base) var(--ease-fluid), border-color var(--motion-base) var(--ease-fluid),
       box-shadow var(--motion-base) var(--ease-fluid);
   }
@@ -227,6 +241,12 @@ body[dir="rtl"] .ui-kicker {
     background:
       radial-gradient(circle at 10% 12%, rgba(20, 184, 166, 0.14), transparent 24%),
       radial-gradient(circle at 88% 18%, rgba(245, 158, 11, 0.16), transparent 22%);
+  }
+
+  .ui-command-deck::after {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.34), transparent);
   }
 
   .ui-toolbar-grid {
@@ -358,7 +378,9 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-admin-subcard {
-    @apply rounded-[1rem] border border-slate-800/80 bg-slate-950/50 p-2.5;
+    @apply rounded-[1rem] border border-slate-800/80 bg-slate-950/55 p-2.5 shadow-sm shadow-black/15 backdrop-blur-xl;
+    transition: transform var(--motion-fast) var(--ease-fluid), border-color var(--motion-fast) var(--ease-fluid),
+      background-color var(--motion-fast) var(--ease-fluid);
   }
 
   .ui-action-tile {
@@ -421,7 +443,15 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-empty-state {
-    @apply rounded-[1.6rem] border border-slate-800/80 bg-slate-950/55 p-5 shadow-lg shadow-black/25 backdrop-blur-xl;
+    @apply relative overflow-hidden rounded-[1.6rem] border border-slate-800/80 bg-slate-950/55 p-5 shadow-lg shadow-black/25 backdrop-blur-xl;
+  }
+
+  .ui-empty-state::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(245, 158, 11, 0.08), transparent 24%),
+      radial-gradient(circle at 88% 16%, rgba(20, 184, 166, 0.08), transparent 22%);
   }
 
   .ui-readiness-item {
@@ -719,18 +749,20 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-chip {
-    @apply inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1 text-xs text-slate-200;
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-700/70 px-3 py-1.5 text-xs text-slate-200 backdrop-blur-xl;
+    background: rgba(15, 23, 42, 0.72);
     transition:
       transform var(--motion-fast) var(--ease-fluid),
       border-color var(--motion-fast) var(--ease-fluid),
       background-color var(--motion-fast) var(--ease-fluid),
-      color var(--motion-fast) var(--ease-fluid);
+      color var(--motion-fast) var(--ease-fluid),
+      box-shadow var(--motion-fast) var(--ease-fluid);
   }
 
   .ui-chip-strong {
-    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium;
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm shadow-black/15 backdrop-blur-xl;
     border-color: rgba(245, 158, 11, 0.28);
-    background: rgba(15, 23, 42, 0.78);
+    background: rgba(15, 23, 42, 0.82);
     color: #f8fafc;
   }
 
@@ -779,7 +811,7 @@ body[dir="rtl"] .ui-kicker {
   }
 
   .ui-pill-nav {
-    @apply rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-100 transition;
+    @apply rounded-full border border-slate-700/80 bg-slate-900/65 px-3 py-1.5 text-sm text-slate-100 shadow-sm shadow-black/10 backdrop-blur-xl transition;
   }
 
   .ui-pill-nav:hover {
@@ -920,20 +952,27 @@ body[dir="rtl"] .ui-kicker {
   }
 }
 
-@media (hover: hover) {
-  .ui-chip:hover,
-  .ui-status-pill:hover,
-  .ui-state-chip:hover {
-    transform: translateY(-1px);
-    border-color: rgba(245, 158, 11, 0.24);
-  }
+  @media (hover: hover) {
+    .ui-chip:hover,
+    .ui-status-pill:hover,
+    .ui-state-chip:hover {
+      transform: translateY(-1px);
+      border-color: rgba(245, 158, 11, 0.24);
+      box-shadow: 0 10px 20px rgba(2, 6, 23, 0.2);
+    }
 
-  .ui-surface-lift:hover {
-    transform: translateY(-2px);
-    border-color: rgba(245, 158, 11, 0.45);
-    box-shadow: 0 20px 36px rgba(2, 6, 23, 0.46);
+    .ui-surface-lift:hover {
+      transform: translateY(-2px);
+      border-color: rgba(245, 158, 11, 0.45);
+      box-shadow: 0 20px 36px rgba(2, 6, 23, 0.46);
+    }
+
+    .ui-admin-subcard:hover {
+      transform: translateY(-1px);
+      border-color: rgba(245, 158, 11, 0.18);
+      background: rgba(15, 23, 42, 0.72);
+    }
   }
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,

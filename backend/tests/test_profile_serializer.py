@@ -93,6 +93,47 @@ class ProfileSerializerTests(SimpleTestCase):
         serializer = ProfileSerializer(instance=profile, context={"request": request})
         self.assertEqual(serializer.data["tagline"], "Menu rapide")
 
+    def test_business_hours_field_is_exposed(self):
+        serializer = ProfileSerializer()
+        self.assertIn("business_hours", serializer.fields)
+        self.assertIn("business_hours_i18n", serializer.fields)
+        self.assertIn("business_hours_schedule", serializer.fields)
+
+    def test_profile_business_hours_localizes_for_public_requests(self):
+        request = RequestFactory().get("/api/meta/?lang=fr", HTTP_HOST="demo.menu.kepoli.com")
+        request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
+        profile = Profile(
+            tenant=Tenant(name="Demo", slug="demo", plan=Plan(code="starter", name="Basic")),
+            business_hours="Mon-Sat, 11:00-23:00",
+            business_hours_i18n={"fr": "Lun-Sam, 11:00-23:00"},
+        )
+        serializer = ProfileSerializer(instance=profile, context={"request": request})
+        self.assertEqual(serializer.data["business_hours"], "Lun-Sam, 11:00-23:00")
+
+    def test_business_hours_schedule_accepts_weekday_slots(self):
+        serializer = ProfileSerializer(
+            data={
+                "business_hours_schedule": {
+                    "mon": {"enabled": True, "open": "09:00", "close": "18:00"},
+                    "sun": {"enabled": False, "open": "", "close": ""},
+                }
+            },
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_business_hours_schedule_rejects_invalid_time_format(self):
+        serializer = ProfileSerializer(
+            data={
+                "business_hours_schedule": {
+                    "mon": {"enabled": True, "open": "9:00", "close": "18:00"},
+                }
+            },
+            partial=True,
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("business_hours_schedule", serializer.errors)
+
     def test_profile_i18n_enforces_plan_limit(self):
         request = RequestFactory().get("/api/profile/", HTTP_HOST="demo.menu.kepoli.com")
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))

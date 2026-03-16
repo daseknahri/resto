@@ -5,48 +5,94 @@
       cart.count ? 'pb-44' : 'pb-24',
     ]"
   >
-    <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/82 p-3 md:p-4">
-      <div class="space-y-2.5">
-        <div class="space-y-1">
-          <p class="ui-kicker">{{ t('menu.kicker') }}</p>
-          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">
-            {{ tenantName }}
-          </h1>
-        </div>
+    <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/82 p-0">
+      <div class="relative min-h-[15rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[17rem]">
+        <img
+          v-if="heroImage"
+          :src="heroImage"
+          :alt="`${tenantName} cover`"
+          class="absolute inset-0 h-full w-full object-cover"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
+        />
+        <div class="absolute inset-0 bg-slate-950/82"></div>
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.12),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_28%)]"></div>
 
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span class="ui-chip text-[11px]">{{ categories.length }} {{ t("customerLeadPage.categories") }}</span>
-          <span class="ui-chip text-[11px]">{{ itemCountLabel(cart.count) }}</span>
-        </div>
+        <div class="relative space-y-4 p-3 md:p-5">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 items-start gap-3">
+              <img
+                v-if="logoImage"
+                :src="logoImage"
+                :alt="`${tenantName} logo`"
+                class="h-14 w-14 rounded-2xl border border-slate-700/70 object-cover shadow-xl shadow-black/35"
+                loading="eager"
+                decoding="async"
+              />
+              <div class="min-w-0 space-y-1">
+                <p class="ui-kicker">{{ t('menu.kicker') }}</p>
+                <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">
+                  {{ tenantName }}
+                </h1>
+                <p class="line-clamp-2 text-sm text-slate-300">{{ tenantDescription }}</p>
+              </div>
+            </div>
 
-        <div class="relative">
-          <input
-            v-model.trim="search"
-            class="ui-input pr-12"
-            :placeholder="t('menu.searchPlaceholder')"
-          />
-          <button
-            v-if="search"
-            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
-            @click="clearSearch"
-          >
-            <span class="sr-only">{{ t('common.clear') }}</span>
-            <AppIcon name="close" class="h-3.5 w-3.5" />
-          </button>
-        </div>
+            <div class="grid grid-cols-2 gap-2 sm:min-w-[220px]">
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 backdrop-blur-xl">
+                <p class="ui-kicker mb-1">{{ t("customerLeadPage.categories") }}</p>
+                <p class="text-sm font-semibold text-slate-100">{{ categories.length }}</p>
+              </div>
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 backdrop-blur-xl">
+                <p class="ui-kicker mb-1">{{ t("common.cart") }}</p>
+                <p class="text-sm font-semibold text-slate-100">{{ itemCountLabel(cart.count) }}</p>
+              </div>
+            </div>
+          </div>
 
-        <div
-          v-if="categories.length"
-          class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <button
-            v-for="cat in categories.slice(0, 7)"
-            :key="`quick-${cat.slug}`"
-            class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs"
-            @click="goToCategory(cat.slug)"
-          >
-            {{ cat.name }}
-          </button>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-chip-strong">{{ statusLabel }}</span>
+            <span v-if="locationLine" class="ui-chip">
+              <AppIcon name="info" class="h-3.5 w-3.5" />
+              {{ locationLine }}
+            </span>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/80 bg-slate-950/72 p-3 shadow-xl shadow-black/25 backdrop-blur-xl">
+            <div class="relative">
+              <input
+                v-model.trim="search"
+                class="ui-input pr-12"
+                :placeholder="t('menu.searchPlaceholder')"
+              />
+              <button
+                v-if="search"
+                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+                @click="clearSearch"
+              >
+                <span class="sr-only">{{ t('common.clear') }}</span>
+                <AppIcon name="close" class="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div v-if="categories.length" class="mt-3 space-y-2">
+              <div class="flex items-center justify-between gap-3">
+                <p class="ui-kicker">{{ t("customerLeadPage.categories") }}</p>
+                <span class="ui-chip text-[11px]">{{ itemCountLabel(categories.length) }}</span>
+              </div>
+              <div class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  v-for="cat in categories.slice(0, 7)"
+                  :key="`quick-${cat.slug}`"
+                  class="ui-pill-nav whitespace-nowrap px-3 py-1 text-xs"
+                  @click="goToCategory(cat.slug)"
+                >
+                  {{ cat.name }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -131,6 +177,7 @@ const search = ref('');
 const placeholder =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
 const meta = computed(() => tenant.resolvedMeta || null);
+const profile = computed(() => meta.value?.profile || null);
 const menuCategories = computed(() =>
   Array.isArray(menu.categories) ? menu.categories : []
 );
@@ -138,6 +185,13 @@ const menuCategories = computed(() =>
 const tenantName = computed(
   () => meta.value?.name || t('customerLayout.fallbackTenantName')
 );
+const tenantDescription = computed(
+  () => String(profile.value?.description || profile.value?.tagline || '').trim() || t('customerLeadPage.fallbackDescription')
+);
+const heroImage = computed(() => String(profile.value?.hero_url || '').trim());
+const logoImage = computed(() => String(profile.value?.logo_url || '').trim());
+const locationLine = computed(() => String(profile.value?.address || meta.value?.name || '').trim());
+const statusLabel = computed(() => (profile.value?.is_open === false ? t('customerLeadPage.closedNow') : t('customerLeadPage.openNow')));
 const cartCurrency = computed(() => {
   const firstItemCurrency = cart.items.find((item) => item.currency)?.currency;
   return firstItemCurrency || meta.value?.plan?.currency || 'USD';

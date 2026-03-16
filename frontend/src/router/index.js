@@ -28,6 +28,8 @@ const LeadCapture = () => import("../pages/LeadCapture.vue");
 
 const OwnerHome = () => import("../pages/OwnerHome.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
+const OwnerMenuBuilder = () => import("../pages/OwnerMenuBuilder.vue");
+const OwnerProfile = () => import("../pages/OwnerProfile.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 const OwnerTables = () => import("../pages/OwnerTables.vue");
 
@@ -89,9 +91,21 @@ const routes = [
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {
+        path: "menu-builder",
+        name: "owner-menu-builder",
+        component: OwnerMenuBuilder,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
         path: "onboarding",
         name: "onboarding",
         component: Wizard,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "profile",
+        name: "owner-profile",
+        component: OwnerProfile,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {

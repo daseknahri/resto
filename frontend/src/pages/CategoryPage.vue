@@ -1,29 +1,52 @@
 <template>
   <div class="space-y-3 px-3 py-3 pb-24 sm:space-y-4 sm:px-4 sm:py-4 ui-safe-bottom">
-    <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/84 p-3 md:p-4">
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="min-w-0 space-y-1">
-            <p class="ui-kicker">{{ t("category.kicker") }}</p>
-            <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-            <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
-          </div>
-          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs">
-            <AppIcon name="menu" class="h-3.5 w-3.5" />
-            {{ t("customerLayout.navMenu") }}
-          </RouterLink>
-        </div>
+    <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/84 p-0">
+      <div class="relative min-h-[13rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[14rem]">
+        <img
+          v-if="currentCategory?.image_url"
+          :src="currentCategory.image_url"
+          :alt="categoryName"
+          class="absolute inset-0 h-full w-full object-cover"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
+        />
+        <div class="absolute inset-0 bg-slate-950/84"></div>
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.1),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_24%)]"></div>
 
-        <div class="relative">
-          <input v-model.trim="search" class="ui-input pr-12" :placeholder="t('category.searchPlaceholder')" />
-          <button
-            v-if="search"
-            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
-            @click="search = ''"
-          >
-            <span class="sr-only">{{ t("common.clear") }}</span>
-            <AppIcon name="close" class="h-3.5 w-3.5" />
-          </button>
+        <div class="relative space-y-3 p-3 md:p-4">
+          <div class="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-start">
+            <div class="min-w-0 space-y-1">
+              <p class="ui-kicker">{{ t("category.kicker") }}</p>
+              <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
+              <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 sm:min-w-[220px]">
+              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 backdrop-blur-xl">
+                <p class="ui-kicker mb-1">{{ t("customerLayout.navMenu") }}</p>
+                <p class="text-sm font-semibold text-slate-100">{{ itemCountLabel(filteredDishes.length) }}</p>
+              </div>
+              <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline flex items-center justify-center gap-2 px-3 py-2 text-xs">
+                <AppIcon name="menu" class="h-3.5 w-3.5" />
+                {{ t("customerLayout.navMenu") }}
+              </RouterLink>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-slate-800/80 bg-slate-950/72 p-3 shadow-xl shadow-black/25 backdrop-blur-xl">
+            <div class="relative">
+              <input v-model.trim="search" class="ui-input pr-12" :placeholder="t('category.searchPlaceholder')" />
+              <button
+                v-if="search"
+                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+                @click="search = ''"
+              >
+                <span class="sr-only">{{ t("common.clear") }}</span>
+                <AppIcon name="close" class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -54,7 +77,17 @@
               <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(dish.price, dish.currency) }}</p>
             </div>
 
-            <div class="mt-auto flex items-center justify-between gap-2">
+            <div class="flex flex-wrap gap-2">
+              <span class="ui-chip text-[11px]">
+                <AppIcon name="menu" class="h-3.5 w-3.5" />
+                {{ categoryName }}
+              </span>
+              <span class="ui-chip text-[11px]">
+                {{ t("dishPage.optionsCount", { count: Array.isArray(dish.options) ? dish.options.length : 0 }) }}
+              </span>
+            </div>
+
+            <div class="mt-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <button
                 class="ui-btn-primary inline-flex items-center gap-2 px-3 py-2 text-sm"
                 :disabled="quickAddDisabled"
@@ -110,7 +143,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { currentLocale, formatCurrency, t } = useI18n();
+const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
 const search = ref("");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);

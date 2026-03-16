@@ -4,12 +4,12 @@
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("ownerTables.title") }}</h2>
-          <p class="text-sm text-slate-300">{{ t("ownerTables.description") }}</p>
-          <p class="text-xs text-slate-400">
-            {{ t("ownerTables.tableLinksCount", { count: tables.length }) }} -
-            {{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}
-          </p>
+          <h2 class="ui-display text-[1.55rem] font-semibold text-white md:text-3xl">{{ t("ownerTables.title") }}</h2>
+          <div class="ui-scroll-row">
+            <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
+            <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>
+            <span class="ui-data-strip">{{ t("ownerTables.disabledTables") }}: {{ Math.max(tables.length - activeTablesCount, 0) }}</span>
+          </div>
         </div>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
           <button class="ui-btn-primary w-full sm:w-auto" @click="openSetup('create')">
@@ -44,7 +44,7 @@
             </select>
           </label>
         </div>
-        <div class="ui-scroll-row">
+        <div class="hidden ui-scroll-row md:flex">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="loading" @click="fetchTables">
             <AppIcon name="refresh" class="owner-table-icon" />
             {{ loading ? t("ownerTables.refreshing") : t("common.refresh") }}
@@ -63,13 +63,32 @@
           </button>
         </div>
       </div>
-      <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-        <span>{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</span>
-        <span v-if="searchQuery">- {{ t("common.search") }}: {{ searchQuery }}</span>
-        <span v-if="statusFilter !== 'all'">
-          - {{ statusFilter === 'active' ? t("ownerTables.activeTables") : t("ownerTables.disabledTables") }}
+      <div class="mt-3 ui-scroll-row text-xs text-slate-400">
+        <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: filteredTables.length }) }}</span>
+        <span v-if="searchQuery" class="ui-data-strip">{{ t("common.search") }}: {{ searchQuery }}</span>
+        <span v-if="statusFilter !== 'all'" class="ui-data-strip">
+          {{ statusFilter === 'active' ? t("ownerTables.activeTables") : t("ownerTables.disabledTables") }}
         </span>
       </div>
+      <details class="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-2.5 md:hidden">
+        <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+          {{ t("ownerTables.cardsTitle") }}
+        </summary>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">
+            <AppIcon name="download" class="owner-table-icon" />
+            {{ t("ownerTables.exportCsv") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="downloadHtmlPack">
+            <AppIcon name="menu" class="owner-table-icon" />
+            {{ t("ownerTables.htmlPack") }}
+          </button>
+          <button class="ui-btn-outline col-span-2 px-3 py-1.5 text-xs" :disabled="!tables.length" @click="printCards">
+            <AppIcon name="print" class="owner-table-icon" />
+            {{ t("ownerTables.printCards") }}
+          </button>
+        </div>
+      </details>
     </div>
 
     <header class="print-only rounded-xl border border-slate-300 bg-white p-4 text-slate-900">
@@ -114,12 +133,12 @@
             v-if="tableQrSrc(table)"
             :src="tableQrSrc(table)"
             :alt="t('ownerTables.qrAlt', { label: table.label })"
-            class="h-40 w-40"
+            class="h-36 w-36 sm:h-40 sm:w-40"
             loading="lazy"
           />
           <div
             v-else
-            class="flex h-40 w-40 items-center justify-center bg-slate-100 text-center text-[11px] font-medium text-slate-500"
+            class="flex h-36 w-36 items-center justify-center bg-slate-100 text-center text-[11px] font-medium text-slate-500 sm:h-40 sm:w-40"
           >
             {{ t("ownerTables.generating") }}
           </div>
@@ -154,12 +173,6 @@
             <AppIcon name="download" class="owner-table-icon" />
             {{ t("ownerTables.downloadQr") }}
           </button>
-          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
-            {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
-          </button>
-          <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
-            {{ t("ownerTables.delete") }}
-          </button>
         </div>
 
         <details class="no-print sm:hidden rounded-xl border border-slate-800/80 bg-slate-950/45 p-2.5">
@@ -172,6 +185,12 @@
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
               <AppIcon name="copy" class="owner-table-icon" />
               {{ t("ownerTables.copyQr") }}
+            </button>
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
+              {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+            </button>
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
+              {{ t("ownerTables.delete") }}
             </button>
           </div>
         </details>

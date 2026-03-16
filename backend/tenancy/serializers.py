@@ -10,6 +10,8 @@ from .tiering import external_plan_code, plan_display_name, plan_entitlements
 
 SUPPORTED_PROFILE_LANGUAGES = {"en", "fr", "ar"}
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
+_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+_BUSINESS_HOURS_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
 def _normalize_local_media_url(value: str, request) -> str:
@@ -195,6 +197,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "tagline_i18n",
             "description",
             "description_i18n",
+            "business_hours",
+            "business_hours_i18n",
+            "business_hours_schedule",
             "phone",
             "whatsapp",
             "address",
@@ -276,6 +281,47 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
     def validate_description_i18n(self, value):
         return self._validate_i18n_map(value, field_label="Description", max_length=2000)
 
+    def validate_business_hours_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Business hours", max_length=1000)
+
+    def validate_business_hours_schedule(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Business hours schedule must be a JSON object.")
+
+        cleaned = {}
+        for raw_day, raw_entry in value.items():
+            day = str(raw_day or "").strip().lower()
+            if day not in _BUSINESS_HOURS_DAYS:
+                raise serializers.ValidationError(
+                    f"Business hours day must be one of: {', '.join(_BUSINESS_HOURS_DAYS)}."
+                )
+            if not isinstance(raw_entry, dict):
+                raise serializers.ValidationError("Business hours day entry must be an object.")
+
+            enabled = bool(raw_entry.get("enabled", False))
+            open_time = str(raw_entry.get("open", "") or "").strip()
+            close_time = str(raw_entry.get("close", "") or "").strip()
+
+            if enabled:
+                if not _TIME_RE.match(open_time):
+                    raise serializers.ValidationError(f"Opening time for '{day}' must use HH:MM format.")
+                if not _TIME_RE.match(close_time):
+                    raise serializers.ValidationError(f"Closing time for '{day}' must use HH:MM format.")
+                if open_time == close_time:
+                    raise serializers.ValidationError(
+                        f"Opening and closing times for '{day}' cannot be the same."
+                    )
+
+            cleaned[day] = {
+                "enabled": enabled,
+                "open": open_time if enabled else "",
+                "close": close_time if enabled else "",
+            }
+
+        return cleaned
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         disabled_in_payload = "is_menu_temporarily_disabled" in attrs
@@ -335,6 +381,10 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         data["tagline"] = self._localized_text(data.get("tagline", ""), data.get("tagline_i18n"))
         data["address"] = self._localized_text(data.get("address", ""), data.get("address_i18n"))
         data["description"] = self._localized_text(data.get("description", ""), data.get("description_i18n"))
+        data["business_hours"] = self._localized_text(
+            data.get("business_hours", ""),
+            data.get("business_hours_i18n"),
+        )
         return data
 
 

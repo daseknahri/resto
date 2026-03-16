@@ -65,8 +65,33 @@
             </RouterLink>
           </div>
 
-          <div class="ui-section-band">
+          <div class="ui-section-band space-y-3">
+            <div class="flex flex-wrap gap-2">
+              <span class="ui-chip">
+                <AppIcon name="menu" class="h-3.5 w-3.5" />
+                {{ categoryName }}
+              </span>
+              <span class="ui-chip">
+                <AppIcon name="cart" class="h-3.5 w-3.5" />
+                {{ formatCurrency(dish.price, dish.currency) }}
+              </span>
+            </div>
             <p class="leading-relaxed text-slate-200">{{ dish.description || t('dishPage.noDescription') }}</p>
+          </div>
+
+          <div class="grid gap-2 sm:grid-cols-3">
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-3 py-2.5">
+              <p class="ui-kicker mb-1">{{ t('dishPage.total') }}</p>
+              <p class="text-sm font-semibold text-slate-100">{{ formatCurrency(unitPriceWithOptions, dish.currency) }}</p>
+            </div>
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-3 py-2.5">
+              <p class="ui-kicker mb-1">{{ t('dishPage.options') }}</p>
+              <p class="text-sm font-semibold text-slate-100">{{ t('dishPage.optionsCount', { count: selectedOptionObjects.length }) }}</p>
+            </div>
+            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-3 py-2.5">
+              <p class="ui-kicker mb-1">{{ t('dishPage.qty') }}</p>
+              <p class="text-sm font-semibold text-slate-100">{{ qty }}</p>
+            </div>
           </div>
 
           <div v-if="dish.options?.length" class="ui-section-band space-y-3">

@@ -4,21 +4,38 @@
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-kicker">{{ t("stepCategories.title") }}</p>
-          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("stepCategories.description") }}</h2>
+          <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("common.categories") }}</h2>
         </div>
-        <button class="ui-btn-primary px-4 py-2 text-sm" type="button" @click="openQuickCategoryModal">
-          {{ t("stepCategories.addCategory") }}
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button class="ui-btn-outline px-4 py-2 text-sm" type="button" :disabled="saving || hasActiveUploads" @click="saveAndNext">
+            {{ saving ? t("common.saving") : t("common.save") }}
+          </button>
+          <button class="ui-btn-primary px-4 py-2 text-sm" type="button" @click="openQuickCategoryModal">
+            {{ t("stepCategories.addCategory") }}
+          </button>
+        </div>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <span class="ui-data-strip">{{ categories.length }} {{ t("common.categories") }}</span>
-        <span class="ui-data-strip">{{ availableContentLocales.length }} {{ t("stepCategories.translationsTitle") }}</span>
+      <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <label class="text-sm text-slate-300">
+          <span class="sr-only">{{ t("common.search") }}</span>
+          <input v-model.trim="categorySearch" class="ui-input" :placeholder="t('common.search')" />
+        </label>
+        <div class="ui-scroll-row">
+          <span class="ui-data-strip">{{ filteredCategories.length }} / {{ categories.length }} {{ t("common.categories") }}</span>
+          <span class="ui-data-strip">{{ availableContentLocales.length }} {{ t("stepCategories.translationsTitle") }}</span>
+        </div>
       </div>
     </section>
 
     <div class="space-y-3">
+      <div
+        v-if="!filteredCategories.length"
+        class="rounded-2xl border border-dashed border-slate-700 bg-slate-950/55 p-5 text-sm text-slate-400"
+      >
+        {{ categorySearch ? `${t("common.search")} - 0` : t("stepCategories.addAtLeastOne") }}
+      </div>
       <article
-        v-for="(cat, idx) in categories"
+        v-for="(cat, idx) in filteredCategories"
         :key="cat.local_id"
         class="rounded-2xl border border-slate-800 bg-slate-950/75 p-4 shadow-[0_12px_28px_rgba(2,8,23,0.18)]"
       >
@@ -43,12 +60,11 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openCategoryEditor(cat.local_id)">
             Edit
           </button>
-          <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" type="button" @click="remove(idx)">
+          <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" type="button" @click="removeByLocalId(cat.local_id)">
             {{ t("stepCategories.remove") }}
           </button>
         </div>
       </article>
-      <button class="ui-btn-outline px-4 py-2 text-sm" @click="openQuickCategoryModal">{{ t("stepCategories.addCategory") }}</button>
     </div>
 
     <Teleport to="body">
@@ -57,115 +73,136 @@
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeCategoryEditor"
       >
-        <div class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-5 space-y-4">
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="text-lg font-semibold text-white">Edit {{ t("common.categories") }}</h3>
+        <div class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+            <div class="space-y-1">
+              <p class="ui-kicker">{{ t("common.categories") }}</p>
+              <h3 class="text-lg font-semibold text-white">Edit {{ t("common.categories") }}</h3>
+            </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeCategoryEditor">{{ t("common.close") }}</button>
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    v-for="locale in availableContentLocales"
-                    :key="`cat-name-${locale.code}`"
-                    type="button"
-                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                    :class="categoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                    @click="categoryFieldLocales.name = locale.code"
-                  >
-                    {{ locale.nativeLabel }}
-                  </button>
+          <div class="space-y-4 p-4 sm:p-5">
+            <div class="ui-scroll-row">
+              <span class="ui-data-strip">Pos: {{ Number(editingCategory.position || 0) }}</span>
+              <span class="ui-data-strip">{{ t("stepCategories.translationsTitle") }}: {{ Object.keys(editingCategory.name_i18n || {}).length }}</span>
+              <span class="ui-data-strip">{{ editingCategory.image_url ? t("stepCategories.removeImage") : t("stepCategories.uploadImage") }}</span>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+              <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr),110px]">
+                <div class="space-y-1">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
+                    <div class="flex flex-wrap gap-1">
+                      <button
+                        v-for="locale in availableContentLocales"
+                        :key="`cat-name-${locale.code}`"
+                        type="button"
+                        class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                        :class="categoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                        @click="categoryFieldLocales.name = locale.code"
+                      >
+                        {{ locale.nativeLabel }}
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    :value="localizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name)"
+                    class="ui-input"
+                    :class="rowError(editingCategory, 'name') ? 'border-red-400' : 'border-slate-700'"
+                    :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                    @input="setLocalizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name, $event.target.value)"
+                  />
+                  <p v-if="rowError(editingCategory, 'name')" class="text-xs text-red-300">{{ rowError(editingCategory, "name") }}</p>
+                </div>
+                <div class="space-y-1">
+                  <input
+                    v-model.number="editingCategory.position"
+                    type="number"
+                    min="0"
+                    class="ui-input"
+                    :class="rowError(editingCategory, 'position') ? 'border-red-400' : 'border-slate-700'"
+                    @input="clearRowError(editingCategory.local_id, 'position')"
+                  />
+                  <p v-if="rowError(editingCategory, 'position')" class="text-xs text-red-300">{{ rowError(editingCategory, "position") }}</p>
                 </div>
               </div>
-              <input
-                :value="localizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name)"
-                class="ui-input"
-                :class="rowError(editingCategory, 'name') ? 'border-red-400' : 'border-slate-700'"
-                :placeholder="t('stepCategories.categoryNamePlaceholder')"
-                @input="setLocalizedCategoryFieldValue(editingCategory, 'name', categoryFieldLocales.name, $event.target.value)"
-              />
-              <p v-if="rowError(editingCategory, 'name')" class="text-xs text-red-300">{{ rowError(editingCategory, "name") }}</p>
             </div>
-            <div class="space-y-1">
-              <input
-                v-model.number="editingCategory.position"
-                type="number"
-                min="0"
-                class="ui-input"
-                :class="rowError(editingCategory, 'position') ? 'border-red-400' : 'border-slate-700'"
-                @input="clearRowError(editingCategory.local_id, 'position')"
-              />
-              <p v-if="rowError(editingCategory, 'position')" class="text-xs text-red-300">{{ rowError(editingCategory, "position") }}</p>
-            </div>
-          </div>
 
-          <div class="space-y-1">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
-              <div class="flex flex-wrap gap-1">
-                <button
-                  v-for="locale in availableContentLocales"
-                  :key="`cat-desc-${locale.code}`"
-                  type="button"
-                  class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                  :class="categoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                  @click="categoryFieldLocales.description = locale.code"
-                >
-                  {{ locale.nativeLabel }}
-                </button>
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
+                  <div class="flex flex-wrap gap-1">
+                    <button
+                      v-for="locale in availableContentLocales"
+                      :key="`cat-desc-${locale.code}`"
+                      type="button"
+                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                      :class="categoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      @click="categoryFieldLocales.description = locale.code"
+                    >
+                      {{ locale.nativeLabel }}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  :value="localizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description)"
+                  rows="3"
+                  class="ui-textarea"
+                  :class="rowError(editingCategory, 'description') ? 'border-red-400' : 'border-slate-700'"
+                  :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+                  @input="setLocalizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description, $event.target.value)"
+                ></textarea>
+                <p v-if="rowError(editingCategory, 'description')" class="text-xs text-red-300">{{ rowError(editingCategory, "description") }}</p>
               </div>
-            </div>
-            <textarea
-              :value="localizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description)"
-              rows="2"
-              class="ui-textarea"
-              :class="rowError(editingCategory, 'description') ? 'border-red-400' : 'border-slate-700'"
-              :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-              @input="setLocalizedCategoryFieldValue(editingCategory, 'description', categoryFieldLocales.description, $event.target.value)"
-            ></textarea>
-          </div>
-          <p v-if="rowError(editingCategory, 'description')" class="text-xs text-red-300">{{ rowError(editingCategory, "description") }}</p>
 
-          <div
-            class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
-            :class="draggingRows[editingCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
-            @dragenter="setDragState(editingCategory.local_id, true)"
-            @dragleave="setDragState(editingCategory.local_id, false)"
-            @dragover="preventDropDefaults"
-            @drop="dropImage(editingCategory, $event)"
-          >
-            <div class="flex flex-wrap items-center gap-3">
-              <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-                {{ uploadingRows[editingCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[editingCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
-                <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[editingCategory.local_id]" @change="uploadImage(editingCategory, $event)" />
-              </label>
-              <button
-                v-if="editingCategory.image_url"
-                type="button"
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
-                @click="clearImage(editingCategory)"
+              <div
+                class="rounded-xl border border-dashed p-3 transition-colors"
+                :class="draggingRows[editingCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+                @dragenter="setDragState(editingCategory.local_id, true)"
+                @dragleave="setDragState(editingCategory.local_id, false)"
+                @dragover="preventDropDefaults"
+                @drop="dropImage(editingCategory, $event)"
               >
-                {{ t("stepCategories.removeImage") }}
-              </button>
-              <img v-if="editingCategory.image_url" :src="editingCategory.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <img v-if="editingCategory.image_url" :src="editingCategory.image_url" alt="" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" />
+                    <div class="min-w-0">
+                      <p class="text-xs font-medium text-slate-100">{{ t("stepCategories.uploadImage") }}</p>
+                      <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                      {{ uploadingRows[editingCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[editingCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
+                      <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[editingCategory.local_id]" @change="uploadImage(editingCategory, $event)" />
+                    </label>
+                    <button
+                      v-if="editingCategory.image_url"
+                      type="button"
+                      class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                      @click="clearImage(editingCategory)"
+                    >
+                      {{ t("stepCategories.removeImage") }}
+                    </button>
+                  </div>
+                </div>
+                <p class="mt-3 text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
+                <div v-if="uploadingRows[editingCategory.local_id]" class="mt-3 h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+                  <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[editingCategory.local_id] || 0}%` }"></div>
+                </div>
+              </div>
+
+              <p v-if="rowError(editingCategory, 'image_url')" class="text-xs text-red-300">{{ rowError(editingCategory, "image_url") }}</p>
+              <p v-if="rowError(editingCategory, 'slug')" class="text-xs text-red-300">{{ rowError(editingCategory, "slug") }}</p>
+              <p v-if="rowError(editingCategory, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingCategory, "non_field_errors") }}</p>
             </div>
-            <p class="text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
-          </div>
-          <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
-
-          <div v-if="uploadingRows[editingCategory.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
-            <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[editingCategory.local_id] || 0}%` }"></div>
           </div>
 
-          <p v-if="rowError(editingCategory, 'image_url')" class="text-xs text-red-300">{{ rowError(editingCategory, "image_url") }}</p>
-          <p v-if="rowError(editingCategory, 'slug')" class="text-xs text-red-300">{{ rowError(editingCategory, "slug") }}</p>
-          <p v-if="rowError(editingCategory, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingCategory, "non_field_errors") }}</p>
-
-          <div class="flex justify-end">
-            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeCategoryEditor">Done</button>
+          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeCategoryEditor">{{ t("common.close") }}</button>
           </div>
         </div>
       </div>
@@ -177,61 +214,102 @@
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickCategoryModal"
       >
-        <div class="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl">
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+        <div class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+            <div class="space-y-1">
+              <p class="ui-kicker">{{ t("common.categories") }}</p>
+              <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+            </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
           </div>
-          <div class="mt-4 space-y-3">
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    v-for="locale in availableContentLocales"
-                    :key="`quick-cat-name-${locale.code}`"
-                    type="button"
-                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                    :class="quickCategoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                    @click="quickCategoryFieldLocales.name = locale.code"
-                  >
-                    {{ locale.nativeLabel }}
-                  </button>
+          <div class="space-y-4 p-4">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-400">{{ t("stepCategories.categoryNamePlaceholder") }}</p>
+                  <div class="flex flex-wrap gap-1">
+                    <button
+                      v-for="locale in availableContentLocales"
+                      :key="`quick-cat-name-${locale.code}`"
+                      type="button"
+                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                      :class="quickCategoryFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      @click="quickCategoryFieldLocales.name = locale.code"
+                    >
+                      {{ locale.nativeLabel }}
+                    </button>
+                  </div>
                 </div>
+                <input
+                  :value="localizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name)"
+                  class="ui-input"
+                  :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                  @input="setLocalizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name, $event.target.value)"
+                />
               </div>
-              <input
-                :value="localizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name)"
-                class="ui-input"
-                :placeholder="t('stepCategories.categoryNamePlaceholder')"
-                @input="setLocalizedQuickCategoryFieldValue('name', quickCategoryFieldLocales.name, $event.target.value)"
-              />
-            </div>
 
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    v-for="locale in availableContentLocales"
-                    :key="`quick-cat-description-${locale.code}`"
-                    type="button"
-                    class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                    :class="quickCategoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
-                    @click="quickCategoryFieldLocales.description = locale.code"
-                  >
-                    {{ locale.nativeLabel }}
-                  </button>
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-400">{{ t("stepCategories.categoryDescriptionPlaceholder") }}</p>
+                  <div class="flex flex-wrap gap-1">
+                    <button
+                      v-for="locale in availableContentLocales"
+                      :key="`quick-cat-description-${locale.code}`"
+                      type="button"
+                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                      :class="quickCategoryFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      @click="quickCategoryFieldLocales.description = locale.code"
+                    >
+                      {{ locale.nativeLabel }}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  :value="localizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description)"
+                  rows="3"
+                  class="ui-textarea"
+                  :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
+                  @input="setLocalizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description, $event.target.value)"
+                ></textarea>
+              </div>
+
+              <div
+                class="rounded-xl border border-dashed p-3 transition-colors"
+                :class="draggingRows[quickCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+                @dragenter="setDragState(quickCategory.local_id, true)"
+                @dragleave="setDragState(quickCategory.local_id, false)"
+                @dragover="preventDropDefaults"
+                @drop="dropImage(quickCategory, $event)"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <img v-if="quickCategory.image_url" :src="quickCategory.image_url" alt="" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" />
+                    <div class="min-w-0">
+                      <p class="text-xs font-medium text-slate-100">{{ t("stepCategories.uploadImage") }}</p>
+                      <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
+                      {{ uploadingRows[quickCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[quickCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
+                      <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[quickCategory.local_id]" @change="uploadImage(quickCategory, $event)" />
+                    </label>
+                    <button
+                      v-if="quickCategory.image_url"
+                      type="button"
+                      class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                      @click="clearImage(quickCategory)"
+                    >
+                      {{ t("stepCategories.removeImage") }}
+                    </button>
+                  </div>
+                </div>
+                <p class="mt-3 text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
+                <div v-if="uploadingRows[quickCategory.local_id]" class="mt-3 h-1.5 w-full rounded bg-slate-800 overflow-hidden">
+                  <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[quickCategory.local_id] || 0}%` }"></div>
                 </div>
               </div>
-              <textarea
-                :value="localizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description)"
-                rows="2"
-                class="ui-textarea"
-                :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
-                @input="setLocalizedQuickCategoryFieldValue('description', quickCategoryFieldLocales.description, $event.target.value)"
-              ></textarea>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-2">
+
               <input
                 v-model.number="quickCategory.position"
                 type="number"
@@ -239,38 +317,10 @@
                 class="ui-input"
                 :placeholder="t('stepCategories.positionMin')"
               />
-              <div
-                class="rounded-xl border border-dashed p-3 space-y-2 transition-colors"
-                :class="draggingRows[quickCategory.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
-                @dragenter="setDragState(quickCategory.local_id, true)"
-                @dragleave="setDragState(quickCategory.local_id, false)"
-                @dragover="preventDropDefaults"
-                @drop="dropImage(quickCategory, $event)"
-              >
-                <div class="flex flex-wrap items-center gap-3">
-                  <label class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 cursor-pointer hover:border-brand-secondary">
-                    {{ uploadingRows[quickCategory.local_id] ? t("stepCategories.uploadingProgress", { progress: uploadProgressRows[quickCategory.local_id] || 0 }) : t("stepCategories.uploadImage") }}
-                    <input type="file" accept="image/*" class="hidden" :disabled="uploadingRows[quickCategory.local_id]" @change="uploadImage(quickCategory, $event)" />
-                  </label>
-                  <button
-                    v-if="quickCategory.image_url"
-                    type="button"
-                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
-                    @click="clearImage(quickCategory)"
-                  >
-                    {{ t("stepCategories.removeImage") }}
-                  </button>
-                  <img v-if="quickCategory.image_url" :src="quickCategory.image_url" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700" />
-                </div>
-                <p class="text-xs text-slate-500">{{ t("stepCategories.dropImageHint") }}</p>
-              </div>
             </div>
-            <p class="text-xs text-slate-500">{{ t("stepCategories.acceptedFormats") }}</p>
-            <div v-if="uploadingRows[quickCategory.local_id]" class="h-1.5 w-full rounded bg-slate-800 overflow-hidden">
-              <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${uploadProgressRows[quickCategory.local_id] || 0}%` }"></div>
-            </div>
+
           </div>
-          <div class="mt-4 flex justify-end gap-2">
+          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickCategoryModal">{{ t("common.close") }}</button>
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddCategory">{{ t("stepCategories.addCategory") }}</button>
           </div>
@@ -282,9 +332,9 @@
 
     <div class="flex flex-wrap items-center gap-3 border-t border-slate-800/80 pt-3">
       <button class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
-        {{ saving ? t("common.saving") : t("common.saveAndNext") }}
+        {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
       </button>
-      <button class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
+      <button v-if="!props.standalone" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400">{{ status }}</p>
     </div>
   </div>
@@ -308,10 +358,17 @@ const pendingCleanup = ref([]);
 const globalError = ref("");
 const saving = ref(false);
 const status = ref("");
+const categorySearch = ref("");
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
+const props = defineProps({
+  standalone: {
+    type: Boolean,
+    default: false,
+  },
+});
 const quickCategoryModalOpen = ref(false);
 const categoryEditorModalOpen = ref(false);
 const categoryEditorLocalId = ref("");
@@ -335,6 +392,15 @@ const quickCategoryFieldLocales = reactive({
 const editingCategory = computed(
   () => categories.find((cat) => String(cat.local_id) === String(categoryEditorLocalId.value)) || null
 );
+const filteredCategories = computed(() => {
+  const query = categorySearch.value.trim().toLowerCase();
+  if (!query) return categories;
+  return categories.filter((cat) =>
+    [cat.name, cat.description, cat.slug]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+  );
+});
 
 const hasActiveUploads = computed(() => Object.values(uploadingRows).some(Boolean));
 const maxTranslationLocales = computed(() =>
@@ -615,6 +681,11 @@ const remove = async (idx) => {
   if (!categories.length) categories.push(normalize());
 };
 
+const removeByLocalId = async (localId) => {
+  const index = categories.findIndex((cat) => cat.local_id === localId);
+  if (index >= 0) await remove(index);
+};
+
 const clearImage = async (cat) => {
   const old = cat.image_url;
   cat.image_url = "";
@@ -702,7 +773,7 @@ const saveAndNext = async () => {
     removedIds.value = [];
     status.value = t("common.saved");
     toast.show(t("stepCategories.savedToast"), "success");
-    emit("next");
+    if (!props.standalone) emit("next");
   } catch (e) {
     status.value = t("common.saveFailed");
     globalError.value = e?.message || t("stepCategories.saveFailed");

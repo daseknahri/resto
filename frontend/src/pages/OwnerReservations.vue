@@ -4,13 +4,14 @@
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
-          <h2 class="ui-page-title ui-display">{{ t("ownerReservations.title") }}</h2>
-          <p class="max-w-3xl text-sm text-slate-300">{{ t("ownerReservations.description") }}</p>
-          <p class="text-xs text-slate-400">
-            {{ t("ownerReservations.total") }}: {{ statusCounts.total }} -
-            {{ t("ownerReservations.new") }}: {{ statusCounts.new }} -
-            {{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}
-          </p>
+          <h2 class="ui-page-title ui-display text-[1.55rem] sm:text-[2rem]">{{ t("ownerReservations.title") }}</h2>
+          <div class="ui-scroll-row">
+            <span class="ui-data-strip">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
+            <span class="ui-data-strip">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>
+            <span class="ui-data-strip">{{ t("ownerReservations.contacted") }}: {{ statusCounts.contacted }}</span>
+            <span class="ui-data-strip">{{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}</span>
+            <span class="ui-data-strip">{{ t("ownerReservations.overdue") }}: {{ statusCounts.overdue }}</span>
+          </div>
         </div>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <button class="ui-btn-primary w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="loading" @click="fetchReservations">
@@ -232,7 +233,7 @@
         <article
           v-for="reservation in reservations"
           :key="reservation.id"
-          class="ui-reservation-card ui-surface-lift space-y-3"
+          class="ui-reservation-card ui-surface-lift space-y-3 sm:space-y-3.5"
           :class="reservationCardClass(reservation)"
         >
           <div class="flex items-start justify-between gap-3">
@@ -262,16 +263,20 @@
             </span>
           </div>
 
-          <div class="space-y-1 text-sm text-start">
-            <p class="text-slate-200 break-all">{{ reservation.phone || "-" }}</p>
-            <p class="text-slate-400 break-all">{{ reservation.email || "-" }}</p>
+          <div class="grid gap-1.5 text-sm text-start sm:grid-cols-2">
+            <p class="rounded-lg border border-slate-800/70 bg-slate-950/35 px-2.5 py-2 text-slate-200 break-all">
+              {{ reservation.phone || "-" }}
+            </p>
+            <p class="rounded-lg border border-slate-800/70 bg-slate-950/35 px-2.5 py-2 text-slate-400 break-all">
+              {{ reservation.email || "-" }}
+            </p>
           </div>
 
-          <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-line">
+          <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-2.5 text-xs text-slate-300 whitespace-pre-line">
             {{ reservation.notes || t("ownerReservations.noCustomerNote") }}
           </p>
 
-          <div class="flex flex-wrap items-center gap-2 text-[11px]">
+          <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
             <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-300">
               {{ t("ownerReservations.reminders") }} {{ reservation.reminder_count || 0 }}
             </span>
@@ -293,11 +298,11 @@
             </span>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <a
               v-if="telHref(reservation)"
               :href="telHref(reservation)"
-              class="ui-btn-outline px-3 py-1.5 text-xs"
+              class="ui-btn-outline justify-center px-3 py-1.5 text-xs"
             >
               <AppIcon name="phone" class="owner-res-icon" />
               {{ t("common.call") }}
@@ -307,14 +312,68 @@
               :href="whatsappHref(reservation)"
               target="_blank"
               rel="noopener noreferrer"
-              class="ui-btn-outline px-3 py-1.5 text-xs"
+              class="ui-btn-outline justify-center px-3 py-1.5 text-xs"
             >
               <AppIcon name="chat" class="owner-res-icon" />
               {{ t("ownerReservations.quickChat") }}
             </a>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div class="grid grid-cols-2 gap-2 sm:hidden">
+            <button
+              class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
+              :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"
+              @click="sendReminder(reservation)"
+            >
+              {{ isReminderSending(reservation.id) ? t("ownerReservations.opening") : t("ownerReservations.reminder") }}
+            </button>
+            <button
+              class="owner-action-btn rounded-full bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              :disabled="isUpdating(reservation.id)"
+              @click="updateStatus(reservation, 'contacted')"
+            >
+              {{ t("ownerReservations.contacted") }}
+            </button>
+            <button
+              class="owner-action-btn rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              :disabled="isUpdating(reservation.id)"
+              @click="updateStatus(reservation, 'won')"
+            >
+              {{ t("ownerReservations.confirmed") }}
+            </button>
+          </div>
+
+          <details class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-2.5 sm:hidden">
+            <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">
+              {{ t("common.more") }}
+            </summary>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <button
+                class="owner-action-btn rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
+                :disabled="isUpdating(reservation.id)"
+                @click="updateStatus(reservation, 'lost')"
+              >
+                {{ t("ownerReservations.unavailable") }}
+              </button>
+              <button
+                class="owner-action-btn rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
+                :disabled="isUpdating(reservation.id)"
+                @click="updateStatus(reservation, 'new')"
+              >
+                {{ t("ownerReservations.resetNew") }}
+              </button>
+              <button
+                class="owner-action-btn col-span-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
+                :disabled="isTimelineLoading(reservation.id)"
+                @click="toggleTimeline(reservation.id)"
+              >
+                <AppIcon name="calendar" class="owner-res-icon" />
+                {{ isTimelineOpen(reservation.id) ? t("ownerReservations.hideTimeline") : t("ownerReservations.timeline") }}
+              </button>
+            </div>
+          </details>
+
+          <div class="hidden gap-2 sm:grid sm:grid-cols-3">
             <button
               class="owner-action-btn rounded-full border border-emerald-500/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
               :disabled="isReminderSending(reservation.id) || !canSendReminder(reservation)"

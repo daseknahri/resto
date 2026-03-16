@@ -1,33 +1,50 @@
 <template>
   <section class="space-y-4 pb-24 sm:space-y-5 sm:pb-6">
-    <article class="ui-workspace-stage ui-fade-up space-y-3 p-3 sm:space-y-4 sm:p-4 md:p-5">
-      <div class="space-y-1.5">
-        <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-        <h2 class="ui-page-title ui-display text-[1.7rem] leading-tight sm:text-4xl">{{ t("ownerHome.title") }}</h2>
+    <article class="ui-workspace-stage ui-fade-up space-y-4 p-3 sm:space-y-4 sm:p-4 md:p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-1.5">
+          <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
+          <h2 class="ui-page-title ui-display text-[1.42rem] leading-tight sm:text-[2rem]">{{ t("ownerHome.title") }}</h2>
+        </div>
+        <div class="ui-scroll-row max-w-full sm:max-w-none">
+          <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+          <span class="ui-chip">{{ planModeLabel }}</span>
+        </div>
       </div>
 
-      <div class="ui-scroll-row sm:flex sm:flex-wrap">
-        <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-        <span class="ui-chip">{{ planModeLabel }}</span>
-        <span class="ui-data-strip">{{ t("ownerHome.readiness") }}: {{ readinessScore }}%</span>
-        <span class="ui-data-strip hidden md:inline-flex">{{ categoriesCount }} {{ t("common.categories") }}</span>
-        <span class="ui-data-strip hidden md:inline-flex">{{ dishesCount }} {{ t("common.dishes") }}</span>
+      <div class="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("ownerHome.readiness") }}</p>
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ readinessScore }}%</p>
+        </article>
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("common.categories") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ categoriesCount }}</p>
+        </article>
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("common.dishes") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ dishesCount }}</p>
+        </article>
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("common.status") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</p>
+        </article>
       </div>
 
-      <div class="grid gap-2 sm:flex sm:flex-wrap sm:gap-3">
-        <RouterLink to="/owner/onboarding" class="ui-btn-primary w-full px-5 py-2.5 sm:w-auto">
+      <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2.5 sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full px-5 py-2.5 sm:w-auto">
+        <RouterLink to="/menu" class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto">
           <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
-        <button class="ui-btn-outline w-full px-5 py-2.5 sm:w-auto" @click="copyMenuUrl">
+        <button class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto" @click="copyMenuUrl">
           <AppIcon name="copy" class="owner-home-btn-icon" />
           {{ t("ownerHome.copyPublicUrl") }}
         </button>
-        <button class="ui-btn-outline hidden px-5 py-2.5 sm:inline-flex" :disabled="loading" @click="refresh">
+        <button class="ui-btn-outline col-span-2 w-full px-4 py-2.5 sm:w-auto" :disabled="loading" @click="refresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" />
           {{ loading ? t("ownerHome.refreshing") : t("common.refresh") }}
         </button>
@@ -39,9 +56,7 @@
 
     <article class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex items-center justify-between gap-3">
-        <div>
-          <p class="text-sm text-slate-300">{{ t("ownerHome.launchProgress") }}</p>
-        </div>
+        <p class="text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
         <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</span>
       </div>
       <div class="h-2 overflow-hidden rounded-full bg-slate-800">
@@ -59,7 +74,7 @@
             <span class="ui-readiness-dot mt-1 shrink-0"></span>
             <div class="min-w-0">
               <p class="text-[13px] font-medium text-slate-100 sm:text-sm">{{ item.label }}</p>
-              <RouterLink v-if="item.to" :to="item.to" class="mt-2 inline-flex text-xs text-brand-secondary hover:underline">
+              <RouterLink v-if="item.to" :to="item.to" class="mt-1.5 inline-flex text-[11px] text-brand-secondary hover:underline sm:text-xs">
                 {{ item.actionLabel }}
               </RouterLink>
             </div>
@@ -100,23 +115,29 @@
       <div class="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
-          <ul class="mt-3 space-y-2 text-sm text-slate-200">
+          <ul v-if="topCategories.length" class="mt-3 space-y-2 text-sm text-slate-200">
             <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between gap-3">
               <span>{{ humanizeSlug(item.category_slug) }}</span>
               <span class="text-slate-400">{{ item.count }}</span>
             </li>
-            <li v-if="!topCategories.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
+          <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
+            <AppIcon name="chart" class="mx-auto h-5 w-5 text-slate-500" />
+            <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noDataYet") }}</p>
+          </div>
         </div>
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
-          <ul class="mt-3 space-y-2 text-sm text-slate-200">
+          <ul v-if="topDishes.length" class="mt-3 space-y-2 text-sm text-slate-200">
             <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between gap-3">
               <span>{{ humanizeSlug(item.dish_slug) }}</span>
               <span class="text-slate-400">{{ item.count }}</span>
             </li>
-            <li v-if="!topDishes.length" class="text-slate-500">{{ t("ownerHome.noDataYet") }}</li>
           </ul>
+          <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
+            <AppIcon name="menu" class="mx-auto h-5 w-5 text-slate-500" />
+            <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noDataYet") }}</p>
+          </div>
         </div>
       </div>
     </article>
@@ -205,7 +226,12 @@
                 <td class="px-3 py-2 text-slate-400">{{ request.admin_note || t("ownerHome.noAdminNote") }}</td>
               </tr>
               <tr v-if="!upgradeRequests.length && !upgradeLoading">
-                <td colspan="5" class="px-3 py-3 text-slate-500">{{ t("ownerHome.noRequests") }}</td>
+                <td colspan="5" class="px-3 py-4">
+                  <div class="ui-empty-state px-4 py-4 text-center">
+                    <AppIcon name="plus" class="mx-auto h-5 w-5 text-slate-500" />
+                    <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noRequests") }}</p>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -225,7 +251,10 @@
             <p class="text-sm text-slate-100">{{ request.current_plan_name }} -> {{ request.target_plan_name }}</p>
             <p class="text-xs text-slate-400">{{ request.admin_note || t("ownerHome.noAdminNote") }}</p>
           </article>
-          <p v-if="!upgradeRequests.length && !upgradeLoading" class="text-xs text-slate-500">{{ t("ownerHome.noRequests") }}</p>
+          <div v-if="!upgradeRequests.length && !upgradeLoading" class="ui-empty-state px-4 py-4 text-center">
+            <AppIcon name="plus" class="mx-auto h-5 w-5 text-slate-500" />
+            <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noRequests") }}</p>
+          </div>
         </div>
       </div>
     </article>
@@ -313,36 +342,36 @@ const readinessItems = computed(() => [
     label: t("ownerHome.brandContactPresent"),
     note: t("ownerHome.quickActions"),
     ready: hasContact.value,
-    to: hasContact.value ? "" : "/owner/onboarding",
+    to: hasContact.value ? "" : "/owner/profile",
     actionLabel: t("ownerHome.openMenuBuilder"),
   },
   {
     label: t("ownerHome.themeConfigured"),
     note: t("ownerLayout.publicPreview"),
     ready: hasTheme.value,
-    to: hasTheme.value ? "" : "/owner/onboarding",
+    to: hasTheme.value ? "" : "/owner/profile?tab=theme",
     actionLabel: t("ownerHome.openMenuBuilder"),
   },
   {
     label: t("ownerHome.categoriesAdded"),
     note: `${categoriesCount.value} ${t("common.categories")}`,
     ready: categoriesCount.value > 0,
-    to: categoriesCount.value > 0 ? "" : "/owner/onboarding",
+    to: categoriesCount.value > 0 ? "" : "/owner/menu-builder?tab=categories",
     actionLabel: t("ownerLayout.menuBuilder"),
   },
   {
     label: t("ownerHome.dishesAdded"),
     note: `${dishesCount.value} ${t("common.dishes")}`,
     ready: dishesCount.value > 0,
-    to: dishesCount.value > 0 ? "" : "/owner/onboarding",
+    to: dishesCount.value > 0 ? "" : "/owner/menu-builder?tab=dishes",
     actionLabel: t("ownerLayout.menuBuilder"),
   },
   {
     label: t("ownerHome.menuPublished"),
     note: planModeLabel.value,
     ready: published.value,
-    to: published.value ? "/menu" : "/owner/onboarding",
-    actionLabel: published.value ? t("ownerLayout.publicPreview") : t("ownerHome.openMenuBuilder"),
+    to: published.value ? "/menu" : "/owner/profile?tab=publish",
+    actionLabel: published.value ? t("ownerLayout.publicPreview") : t("common.profile"),
   },
 ]);
 

@@ -24,22 +24,23 @@
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
         </nav>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2">
           <div class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
             {{ t("home.heroLive") }}
           </div>
           <LanguageSwitcher dropdown />
-          <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm md:inline-flex">{{ t("common.admin") }}</RouterLink>
+          <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm lg:inline-flex">{{ t("common.admin") }}</RouterLink>
           <RouterLink
             v-if="session.canEditTenantMenu"
             to="/owner"
-            class="ui-btn-outline ui-touch-target inline-flex text-[11px] sm:text-sm"
+            class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-4 sm:text-sm"
           >
+            <AppIcon name="settings" class="mr-1.5 h-3.5 w-3.5" />
             {{ t("common.workspace") }}
           </RouterLink>
-          <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target text-[11px] sm:text-sm px-3 py-1.5 sm:px-5 sm:py-2.5">{{ t("common.signIn") }}</RouterLink>
-          <button v-else class="ui-btn-outline ui-touch-target text-[11px] sm:text-sm px-3 py-1.5 sm:px-5 sm:py-2.5" @click="signOut">
+          <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm">{{ t("common.signIn") }}</RouterLink>
+          <button v-else class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm" @click="signOut">
             {{ t("common.signOut") }}
           </button>
         </div>
@@ -79,7 +80,7 @@
     </main>
 
     <footer class="ui-footer">
-      <div class="mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.1fr),auto,auto] md:items-start">
+      <div class="mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
         <div class="space-y-2">
           <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle">
@@ -103,17 +104,32 @@
         <div class="space-y-3">
           <p class="ui-kicker">{{ t("common.getStarted") }}</p>
           <div class="flex flex-col gap-2 text-sm">
-            <RouterLink class="ui-top-link" to="/get-started">{{ t("common.getStarted") }}</RouterLink>
-            <RouterLink class="ui-top-link" to="/menu">{{ t("common.liveDemo") }}</RouterLink>
-            <RouterLink class="ui-top-link" to="/contact">{{ t("common.contact") }}</RouterLink>
+            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/get-started">
+              <AppIcon name="plus" class="h-3.5 w-3.5" />
+              <span>{{ t("common.getStarted") }}</span>
+            </RouterLink>
+            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/demo">
+              <AppIcon name="eye" class="h-3.5 w-3.5" />
+              <span>{{ t("common.liveDemo") }}</span>
+            </RouterLink>
+            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/contact">
+              <AppIcon name="chat" class="h-3.5 w-3.5" />
+              <span>{{ t("common.contact") }}</span>
+            </RouterLink>
           </div>
         </div>
 
         <div class="space-y-3">
           <p class="ui-kicker">{{ t("common.status") }}</p>
           <div class="flex flex-col gap-2 text-sm">
-            <RouterLink class="ui-top-link" to="/privacy">{{ t("common.privacy") }}</RouterLink>
-            <RouterLink class="ui-top-link" to="/terms">{{ t("common.terms") }}</RouterLink>
+            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/privacy">
+              <AppIcon name="info" class="h-3.5 w-3.5" />
+              <span>{{ t("common.privacy") }}</span>
+            </RouterLink>
+            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/terms">
+              <AppIcon name="check" class="h-3.5 w-3.5" />
+              <span>{{ t("common.terms") }}</span>
+            </RouterLink>
             <span class="text-slate-500">&copy; {{ year }}</span>
           </div>
         </div>

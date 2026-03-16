@@ -4,7 +4,6 @@
       <header class="ui-fade-up space-y-2 px-1">
         <p class="ui-kicker">{{ t("onboardingWizard.kicker") }}</p>
         <h1 class="ui-display text-3xl font-semibold text-white md:text-4xl">{{ t("onboardingWizard.title") }}</h1>
-        <p class="max-w-3xl text-sm text-slate-300">{{ t("onboardingWizard.footerHint") }}</p>
         <div class="flex flex-wrap items-center gap-2">
           <span class="ui-data-strip">{{ t("onboardingWizard.stepProgress", { current, total: steps.length, pct: progressPct }) }}</span>
           <span class="ui-data-strip">{{ published ? t("onboardingWizard.published") : t("onboardingWizard.draft") }}</span>
@@ -13,14 +12,7 @@
 
       <div class="grid min-w-0 gap-6 lg:grid-cols-[340px,1fr]">
         <aside class="ui-workspace-stage min-w-0 p-4">
-          <div v-if="showResumeHint" class="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-200">
-            <p>{{ t("onboardingWizard.resumedFromStep", { current }) }}</p>
-            <button class="mt-2 text-emerald-300 underline underline-offset-2 hover:text-emerald-200" @click="restartWizard">
-              {{ t("onboardingWizard.startFromStepOne") }}
-            </button>
-          </div>
-
-          <div class="ui-scroll-row mt-4 max-w-full lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
+          <div class="ui-scroll-row max-w-full lg:flex lg:flex-col lg:gap-3 lg:overflow-visible lg:pb-0">
             <button
               v-for="step in steps"
               :key="step.id"
@@ -42,7 +34,6 @@
                     {{ t("common.saved") }}
                   </span>
                 </div>
-                <p class="text-xs leading-5 text-slate-400">{{ t(step.descriptionKey) }}</p>
               </div>
             </button>
           </div>
@@ -74,7 +65,6 @@ import { useTenantStore } from "../stores/tenant";
 
 const current = ref(1);
 const published = ref(false);
-const showResumeHint = ref(false);
 const tenant = useTenantStore();
 const router = useRouter();
 const { t } = useI18n();
@@ -106,12 +96,6 @@ const publish = async () => {
   await router.push({ name: "owner-launch" });
 };
 
-const restartWizard = () => {
-  current.value = 1;
-  showResumeHint.value = false;
-  persistStep();
-};
-
 const restoreStep = () => {
   if (typeof window === "undefined") return;
   const raw = window.localStorage.getItem(stepStorageKey.value);
@@ -119,7 +103,6 @@ const restoreStep = () => {
   if (!Number.isFinite(parsed)) return;
   if (parsed >= 1 && parsed <= steps.length) {
     current.value = parsed;
-    showResumeHint.value = parsed > 1;
   }
 };
 

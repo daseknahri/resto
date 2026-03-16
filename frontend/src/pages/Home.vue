@@ -9,7 +9,7 @@
       <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-amber-400/12 blur-3xl"></div>
       <div class="pointer-events-none absolute -left-16 bottom-0 h-64 w-64 rounded-full bg-teal-400/14 blur-3xl"></div>
       <div class="pointer-events-none absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-      <div class="relative grid gap-8 p-5 sm:p-6 md:grid-cols-[1.3fr,1fr] md:p-10">
+      <div class="relative grid gap-8 p-5 sm:p-6 md:grid-cols-[1.22fr,0.98fr] md:p-10">
         <div class="space-y-6">
           <div class="ui-chip-strong w-fit">
             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
@@ -46,43 +46,175 @@
               <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
             </article>
           </div>
+
+          <div class="ui-section-band space-y-4 p-4 md:p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
+                <p class="mt-2 text-lg font-semibold text-white">{{ t("home.readyTitle") }}</p>
+              </div>
+              <div class="ui-chip-strong">
+                <AppIcon name="check" class="h-3.5 w-3.5" />
+                <span>{{ t("common.available") }}</span>
+              </div>
+            </div>
+            <div class="grid gap-3 md:grid-cols-3">
+              <article class="ui-admin-subcard space-y-2 p-3">
+                <div class="ui-chip w-fit">
+                  <AppIcon name="home" class="h-3.5 w-3.5" />
+                  <span>{{ t("home.interfaces.landing") }}</span>
+                </div>
+                <p class="text-sm font-semibold text-white">{{ t("home.interfaces.landingTitle") }}</p>
+                <p class="text-sm text-slate-400">{{ t("home.interfaces.landingText") }}</p>
+              </article>
+              <article class="ui-admin-subcard space-y-2 p-3">
+                <div class="ui-chip w-fit">
+                  <AppIcon name="settings" class="h-3.5 w-3.5" />
+                  <span>{{ t("home.interfaces.owner") }}</span>
+                </div>
+                <p class="text-sm font-semibold text-white">{{ t("home.interfaces.ownerTitle") }}</p>
+                <p class="text-sm text-slate-400">{{ t("home.interfaces.ownerText") }}</p>
+              </article>
+              <article class="ui-admin-subcard space-y-2 p-3">
+                <div class="ui-chip w-fit">
+                  <AppIcon name="menu" class="h-3.5 w-3.5" />
+                  <span>{{ t("home.interfaces.customer") }}</span>
+                </div>
+                <p class="text-sm font-semibold text-white">{{ t("home.interfaces.customerTitle") }}</p>
+                <p class="text-sm text-slate-400">{{ t("home.interfaces.customerText") }}</p>
+              </article>
+            </div>
+          </div>
         </div>
 
         <div class="grid gap-3 self-end">
-          <article class="ui-orbit-card">
-            <p class="ui-kicker">{{ t("home.interfaces.landing") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.landingTitle") }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.landingText") }}</p>
+          <article class="ui-spotlight-card p-5">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="ui-kicker">{{ t("common.demo") }}</p>
+                <p class="mt-2 text-lg font-semibold text-white">doro.menu.kepoli.com</p>
+              </div>
+              <span class="ui-chip-strong shrink-0">{{ t("home.heroLive") }}</span>
+            </div>
+            <p class="mt-3 text-sm text-slate-300">{{ t("home.interfaces.customerText") }}</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <a :href="demoUrl" target="_blank" rel="noopener noreferrer" class="ui-btn-primary inline-flex items-center gap-2 ui-touch-target">
+                <AppIcon name="menu" class="h-4 w-4" />
+                <span>{{ t("home.viewLiveDemo") }}</span>
+              </a>
+              <RouterLink to="/demo" class="ui-btn-outline inline-flex items-center gap-2 ui-touch-target">
+                <AppIcon name="eye" class="h-4 w-4" />
+                <span>{{ t("common.demo") }}</span>
+              </RouterLink>
+            </div>
+            <div class="mt-4 grid gap-2 sm:grid-cols-2">
+              <div class="ui-admin-subcard p-3">
+                <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
+                <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+              </div>
+              <div class="ui-admin-subcard p-3">
+                <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
+                <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+              </div>
+            </div>
           </article>
-          <article class="ui-orbit-card">
-            <p class="ui-kicker">{{ t("home.interfaces.owner") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.ownerTitle") }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.ownerText") }}</p>
-          </article>
-          <article class="ui-orbit-card">
-            <p class="ui-kicker">{{ t("home.interfaces.customer") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.interfaces.customerTitle") }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("home.interfaces.customerText") }}</p>
+          <article class="ui-command-deck p-5">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-2">
+                <p class="ui-kicker">{{ t("home.plansTitle") }}</p>
+                <p class="text-lg font-semibold text-white">{{ t("home.plans.basic.name") }}</p>
+                <p class="text-sm text-slate-300">{{ t("home.plans.basic.description") }}</p>
+              </div>
+              <div class="ui-chip-strong shrink-0">{{ t("common.available") }}</div>
+            </div>
+            <div class="mt-4 space-y-2">
+              <div class="ui-admin-subcard p-3 text-sm text-slate-300">{{ t("home.plans.basic.feature1") }}</div>
+              <div class="ui-admin-subcard p-3 text-sm text-slate-300">{{ t("home.plans.basic.feature2") }}</div>
+              <div class="ui-admin-subcard p-3 text-sm text-slate-300">{{ t("home.plans.basic.feature3") }}</div>
+            </div>
           </article>
         </div>
       </div>
     </div>
 
-    <section class="grid gap-3 md:gap-4 md:grid-cols-3">
-      <article class="ui-spotlight-card p-5">
-        <p class="ui-kicker">{{ t("home.phases.phase1") }}</p>
-        <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase1Title") }}</p>
-        <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase1Text") }}</p>
+    <section class="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
+      <article class="ui-glass p-5 md:p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div class="space-y-2">
+            <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
+            <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.readyTitle") }}</h2>
+            <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("home.readyText") }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="ui-chip">
+              <AppIcon name="phone" class="h-3.5 w-3.5" />
+              <span>{{ t("home.stats.launchTimeValue") }}</span>
+            </span>
+            <span class="ui-chip">
+              <AppIcon name="settings" class="h-3.5 w-3.5" />
+              <span>{{ t("home.stats.interfacesValue") }}</span>
+            </span>
+            <span class="ui-chip">
+              <AppIcon name="check" class="h-3.5 w-3.5" />
+              <span>{{ t("home.stats.tierReadyValue") }}</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 md:grid-cols-3">
+          <article class="ui-admin-subcard space-y-2">
+            <div class="ui-chip w-fit">
+              <AppIcon name="home" class="h-3.5 w-3.5" />
+              <span>{{ t("home.phases.phase1") }}</span>
+            </div>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase1Title") }}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase1Text") }}</p>
+          </article>
+          <article class="ui-admin-subcard space-y-2">
+            <div class="ui-chip w-fit">
+              <AppIcon name="settings" class="h-3.5 w-3.5" />
+              <span>{{ t("home.phases.phase2") }}</span>
+            </div>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase2Title") }}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase2Text") }}</p>
+          </article>
+          <article class="ui-admin-subcard space-y-2">
+            <div class="ui-chip w-fit">
+              <AppIcon name="menu" class="h-3.5 w-3.5" />
+              <span>{{ t("home.phases.phase3") }}</span>
+            </div>
+            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase3Title") }}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase3Text") }}</p>
+          </article>
+        </div>
       </article>
-      <article class="ui-spotlight-card p-5">
-        <p class="ui-kicker">{{ t("home.phases.phase2") }}</p>
-        <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase2Title") }}</p>
-        <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase2Text") }}</p>
-      </article>
-      <article class="ui-spotlight-card p-5">
-        <p class="ui-kicker">{{ t("home.phases.phase3") }}</p>
-        <p class="mt-2 text-xl font-semibold text-white">{{ t("home.phases.phase3Title") }}</p>
-        <p class="mt-1 text-sm text-slate-300">{{ t("home.phases.phase3Text") }}</p>
+
+      <article class="ui-command-deck p-5 md:p-6">
+        <div class="space-y-2">
+          <p class="ui-kicker">{{ t("home.plansTitle") }}</p>
+          <h3 class="ui-display text-2xl font-semibold text-white">{{ t("home.plans.basic.name") }}</h3>
+          <p class="text-sm text-slate-300">{{ t("home.plans.basic.description") }}</p>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <article class="ui-admin-subcard p-3">
+            <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
+            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+          </article>
+          <article class="ui-admin-subcard p-3">
+            <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
+            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+          </article>
+          <article class="ui-admin-subcard p-3">
+            <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
+            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+          </article>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2">
+          <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.getMyMenu") }}</RouterLink>
+          <RouterLink to="/contact" class="ui-btn-outline ui-touch-target">{{ t("home.talkSupport") }}</RouterLink>
+        </div>
       </article>
     </section>
 
@@ -151,15 +283,42 @@
     </section>
 
     <section class="ui-glass p-6 md:p-8">
-      <div class="grid gap-6 md:grid-cols-[1.2fr,1fr] md:items-center">
-        <div class="space-y-2">
-          <p class="text-sm text-slate-400">{{ t("home.readyEyebrow") }}</p>
-          <h3 class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h3>
-          <p class="text-slate-300">{{ t("home.readyText") }}</p>
+      <div class="grid gap-6 md:grid-cols-[1.18fr,0.82fr] md:items-center">
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
+            <h3 class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h3>
+            <p class="text-slate-300">{{ t("home.readyText") }}</p>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <article class="ui-metric-card">
+              <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+            </article>
+            <article class="ui-metric-card">
+              <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+            </article>
+            <article class="ui-metric-card">
+              <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
+              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+            </article>
+          </div>
         </div>
-        <div class="flex flex-wrap gap-3">
-          <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.submitLead") }}</RouterLink>
-          <RouterLink to="/contact" class="ui-btn-outline ui-touch-target">{{ t("home.talkSupport") }}</RouterLink>
+        <div class="ui-command-deck p-5">
+          <div class="space-y-2">
+            <p class="ui-kicker">{{ t("common.demo") }}</p>
+            <p class="text-lg font-semibold text-white">doro.menu.kepoli.com</p>
+            <p class="text-sm text-slate-300">{{ t("home.interfaces.customerText") }}</p>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-3">
+            <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.submitLead") }}</RouterLink>
+            <RouterLink to="/contact" class="ui-btn-outline ui-touch-target">{{ t("home.talkSupport") }}</RouterLink>
+            <a :href="demoUrl" target="_blank" rel="noopener noreferrer" class="ui-btn-outline ui-touch-target inline-flex items-center gap-2">
+              <AppIcon name="eye" class="h-4 w-4" />
+              <span>{{ t("home.viewLiveDemo") }}</span>
+            </a>
+          </div>
         </div>
       </div>
     </section>
@@ -169,6 +328,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 
@@ -177,6 +337,7 @@ const router = useRouter();
 const session = useSessionStore();
 const { t } = useI18n();
 const leadSuccess = ref(route.query.lead === "success");
+const demoUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.kepoli.com/menu";
 
 const plans = computed(() => [
   {
