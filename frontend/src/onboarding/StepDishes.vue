@@ -684,6 +684,44 @@ const unassignedDishCount = computed(
 const dishCountForCategory = (categoryId) =>
   dishes.filter((dish) => String(dish.category || "") === String(categoryId)).length;
 
+const renumberDishesForCategory = (categoryId) => {
+  const ordered = dishes
+    .filter((dish) => String(dish.category || "") === String(categoryId))
+    .sort(
+      (left, right) =>
+        Number(left.position || 0) - Number(right.position || 0) ||
+        String(left.name || "").localeCompare(String(right.name || ""))
+    );
+  ordered.forEach((dish, index) => {
+    dish.position = index;
+  });
+};
+
+const orderedActiveCategoryDishes = computed(() =>
+  [...activeCategoryDishes.value].sort(
+    (left, right) =>
+      Number(left.position || 0) - Number(right.position || 0) ||
+      String(left.name || "").localeCompare(String(right.name || ""))
+  )
+);
+
+const canMoveDishUp = (localId) =>
+  orderedActiveCategoryDishes.value.findIndex((dish) => String(dish.local_id) === String(localId)) > 0;
+const canMoveDishDown = (localId) => {
+  const index = orderedActiveCategoryDishes.value.findIndex((dish) => String(dish.local_id) === String(localId));
+  return index > -1 && index < orderedActiveCategoryDishes.value.length - 1;
+};
+
+const moveDish = (localId, direction) => {
+  const ordered = [...orderedActiveCategoryDishes.value];
+  const index = ordered.findIndex((dish) => String(dish.local_id) === String(localId));
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
+  [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+  ordered.forEach((dish, orderedIndex) => {
+    dish.position = orderedIndex;
+  });
+};
 const syncActiveCategory = () => {
   if (!sortedCategoryOptions.value.length) {
     activeCategoryId.value = "";
@@ -1277,6 +1315,8 @@ const saveAndNext = async () => {
 
 onMounted(load);
 </script>
+
+
 
 
 
