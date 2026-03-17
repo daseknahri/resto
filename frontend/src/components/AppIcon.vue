@@ -139,6 +139,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M6 9l6 6 6-6"],
   },
+  chevronUp: {
+    viewBox: "0 0 24 24",
+    paths: ["M6 15l6-6 6 6"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

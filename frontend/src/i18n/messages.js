@@ -49,6 +49,8 @@ export const messages = {
       apply: "Apply",
       previous: "Previous",
       next: "Next",
+      moveUp: "Move up",
+      moveDown: "Move down",
       copy: "Copy",
       call: "Call",
       item_one: "{count} item",
@@ -2595,5 +2597,7 @@ const mergeLocaleInto = (target, source) => {
 };
 
 messages.ar = mergeLocaleInto(cloneLocaleValue(messages.en), arabicMessages);
+
+
 
 

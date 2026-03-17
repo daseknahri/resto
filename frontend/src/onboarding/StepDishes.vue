@@ -79,6 +79,14 @@
               />
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
+              <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveDishUp(dish.local_id)" @click="moveDish(dish.local_id, -1)">
+                <AppIcon name="chevronUp" class="h-3.5 w-3.5" />
+                {{ t("common.moveUp") }}
+              </button>
+              <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveDishDown(dish.local_id)" @click="moveDish(dish.local_id, 1)">
+                <AppIcon name="chevronDown" class="h-3.5 w-3.5" />
+                {{ t("common.moveDown") }}
+              </button>
               <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openDishEditor(dish.local_id)">
                 Edit
               </button>
@@ -555,6 +563,7 @@
 
 <script setup>
 import { computed, reactive, ref, onMounted, watch } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
@@ -1268,3 +1277,11 @@ const saveAndNext = async () => {
 
 onMounted(load);
 </script>
+
+
+
+
+
+
+
+

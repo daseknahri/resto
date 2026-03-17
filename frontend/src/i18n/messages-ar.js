@@ -1245,6 +1245,8 @@ Object.assign(arabicMessages, {
     profile: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a",
     edit: "\u062a\u0639\u062f\u064a\u0644",
     remove: "\u062d\u0630\u0641",
+    moveUp: "\u062d\u0631\u0651\u0643 \u0644\u0623\u0639\u0644\u0649",
+    moveDown: "\u062d\u0631\u0651\u0643 \u0644\u0623\u0633\u0641\u0644",
     save: "\u062d\u0641\u0638",
     open: "\u0645\u0641\u062a\u0648\u062d",
     closed: "\u0645\u063a\u0644\u0642"
@@ -1333,4 +1335,6 @@ Object.assign(arabicMessages, {
   }
 });
 export default arabicMessages;
+
+
 

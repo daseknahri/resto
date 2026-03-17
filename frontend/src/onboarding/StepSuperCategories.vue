@@ -143,6 +143,26 @@
           </div>
 
           <div class="flex flex-wrap gap-2 lg:w-auto lg:flex-col lg:items-stretch">
+            <div class="flex flex-wrap gap-2 lg:grid lg:grid-cols-2">
+              <button
+                class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm"
+                type="button"
+                :disabled="!canMoveUp(row.local_id)"
+                @click="moveRow(row.local_id, -1)"
+              >
+                <AppIcon name="chevronUp" class="h-4 w-4" />
+                {{ t("common.moveUp") }}
+              </button>
+              <button
+                class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm"
+                type="button"
+                :disabled="!canMoveDown(row.local_id)"
+                @click="moveRow(row.local_id, 1)"
+              >
+                <AppIcon name="chevronDown" class="h-4 w-4" />
+                {{ t("common.moveDown") }}
+              </button>
+            </div>
             <button class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm" type="button" @click="openEditor(row.local_id)">
               <AppIcon name="settings" class="h-4 w-4" />
               {{ t("common.edit") }}
@@ -392,6 +412,7 @@ const filteredRows = computed(() => {
   if (!query) return source;
   return source.filter((row) => [row.name, row.slug, row.disabled_note].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
 });
+const orderedRows = computed(() => [...rows].sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || ""))));
 
 const syncFieldLocales = () => {
   const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
@@ -517,6 +538,27 @@ const validateClient = () => {
   return valid;
 };
 
+const renumberRows = (collection) => {
+  collection.forEach((row, index) => {
+    row.position = index;
+  });
+};
+
+const canMoveUp = (localId) => orderedRows.value.findIndex((row) => String(row.local_id) === String(localId)) > 0;
+const canMoveDown = (localId) => {
+  const index = orderedRows.value.findIndex((row) => String(row.local_id) === String(localId));
+  return index > -1 && index < orderedRows.value.length - 1;
+};
+
+const moveRow = (localId, direction) => {
+  const ordered = [...orderedRows.value];
+  const index = ordered.findIndex((row) => String(row.local_id) === String(localId));
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
+  [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+  renumberRows(ordered);
+};
+
 const load = async () => {
   try {
     const data = await superCategoryApi.list();
@@ -560,7 +602,7 @@ const quickAdd = () => {
   rows.push(normalizeRow({
     name,
     name_i18n: pickI18nMap(quickRow.name_i18n, allowedTranslationLocales),
-    position: Number(quickRow.position) || 0,
+    position: orderedRows.value.length,
     is_published: quickRow.is_published,
     is_temporarily_disabled: quickRow.is_temporarily_disabled,
     disabled_note: String(quickRow.disabled_note || "").trim(),
@@ -575,6 +617,7 @@ const removeByLocalId = async (localId) => {
   if (row?.id) removedIds.value.push(row.id);
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];
+  renumberRows(orderedRows.value);
 };
 
 const mapServerErrorsToRow = (localId, fieldErrors = {}) => {

@@ -65,6 +65,14 @@
           </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
+          <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveCategoryUp(cat.local_id)" @click="moveCategory(cat.local_id, -1)">
+            <AppIcon name="chevronUp" class="h-3.5 w-3.5" />
+            {{ t("common.moveUp") }}
+          </button>
+          <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveCategoryDown(cat.local_id)" @click="moveCategory(cat.local_id, 1)">
+            <AppIcon name="chevronDown" class="h-3.5 w-3.5" />
+            {{ t("common.moveDown") }}
+          </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openEditor(cat.local_id)">
             {{ t("common.edit") }}
           </button>
@@ -275,6 +283,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
@@ -324,10 +333,12 @@ const activeSuperCategoryRecord = computed(() => sortedSuperCategoryOptions.valu
 const activeCategories = computed(() => categories.filter((cat) => String(cat.super_category) === String(activeSuperCategoryId.value)));
 const filteredCategories = computed(() => {
   const query = search.value.trim().toLowerCase();
-  if (!query) return activeCategories.value;
-  return activeCategories.value.filter((cat) => [cat.name, cat.description, cat.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
+  const source = [...activeCategories.value].sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || "")));
+  if (!query) return source;
+  return source.filter((cat) => [cat.name, cat.description, cat.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
 });
 const editingCategory = computed(() => categories.find((cat) => String(cat.local_id) === String(editorLocalId.value)) || null);
+const orderedActiveCategories = computed(() => [...activeCategories.value].sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || ""))));
 
 const syncFieldLocales = () => {
   const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
@@ -478,6 +489,32 @@ const validateClient = () => {
   return valid;
 };
 
+const renumberCategoriesForGroup = (groupId) => {
+  const ordered = categories
+    .filter((cat) => String(cat.super_category) === String(groupId))
+    .sort((a, b) => (Number(a.position || 0) - Number(b.position || 0)) || String(a.name || "").localeCompare(String(b.name || "")));
+  ordered.forEach((cat, index) => {
+    cat.position = index;
+  });
+};
+
+const canMoveCategoryUp = (localId) => orderedActiveCategories.value.findIndex((cat) => String(cat.local_id) === String(localId)) > 0;
+const canMoveCategoryDown = (localId) => {
+  const index = orderedActiveCategories.value.findIndex((cat) => String(cat.local_id) === String(localId));
+  return index > -1 && index < orderedActiveCategories.value.length - 1;
+};
+
+const moveCategory = (localId, direction) => {
+  const ordered = [...orderedActiveCategories.value];
+  const index = ordered.findIndex((cat) => String(cat.local_id) === String(localId));
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
+  [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+  ordered.forEach((cat, orderedIndex) => {
+    cat.position = orderedIndex;
+  });
+};
+
 const load = async () => {
   try {
     const [groups, data] = await Promise.all([superCategoryApi.list(), categoryApi.list()]);
@@ -533,10 +570,11 @@ const quickAdd = () => {
     name_i18n: pickI18nMap(quickCategory.name_i18n, allowedTranslationLocales),
     description: String(quickCategory.description || "").trim(),
     description_i18n: pickI18nMap(quickCategory.description_i18n, allowedTranslationLocales),
-    position: Number(quickCategory.position) || 0,
+    position: orderedActiveCategories.value.length,
     is_published: quickCategory.is_published,
   }));
   activeSuperCategoryId.value = String(quickCategory.super_category);
+  renumberCategoriesForGroup(quickCategory.super_category);
   closeQuickModal();
 };
 
@@ -547,6 +585,7 @@ const removeByLocalId = async (localId) => {
   if (cat?.id) removedIds.value.push(cat.id);
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];
+  renumberCategoriesForGroup(cat.super_category);
 };
 
 const mapServerErrorsToRow = (localId, fieldErrors = {}) => {
