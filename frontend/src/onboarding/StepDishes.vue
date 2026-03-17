@@ -635,7 +635,7 @@ const categoryLabel = (category) => {
   const superCategoryName = String(category?.super_category_name || "").trim();
   const categoryName = String(category?.name || "").trim();
   if (!superCategoryName || !categoryName) return categoryName || superCategoryName;
-  return `${superCategoryName} • ${categoryName}`;
+  return `${superCategoryName} / ${categoryName}`;
 };
 const sortedCategoryOptions = computed(() =>
   [...categoryOptions.value].sort(
@@ -652,7 +652,13 @@ const activeCategoryIndex = computed(() =>
   sortedCategoryOptions.value.findIndex((category) => String(category.id) === String(activeCategoryId.value))
 );
 const activeCategoryDishes = computed(() =>
-  dishes.filter((dish) => String(dish.category || "") === String(activeCategoryId.value))
+  dishes
+    .filter((dish) => String(dish.category || "") === String(activeCategoryId.value))
+    .sort(
+      (left, right) =>
+        Number(left.position || 0) - Number(right.position || 0) ||
+        String(left.name || "").localeCompare(String(right.name || ""))
+    )
 );
 const activeCategoryDishesFiltered = computed(() => {
   const query = dishSearch.value.trim().toLowerCase();
@@ -1164,7 +1170,7 @@ const quickAddDish = () => {
       description_i18n: pickI18nMap(quickDish.description_i18n, allowedTranslationLocales),
       price: Number(quickDish.price) || 0,
       image_url: String(quickDish.image_url || "").trim(),
-      position: dishes.length,
+      position: activeCategoryDishes.value.length,
       options: (Array.isArray(quickDish.options) ? quickDish.options : [])
         .map((option) =>
           normalizeOption({
@@ -1182,6 +1188,7 @@ const quickAddDish = () => {
     })
   );
   setActiveCategory(category);
+  renumberDishesForCategory(category);
   closeQuickDishModal();
   toast.show(t("stepDishes.savedToast"), "success");
 };
@@ -1197,6 +1204,9 @@ const remove = async (idx) => {
   delete uploadProgressRows[dish?.local_id];
   delete draggingRows[dish?.local_id];
   queueCleanup(dish?.image_url || "");
+  if (dish?.category) {
+    renumberDishesForCategory(dish.category);
+  }
 };
 
 const removeDishByLocalId = async (localId) => {
@@ -1315,6 +1325,8 @@ const saveAndNext = async () => {
 
 onMounted(load);
 </script>
+
+
 
 
 

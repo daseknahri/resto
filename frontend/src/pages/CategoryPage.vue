@@ -10,6 +10,7 @@
           loading="eager"
           fetchpriority="high"
           decoding="async"
+          @error="handleCategoryImageError"
         />
         <div class="absolute inset-0 bg-slate-950/84"></div>
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.1),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_24%)]"></div>
@@ -66,6 +67,7 @@
               :loading="dishIndex < 2 ? 'eager' : 'lazy'"
               :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
               decoding="async"
+              @error="handleDishImageError"
             />
           </RouterLink>
           <div class="flex min-h-full flex-col gap-3">
@@ -138,6 +140,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { withImageFallback } from "../lib/images";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";
 import { useMenuStore } from "../stores/menu";
@@ -175,6 +178,8 @@ const filteredDishes = computed(() => {
 });
 
 const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80";
+const handleCategoryImageError = (event) => withImageFallback(event);
+const handleDishImageError = (event) => withImageFallback(event, placeholder);
 
 const addDishQuick = (dish) => {
   if (isBrowseOnlyPlan.value) {

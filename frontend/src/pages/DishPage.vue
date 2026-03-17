@@ -34,6 +34,7 @@
           fetchpriority="high"
           decoding="async"
           referrerpolicy="no-referrer"
+          @error="handleDishImageError"
         />
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
         <div class="absolute inset-x-3 bottom-3 space-y-2 sm:inset-x-4 sm:bottom-4">
@@ -208,7 +209,7 @@
           class="group ui-surface-lift overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 transition-colors hover:border-[var(--color-secondary)]/60"
         >
           <div class="relative h-24 w-full overflow-hidden">
-            <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" decoding="async" />
+            <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" loading="lazy" decoding="async" @error="handleDishImageError" />
           </div>
           <div class="space-y-1 p-3">
             <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
@@ -270,6 +271,7 @@ import { useToastStore } from '../stores/toast';
 import { useTenantStore } from '../stores/tenant';
 import { useVisibility } from '../composables/useVisibility';
 import { trackEvent } from '../lib/analytics';
+import { withImageFallback } from '../lib/images';
 
 const props = defineProps({ category: String, dish: String });
 
@@ -291,6 +293,7 @@ const dishes = computed(() => menu.dishes[props.category] || []);
 const dish = computed(() => dishes.value.find((d) => d.slug === props.dish));
 const placeholder =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
+const handleDishImageError = (event) => withImageFallback(event, placeholder);
 const menuCategories = computed(() =>
   Array.isArray(menu.categories) ? menu.categories : []
 );

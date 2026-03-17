@@ -15,6 +15,7 @@
           loading="eager"
           fetchpriority="high"
           decoding="async"
+          @error="handleHeroImageError"
         />
         <div class="absolute inset-0 bg-slate-950/84"></div>
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_30%)]"></div>
@@ -29,6 +30,7 @@
                 class="h-14 w-14 rounded-2xl border border-slate-700/70 object-cover shadow-xl shadow-black/35"
                 loading="eager"
                 decoding="async"
+                @error="handleLogoImageError"
               />
               <div class="min-w-0 space-y-1">
                 <p class="ui-kicker">{{ t('menu.kicker') }}</p>
@@ -150,6 +152,7 @@
                 class="h-full w-full object-cover transition duration-500 hover:scale-[1.03]"
                 loading="lazy"
                 decoding="async"
+                @error="handleDishImageError"
               />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/15 to-transparent"></div>
               <div class="absolute inset-x-0 bottom-0 flex items-center justify-between px-4 pb-4">
@@ -222,6 +225,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { withImageFallback } from '../lib/images';
 import { trackEvent } from '../lib/analytics';
 import { useCartStore } from '../stores/cart';
 import { useMenuStore } from '../stores/menu';
@@ -309,6 +313,10 @@ const goToDish = (dish) => {
 const clearSearch = () => {
   search.value = '';
 };
+
+const handleHeroImageError = (event) => withImageFallback(event);
+const handleLogoImageError = (event) => withImageFallback(event);
+const handleDishImageError = (event) => withImageFallback(event);
 
 watch([superCategories, menuCategories], syncSelection, { immediate: true });
 watch(
