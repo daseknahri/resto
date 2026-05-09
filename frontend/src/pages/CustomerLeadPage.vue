@@ -22,7 +22,7 @@
           fetchpriority="high"
           decoding="async"
         />
-        <div class="absolute inset-0 bg-slate-950/92"></div>
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/96 via-slate-950/70 to-slate-950/30"></div>
         <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.11),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]"></div>
 
         <div class="relative flex min-h-[calc(100vh-9.5rem)] flex-col justify-between gap-4 p-4 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)] md:p-6">

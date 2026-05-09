@@ -55,11 +55,18 @@
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("stepCategories.cardLabel", { index: index + 1 }) }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("stepCategories.cardLabel", { index: index + 1 }) }}</p>
+              <span
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="cat.is_published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-400'"
+              >
+                {{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}
+              </span>
+            </div>
             <h3 class="mt-1 truncate text-base font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
             <p class="mt-1 line-clamp-2 text-sm text-slate-400">{{ cat.description || t("stepCategories.categoryDescriptionPlaceholder") }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
-              <span class="ui-data-strip">Pos: {{ Number(cat.position || 0) }}</span>
               <span class="ui-data-strip">{{ t("stepCategories.translationsTitle") }}: {{ Object.keys(cat.name_i18n || {}).length }}</span>
             </div>
           </div>

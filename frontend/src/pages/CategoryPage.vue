@@ -1,7 +1,8 @@
 <template>
-  <div class="space-y-3 px-3 py-3 pb-24 sm:space-y-4 sm:px-4 sm:py-4 ui-safe-bottom">
+  <div class="space-y-4 px-3 py-3 pb-24 sm:space-y-5 sm:px-4 sm:py-4 ui-safe-bottom">
+    <!-- Category hero -->
     <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/84 p-0">
-      <div class="relative min-h-[13rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[14rem]">
+      <div class="relative min-h-[11rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[13rem]">
         <img
           v-if="currentCategory?.image_url"
           :src="currentCategory.image_url"
@@ -12,104 +13,107 @@
           decoding="async"
           @error="handleCategoryImageError"
         />
-        <div class="absolute inset-0 bg-slate-950/84"></div>
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.1),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.12),transparent_24%)]"></div>
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/15"></div>
 
-        <div class="relative space-y-3 p-3 md:p-4">
-          <div class="grid gap-3 md:grid-cols-[minmax(0,1fr),auto] md:items-start">
-            <div class="min-w-0 space-y-1">
-              <p class="ui-kicker">{{ t("category.kicker") }}</p>
-              <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-              <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 sm:min-w-[220px]">
-              <div class="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-3 py-2 backdrop-blur-xl">
-                <p class="ui-kicker mb-1">{{ t("customerLayout.navMenu") }}</p>
-                <p class="text-sm font-semibold text-slate-100">{{ itemCountLabel(filteredDishes.length) }}</p>
-              </div>
-              <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline flex items-center justify-center gap-2 px-3 py-2 text-xs">
-                <AppIcon name="menu" class="h-3.5 w-3.5" />
-                {{ t("customerLayout.navMenu") }}
-              </RouterLink>
-            </div>
+        <div class="relative flex h-full flex-col justify-end space-y-2 p-4 md:p-5">
+          <div class="space-y-1">
+            <p class="ui-kicker">{{ t("category.kicker") }}</p>
+            <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
+            <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
           </div>
-
-          <div class="rounded-2xl border border-slate-800/80 bg-slate-950/72 p-3 shadow-xl shadow-black/25 backdrop-blur-xl">
-            <div class="relative">
-              <input v-model.trim="search" class="ui-input pr-12" :placeholder="t('category.searchPlaceholder')" />
-              <button
-                v-if="search"
-                class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
-                @click="search = ''"
-              >
-                <span class="sr-only">{{ t("common.clear") }}</span>
-                <AppIcon name="close" class="h-3.5 w-3.5" />
-              </button>
-            </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="ui-chip text-[11px]">{{ itemCountLabel(filteredDishes.length) }}</span>
+            <RouterLink :to="{ name: 'menu' }" class="ui-chip text-[11px] hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
+              <AppIcon name="menu" class="h-3 w-3" />
+              {{ t("customerLayout.navMenu") }}
+            </RouterLink>
           </div>
         </div>
       </div>
     </header>
 
-    <div class="grid gap-3">
+    <!-- Search -->
+    <div class="relative">
+      <input v-model.trim="search" class="ui-input pr-10" :placeholder="t('category.searchPlaceholder')" />
+      <button
+        v-if="search"
+        class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 p-1 text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+        @click="search = ''"
+      >
+        <span class="sr-only">{{ t("common.clear") }}</span>
+        <AppIcon name="close" class="h-3.5 w-3.5" />
+      </button>
+    </div>
+
+    <!-- Dish grid -->
+    <div v-if="menu.loading && !filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-for="n in 6" :key="`loading-${n}`" class="ui-skeleton h-80 rounded-[1.8rem]"></div>
+    </div>
+
+    <div v-else-if="filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <article
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
-        class="ui-content-auto ui-orbit-card ui-surface-lift ui-reveal p-3 sm:p-4"
+        class="group ui-content-auto overflow-hidden rounded-[1.8rem] border border-slate-800/80 bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-all duration-300 hover:border-slate-700/80 hover:shadow-[0_28px_64px_rgba(2,6,23,0.48)]"
       >
-        <div class="grid gap-4 sm:grid-cols-[112px,minmax(0,1fr)] sm:items-start">
-          <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block">
+        <!-- Image -->
+        <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block">
+          <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
             <img
               :src="dish.image_url || placeholder"
               :alt="dish.name"
-              class="h-32 w-full rounded-xl object-cover sm:h-36"
+              class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
               :loading="dishIndex < 2 ? 'eager' : 'lazy'"
               :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
               decoding="async"
               @error="handleDishImageError"
             />
-          </RouterLink>
-          <div class="flex min-h-full flex-col gap-3">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 space-y-1">
-                <p class="truncate text-lg font-semibold text-white">{{ dish.name }}</p>
-                <p class="line-clamp-2 text-sm text-slate-300">{{ dish.description || t("dishPage.noDescription") }}</p>
-              </div>
-              <p class="shrink-0 text-lg font-semibold text-[var(--color-secondary)]">{{ formatCurrency(dish.price, dish.currency) }}</p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-              <span class="ui-chip text-[11px]">
-                <AppIcon name="menu" class="h-3.5 w-3.5" />
-                {{ categoryName }}
-              </span>
-              <span class="ui-chip text-[11px]">
-                {{ t("dishPage.optionsCount", { count: Array.isArray(dish.options) ? dish.options.length : 0 }) }}
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
+            <!-- Price badge -->
+            <div class="absolute right-3 top-3">
+              <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold text-slate-950 shadow-lg">
+                {{ formatCurrency(dish.price, dish.currency) }}
               </span>
             </div>
+          </div>
+        </RouterLink>
 
-            <div class="mt-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                class="ui-btn-primary inline-flex items-center gap-2 px-3 py-2 text-sm"
-                :disabled="quickAddDisabled"
-                :class="quickAddDisabled ? 'cursor-not-allowed opacity-50' : ''"
-                @click="addDishQuick(dish)"
-              >
-                <AppIcon name="plus" class="h-4 w-4" />
-                <span>{{ t("dishPage.add") }}</span>
-              </button>
-              <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="ui-btn-outline justify-center">
-                <AppIcon name="eye" class="h-3.5 w-3.5" />
-                {{ t("category.viewDish") }}
-              </RouterLink>
-            </div>
+        <!-- Content -->
+        <div class="space-y-3 p-4">
+          <div class="space-y-1">
+            <h3 class="text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
+            <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
+          </div>
+
+          <div v-if="dish.options?.length" class="flex flex-wrap gap-1.5">
+            <span class="ui-data-strip text-[11px]">
+              {{ t("dishPage.optionsCount", { count: dish.options.length }) }}
+            </span>
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              v-if="!quickAddDisabled"
+              class="ui-btn-primary flex-1 justify-center gap-1.5 py-2 text-sm"
+              @click="addDishQuick(dish)"
+            >
+              <AppIcon name="plus" class="h-4 w-4" />
+              {{ t("dishPage.add") }}
+            </button>
+            <RouterLink
+              :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
+              class="ui-btn-outline justify-center gap-1.5 py-2 text-sm"
+              :class="quickAddDisabled ? 'flex-1' : ''"
+            >
+              <AppIcon name="eye" class="h-3.5 w-3.5" />
+              {{ t("category.viewDish") }}
+            </RouterLink>
           </div>
         </div>
       </article>
     </div>
 
-    <div v-if="!menu.loading && !filteredDishes.length" class="ui-empty-state space-y-3 text-center">
+    <div v-else-if="!menu.loading" class="ui-empty-state space-y-3 text-center">
       <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
         <AppIcon name="search" class="h-5 w-5" />
       </div>
@@ -129,9 +133,6 @@
       </div>
     </div>
 
-    <div v-if="menu.loading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <div v-for="n in 3" :key="`loading-${n}`" class="ui-skeleton h-44 rounded-[1.5rem]"></div>
-    </div>
     <p v-if="menu.error" class="text-sm text-red-400">{{ menu.error }}</p>
   </div>
 </template>
