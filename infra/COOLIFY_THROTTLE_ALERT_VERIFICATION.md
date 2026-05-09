@@ -18,7 +18,7 @@ From repo root on VPS (example: `/opt/resto`):
 ```bash
 bash infra/coolify/verify_throttle_alerts.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --login-url api.kepoli.com \
+  --login-url api.ibnbatoutaweb.com \
   --attempts 12
 ```
 
@@ -37,7 +37,7 @@ Expected output:
 ```bash
 bash infra/coolify/verify_throttle_alerts.sh \
   --container api-<uuid>-<id> \
-  --login-url https://api.kepoli.com/api/login/
+  --login-url https://api.ibnbatoutaweb.com/api/login/
 ```
 
 ## 3) If no `429` is observed

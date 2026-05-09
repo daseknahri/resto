@@ -4,18 +4,18 @@ This is the exact operator sequence to validate a real tenant on production befo
 
 Use this after:
 - Coolify deploy is healthy
-- wildcard DNS for `*.menu.kepoli.com` resolves to the VPS
-- `menu.kepoli.com`, `admin.menu.kepoli.com`, and tenant subdomains are reachable over HTTPS
+- wildcard DNS for `*.menu.ibnbatoutaweb.com` resolves to the VPS
+- `menu.ibnbatoutaweb.com`, `admin.menu.ibnbatoutaweb.com`, and tenant subdomains are reachable over HTTPS
 
 ## Required Inputs
-- Public site: `https://menu.kepoli.com`
-- Admin console: `https://admin.menu.kepoli.com/admin-console`
+- Public site: `https://menu.ibnbatoutaweb.com`
+- Admin console: `https://admin.menu.ibnbatoutaweb.com/admin-console`
 - Test tenant slug: choose one fresh slug, for example `smoke-20260310`
-- Expected tenant host: `https://smoke-20260310.menu.kepoli.com`
+- Expected tenant host: `https://smoke-20260310.menu.ibnbatoutaweb.com`
 - Test table slug after onboarding: `table-1`
 
 ## Credentials You Need Before Starting
-- Platform admin account for `admin.menu.kepoli.com`
+- Platform admin account for `admin.menu.ibnbatoutaweb.com`
 - A fresh lead email and phone number that you control
 - A test WhatsApp-accessible phone if you want to verify order handoff end-to-end
 
@@ -31,9 +31,9 @@ Then run the production wrapper in dry-run mode to confirm the exact tenant URLs
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 `
   -TenantSlug smoke-20260310 `
-  -BaseDomain menu.kepoli.com `
-  -PublicHost menu.kepoli.com `
-  -AdminHost admin.menu.kepoli.com `
+  -BaseDomain menu.ibnbatoutaweb.com `
+  -PublicHost menu.ibnbatoutaweb.com `
+  -AdminHost admin.menu.ibnbatoutaweb.com `
   -TableSlug table-1 `
   -DryRun
 ```
@@ -43,7 +43,7 @@ Expected:
 - dry-run prints the exact production URLs and smoke commands
 
 ## Phase 2 - Public Lead Capture
-1. Open `https://menu.kepoli.com/get-started`
+1. Open `https://menu.ibnbatoutaweb.com/get-started`
 2. Submit a new lead using the chosen tenant slug context in your notes
 3. Use the `basic` plan for this validation
 
@@ -59,10 +59,10 @@ Expected:
 - lead appears in admin console
 
 ## Phase 3 - Admin Provisioning
-1. Open `https://admin.menu.kepoli.com/admin-console`
+1. Open `https://admin.menu.ibnbatoutaweb.com/admin-console`
 2. Find the new lead
 3. Click `Check`
-4. Confirm preview resolves to `smoke-20260310.menu.kepoli.com`
+4. Confirm preview resolves to `smoke-20260310.menu.ibnbatoutaweb.com`
 5. Click `Provision`
 
 Expected package content:
@@ -91,7 +91,7 @@ Expected:
 - no 403/500/auth loop
 
 ## Phase 5 - Owner Onboarding
-Use the owner workspace on `https://smoke-20260310.menu.kepoli.com/owner`.
+Use the owner workspace on `https://smoke-20260310.menu.ibnbatoutaweb.com/owner`.
 
 Complete at least:
 - Brand step:
@@ -122,9 +122,9 @@ Run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 `
   -TenantSlug smoke-20260310 `
-  -BaseDomain menu.kepoli.com `
-  -PublicHost menu.kepoli.com `
-  -AdminHost admin.menu.kepoli.com `
+  -BaseDomain menu.ibnbatoutaweb.com `
+  -PublicHost menu.ibnbatoutaweb.com `
+  -AdminHost admin.menu.ibnbatoutaweb.com `
   -TableSlug table-1
 ```
 
@@ -140,11 +140,11 @@ Expected:
 
 ## Phase 7 - Manual Customer Verification
 Open and verify:
-- `https://smoke-20260310.menu.kepoli.com/menu`
-- `https://smoke-20260310.menu.kepoli.com/browse`
-- `https://smoke-20260310.menu.kepoli.com/cart`
-- `https://smoke-20260310.menu.kepoli.com/reserve`
-- `https://smoke-20260310.menu.kepoli.com/t/table-1`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/menu`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/browse`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/cart`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/reserve`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/t/table-1`
 
 Check:
 - tenant branding is correct
@@ -162,9 +162,9 @@ Hard fail if:
 
 ## Phase 8 - Manual Owner Verification
 Open:
-- `https://smoke-20260310.menu.kepoli.com/owner`
-- `https://smoke-20260310.menu.kepoli.com/owner/tables`
-- `https://smoke-20260310.menu.kepoli.com/owner/reservations`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/owner`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/owner/tables`
+- `https://smoke-20260310.menu.ibnbatoutaweb.com/owner/reservations`
 
 Check:
 - readiness metrics render
@@ -174,7 +174,7 @@ Check:
 
 ## Phase 9 - Manual Admin Follow-up
 Return to:
-- `https://admin.menu.kepoli.com/admin-console`
+- `https://admin.menu.ibnbatoutaweb.com/admin-console`
 
 Check:
 - `Load package` still works

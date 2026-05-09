@@ -9,7 +9,7 @@ Usage:
   check_email_dns.sh --domain <domain> [options]
 
 Options:
-  --domain <domain>            Root sending domain (required), e.g. kepoli.com
+  --domain <domain>            Root sending domain (required), e.g. ibnbatoutaweb.com
   --dkim-selector <selector>   DKIM selector to verify (repeatable), e.g. s1
   --require-dkim               Fail if no --dkim-selector provided
   --resolver <dns-server>      DNS server for dig (optional), e.g. 1.1.1.1
@@ -17,8 +17,8 @@ Options:
   -h, --help                   Show help
 
 Examples:
-  check_email_dns.sh --domain kepoli.com
-  check_email_dns.sh --domain kepoli.com --dkim-selector s1 --dkim-selector s2
+  check_email_dns.sh --domain ibnbatoutaweb.com
+  check_email_dns.sh --domain ibnbatoutaweb.com --dkim-selector s1 --dkim-selector s2
 EOF
 }
 

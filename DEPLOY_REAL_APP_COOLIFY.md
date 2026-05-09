@@ -23,15 +23,15 @@ Use this stack to deploy the actual Django + Vue restaurant SaaS.
 Recommended pattern (so other apps can run on the same root domain):
 
 - Tenant namespace on a subdomain zone:
-  - frontend base: `menu.kepoli.com`
-  - tenant wildcard: `*.menu.kepoli.com`
-  - admin app: `admin.menu.kepoli.com`
+  - frontend base: `menu.ibnbatoutaweb.com`
+  - tenant wildcard: `*.menu.ibnbatoutaweb.com`
+  - admin app: `admin.menu.ibnbatoutaweb.com`
 
 Important:
 
 - In this Coolify version, Docker Compose domain fields must be entered as full URLs.
-- Include scheme and internal service port, for example `https://menu.kepoli.com:3000`.
-- A bare hostname like `menu.kepoli.com` can be misparsed as a path prefix, producing `Host(\`\`) && PathPrefix(...)` errors.
+- Include scheme and internal service port, for example `https://menu.ibnbatoutaweb.com:3000`.
+- A bare hostname like `menu.ibnbatoutaweb.com` can be misparsed as a path prefix, producing `Host(\`\`) && PathPrefix(...)` errors.
 
 The frontend/admin Nginx now proxies these paths internally to Django:
 
@@ -46,7 +46,7 @@ That means Coolify only needs host-based routing, not path-based `/api` rules.
 Important:
 
 - tenant requests still reach Django with the original host preserved
-- `slug.kepoli.com/api/...` arrives at Django as `Host: slug.kepoli.com`
+- `slug.ibnbatoutaweb.com/api/...` arrives at Django as `Host: slug.ibnbatoutaweb.com`
 - this is required because tenant resolution is host-based
 
 ## Exact Coolify UI Setup
@@ -55,13 +55,13 @@ Important:
 
 Enter in `Domains for frontend`:
 
-- `https://menu.kepoli.com:3000`
+- `https://menu.ibnbatoutaweb.com:3000`
 
 ### Admin service
 
 Enter in `Domains for admin`:
 
-- `https://admin.menu.kepoli.com:3000`
+- `https://admin.menu.ibnbatoutaweb.com:3000`
 
 ### API service
 
@@ -79,10 +79,10 @@ So a public API hostname is not needed for the recommended production setup.
 
 Do not add the tenant wildcard to the Coolify app domain field on this stack.
 
-Use a separate server-level Traefik dynamic configuration for `*.menu.kepoli.com` instead:
+Use a separate server-level Traefik dynamic configuration for `*.menu.ibnbatoutaweb.com` instead:
 
 - [infra/COOLIFY_TENANT_WILDCARD_PROXY.md](infra/COOLIFY_TENANT_WILDCARD_PROXY.md)
-- [infra/coolify/traefik-kepoli-tenant-wildcard.yml](infra/coolify/traefik-kepoli-tenant-wildcard.yml)
+- [infra/coolify/traefik-ibnbatoutaweb-tenant-wildcard.yml](infra/coolify/traefik-ibnbatoutaweb-tenant-wildcard.yml)
 
 ## DNS
 
@@ -99,17 +99,17 @@ Copy values from `coolify.env.example` and replace secrets.
 
 Set:
 
-- `PUBLIC_MENU_BASE_URL=https://menu.kepoli.com`
-- `TENANT_DOMAIN_SUFFIX=menu.kepoli.com`
-- `DJANGO_PUBLIC_SCHEMA_HOSTS=menu.kepoli.com,admin.menu.kepoli.com,localhost,127.0.0.1`
-- `DJANGO_ALLOWED_HOSTS=menu.kepoli.com,admin.menu.kepoli.com,.menu.kepoli.com,localhost,127.0.0.1`
-- `DJANGO_CSRF_TRUSTED_ORIGINS=https://menu.kepoli.com,https://admin.menu.kepoli.com,https://*.menu.kepoli.com`
-- `DJANGO_CORS_ALLOWED_ORIGINS=https://menu.kepoli.com,https://admin.menu.kepoli.com`
-- `DJANGO_SESSION_COOKIE_DOMAIN=.menu.kepoli.com`
-- `DJANGO_CSRF_COOKIE_DOMAIN=.menu.kepoli.com`
+- `PUBLIC_MENU_BASE_URL=https://menu.ibnbatoutaweb.com`
+- `TENANT_DOMAIN_SUFFIX=menu.ibnbatoutaweb.com`
+- `DJANGO_PUBLIC_SCHEMA_HOSTS=menu.ibnbatoutaweb.com,admin.menu.ibnbatoutaweb.com,localhost,127.0.0.1`
+- `DJANGO_ALLOWED_HOSTS=menu.ibnbatoutaweb.com,admin.menu.ibnbatoutaweb.com,.menu.ibnbatoutaweb.com,localhost,127.0.0.1`
+- `DJANGO_CSRF_TRUSTED_ORIGINS=https://menu.ibnbatoutaweb.com,https://admin.menu.ibnbatoutaweb.com,https://*.menu.ibnbatoutaweb.com`
+- `DJANGO_CORS_ALLOWED_ORIGINS=https://menu.ibnbatoutaweb.com,https://admin.menu.ibnbatoutaweb.com`
+- `DJANGO_SESSION_COOKIE_DOMAIN=.menu.ibnbatoutaweb.com`
+- `DJANGO_CSRF_COOKIE_DOMAIN=.menu.ibnbatoutaweb.com`
 - `VITE_API_BASE_URL=auto`
 - `VITE_ADMIN_API_BASE_URL=auto`
-- `VITE_PLATFORM_PUBLIC_HOSTS=menu.kepoli.com,admin.menu.kepoli.com`
+- `VITE_PLATFORM_PUBLIC_HOSTS=menu.ibnbatoutaweb.com,admin.menu.ibnbatoutaweb.com`
 
 ### Transactional email (activation + password reset)
 
@@ -127,11 +127,11 @@ Use SMTP backend in production and set all related keys:
 
 Verify after deploy:
 
-- `bash infra/coolify/check_email_dns.sh --domain kepoli.com --dkim-selector <selector1> --dkim-selector <selector2>`
+- `bash infra/coolify/check_email_dns.sh --domain ibnbatoutaweb.com --dkim-selector <selector1> --dkim-selector <selector2>`
 - `python manage.py check_email_delivery --expect-smtp --expect-no-fail-silently`
 - `python manage.py check_email_delivery --expect-smtp --expect-no-fail-silently --send-test --to you@yourdomain.com`
-- `python manage.py email_delivery_drill --to you@yourdomain.com --base-url menu.kepoli.com`
-- VPS shortcut: `bash infra/coolify/verify_email_delivery.sh --resource-uuid <RESOURCE_UUID> --to you@yourdomain.com --base-url menu.kepoli.com`
+- `python manage.py email_delivery_drill --to you@yourdomain.com --base-url menu.ibnbatoutaweb.com`
+- VPS shortcut: `bash infra/coolify/verify_email_delivery.sh --resource-uuid <RESOURCE_UUID> --to you@yourdomain.com --base-url menu.ibnbatoutaweb.com`
 
 ### Optional: S3-Compatible media storage
 
@@ -201,7 +201,7 @@ Sentry remains disabled until DSN values are provided.
 
 Run after each production deploy:
 
-- `bash infra/coolify/verify_throttle_alerts.sh --resource-uuid <RESOURCE_UUID> --login-url https://admin.menu.kepoli.com/api/login/ --attempts 12`
+- `bash infra/coolify/verify_throttle_alerts.sh --resource-uuid <RESOURCE_UUID> --login-url https://admin.menu.ibnbatoutaweb.com/api/login/ --attempts 12`
 
 This confirms:
 - login throttling returns `429`
@@ -212,12 +212,12 @@ This confirms:
 
 - The current `/platform` stack is a placeholder scaffold. Do not use it for the live product.
 - This real stack serves the actual app under `frontend/` and `backend/`.
-- Add wildcard DNS for your tenant namespace before tenant onboarding (for example `*.menu.kepoli.com`).
+- Add wildcard DNS for your tenant namespace before tenant onboarding (for example `*.menu.ibnbatoutaweb.com`).
 - Apply the wildcard tenant router through Coolify Server -> Proxy -> Dynamic Configurations rather than the app domain field.
 - Set `VITE_API_BASE_URL=auto` and `VITE_ADMIN_API_BASE_URL=auto` so frontend uses same-host `/api`.
-- Set `DJANGO_PUBLIC_SCHEMA_HOSTS` to your non-tenant hosts, for example `kepoli.com,admin.kepoli.com,localhost,127.0.0.1`.
-- If using namespace domains, use values like `menu.kepoli.com,admin.menu.kepoli.com,localhost,127.0.0.1`.
-- Set `TENANT_DOMAIN_SUFFIX` explicitly (for example `menu.kepoli.com`) to avoid accidental provisioning on the wrong domain.
+- Set `DJANGO_PUBLIC_SCHEMA_HOSTS` to your non-tenant hosts, for example `ibnbatoutaweb.com,admin.ibnbatoutaweb.com,localhost,127.0.0.1`.
+- If using namespace domains, use values like `menu.ibnbatoutaweb.com,admin.menu.ibnbatoutaweb.com,localhost,127.0.0.1`.
+- Set `TENANT_DOMAIN_SUFFIX` explicitly (for example `menu.ibnbatoutaweb.com`) to avoid accidental provisioning on the wrong domain.
 - If you switch an existing Coolify resource from the placeholder stack to this real stack, the old `postgres_data` volume may keep previous credentials. In that case, either reuse the original database password or delete the old Postgres volume and redeploy before first production launch.
 - Database backup + restore drill: `infra/COOLIFY_DB_BACKUP_RUNBOOK.md`.
 - Uptime monitoring + webhook alerts: `infra/COOLIFY_UPTIME_MONITORING.md`.
@@ -240,16 +240,16 @@ You should not need to touch:
 
 unless you introduce a new public hostname or change the deployment topology.
 
-## Why Coolify blocked `*.kepoli.com`
+## Why Coolify blocked `*.ibnbatoutaweb.com`
 
 Coolify treats wildcard domains as exclusive ownership on that DNS zone.  
-If one resource owns `*.kepoli.com`, another resource cannot claim `anything.kepoli.com`.
+If one resource owns `*.ibnbatoutaweb.com`, another resource cannot claim `anything.ibnbatoutaweb.com`.
 
-Use a tenant namespace wildcard instead (`*.menu.kepoli.com`) so you can deploy other apps on:
+Use a tenant namespace wildcard instead (`*.menu.ibnbatoutaweb.com`) so you can deploy other apps on:
 
-- `kepoli.com`
-- `admin.kepoli.com`
-- `blog.kepoli.com`
+- `ibnbatoutaweb.com`
+- `admin.ibnbatoutaweb.com`
+- `blog.ibnbatoutaweb.com`
 
 ## Troubleshooting: `Host(\`\`) && PathPrefix(...)` in Traefik logs
 
@@ -257,7 +257,7 @@ This means Coolify parsed an invalid domain entry.
 
 Fix:
 
-1. In each `Domains for ...` field, use full URL values with the service port, for example `https://menu.kepoli.com:3000`.
+1. In each `Domains for ...` field, use full URL values with the service port, for example `https://menu.ibnbatoutaweb.com:3000`.
 2. Avoid blank items and malformed commas in comma-separated values.
 3. Click `Save`, then `Redeploy`.
 
@@ -265,17 +265,17 @@ Fix:
 
 If you see errors such as:
 
-- `HostSNI('*.menu.kepoli.com') is not a valid hostname`
-- `Unable to obtain ACME certificate for domains ["*.menu.kepoli.com"]`
+- `HostSNI('*.menu.ibnbatoutaweb.com') is not a valid hostname`
+- `Unable to obtain ACME certificate for domains ["*.menu.ibnbatoutaweb.com"]`
 
 that means the wildcard was added to the normal app domain field.
 
 Fix:
 
-1. Remove `https://*.menu.kepoli.com:3000` from `Domains for frontend`.
+1. Remove `https://*.menu.ibnbatoutaweb.com:3000` from `Domains for frontend`.
 2. Keep only:
-   - `https://menu.kepoli.com:3000`
-   - `https://admin.menu.kepoli.com:3000`
+   - `https://menu.ibnbatoutaweb.com:3000`
+   - `https://admin.menu.ibnbatoutaweb.com:3000`
 3. Save and redeploy the resource.
 4. Configure the wildcard at the server proxy layer using:
    - [infra/COOLIFY_TENANT_WILDCARD_PROXY.md](infra/COOLIFY_TENANT_WILDCARD_PROXY.md)

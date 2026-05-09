@@ -90,7 +90,7 @@ Must complete:
 - verify wildcard routing still survives redeploy/restart
 
 Required outcome:
-- `*.menu.kepoli.com` remains stable across routine operations
+- `*.menu.ibnbatoutaweb.com` remains stable across routine operations
 
 ### 2. Deploy/Recovery Discipline
 Use:

@@ -2,9 +2,9 @@
 
 This guide adds lightweight uptime checks for:
 
-- `https://kepoli.com/health`
-- `https://admin.kepoli.com/health`
-- `https://api.kepoli.com/api/health/`
+- `https://ibnbatoutaweb.com/health`
+- `https://admin.ibnbatoutaweb.com/health`
+- `https://api.ibnbatoutaweb.com/api/health/`
 
 Scripts:
 
@@ -25,9 +25,9 @@ chmod +x infra/coolify/verify_uptime_alerts.sh
 
 ```bash
 ./infra/coolify/uptime_probe.sh \
-  --check "https://kepoli.com/health|200" \
-  --check "https://admin.kepoli.com/health|200" \
-  --check "https://api.kepoli.com/api/health/|200"
+  --check "https://ibnbatoutaweb.com/health|200" \
+  --check "https://admin.ibnbatoutaweb.com/health|200" \
+  --check "https://api.ibnbatoutaweb.com/api/health/|200"
 ```
 
 Expected:
@@ -48,9 +48,9 @@ Then run:
 
 ```bash
 ./infra/coolify/uptime_probe.sh \
-  --check "https://kepoli.com/health|200" \
-  --check "https://admin.kepoli.com/health|200" \
-  --check "https://api.kepoli.com/api/health/|200" \
+  --check "https://ibnbatoutaweb.com/health|200" \
+  --check "https://admin.ibnbatoutaweb.com/health|200" \
+  --check "https://api.ibnbatoutaweb.com/api/health/|200" \
   --cooldown-minutes 20
 ```
 

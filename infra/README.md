@@ -23,7 +23,7 @@
 - Local example:
   - `powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -TenantHost demo.localhost -ApiPort 8000 -WebPort 5173 -TableSlug table-1`
 - Production example:
-  - `powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://demo.kepoli.com -ApiBaseUrl https://demo.kepoli.com/api -TableSlug table-1`
+  - `powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://demo.ibnbatoutaweb.com -ApiBaseUrl https://demo.ibnbatoutaweb.com/api -TableSlug table-1`
 
 ## Production tenant smoke wrapper
 - Script: `infra/production_tenant_smoke.ps1`
@@ -32,9 +32,9 @@
   - runs tenant pre-release smoke
   - runs customer-flow smoke
 - Dry run example:
-  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain kepoli.com -TableSlug table-1 -DryRun`
+  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain ibnbatoutaweb.com -TableSlug table-1 -DryRun`
 - Live example:
-  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain kepoli.com -TableSlug table-1`
+  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain ibnbatoutaweb.com -TableSlug table-1`
 
 ## Browser E2E (Critical + mobile regression)
 - Prepare deterministic E2E admin + demo seed:
@@ -109,7 +109,7 @@
 ## Coolify tenant wildcard proxy
 - Runbook: `infra/COOLIFY_TENANT_WILDCARD_PROXY.md`
 - Dynamic config:
-  - `infra/coolify/traefik-kepoli-tenant-wildcard.yml`
+  - `infra/coolify/traefik-ibnbatoutaweb-tenant-wildcard.yml`
 
 ## Coolify S3 media lifecycle template
 - Template: `infra/coolify/s3_media_lifecycle_policy.example.json`

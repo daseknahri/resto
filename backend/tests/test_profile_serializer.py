@@ -31,15 +31,15 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertIn("language", serializer.errors)
 
     def test_logo_url_is_normalized_to_https_for_same_host_media(self):
-        request = RequestFactory().get("/", secure=True, HTTP_HOST="badr.menu.kepoli.com")
+        request = RequestFactory().get("/", secure=True, HTTP_HOST="badr.menu.ibnbatoutaweb.com")
         tenant = Tenant(name="Badr", slug="badr", plan=Plan(code="basic", name="Basic"))
-        profile = Profile(tenant=tenant, logo_url="http://badr.menu.kepoli.com/media/uploads/badr/logo.webp")
+        profile = Profile(tenant=tenant, logo_url="http://badr.menu.ibnbatoutaweb.com/media/uploads/badr/logo.webp")
 
         serializer = ProfileSerializer(instance=profile, context={"request": request})
 
         self.assertEqual(
             serializer.data["logo_url"],
-            "https://badr.menu.kepoli.com/media/uploads/badr/logo.webp",
+            "https://badr.menu.ibnbatoutaweb.com/media/uploads/badr/logo.webp",
         )
 
     def test_partial_update_does_not_fail_on_existing_disabled_without_note(self):
@@ -59,7 +59,7 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertIn("menu_disabled_note", serializer.errors)
 
     def test_profile_i18n_localizes_for_public_requests(self):
-        request = RequestFactory().get("/api/meta/?lang=fr", HTTP_HOST="demo.menu.kepoli.com")
+        request = RequestFactory().get("/api/meta/?lang=fr", HTTP_HOST="demo.menu.ibnbatoutaweb.com")
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
         profile = Profile(
             tenant=Tenant(name="Demo", slug="demo", plan=Plan(code="starter", name="Basic")),
@@ -70,7 +70,7 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertEqual(serializer.data["tagline"], "Menu rapide")
 
     def test_profile_i18n_keeps_base_fields_for_authenticated_owner(self):
-        request = RequestFactory().get("/api/profile/?lang=fr", HTTP_HOST="demo.menu.kepoli.com")
+        request = RequestFactory().get("/api/profile/?lang=fr", HTTP_HOST="demo.menu.ibnbatoutaweb.com")
         request.user = SimpleNamespace(is_authenticated=True)
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
         profile = Profile(
@@ -82,7 +82,7 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertEqual(serializer.data["tagline"], "Fast menu")
 
     def test_profile_i18n_can_be_forced_for_authenticated_owner(self):
-        request = RequestFactory().get("/api/meta/?lang=fr&force_locale=1", HTTP_HOST="demo.menu.kepoli.com")
+        request = RequestFactory().get("/api/meta/?lang=fr&force_locale=1", HTTP_HOST="demo.menu.ibnbatoutaweb.com")
         request.user = SimpleNamespace(is_authenticated=True)
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
         profile = Profile(
@@ -100,7 +100,7 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertIn("business_hours_schedule", serializer.fields)
 
     def test_profile_business_hours_localizes_for_public_requests(self):
-        request = RequestFactory().get("/api/meta/?lang=fr", HTTP_HOST="demo.menu.kepoli.com")
+        request = RequestFactory().get("/api/meta/?lang=fr", HTTP_HOST="demo.menu.ibnbatoutaweb.com")
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
         profile = Profile(
             tenant=Tenant(name="Demo", slug="demo", plan=Plan(code="starter", name="Basic")),
@@ -135,7 +135,7 @@ class ProfileSerializerTests(SimpleTestCase):
         self.assertIn("business_hours_schedule", serializer.errors)
 
     def test_profile_i18n_enforces_plan_limit(self):
-        request = RequestFactory().get("/api/profile/", HTTP_HOST="demo.menu.kepoli.com")
+        request = RequestFactory().get("/api/profile/", HTTP_HOST="demo.menu.ibnbatoutaweb.com")
         request.tenant = SimpleNamespace(plan=SimpleNamespace(max_languages=3))
         serializer = ProfileSerializer(context={"request": request})
         cleaned = serializer.validate_tagline_i18n({"fr": "Menu rapide", "ar": "قائمة", "en": "Fast menu"})

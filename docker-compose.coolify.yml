@@ -20,7 +20,7 @@ services:
     init: true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.menu-kepoli-com-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.services.menu-ibnbatoutaweb-com-frontend.loadbalancer.server.port=3000"
     depends_on:
       api:
         condition: service_healthy
@@ -72,16 +72,16 @@ services:
     init: true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.kepoli-api.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kepoli-api-menu.rule=Host(`menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-menu.tls=true"
-      - "traefik.http.routers.kepoli-api-menu.service=kepoli-api"
-      - "traefik.http.routers.kepoli-api-admin.rule=Host(`admin.menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-admin.tls=true"
-      - "traefik.http.routers.kepoli-api-admin.service=kepoli-api"
-      - "traefik.http.routers.kepoli-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.kepoli.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.kepoli-api-tenant.tls=true"
-      - "traefik.http.routers.kepoli-api-tenant.service=kepoli-api"
+      - "traefik.http.services.ibnbatoutaweb-api.loadbalancer.server.port=8000"
+      - "traefik.http.routers.ibnbatoutaweb-api-menu.rule=Host(`menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-menu.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-menu.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin.rule=Host(`admin.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant.service=ibnbatoutaweb-api"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG}

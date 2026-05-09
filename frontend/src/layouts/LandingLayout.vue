@@ -150,7 +150,7 @@ const router = useRouter();
 const session = useSessionStore();
 const { t } = useI18n();
 const year = new Date().getFullYear();
-const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || "contact@kepoli.com";
+const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com";
 
 const logoStyle = computed(() => ({
   background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",

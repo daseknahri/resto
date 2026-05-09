@@ -108,9 +108,9 @@ done
 
 if [[ ${#CHECKS[@]} -eq 0 ]]; then
   CHECKS=(
-    "https://menu.kepoli.com/health|200"
-    "https://admin.menu.kepoli.com/health|200"
-    "https://menu.kepoli.com/api/health/|200"
+    "https://menu.ibnbatoutaweb.com/health|200"
+    "https://admin.menu.ibnbatoutaweb.com/health|200"
+    "https://menu.ibnbatoutaweb.com/api/health/|200"
   )
 fi
 

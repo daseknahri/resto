@@ -15,10 +15,10 @@ Use this checklist before each production redeploy on Coolify.
 - [ ] Verify no repeated restarts in Coolify logs.
 
 ## 3. Post-Deploy Health
-- [ ] `https://menu.kepoli.com/health` returns `200`.
-- [ ] `https://admin.menu.kepoli.com/health` returns `200`.
-- [ ] `https://api.kepoli.com/api/health/` returns `200`.
-- [ ] Tenant wildcard path works: `https://<tenant>.menu.kepoli.com/menu`.
+- [ ] `https://menu.ibnbatoutaweb.com/health` returns `200`.
+- [ ] `https://admin.menu.ibnbatoutaweb.com/health` returns `200`.
+- [ ] `https://api.ibnbatoutaweb.com/api/health/` returns `200`.
+- [ ] Tenant wildcard path works: `https://<tenant>.menu.ibnbatoutaweb.com/menu`.
 
 ## 4. SEO Validation (Customer Host)
 - [ ] View source/DevTools shows:
@@ -46,6 +46,6 @@ Use this checklist before each production redeploy on Coolify.
 - [ ] Cart WhatsApp handoff works.
 
 ## 7. Rollback Readiness
-- [ ] Latest DB backup exists in `/var/backups/kepoli`.
+- [ ] Latest DB backup exists in `/var/backups/ibnbatoutaweb`.
 - [ ] Restore dry run command validated.
 - [ ] Previous known-good deploy hash is documented.

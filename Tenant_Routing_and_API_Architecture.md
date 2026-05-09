@@ -8,14 +8,14 @@ This document explains how restaurant tenant routing works today, how DNS and su
 
 ### Domains
 
-- `kepoli.com`
+- `ibnbatoutaweb.com`
   - public sales landing
   - lead capture
   - shared public API on `/api`
-- `admin.kepoli.com`
+- `admin.ibnbatoutaweb.com`
   - platform superadmin interface
   - shared public/admin API on `/api`
-- `slug.kepoli.com`
+- `slug.ibnbatoutaweb.com`
   - one restaurant tenant
   - customer menu pages
   - owner workspace pages
@@ -27,14 +27,14 @@ The current system is **host-based multi-tenancy**.
 
 Tenant identity comes from the request host:
 
-- `demo.kepoli.com` -> tenant `demo`
-- `yassernahri7.kepoli.com` -> tenant `yassernahri7`
+- `demo.ibnbatoutaweb.com` -> tenant `demo`
+- `yassernahri7.ibnbatoutaweb.com` -> tenant `yassernahri7`
 
 This is handled in middleware by resolving the hostname to a `Domain` row and switching Django to the correct tenant context.
 
 ### Owner Flow
 
-1. Lead is submitted on `kepoli.com`
+1. Lead is submitted on `ibnbatoutaweb.com`
 2. Platform admin approves and provisions the lead
 3. System creates:
    - tenant
@@ -42,9 +42,9 @@ This is handled in middleware by resolving the hostname to a `Domain` row and sw
    - owner user
    - activation token
 4. Owner receives:
-   - activation URL: `https://slug.kepoli.com/activate?token=...`
-   - sign-in URL: `https://slug.kepoli.com/signin`
-   - workspace URL: `https://slug.kepoli.com/owner`
+   - activation URL: `https://slug.ibnbatoutaweb.com/activate?token=...`
+   - sign-in URL: `https://slug.ibnbatoutaweb.com/signin`
+   - workspace URL: `https://slug.ibnbatoutaweb.com/owner`
 5. Owner activates account and is redirected into onboarding/workspace
 
 ### Why This Model Is Correct Right Now
@@ -68,22 +68,22 @@ At Hostinger, production should include:
 
 This wildcard record allows any restaurant subdomain to resolve:
 
-- `resto-a.kepoli.com`
-- `resto-b.kepoli.com`
-- `resto-c.kepoli.com`
+- `resto-a.ibnbatoutaweb.com`
+- `resto-b.ibnbatoutaweb.com`
+- `resto-c.ibnbatoutaweb.com`
 
 ### Proxy / Coolify Routing
 
 Reverse proxy rules must preserve the host:
 
-- `kepoli.com` -> frontend service
-- `admin.kepoli.com` -> admin service
-- `*.kepoli.com` -> frontend service
-- `/api` on `kepoli.com`, `admin.kepoli.com`, and `*.kepoli.com` -> Django API service
+- `ibnbatoutaweb.com` -> frontend service
+- `admin.ibnbatoutaweb.com` -> admin service
+- `*.ibnbatoutaweb.com` -> frontend service
+- `/api` on `ibnbatoutaweb.com`, `admin.ibnbatoutaweb.com`, and `*.ibnbatoutaweb.com` -> Django API service
 
 Important:
 
-- `slug.kepoli.com/api/...` must reach Django with `Host: slug.kepoli.com`
+- `slug.ibnbatoutaweb.com/api/...` must reach Django with `Host: slug.ibnbatoutaweb.com`
 - tenant routing depends on that host remaining intact
 
 ## Stage 1: Current Web SaaS
@@ -115,7 +115,7 @@ This stage keeps the current host-based web product, but adds a **central API co
 
 ### New Addition
 
-- `api.kepoli.com`
+- `api.ibnbatoutaweb.com`
 
 This would be used for:
 
@@ -130,9 +130,9 @@ This would be used for:
 At this stage, the platform may support **two modes**:
 
 1. host-based mode for the web app
-   - `slug.kepoli.com/api/...`
+   - `slug.ibnbatoutaweb.com/api/...`
 2. explicit-tenant mode for central API consumers
-   - `api.kepoli.com/v1/...`
+   - `api.ibnbatoutaweb.com/v1/...`
 
 Explicit tenant identity can be provided through one of these patterns:
 
@@ -164,13 +164,13 @@ Native mobile apps and third-party integrations usually prefer:
 
 Instead of each client switching between:
 
-- `resto1.kepoli.com`
-- `resto2.kepoli.com`
-- `resto3.kepoli.com`
+- `resto1.ibnbatoutaweb.com`
+- `resto2.ibnbatoutaweb.com`
+- `resto3.ibnbatoutaweb.com`
 
 they typically use:
 
-- `api.kepoli.com`
+- `api.ibnbatoutaweb.com`
 
 and identify tenant explicitly in the request.
 
@@ -180,14 +180,14 @@ Current web request:
 
 ```http
 GET /api/categories/
-Host: demo.kepoli.com
+Host: demo.ibnbatoutaweb.com
 ```
 
 Future mobile/integration request:
 
 ```http
 GET /v1/categories
-Host: api.kepoli.com
+Host: api.ibnbatoutaweb.com
 Authorization: Bearer <token>
 X-Tenant: demo
 ```
@@ -196,7 +196,7 @@ or:
 
 ```http
 GET /v1/tenants/demo/categories
-Host: api.kepoli.com
+Host: api.ibnbatoutaweb.com
 Authorization: Bearer <token>
 ```
 
@@ -230,7 +230,7 @@ Add:
 
 Add:
 
-- `api.kepoli.com/v1/...`
+- `api.ibnbatoutaweb.com/v1/...`
 - explicit tenant identification for mobile/integrations
 - token strategy separated from browser session behavior
 

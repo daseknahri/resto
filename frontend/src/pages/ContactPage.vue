@@ -55,7 +55,7 @@ import { computed } from "vue";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
-const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || "contact@kepoli.com").trim());
+const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com").trim());
 const supportPhone = computed(() => String(import.meta.env.VITE_CONTACT_PHONE || "").trim());
 const supportPhoneLabel = computed(() => supportPhone.value || "+212...");
 const whatsappUrl = computed(() => {

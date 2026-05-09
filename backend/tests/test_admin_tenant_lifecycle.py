@@ -26,7 +26,7 @@ def _admin_user():
     return Mock(is_authenticated=True, is_superuser=False, is_staff=False, is_platform_admin=True, pk=1, id=1)
 
 
-def _domains_manager(primary_domain="demo.kepoli.com"):
+def _domains_manager(primary_domain="demo.ibnbatoutaweb.com"):
     primary = SimpleNamespace(domain=primary_domain)
     primary_qs = SimpleNamespace(first=lambda: primary)
     fallback_qs = SimpleNamespace(first=lambda: primary)

@@ -130,7 +130,7 @@ const activeActionsCount = computed(() => (isPublished.value ? 3 : 2));
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
 const menuHost = computed(() => {
   try {
-    return new URL(menuUrl.value, typeof window === "undefined" ? "https://menu.kepoli.com" : window.location.origin).host;
+    return new URL(menuUrl.value, typeof window === "undefined" ? "https://menu.ibnbatoutaweb.com" : window.location.origin).host;
   } catch {
     return "menu";
   }

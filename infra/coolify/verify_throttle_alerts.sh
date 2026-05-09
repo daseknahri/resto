@@ -12,7 +12,7 @@ Usage:
 
 Options:
   --login-url <url-or-host>      API login endpoint or host (examples:
-                                 menu.kepoli.com, https://menu.kepoli.com, https://admin.menu.kepoli.com/api/login/)
+                                 menu.ibnbatoutaweb.com, https://menu.ibnbatoutaweb.com, https://admin.menu.ibnbatoutaweb.com/api/login/)
   --resource-uuid <uuid>         Coolify resource UUID (auto-detect api container)
   --container <name>             Explicit api container name
   --attempts <n>                 Number of bad login attempts (default: 10)
@@ -25,8 +25,8 @@ Options:
   -h, --help                     Show help
 
 Examples:
-  bash infra/coolify/verify_throttle_alerts.sh --resource-uuid <RESOURCE_UUID> --login-url menu.kepoli.com
-  bash infra/coolify/verify_throttle_alerts.sh --container api-xxxx --login-url https://admin.menu.kepoli.com/api/login/
+  bash infra/coolify/verify_throttle_alerts.sh --resource-uuid <RESOURCE_UUID> --login-url menu.ibnbatoutaweb.com
+  bash infra/coolify/verify_throttle_alerts.sh --container api-xxxx --login-url https://admin.menu.ibnbatoutaweb.com/api/login/
 EOF
 }
 

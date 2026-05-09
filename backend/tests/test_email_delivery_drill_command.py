@@ -7,7 +7,7 @@ from django.test import SimpleTestCase, override_settings
 
 
 class EmailDeliveryDrillCommandTests(SimpleTestCase):
-    @override_settings(PUBLIC_MENU_BASE_URL="https://menu.kepoli.com")
+    @override_settings(PUBLIC_MENU_BASE_URL="https://menu.ibnbatoutaweb.com")
     @patch("accounts.management.commands.email_delivery_drill.send_password_reset_email", return_value=1)
     @patch("accounts.management.commands.email_delivery_drill.send_activation_email", return_value=1)
     def test_drill_sends_both_messages(self, mock_activation, mock_reset):
@@ -26,10 +26,10 @@ class EmailDeliveryDrillCommandTests(SimpleTestCase):
             "--to",
             "owner@example.com",
             "--base-url",
-            "menu.kepoli.com",
+            "menu.ibnbatoutaweb.com",
         )
         activation_args = mock_activation.call_args.args
-        self.assertIn("https://menu.kepoli.com/activate?token=", activation_args[3])
+        self.assertIn("https://menu.ibnbatoutaweb.com/activate?token=", activation_args[3])
 
     @patch("accounts.management.commands.email_delivery_drill.send_password_reset_email", return_value=1)
     @patch("accounts.management.commands.email_delivery_drill.send_activation_email", return_value=0)
@@ -40,7 +40,7 @@ class EmailDeliveryDrillCommandTests(SimpleTestCase):
                 "--to",
                 "owner@example.com",
                 "--base-url",
-                "https://menu.kepoli.com",
+                "https://menu.ibnbatoutaweb.com",
             )
 
     def test_rejects_invalid_base_url(self):

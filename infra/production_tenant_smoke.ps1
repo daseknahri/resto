@@ -1,8 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$TenantSlug,
-    [string]$BaseDomain = "menu.kepoli.com",
-    [string]$PublicHost = "menu.kepoli.com",
-    [string]$AdminHost = "admin.menu.kepoli.com",
+    [string]$BaseDomain = "menu.ibnbatoutaweb.com",
+    [string]$PublicHost = "menu.ibnbatoutaweb.com",
+    [string]$AdminHost = "admin.menu.ibnbatoutaweb.com",
     [string]$TableSlug = "table-1",
     [switch]$DryRun
 )

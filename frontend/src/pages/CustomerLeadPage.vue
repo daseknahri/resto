@@ -310,7 +310,7 @@ const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
 const showPlatformDemo = computed(() => isPublicDemoHost());
-const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.kepoli.com/menu");
+const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu");
 
 const form = reactive({
   name: "",

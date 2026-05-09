@@ -11,10 +11,10 @@ Usage:
 Options:
   --resource-uuid <uuid>   Required: Coolify resource UUID
   --repo-dir <path>        Repo root path (default: /opt/resto)
-  --db-name <name>         Database name (default: kepoli_platform)
-  --db-user <name>         Database user (default: kepoli_user)
-  --base-domain <domain>   Tenant namespace base domain (default: menu.kepoli.com)
-  --output-root <path>     Root backup directory (default: /var/backups/kepoli)
+  --db-name <name>         Database name (default: ibnbatoutaweb_platform)
+  --db-user <name>         Database user (default: ibnbatoutaweb_user)
+  --base-domain <domain>   Tenant namespace base domain (default: menu.ibnbatoutaweb.com)
+  --output-root <path>     Root backup directory (default: /var/backups/ibnbatoutaweb)
   --tag-prefix <prefix>    Git tag prefix (default: backup)
   --skip-git-tag           Do not create/push a git tag
   --skip-media             Do not archive media volume
@@ -28,10 +28,10 @@ EOF
 
 RESOURCE_UUID=""
 REPO_DIR="/opt/resto"
-DB_NAME="${POSTGRES_DB:-kepoli_platform}"
-DB_USER="${POSTGRES_USER:-kepoli_user}"
-BASE_DOMAIN="menu.kepoli.com"
-OUTPUT_ROOT="/var/backups/kepoli"
+DB_NAME="${POSTGRES_DB:-ibnbatoutaweb_platform}"
+DB_USER="${POSTGRES_USER:-ibnbatoutaweb_user}"
+BASE_DOMAIN="menu.ibnbatoutaweb.com"
+OUTPUT_ROOT="/var/backups/ibnbatoutaweb"
 TAG_PREFIX="backup"
 SKIP_GIT_TAG=0
 SKIP_MEDIA=0
@@ -192,8 +192,8 @@ if [[ "$SKIP_MEDIA" -eq 0 ]]; then
 fi
 
 if [[ "$SKIP_WILDCARD" -eq 0 ]]; then
-  if [[ -f /data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml ]]; then
-    cp /data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml "$BACKUP_DIR/kepoli-tenant-wildcard.live.yml"
+  if [[ -f /data/coolify/proxy/dynamic/ibnbatoutaweb-tenant-wildcard.yml ]]; then
+    cp /data/coolify/proxy/dynamic/ibnbatoutaweb-tenant-wildcard.yml "$BACKUP_DIR/kepoli-tenant-wildcard.live.yml"
   fi
   if [[ -d "/data/coolify/proxy/certs/${BASE_DOMAIN}" ]]; then
     tar -czf "$BACKUP_DIR/${BASE_DOMAIN//./-}-certs_${TIMESTAMP}.tar.gz" -C /data/coolify/proxy/certs "$BASE_DOMAIN"

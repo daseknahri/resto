@@ -11,8 +11,8 @@ Usage:
 Options:
   --resource-uuid <uuid>      Coolify resource UUID used to auto-detect frontend container
   --frontend-container <name> Explicit frontend container name
-  --base-domain <domain>      Tenant namespace base domain (default: menu.kepoli.com)
-  --cert-dir <path>           Cert directory mounted in proxy (default: /traefik/certs/menu.kepoli.com)
+  --base-domain <domain>      Tenant namespace base domain (default: menu.ibnbatoutaweb.com)
+  --cert-dir <path>           Cert directory mounted in proxy (default: /traefik/certs/menu.ibnbatoutaweb.com)
   --proxy-config-dir <path>   Host dynamic-config directory (default: /data/coolify/proxy/dynamic)
   --file-name <name>          Output file name (default: kepoli-tenant-wildcard.yml)
   --prefer-ip                 Render proxy target with shared network IP instead of container hostname
@@ -26,10 +26,10 @@ RENDER_SCRIPT="${SCRIPT_DIR}/render_tenant_wildcard_proxy.sh"
 
 RESOURCE_UUID=""
 FRONTEND_CONTAINER=""
-BASE_DOMAIN="menu.kepoli.com"
-CERT_DIR="/traefik/certs/menu.kepoli.com"
+BASE_DOMAIN="menu.ibnbatoutaweb.com"
+CERT_DIR="/traefik/certs/menu.ibnbatoutaweb.com"
 PROXY_CONFIG_DIR="/data/coolify/proxy/dynamic"
-FILE_NAME="kepoli-tenant-wildcard.yml"
+FILE_NAME="ibnbatoutaweb-tenant-wildcard.yml"
 PREFER_IP=0
 DRY_RUN=0
 

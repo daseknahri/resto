@@ -92,7 +92,7 @@
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="ui-kicker">{{ t("common.demo") }}</p>
-                <p class="mt-2 text-lg font-semibold text-white">doro.menu.kepoli.com</p>
+                <p class="mt-2 text-lg font-semibold text-white">doro.menu.ibnbatoutaweb.com</p>
               </div>
               <span class="ui-chip-strong shrink-0">{{ t("home.heroLive") }}</span>
             </div>
@@ -308,7 +308,7 @@
         <div class="ui-command-deck p-5">
           <div class="space-y-2">
             <p class="ui-kicker">{{ t("common.demo") }}</p>
-            <p class="text-lg font-semibold text-white">doro.menu.kepoli.com</p>
+            <p class="text-lg font-semibold text-white">doro.menu.ibnbatoutaweb.com</p>
             <p class="text-sm text-slate-300">{{ t("home.interfaces.customerText") }}</p>
           </div>
           <div class="mt-4 flex flex-wrap gap-3">
@@ -337,7 +337,7 @@ const router = useRouter();
 const session = useSessionStore();
 const { t } = useI18n();
 const leadSuccess = ref(route.query.lead === "success");
-const demoUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.kepoli.com/menu";
+const demoUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu";
 
 const plans = computed(() => [
   {

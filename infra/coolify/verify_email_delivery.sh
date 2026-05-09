@@ -13,7 +13,7 @@ Options:
   --resource-uuid <uuid>       Coolify resource UUID (auto-detect api container)
   --container <name>           Explicit api container name
   --to <email>                 Destination email for test delivery
-  --base-url <host-or-url>     Frontend host/url used to build owner links (ex: menu.kepoli.com)
+  --base-url <host-or-url>     Frontend host/url used to build owner links (ex: menu.ibnbatoutaweb.com)
   --skip-drill                 Only run config check command, skip email template drill
   --dry-run                    Print commands without executing
   -h, --help                   Show help

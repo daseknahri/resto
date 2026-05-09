@@ -9,10 +9,10 @@ Usage:
   check_live_wildcard.sh [options]
 
 Options:
-  --base-domain <domain>      Tenant namespace base domain (default: menu.kepoli.com)
+  --base-domain <domain>      Tenant namespace base domain (default: menu.ibnbatoutaweb.com)
   --tenant-slug <slug>        Tenant slug to probe (default: smoke)
   --proxy-config <path>       Proxy dynamic config path (default: /data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml)
-  --cert-dir <path>           Proxy certificate dir (default: /data/coolify/proxy/certs/menu.kepoli.com)
+  --cert-dir <path>           Proxy certificate dir (default: /data/coolify/proxy/certs/menu.ibnbatoutaweb.com)
   --host-ip <ip>              Override public host IP for --resolve probes
   --skip-network              Skip external curl checks
   --dry-run                   Print resolved values only
@@ -20,10 +20,10 @@ Options:
 EOF
 }
 
-BASE_DOMAIN="menu.kepoli.com"
+BASE_DOMAIN="menu.ibnbatoutaweb.com"
 TENANT_SLUG="smoke"
-PROXY_CONFIG="/data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml"
-CERT_DIR="/data/coolify/proxy/certs/menu.kepoli.com"
+PROXY_CONFIG="/data/coolify/proxy/dynamic/ibnbatoutaweb-tenant-wildcard.yml"
+CERT_DIR="/data/coolify/proxy/certs/menu.ibnbatoutaweb.com"
 HOST_IP=""
 SKIP_NETWORK=0
 DRY_RUN=0

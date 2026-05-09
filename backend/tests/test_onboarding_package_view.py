@@ -35,16 +35,16 @@ class LeadOnboardingPackageViewTests(SimpleTestCase):
         tenant = SimpleNamespace(slug="demo")
         lead = SimpleNamespace(id=1)
         get_object_or_404_mock.return_value = lead
-        build_onboarding_url_mock.return_value = "https://demo.kepoli.com/owner/onboarding"
-        build_public_menu_url_mock.return_value = "https://demo.kepoli.com/menu"
+        build_onboarding_url_mock.return_value = "https://demo.ibnbatoutaweb.com/owner/onboarding"
+        build_public_menu_url_mock.return_value = "https://demo.ibnbatoutaweb.com/menu"
         build_owner_checklist_mock.return_value = ["step 1", "step 2"]
         onboarding_package_mock.return_value = SimpleNamespace(
             tenant=tenant,
-            tenant_url="https://demo.kepoli.com",
-            workspace_url="https://demo.kepoli.com/owner",
-            signin_url="https://demo.kepoli.com/signin",
-            admin_url="https://demo.kepoli.com/admin/",
-            activation_url="https://demo.kepoli.com/activate?token=abc",
+            tenant_url="https://demo.ibnbatoutaweb.com",
+            workspace_url="https://demo.ibnbatoutaweb.com/owner",
+            signin_url="https://demo.ibnbatoutaweb.com/signin",
+            admin_url="https://demo.ibnbatoutaweb.com/admin/",
+            activation_url="https://demo.ibnbatoutaweb.com/activate?token=abc",
             activation_token=SimpleNamespace(token="abc"),
             whatsapp_link="https://wa.me/212600000000?text=...",
             whatsapp_message_template="message",
@@ -55,7 +55,7 @@ class LeadOnboardingPackageViewTests(SimpleTestCase):
         response = self.view(request, lead_id=1)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["onboarding_url"], "https://demo.kepoli.com/owner/onboarding")
-        self.assertEqual(response.data["public_menu_url"], "https://demo.kepoli.com/menu")
+        self.assertEqual(response.data["onboarding_url"], "https://demo.ibnbatoutaweb.com/owner/onboarding")
+        self.assertEqual(response.data["public_menu_url"], "https://demo.ibnbatoutaweb.com/menu")
         self.assertEqual(response.data["owner_next_steps"], ["step 1", "step 2"])
         log_admin_action_mock.assert_called_once()

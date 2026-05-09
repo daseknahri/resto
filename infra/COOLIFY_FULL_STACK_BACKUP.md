@@ -16,10 +16,10 @@ cd /opt/resto
 
 bash infra/coolify/backup_full_stack.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --db-name kepoli_platform \
-  --db-user kepoli_user \
-  --base-domain menu.kepoli.com \
-  --output-root /var/backups/kepoli
+  --db-name ibnbatoutaweb_platform \
+  --db-user ibnbatoutaweb_user \
+  --base-domain menu.ibnbatoutaweb.com \
+  --output-root /var/backups/ibnbatoutaweb
 ```
 
 This captures:
@@ -37,7 +37,7 @@ This captures:
 Output directory example:
 
 ```text
-/var/backups/kepoli/20260314T101500Z/
+/var/backups/ibnbatoutaweb/20260314T101500Z/
 ```
 
 ## 2. Dry run before first use
@@ -56,7 +56,7 @@ Run on the VPS host:
 cd /opt/resto
 
 bash infra/coolify/check_live_wildcard.sh \
-  --base-domain menu.kepoli.com \
+  --base-domain menu.ibnbatoutaweb.com \
   --tenant-slug smoke
 ```
 
@@ -74,10 +74,10 @@ This checks:
 Run these after a risky deploy:
 
 ```bash
-bash infra/coolify/check_live_wildcard.sh --base-domain menu.kepoli.com --tenant-slug smoke
-curl -I https://menu.kepoli.com/health
-curl -I https://admin.menu.kepoli.com/health
-curl -I https://<real-tenant>.menu.kepoli.com/health
+bash infra/coolify/check_live_wildcard.sh --base-domain menu.ibnbatoutaweb.com --tenant-slug smoke
+curl -I https://menu.ibnbatoutaweb.com/health
+curl -I https://admin.menu.ibnbatoutaweb.com/health
+curl -I https://<real-tenant>.menu.ibnbatoutaweb.com/health
 ```
 
 ## 5. Restore notes
@@ -87,10 +87,10 @@ Database restore still uses:
 ```bash
 bash infra/coolify/restore_postgres.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --backup-file /var/backups/kepoli/<TIMESTAMP>/kepoli_platform_<TIMESTAMP>.dump \
-  --db-name kepoli_platform \
-  --db-user kepoli_user \
-  --admin-user kepoli_user
+  --backup-file /var/backups/ibnbatoutaweb/<TIMESTAMP>/ibnbatoutaweb_platform_<TIMESTAMP>.dump \
+  --db-name ibnbatoutaweb_platform \
+  --db-user ibnbatoutaweb_user \
+  --admin-user ibnbatoutaweb_user
 ```
 
 Media restore can be done from the archived tarball inside the backup directory by mounting the current `media` Docker volume into a temporary container and extracting it back.

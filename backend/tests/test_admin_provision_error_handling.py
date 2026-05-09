@@ -28,7 +28,7 @@ class AdminProvisionErrorHandlingTests(SimpleTestCase):
         get_object_mock.return_value = SimpleNamespace(id=3)
         view = ProvisionLeadViewSet.as_view({"put": "update"})
 
-        request = self.factory.put("/api/lead-provision/3/", {"domain_suffix": "menu.kepoli.com"}, format="json")
+        request = self.factory.put("/api/lead-provision/3/", {"domain_suffix": "menu.ibnbatoutaweb.com"}, format="json")
         force_authenticate(request, user=_admin_user())
         response = view(request, pk=3)
 
@@ -53,11 +53,11 @@ class AdminProvisionErrorHandlingTests(SimpleTestCase):
         get_object_mock.return_value = SimpleNamespace(id=6)
         provision_lead_mock.return_value = SimpleNamespace(
             tenant=tenant,
-            tenant_url="https://demo.menu.kepoli.com",
-            workspace_url="https://demo.menu.kepoli.com/owner",
-            signin_url="https://demo.menu.kepoli.com/signin",
-            admin_url="https://demo.menu.kepoli.com/admin/",
-            activation_url="https://demo.menu.kepoli.com/activate?token=abc",
+            tenant_url="https://demo.menu.ibnbatoutaweb.com",
+            workspace_url="https://demo.menu.ibnbatoutaweb.com/owner",
+            signin_url="https://demo.menu.ibnbatoutaweb.com/signin",
+            admin_url="https://demo.menu.ibnbatoutaweb.com/admin/",
+            activation_url="https://demo.menu.ibnbatoutaweb.com/activate?token=abc",
             activation_token=SimpleNamespace(token="abc"),
             job=SimpleNamespace(id=9),
             whatsapp_link="",
@@ -65,7 +65,7 @@ class AdminProvisionErrorHandlingTests(SimpleTestCase):
         )
         view = ProvisionLeadViewSet.as_view({"put": "update"})
 
-        request = self.factory.put("/api/lead-provision/6/", {"domain_suffix": "menu.kepoli.com"}, format="json")
+        request = self.factory.put("/api/lead-provision/6/", {"domain_suffix": "menu.ibnbatoutaweb.com"}, format="json")
         force_authenticate(request, user=_admin_user())
         response = view(request, pk=6)
 

@@ -22,7 +22,7 @@ Missing or broken records reduce inbox placement.
 From VPS host:
 
 ```bash
-bash infra/coolify/check_email_dns.sh --domain kepoli.com
+bash infra/coolify/check_email_dns.sh --domain ibnbatoutaweb.com
 ```
 
 This checks:
@@ -35,7 +35,7 @@ Use selectors provided by your SMTP provider:
 
 ```bash
 bash infra/coolify/check_email_dns.sh \
-  --domain kepoli.com \
+  --domain ibnbatoutaweb.com \
   --dkim-selector s1 \
   --dkim-selector s2
 ```
@@ -45,7 +45,7 @@ If any provided selector has no `v=DKIM1` TXT, script exits non-zero.
 ## JSON output (automation)
 
 ```bash
-bash infra/coolify/check_email_dns.sh --domain kepoli.com --json
+bash infra/coolify/check_email_dns.sh --domain ibnbatoutaweb.com --json
 ```
 
 ## Typical provider notes

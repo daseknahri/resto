@@ -82,10 +82,10 @@ class TenantAwareMiddlewareTests(SimpleTestCase):
         get_domain_model.return_value = DummyDomainModel
         get_tenant.side_effect = DummyDomainModel.DoesNotExist
 
-        request = self.factory.get("/api/session/", HTTP_HOST="admin.kepoli.com")
+        request = self.factory.get("/api/session/", HTTP_HOST="admin.ibnbatoutaweb.com")
         with self.settings(
-            PUBLIC_SCHEMA_HOSTS=["localhost", "127.0.0.1", "kepoli.com", "admin.kepoli.com"],
-            ALLOWED_HOSTS=["localhost", "127.0.0.1", "admin.kepoli.com"],
+            PUBLIC_SCHEMA_HOSTS=["localhost", "127.0.0.1", "ibnbatoutaweb.com", "admin.ibnbatoutaweb.com"],
+            ALLOWED_HOSTS=["localhost", "127.0.0.1", "admin.ibnbatoutaweb.com"],
         ):
             response = self.middleware.process_request(request)
 

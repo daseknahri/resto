@@ -8,22 +8,22 @@ For the exact live execution order on your real domain, use:
 Use it after:
 - deployment is healthy
 - DNS resolves correctly
-- `menu.kepoli.com`, `admin.menu.kepoli.com`, and wildcard tenant subdomains are live
+- `menu.ibnbatoutaweb.com`, `admin.menu.ibnbatoutaweb.com`, and wildcard tenant subdomains are live
 
 ## Required Inputs
-- Super admin URL: `https://admin.menu.kepoli.com/admin-console`
-- Public landing URL: `https://menu.kepoli.com`
+- Super admin URL: `https://admin.menu.ibnbatoutaweb.com/admin-console`
+- Public landing URL: `https://menu.ibnbatoutaweb.com`
 - Test tenant slug: example `firstresto`
-- Expected tenant URL: `https://firstresto.menu.kepoli.com`
+- Expected tenant URL: `https://firstresto.menu.ibnbatoutaweb.com`
 
 ## 1. Platform Health
-- [ ] Open `https://menu.kepoli.com/health`
-- [ ] Open `https://admin.menu.kepoli.com/health`
-- [ ] Open `https://menu.kepoli.com/api/session/`
-- [ ] Confirm no console errors on `menu.kepoli.com`
+- [ ] Open `https://menu.ibnbatoutaweb.com/health`
+- [ ] Open `https://admin.menu.ibnbatoutaweb.com/health`
+- [ ] Open `https://menu.ibnbatoutaweb.com/api/session/`
+- [ ] Confirm no console errors on `menu.ibnbatoutaweb.com`
 
 ## 2. Lead Capture
-- [ ] Submit a fresh lead from `https://menu.kepoli.com/get-started`
+- [ ] Submit a fresh lead from `https://menu.ibnbatoutaweb.com/get-started`
 - [ ] Confirm lead appears in `admin-console`
 - [ ] Confirm lead card shows plan, source, and contact details
 
@@ -62,9 +62,9 @@ Use it after:
 - [ ] Confirm owner reaches launch summary
 
 ## 7. Public Verification
-- [ ] Open tenant public landing: `https://firstresto.menu.kepoli.com/menu`
-- [ ] Open tenant browse page: `https://firstresto.menu.kepoli.com/browse`
-- [ ] Open reservation page: `https://firstresto.menu.kepoli.com/reserve`
+- [ ] Open tenant public landing: `https://firstresto.menu.ibnbatoutaweb.com/menu`
+- [ ] Open tenant browse page: `https://firstresto.menu.ibnbatoutaweb.com/browse`
+- [ ] Open reservation page: `https://firstresto.menu.ibnbatoutaweb.com/reserve`
 - [ ] Confirm branding is tenant-specific, not demo/public fallback
 - [ ] Confirm no console errors on tenant pages
 
@@ -72,13 +72,13 @@ Use it after:
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://firstresto.menu.kepoli.com -ApiBaseUrl https://firstresto.menu.kepoli.com/api -TableSlug table-1
+powershell -ExecutionPolicy Bypass -File .\infra\customer_flow_smoke.ps1 -FrontendBaseUrl https://firstresto.menu.ibnbatoutaweb.com -ApiBaseUrl https://firstresto.menu.ibnbatoutaweb.com/api -TableSlug table-1
 ```
 
 Or run the full production wrapper:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug firstresto -BaseDomain menu.kepoli.com -PublicHost menu.kepoli.com -AdminHost admin.menu.kepoli.com -TableSlug table-1
+powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug firstresto -BaseDomain menu.ibnbatoutaweb.com -PublicHost menu.ibnbatoutaweb.com -AdminHost admin.menu.ibnbatoutaweb.com -TableSlug table-1
 ```
 
 Expected:
@@ -87,7 +87,7 @@ Expected:
 - create at least one table in owner workspace if you want strict QR/table-context validation in this first run
 
 ## 9. Owner Workspace Verification
-- [ ] Open `https://firstresto.menu.kepoli.com/owner`
+- [ ] Open `https://firstresto.menu.ibnbatoutaweb.com/owner`
 - [ ] Confirm readiness metrics render
 - [ ] Confirm public URL copy action works
 - [ ] Confirm tables page works

@@ -182,7 +182,7 @@
 - [x] Execute mobile responsiveness hardening pass across customer/owner/admin/auth pages (touch targets, stacked controls, horizontal-safe tables, sticky mobile CTAs).
 - [x] Add customer-facing restaurant landing block on `/menu` with Google/social CTA buttons, lead-capture form, and post-submit confirmation UX.
 - [x] Split customer journey into four dedicated pages: info/lead (`/menu`), menu browse (`/browse`), cart (`/cart`), and reservation (`/reserve`).
-- [x] Harden public demo host flow (`kepoli.com`) with demo-safe menu fallback so customer pages do not crash when no tenant is resolved.
+- [x] Harden public demo host flow (`ibnbatoutaweb.com`) with demo-safe menu fallback so customer pages do not crash when no tenant is resolved.
 - [x] Execute dedicated mobile polish pass for the 4-page customer flow (hero hierarchy, quick actions, better form ergonomics, and sticky CTAs).
 - [x] Execute owner workspace polish pass (consistent nav pills, stronger dashboard hierarchy, and mobile quick actions across dashboard/onboarding/tables/reservations).
 - [x] Add owner operations mobile action rails (tables create/bulk shortcuts and reservation bulk-action sticky bar).
@@ -236,7 +236,7 @@
 - [x] Expand i18n coverage across remaining admin/auth/owner detail screens now that the locale foundation is in place (all `frontend/src/pages`, `layouts`, `components`, and `onboarding` views use locale helpers).
 - [x] Add owner wizard fields for managing translated content (`name_i18n`, `description_i18n`) with plan-aware language limits and UX guidance.
 - [x] Add API contract/export workflow (OpenAPI or equivalent) for safer frontend/backend evolution.
-- [x] Define Stage 2 central API strategy for future mobile apps/integrations (`api.kepoli.com`, versioning, explicit tenant identity pattern). See `Tenant_Routing_and_API_Architecture.md`.
+- [x] Define Stage 2 central API strategy for future mobile apps/integrations (`api.ibnbatoutaweb.com`, versioning, explicit tenant identity pattern). See `Tenant_Routing_and_API_Architecture.md`.
 - [x] Add migration safety check to CI (`makemigrations --check`) so schema drift is caught before deploy.
 - [x] Add browser E2E suite for critical SaaS flows (public lead -> admin provision -> activation -> onboarding -> publish) using Playwright (`frontend/tests/e2e/critical-saas-flow.spec.js` + `infra/prepare_e2e.*`).
 - [x] Add mobile breakpoint regression QA for Landing, Customer flow, Owner workspace, and Admin console.
@@ -281,13 +281,13 @@
 - [ ] Configure Gunicorn + Nginx + systemd services.
 - [ ] Configure HTTPS (Let's Encrypt) and auto-renew.
 - [ ] Configure wildcard subdomain routing for tenants.
-- [x] Prepare exact Coolify/VPS wildcard proxy configuration and Traefik dynamic-config template for `*.menu.kepoli.com`.
-- [ ] Install production wildcard certificate for `menu.kepoli.com` + `*.menu.kepoli.com` and attach it to the Coolify proxy.
-- [ ] Apply server-level Traefik wildcard router and verify tenant host resolution on production (`<slug>.menu.kepoli.com`).
+- [x] Prepare exact Coolify/VPS wildcard proxy configuration and Traefik dynamic-config template for `*.menu.ibnbatoutaweb.com`.
+- [ ] Install production wildcard certificate for `menu.ibnbatoutaweb.com` + `*.menu.ibnbatoutaweb.com` and attach it to the Coolify proxy.
+- [ ] Apply server-level Traefik wildcard router and verify tenant host resolution on production (`<slug>.menu.ibnbatoutaweb.com`).
 - [ ] Re-run wildcard installer after the next Coolify resource recreation/redeploy and document the exact stable ops procedure.
-- [x] Add explicit tenant domain suffix control (`TENANT_DOMAIN_SUFFIX`) so provisioning can target namespace wildcards (for example `*.menu.kepoli.com`) without coupling to root domain.
+- [x] Add explicit tenant domain suffix control (`TENANT_DOMAIN_SUFFIX`) so provisioning can target namespace wildcards (for example `*.menu.ibnbatoutaweb.com`) without coupling to root domain.
 - [x] Document Coolify wildcard ownership strategy to avoid cross-app conflicts on shared root domains.
-- [x] Document same-host `/api` proxy requirement for `kepoli.com`, `admin.kepoli.com`, and `*.kepoli.com`.
+- [x] Document same-host `/api` proxy requirement for `ibnbatoutaweb.com`, `admin.ibnbatoutaweb.com`, and `*.ibnbatoutaweb.com`.
 - [x] Simplify production host routing by proxying `/api`, `/admin`, `/media`, and `/static` through frontend/admin Nginx.
 - [x] Configure static/media serving and caching (Nginx gzip + cache headers for `/assets`, proxied `/static`, and `/media`).
 - [x] Add environment separation (dev/stage/prod) and secrets management (`coolify.env.staging.sample`, `coolify.env.production.sample`, `infra/COOLIFY_ENV_SEPARATION.md`).

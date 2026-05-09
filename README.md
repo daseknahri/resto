@@ -148,7 +148,7 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
   - Windows: `powershell -ExecutionPolicy Bypass -File .\infra\release_candidate_freeze.ps1`
   - Linux/macOS: `bash ./infra/release_candidate_freeze.sh`
 - Live tenant production smoke:
-  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain kepoli.com -TableSlug table-1`
+  - `powershell -ExecutionPolicy Bypass -File .\infra\production_tenant_smoke.ps1 -TenantSlug smoke-20260310 -BaseDomain ibnbatoutaweb.com -TableSlug table-1`
 - Exact operator runbook:
   - `Kepoli_Production_Smoke_Execution.md`
 
@@ -156,7 +156,7 @@ Notes: Use LF endings; secrets stay out of VCS; tenant routing uses subdomains.
 - Runbook:
   - `infra/COOLIFY_TENANT_WILDCARD_PROXY.md`
 - Render current wildcard config from live Coolify containers:
-  - `bash infra/coolify/render_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.kepoli.com`
+  - `bash infra/coolify/render_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.ibnbatoutaweb.com`
 - Install/update wildcard config on VPS:
-  - `bash infra/coolify/install_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.kepoli.com`
+  - `bash infra/coolify/install_tenant_wildcard_proxy.sh --resource-uuid <RESOURCE_UUID> --base-domain menu.ibnbatoutaweb.com`
 - Analytics retention cleanup (scheduled): `cd backend && .\.venv\Scripts\python.exe manage.py prune_analytics_events --days 90`

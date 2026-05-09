@@ -11,8 +11,8 @@ Usage:
 Options:
   --resource-uuid <uuid>      Coolify resource UUID used to auto-detect frontend container
   --frontend-container <name> Explicit frontend container name
-  --base-domain <domain>      Tenant namespace base domain (default: menu.kepoli.com)
-  --cert-dir <path>           Cert directory mounted in proxy (default: /traefik/certs/menu.kepoli.com)
+  --base-domain <domain>      Tenant namespace base domain (default: menu.ibnbatoutaweb.com)
+  --cert-dir <path>           Cert directory mounted in proxy (default: /traefik/certs/menu.ibnbatoutaweb.com)
   --output <path>             Write YAML to file instead of stdout
   --prefer-ip                 Resolve frontend IP on the proxy-shared network and use direct IP target
   --dry-run                   Print chosen target metadata to stderr
@@ -26,8 +26,8 @@ EOF
 
 RESOURCE_UUID=""
 FRONTEND_CONTAINER=""
-BASE_DOMAIN="menu.kepoli.com"
-CERT_DIR="/traefik/certs/menu.kepoli.com"
+BASE_DOMAIN="menu.ibnbatoutaweb.com"
+CERT_DIR="/traefik/certs/menu.ibnbatoutaweb.com"
 OUTPUT_PATH=""
 PREFER_IP=0
 DRY_RUN=0
@@ -161,33 +161,33 @@ KEY_FILE="${CERT_DIR%/}/privkey.pem"
 YAML_CONTENT="$(cat <<EOF
 http:
   routers:
-    kepoli-tenant-wildcard-http:
+    ibnbatoutaweb-tenant-wildcard-http:
       entryPoints:
         - http
       ruleSyntax: v2
       rule: HostRegexp(\`{tenant:[a-z0-9-]+}.${BASE_DOMAIN}\`)
       middlewares:
-        - kepoli-tenant-https-redirect
+        - ibnbatoutaweb-tenant-https-redirect
       service: noop@internal
 
-    kepoli-tenant-wildcard-https:
+    ibnbatoutaweb-tenant-wildcard-https:
       entryPoints:
         - https
       ruleSyntax: v2
       rule: HostRegexp(\`{tenant:[a-z0-9-]+}.${BASE_DOMAIN}\`)
-      service: kepoli-tenant-frontend-direct
+      service: ibnbatoutaweb-tenant-frontend-direct
       priority: 100
       tls: true
 
   services:
-    kepoli-tenant-frontend-direct:
+    ibnbatoutaweb-tenant-frontend-direct:
       loadBalancer:
         passHostHeader: true
         servers:
           - url: ${TARGET_URL}
 
   middlewares:
-    kepoli-tenant-https-redirect:
+    ibnbatoutaweb-tenant-https-redirect:
       redirectScheme:
         scheme: https
         permanent: true

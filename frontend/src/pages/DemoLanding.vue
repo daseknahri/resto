@@ -13,7 +13,7 @@
         </p>
         <div class="mx-auto flex w-fit items-center gap-2 rounded-full border border-slate-700/80 bg-slate-950/55 px-3 py-1.5 text-xs text-slate-300">
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-          <span>doro.menu.kepoli.com</span>
+          <span>doro.menu.ibnbatoutaweb.com</span>
         </div>
         <div class="flex flex-wrap items-center justify-center gap-2">
           <a
@@ -123,5 +123,5 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
-const demoMenuUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.kepoli.com/menu";
+const demoMenuUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu";
 </script>

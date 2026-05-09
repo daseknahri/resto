@@ -60,7 +60,7 @@ These items should be closed before treating the product as sales-ready producti
   - activation
   - owner onboarding
   - publish
-  - tenant menu open on `slug.kepoli.com`
+  - tenant menu open on `slug.ibnbatoutaweb.com`
 
 4. Release checkpoint discipline
 - The repository is intentionally still in a large working state from active product build-out

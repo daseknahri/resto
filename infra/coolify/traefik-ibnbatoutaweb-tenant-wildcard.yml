@@ -1,0 +1,28 @@
+http:
+  routers:
+    ibnbatoutaweb-tenant-wildcard-http:
+      entryPoints:
+        - http
+      rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`)
+      middlewares:
+        - ibnbatoutaweb-tenant-https-redirect
+      service: noop@internal
+
+    ibnbatoutaweb-tenant-wildcard-https:
+      entryPoints:
+        - https
+      rule: HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`)
+      service: menu-ibnbatoutaweb-com-frontend@docker
+      priority: 100
+      tls: true
+
+  middlewares:
+    ibnbatoutaweb-tenant-https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+tls:
+  certificates:
+    - certFile: /traefik/certs/menu.ibnbatoutaweb.com/fullchain.pem
+      keyFile: /traefik/certs/menu.ibnbatoutaweb.com/privkey.pem

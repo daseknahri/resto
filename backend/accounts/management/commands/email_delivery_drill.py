@@ -34,7 +34,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--base-url",
             default="",
-            help="Frontend base URL used to build links (for example https://menu.kepoli.com).",
+            help="Frontend base URL used to build links (for example https://menu.ibnbatoutaweb.com).",
         )
         parser.add_argument(
             "--token",

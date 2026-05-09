@@ -34,15 +34,15 @@ Recommended command:
 ```bash
 ./infra/coolify/backup_postgres.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --db-name kepoli_platform \
-  --db-user kepoli_user \
-  --output-dir /var/backups/kepoli \
+  --db-name ibnbatoutaweb_platform \
+  --db-user ibnbatoutaweb_user \
+  --output-dir /var/backups/ibnbatoutaweb \
   --retention-days 14
 ```
 
 Expected output:
 
-- `.dump` file in `/var/backups/kepoli`
+- `.dump` file in `/var/backups/ibnbatoutaweb`
 - `.sha256` checksum file next to it
 
 ## 4. Restore Drill (Required)
@@ -54,10 +54,10 @@ Example restore:
 ```bash
 ./infra/coolify/restore_postgres.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --backup-file /var/backups/kepoli/kepoli_platform_<TIMESTAMP>.dump \
-  --db-name kepoli_platform \
-  --db-user kepoli_user \
-  --admin-user kepoli_user
+  --backup-file /var/backups/ibnbatoutaweb/ibnbatoutaweb_platform_<TIMESTAMP>.dump \
+  --db-name ibnbatoutaweb_platform \
+  --db-user ibnbatoutaweb_user \
+  --admin-user ibnbatoutaweb_user
 ```
 
 Notes:
@@ -71,11 +71,11 @@ After restore:
 
 1. Redeploy app or restart API service.
 2. Confirm health:
-   - `https://menu.kepoli.com/health`
-   - `https://admin.menu.kepoli.com/health`
+   - `https://menu.ibnbatoutaweb.com/health`
+   - `https://admin.menu.ibnbatoutaweb.com/health`
 3. Validate critical app paths:
-   - `https://yassernahri7.menu.kepoli.com/menu`
-   - `https://admin.menu.kepoli.com/admin-console`
+   - `https://yassernahri7.menu.ibnbatoutaweb.com/menu`
+   - `https://admin.menu.ibnbatoutaweb.com/admin-console`
 
 ## 6. Scheduling (Daily)
 
@@ -84,7 +84,7 @@ Use a server cron job (or Coolify scheduled task on host) to run daily backup.
 Example cron (03:15 UTC):
 
 ```cron
-15 3 * * * /bin/bash /opt/resto/infra/coolify/backup_postgres.sh --resource-uuid <RESOURCE_UUID> --db-name kepoli_platform --db-user kepoli_user --output-dir /var/backups/kepoli --retention-days 14 >> /var/log/resto/db-backup.log 2>&1
+15 3 * * * /bin/bash /opt/resto/infra/coolify/backup_postgres.sh --resource-uuid <RESOURCE_UUID> --db-name ibnbatoutaweb_platform --db-user ibnbatoutaweb_user --output-dir /var/backups/ibnbatoutaweb --retention-days 14 >> /var/log/resto/db-backup.log 2>&1
 ```
 
 ## 7. Safety

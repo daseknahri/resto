@@ -2,20 +2,20 @@
 
 Use this when the base production hosts already work:
 
-- `https://menu.kepoli.com`
-- `https://admin.menu.kepoli.com`
+- `https://menu.ibnbatoutaweb.com`
+- `https://admin.menu.ibnbatoutaweb.com`
 
 and only tenant subdomains still need routing:
 
-- `https://<slug>.menu.kepoli.com`
+- `https://<slug>.menu.ibnbatoutaweb.com`
 
 This avoids putting the wildcard in the normal Coolify app domain field, which can fail with Traefik/ACME errors on this stack.
 
 ## Target topology
 
 - Coolify app domains:
-  - frontend: `https://menu.kepoli.com:3000`
-  - admin: `https://admin.menu.kepoli.com:3000`
+  - frontend: `https://menu.ibnbatoutaweb.com:3000`
+  - admin: `https://admin.menu.ibnbatoutaweb.com:3000`
   - api: empty
 - DNS:
   - `A menu -> VPS_IP`
@@ -23,7 +23,7 @@ This avoids putting the wildcard in the normal Coolify app domain field, which c
   - `A *.menu -> VPS_IP`
 - Wildcard routing:
   - Traefik dynamic configuration on the Coolify server
-  - custom wildcard certificate for `menu.kepoli.com` + `*.menu.kepoli.com`
+  - custom wildcard certificate for `menu.ibnbatoutaweb.com` + `*.menu.ibnbatoutaweb.com`
 
 ## 1. DNS
 
@@ -33,17 +33,17 @@ At Hostinger, confirm:
 - `admin.menu` -> `85.31.239.111`
 - `*.menu` -> `85.31.239.111`
 
-Do not continue until `menu.kepoli.com` and `admin.menu.kepoli.com` already load successfully.
+Do not continue until `menu.ibnbatoutaweb.com` and `admin.menu.ibnbatoutaweb.com` already load successfully.
 
 ## 2. Keep the Coolify app domains exact-host only
 
 In the Coolify resource:
 
-- `Domains for frontend`: `https://menu.kepoli.com:3000`
-- `Domains for admin`: `https://admin.menu.kepoli.com:3000`
+- `Domains for frontend`: `https://menu.ibnbatoutaweb.com:3000`
+- `Domains for admin`: `https://admin.menu.ibnbatoutaweb.com:3000`
 - `Domains for api`: empty
 
-Do not add `https://*.menu.kepoli.com:3000` there.
+Do not add `https://*.menu.ibnbatoutaweb.com:3000` there.
 
 ## 3. Generate a wildcard certificate on the VPS
 
@@ -63,12 +63,12 @@ sudo certbot certonly \
   --manual \
   --preferred-challenges dns \
   --agree-tos \
-  -m admin@kepoli.com \
-  -d menu.kepoli.com \
-  -d '*.menu.kepoli.com'
+  -m admin@ibnbatoutaweb.com \
+  -d menu.ibnbatoutaweb.com \
+  -d '*.menu.ibnbatoutaweb.com'
 ```
 
-Certbot will print one or more TXT records for `_acme-challenge.menu.kepoli.com`.
+Certbot will print one or more TXT records for `_acme-challenge.menu.ibnbatoutaweb.com`.
 
 In Hostinger DNS:
 
@@ -78,24 +78,24 @@ In Hostinger DNS:
 
 After success, Certbot stores the files under:
 
-- `/etc/letsencrypt/live/menu.kepoli.com/fullchain.pem`
-- `/etc/letsencrypt/live/menu.kepoli.com/privkey.pem`
+- `/etc/letsencrypt/live/menu.ibnbatoutaweb.com/fullchain.pem`
+- `/etc/letsencrypt/live/menu.ibnbatoutaweb.com/privkey.pem`
 
 ## 4. Copy the wildcard certificate into the Coolify proxy certificate path
 
 Create the target directory:
 
 ```bash
-sudo mkdir -p /data/coolify/proxy/certs/menu.kepoli.com
+sudo mkdir -p /data/coolify/proxy/certs/menu.ibnbatoutaweb.com
 ```
 
 Copy the certificate files:
 
 ```bash
-sudo cp /etc/letsencrypt/live/menu.kepoli.com/fullchain.pem /data/coolify/proxy/certs/menu.kepoli.com/fullchain.pem
-sudo cp /etc/letsencrypt/live/menu.kepoli.com/privkey.pem /data/coolify/proxy/certs/menu.kepoli.com/privkey.pem
-sudo chmod 600 /data/coolify/proxy/certs/menu.kepoli.com/privkey.pem
-sudo chmod 644 /data/coolify/proxy/certs/menu.kepoli.com/fullchain.pem
+sudo cp /etc/letsencrypt/live/menu.ibnbatoutaweb.com/fullchain.pem /data/coolify/proxy/certs/menu.ibnbatoutaweb.com/fullchain.pem
+sudo cp /etc/letsencrypt/live/menu.ibnbatoutaweb.com/privkey.pem /data/coolify/proxy/certs/menu.ibnbatoutaweb.com/privkey.pem
+sudo chmod 600 /data/coolify/proxy/certs/menu.ibnbatoutaweb.com/privkey.pem
+sudo chmod 644 /data/coolify/proxy/certs/menu.ibnbatoutaweb.com/fullchain.pem
 ```
 
 ## 5. Generate the Traefik wildcard router config from the live deployment
@@ -108,7 +108,7 @@ Use the installer script on the VPS to render the correct target from the curren
 cd /opt/resto
 bash infra/coolify/install_tenant_wildcard_proxy.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --base-domain menu.kepoli.com \
+  --base-domain menu.ibnbatoutaweb.com \
   --dry-run
 ```
 
@@ -118,12 +118,12 @@ Review the rendered YAML. Then install it:
 cd /opt/resto
 bash infra/coolify/install_tenant_wildcard_proxy.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --base-domain menu.kepoli.com
+  --base-domain menu.ibnbatoutaweb.com
 ```
 
 This writes a dynamic config file under:
 
-- `/data/coolify/proxy/dynamic/kepoli-tenant-wildcard.yml`
+- `/data/coolify/proxy/dynamic/ibnbatoutaweb-tenant-wildcard.yml`
 
 The script:
 
@@ -138,7 +138,7 @@ If you need to inspect the generated YAML without installing:
 cd /opt/resto
 bash infra/coolify/render_tenant_wildcard_proxy.sh \
   --resource-uuid <RESOURCE_UUID> \
-  --base-domain menu.kepoli.com
+  --base-domain menu.ibnbatoutaweb.com
 ```
 
 ## 6. Load the Traefik wildcard router into Coolify
@@ -154,20 +154,20 @@ Create a new dynamic configuration and paste the contents of the rendered file, 
 
 Reference template:
 
-- [traefik-kepoli-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-kepoli-tenant-wildcard.yml)
+- [traefik-ibnbatoutaweb-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-ibnbatoutaweb-tenant-wildcard.yml)
 
 The router does three things:
 
-- redirects `http://<slug>.menu.kepoli.com` to HTTPS
-- matches `https://<slug>.menu.kepoli.com`
+- redirects `http://<slug>.menu.ibnbatoutaweb.com` to HTTPS
+- matches `https://<slug>.menu.ibnbatoutaweb.com`
 - forwards that traffic to the working frontend service inside Docker
 
 Important:
 
 - the frontend service must expose the stable Traefik service label from [docker-compose.coolify.yml](C:/Users/user/resto/docker-compose.coolify.yml)
 - the wildcard TLS files are referenced inside the proxy container as:
-  - `/traefik/certs/menu.kepoli.com/fullchain.pem`
-  - `/traefik/certs/menu.kepoli.com/privkey.pem`
+  - `/traefik/certs/menu.ibnbatoutaweb.com/fullchain.pem`
+  - `/traefik/certs/menu.ibnbatoutaweb.com/privkey.pem`
 
 ## 7. Restart the Coolify proxy
 
@@ -181,15 +181,15 @@ After saving the dynamic configuration:
 Test exact hosts first:
 
 ```bash
-curl -I https://menu.kepoli.com/health
-curl -I https://admin.menu.kepoli.com/health
-curl -I https://menu.kepoli.com/api/health/
+curl -I https://menu.ibnbatoutaweb.com/health
+curl -I https://admin.menu.ibnbatoutaweb.com/health
+curl -I https://menu.ibnbatoutaweb.com/api/health/
 ```
 
 Then test wildcard routing with any sample slug:
 
 ```bash
-curl -I https://smoke.menu.kepoli.com/health
+curl -I https://smoke.menu.ibnbatoutaweb.com/health
 ```
 
 Expected:
@@ -199,14 +199,14 @@ Expected:
 If DNS has not propagated yet, force resolution from the VPS or a local machine:
 
 ```bash
-curl -I --resolve smoke.menu.kepoli.com:443:85.31.239.111 https://smoke.menu.kepoli.com/health
+curl -I --resolve smoke.menu.ibnbatoutaweb.com:443:85.31.239.111 https://smoke.menu.ibnbatoutaweb.com/health
 ```
 
-After provisioning a real tenant (for example `demo.menu.kepoli.com`), verify tenant resolution through Django as well:
+After provisioning a real tenant (for example `demo.menu.ibnbatoutaweb.com`), verify tenant resolution through Django as well:
 
 ```bash
-curl -I https://demo.menu.kepoli.com/health
-curl -I https://demo.menu.kepoli.com/api/health/
+curl -I https://demo.menu.ibnbatoutaweb.com/health
+curl -I https://demo.menu.ibnbatoutaweb.com/api/health/
 ```
 
 Expected after provisioning:
@@ -217,8 +217,8 @@ Expected after provisioning:
 ## 9. Why this works
 
 - Coolify exact-host routing already handles:
-  - `menu.kepoli.com`
-  - `admin.menu.kepoli.com`
+  - `menu.ibnbatoutaweb.com`
+  - `admin.menu.ibnbatoutaweb.com`
 - the tenant wildcard is added at the proxy layer, not at the app-domain form layer
 - Nginx preserves the original forwarded tenant host to Django, so host-based tenant resolution still works
 
@@ -240,7 +240,7 @@ Later:
 
 - [docker-compose.coolify.yml](C:/Users/user/resto/docker-compose.coolify.yml)
 - [frontend/nginx.conf](C:/Users/user/resto/frontend/nginx.conf)
-- [traefik-kepoli-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-kepoli-tenant-wildcard.yml)
+- [traefik-ibnbatoutaweb-tenant-wildcard.yml](C:/Users/user/resto/infra/coolify/traefik-ibnbatoutaweb-tenant-wildcard.yml)
 - [render_tenant_wildcard_proxy.sh](C:/Users/user/resto/infra/coolify/render_tenant_wildcard_proxy.sh)
 - [install_tenant_wildcard_proxy.sh](C:/Users/user/resto/infra/coolify/install_tenant_wildcard_proxy.sh)
 - [DEPLOY_REAL_APP_COOLIFY.md](C:/Users/user/resto/DEPLOY_REAL_APP_COOLIFY.md)
