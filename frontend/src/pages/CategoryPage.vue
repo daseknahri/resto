@@ -85,9 +85,20 @@
             <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
           </div>
 
-          <div v-if="dish.options?.length" class="flex flex-wrap gap-1.5">
-            <span class="ui-data-strip text-[11px]">
+          <div v-if="dish.tags?.length" class="flex flex-wrap gap-1">
+            <span
+              v-for="tag in dish.tags"
+              :key="tag"
+              class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400"
+            >{{ t(`dishPage.tag_${tag}`) }}</span>
+          </div>
+
+          <div v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5">
+            <span v-if="dish.options?.length" class="ui-data-strip text-[11px]">
               {{ t("dishPage.optionsCount", { count: dish.options.length }) }}
+            </span>
+            <span v-if="dish.option_groups?.length" class="ui-data-strip text-[11px]">
+              {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}
             </span>
           </div>
 
@@ -139,6 +150,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { withImageFallback } from "../lib/images";
@@ -149,6 +161,7 @@ import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
 const props = defineProps({ slug: String });
+const router = useRouter();
 const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
@@ -172,9 +185,11 @@ const quickAddDisabled = computed(() => isBrowseOnlyPlan.value || !isRestaurantO
 const filteredDishes = computed(() => {
   const term = search.value.toLowerCase();
   return dishes.value.filter((dish) => {
+    if (!term) return true;
     const name = String(dish.name || "").toLowerCase();
     const description = String(dish.description || "").toLowerCase();
-    return !term || name.includes(term) || description.includes(term);
+    const tagMatch = (dish.tags || []).some((tag) => tag.replace("_", " ").includes(term));
+    return name.includes(term) || description.includes(term) || tagMatch;
   });
 });
 
@@ -189,6 +204,12 @@ const addDishQuick = (dish) => {
   }
   if (!isRestaurantOpen.value) {
     toast.show(t("dishPage.restaurantCurrentlyClosed"), "error");
+    return;
+  }
+
+  const hasRequiredGroups = dish.option_groups?.some((g) => g.min_select > 0) || false;
+  if (hasRequiredGroups) {
+    router.push({ name: "dish", params: { category: props.slug, dish: dish.slug } });
     return;
   }
 
