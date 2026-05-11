@@ -377,56 +377,94 @@
                     :key="group.local_id"
                     class="rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 space-y-2"
                   >
-                    <div class="flex flex-wrap items-center gap-2">
-                      <input
-                        v-model="group.name"
-                        class="ui-input flex-1 min-w-0"
-                        :placeholder="t('stepDishes.groupNamePlaceholder')"
-                      />
-                      <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 shrink-0 cursor-pointer">
+                    <div class="space-y-2">
+                      <div class="space-y-1">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                          <p class="text-[11px] text-slate-400">{{ t("stepDishes.groupNamePlaceholder") }}</p>
+                          <div class="flex flex-wrap gap-1">
+                            <button
+                              v-for="locale in availableContentLocales"
+                              :key="`group-name-${group.local_id}-${locale.code}`"
+                              type="button"
+                              class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                              :class="dishFieldLocales.groupName === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                              @click="dishFieldLocales.groupName = locale.code"
+                            >
+                              {{ locale.nativeLabel }}
+                            </button>
+                          </div>
+                        </div>
                         <input
-                          type="checkbox"
-                          :checked="group.min_select > 0"
-                          class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
-                          @change="group.min_select = $event.target.checked ? 1 : 0"
+                          :value="localizedGroupNameValue(group, dishFieldLocales.groupName)"
+                          class="ui-input w-full"
+                          :placeholder="t('stepDishes.groupNamePlaceholder')"
+                          @input="setLocalizedGroupNameValue(group, dishFieldLocales.groupName, $event.target.value)"
                         />
-                        {{ t("stepDishes.groupRequired") }}
-                      </label>
-                      <button
-                        type="button"
-                        class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
-                        @click="removeGroup(editingDish, groupIdx)"
-                      >
-                        {{ t("stepDishes.remove") }}
-                      </button>
-                    </div>
-
-                    <div v-if="group.options?.length" class="space-y-1.5 pl-1">
-                      <div
-                        v-for="(opt, optIdx) in group.options"
-                        :key="opt.local_id"
-                        class="flex items-center gap-2"
-                      >
-                        <input
-                          v-model="opt.name"
-                          class="ui-input flex-1 min-w-0"
-                          :placeholder="t('stepDishes.variantNamePlaceholder')"
-                        />
-                        <input
-                          v-model.number="opt.price_delta"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          class="ui-input w-28 shrink-0"
-                          :placeholder="t('stepDishes.extraPricePlaceholder')"
-                        />
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <label class="inline-flex flex-1 items-center gap-1.5 text-xs text-slate-300 shrink-0 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            :checked="group.min_select > 0"
+                            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
+                            @change="group.min_select = $event.target.checked ? 1 : 0"
+                          />
+                          {{ t("stepDishes.groupRequired") }}
+                        </label>
                         <button
                           type="button"
-                          class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
-                          @click="removeGroupOption(group, optIdx)"
+                          class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                          @click="removeGroup(editingDish, groupIdx)"
                         >
                           {{ t("stepDishes.remove") }}
                         </button>
+                      </div>
+                    </div>
+
+                    <div v-if="group.options?.length" class="space-y-2 pl-1">
+                      <div
+                        v-for="(opt, optIdx) in group.options"
+                        :key="opt.local_id"
+                        class="space-y-1"
+                      >
+                        <div class="flex flex-wrap items-center justify-between gap-1">
+                          <p class="text-[11px] text-slate-400">{{ t("stepDishes.variantNamePlaceholder") }}</p>
+                          <div class="flex flex-wrap gap-1">
+                            <button
+                              v-for="locale in availableContentLocales"
+                              :key="`group-opt-name-${opt.local_id}-${locale.code}`"
+                              type="button"
+                              class="rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                              :class="dishFieldLocales.groupOptionName === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                              @click="dishFieldLocales.groupOptionName = locale.code"
+                            >
+                              {{ locale.nativeLabel }}
+                            </button>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input
+                            :value="localizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName)"
+                            class="ui-input flex-1 min-w-0"
+                            :placeholder="t('stepDishes.variantNamePlaceholder')"
+                            @input="setLocalizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName, $event.target.value)"
+                          />
+                          <input
+                            v-model.number="opt.price_delta"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            class="ui-input w-28 shrink-0"
+                            :placeholder="t('stepDishes.extraPricePlaceholder')"
+                          />
+                          <button
+                            type="button"
+                            class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                            @click="removeGroupOption(group, optIdx)"
+                          >
+                            {{ t("stepDishes.remove") }}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -704,6 +742,8 @@ const dishFieldLocales = reactive({
   name: "en",
   description: "en",
   variantName: "en",
+  groupName: "en",
+  groupOptionName: "en",
 });
 const quickDishModalOpen = ref(false);
 const quickDish = reactive({
@@ -853,6 +893,8 @@ const syncDishFieldLocales = () => {
   if (!allowed.has(dishFieldLocales.name)) dishFieldLocales.name = defaultLocale.value;
   if (!allowed.has(dishFieldLocales.description)) dishFieldLocales.description = defaultLocale.value;
   if (!allowed.has(dishFieldLocales.variantName)) dishFieldLocales.variantName = defaultLocale.value;
+  if (!allowed.has(dishFieldLocales.groupName)) dishFieldLocales.groupName = defaultLocale.value;
+  if (!allowed.has(dishFieldLocales.groupOptionName)) dishFieldLocales.groupOptionName = defaultLocale.value;
   if (!allowed.has(quickDishFieldLocales.name)) quickDishFieldLocales.name = defaultLocale.value;
   if (!allowed.has(quickDishFieldLocales.description)) quickDishFieldLocales.description = defaultLocale.value;
   if (!allowed.has(quickDishFieldLocales.variantName)) quickDishFieldLocales.variantName = defaultLocale.value;
@@ -911,6 +953,56 @@ const setLocalizedVariantNameValue = (dish, option, localeCode, value) => {
     }
   }
   clearRowError(dish.local_id, optionFieldKey(option, "name"));
+};
+
+const localizedGroupNameValue = (group, localeCode) => {
+  if (!group) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(group.name || "");
+  const map = group.name_i18n;
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedGroupNameValue = (group, localeCode, value) => {
+  if (!group) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    group.name = nextValue;
+  } else {
+    if (!group.name_i18n || typeof group.name_i18n !== "object") group.name_i18n = {};
+    if (nextValue.trim()) {
+      group.name_i18n[locale] = nextValue;
+    } else {
+      delete group.name_i18n[locale];
+    }
+  }
+};
+
+const localizedGroupOptionNameValue = (opt, localeCode) => {
+  if (!opt) return "";
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  if (locale === defaultLocale.value) return String(opt.name || "");
+  const map = opt.name_i18n;
+  if (!map || typeof map !== "object") return "";
+  return String(map[locale] || "");
+};
+
+const setLocalizedGroupOptionNameValue = (opt, localeCode, value) => {
+  if (!opt) return;
+  const locale = normalizeLocale(localeCode || defaultLocale.value);
+  const nextValue = String(value || "");
+  if (locale === defaultLocale.value) {
+    opt.name = nextValue;
+  } else {
+    if (!opt.name_i18n || typeof opt.name_i18n !== "object") opt.name_i18n = {};
+    if (nextValue.trim()) {
+      opt.name_i18n[locale] = nextValue;
+    } else {
+      delete opt.name_i18n[locale];
+    }
+  }
 };
 
 const localizedQuickDishFieldValue = (field, localeCode) => {
