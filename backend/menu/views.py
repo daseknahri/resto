@@ -638,7 +638,9 @@ class OrderHandoffSerializer(serializers.Serializer):
             return ""
         if len(cleaned) < 2:
             raise serializers.ValidationError("Customer name is too short.")
-        if not re.match(r"^[A-Za-z0-9\s\-'._]{2,80}$", cleaned):
+        if len(cleaned) > 80:
+            raise serializers.ValidationError("Customer name must be 80 characters or fewer.")
+        if re.search(r"[<>\"{}|\\^`\x00-\x1f]", cleaned):
             raise serializers.ValidationError("Customer name contains unsupported characters.")
         return cleaned
 

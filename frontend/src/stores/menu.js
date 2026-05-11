@@ -9,6 +9,8 @@ const normalizeDishes = (value) => {
   return value.map((item) => ({
     ...item,
     options: Array.isArray(item?.options) ? item.options : [],
+    option_groups: Array.isArray(item?.option_groups) ? item.option_groups : [],
+    tags: Array.isArray(item?.tags) ? item.tags : [],
   }));
 };
 
