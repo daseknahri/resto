@@ -580,6 +580,13 @@ watchEffect(() => {
       }
     });
   }
+  if (dish.value?.option_groups?.length) {
+    dish.value.option_groups.forEach((group) => {
+      if (group.min_select > 0 && group.options?.length && groupSelections.value[group.id] == null) {
+        groupSelections.value = { ...groupSelections.value, [group.id]: group.options[0].id };
+      }
+    });
+  }
 });
 
 watch(
