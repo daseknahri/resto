@@ -110,17 +110,26 @@
                   v-for="opt in group.options"
                   :key="opt.id"
                   class="ui-selection-card"
-                  :data-active="groupSelections[group.id] === opt.id"
-                  :data-warning="group.min_select > 0 && groupSelections[group.id] == null"
+                  :data-active="groupIsSelected(group.id, opt.id)"
+                  :data-warning="group.min_select > 0 && groupSelectedCount(group.id) < group.min_select"
                 >
                   <label class="flex w-full items-center gap-2 cursor-pointer">
                     <input
+                      v-if="group.max_select === 1"
                       type="radio"
                       :name="`group-${group.id}`"
                       :value="opt.id"
-                      :checked="groupSelections[group.id] === opt.id"
+                      :checked="groupIsSelected(group.id, opt.id)"
                       class="h-4 w-4 border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
-                      @change="selectInGroup(group.id, opt.id)"
+                      @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select)"
+                    />
+                    <input
+                      v-else
+                      type="checkbox"
+                      :value="opt.id"
+                      :checked="groupIsSelected(group.id, opt.id)"
+                      class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
+                      @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select)"
                     />
                     <div class="min-w-0 flex-1">
                       <p class="font-semibold text-slate-100">{{ opt.name }}</p>
@@ -358,12 +367,29 @@ const visibleSimilarDishes = computed(() =>
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
 
-const selectInGroup = (groupId, optionId) => {
-  groupSelections.value = { ...groupSelections.value, [groupId]: optionId };
+const groupIsSelected = (groupId, optionId) => {
+  const sel = groupSelections.value[groupId];
+  return Array.isArray(sel) ? sel.includes(optionId) : sel === optionId;
+};
+
+const toggleInGroup = (groupId, optionId, maxSelect, minSelect = 0) => {
+  const current = Array.isArray(groupSelections.value[groupId])
+    ? [...groupSelections.value[groupId]]
+    : groupSelections.value[groupId] != null ? [groupSelections.value[groupId]] : [];
+  const idx = current.indexOf(optionId);
+  if (idx >= 0) {
+    if (current.length > Math.max(minSelect, 0)) current.splice(idx, 1);
+  } else {
+    if (current.length >= maxSelect) current.shift();
+    current.push(optionId);
+  }
+  groupSelections.value = { ...groupSelections.value, [groupId]: current };
 };
 
 const allSelectedOptionIds = computed(() => {
-  const grouped = Object.values(groupSelections.value).filter((id) => id != null);
+  const grouped = Object.values(groupSelections.value)
+    .flatMap((sel) => (Array.isArray(sel) ? sel : sel != null ? [sel] : []))
+    .filter((id) => id != null);
   return [...selectedOptionIds.value, ...grouped];
 });
 
@@ -428,10 +454,15 @@ const hasUngroupedRequiredMissing = computed(
     ) || false
 );
 
+const groupSelectedCount = (groupId) => {
+  const sel = groupSelections.value[groupId];
+  return Array.isArray(sel) ? sel.length : sel != null ? 1 : 0;
+};
+
 const hasGroupMissing = computed(
   () =>
     dish.value?.option_groups?.some(
-      (g) => g.min_select > 0 && groupSelections.value[g.id] == null
+      (g) => g.min_select > 0 && groupSelectedCount(g.id) < g.min_select
     ) || false
 );
 
@@ -583,8 +614,8 @@ watchEffect(() => {
   }
   if (dish.value?.option_groups?.length) {
     dish.value.option_groups.forEach((group) => {
-      if (group.min_select > 0 && group.options?.length && groupSelections.value[group.id] == null) {
-        groupSelections.value = { ...groupSelections.value, [group.id]: group.options[0].id };
+      if (group.min_select > 0 && group.options?.length && groupSelectedCount(group.id) === 0) {
+        groupSelections.value = { ...groupSelections.value, [group.id]: [group.options[0].id] };
       }
     });
   }
