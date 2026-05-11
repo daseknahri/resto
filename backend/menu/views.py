@@ -24,12 +24,13 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, SuperCategory, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
 from .permissions import IsTenantEditorOrReadOnly
 from .serializers import (
     CategorySerializer,
     DishOptionSerializer,
     DishSerializer,
+    OptionGroupSerializer,
     SuperCategorySerializer,
     TableLinkSerializer,
 )
@@ -134,7 +135,7 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             Category.objects.select_related("super_category")
-            .prefetch_related("dishes__options")
+            .prefetch_related("dishes__options", "dishes__option_groups__options")
             .all()
         )
         qs = _filter_by_reference(
@@ -162,7 +163,7 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     permission_classes = [IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
-        qs = Dish.objects.select_related("category", "category__super_category").prefetch_related("options").all()
+        qs = Dish.objects.select_related("category", "category__super_category").prefetch_related("options", "option_groups__options").all()
         category_slug = self.request.query_params.get("category")
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
@@ -204,6 +205,26 @@ class DishOptionViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 dish__category__super_category__is_temporarily_disabled=False,
             )
         return qs.order_by("dish__category__super_category__position", "dish__category__position", "dish__position", "name")
+
+    def get_permissions(self):
+        if self.request.method in ("GET", "HEAD", "OPTIONS"):
+            return [AllowAny()]
+        return super().get_permissions()
+
+
+class OptionGroupViewSet(viewsets.ModelViewSet):
+    serializer_class = OptionGroupSerializer
+    permission_classes = [IsTenantEditorOrReadOnly]
+
+    def get_queryset(self):
+        qs = OptionGroup.objects.select_related("dish").prefetch_related("options").all()
+        dish_ref = self.request.query_params.get("dish")
+        if dish_ref:
+            if str(dish_ref).isdigit():
+                qs = qs.filter(dish_id=int(dish_ref))
+            else:
+                qs = qs.filter(dish__slug=dish_ref)
+        return qs.order_by("position", "name")
 
     def get_permissions(self):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):

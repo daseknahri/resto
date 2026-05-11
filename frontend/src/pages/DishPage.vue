@@ -95,6 +95,45 @@
             </div>
           </div>
 
+          <div v-if="dish.option_groups?.length" class="ui-section-band space-y-4">
+            <div v-for="group in dish.option_groups" :key="group.id" class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium text-slate-200">
+                  {{ group.name }}
+                  <span v-if="group.min_select > 0" class="ml-1.5 text-[11px] text-amber-300">{{ t('dishPage.required') }}</span>
+                </p>
+                <span class="ui-data-strip text-[11px]">{{ t('dishPage.pickOne') }}</span>
+              </div>
+              <ul class="grid gap-2 sm:grid-cols-2 text-sm">
+                <li
+                  v-for="opt in group.options"
+                  :key="opt.id"
+                  class="ui-selection-card"
+                  :data-active="groupSelections[group.id] === opt.id"
+                  :data-warning="group.min_select > 0 && groupSelections[group.id] == null"
+                >
+                  <label class="flex w-full items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      :name="`group-${group.id}`"
+                      :value="opt.id"
+                      :checked="groupSelections[group.id] === opt.id"
+                      class="h-4 w-4 border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]"
+                      @change="selectInGroup(group.id, opt.id)"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <p class="font-semibold text-slate-100">{{ opt.name }}</p>
+                    </div>
+                    <span v-if="Number(opt.price_delta) > 0" class="text-slate-300">+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+            <p v-if="hasGroupMissing" class="text-xs text-amber-300">
+              {{ t('dishPage.selectRequiredOptions') }}
+            </p>
+          </div>
+
           <div v-if="dish.options?.length" class="ui-section-band space-y-3">
             <div class="flex items-center justify-between gap-2">
               <p class="text-sm text-slate-300">{{ t('dishPage.options') }}</p>
@@ -125,7 +164,7 @@
                 </label>
               </li>
             </ul>
-            <p v-if="hasRequiredMissing" class="text-xs text-amber-300">
+            <p v-if="hasUngroupedRequiredMissing" class="text-xs text-amber-300">
               {{ t('dishPage.selectRequiredOptions') }}
             </p>
           </div>
@@ -283,6 +322,7 @@ const { currentLocale, formatCurrency, t } = useI18n();
 const similarVis = useVisibility();
 const qty = ref(1);
 const selectedOptionIds = ref([]);
+const groupSelections = ref({});
 const whatsappPhone = (import.meta.env.VITE_CONTACT_PHONE || '').replace(
   /[^\d+]/g,
   ''
@@ -317,10 +357,30 @@ const visibleSimilarDishes = computed(() =>
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const isRestaurantOpen = computed(() => meta.value?.profile?.is_open !== false);
 
+const selectInGroup = (groupId, optionId) => {
+  groupSelections.value = { ...groupSelections.value, [groupId]: optionId };
+};
+
+const allSelectedOptionIds = computed(() => {
+  const grouped = Object.values(groupSelections.value).filter((id) => id != null);
+  return [...selectedOptionIds.value, ...grouped];
+});
+
+const allSelectedOptionIdsSorted = computed(() =>
+  [...allSelectedOptionIds.value]
+    .map((x) => Number(x))
+    .filter((x) => Number.isInteger(x) && x > 0)
+    .sort((a, b) => a - b)
+);
+
 const selectedOptionObjects = computed(() => {
-  if (!dish.value?.options) return [];
-  const byId = new Map(dish.value.options.map((o) => [o.id, o]));
-  return selectedOptionIds.value.map((id) => byId.get(id)).filter(Boolean);
+  if (!dish.value) return [];
+  const allOptions = [
+    ...(dish.value.options || []),
+    ...(dish.value.option_groups || []).flatMap((g) => g.options || []),
+  ];
+  const byId = new Map(allOptions.map((o) => [o.id, o]));
+  return allSelectedOptionIdsSorted.value.map((id) => byId.get(id)).filter(Boolean);
 });
 
 const selectedOptionNote = computed(() => {
@@ -332,12 +392,6 @@ const selectedOptionNote = computed(() => {
   return `${t('dishPage.options')}: ${bits.join(', ')}`;
 });
 
-const selectedOptionIdsSorted = computed(() =>
-  [...selectedOptionIds.value]
-    .map((x) => Number(x))
-    .filter((x) => Number.isInteger(x) && x > 0)
-    .sort((a, b) => a - b)
-);
 
 const unitOptionTotal = computed(() =>
   selectedOptionObjects.value.reduce(
@@ -366,11 +420,22 @@ const totalWithOptions = computed(() => {
   return baseTotal.value + extrasTotal.value;
 });
 
-const hasRequiredMissing = computed(
+const hasUngroupedRequiredMissing = computed(
   () =>
     dish.value?.options?.some(
       (opt) => opt.is_required && !selectedOptionIds.value.includes(opt.id)
     ) || false
+);
+
+const hasGroupMissing = computed(
+  () =>
+    dish.value?.option_groups?.some(
+      (g) => g.min_select > 0 && groupSelections.value[g.id] == null
+    ) || false
+);
+
+const hasRequiredMissing = computed(
+  () => hasUngroupedRequiredMissing.value || hasGroupMissing.value
 );
 
 const orderingDisabled = computed(
@@ -415,7 +480,7 @@ const addToCart = () => {
     return;
   }
   const quantity = qty.value && qty.value > 0 ? qty.value : 1;
-  const optionSig = selectedOptionIdsSorted.value.join(',');
+  const optionSig = allSelectedOptionIdsSorted.value.join(',');
   cart.add({
     key: `${dish.value.slug}::${optionSig}`,
     slug: dish.value.slug,
@@ -424,7 +489,7 @@ const addToCart = () => {
     currency: dish.value.currency,
     qty: quantity,
     note: selectedOptionNote.value,
-    option_ids: selectedOptionIdsSorted.value,
+    option_ids: allSelectedOptionIdsSorted.value,
     option_labels: selectedOptionObjects.value.map((opt) => opt.name),
   });
   toast.show(t('dishPage.addedToCart'), 'success');
@@ -468,6 +533,7 @@ watch(
   () => {
     qty.value = 1;
     selectedOptionIds.value = [];
+    groupSelections.value = {};
   }
 );
 

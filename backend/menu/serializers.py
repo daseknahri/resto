@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, Dish, DishOption, SuperCategory, TableLink
+from .models import Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
@@ -187,10 +187,13 @@ class SuperCategorySerializer(LocalizedContentMixin, serializers.ModelSerializer
 
 class DishOptionSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     dish = serializers.PrimaryKeyRelatedField(queryset=Dish.objects.all(), write_only=True)
+    group = serializers.PrimaryKeyRelatedField(
+        queryset=OptionGroup.objects.all(), write_only=False, allow_null=True, required=False
+    )
 
     class Meta:
         model = DishOption
-        fields = ["id", "dish", "name", "name_i18n", "price_delta", "is_required", "max_select"]
+        fields = ["id", "dish", "group", "name", "name_i18n", "price_delta", "is_required", "max_select", "position"]
 
     def validate_name(self, value):
         cleaned = (value or "").strip()
@@ -219,8 +222,45 @@ class DishOptionSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         return data
 
 
+class OptionInGroupSerializer(LocalizedContentMixin, serializers.ModelSerializer):
+    class Meta:
+        model = DishOption
+        fields = ["id", "name", "name_i18n", "price_delta", "position"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
+        return data
+
+
+class OptionGroupSerializer(LocalizedContentMixin, serializers.ModelSerializer):
+    options = OptionInGroupSerializer(many=True, read_only=True)
+    dish = serializers.PrimaryKeyRelatedField(queryset=Dish.objects.all(), write_only=True)
+
+    class Meta:
+        model = OptionGroup
+        fields = ["id", "dish", "name", "name_i18n", "min_select", "max_select", "position", "options"]
+
+    def validate_name(self, value):
+        cleaned = (value or "").strip()
+        if len(cleaned) < 1:
+            raise serializers.ValidationError("Group name is required.")
+        if len(cleaned) > 150:
+            raise serializers.ValidationError("Group name must be 150 characters or fewer.")
+        return cleaned
+
+    def validate_name_i18n(self, value):
+        return self._validate_i18n_map(value, field_label="Group name", max_length=150)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["name"] = self._localized_text(data.get("name"), data.get("name_i18n"))
+        return data
+
+
 class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
-    options = DishOptionSerializer(many=True, read_only=True)
+    options = serializers.SerializerMethodField()
+    option_groups = OptionGroupSerializer(many=True, read_only=True)
     category_slug = serializers.CharField(source="category.slug", read_only=True)
     category_name = serializers.SerializerMethodField()
     super_category_slug = serializers.CharField(source="category.super_category.slug", read_only=True)
@@ -246,7 +286,12 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "position",
             "is_published",
             "options",
+            "option_groups",
         ]
+
+    def get_options(self, instance):
+        ungrouped = [opt for opt in instance.options.all() if opt.group_id is None]
+        return DishOptionSerializer(ungrouped, many=True, context=self.context).data
 
     def validate_name(self, value):
         cleaned = (value or "").strip()

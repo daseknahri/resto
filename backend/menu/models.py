@@ -65,13 +65,39 @@ class Dish(models.Model):
         return self.name
 
 
+class OptionGroup(models.Model):
+    dish = models.ForeignKey(Dish, on_delete=models.CASCADE, related_name="option_groups")
+    name = models.CharField(max_length=150)
+    name_i18n = models.JSONField(default=dict, blank=True)
+    min_select = models.PositiveIntegerField(default=1)
+    max_select = models.PositiveIntegerField(default=1)
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "name")
+
+    def __str__(self) -> str:
+        return f"{self.dish.name} / {self.name}"
+
+
 class DishOption(models.Model):
     dish = models.ForeignKey(Dish, on_delete=models.CASCADE, related_name="options")
+    group = models.ForeignKey(
+        OptionGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="options",
+    )
     name = models.CharField(max_length=150)
     name_i18n = models.JSONField(default=dict, blank=True)
     price_delta = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     is_required = models.BooleanField(default=False)
     max_select = models.PositiveIntegerField(default=1)
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "name")
 
     def __str__(self) -> str:
         return f"{self.name} (+{self.price_delta})"

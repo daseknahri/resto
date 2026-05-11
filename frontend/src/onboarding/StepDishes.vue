@@ -77,6 +77,7 @@
                 <div class="mt-2 flex flex-wrap gap-2">
                   <span class="ui-data-strip">{{ t("stepDishes.pricePlaceholder") }}: {{ Number(dish.price || 0).toFixed(2) }}</span>
                   <span class="ui-data-strip">{{ t("stepDishes.variantsTitle") }}: {{ Array.isArray(dish.options) ? dish.options.length : 0 }}</span>
+                  <span v-if="dish.option_groups?.length" class="ui-data-strip text-sky-200">{{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
                 </div>
               </div>
               <img
@@ -355,6 +356,92 @@
             <p v-if="rowError(editingDish, 'options')" class="text-xs text-red-300">{{ rowError(editingDish, "options") }}</p>
               </div>
 
+              <div class="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.optionGroupsTitle") }}</p>
+                    <p class="text-xs text-slate-500">{{ t("stepDishes.optionGroupsHint") }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                    @click="addGroup(editingDish)"
+                  >
+                    {{ t("stepDishes.addGroup") }}
+                  </button>
+                </div>
+
+                <div v-if="editingDish.option_groups?.length" class="space-y-3">
+                  <div
+                    v-for="(group, groupIdx) in editingDish.option_groups"
+                    :key="group.local_id"
+                    class="rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 space-y-2"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input
+                        v-model="group.name"
+                        class="ui-input flex-1 min-w-0"
+                        :placeholder="t('stepDishes.groupNamePlaceholder')"
+                      />
+                      <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 shrink-0 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          :checked="group.min_select > 0"
+                          class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
+                          @change="group.min_select = $event.target.checked ? 1 : 0"
+                        />
+                        {{ t("stepDishes.groupRequired") }}
+                      </label>
+                      <button
+                        type="button"
+                        class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                        @click="removeGroup(editingDish, groupIdx)"
+                      >
+                        {{ t("stepDishes.remove") }}
+                      </button>
+                    </div>
+
+                    <div v-if="group.options?.length" class="space-y-1.5 pl-1">
+                      <div
+                        v-for="(opt, optIdx) in group.options"
+                        :key="opt.local_id"
+                        class="flex items-center gap-2"
+                      >
+                        <input
+                          v-model="opt.name"
+                          class="ui-input flex-1 min-w-0"
+                          :placeholder="t('stepDishes.variantNamePlaceholder')"
+                        />
+                        <input
+                          v-model.number="opt.price_delta"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          class="ui-input w-28 shrink-0"
+                          :placeholder="t('stepDishes.extraPricePlaceholder')"
+                        />
+                        <button
+                          type="button"
+                          class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                          @click="removeGroupOption(group, optIdx)"
+                        >
+                          {{ t("stepDishes.remove") }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="rounded-full border border-slate-700/60 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-600"
+                      @click="addGroupOption(group)"
+                    >
+                      {{ t("stepDishes.addGroupOption") }}
+                    </button>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noGroups") }}</p>
+              </div>
+
               <p v-if="rowError(editingDish, 'image_url')" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
               <p v-if="rowError(editingDish, 'slug')" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
               <p v-if="rowError(editingDish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingDish, "non_field_errors") }}</p>
@@ -582,7 +669,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
-import { categoryApi, dishApi, dishOptionApi, uploadApi } from "../lib/onboardingApi";
+import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
@@ -925,6 +1012,27 @@ const normalizeOption = (option = {}) => ({
   price_delta: Number(option.price_delta || 0),
   is_required: option.is_required === true,
   max_select: Math.max(1, Number(option.max_select) || 1),
+  position: Number(option.position || 0),
+});
+
+const normalizeGroupOption = (opt = {}) => ({
+  id: opt.id,
+  local_id: opt.id ? `gopt-${opt.id}` : crypto.randomUUID(),
+  name: opt.name || "",
+  name_i18n: opt.name_i18n && typeof opt.name_i18n === "object" ? { ...opt.name_i18n } : {},
+  price_delta: Number(opt.price_delta || 0),
+  position: Number(opt.position || 0),
+});
+
+const normalizeOptionGroup = (group = {}) => ({
+  id: group.id,
+  local_id: group.id ? `group-${group.id}` : crypto.randomUUID(),
+  name: group.name || "",
+  name_i18n: group.name_i18n && typeof group.name_i18n === "object" ? { ...group.name_i18n } : {},
+  min_select: Math.max(0, Number(group.min_select ?? 1)),
+  max_select: Math.max(1, Number(group.max_select ?? 1)),
+  position: Number(group.position || 0),
+  options: Array.isArray(group.options) ? group.options.map(normalizeGroupOption) : [],
 });
 
 const normalize = (dish = {}) => ({
@@ -942,6 +1050,7 @@ const normalize = (dish = {}) => ({
   position: dish.position ?? dishes.length,
   is_published: dish.is_published ?? true,
   options: Array.isArray(dish.options) ? dish.options.map((option) => normalizeOption(option)) : [],
+  option_groups: Array.isArray(dish.option_groups) ? dish.option_groups.map(normalizeOptionGroup) : [],
 });
 
 const pickI18nMap = (input, allowedLocales = null) => {
@@ -979,6 +1088,26 @@ const removeOption = (dish, optionIndex) => {
   clearRowError(dish.local_id, optionFieldKey(option, "price_delta"));
   clearRowError(dish.local_id, optionFieldKey(option, "max_select"));
   clearRowError(dish.local_id, "options");
+};
+
+const addGroup = (dish) => {
+  if (!Array.isArray(dish.option_groups)) dish.option_groups = [];
+  dish.option_groups.push(normalizeOptionGroup());
+};
+
+const removeGroup = (dish, groupIndex) => {
+  if (!Array.isArray(dish.option_groups)) return;
+  dish.option_groups.splice(groupIndex, 1);
+};
+
+const addGroupOption = (group) => {
+  if (!Array.isArray(group.options)) group.options = [];
+  group.options.push(normalizeGroupOption());
+};
+
+const removeGroupOption = (group, optIdx) => {
+  if (!Array.isArray(group.options)) return;
+  group.options.splice(optIdx, 1);
 };
 
 const rowError = (dish, field) => rowErrors[dish.local_id]?.[field] || "";
@@ -1316,6 +1445,20 @@ const saveAndNext = async () => {
           }))
         );
         dish.options = savedOptions.map((option) => normalizeOption(option));
+
+        const desiredGroups = Array.isArray(dish.option_groups) ? dish.option_groups : [];
+        const savedGroups = await optionGroupApi.syncForDish(
+          dish.id,
+          desiredGroups.map((group) => ({
+            ...group,
+            name_i18n: pickI18nMap(group.name_i18n, allowedTranslationLocales),
+            options: (group.options || []).map((opt) => ({
+              ...opt,
+              name_i18n: pickI18nMap(opt.name_i18n, allowedTranslationLocales),
+            })),
+          }))
+        );
+        dish.option_groups = savedGroups.map(normalizeOptionGroup);
       } catch (e) {
         mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
         if (e?.message) {

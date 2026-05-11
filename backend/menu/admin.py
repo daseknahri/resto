@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, SuperCategory, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
 
 
 @admin.register(SuperCategory)
@@ -27,10 +27,23 @@ class DishAdmin(admin.ModelAdmin):
     ordering = ("category", "position")
 
 
+class DishOptionInline(admin.TabularInline):
+    model = DishOption
+    extra = 1
+    fields = ("name", "price_delta", "position", "is_required", "max_select")
+
+
+@admin.register(OptionGroup)
+class OptionGroupAdmin(admin.ModelAdmin):
+    list_display = ("name", "dish", "min_select", "max_select", "position")
+    list_filter = ("dish__category",)
+    inlines = [DishOptionInline]
+
+
 @admin.register(DishOption)
 class DishOptionAdmin(admin.ModelAdmin):
-    list_display = ("name", "dish", "price_delta", "is_required", "max_select")
-    list_filter = ("is_required",)
+    list_display = ("name", "dish", "group", "price_delta", "is_required", "max_select", "position")
+    list_filter = ("is_required", "group")
 
 
 @admin.register(AnalyticsEvent)

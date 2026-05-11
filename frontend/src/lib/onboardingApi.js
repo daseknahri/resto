@@ -284,11 +284,13 @@ export const dishOptionApi = {
   async upsert(option) {
     const payload = {
       dish: Number(option.dish),
+      group: option.group != null ? Number(option.group) : null,
       name: String(option.name || "").trim(),
       name_i18n: normalizeI18nMap(option.name_i18n),
       price_delta: Number(option.price_delta) || 0,
       is_required: option.is_required === true,
       max_select: Math.max(1, Number(option.max_select) || 1),
+      position: Number(option.position) || 0,
     };
     try {
       if (option.id) {
@@ -334,6 +336,90 @@ export const dishOptionApi = {
     }
 
     return savedOptions;
+  },
+};
+
+export const optionGroupApi = {
+  async list(dishId = null) {
+    const params = dishId ? { dish: dishId } : {};
+    const { data } = await api.get("/option-groups/", { params });
+    return Array.isArray(data) ? data : [];
+  },
+
+  async upsert(group) {
+    const payload = {
+      dish: Number(group.dish),
+      name: String(group.name || "").trim(),
+      name_i18n: normalizeI18nMap(group.name_i18n),
+      min_select: Math.max(0, Number(group.min_select ?? 1)),
+      max_select: Math.max(1, Number(group.max_select ?? 1)),
+      position: Number(group.position) || 0,
+    };
+    try {
+      if (group.id) {
+        const { data } = await api.put(`/option-groups/${group.id}/`, payload);
+        return data;
+      }
+      const { data } = await api.post("/option-groups/", payload);
+      return data;
+    } catch (err) {
+      throw asValidationError(err, translate("onboardingApi.saveOptionGroupFailed"));
+    }
+  },
+
+  async remove(id) {
+    await api.delete(`/option-groups/${id}/`);
+  },
+
+  async syncForDish(dishId, desiredGroups = []) {
+    const remoteGroups = await this.list(dishId);
+    const keepGroupIds = new Set();
+    const savedGroups = [];
+
+    for (const [idx, group] of desiredGroups.entries()) {
+      const name = String(group.name || "").trim();
+      if (!name) continue;
+      const saved = await this.upsert({ ...group, dish: dishId, position: idx });
+      keepGroupIds.add(saved.id);
+
+      const remoteGroup = remoteGroups.find((g) => g.id === group.id);
+      const remoteOptions = remoteGroup?.options || [];
+      const desiredOptions = (group.options || []).filter((o) => String(o.name || "").trim());
+      const keepOptionIds = new Set();
+      const savedOptions = [];
+
+      for (const [optIdx, opt] of desiredOptions.entries()) {
+        const savedOpt = await dishOptionApi.upsert({
+          id: opt.id,
+          dish: dishId,
+          group: saved.id,
+          name: opt.name,
+          name_i18n: opt.name_i18n || {},
+          price_delta: opt.price_delta || 0,
+          is_required: false,
+          max_select: 1,
+          position: optIdx,
+        });
+        if (savedOpt?.id) keepOptionIds.add(savedOpt.id);
+        savedOptions.push(savedOpt);
+      }
+      for (const remote of remoteOptions) {
+        if (remote?.id && !keepOptionIds.has(remote.id)) {
+          await dishOptionApi.remove(remote.id);
+        }
+      }
+      savedGroups.push({ ...saved, options: savedOptions });
+    }
+
+    for (const remote of remoteGroups) {
+      if (remote?.id && !keepGroupIds.has(remote.id)) {
+        for (const opt of remote.options || []) {
+          if (opt?.id) await dishOptionApi.remove(opt.id);
+        }
+        await this.remove(remote.id);
+      }
+    }
+    return savedGroups;
   },
 };
 

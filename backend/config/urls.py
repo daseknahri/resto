@@ -12,6 +12,7 @@ from menu.views import (
     CheckoutIntentView,
     DishOptionViewSet,
     DishViewSet,
+    OptionGroupViewSet,
     OrderHandoffView,
     SuperCategoryViewSet,
     TableBulkGenerateView,
@@ -39,6 +40,7 @@ tenant_router.register(r"super-categories", SuperCategoryViewSet, basename="supe
 tenant_router.register(r"categories", CategoryViewSet, basename="category")
 tenant_router.register(r"dishes", DishViewSet, basename="dish")
 tenant_router.register(r"dish-options", DishOptionViewSet, basename="dish-option")
+tenant_router.register(r"option-groups", OptionGroupViewSet, basename="option-group")
 tenant_router.register(r"tables", TableLinkViewSet, basename="table-link")
 
 urlpatterns = [
