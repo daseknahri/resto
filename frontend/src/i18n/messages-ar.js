@@ -1256,7 +1256,16 @@ const arabicMessages = {
     "summaryCopied": "تم نسخ الملخص",
     "summaryCopiedToClipboard": "تم نسخ الملخص إلى الحافظة",
     "copyFailed": "فشل النسخ",
-    "linkCopied": "تم نسخ الرابط"
+    "linkCopied": "تم نسخ الرابط",
+    "pickUpTo": "اختر حتى {n}",
+    "tag_vegan": "نباتي (فيغان)",
+    "tag_vegetarian": "نباتي",
+    "tag_spicy": "حار",
+    "tag_gluten_free": "خالٍ من الغلوتين",
+    "tag_dairy_free": "خالٍ من الألبان",
+    "tag_nuts": "يحتوي على مكسرات",
+    "tag_halal": "حلال",
+    "tag_kosher": "كوشير"
   }
 };
 

@@ -913,7 +913,16 @@ export const messages = {
       summaryCopied: "Summary copied",
       summaryCopiedToClipboard: "Summary copied to clipboard",
       copyFailed: "Copy failed",
-      linkCopied: "Link copied"
+      linkCopied: "Link copied",
+      pickUpTo: "Pick up to {n}",
+      tag_vegan: "Vegan",
+      tag_vegetarian: "Vegetarian",
+      tag_spicy: "Spicy",
+      tag_gluten_free: "Gluten-free",
+      tag_dairy_free: "Dairy-free",
+      tag_nuts: "Contains nuts",
+      tag_halal: "Halal",
+      tag_kosher: "Kosher",
     },
     menu: {
       kicker: "Menu browsing",

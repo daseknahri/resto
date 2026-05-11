@@ -40,8 +40,9 @@
         <div class="absolute inset-x-3 bottom-3 space-y-2 sm:inset-x-4 sm:bottom-4">
           <div class="flex flex-wrap items-center gap-2">
             <span class="ui-chip-strong">{{ categoryName }}</span>
-            <span v-if="dish.is_vegan" class="ui-chip">{{ t('dishPage.vegan') }}</span>
-            <span v-if="dish.is_spicy" class="ui-chip">{{ t('dishPage.spicy') }}</span>
+            <template v-if="dish.tags?.length">
+              <span v-for="tag in dish.tags" :key="tag" class="ui-chip">{{ t(`dishPage.tag_${tag}`) }}</span>
+            </template>
             <span v-if="isBrowseOnlyPlan" class="ui-chip bg-sky-500/20 text-sky-200">{{ t('dishPage.menuOnly') }}</span>
           </div>
           <div class="flex items-end justify-between gap-3">
@@ -102,7 +103,7 @@
                   {{ group.name }}
                   <span v-if="group.min_select > 0" class="ml-1.5 text-[11px] text-amber-300">{{ t('dishPage.required') }}</span>
                 </p>
-                <span class="ui-data-strip text-[11px]">{{ t('dishPage.pickOne') }}</span>
+                <span class="ui-data-strip text-[11px]">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
               </div>
               <ul class="grid gap-2 sm:grid-cols-2 text-sm">
                 <li
