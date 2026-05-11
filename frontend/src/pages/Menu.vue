@@ -146,8 +146,12 @@
             <h3 class="text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
             <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
           </div>
-          <div v-if="dish.options?.length" class="flex flex-wrap gap-1.5">
-            <span class="ui-data-strip text-[11px]">{{ itemCountLabel(dish.options.length) }} {{ t('dishPage.options') }}</span>
+          <div v-if="dish.tags?.length" class="flex flex-wrap gap-1">
+            <span v-for="tag in dish.tags" :key="tag" class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400">{{ t(`dishPage.tag_${tag}`) }}</span>
+          </div>
+          <div v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5">
+            <span v-if="dish.options?.length" class="ui-data-strip text-[11px]">{{ t('dishPage.optionsCount', { count: dish.options.length }) }}</span>
+            <span v-if="dish.option_groups?.length" class="ui-data-strip text-[11px]">{{ dish.option_groups.length }} {{ t('stepDishes.optionGroupsTitle') }}</span>
           </div>
           <div class="flex gap-2">
             <button
@@ -274,7 +278,10 @@ const selectedDishes = computed(() => menu.dishes[selectedCategorySlug.value] ||
 const filteredDishes = computed(() => {
   const query = search.value.trim().toLowerCase();
   if (!query) return selectedDishes.value;
-  return selectedDishes.value.filter((dish) => [dish.name, dish.description, dish.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
+  return selectedDishes.value.filter((dish) => {
+    if ([dish.name, dish.description, dish.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query))) return true;
+    return (dish.tags || []).some((tag) => tag.replace('_', ' ').includes(query));
+  });
 });
 
 const syncSelection = () => {
@@ -304,8 +311,9 @@ const goToDish = (dish) => {
 };
 const quickAdd = (dish) => {
   if (!dish) return;
+  const hasRequiredGroups = dish.option_groups?.some((g) => g.min_select > 0) || false;
   const requiredOptions = Array.isArray(dish.options) ? dish.options.filter((o) => o.is_required) : [];
-  if (requiredOptions.length) {
+  if (hasRequiredGroups || requiredOptions.length) {
     goToDish(dish);
     return;
   }

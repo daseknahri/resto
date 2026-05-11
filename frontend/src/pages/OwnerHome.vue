@@ -117,7 +117,7 @@
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
           <ul v-if="topCategories.length" class="mt-3 space-y-2 text-sm text-slate-200">
             <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between gap-3">
-              <span>{{ humanizeSlug(item.category_slug) }}</span>
+              <span>{{ resolveLabel(categoryNameBySlug, item.category_slug) }}</span>
               <span class="text-slate-400">{{ item.count }}</span>
             </li>
           </ul>
@@ -130,7 +130,7 @@
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
           <ul v-if="topDishes.length" class="mt-3 space-y-2 text-sm text-slate-200">
             <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between gap-3">
-              <span>{{ humanizeSlug(item.dish_slug) }}</span>
+              <span>{{ resolveLabel(dishNameBySlug, item.dish_slug) }}</span>
               <span class="text-slate-400">{{ item.count }}</span>
             </li>
           </ul>
@@ -275,6 +275,8 @@ const { t, formatDateTime, formatNumber } = useI18n();
 
 const categoriesCount = ref(0);
 const dishesCount = ref(0);
+const categoriesData = ref([]);
+const dishesData = ref([]);
 const loading = ref(false);
 const copied = ref(false);
 const error = ref("");
@@ -335,6 +337,9 @@ const interactionRateLabel = computed(() =>
 );
 const topCategories = computed(() => (analyticsSummary.value?.top_categories || []).slice(0, 6));
 const topDishes = computed(() => (analyticsSummary.value?.top_dishes || []).slice(0, 6));
+const categoryNameBySlug = computed(() => Object.fromEntries(categoriesData.value.map((c) => [c.slug, c.name])));
+const dishNameBySlug = computed(() => Object.fromEntries(dishesData.value.map((d) => [d.slug, d.name])));
+const resolveLabel = (map, slug) => map[slug] || humanizeSlug(slug);
 const pendingUpgrade = computed(() => upgradeRequests.value.find((request) => request.status === "pending") || null);
 const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgradeMeta.value.has_pending_request === true);
 const readinessItems = computed(() => [
@@ -384,8 +389,10 @@ const refresh = async () => {
       api.get("/categories/", { timeout: 5000 }),
       api.get("/dishes/", { timeout: 5000 }),
     ]);
-    categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
-    dishesCount.value = Array.isArray(dishes.data) ? dishes.data.length : 0;
+    categoriesData.value = Array.isArray(cats.data) ? cats.data : [];
+    dishesData.value = Array.isArray(dishes.data) ? dishes.data : [];
+    categoriesCount.value = categoriesData.value.length;
+    dishesCount.value = dishesData.value.length;
     ensureUpgradeTargetSelection();
     void hydrateOwnerInsights();
   } catch {

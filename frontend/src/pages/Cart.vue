@@ -141,7 +141,7 @@
           <p>
             {{
               t('cartPage.unavailableItemsDetected', {
-                items: unavailableSlugs.join(', '),
+                items: unavailableNames.join(', '),
               })
             }}
           </p>
@@ -608,6 +608,9 @@ const handoffError = ref('');
 const checkoutError = ref('');
 const customerNote = ref('');
 const unavailableSlugs = ref([]);
+const unavailableNames = computed(() =>
+  unavailableSlugs.value.map((slug) => cart.items.find((i) => i.slug === slug)?.name || slug)
+);
 
 const fulfillmentType = ref('');
 const deliveryAddress = ref('');
