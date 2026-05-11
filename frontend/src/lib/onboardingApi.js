@@ -246,6 +246,7 @@ export const dishApi = {
       price: Number(dish.price) || 0,
       currency: normalizeCurrency(dish.currency),
       image_url: normalizeOptionalUrl(dish.image_url),
+      tags: Array.isArray(dish.tags) ? dish.tags : [],
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
     };
@@ -316,14 +317,16 @@ export const dishOptionApi = {
       : [];
 
     const savedOptions = [];
-    for (const option of sanitizedDesired) {
+    for (const [optIdx, option] of sanitizedDesired.entries()) {
       const saved = await this.upsert({
         id: option.id,
         dish: dishId,
         name: option.name,
+        name_i18n: option.name_i18n || {},
         price_delta: option.price_delta,
         is_required: option.is_required,
         max_select: option.max_select,
+        position: option.position ?? optIdx,
       });
       if (saved?.id) keepIds.add(saved.id);
       savedOptions.push(saved);

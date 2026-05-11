@@ -54,6 +54,7 @@ class Dish(models.Model):
     currency = models.CharField(max_length=8, default="USD")
     image_url = models.URLField(blank=True)
     position = models.PositiveIntegerField(default=0)
+    tags = models.JSONField(default=list, blank=True)
     is_published = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

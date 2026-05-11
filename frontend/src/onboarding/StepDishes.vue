@@ -51,6 +51,12 @@
         <div class="flex flex-wrap items-center gap-2">
           <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
           <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ t("common.dishes") }}</span>
+          <button type="button" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-emerald-400/50 hover:text-emerald-300" @click="publishAllInCategory">
+            {{ t("stepDishes.bulkPublish") }}
+          </button>
+          <button type="button" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500" @click="unpublishAllInCategory">
+            {{ t("stepDishes.bulkUnpublish") }}
+          </button>
         </div>
       </div>
 
@@ -206,6 +212,17 @@
                   <p v-if="rowError(editingDish, 'price')" class="text-xs text-red-300">{{ rowError(editingDish, "price") }}</p>
                 </div>
 
+                <div class="space-y-1">
+                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishSlug") }}</p>
+                  <input
+                    v-model.trim="editingDish.slug"
+                    class="ui-input border-slate-700 font-mono text-sm"
+                    :placeholder="t('stepDishes.dishSlug')"
+                    @input="clearRowError(editingDish.local_id, 'slug')"
+                  />
+                  <p v-if="rowError(editingDish, 'slug')" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
+                </div>
+
                 <div class="rounded-xl border border-dashed p-3 transition-colors"
                   :class="draggingRows[editingDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
                   @dragenter="setDragState(editingDish.local_id, true)"
@@ -270,6 +287,21 @@
                 ></textarea>
               </div>
               <p v-if="rowError(editingDish, 'description')" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
+
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+                <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.tagsTitle") }}</p>
+                <div class="flex flex-wrap gap-2">
+                  <label
+                    v-for="tag in DISH_TAGS"
+                    :key="tag"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors select-none"
+                    :class="editingDish.tags?.includes(tag) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+                  >
+                    <input type="checkbox" class="sr-only" :checked="editingDish.tags?.includes(tag)" @change="toggleTag(editingDish, tag, $event.target.checked)" />
+                    {{ t(`stepDishes.tag_${tag}`) }}
+                  </label>
+                </div>
+              </div>
 
               <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -343,10 +375,16 @@
                     {{ t("stepDishes.remove") }}
                   </button>
                 </div>
-                <label class="mt-2 inline-flex items-center gap-2 text-xs text-slate-300">
-                  <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
-                  {{ t("stepDishes.requiredBeforeAddToCart") }}
-                </label>
+                <div class="mt-2 flex flex-wrap items-center gap-3">
+                  <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+                    <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                    {{ t("stepDishes.requiredBeforeAddToCart") }}
+                  </label>
+                  <div class="ml-auto flex items-center gap-1">
+                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionUp(editingDish, optIdx)" @click="moveOption(editingDish, optIdx, -1)">↑</button>
+                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" @click="moveOption(editingDish, optIdx, 1)">↓</button>
+                  </div>
+                </div>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
@@ -402,7 +440,7 @@
                         />
                       </div>
                       <div class="flex flex-wrap items-center gap-2">
-                        <label class="inline-flex flex-1 items-center gap-1.5 text-xs text-slate-300 shrink-0 cursor-pointer">
+                        <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
                           <input
                             type="checkbox"
                             :checked="group.min_select > 0"
@@ -411,6 +449,19 @@
                           />
                           {{ t("stepDishes.groupRequired") }}
                         </label>
+                        <div class="flex items-center gap-1.5">
+                          <p class="text-[11px] text-slate-400">{{ t("stepDishes.groupMaxSelect") }}</p>
+                          <input
+                            v-model.number="group.max_select"
+                            type="number"
+                            min="1"
+                            class="ui-input w-16 border-slate-700 text-xs"
+                          />
+                        </div>
+                        <div class="ml-auto flex items-center gap-1">
+                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupUp(editingDish, groupIdx)" @click="moveGroup(editingDish, groupIdx, -1)">↑</button>
+                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupDown(editingDish, groupIdx)" @click="moveGroup(editingDish, groupIdx, 1)">↓</button>
+                        </div>
                         <button
                           type="button"
                           class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
@@ -454,9 +505,11 @@
                             type="number"
                             min="0"
                             step="0.01"
-                            class="ui-input w-28 shrink-0"
+                            class="ui-input w-24 shrink-0"
                             :placeholder="t('stepDishes.extraPricePlaceholder')"
                           />
+                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionUp(group, optIdx)" @click="moveGroupOption(group, optIdx, -1)">↑</button>
+                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionDown(group, optIdx)" @click="moveGroupOption(group, optIdx, 1)">↓</button>
                           <button
                             type="button"
                             class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
@@ -481,7 +534,6 @@
               </div>
 
               <p v-if="rowError(editingDish, 'image_url')" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
-              <p v-if="rowError(editingDish, 'slug')" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
               <p v-if="rowError(editingDish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingDish, "non_field_errors") }}</p>
             </div>
           </div>
@@ -681,6 +733,42 @@
                 </div>
                 <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
               </div>
+
+              <div class="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.optionGroupsTitle") }}</p>
+                  <button type="button" class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary" @click="addQuickGroup">
+                    {{ t("stepDishes.addGroup") }}
+                  </button>
+                </div>
+                <div v-if="quickDish.option_groups.length" class="space-y-3">
+                  <div v-for="(group, groupIdx) in quickDish.option_groups" :key="group.local_id" class="rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 space-y-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input v-model="group.name" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.groupNamePlaceholder')" />
+                      <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer shrink-0">
+                        <input type="checkbox" :checked="group.min_select > 0" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" @change="group.min_select = $event.target.checked ? 1 : 0" />
+                        {{ t("stepDishes.groupRequired") }}
+                      </label>
+                      <button type="button" class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0" @click="removeQuickGroup(groupIdx)">
+                        {{ t("stepDishes.remove") }}
+                      </button>
+                    </div>
+                    <div v-if="group.options?.length" class="space-y-1.5 pl-1">
+                      <div v-for="(opt, optIdx) in group.options" :key="opt.local_id" class="flex items-center gap-2">
+                        <input v-model="opt.name" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.variantNamePlaceholder')" />
+                        <input v-model.number="opt.price_delta" type="number" min="0" step="0.01" class="ui-input w-24 shrink-0" :placeholder="t('stepDishes.extraPricePlaceholder')" />
+                        <button type="button" class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0" @click="removeQuickGroupOption(group, optIdx)">
+                          {{ t("stepDishes.remove") }}
+                        </button>
+                      </div>
+                    </div>
+                    <button type="button" class="rounded-full border border-slate-700/60 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-600" @click="addQuickGroupOption(group)">
+                      {{ t("stepDishes.addGroupOption") }}
+                    </button>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noGroups") }}</p>
+              </div>
             </div>
           </div>
 
@@ -729,6 +817,7 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const emit = defineEmits(["next", "back"]);
+const DISH_TAGS = ["vegan", "vegetarian", "spicy", "gluten_free", "dairy_free", "nuts", "halal", "kosher"];
 const props = defineProps({
   standalone: {
     type: Boolean,
@@ -756,6 +845,7 @@ const quickDish = reactive({
   price: 0,
   image_url: "",
   options: [],
+  option_groups: [],
 });
 const quickDishFieldLocales = reactive({
   name: "en",
@@ -1143,6 +1233,7 @@ const normalize = (dish = {}) => ({
   is_published: dish.is_published ?? true,
   options: Array.isArray(dish.options) ? dish.options.map((option) => normalizeOption(option)) : [],
   option_groups: Array.isArray(dish.option_groups) ? dish.option_groups.map(normalizeOptionGroup) : [],
+  tags: Array.isArray(dish.tags) ? [...dish.tags] : [],
 });
 
 const pickI18nMap = (input, allowedLocales = null) => {
@@ -1198,6 +1289,69 @@ const addGroupOption = (group) => {
 };
 
 const removeGroupOption = (group, optIdx) => {
+  if (!Array.isArray(group.options)) return;
+  group.options.splice(optIdx, 1);
+};
+
+const canMoveOptionUp = (dish, optIdx) => optIdx > 0;
+const canMoveOptionDown = (dish, optIdx) => Array.isArray(dish.options) && optIdx < dish.options.length - 1;
+const moveOption = (dish, optIdx, direction) => {
+  if (!Array.isArray(dish.options)) return;
+  const target = optIdx + direction;
+  if (target < 0 || target >= dish.options.length) return;
+  [dish.options[optIdx], dish.options[target]] = [dish.options[target], dish.options[optIdx]];
+  dish.options.forEach((o, i) => { o.position = i; });
+};
+
+const canMoveGroupUp = (dish, groupIdx) => groupIdx > 0;
+const canMoveGroupDown = (dish, groupIdx) => Array.isArray(dish.option_groups) && groupIdx < dish.option_groups.length - 1;
+const moveGroup = (dish, groupIdx, direction) => {
+  if (!Array.isArray(dish.option_groups)) return;
+  const target = groupIdx + direction;
+  if (target < 0 || target >= dish.option_groups.length) return;
+  [dish.option_groups[groupIdx], dish.option_groups[target]] = [dish.option_groups[target], dish.option_groups[groupIdx]];
+  dish.option_groups.forEach((g, i) => { g.position = i; });
+};
+
+const canMoveGroupOptionUp = (group, optIdx) => optIdx > 0;
+const canMoveGroupOptionDown = (group, optIdx) => Array.isArray(group.options) && optIdx < group.options.length - 1;
+const moveGroupOption = (group, optIdx, direction) => {
+  if (!Array.isArray(group.options)) return;
+  const target = optIdx + direction;
+  if (target < 0 || target >= group.options.length) return;
+  [group.options[optIdx], group.options[target]] = [group.options[target], group.options[optIdx]];
+  group.options.forEach((o, i) => { o.position = i; });
+};
+
+const toggleTag = (dish, tag, checked) => {
+  if (!Array.isArray(dish.tags)) dish.tags = [];
+  if (checked) {
+    if (!dish.tags.includes(tag)) dish.tags.push(tag);
+  } else {
+    dish.tags = dish.tags.filter((t) => t !== tag);
+  }
+};
+
+const publishAllInCategory = () => {
+  activeCategoryDishes.value.forEach((dish) => { dish.is_published = true; });
+};
+const unpublishAllInCategory = () => {
+  activeCategoryDishes.value.forEach((dish) => { dish.is_published = false; });
+};
+
+const addQuickGroup = () => {
+  if (!Array.isArray(quickDish.option_groups)) quickDish.option_groups = [];
+  quickDish.option_groups.push(normalizeOptionGroup());
+};
+const removeQuickGroup = (groupIdx) => {
+  if (!Array.isArray(quickDish.option_groups)) return;
+  quickDish.option_groups.splice(groupIdx, 1);
+};
+const addQuickGroupOption = (group) => {
+  if (!Array.isArray(group.options)) group.options = [];
+  group.options.push(normalizeGroupOption());
+};
+const removeQuickGroupOption = (group, optIdx) => {
   if (!Array.isArray(group.options)) return;
   group.options.splice(optIdx, 1);
 };
@@ -1353,6 +1507,7 @@ const resetQuickDish = (categoryId = activeCategoryId.value) => {
   quickDish.price = 0;
   quickDish.image_url = "";
   quickDish.options = [];
+  quickDish.option_groups = [];
   uploadingRows[quickDish.local_id] = false;
   uploadProgressRows[quickDish.local_id] = 0;
   draggingRows[quickDish.local_id] = false;
@@ -1424,6 +1579,9 @@ const quickAddDish = () => {
             option.is_required === true ||
             Number(option.max_select || 1) !== 1
         ),
+      option_groups: (Array.isArray(quickDish.option_groups) ? quickDish.option_groups : [])
+        .map(normalizeOptionGroup)
+        .filter((g) => String(g.name || "").trim()),
     })
   );
   setActiveCategory(category);

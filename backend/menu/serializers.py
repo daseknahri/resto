@@ -265,6 +265,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     super_category_slug = serializers.CharField(source="category.super_category.slug", read_only=True)
     super_category_name = serializers.SerializerMethodField()
+    tags = serializers.JSONField(default=list, required=False)
 
     class Meta:
         model = Dish
@@ -283,6 +284,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "price",
             "currency",
             "image_url",
+            "tags",
             "position",
             "is_published",
             "options",
@@ -315,6 +317,20 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         if value is None or value < 0:
             raise serializers.ValidationError("Price must be zero or greater.")
         return value
+
+    def validate_tags(self, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a list.")
+        seen = set()
+        cleaned = []
+        for item in value:
+            tag = str(item).strip().lower()[:32]
+            if tag and tag not in seen:
+                seen.add(tag)
+                cleaned.append(tag)
+        return cleaned
 
     def validate_currency(self, value):
         cleaned = (value or "").strip().upper()
