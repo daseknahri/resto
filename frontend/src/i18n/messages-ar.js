@@ -1036,7 +1036,7 @@ const arabicMessages = {
     "kicker": "اختياراتك",
     "plan": "الباقة: {plan}",
     "table": "الطاولة: {table}",
-    "reviewAdjustSend": "راجع العناصر وعدّل الكمية ثم أرسل الطلب عبر واتساب.",
+    "reviewAdjustSend": "راجع العناصر وعدّل الكمية ثم ضع طلبك.",
     "orderingDisabled": "الطلبات معطلة",
     "browseOnlyBody": "هذه الباقة تسمح بالتصفح فقط حالياً. السلة وإجراءات الطلب غير متاحة.",
     "cartEmpty": "السلة فارغة.",
