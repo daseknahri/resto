@@ -23,7 +23,7 @@
 
             <div
               class="owner-main-nav hidden md:grid"
-              :style="`--nav-cols: ${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`"
+              :style="`--nav-cols: ${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0) + 1}`"
             >
               <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'" active-class="" exact-active-class="">
                 <AppIcon name="home" class="owner-nav-icon" />
@@ -60,6 +60,16 @@
               >
                 <AppIcon name="calendar" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.reservations") }}</span>
+              </RouterLink>
+              <RouterLink
+                to="/owner/orders"
+                class="owner-main-nav-item"
+                :data-active="$route.path.startsWith('/owner/orders')"
+                active-class=""
+                exact-active-class=""
+              >
+                <AppIcon name="menu" class="owner-nav-icon" />
+                <span>{{ t("ownerLayout.orders") }}</span>
               </RouterLink>
             </div>
 
@@ -105,7 +115,7 @@
     </main>
 
     <nav class="ui-bottom-dock owner-bottom-dock md:hidden">
-      <div class="ui-bottom-dock-grid" :class="`grid-cols-${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
+      <div class="ui-bottom-dock-grid" :class="`grid-cols-${3 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
         <RouterLink
           to="/owner"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
@@ -148,6 +158,16 @@
           <AppIcon name="calendar" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.reservations") }}</span>
         </RouterLink>
+        <RouterLink
+          to="/owner/orders"
+          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
+          :data-active="$route.path.startsWith('/owner/orders')"
+          active-class=""
+          exact-active-class=""
+        >
+          <AppIcon name="menu" class="owner-dock-icon" />
+          <span>{{ t("ownerLayout.orders") }}</span>
+        </RouterLink>
       </div>
     </nav>
   </div>
@@ -176,6 +196,7 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/profile")) return t("common.profile");
   if (path.startsWith("/owner/tables")) return t("ownerLayout.tablesQr");
   if (path.startsWith("/owner/reservations")) return t("ownerLayout.reservations");
+  if (path.startsWith("/owner/orders")) return t("ownerLayout.orders");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

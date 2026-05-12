@@ -16,6 +16,8 @@
         "order_handoff": "120/hour",
         "checkout_intent": "60/hour",
         "analytics_events": "600/hour",
+        "place_order": "60/hour",
+        "order_status": "300/hour",
         "auth_login_burst": "8/min",
         "auth_login_sustained": "50/day",
         "auth_activation": "20/hour",

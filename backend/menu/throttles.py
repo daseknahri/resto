@@ -19,3 +19,7 @@ class CheckoutIntentThrottle(_IPThrottle):
 
 class AnalyticsEventThrottle(_IPThrottle):
     scope = "analytics_events"
+
+
+class PlaceOrderThrottle(_IPThrottle):
+    scope = "place_order"

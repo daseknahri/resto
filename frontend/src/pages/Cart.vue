@@ -164,11 +164,9 @@
             <span class="ui-chip">{{ planLabel }}</span>
             <span class="ui-chip">
               {{
-                cart.canCheckout
-                  ? t('cartPage.checkout')
-                  : cart.canWhatsapp
-                    ? t('cartPage.whatsappHandoff')
-                    : t('cartPage.orderingDisabledPlan')
+                isBrowseOnlyPlan
+                  ? t('cartPage.orderingDisabledPlan')
+                  : t('cartPage_order.placeOrder')
               }}
             </span>
           </div>
@@ -462,23 +460,25 @@
           <div class="ui-section-band space-y-2.5 px-3 py-3">
             <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
 
+            <!-- Primary: in-app order tracking (shown when ordering is enabled) -->
             <button
-              v-if="cart.canCheckout"
+              v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center"
-              :disabled="processingCheckout"
-              @click="startCheckout"
+              :disabled="placingOrder"
+              @click="placeInAppOrder"
             >
               <AppIcon name="cart" class="h-3.5 w-3.5" />
               {{
-                processingCheckout
-                  ? t('cartPage.preparingCheckout')
-                  : t('cartPage.proceedCheckout')
+                placingOrder
+                  ? t('cartPage_order.placing')
+                  : t('cartPage_order.placeOrder')
               }}
             </button>
 
+            <!-- Secondary: WhatsApp fallback -->
             <button
-              v-else-if="cart.canWhatsapp"
-              class="ui-btn-primary w-full justify-center"
+              v-if="cart.canWhatsapp"
+              class="ui-btn-outline w-full justify-center"
               :disabled="sendingWhatsapp"
               @click="openWhatsApp"
             >
@@ -490,23 +490,38 @@
               }}
             </button>
 
+            <!-- Secondary: online checkout -->
             <button
-              v-else
+              v-if="cart.canCheckout"
+              class="ui-btn-outline w-full justify-center"
+              :disabled="processingCheckout"
+              @click="startCheckout"
+            >
+              <AppIcon name="cart" class="h-3.5 w-3.5" />
+              {{
+                processingCheckout
+                  ? t('cartPage.preparingCheckout')
+                  : t('cartPage.proceedCheckout')
+              }}
+            </button>
+
+            <!-- Browse-only fallback -->
+            <button
+              v-if="isBrowseOnlyPlan"
               class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50"
               disabled
             >
               {{ t('cartPage.orderingDisabledPlan') }}
             </button>
 
-            <p v-if="!cart.canCheckout" class="text-xs text-slate-400">
-              {{
-                cart.canWhatsapp
-                  ? t('cartPage.whatsappEnabledCurrentPlan')
-                  : t('cartPage.orderingDisabledCurrentPlan')
-              }}
+            <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-400">
+              {{ t('cartPage.orderingDisabledCurrentPlan') }}
             </p>
           </div>
 
+          <p v-if="placeOrderError" class="text-xs text-red-300">
+            {{ placeOrderError }}
+          </p>
           <p v-if="checkoutError" class="text-xs text-red-300">
             {{ checkoutError }}
           </p>
@@ -589,23 +604,29 @@ import {
   ref,
   watch,
 } from 'vue';
+import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
+import { useOrderStore } from '../stores/order';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
 
+const router = useRouter();
 const cart = useCartStore();
+const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { formatCurrency, itemCountLabel, t } = useI18n();
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
+const placingOrder = ref(false);
 const handoffError = ref('');
 const checkoutError = ref('');
+const placeOrderError = ref('');
 const customerNote = ref('');
 const unavailableSlugs = ref([]);
 const unavailableNames = computed(() =>
@@ -1217,6 +1238,42 @@ const openWhatsApp = async () => {
     toast.show(detail, 'error');
   } finally {
     sendingWhatsapp.value = false;
+  }
+};
+
+const placeInAppOrder = async () => {
+  placeOrderError.value = '';
+  handoffError.value = '';
+  checkoutError.value = '';
+  unavailableSlugs.value = [];
+  fieldErrors.value = {};
+  if (isBrowseOnlyPlan.value) return;
+  if (!cart.items.length) {
+    toast.show(t('cartPage.cartEmpty'), 'error');
+    return;
+  }
+  if (!validateForm()) return;
+
+  placingOrder.value = true;
+  try {
+    trackEvent('place_order_click', {
+      source: 'cart_in_app',
+      metadata: {
+        items_count: cart.count,
+        total: cart.total,
+        currency: currency.value,
+      },
+    });
+    const result = await order.placeOrder(buildPayload());
+    cart.clear();
+    toast.show(t('cartPage_order.placeOrder'), 'success');
+    router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
+  } catch (err) {
+    const detail = mapOrderApiError(err, t('cartPage_order.placeOrderError'));
+    placeOrderError.value = detail;
+    toast.show(detail, 'error');
+  } finally {
+    placingOrder.value = false;
   }
 };
 

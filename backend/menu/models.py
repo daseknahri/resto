@@ -119,6 +119,67 @@ class TableLink(models.Model):
         return self.label
 
 
+class Order(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+        PREPARING = "preparing", "Preparing"
+        READY = "ready", "Ready"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class FulfillmentType(models.TextChoices):
+        PICKUP = "pickup", "Pickup"
+        DELIVERY = "delivery", "Delivery"
+        TABLE = "table", "Table"
+
+    order_number = models.CharField(max_length=20, unique=True, db_index=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    customer_name = models.CharField(max_length=80, blank=True)
+    customer_phone = models.CharField(max_length=30, blank=True)
+    customer_note = models.TextField(blank=True)
+    fulfillment_type = models.CharField(max_length=20, choices=FulfillmentType.choices, blank=True)
+    table_label = models.CharField(max_length=40, blank=True)
+    table_slug = models.SlugField(max_length=55, blank=True)
+    delivery_address = models.TextField(blank=True)
+    delivery_location_url = models.URLField(max_length=500, blank=True)
+    delivery_lat = models.FloatField(null=True, blank=True)
+    delivery_lng = models.FloatField(null=True, blank=True)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=8, default="USD")
+    owner_note = models.TextField(blank=True)
+    estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("status", "created_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.order_number} ({self.status})"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    dish_slug = models.SlugField(max_length=210)
+    dish_name = models.CharField(max_length=200)
+    unit_price = models.DecimalField(max_digits=8, decimal_places=2)
+    qty = models.PositiveIntegerField(default=1)
+    note = models.CharField(max_length=120, blank=True)
+    options = models.JSONField(default=list, blank=True)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return f"{self.qty}x {self.dish_name}"
+
+
 class AnalyticsEvent(models.Model):
     event_type = models.CharField(max_length=48, db_index=True)
     path = models.CharField(max_length=320, blank=True)

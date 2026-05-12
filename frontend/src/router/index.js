@@ -29,9 +29,11 @@ const LeadCapture = () => import("../pages/LeadCapture.vue");
 const OwnerHome = () => import("../pages/OwnerHome.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
 const OwnerMenuBuilder = () => import("../pages/OwnerMenuBuilder.vue");
+const OwnerOrders = () => import("../pages/OwnerOrders.vue");
 const OwnerProfile = () => import("../pages/OwnerProfile.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 const OwnerTables = () => import("../pages/OwnerTables.vue");
+const OrderStatus = () => import("../pages/OrderStatus.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
 const Activate = () => import("../pages/Activate.vue");
@@ -69,6 +71,7 @@ const routes = [
       { path: "browse/:category/:dish", name: "dish", component: DishPage, props: true, meta: { interface: "customer" } },
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },
       { path: "cart", name: "cart", component: Cart, meta: { interface: "customer" } },
+      { path: "order/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
       {
         path: "menu/:slug",
         redirect: (to) => ({ name: "category", params: { slug: to.params.slug } }),
@@ -118,6 +121,12 @@ const routes = [
         path: "reservations",
         name: "owner-reservations",
         component: OwnerReservations,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "orders",
+        name: "owner-orders",
+        component: OwnerOrders,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {

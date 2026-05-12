@@ -24,7 +24,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, Order, OrderItem, SuperCategory, TableLink
 from .permissions import IsTenantEditorOrReadOnly
 from .serializers import (
     CategorySerializer,
@@ -34,7 +34,7 @@ from .serializers import (
     SuperCategorySerializer,
     TableLinkSerializer,
 )
-from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle
+from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle
 
 
 class PublishAccessMixin:
@@ -1080,5 +1080,346 @@ class CheckoutIntentView(OrderHandoffView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+# ---------------------------------------------------------------------------
+# In-app order management
+# ---------------------------------------------------------------------------
+
+import secrets as _secrets
+
+
+def _generate_order_number() -> str:
+    """Generate a unique order number like ORD-A3F2C1."""
+    for _ in range(10):
+        candidate = f"ORD-{_secrets.token_hex(3).upper()}"
+        if not Order.objects.filter(order_number=candidate).exists():
+            return candidate
+    raise RuntimeError("Could not generate unique order number after 10 attempts.")
+
+
+class PlaceOrderView(APIView):
+    """POST /api/place-order/ — customer submits an in-app order."""
+    permission_classes = [AllowAny]
+    throttle_classes = [PlaceOrderThrottle]
+
+    def post(self, request, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant not resolved.", "code": "tenant_missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        plan = getattr(tenant, "plan", None)
+        if not plan or (not plan.can_whatsapp_order and not plan.can_checkout):
+            return Response({"detail": "Ordering is not available on this plan.", "code": "plan_forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        profile = Profile.objects.filter(tenant=tenant).first()
+        if profile is None:
+            return Response({"detail": "Restaurant not configured.", "code": "profile_missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = getattr(request, "user", None)
+        can_preview = bool(user and user.is_authenticated and (
+            user.is_superuser or user.is_staff or
+            getattr(user, "is_platform_admin", False) or
+            (getattr(user, "tenant_id", None) == tenant.id)
+        ))
+
+        if profile.is_menu_temporarily_disabled and not can_preview:
+            return Response({"detail": "Menu is temporarily unavailable.", "code": "menu_temporarily_disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if not profile.is_menu_published and not can_preview:
+            return Response({"detail": "Menu is not published yet.", "code": "menu_unpublished"}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = OrderHandoffSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = serializer.validated_data
+        items_input = validated["items"]
+
+        slugs = [i["slug"] for i in items_input]
+        all_option_ids = [oid for i in items_input for oid in i.get("option_ids", [])]
+
+        dishes_map = {d.slug: d for d in Dish.objects.filter(
+            slug__in=slugs, is_published=True, category__is_published=True
+        ).select_related("category")}
+
+        missing = [s for s in slugs if s not in dishes_map]
+        if missing:
+            return Response({"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing}, status=status.HTTP_400_BAD_REQUEST)
+
+        options_map = {}
+        if all_option_ids:
+            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids)}
+
+        # Build order items and compute total
+        order_items_data = []
+        total = Decimal("0")
+        currency = "USD"
+
+        for item_input in items_input:
+            dish = dishes_map[item_input["slug"]]
+            currency = dish.currency or "USD"
+            unit_price = Decimal(str(dish.price))
+
+            option_snapshots = []
+            for oid in item_input.get("option_ids", []):
+                opt = options_map.get(oid)
+                if opt:
+                    unit_price += Decimal(str(opt.price_delta))
+                    option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+
+            qty = item_input["qty"]
+            subtotal = unit_price * qty
+            total += subtotal
+            order_items_data.append({
+                "dish_slug": dish.slug,
+                "dish_name": dish.name,
+                "unit_price": unit_price,
+                "qty": qty,
+                "note": item_input.get("note", ""),
+                "options": option_snapshots,
+                "subtotal": subtotal,
+            })
+
+        table_slug = (validated.get("table_slug") or "").strip()
+        fulfillment_type = (validated.get("fulfillment_type") or "")
+        if table_slug:
+            fulfillment_type = Order.FulfillmentType.TABLE
+
+        with transaction.atomic():
+            order_number = _generate_order_number()
+            order = Order.objects.create(
+                order_number=order_number,
+                status=Order.Status.PENDING,
+                customer_name=validated.get("customer_name", ""),
+                customer_phone=validated.get("customer_phone", ""),
+                customer_note=validated.get("customer_note", ""),
+                fulfillment_type=fulfillment_type,
+                table_label=validated.get("table_label", ""),
+                table_slug=table_slug,
+                delivery_address=validated.get("delivery_address", ""),
+                delivery_location_url=validated.get("delivery_location_url", ""),
+                delivery_lat=validated.get("delivery_lat"),
+                delivery_lng=validated.get("delivery_lng"),
+                total=total,
+                currency=currency,
+            )
+            for item_data in order_items_data:
+                OrderItem.objects.create(order=order, **item_data)
+
+        return Response({
+            "order_number": order.order_number,
+            "status": order.status,
+            "total": str(order.total),
+            "currency": order.currency,
+            "estimated_ready_minutes": order.estimated_ready_minutes,
+        }, status=status.HTTP_201_CREATED)
+
+
+class CustomerOrderStatusView(APIView):
+    """GET /api/order-status/<order_number>/ — customer polls order status."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, order_number, *args, **kwargs):
+        order_number = (order_number or "").strip().upper()
+        order = Order.objects.filter(order_number=order_number).prefetch_related("items").first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        items = [
+            {
+                "dish_name": item.dish_name,
+                "qty": item.qty,
+                "unit_price": str(item.unit_price),
+                "subtotal": str(item.subtotal),
+                "options": item.options,
+                "note": item.note,
+            }
+            for item in order.items.all()
+        ]
+
+        return Response({
+            "order_number": order.order_number,
+            "status": order.status,
+            "fulfillment_type": order.fulfillment_type,
+            "table_label": order.table_label,
+            "total": str(order.total),
+            "currency": order.currency,
+            "owner_note": order.owner_note,
+            "estimated_ready_minutes": order.estimated_ready_minutes,
+            "items_count": sum(i["qty"] for i in items),
+            "items": items,
+            "created_at": order.created_at.isoformat(),
+            "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+        })
+
+
+def _can_edit_tenant_order(request) -> bool:
+    user = getattr(request, "user", None)
+    tenant = getattr(request, "tenant", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    from accounts.models import User
+    return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+
+
+class OwnerOrderListView(APIView):
+    """GET /api/owner/orders/ — owner lists all orders, optionally filtered by status."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        status_filter = request.query_params.get("status", "").strip().lower()
+        valid_statuses = {s.value for s in Order.Status}
+
+        qs = Order.objects.prefetch_related("items").order_by("-created_at")
+        if status_filter and status_filter in valid_statuses:
+            qs = qs.filter(status=status_filter)
+
+        orders = []
+        for order in qs[:200]:
+            orders.append({
+                "id": order.id,
+                "order_number": order.order_number,
+                "status": order.status,
+                "fulfillment_type": order.fulfillment_type,
+                "table_label": order.table_label,
+                "customer_name": order.customer_name,
+                "customer_phone": order.customer_phone,
+                "customer_note": order.customer_note,
+                "delivery_address": order.delivery_address,
+                "total": str(order.total),
+                "currency": order.currency,
+                "owner_note": order.owner_note,
+                "estimated_ready_minutes": order.estimated_ready_minutes,
+                "items_count": sum(i.qty for i in order.items.all()),
+                "items": [
+                    {
+                        "dish_name": i.dish_name,
+                        "dish_slug": i.dish_slug,
+                        "qty": i.qty,
+                        "unit_price": str(i.unit_price),
+                        "subtotal": str(i.subtotal),
+                        "options": i.options,
+                        "note": i.note,
+                    }
+                    for i in order.items.all()
+                ],
+                "created_at": order.created_at.isoformat(),
+                "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+            })
+
+        return Response({"results": orders, "count": len(orders)})
+
+
+class OwnerOrderDetailView(APIView):
+    """GET /api/owner/orders/<id>/ — single order detail."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.filter(id=order_id).prefetch_related("items").first()
+        if order is None:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "id": order.id,
+            "order_number": order.order_number,
+            "status": order.status,
+            "fulfillment_type": order.fulfillment_type,
+            "table_label": order.table_label,
+            "table_slug": order.table_slug,
+            "customer_name": order.customer_name,
+            "customer_phone": order.customer_phone,
+            "customer_note": order.customer_note,
+            "delivery_address": order.delivery_address,
+            "delivery_location_url": order.delivery_location_url,
+            "delivery_lat": order.delivery_lat,
+            "delivery_lng": order.delivery_lng,
+            "total": str(order.total),
+            "currency": order.currency,
+            "owner_note": order.owner_note,
+            "estimated_ready_minutes": order.estimated_ready_minutes,
+            "items": [
+                {
+                    "id": i.id,
+                    "dish_name": i.dish_name,
+                    "dish_slug": i.dish_slug,
+                    "qty": i.qty,
+                    "unit_price": str(i.unit_price),
+                    "subtotal": str(i.subtotal),
+                    "options": i.options,
+                    "note": i.note,
+                }
+                for i in order.items.all()
+            ],
+            "created_at": order.created_at.isoformat(),
+            "updated_at": order.updated_at.isoformat(),
+            "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+        })
+
+
+class OwnerOrderStatusUpdateView(APIView):
+    """PATCH /api/owner/orders/<id>/status/ — owner updates order status."""
+    permission_classes = [IsAuthenticated]
+
+    ALLOWED_TRANSITIONS = {
+        Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
+        Order.Status.CONFIRMED: {Order.Status.PREPARING, Order.Status.CANCELLED},
+        Order.Status.PREPARING: {Order.Status.READY, Order.Status.CANCELLED},
+        Order.Status.READY: {Order.Status.COMPLETED, Order.Status.CANCELLED},
+        Order.Status.COMPLETED: set(),
+        Order.Status.CANCELLED: set(),
+    }
+
+    def patch(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.filter(id=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = (request.data.get("status") or "").strip().lower()
+        owner_note = request.data.get("owner_note")
+        estimated_ready_minutes = request.data.get("estimated_ready_minutes")
+
+        if new_status:
+            allowed = self.ALLOWED_TRANSITIONS.get(order.status, set())
+            if new_status not in {s.value for s in allowed}:
+                return Response(
+                    {"detail": f"Cannot transition from '{order.status}' to '{new_status}'.", "code": "invalid_transition"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            order.status = new_status
+            order.status_updated_at = timezone.now()
+
+        if owner_note is not None:
+            order.owner_note = str(owner_note).strip()[:500]
+
+        if estimated_ready_minutes is not None:
+            try:
+                mins = int(estimated_ready_minutes)
+                order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
+            except (TypeError, ValueError):
+                order.estimated_ready_minutes = None
+
+        order.save(update_fields=["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"])
+
+        return Response({
+            "id": order.id,
+            "order_number": order.order_number,
+            "status": order.status,
+            "owner_note": order.owner_note,
+            "estimated_ready_minutes": order.estimated_ready_minutes,
+            "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+        })
 
 
