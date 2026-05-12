@@ -19,13 +19,16 @@ export const useTenantStore = defineStore("tenant", {
       const plan = this.resolvedMeta?.plan || {};
       const canCheckout = plan.can_checkout === true;
       const canWhatsapp = plan.can_whatsapp_order === true;
+      // can_in_app_order defaults to true (open by default — gate later during tier work)
+      const canInAppOrder = plan.can_in_app_order !== false;
       return {
         tier_code: plan.tier_code || plan.code || "",
         tier_name: plan.tier_name || plan.name || "",
-        ordering_mode: canCheckout ? "checkout" : canWhatsapp ? "whatsapp" : "menu_only",
-        can_order: canCheckout || canWhatsapp,
+        ordering_mode: canCheckout ? "checkout" : canWhatsapp ? "whatsapp" : canInAppOrder ? "in_app" : "menu_only",
+        can_order: canCheckout || canWhatsapp || canInAppOrder,
         can_checkout: canCheckout,
         can_whatsapp_order: canWhatsapp,
+        can_in_app_order: canInAppOrder,
         max_languages: plan.max_languages || 1,
         is_active: plan.is_active !== false,
       };
