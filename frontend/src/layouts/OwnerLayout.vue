@@ -188,8 +188,9 @@ const router = useRouter();
 const { t } = useI18n();
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
-const showTables = computed(() => tenant.hasFlag("owner_table_management"));
-const showReservations = computed(() => tenant.hasFlag("owner_reservation_inbox"));
+// Always show all features until tier gating is configured
+const showTables = computed(() => true);
+const showReservations = computed(() => true);
 const activeWorkspaceLabel = computed(() => {
   const path = router.currentRoute.value.path || "";
   if (path.startsWith("/owner/menu-builder")) return t("ownerLayout.menuBuilder");
