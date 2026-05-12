@@ -108,11 +108,15 @@ def plan_feature_flag_catalog() -> list[dict]:
 
 def plan_entitlements(plan) -> dict:
     can_checkout = bool(getattr(plan, "can_checkout", False))
-    can_whatsapp_order = bool(getattr(plan, "can_whatsapp_order", False))
+    # TODO: restore per-plan gating once tier work is complete.
+    # For now all ordering channels are open so every tenant can use and test the full feature set.
+    can_whatsapp_order = True
+    can_in_app_order = True
+
     if can_checkout:
         ordering_mode = "checkout"
-    elif can_whatsapp_order:
-        ordering_mode = "whatsapp"
+    elif can_in_app_order or can_whatsapp_order:
+        ordering_mode = "in_app"
     else:
         ordering_mode = "menu_only"
 
@@ -121,9 +125,10 @@ def plan_entitlements(plan) -> dict:
         "tier_code": external_plan_code(canonical),
         "tier_name": plan_display_name(canonical, fallback=getattr(plan, "name", "")),
         "ordering_mode": ordering_mode,
-        "can_order": can_checkout or can_whatsapp_order,
+        "can_order": True,
         "can_checkout": can_checkout,
         "can_whatsapp_order": can_whatsapp_order,
+        "can_in_app_order": can_in_app_order,
         "max_languages": int(getattr(plan, "max_languages", 1) or 1),
         "is_active": bool(getattr(plan, "is_active", True)),
     }

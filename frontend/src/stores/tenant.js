@@ -40,19 +40,11 @@ export const useTenantStore = defineStore("tenant", {
     },
     /**
      * Check if a plan feature flag is enabled.
-     * Returns true when:
-     *  - no flags are configured at all (open-by-default, backward compatible)
-     *  - the flag exists in the list and is enabled
-     *  - the flag key is absent from the list (not explicitly restricted)
+     * TODO: restore per-flag gating once tier work is complete.
+     * For now always returns true so all owner features are accessible for testing.
      */
     hasFlag() {
-      return (key) => {
-        const flags = this.resolvedMeta?.feature_flags;
-        if (!Array.isArray(flags) || flags.length === 0) return true;
-        const flag = flags.find((f) => f.key === key);
-        if (!flag) return true; // not explicitly restricted
-        return flag.enabled === true;
-      };
+      return (_key) => true;
     },
   },
   actions: {
@@ -70,9 +62,10 @@ export const useTenantStore = defineStore("tenant", {
       const cart = useCartStore();
       const canCheckout = this.entitlements?.can_checkout === true;
       const canWhatsapp = this.entitlements?.can_whatsapp_order === true;
+      const canInAppOrder = this.entitlements?.can_in_app_order !== false;
       cart.setCanCheckout(canCheckout);
       cart.setCanWhatsapp(canWhatsapp);
-      if (!canCheckout && !canWhatsapp && cart.items.length) {
+      if (!canCheckout && !canWhatsapp && !canInAppOrder && cart.items.length) {
         cart.clear();
       }
     },
