@@ -18,8 +18,8 @@ export const useTenantStore = defineStore("tenant", {
       if (e && typeof e === "object") return e;
       const plan = this.resolvedMeta?.plan || {};
       const canCheckout = plan.can_checkout === true;
-      const canWhatsapp = plan.can_whatsapp_order === true;
-      // can_in_app_order defaults to true (open by default — gate later during tier work)
+      // whatsapp + in_app_order default to true (open by default — gate later during tier work)
+      const canWhatsapp = plan.can_whatsapp_order !== false;
       const canInAppOrder = plan.can_in_app_order !== false;
       return {
         tier_code: plan.tier_code || plan.code || "",
