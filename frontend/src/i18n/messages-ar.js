@@ -43,7 +43,11 @@ const arabicMessages = {
     "copy": "نسخ",
     "call": "اتصال",
     "item_one": "{count} عنصر",
-    "item_other": "{count} عناصر"
+    "item_other": "{count} عناصر",
+    "translate": "ترجم",
+    "translating": "جارٍ الترجمة…",
+    "translateErrorGeneric": "فشل الترجمة.",
+    "translateErrorNotConfigured": "خدمة الترجمة غير مُهيأة."
   },
   "landingLayout": {
     "kicker": "منصة القوائم",

@@ -173,6 +173,15 @@
                       >
                         {{ locale.nativeLabel }}
                       </button>
+                      <button
+                        v-if="dishFieldLocales.name !== defaultLocale && localizedDishFieldValue(editingDish, 'name', defaultLocale)"
+                        type="button"
+                        class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+                        :disabled="dishTranslating[`${editingDish.local_id}_name`]"
+                        @click="runDishTranslate(editingDish, 'name', dishFieldLocales.name)"
+                      >
+                        {{ dishTranslating[`${editingDish.local_id}_name`] ? t("common.translating") : t("common.translate") }}
+                      </button>
                     </div>
                   </div>
                   <input
@@ -274,6 +283,15 @@
                       @click="dishFieldLocales.description = locale.code"
                     >
                       {{ locale.nativeLabel }}
+                    </button>
+                    <button
+                      v-if="dishFieldLocales.description !== defaultLocale && localizedDishFieldValue(editingDish, 'description', defaultLocale)"
+                      type="button"
+                      class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+                      :disabled="dishTranslating[`${editingDish.local_id}_description`]"
+                      @click="runDishTranslate(editingDish, 'description', dishFieldLocales.description)"
+                    >
+                      {{ dishTranslating[`${editingDish.local_id}_description`] ? t("common.translating") : t("common.translate") }}
                     </button>
                   </div>
                 </div>
@@ -581,6 +599,15 @@
                       >
                         {{ locale.nativeLabel }}
                       </button>
+                      <button
+                        v-if="quickDishFieldLocales.name !== defaultLocale && localizedQuickDishFieldValue('name', defaultLocale)"
+                        type="button"
+                        class="rounded-full border border-sky-700/60 px-2 py-0.5 text-[10px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+                        :disabled="dishTranslating['quick_name']"
+                        @click="runQuickDishTranslate('name', quickDishFieldLocales.name)"
+                      >
+                        {{ dishTranslating["quick_name"] ? t("common.translating") : t("common.translate") }}
+                      </button>
                     </div>
                   </div>
                   <input
@@ -640,6 +667,15 @@
                         @click="quickDishFieldLocales.description = locale.code"
                       >
                         {{ locale.nativeLabel }}
+                      </button>
+                      <button
+                        v-if="quickDishFieldLocales.description !== defaultLocale && localizedQuickDishFieldValue('description', defaultLocale)"
+                        type="button"
+                        class="rounded-full border border-sky-700/60 px-2 py-0.5 text-[10px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+                        :disabled="dishTranslating['quick_description']"
+                        @click="runQuickDishTranslate('description', quickDishFieldLocales.description)"
+                      >
+                        {{ dishTranslating["quick_description"] ? t("common.translating") : t("common.translate") }}
                       </button>
                     </div>
                   </div>
@@ -797,6 +833,7 @@ import { computed, reactive, ref, onMounted, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useTranslate } from "../composables/useTranslate";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
@@ -816,6 +853,7 @@ const dishSearch = ref("");
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t } = useI18n();
+const { translating: dishTranslating, translateError: dishTranslateError, translateField } = useTranslate();
 const emit = defineEmits(["next", "back"]);
 const DISH_TAGS = ["vegan", "vegetarian", "spicy", "gluten_free", "dairy_free", "nuts", "halal", "kosher"];
 const props = defineProps({
@@ -1019,6 +1057,21 @@ const setLocalizedDishFieldValue = (dish, field, localeCode, value) => {
   clearRowError(dish.local_id, field);
 };
 
+const runDishTranslate = async (dish, field, targetLocale) => {
+  if (!dish) return;
+  const sourceText = localizedDishFieldValue(dish, field, defaultLocale.value);
+  if (!sourceText.trim()) return;
+  const key = `${dish.local_id}_${field}`;
+  const result = await translateField(key, sourceText, targetLocale, defaultLocale.value);
+  if (result) {
+    setLocalizedDishFieldValue(dish, field, targetLocale, result);
+  } else if (dishTranslateError.value === "notConfigured") {
+    toast.show(t("common.translateErrorNotConfigured"), "error");
+  } else if (dishTranslateError.value) {
+    toast.show(t("common.translateErrorGeneric"), "error");
+  }
+};
+
 const localizedVariantNameValue = (option, localeCode) => {
   if (!option) return "";
   const locale = normalizeLocale(localeCode || defaultLocale.value);
@@ -1092,6 +1145,20 @@ const setLocalizedGroupOptionNameValue = (opt, localeCode, value) => {
     } else {
       delete opt.name_i18n[locale];
     }
+  }
+};
+
+const runQuickDishTranslate = async (field, targetLocale) => {
+  const sourceText = localizedQuickDishFieldValue(field, defaultLocale.value);
+  if (!sourceText.trim()) return;
+  const key = `quick_${field}`;
+  const result = await translateField(key, sourceText, targetLocale, defaultLocale.value);
+  if (result) {
+    setLocalizedQuickDishFieldValue(field, targetLocale, result);
+  } else if (dishTranslateError.value === "notConfigured") {
+    toast.show(t("common.translateErrorNotConfigured"), "error");
+  } else if (dishTranslateError.value) {
+    toast.show(t("common.translateErrorGeneric"), "error");
   }
 };
 

@@ -178,6 +178,8 @@ for inferred_host in (
         public_schema_hosts.add(inferred_host)
 PUBLIC_SCHEMA_HOSTS = sorted(public_schema_hosts)
 RESERVATION_SLA_NEW_MINUTES = int(os.getenv("RESERVATION_SLA_NEW_MINUTES", "30"))
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-12b-it:free").strip()
 RESERVATION_SLA_DUE_SOON_MINUTES = int(os.getenv("RESERVATION_SLA_DUE_SOON_MINUTES", "10"))
 
 STORAGES = {
@@ -198,7 +200,7 @@ if USE_S3_MEDIA_STORAGE:
     AWS_S3_ENDPOINT_URL = os.getenv("AWS_S3_ENDPOINT_URL", "").strip() or None
     AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "").strip()
     AWS_S3_ADDRESSING_STYLE = os.getenv("AWS_S3_ADDRESSING_STYLE", "auto").strip().lower() or "auto"
-    AWS_QUERYSTRING_AUTH = parse_bool_env("AWS_QUERYSTRING_AUTH", True)
+    AWS_QUERYSTRING_AUTH = parse_bool_env("AWS_QUERYSTRING_AUTH", False)
     AWS_QUERYSTRING_EXPIRE = int(os.getenv("AWS_QUERYSTRING_EXPIRE", "900"))
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
@@ -224,17 +226,30 @@ if USE_S3_MEDIA_STORAGE:
     if AWS_QUERYSTRING_EXPIRE <= 0:
         raise RuntimeError("AWS_QUERYSTRING_EXPIRE must be a positive integer.")
 
+    s3_options = {
+        "bucket_name": AWS_STORAGE_BUCKET_NAME,
+        "location": AWS_MEDIA_LOCATION,
+        "default_acl": AWS_DEFAULT_ACL,
+        "querystring_auth": AWS_QUERYSTRING_AUTH,
+        "querystring_expire": AWS_QUERYSTRING_EXPIRE,
+        "file_overwrite": AWS_S3_FILE_OVERWRITE,
+        "object_parameters": AWS_S3_OBJECT_PARAMETERS,
+    }
+    if AWS_ACCESS_KEY_ID:
+        s3_options["access_key"] = AWS_ACCESS_KEY_ID
+    if AWS_SECRET_ACCESS_KEY:
+        s3_options["secret_key"] = AWS_SECRET_ACCESS_KEY
+    if AWS_S3_REGION_NAME:
+        s3_options["region_name"] = AWS_S3_REGION_NAME
+    if AWS_S3_ENDPOINT_URL:
+        s3_options["endpoint_url"] = AWS_S3_ENDPOINT_URL
+    if AWS_S3_ADDRESSING_STYLE and AWS_S3_ADDRESSING_STYLE != "auto":
+        s3_options["addressing_style"] = AWS_S3_ADDRESSING_STYLE
+    if AWS_S3_SIGNATURE_VERSION:
+        s3_options["signature_version"] = AWS_S3_SIGNATURE_VERSION
     STORAGES["default"] = {
         "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {
-            "bucket_name": AWS_STORAGE_BUCKET_NAME,
-            "location": AWS_MEDIA_LOCATION,
-            "default_acl": AWS_DEFAULT_ACL,
-            "querystring_auth": AWS_QUERYSTRING_AUTH,
-            "querystring_expire": AWS_QUERYSTRING_EXPIRE,
-            "file_overwrite": AWS_S3_FILE_OVERWRITE,
-            "object_parameters": AWS_S3_OBJECT_PARAMETERS,
-        },
+        "OPTIONS": s3_options,
     }
 
     media_location_prefix = f"{AWS_MEDIA_LOCATION}/" if AWS_MEDIA_LOCATION else ""

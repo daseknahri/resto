@@ -54,7 +54,11 @@ export const messages = {
       copy: "Copy",
       call: "Call",
       item_one: "{count} item",
-      item_other: "{count} items"
+      item_other: "{count} items",
+      translate: "Translate",
+      translating: "Translating…",
+      translateErrorGeneric: "Translation failed.",
+      translateErrorNotConfigured: "Translation not configured."
     },
     landingLayout: {
       kicker: "Resto Menu",

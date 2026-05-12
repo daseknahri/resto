@@ -35,6 +35,22 @@ export const useTenantStore = defineStore("tenant", {
       if (mode) return mode === "menu_only";
       return false;
     },
+    /**
+     * Check if a plan feature flag is enabled.
+     * Returns true when:
+     *  - no flags are configured at all (open-by-default, backward compatible)
+     *  - the flag exists in the list and is enabled
+     *  - the flag key is absent from the list (not explicitly restricted)
+     */
+    hasFlag() {
+      return (key) => {
+        const flags = this.resolvedMeta?.feature_flags;
+        if (!Array.isArray(flags) || flags.length === 0) return true;
+        const flag = flags.find((f) => f.key === key);
+        if (!flag) return true; // not explicitly restricted
+        return flag.enabled === true;
+      };
+    },
   },
   actions: {
     mergeProfile(profile) {

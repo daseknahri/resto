@@ -29,6 +29,15 @@
             >
               {{ localeChipLabel(localeCode) }}
             </button>
+            <button
+              v-if="fieldLocales.tagline !== defaultContentLocale && localizedFieldValue('tagline', defaultContentLocale)"
+              type="button"
+              class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+              :disabled="translating['tagline']"
+              @click="runTranslate('tagline', 'tagline', fieldLocales.tagline)"
+            >
+              {{ translating["tagline"] ? t("common.translating") : t("common.translate") }}
+            </button>
           </div>
         </div>
         <input
@@ -64,6 +73,15 @@
             >
               {{ localeChipLabel(localeCode) }}
             </button>
+            <button
+              v-if="fieldLocales.address !== defaultContentLocale && localizedFieldValue('address', defaultContentLocale)"
+              type="button"
+              class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+              :disabled="translating['address']"
+              @click="runTranslate('address', 'address', fieldLocales.address)"
+            >
+              {{ translating["address"] ? t("common.translating") : t("common.translate") }}
+            </button>
           </div>
         </div>
         <input
@@ -89,6 +107,15 @@
               @click="fieldLocales.description = localeCode"
             >
               {{ localeChipLabel(localeCode) }}
+            </button>
+            <button
+              v-if="fieldLocales.description !== defaultContentLocale && localizedFieldValue('description', defaultContentLocale)"
+              type="button"
+              class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
+              :disabled="translating['description']"
+              @click="runTranslate('description', 'description', fieldLocales.description)"
+            >
+              {{ translating["description"] ? t("common.translating") : t("common.translate") }}
             </button>
           </div>
         </div>
@@ -257,6 +284,7 @@ import {
   WEEKDAY_KEYS,
 } from "../lib/businessHours";
 import { useI18n } from "../composables/useI18n";
+import { useTranslate } from "../composables/useTranslate";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { profileApi } from "../lib/onboardingApi";
 import { useLocaleStore } from "../stores/locale";
@@ -297,6 +325,21 @@ const locale = useLocaleStore();
 const toast = useToastStore();
 const emit = defineEmits(["next"]);
 const { localeOptions, t } = useI18n();
+const { translating, translateError, translateField } = useTranslate();
+
+const runTranslate = async (fieldKey, formField, targetLocale) => {
+  const sourceText = localizedFieldValue(formField, defaultContentLocale.value);
+  if (!sourceText.trim()) return;
+  const result = await translateField(fieldKey, sourceText, targetLocale, defaultContentLocale.value);
+  if (result) {
+    onLocalizedFieldInput(formField, targetLocale, result);
+  } else if (translateError.value === "notConfigured") {
+    toast.show(t("common.translateErrorNotConfigured"), "error");
+  } else if (translateError.value) {
+    toast.show(t("common.translateErrorGeneric"), "error");
+  }
+};
+
 const canWhatsappOrder = computed(() => tenant.entitlements?.can_whatsapp_order === true);
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
 const introText = computed(() =>

@@ -33,7 +33,7 @@ from sales.views import (
     TierUpgradeTargetsView,
     TierUpgradeRequestListCreateView,
 )
-from tenancy.api import ImageDeleteView, ImageUploadView, ProfileView, TenantMetaView
+from tenancy.api import ImageDeleteView, ImageUploadView, ProfileView, TenantMetaView, TranslateView
 
 tenant_router = routers.DefaultRouter()
 tenant_router.register(r"super-categories", SuperCategoryViewSet, basename="super-category")
@@ -49,6 +49,7 @@ urlpatterns = [
     path("api/profile/", ProfileView.as_view(), name="tenant-profile"),
     path("api/uploads/image/", ImageUploadView.as_view(), name="image-upload"),
     path("api/uploads/image-delete/", ImageDeleteView.as_view(), name="image-delete"),
+    path("api/translate/", TranslateView.as_view(), name="translate"),
     path("api/order-handoff/", OrderHandoffView.as_view(), name="order-handoff"),
     path("api/checkout-intent/", CheckoutIntentView.as_view(), name="checkout-intent"),
     path("api/analytics/summary/", AnalyticsSummaryView.as_view(), name="analytics-summary"),

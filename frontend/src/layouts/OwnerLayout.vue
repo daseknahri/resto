@@ -21,7 +21,10 @@
               </div>
             </div>
 
-            <div class="owner-main-nav hidden md:grid">
+            <div
+              class="owner-main-nav hidden md:grid"
+              :style="`--nav-cols: ${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`"
+            >
               <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'" active-class="" exact-active-class="">
                 <AppIcon name="home" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.dashboard") }}</span>
@@ -37,6 +40,7 @@
                 <span>{{ t("ownerLayout.menuBuilder") }}</span>
               </RouterLink>
               <RouterLink
+                v-if="showTables"
                 to="/owner/tables"
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/tables')"
@@ -47,6 +51,7 @@
                 <span>{{ t("ownerLayout.tablesQr") }}</span>
               </RouterLink>
               <RouterLink
+                v-if="showReservations"
                 to="/owner/reservations"
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/reservations')"
@@ -100,7 +105,7 @@
     </main>
 
     <nav class="ui-bottom-dock owner-bottom-dock md:hidden">
-      <div class="ui-bottom-dock-grid grid-cols-4">
+      <div class="ui-bottom-dock-grid" :class="`grid-cols-${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
         <RouterLink
           to="/owner"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
@@ -122,6 +127,7 @@
           <span>{{ t("ownerLayout.menuBuilder") }}</span>
         </RouterLink>
         <RouterLink
+          v-if="showTables"
           to="/owner/tables"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/tables')"
@@ -132,6 +138,7 @@
           <span>{{ t("ownerLayout.tablesQr") }}</span>
         </RouterLink>
         <RouterLink
+          v-if="showReservations"
           to="/owner/reservations"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/reservations')"
@@ -161,6 +168,8 @@ const router = useRouter();
 const { t } = useI18n();
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
+const showTables = computed(() => tenant.hasFlag("owner_table_management"));
+const showReservations = computed(() => tenant.hasFlag("owner_reservation_inbox"));
 const activeWorkspaceLabel = computed(() => {
   const path = router.currentRoute.value.path || "";
   if (path.startsWith("/owner/menu-builder")) return t("ownerLayout.menuBuilder");
@@ -312,7 +321,7 @@ watch(
 }
 
 .owner-main-nav {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--nav-cols, 4), minmax(0, 1fr));
   gap: 0.5rem;
   border: 1px solid rgba(51, 65, 85, 0.7);
   border-radius: 1rem;
