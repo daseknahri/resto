@@ -636,17 +636,43 @@ const refresh = async () => {
 };
 
 const hydrateOwnerInsights = async () => {
+  // Single-request path: /api/owner/dashboard/ combines analytics + upgrade
+  // data that previously required 3 separate calls.
   try {
-    const analytics = await api.get("/analytics/summary/", {
+    const { data } = await api.get("/owner/dashboard/", {
       params: { days: 30 },
-      timeout: 5000,
+      timeout: 8000,
     });
-    analyticsSummary.value = analytics?.data || analyticsSummary.value;
+    if (data?.analytics_summary) {
+      analyticsSummary.value = data.analytics_summary;
+    }
+    if (Array.isArray(data?.upgrade_targets)) {
+      upgradeTargets.value = data.upgrade_targets;
+    }
+    if (data?.upgrade_meta) {
+      upgradeMeta.value = {
+        current_tier_code: data.upgrade_meta.current_tier_code || tenant.entitlements?.tier_code || "basic",
+        current_tier_name: data.upgrade_meta.current_tier_name || tenant.entitlements?.tier_name || "Basic",
+        has_pending_request: data.upgrade_meta.has_pending_request === true,
+      };
+    }
+    if (Array.isArray(data?.upgrade_requests)) {
+      upgradeRequests.value = data.upgrade_requests;
+      // Re-derive pending flag from the fresh list
+      upgradeMeta.value = {
+        ...upgradeMeta.value,
+        has_pending_request: upgradeRequests.value.some((r) => r.status === "pending"),
+      };
+    }
+    ensureUpgradeTargetSelection();
   } catch {
-    // Analytics are supplementary. Keep the dashboard responsive if they lag.
+    // Dashboard endpoint unavailable — fall back to individual calls.
+    try {
+      const analytics = await api.get("/analytics/summary/", { params: { days: 30 }, timeout: 5000 });
+      analyticsSummary.value = analytics?.data || analyticsSummary.value;
+    } catch { /* analytics are supplementary */ }
+    await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
   }
-
-  await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
 };
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
