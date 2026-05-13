@@ -1431,6 +1431,12 @@ export const messages = {
       exportCsv: "Export CSV",
       openMap: "Map",
       whatsapp: "WhatsApp",
+      searchPlaceholder: "Search order #, name, phone…",
+      dateAll: "All dates",
+      dateToday: "Today",
+      dateYesterday: "Yesterday",
+      dateLast7: "Last 7 days",
+      showingFiltered: "Showing {shown} of {total} orders",
     },
     orderStatus: {
       kicker: "Order tracking",

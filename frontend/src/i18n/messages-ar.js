@@ -1344,7 +1344,15 @@ const arabicMessages = {
     "printBlocked": "تم حظر النوافذ المنبثقة — يرجى السماح بها للطباعة.",
     "muteAlerts": "كتم تنبيهات الطلبات",
     "unmuteAlerts": "تفعيل تنبيهات الطلبات",
-    "exportCsv": "تصدير CSV"
+    "exportCsv": "تصدير CSV",
+    "openMap": "الخريطة",
+    "whatsapp": "واتساب",
+    "searchPlaceholder": "بحث برقم الطلب، الاسم، الهاتف…",
+    "dateAll": "كل التواريخ",
+    "dateToday": "اليوم",
+    "dateYesterday": "أمس",
+    "dateLast7": "آخر 7 أيام",
+    "showingFiltered": "عرض {shown} من أصل {total} طلب"
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",

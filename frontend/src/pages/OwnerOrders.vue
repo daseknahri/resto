@@ -46,6 +46,35 @@
         </div>
       </div>
 
+      <!-- Search + date filter row -->
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          v-model.trim="searchQuery"
+          class="ui-input min-w-0 flex-1 text-sm"
+          :placeholder="t('ownerOrders.searchPlaceholder')"
+          @input="searchQuery = $event.target.value"
+        />
+        <div class="flex flex-wrap gap-1">
+          <button
+            v-for="d in dateTabs"
+            :key="d.value"
+            type="button"
+            class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
+            :class="activeDateFilter === d.value
+              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+              : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+            @click="activeDateFilter = d.value"
+          >
+            {{ d.label }}
+          </button>
+        </div>
+        <button
+          v-if="searchQuery || activeDateFilter !== 'all'"
+          class="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+          @click="searchQuery = ''; activeDateFilter = 'all'"
+        >✕</button>
+      </div>
+
       <!-- Status filter tabs -->
       <div class="flex flex-wrap gap-1.5">
         <button
@@ -62,6 +91,11 @@
           <span v-if="tab.count > 0" class="ml-1 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px]">{{ tab.count }}</span>
         </button>
       </div>
+
+      <!-- Active filter summary -->
+      <p v-if="filteredOrders.length !== order.orders.length" class="text-xs text-slate-500">
+        {{ t("ownerOrders.showingFiltered", { shown: filteredOrders.length, total: order.orders.length }) }}
+      </p>
     </div>
 
     <!-- Loading -->
@@ -257,6 +291,8 @@ const order = useOrderStore();
 const toast = useToastStore();
 
 const activeStatus = ref("");
+const activeDateFilter = ref("all");
+const searchQuery = ref("");
 const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
@@ -269,6 +305,14 @@ const soundEnabled = ref((() => {
 watch(soundEnabled, (val) => {
   try { localStorage.setItem(SOUND_KEY, val ? "on" : "off"); } catch { /* ignore */ }
 });
+
+// ── Date filter tabs ──────────────────────────────────────────────────────────
+const dateTabs = computed(() => [
+  { value: "all",       label: t("ownerOrders.dateAll") },
+  { value: "today",     label: t("ownerOrders.dateToday") },
+  { value: "yesterday", label: t("ownerOrders.dateYesterday") },
+  { value: "week",      label: t("ownerOrders.dateLast7") },
+]);
 
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
@@ -299,9 +343,44 @@ const todayStats = computed(() => {
 const STATUS_SORT = { pending: 0, confirmed: 1, preparing: 2, ready: 3, completed: 4, cancelled: 5 };
 
 const filteredOrders = computed(() => {
-  const base = activeStatus.value
-    ? order.orders.filter((o) => o.status === activeStatus.value)
-    : order.orders;
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = yesterday.toDateString();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 6);
+  weekAgo.setHours(0, 0, 0, 0);
+
+  const q = searchQuery.value.toLowerCase();
+
+  let base = order.orders.filter((o) => {
+    // Status filter
+    if (activeStatus.value && o.status !== activeStatus.value) return false;
+
+    // Date filter
+    if (activeDateFilter.value !== "all") {
+      const d = new Date(o.created_at);
+      if (activeDateFilter.value === "today" && d.toDateString() !== todayStr) return false;
+      if (activeDateFilter.value === "yesterday" && d.toDateString() !== yesterdayStr) return false;
+      if (activeDateFilter.value === "week" && d < weekAgo) return false;
+    }
+
+    // Search filter
+    if (q) {
+      const haystack = [
+        o.order_number,
+        o.customer_name,
+        o.customer_phone,
+        o.delivery_address,
+        o.table_label,
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+
+    return true;
+  });
+
   return [...base].sort((a, b) => {
     const sd = (STATUS_SORT[a.status] ?? 9) - (STATUS_SORT[b.status] ?? 9);
     if (sd !== 0) return sd;
