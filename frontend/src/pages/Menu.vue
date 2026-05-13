@@ -50,6 +50,14 @@
       </div>
     </header>
 
+    <!-- Table context confirmation banner -->
+    <div
+      v-if="tableContextBanner"
+      class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
+    >
+      ✓ {{ tableContextBanner }}
+    </div>
+
     <!-- Filter bar: search + section/category pills -->
     <div class="ui-panel space-y-3 p-3 sm:p-4">
       <div class="relative">
@@ -214,12 +222,13 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { withImageFallback } from '../lib/images';
 import { trackEvent } from '../lib/analytics';
 import { getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule } from '../lib/businessHours';
+import api from '../lib/api';
 import { useCartStore } from '../stores/cart';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
@@ -230,7 +239,28 @@ const tenant = useTenantStore();
 const cart = useCartStore();
 const toast = useToastStore();
 const router = useRouter();
+const route = useRoute();
 const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
+
+// ── Table QR context ──────────────────────────────────────────────────────────
+const tableContextBanner = ref(''); // shown after successful table scan
+
+const resolveTableContext = async () => {
+  const tableSlug = route.params?.tableSlug;
+  if (!tableSlug) return;
+  try {
+    const { data } = await api.get(`/table-context/${tableSlug}/`);
+    if (data?.label && data?.slug) {
+      cart.setTableContext(data.label, data.slug);
+      tableContextBanner.value = t('menu.tableContextSet', { table: data.label });
+    }
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      toast.show(t('menu.tableNotFound'), 'error');
+    }
+    // Non-404: silently ignore — customer can still browse
+  }
+};
 
 const search = ref('');
 const selectedSuperCategorySlug = ref('');
@@ -368,6 +398,7 @@ watch(
 );
 
 onMounted(async () => {
+  await resolveTableContext();
   if (!menuCategories.value.length) await menu.fetchCategories();
   trackEvent('menu_view', { source: 'customer_menu_browse' });
 });

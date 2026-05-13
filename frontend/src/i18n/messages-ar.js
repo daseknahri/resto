@@ -751,7 +751,9 @@ const arabicMessages = {
     "loading": "جارٍ تحميل القائمة...",
     "opensUntil": "مفتوح · يغلق {time}",
     "opensAt": "مغلق · يفتح {day} {time}",
-    "tomorrow": "غداً"
+    "tomorrow": "غداً",
+    "tableContextSet": "الطلب لـ {table} — أضف عناصر ثم اذهب إلى السلة",
+    "tableNotFound": "رابط الطاولة لم يعد نشطاً."
   },
   "category": {
     "kicker": "التصنيف",

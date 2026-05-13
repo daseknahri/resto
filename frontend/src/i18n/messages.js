@@ -943,6 +943,8 @@ export const messages = {
       opensUntil: "Open · closes {time}",
       opensAt: "Closed · opens {day} {time}",
       tomorrow: "tomorrow",
+      tableContextSet: "Ordering for {table} — add items and go to cart when ready",
+      tableNotFound: "Table link is no longer active.",
     },
     category: {
       kicker: "Category",
@@ -2284,6 +2286,8 @@ export const messages = {
       opensUntil: "Ouvert · ferme a {time}",
       opensAt: "Ferme · ouvre {day} a {time}",
       tomorrow: "demain",
+      tableContextSet: "Commande pour {table} — ajoutez des articles et allez au panier",
+      tableNotFound: "Ce lien de table n est plus actif.",
     },
     category: {
       kicker: "Categorie",
