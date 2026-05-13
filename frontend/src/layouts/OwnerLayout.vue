@@ -29,6 +29,24 @@
                 <AppIcon name="home" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.dashboard") }}</span>
               </RouterLink>
+              <!-- Orders — second position, always visible, live badge -->
+              <RouterLink
+                to="/owner/orders"
+                class="owner-main-nav-item"
+                :data-active="$route.path.startsWith('/owner/orders')"
+                :data-urgent="pendingOrdersCount > 0"
+                active-class=""
+                exact-active-class=""
+              >
+                <span class="relative inline-flex items-center gap-1">
+                  <AppIcon name="menu" class="owner-nav-icon" />
+                  <span
+                    v-if="pendingOrdersCount > 0"
+                    class="owner-orders-badge"
+                  >{{ pendingOrdersCount }}</span>
+                </span>
+                <span>{{ t("ownerLayout.orders") }}</span>
+              </RouterLink>
               <RouterLink
                 :to="{ name: 'owner-menu-builder' }"
                 class="owner-main-nav-item"
@@ -60,16 +78,6 @@
               >
                 <AppIcon name="calendar" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.reservations") }}</span>
-              </RouterLink>
-              <RouterLink
-                to="/owner/orders"
-                class="owner-main-nav-item"
-                :data-active="$route.path.startsWith('/owner/orders')"
-                active-class=""
-                exact-active-class=""
-              >
-                <AppIcon name="menu" class="owner-nav-icon" />
-                <span>{{ t("ownerLayout.orders") }}</span>
               </RouterLink>
             </div>
 
@@ -126,6 +134,21 @@
           <AppIcon name="home" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.dashboard") }}</span>
         </RouterLink>
+        <!-- Orders — second position with live badge -->
+        <RouterLink
+          to="/owner/orders"
+          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
+          :data-active="$route.path.startsWith('/owner/orders')"
+          :data-urgent="pendingOrdersCount > 0"
+          active-class=""
+          exact-active-class=""
+        >
+          <span class="relative inline-flex">
+            <AppIcon name="menu" class="owner-dock-icon" />
+            <span v-if="pendingOrdersCount > 0" class="owner-orders-badge-dock">{{ pendingOrdersCount }}</span>
+          </span>
+          <span>{{ t("ownerLayout.orders") }}</span>
+        </RouterLink>
         <RouterLink
           :to="{ name: 'owner-menu-builder' }"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
@@ -158,16 +181,6 @@
           <AppIcon name="calendar" class="owner-dock-icon" />
           <span>{{ t("ownerLayout.reservations") }}</span>
         </RouterLink>
-        <RouterLink
-          to="/owner/orders"
-          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
-          :data-active="$route.path.startsWith('/owner/orders')"
-          active-class=""
-          exact-active-class=""
-        >
-          <AppIcon name="menu" class="owner-dock-icon" />
-          <span>{{ t("ownerLayout.orders") }}</span>
-        </RouterLink>
       </div>
     </nav>
   </div>
@@ -179,11 +192,13 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
+import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 
 const session = useSessionStore();
 const tenant = useTenantStore();
+const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
@@ -191,6 +206,7 @@ const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").t
 // Always show all features until tier gating is configured
 const showTables = computed(() => true);
 const showReservations = computed(() => true);
+const pendingOrdersCount = computed(() => order.orders.filter((o) => o.status === "pending").length);
 const activeWorkspaceLabel = computed(() => {
   const path = router.currentRoute.value.path || "";
   if (path.startsWith("/owner/menu-builder")) return t("ownerLayout.menuBuilder");
@@ -229,6 +245,7 @@ const onDocumentPointerDown = (event) => {
   }
 };
 
+let orderPollTimer = null;
 onMounted(async () => {
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
@@ -236,12 +253,16 @@ onMounted(async () => {
   if (typeof document !== "undefined") {
     document.addEventListener("pointerdown", onDocumentPointerDown);
   }
+  // Background order poll — keeps the nav badge live on every page
+  await order.fetchOrders();
+  orderPollTimer = setInterval(() => order.fetchOrders(), 30000);
 });
 
 onBeforeUnmount(() => {
   if (typeof document !== "undefined") {
     document.removeEventListener("pointerdown", onDocumentPointerDown);
   }
+  clearInterval(orderPollTimer);
 });
 
 watch(
@@ -382,6 +403,52 @@ watch(
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.08));
   color: rgb(245, 158, 11);
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12) inset;
+}
+
+.owner-main-nav-item[data-urgent="true"] {
+  border-color: rgba(245, 158, 11, 0.55);
+  color: rgb(245, 158, 11);
+}
+
+.owner-orders-badge {
+  position: absolute;
+  top: -0.45rem;
+  right: -0.55rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 9999px;
+  background: rgb(245, 158, 11);
+  color: rgb(0, 0, 0);
+  font-size: 0.6rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.18rem;
+  animation: owner-badge-pulse 2s ease-in-out infinite;
+}
+
+.owner-orders-badge-dock {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.35rem;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 9999px;
+  background: rgb(245, 158, 11);
+  color: rgb(0, 0, 0);
+  font-size: 0.52rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.15rem;
+  animation: owner-badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes owner-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+  50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
 }
 
 @media (max-width: 640px) {
