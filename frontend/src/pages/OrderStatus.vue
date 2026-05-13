@@ -25,6 +25,18 @@
         </p>
       </div>
 
+      <!-- Order-cancelled banner -->
+      <div
+        v-if="orderData.status === 'cancelled'"
+        class="ui-reveal rounded-2xl border border-red-400/60 bg-red-500/15 p-4 text-center shadow-lg shadow-red-900/20 sm:p-5"
+      >
+        <p class="text-2xl font-bold text-red-200">{{ t("orderStatus.cancelledTitle") }}</p>
+        <p class="mt-1 text-sm text-red-100/80">{{ t("orderStatus.cancelledBody") }}</p>
+        <RouterLink :to="{ name: 'menu' }" class="mt-3 inline-flex rounded-full border border-red-400/50 px-4 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/10">
+          {{ t("orderStatus.backToMenu") }}
+        </RouterLink>
+      </div>
+
       <!-- Header -->
       <div class="ui-hero-ribbon ui-reveal p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -293,15 +305,31 @@ const fetchStatus = async () => {
 };
 
 let pollTimer = null;
+
+const onStatusPageVisible = () => {
+  if (typeof document !== "undefined" && document.visibilityState === "visible" && isLiveStatus.value) {
+    fetchStatus();
+  }
+};
+
 onMounted(() => {
   // Request notification permission proactively (non-blocking)
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
     Notification.requestPermission().catch(() => {});
   }
   fetchStatus();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onStatusPageVisible);
+  }
   pollTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     if (isLiveStatus.value) fetchStatus();
   }, POLL_INTERVAL_S * 1000);
 });
-onUnmounted(() => clearInterval(pollTimer));
+onUnmounted(() => {
+  clearInterval(pollTimer);
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onStatusPageVisible);
+  }
+});
 </script>

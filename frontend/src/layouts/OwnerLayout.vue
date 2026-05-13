@@ -308,27 +308,42 @@ const layoutRequestNotifPermission = () => {
 };
 
 let orderPollTimer = null;
+
+const layoutDoSilentPoll = async () => {
+  const fresh = await order.fetchOrders("", { silent: true });
+  layoutCheckNewOrders(Array.isArray(fresh) ? fresh : order.orders);
+};
+
+const onLayoutPageVisible = () => {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    layoutDoSilentPoll();
+  }
+};
+
 onMounted(async () => {
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }
   if (typeof document !== "undefined") {
     document.addEventListener("pointerdown", onDocumentPointerDown);
+    document.addEventListener("visibilitychange", onLayoutPageVisible);
   }
   layoutRequestNotifPermission();
   // Background order poll — keeps the nav badge live on every page.
   // Always silent so we never trigger the loading spinner shown in OwnerOrders.
   const initial = await order.fetchOrders("", { silent: true });
   layoutCheckNewOrders(Array.isArray(initial) ? initial : order.orders);
-  orderPollTimer = setInterval(async () => {
-    const fresh = await order.fetchOrders("", { silent: true });
-    layoutCheckNewOrders(Array.isArray(fresh) ? fresh : order.orders);
+  orderPollTimer = setInterval(() => {
+    // Skip when tab is hidden — the visibilitychange handler fires on resume instead
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    layoutDoSilentPoll();
   }, 30000);
 });
 
 onBeforeUnmount(() => {
   if (typeof document !== "undefined") {
     document.removeEventListener("pointerdown", onDocumentPointerDown);
+    document.removeEventListener("visibilitychange", onLayoutPageVisible);
   }
   clearInterval(orderPollTimer);
 });

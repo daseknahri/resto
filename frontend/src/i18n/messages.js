@@ -1464,6 +1464,8 @@ export const messages = {
       orderReadyTitle: "Your order is ready!",
       readyBodyPickup: "Please come collect your order at the counter.",
       readyBodyDelivery: "Your order is on its way!",
+      cancelledTitle: "Order cancelled",
+      cancelledBody: "This order was cancelled. Please contact the restaurant if you have questions.",
       readyNotifTitle: "Order ready!",
       readyNotifBody: "Order #{number} is ready for you.",
     },

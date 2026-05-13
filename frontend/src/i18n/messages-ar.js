@@ -1380,6 +1380,8 @@ const arabicMessages = {
     "orderReadyTitle": "طلبك جاهز!",
     "readyBodyPickup": "يُرجى التوجه إلى الكاونتر لاستلام طلبك.",
     "readyBodyDelivery": "طلبك في الطريق إليك!",
+    "cancelledTitle": "تم إلغاء الطلب",
+    "cancelledBody": "تم إلغاء هذا الطلب. يُرجى التواصل مع المطعم إذا كان لديك استفسار.",
     "readyNotifTitle": "الطلب جاهز!",
     "readyNotifBody": "الطلب رقم #{number} جاهز لاستلامك."
   },

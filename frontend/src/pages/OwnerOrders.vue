@@ -648,31 +648,53 @@ const requestNotificationPermission = async () => {
   if (Notification.permission === "default") await Notification.requestPermission();
 };
 
-// ── Polling ───────────────────────────────────────────────────────────────────
+// ── Polling (visibility-aware) ────────────────────────────────────────────────
 let pollTimer = null;
+
+const doPoll = async () => {
+  // Always fetch all orders (no status filter) — filtering is client-side only.
+  // Passing activeStatus to the API would replace the full list with a subset,
+  // making other status groups disappear until the next manual refresh.
+  const fresh = await order.fetchOrders("", { silent: true });
+  const orders = Array.isArray(fresh) ? fresh : order.orders;
+  checkForNewOrders(orders);
+
+  // Recurring alert: re-ping if there are still unhandled pending orders
+  const hasPending = orders.some((o) => o.status === "pending");
+  const cooldownPassed = Date.now() - lastAlertTime.value > RECURRING_ALERT_MS;
+  if (hasPending && knownOrderIds.value.size > 0 && cooldownPassed) {
+    playAlertSound();
+    lastAlertTime.value = Date.now();
+  }
+};
+
+const onPageVisible = () => {
+  // Immediately refresh when the owner switches back to this tab
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    doPoll();
+  }
+};
 
 onMounted(async () => {
   await requestNotificationPermission();
   const initial = await order.fetchOrders();
   checkForNewOrders(Array.isArray(initial) ? initial : order.orders);
 
-  pollTimer = setInterval(async () => {
-    // Always fetch all orders (no status filter) — filtering is client-side only.
-    // Passing activeStatus to the API would replace the full list with a subset,
-    // making other status groups disappear until the next manual refresh.
-    const fresh = await order.fetchOrders("", { silent: true });
-    const orders = Array.isArray(fresh) ? fresh : order.orders;
-    checkForNewOrders(orders);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onPageVisible);
+  }
 
-    // Recurring alert: re-ping if there are still unhandled pending orders
-    const hasPending = orders.some((o) => o.status === "pending");
-    const cooldownPassed = Date.now() - lastAlertTime.value > RECURRING_ALERT_MS;
-    if (hasPending && knownOrderIds.value.size > 0 && cooldownPassed) {
-      playAlertSound();
-      lastAlertTime.value = Date.now();
-    }
+  pollTimer = setInterval(() => {
+    // Skip the API call when the tab is in the background — runs on resume instead
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    doPoll();
   }, 15000); // 15 s — faster than layout's 30 s
 });
 
-onUnmounted(() => clearInterval(pollTimer));
+onUnmounted(() => {
+  clearInterval(pollTimer);
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onPageVisible);
+  }
+});
 </script>
