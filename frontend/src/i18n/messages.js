@@ -147,7 +147,9 @@ export const messages = {
       navInfo: "Info",
       navMenu: "Menu",
       navCart: "Cart",
-      navReserve: "Reserve"
+      navReserve: "Reserve",
+      trackOrderBanner: "Order #{number} — Tap to track",
+      trackOrderDismiss: "Dismiss order tracker"
     },
     customerFlow: {
       title: "Guest journey",
@@ -1611,7 +1613,9 @@ export const messages = {
       navInfo: "Infos",
       navMenu: "Menu",
       navCart: "Panier",
-      navReserve: "Reserver"
+      navReserve: "Reserver",
+      trackOrderBanner: "Commande #{number} — Suivre",
+      trackOrderDismiss: "Fermer le suivi"
     },
     customerFlow: {
       title: "Parcours client",

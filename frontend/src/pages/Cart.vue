@@ -1266,6 +1266,11 @@ const placeInAppOrder = async () => {
     });
     const result = await order.placeOrder(buildPayload());
     cart.clear();
+    // Persist the order number so the layout can show a "track order" banner
+    try {
+      localStorage.setItem('lastOrderNumber', result.order_number);
+      localStorage.setItem('lastOrderAt', String(Date.now()));
+    } catch {}
     toast.show(t('cartPage_order.placeOrder'), 'success');
     router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
   } catch (err) {

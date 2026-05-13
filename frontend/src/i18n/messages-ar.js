@@ -136,7 +136,9 @@ const arabicMessages = {
     "navInfo": "معلومات",
     "navMenu": "القائمة",
     "navCart": "السلة",
-    "navReserve": "الحجز"
+    "navReserve": "الحجز",
+    "trackOrderBanner": "الطلب #{number} — تتبع طلبك",
+    "trackOrderDismiss": "إغلاق متتبع الطلب"
   },
   "customerFlow": {
     "title": "رحلة الضيف",

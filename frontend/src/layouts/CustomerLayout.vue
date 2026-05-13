@@ -69,6 +69,29 @@
       </div>
     </div>
 
+    <!-- Track-order banner: shown when a recent in-app order exists and user is not on the order-status page -->
+    <div v-if="trackBannerOrder" class="mx-auto w-full max-w-5xl px-4 pt-2">
+      <div class="flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5 shadow-lg shadow-black/20">
+        <RouterLink
+          :to="{ name: 'order-status', params: { orderNumber: trackBannerOrder } }"
+          class="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[var(--color-secondary)] hover:opacity-80"
+        >
+          <span class="relative flex h-2.5 w-2.5 shrink-0">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-secondary)] opacity-50" />
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-secondary)]" />
+          </span>
+          <span class="truncate">{{ t("customerLayout.trackOrderBanner", { number: trackBannerOrder }) }}</span>
+        </RouterLink>
+        <button
+          class="ml-3 shrink-0 rounded-full p-1 text-slate-400 hover:text-slate-200"
+          :aria-label="t('customerLayout.trackOrderDismiss')"
+          @click="dismissTrackBanner"
+        >
+          <AppIcon name="close" class="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+
     <main class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
@@ -104,7 +127,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import AppIcon from "../components/AppIcon.vue";
@@ -167,6 +190,37 @@ const tenantNotice = computed(() => {
   return null;
 });
 
+// ── Track-order banner ────────────────────────────────────────────────────────
+const ORDER_TRACK_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const trackedOrderNumber = ref(null);
+const trackedOrderAt = ref(0);
+
+const loadOrderTracking = () => {
+  try {
+    trackedOrderNumber.value = localStorage.getItem('lastOrderNumber') || null;
+    trackedOrderAt.value = Number(localStorage.getItem('lastOrderAt') || 0);
+  } catch {
+    trackedOrderNumber.value = null;
+    trackedOrderAt.value = 0;
+  }
+};
+
+const trackBannerOrder = computed(() => {
+  if (!trackedOrderNumber.value) return null;
+  if (route.name === 'order-status') return null;
+  if (Date.now() - trackedOrderAt.value > ORDER_TRACK_TTL_MS) return null;
+  return trackedOrderNumber.value;
+});
+
+const dismissTrackBanner = () => {
+  try {
+    localStorage.removeItem('lastOrderNumber');
+    localStorage.removeItem('lastOrderAt');
+  } catch {}
+  trackedOrderNumber.value = null;
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const humanizeSlug = (value) =>
   String(value || "")
     .replace(/[-_]+/g, " ")
@@ -206,10 +260,17 @@ const syncTableFromQuery = async () => {
   await resolveTableFromSlug(normalizedSlug);
 };
 
-onMounted(syncTableFromQuery);
+onMounted(() => {
+  loadOrderTracking();
+  syncTableFromQuery();
+});
 watch(() => route.query?.table, syncTableFromQuery);
 watch(() => route.query?.t, syncTableFromQuery);
 watch(() => route.params?.tableSlug, syncTableFromQuery);
+// Re-read localStorage whenever leaving order-status so the banner appears immediately
+watch(() => route.name, (name) => {
+  if (name !== 'order-status') loadOrderTracking();
+});
 watch(
   () => currentLocale.value,
   () => {
