@@ -121,12 +121,29 @@
             <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
             <span class="ml-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
           </div>
-          <div v-if="o.customer_phone">
+          <div v-if="o.customer_phone" class="flex flex-wrap items-center gap-2">
             <a :href="`tel:${o.customer_phone}`" class="font-medium text-sky-300 hover:text-sky-200">{{ o.customer_phone }}</a>
+            <a
+              :href="orderWhatsappUrl(o.customer_phone)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 hover:border-emerald-400/60 hover:bg-emerald-500/20"
+            >
+              💬 {{ t("ownerOrders.whatsapp") }}
+            </a>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
             <span class="ml-1.5 text-slate-200">{{ o.delivery_address }}</span>
+            <a
+              v-if="orderMapUrl(o)"
+              :href="orderMapUrl(o)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ml-2 inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
+            >
+              📍 {{ t("ownerOrders.openMap") }}
+            </a>
           </div>
         </div>
 
@@ -339,6 +356,21 @@ const formatTime = (iso) => {
   if (diffMin < 60) return `${diffMin}m`;
   if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
   return d.toLocaleDateString();
+};
+
+// ── Delivery helpers ──────────────────────────────────────────────────────────
+const orderMapUrl = (o) => {
+  if (o.delivery_location_url) return o.delivery_location_url;
+  const lat = o.delivery_lat;
+  const lng = o.delivery_lng;
+  if (lat != null && lng != null) return `https://maps.google.com/?q=${lat},${lng}`;
+  return null;
+};
+
+const orderWhatsappUrl = (phone) => {
+  if (!phone) return "#";
+  const digits = String(phone).replace(/\D/g, "");
+  return `https://wa.me/${digits}`;
 };
 
 // ── Order age ─────────────────────────────────────────────────────────────────

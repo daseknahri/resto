@@ -1421,6 +1421,8 @@ export const messages = {
       muteAlerts: "Mute order alerts",
       unmuteAlerts: "Unmute order alerts",
       exportCsv: "Export CSV",
+      openMap: "Map",
+      whatsapp: "WhatsApp",
     },
     orderStatus: {
       kicker: "Order tracking",
