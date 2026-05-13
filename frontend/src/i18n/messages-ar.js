@@ -320,7 +320,15 @@ const arabicMessages = {
     "closedToast": "المطعم مغلق الآن",
     "toggleFailed": "فشل تحديث حالة المطعم",
     "todayOrders": "طلبات اليوم",
-    "todayRevenue": "إيرادات اليوم"
+    "todayRevenue": "إيرادات اليوم",
+    "dishAvailability": "توفر الأطباق",
+    "soldOut": "نفد",
+    "dishAvailable": "متوفر",
+    "dish86d": "نفد",
+    "dish86dToast": "تم وضع علامة غير متوفر على {name}",
+    "dishRestored": "{name} متوفر مجدداً",
+    "dish86Failed": "فشل تحديث توفر الطبق",
+    "noDishesLoaded": "لم يتم تحميل الأطباق — انقر على تحديث أولاً."
   },
   "ownerTables": {
     "kicker": "مساحة المالك",

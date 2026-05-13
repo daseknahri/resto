@@ -70,6 +70,56 @@
         </button>
       </div>
 
+      <!-- Dish availability quick toggle -->
+      <details class="group rounded-xl border border-slate-800 bg-slate-950/30" :open="soldOutCount > 0 || dishAvailOpen">
+        <summary
+          class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-200 [&::-webkit-details-marker]:hidden"
+          @click.prevent="dishAvailOpen = !dishAvailOpen"
+        >
+          <span class="flex items-center gap-2">
+            <AppIcon name="menu" class="h-3.5 w-3.5 text-slate-400" />
+            {{ t("ownerHome.dishAvailability") }}
+          </span>
+          <span class="flex items-center gap-2 text-xs font-normal text-slate-400">
+            <span v-if="soldOutCount > 0" class="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 font-semibold text-red-300">
+              {{ soldOutCount }} {{ t("ownerHome.soldOut") }}
+            </span>
+            <span>{{ dishAvailOpen ? "▲" : "▼" }}</span>
+          </span>
+        </summary>
+        <div v-if="dishAvailOpen" class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2">
+          <input
+            v-model.trim="dishAvailSearch"
+            class="ui-input mb-2 text-xs"
+            :placeholder="t('common.search')"
+          />
+          <div v-if="!dishesData.length" class="py-2 text-center text-xs text-slate-500">
+            {{ t("ownerHome.noDishesLoaded") }}
+          </div>
+          <div
+            v-for="dish in filteredDishesAvail"
+            :key="dish.id"
+            class="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
+            :class="!dish.is_published ? 'opacity-60' : ''"
+          >
+            <div class="min-w-0">
+              <p class="truncate text-xs font-medium text-slate-100">{{ dish.name }}</p>
+              <p class="text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
+            </div>
+            <button
+              class="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-50"
+              :class="dish.is_published
+                ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
+                : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
+              :disabled="togglingDishId === dish.id"
+              @click="toggleDishPublished(dish)"
+            >
+              {{ togglingDishId === dish.id ? "…" : (dish.is_published ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
+            </button>
+          </div>
+        </div>
+      </details>
+
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
         <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2.5 sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" />
@@ -391,6 +441,46 @@ const analyticsSummary = ref({
   top_dishes: [],
   interaction_rate_pct: 0,
 });
+
+// ── Dish availability panel ───────────────────────────────────────────────────
+const dishAvailOpen = ref(false);
+const dishAvailSearch = ref("");
+const togglingDishId = ref(null);
+
+const soldOutCount = computed(() => dishesData.value.filter((d) => !d.is_published).length);
+const filteredDishesAvail = computed(() => {
+  const q = dishAvailSearch.value.toLowerCase();
+  const list = [...dishesData.value].sort((a, b) => {
+    // 86'd dishes first
+    if (!a.is_published && b.is_published) return -1;
+    if (a.is_published && !b.is_published) return 1;
+    return 0;
+  });
+  if (!q) return list;
+  return list.filter((d) =>
+    (d.name || "").toLowerCase().includes(q) ||
+    (d.category_name || "").toLowerCase().includes(q) ||
+    (d.category_slug || "").toLowerCase().includes(q)
+  );
+});
+
+const toggleDishPublished = async (dish) => {
+  if (togglingDishId.value === dish.id) return;
+  togglingDishId.value = dish.id;
+  const newValue = !dish.is_published;
+  try {
+    await api.patch(`/dishes/${dish.id}/`, { is_published: newValue });
+    dish.is_published = newValue;
+    toast.show(
+      newValue ? t("ownerHome.dishRestored", { name: dish.name }) : t("ownerHome.dish86dToast", { name: dish.name }),
+      newValue ? "success" : "info"
+    );
+  } catch {
+    toast.show(t("ownerHome.dish86Failed"), "error");
+  } finally {
+    togglingDishId.value = null;
+  }
+};
 
 const pendingOrders = computed(() => order.orders.filter((o) => o.status === "pending"));
 const activeOrders = computed(() => order.orders.filter((o) => ["confirmed", "preparing", "ready"].includes(o.status)));
