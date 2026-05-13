@@ -31,6 +31,19 @@ jobs:
           node-version: "20"
 
       - name: Validate Docker Compose configuration
+        env:
+          APP_ENV: production
+          TRUST_PROXY: "true"
+          LOG_LEVEL: info
+          DATABASE_URL: postgresql://user:pass@postgres:5432/db
+          REDIS_URL: redis://redis:6379
+          POSTGRES_HOST: postgres
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: platform
+          POSTGRES_USER: platform_user
+          POSTGRES_PASSWORD: ci_dummy_password
+          REDIS_HOST: redis
+          REDIS_PORT: "6379"
         run: docker compose config > /dev/null
 
       - name: Run platform smoke tests
