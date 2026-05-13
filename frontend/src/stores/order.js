@@ -48,8 +48,10 @@ export const useOrderStore = defineStore("order", {
     // -------------------------------------------------------
     // Owner: fetch orders
     // -------------------------------------------------------
-    async fetchOrders(statusFilter = "") {
-      this.ordersLoading = true;
+    // Pass { silent: true } for background polls so the loading flag is not set
+    // and the orders list never flickers while already displaying data.
+    async fetchOrders(statusFilter = "", { silent = false } = {}) {
+      if (!silent) this.ordersLoading = true;
       this.ordersError = null;
       this.ordersStatusFilter = statusFilter;
       try {
@@ -60,7 +62,7 @@ export const useOrderStore = defineStore("order", {
       } catch (err) {
         this.ordersError = err?.response?.data?.detail || "Failed to load orders.";
       } finally {
-        this.ordersLoading = false;
+        if (!silent) this.ordersLoading = false;
       }
     },
 

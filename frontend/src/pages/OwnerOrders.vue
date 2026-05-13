@@ -471,6 +471,12 @@ const updateStatus = async (o, newStatus) => {
   try {
     await order.updateOrderStatus(o.id, { status: newStatus });
     toast.show(t("ownerOrders.updated"), "success");
+    // After confirming, immediately open the note/ETA panel so the owner can
+    // set an estimated ready time in the same action without a second click.
+    if (newStatus === "confirmed") {
+      const fresh = order.orders.find((x) => x.id === o.id) || o;
+      openEdit(fresh);
+    }
   } catch {
     toast.show(t("ownerOrders.updateFailed"), "error");
   }
@@ -651,7 +657,10 @@ onMounted(async () => {
   checkForNewOrders(Array.isArray(initial) ? initial : order.orders);
 
   pollTimer = setInterval(async () => {
-    const fresh = await order.fetchOrders(activeStatus.value);
+    // Always fetch all orders (no status filter) — filtering is client-side only.
+    // Passing activeStatus to the API would replace the full list with a subset,
+    // making other status groups disappear until the next manual refresh.
+    const fresh = await order.fetchOrders("", { silent: true });
     const orders = Array.isArray(fresh) ? fresh : order.orders;
     checkForNewOrders(orders);
 

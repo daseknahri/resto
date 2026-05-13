@@ -245,9 +245,40 @@ const onDocumentPointerDown = (event) => {
   }
 };
 
-// ── Layout-level new-order browser notifications ──────────────────────────────
-// (sound is handled in OwnerOrders; here we just keep the badge + notif live)
+// ── Layout-level new-order alerts ─────────────────────────────────────────────
+// Keeps the nav badge live on every page. Also fires audio + browser notif when
+// a new pending order arrives and the owner is NOT already on the Orders page
+// (OwnerOrders handles its own sound there to avoid double-chime).
 const layoutKnownIds = new Set();
+
+// Read the same sound-preference key that OwnerOrders writes.
+const LAYOUT_SOUND_KEY = typeof window === "undefined"
+  ? "orders:sound"
+  : `orders:sound:${window.location.hostname}`;
+const layoutSoundEnabled = () => {
+  try { return localStorage.getItem(LAYOUT_SOUND_KEY) !== "off"; } catch { return true; }
+};
+
+const layoutPlayAlertSound = () => {
+  if (!layoutSoundEnabled()) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.18].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(i === 0 ? 780 : 980, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.25);
+    });
+  } catch {
+    // AudioContext not available or blocked
+  }
+};
 
 const layoutCheckNewOrders = (orders) => {
   if (!Array.isArray(orders)) return;
@@ -259,12 +290,13 @@ const layoutCheckNewOrders = (orders) => {
   const newPending = orders.filter((o) => o.status === "pending" && !layoutKnownIds.has(o.id));
   orders.forEach((o) => layoutKnownIds.add(o.id));
   if (!newPending.length) return;
-  // Browser notification only — no sound (OwnerOrders handles sound on that page)
+  // Play sound only when not on the Orders page (it handles its own sound there)
+  const onOrdersPage = router.currentRoute.value.path.startsWith("/owner/orders");
+  if (!onOrdersPage) layoutPlayAlertSound();
+  // Browser notification
   if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
     new Notification(
-      newPending.length === 1
-        ? t("ownerOrders.newOrderNotifTitle", { count: 1 })
-        : t("ownerOrders.newOrderNotifTitle", { count: newPending.length }),
+      t("ownerOrders.newOrderNotifTitle", { count: newPending.length }),
       { body: t("ownerOrders.newOrderNotifBody"), icon: "/favicon.ico", tag: "new-order", renotify: true }
     );
   }
@@ -284,11 +316,12 @@ onMounted(async () => {
     document.addEventListener("pointerdown", onDocumentPointerDown);
   }
   layoutRequestNotifPermission();
-  // Background order poll — keeps the nav badge live on every page
-  const initial = await order.fetchOrders();
+  // Background order poll — keeps the nav badge live on every page.
+  // Always silent so we never trigger the loading spinner shown in OwnerOrders.
+  const initial = await order.fetchOrders("", { silent: true });
   layoutCheckNewOrders(Array.isArray(initial) ? initial : order.orders);
   orderPollTimer = setInterval(async () => {
-    const fresh = await order.fetchOrders();
+    const fresh = await order.fetchOrders("", { silent: true });
     layoutCheckNewOrders(Array.isArray(fresh) ? fresh : order.orders);
   }, 30000);
 });
