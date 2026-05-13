@@ -8,10 +8,23 @@
           <h1 class="text-2xl font-semibold text-white">{{ t("ownerOrders.title") }}</h1>
           <p class="text-sm text-slate-400">{{ t("ownerOrders.description") }}</p>
         </div>
-        <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="order.ordersLoading" @click="refresh">
-          <AppIcon name="refresh" class="h-3.5 w-3.5" />
-          {{ t("ownerOrders.refreshOrders") }}
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="ui-btn-outline px-3 py-1.5 text-sm"
+            :class="soundEnabled ? '' : 'opacity-50'"
+            :title="soundEnabled ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
+            @click="soundEnabled = !soundEnabled"
+          >
+            {{ soundEnabled ? "🔔" : "🔕" }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="!order.orders.length" @click="exportCsv">
+            ⬇ {{ t("ownerOrders.exportCsv") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="order.ordersLoading" @click="refresh">
+            <AppIcon name="refresh" class="h-3.5 w-3.5" />
+            {{ t("ownerOrders.refreshOrders") }}
+          </button>
+        </div>
       </div>
 
       <!-- Today's stats bar -->
@@ -216,7 +229,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderStore } from "../stores/order";
@@ -230,6 +243,15 @@ const activeStatus = ref("");
 const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
+
+// Sound preference — persisted in localStorage per hostname
+const SOUND_KEY = typeof window === "undefined" ? "orders:sound" : `orders:sound:${window.location.hostname}`;
+const soundEnabled = ref((() => {
+  try { return localStorage.getItem(SOUND_KEY) !== "off"; } catch { return true; }
+})());
+watch(soundEnabled, (val) => {
+  try { localStorage.setItem(SOUND_KEY, val ? "on" : "off"); } catch { /* ignore */ }
+});
 
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
@@ -422,12 +444,40 @@ const printTicket = (o) => {
   setTimeout(() => { win.print(); win.close(); }, 300);
 };
 
+// ── CSV export ────────────────────────────────────────────────────────────────
+const exportCsv = () => {
+  const cols = [
+    "order_number", "status", "fulfillment_type", "table_label",
+    "customer_name", "customer_phone", "delivery_address",
+    "total", "currency", "items_count", "customer_note", "owner_note",
+    "estimated_ready_minutes", "created_at",
+  ];
+  const header = cols.join(",");
+  const rows = filteredOrders.value.map((o) =>
+    cols.map((col) => {
+      const val = o[col] ?? "";
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 // ── New-order alert ───────────────────────────────────────────────────────────
 const knownOrderIds = ref(new Set());
 const lastAlertTime = ref(0);
 const RECURRING_ALERT_MS = 2 * 60 * 1000; // re-ping every 2 min while pending orders sit
 
 const playAlertSound = () => {
+  if (!soundEnabled.value) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     [0, 0.18].forEach((delay, i) => {

@@ -939,7 +939,10 @@ export const messages = {
       tip: "Tip: choose clear category images to increase customer taps and conversion.",
       noMatchTitle: "No matching categories.",
       noMatchText: "Try a different search term or check back later.",
-      loading: "Loading menu..."
+      loading: "Loading menu...",
+      opensUntil: "Open · closes {time}",
+      opensAt: "Closed · opens {day} {time}",
+      tomorrow: "tomorrow",
     },
     category: {
       kicker: "Category",
@@ -1413,6 +1416,9 @@ export const messages = {
       todayPending: "Pending",
       printTicket: "Print",
       printBlocked: "Pop-up blocked — please allow pop-ups to print.",
+      muteAlerts: "Mute order alerts",
+      unmuteAlerts: "Unmute order alerts",
+      exportCsv: "Export CSV",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -2274,7 +2280,10 @@ export const messages = {
       tip: "Astuce: utilisez des images de categories claires pour augmenter les clics.",
       noMatchTitle: "Aucune categorie correspondante.",
       noMatchText: "Essayez un autre terme ou revenez plus tard.",
-      loading: "Chargement du menu..."
+      loading: "Chargement du menu...",
+      opensUntil: "Ouvert · ferme a {time}",
+      opensAt: "Ferme · ouvre {day} a {time}",
+      tomorrow: "demain",
     },
     category: {
       kicker: "Categorie",

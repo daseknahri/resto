@@ -219,6 +219,7 @@ import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { withImageFallback } from '../lib/images';
 import { trackEvent } from '../lib/analytics';
+import { getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule } from '../lib/businessHours';
 import { useCartStore } from '../stores/cart';
 import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
@@ -246,7 +247,25 @@ const tenantDescription = computed(() => String(profile.value?.description || pr
 const heroImage = computed(() => String(profile.value?.hero_url || '').trim());
 const logoImage = computed(() => String(profile.value?.logo_url || '').trim());
 const locationLine = computed(() => String(profile.value?.address || meta.value?.name || '').trim());
-const statusLabel = computed(() => (profile.value?.is_open === false ? t('customerLeadPage.closedNow') : t('customerLeadPage.openNow')));
+const statusLabel = computed(() => {
+  if (profile.value?.is_open === false) return t('customerLeadPage.closedNow');
+  const schedule = profile.value?.business_hours_schedule;
+  if (schedule && Object.keys(schedule).length) {
+    const openBySchedule = isCurrentlyOpenBySchedule(schedule);
+    if (openBySchedule === true) {
+      const closeTime = getTodayClosingTime(schedule);
+      return closeTime ? t('menu.opensUntil', { time: closeTime }) : t('customerLeadPage.openNow');
+    }
+    if (openBySchedule === false) {
+      const next = getNextOpenInfo(schedule, currentLocale.value);
+      if (next) {
+        const dayPart = next.isTomorrow ? t('menu.tomorrow') : next.dayLabel;
+        return t('menu.opensAt', { day: dayPart, time: next.openTime });
+      }
+    }
+  }
+  return t('customerLeadPage.openNow');
+});
 const cartCurrency = computed(() => {
   const firstItemCurrency = cart.items.find((item) => item.currency)?.currency;
   return firstItemCurrency || meta.value?.plan?.currency || 'USD';

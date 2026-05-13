@@ -748,7 +748,10 @@ const arabicMessages = {
     "tip": "نصيحة: استخدم صور تصنيفات واضحة لزيادة التفاعل والتحويل.",
     "noMatchTitle": "لا توجد تصنيفات مطابقة.",
     "noMatchText": "جرّب عبارة بحث أخرى أو عد لاحقاً.",
-    "loading": "جارٍ تحميل القائمة..."
+    "loading": "جارٍ تحميل القائمة...",
+    "opensUntil": "مفتوح · يغلق {time}",
+    "opensAt": "مغلق · يفتح {day} {time}",
+    "tomorrow": "غداً"
   },
   "category": {
     "kicker": "التصنيف",
@@ -1328,7 +1331,10 @@ const arabicMessages = {
     "todayRevenue": "الإيرادات",
     "todayPending": "معلق",
     "printTicket": "طباعة",
-    "printBlocked": "تم حظر النوافذ المنبثقة — يرجى السماح بها للطباعة."
+    "printBlocked": "تم حظر النوافذ المنبثقة — يرجى السماح بها للطباعة.",
+    "muteAlerts": "كتم تنبيهات الطلبات",
+    "unmuteAlerts": "تفعيل تنبيهات الطلبات",
+    "exportCsv": "تصدير CSV"
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",

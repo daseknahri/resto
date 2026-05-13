@@ -143,3 +143,58 @@ export const formatBusinessHoursSummary = (schedule, locale) => {
 
 export const buildBusinessHoursSummaries = (schedule) =>
   Object.fromEntries(HOURS_LOCALES.map((locale) => [locale, formatBusinessHoursSummary(schedule, locale)]));
+
+// ── Runtime open/close helpers ────────────────────────────────────────────────
+
+/** Map JS getDay() (0=Sun..6=Sat) to WEEKDAY_KEYS index. */
+const jsWeekdayToKey = (jsDay) => WEEKDAY_KEYS[jsDay === 0 ? 6 : jsDay - 1];
+
+export const getCurrentDayKey = () => jsWeekdayToKey(new Date().getDay());
+
+const currentHHMM = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+};
+
+/**
+ * Returns true if the current time falls inside today's configured hours.
+ * Returns null when no schedule is configured (unknown state).
+ */
+export const isCurrentlyOpenBySchedule = (schedule) => {
+  if (!schedule || !Object.keys(schedule).length) return null;
+  const normalized = normalizeBusinessHoursSchedule(schedule);
+  const entry = normalized[getCurrentDayKey()];
+  if (!entry?.enabled || !entry.open || !entry.close) return false;
+  const now = currentHHMM();
+  return now >= entry.open && now < entry.close;
+};
+
+/** Returns today's closing time string (e.g. "22:00") or null if unavailable. */
+export const getTodayClosingTime = (schedule) => {
+  if (!schedule || !Object.keys(schedule).length) return null;
+  const normalized = normalizeBusinessHoursSchedule(schedule);
+  const entry = normalized[getCurrentDayKey()];
+  return entry?.enabled && entry.close ? entry.close : null;
+};
+
+/** Returns the next opening day/time, or null if none found in the week. */
+export const getNextOpenInfo = (schedule, locale = "en") => {
+  if (!schedule || !Object.keys(schedule).length) return null;
+  const normalized = normalizeBusinessHoursSchedule(schedule);
+  const resolvedLocale = normalizeLocaleCode(locale);
+  const todayIdx = WEEKDAY_KEYS.indexOf(getCurrentDayKey());
+  for (let i = 1; i <= 7; i++) {
+    const idx = (todayIdx + i) % 7;
+    const dayKey = WEEKDAY_KEYS[idx];
+    const entry = normalized[dayKey];
+    if (entry?.enabled && entry.open) {
+      return {
+        dayKey,
+        dayLabel: i === 1 ? null : DAY_SHORT_LABELS[resolvedLocale][dayKey],
+        openTime: entry.open,
+        isTomorrow: i === 1,
+      };
+    }
+  }
+  return null;
+};
