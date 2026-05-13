@@ -292,10 +292,78 @@ const saveNote = async (o) => {
   }
 };
 
+// ── New-order alert ──────────────────────────────────────────────────────────
+const knownOrderIds = ref(new Set());
+
+const playAlertSound = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Two quick ascending beeps
+    [0, 0.18].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(i === 0 ? 780 : 980, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.25);
+    });
+  } catch {
+    // AudioContext not available (e.g. SSR or blocked)
+  }
+};
+
+const showBrowserNotification = (count) => {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  new Notification(t("ownerOrders.newOrderNotifTitle", { count }), {
+    body: t("ownerOrders.newOrderNotifBody"),
+    icon: "/favicon.ico",
+    tag: "new-order",
+    renotify: true,
+  });
+};
+
+const checkForNewOrders = (freshOrders) => {
+  if (!knownOrderIds.value.size) {
+    // First load — seed known IDs without alerting
+    freshOrders.forEach((o) => knownOrderIds.value.add(o.id));
+    return;
+  }
+  const newPending = freshOrders.filter(
+    (o) => o.status === "pending" && !knownOrderIds.value.has(o.id)
+  );
+  freshOrders.forEach((o) => knownOrderIds.value.add(o.id));
+  if (newPending.length) {
+    playAlertSound();
+    showBrowserNotification(newPending.length);
+    toast.show(t("ownerOrders.newOrderNotifTitle", { count: newPending.length }), "info");
+  }
+};
+
+const requestNotificationPermission = async () => {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    await Notification.requestPermission();
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 let pollTimer = null;
-onMounted(() => {
-  order.fetchOrders();
-  pollTimer = setInterval(() => order.fetchOrders(activeStatus.value), 30000);
+onMounted(async () => {
+  await requestNotificationPermission();
+  const initial = await order.fetchOrders();
+  if (Array.isArray(initial)) checkForNewOrders(initial);
+  else checkForNewOrders(order.orders);
+
+  pollTimer = setInterval(async () => {
+    await order.fetchOrders(activeStatus.value);
+    checkForNewOrders(order.orders);
+  }, 30000);
 });
 onUnmounted(() => clearInterval(pollTimer));
 </script>

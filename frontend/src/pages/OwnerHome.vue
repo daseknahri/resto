@@ -142,6 +142,58 @@
       </div>
     </article>
 
+    <!-- Live Orders Widget -->
+    <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+          <AppIcon name="menu" class="owner-home-section-icon" />
+          <span>{{ t("ownerHome.liveOrders") }}</span>
+        </h3>
+        <RouterLink :to="{ name: 'owner-orders' }" class="ui-btn-outline px-3 py-1.5 text-xs">
+          {{ t("ownerHome.viewAllOrders") }}
+        </RouterLink>
+      </div>
+
+      <!-- Status counts -->
+      <div class="flex flex-wrap gap-2">
+        <div
+          class="flex items-center gap-2 rounded-xl border px-3 py-2"
+          :class="pendingOrders.length ? 'border-amber-500/60 bg-amber-500/10' : 'border-slate-700 bg-slate-900/40'"
+        >
+          <span class="text-xl font-bold" :class="pendingOrders.length ? 'text-amber-300' : 'text-slate-400'">{{ pendingOrders.length }}</span>
+          <span class="text-xs font-medium" :class="pendingOrders.length ? 'text-amber-200' : 'text-slate-500'">{{ t("ownerOrders.statusPending") }}</span>
+          <span v-if="pendingOrders.length" class="h-2 w-2 animate-pulse rounded-full bg-amber-400"></span>
+        </div>
+        <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2">
+          <span class="text-xl font-bold text-slate-300">{{ activeOrders.length }}</span>
+          <span class="text-xs font-medium text-slate-500">{{ t("ownerHome.inProgress") }}</span>
+        </div>
+      </div>
+
+      <!-- Recent orders list -->
+      <div v-if="recentOrders.length" class="space-y-1.5">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.recentOrdersList") }}</p>
+        <div
+          v-for="o in recentOrders"
+          :key="o.id"
+          class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs"
+        >
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono font-bold text-slate-100">{{ o.order_number }}</span>
+            <span class="rounded-full px-2 py-0.5 font-semibold" :class="orderStatusClass(o.status)">{{ orderStatusLabel(o.status) }}</span>
+            <span v-if="o.fulfillment_type" class="hidden sm:inline text-slate-400">{{ o.fulfillment_type }}</span>
+          </div>
+          <div class="flex shrink-0 items-center gap-3">
+            <span class="font-semibold text-[var(--color-secondary)]">{{ formatOrderTotal(o) }}</span>
+            <span class="text-slate-500">{{ formatTimeAgo(o.created_at) }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="!order.ordersLoading" class="rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-6 text-center">
+        <p class="text-sm text-slate-400">{{ t("ownerHome.noOrdersYet") }}</p>
+      </div>
+    </article>
+
     <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -266,10 +318,12 @@ import { computed, onMounted, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
+import { useOrderStore } from "../stores/order";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
 const tenant = useTenantStore();
+const order = useOrderStore();
 const toast = useToastStore();
 const { t, formatDateTime, formatNumber } = useI18n();
 
@@ -298,6 +352,10 @@ const analyticsSummary = ref({
   top_dishes: [],
   interaction_rate_pct: 0,
 });
+
+const pendingOrders = computed(() => order.orders.filter((o) => o.status === "pending"));
+const activeOrders = computed(() => order.orders.filter((o) => ["confirmed", "preparing", "ready"].includes(o.status)));
+const recentOrders = computed(() => [...order.orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5));
 
 const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);
@@ -394,6 +452,7 @@ const refresh = async () => {
     categoriesCount.value = categoriesData.value.length;
     dishesCount.value = dishesData.value.length;
     ensureUpgradeTargetSelection();
+    void order.fetchOrders();
     void hydrateOwnerInsights();
   } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
@@ -510,6 +569,38 @@ const upgradeStatusLabel = (status) => {
   if (status === "rejected") return t("ownerHome.statusRejected");
   if (status === "canceled") return t("ownerHome.statusCanceled");
   return t("ownerHome.statusPending");
+};
+
+const orderStatusClass = (s) => ({
+  pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
+  confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
+  preparing: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
+  ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
+  completed: "bg-slate-700 text-slate-300",
+  cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
+}[s] || "bg-slate-700 text-slate-300");
+
+const orderStatusLabel = (s) => ({
+  pending: t("ownerOrders.statusPending"),
+  confirmed: t("ownerOrders.statusConfirmed"),
+  preparing: t("ownerOrders.statusPreparing"),
+  ready: t("ownerOrders.statusReady"),
+  completed: t("ownerOrders.statusCompleted"),
+  cancelled: t("ownerOrders.statusCancelled"),
+}[s] || s);
+
+const formatOrderTotal = (o) => {
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency || "USD" }).format(Number(o.total) || 0); }
+  catch { return `${o.currency} ${Number(o.total).toFixed(2)}`; }
+};
+
+const formatTimeAgo = (iso) => {
+  if (!iso) return "";
+  const diffMin = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (diffMin < 1) return t("ownerOrders.justNow");
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h`;
+  return new Date(iso).toLocaleDateString();
 };
 
 const humanizeSlug = (value) =>

@@ -56,6 +56,7 @@ export const useOrderStore = defineStore("order", {
         const params = statusFilter ? { status: statusFilter } : {};
         const res = await api.get("/owner/orders/", { params });
         this.orders = Array.isArray(res.data?.results) ? res.data.results : [];
+        return this.orders;
       } catch (err) {
         this.ordersError = err?.response?.data?.detail || "Failed to load orders.";
       } finally {

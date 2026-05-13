@@ -254,6 +254,11 @@ const arabicMessages = {
     "restaurantClosed": "المطعم مغلق",
     "launchProgress": "تقدم جاهزية الإطلاق",
     "pushTo100": "ارفع الجاهزية إلى 100% قبل الحملات المدفوعة ونشر QR.",
+    "liveOrders": "الطلبات المباشرة",
+    "viewAllOrders": "عرض جميع الطلبات",
+    "inProgress": "قيد التنفيذ",
+    "recentOrdersList": "الطلبات الأخيرة",
+    "noOrdersYet": "لا توجد طلبات بعد. ستظهر هنا عند بدء العملاء بالطلب.",
     "analyticsTitle": "تحليلات القائمة خلال 30 يوماً",
     "analyticsSubtitle": "تُجمع تلقائياً من تفاعلات العملاء",
     "menuViews": "مشاهدات القائمة",
@@ -1308,7 +1313,9 @@ const arabicMessages = {
     "delivery": "التوصيل",
     "note": "ملاحظة",
     "options": "الخيارات",
-    "refreshOrders": "تحديث"
+    "refreshOrders": "تحديث",
+    "newOrderNotifTitle": "طلب جديد | {count} طلبات جديدة",
+    "newOrderNotifBody": "هناك طلب (طلبات) جديدة تنتظر تأكيدك."
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",
