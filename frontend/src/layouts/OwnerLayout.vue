@@ -245,6 +245,36 @@ const onDocumentPointerDown = (event) => {
   }
 };
 
+// ── Layout-level new-order browser notifications ──────────────────────────────
+// (sound is handled in OwnerOrders; here we just keep the badge + notif live)
+const layoutKnownIds = new Set();
+
+const layoutCheckNewOrders = (orders) => {
+  if (!Array.isArray(orders)) return;
+  if (!layoutKnownIds.size) {
+    // First load — seed without alerting
+    orders.forEach((o) => layoutKnownIds.add(o.id));
+    return;
+  }
+  const newPending = orders.filter((o) => o.status === "pending" && !layoutKnownIds.has(o.id));
+  orders.forEach((o) => layoutKnownIds.add(o.id));
+  if (!newPending.length) return;
+  // Browser notification only — no sound (OwnerOrders handles sound on that page)
+  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    new Notification(
+      newPending.length === 1
+        ? t("ownerOrders.newOrderNotifTitle", { count: 1 })
+        : t("ownerOrders.newOrderNotifTitle", { count: newPending.length }),
+      { body: t("ownerOrders.newOrderNotifBody"), icon: "/favicon.ico", tag: "new-order", renotify: true }
+    );
+  }
+};
+
+const layoutRequestNotifPermission = () => {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
+};
+
 let orderPollTimer = null;
 onMounted(async () => {
   if (!tenant.meta && !tenant.loading) {
@@ -253,9 +283,14 @@ onMounted(async () => {
   if (typeof document !== "undefined") {
     document.addEventListener("pointerdown", onDocumentPointerDown);
   }
+  layoutRequestNotifPermission();
   // Background order poll — keeps the nav badge live on every page
-  await order.fetchOrders();
-  orderPollTimer = setInterval(() => order.fetchOrders(), 30000);
+  const initial = await order.fetchOrders();
+  layoutCheckNewOrders(Array.isArray(initial) ? initial : order.orders);
+  orderPollTimer = setInterval(async () => {
+    const fresh = await order.fetchOrders();
+    layoutCheckNewOrders(Array.isArray(fresh) ? fresh : order.orders);
+  }, 30000);
 });
 
 onBeforeUnmount(() => {

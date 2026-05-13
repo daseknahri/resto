@@ -298,7 +298,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
-import { formatBusinessHoursRows, formatBusinessHoursSummary, normalizeBusinessHoursSchedule } from "../lib/businessHours";
+import { formatBusinessHoursRows, formatBusinessHoursSummary, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
 import { isPublicDemoHost } from "../lib/runtimeHost";
@@ -329,7 +329,25 @@ const errors = reactive({
 const profile = computed(() => meta.value?.profile || {});
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
 const isOpen = computed(() => profile.value?.is_open !== false);
-const statusLabel = computed(() => (isOpen.value ? t("customerLeadPage.openNow") : t("customerLeadPage.closedNow")));
+const statusLabel = computed(() => {
+  if (!isOpen.value) return t("customerLeadPage.closedNow");
+  const schedule = profile.value?.business_hours_schedule;
+  if (schedule && Object.keys(schedule).length) {
+    const openBySchedule = isCurrentlyOpenBySchedule(schedule);
+    if (openBySchedule === true) {
+      const closeTime = getTodayClosingTime(schedule);
+      return closeTime ? t("menu.opensUntil", { time: closeTime }) : t("customerLeadPage.openNow");
+    }
+    if (openBySchedule === false) {
+      const next = getNextOpenInfo(schedule, currentLocale.value);
+      if (next) {
+        const dayPart = next.isTomorrow ? t("menu.tomorrow") : next.dayLabel;
+        return t("menu.opensAt", { day: dayPart, time: next.openTime });
+      }
+    }
+  }
+  return t("customerLeadPage.openNow");
+});
 const locationLine = computed(() => {
   const line = String(profile.value?.address || profile.value?.city || "").trim();
   return line || "";
