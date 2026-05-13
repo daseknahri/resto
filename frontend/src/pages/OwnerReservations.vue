@@ -540,9 +540,11 @@ const reminderOptions = computed(() => [
   { value: "none", label: t("ownerReservations.noReminders") },
 ]);
 const statusCounts = computed(() => {
+  // Use the server-reported total for the overall count; per-status counts
+  // are derived from the current page only (server doesn't return them).
   const rows = Array.isArray(reservations.value) ? reservations.value : [];
   return {
-    total: rows.length,
+    total: pagination.value.total || rows.length,
     new: rows.filter((item) => item?.status === "new").length,
     contacted: rows.filter((item) => item?.status === "contacted").length,
     won: rows.filter((item) => item?.status === "won").length,

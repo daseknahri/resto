@@ -262,10 +262,11 @@
       <!-- Recent orders list -->
       <div v-if="recentOrders.length" class="space-y-1.5">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.recentOrdersList") }}</p>
-        <div
+        <RouterLink
           v-for="o in recentOrders"
           :key="o.id"
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs"
+          :to="{ name: 'owner-orders' }"
+          class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:border-slate-600 hover:bg-slate-900/60"
         >
           <div class="flex items-center gap-2 min-w-0">
             <span class="font-mono font-bold text-slate-100">{{ o.order_number }}</span>
@@ -276,7 +277,7 @@
             <span class="font-semibold text-[var(--color-secondary)]">{{ formatOrderTotal(o) }}</span>
             <span class="text-slate-500">{{ formatTimeAgo(o.created_at) }}</span>
           </div>
-        </div>
+        </RouterLink>
       </div>
       <div v-else-if="!order.ordersLoading" class="rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-6 text-center">
         <p class="text-sm text-slate-400">{{ t("ownerHome.noOrdersYet") }}</p>
@@ -403,7 +404,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -784,8 +786,36 @@ const humanizeSlug = (value) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+// ── Live-orders background poll ──────────────────────────────────────────────
+const HOME_POLL_INTERVAL_S = 30;
+let homePollTimer = null;
+
+const doSilentOrdersPoll = () => {
+  void order.fetchOrders("", { silent: true });
+};
+
+const onHomePageVisible = () => {
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    doSilentOrdersPoll();
+  }
+};
+
 onMounted(async () => {
   await refresh();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onHomePageVisible);
+  }
+  homePollTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    doSilentOrdersPoll();
+  }, HOME_POLL_INTERVAL_S * 1000);
+});
+
+onUnmounted(() => {
+  clearInterval(homePollTimer);
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onHomePageVisible);
+  }
 });
 </script>
 
