@@ -121,13 +121,15 @@ jobs:
       - name: Notify Coolify
         shell: bash
         env:
-          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          if [ -z "$COOLIFY_DEPLOY_WEBHOOK" ]; then
-            echo "Missing required secret: COOLIFY_DEPLOY_WEBHOOK" >&2
+          if [ -z "$COOLIFY_WEBHOOK_URL" ] || [ -z "$COOLIFY_TOKEN" ]; then
+            echo "Missing required secrets: COOLIFY_WEBHOOK_URL and/or COOLIFY_TOKEN" >&2
             exit 1
           fi
 
           curl --fail --silent --show-error \
             --request POST \
-            "$COOLIFY_DEPLOY_WEBHOOK"
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_WEBHOOK_URL"
