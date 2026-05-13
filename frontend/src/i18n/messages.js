@@ -1088,7 +1088,15 @@ export const messages = {
       statusApproved: "Approved",
       statusRejected: "Rejected",
       statusCanceled: "Canceled",
-      statusPending: "Pending"
+      statusPending: "Pending",
+      openNow: "Open now",
+      closeNow: "Close now",
+      openToggleHint: "Customers see this status on your menu page",
+      openedToast: "Restaurant is now open",
+      closedToast: "Restaurant is now closed",
+      toggleFailed: "Failed to update restaurant status",
+      todayOrders: "Today's orders",
+      todayRevenue: "Today's revenue",
     },
     adminConsole: {
       loadJobsFailed: "Unable to load jobs (login as admin)",
@@ -2415,7 +2423,15 @@ export const messages = {
       statusApproved: "Approuve",
       statusRejected: "Refuse",
       statusCanceled: "Annule",
-      statusPending: "En attente"
+      statusPending: "En attente",
+      openNow: "Ouvrir maintenant",
+      closeNow: "Fermer maintenant",
+      openToggleHint: "Les clients voient ce statut sur votre menu",
+      openedToast: "Le restaurant est maintenant ouvert",
+      closedToast: "Le restaurant est maintenant ferme",
+      toggleFailed: "Echec de la mise a jour du statut",
+      todayOrders: "Commandes aujourd'hui",
+      todayRevenue: "Recettes d'aujourd'hui",
     },
     adminConsole: {
       loadJobsFailed: "Impossible de charger les jobs (connectez-vous en admin)",

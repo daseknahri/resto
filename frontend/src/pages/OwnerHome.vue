@@ -31,6 +31,45 @@
         </article>
       </div>
 
+      <!-- Today's order quick-stats -->
+      <div class="grid grid-cols-3 gap-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50">
+        <div class="py-3 text-center">
+          <p class="text-xl font-bold tabular-nums text-white">{{ todayOrderStats.count }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayOrders") }}</p>
+        </div>
+        <div class="border-x border-slate-800 py-3 text-center">
+          <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayOrderStats.revenue }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayRevenue") }}</p>
+        </div>
+        <div class="py-3 text-center">
+          <p class="text-xl font-bold tabular-nums transition-colors" :class="todayOrderStats.pending > 0 ? 'text-amber-400' : 'text-white'">{{ todayOrderStats.pending }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
+        </div>
+      </div>
+
+      <!-- Restaurant open/closed quick toggle -->
+      <div
+        class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors"
+        :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'"
+      >
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'">
+            {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
+          </p>
+          <p class="text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+        </div>
+        <button
+          class="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
+          :class="isOpen
+            ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
+            : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
+          :disabled="togglingOpen"
+          @click="toggleOpen"
+        >
+          {{ togglingOpen ? "…" : (isOpen ? t("ownerHome.closeNow") : t("ownerHome.openNow")) }}
+        </button>
+      </div>
+
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
         <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2.5 sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" />
@@ -359,6 +398,48 @@ const recentOrders = computed(() => [...order.orders].sort((a, b) => new Date(b.
 
 const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);
+const isOpen = computed(() => profile.value?.is_open !== false);
+const togglingOpen = ref(false);
+
+// ── Today's order stats ───────────────────────────────────────────────────────
+const todayOrderStats = computed(() => {
+  const today = new Date().toDateString();
+  const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const currency = todayOrders.find((o) => o.currency)?.currency || "USD";
+  let revenueLabel = "";
+  try {
+    revenueLabel = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 0,
+    }).format(revenue);
+  } catch {
+    revenueLabel = `${currency} ${Math.floor(revenue)}`;
+  }
+  return {
+    count: todayOrders.length,
+    revenue: revenueLabel,
+    pending: todayOrders.filter((o) => o.status === "pending").length,
+  };
+});
+
+// ── Open/Closed toggle ────────────────────────────────────────────────────────
+const toggleOpen = async () => {
+  if (togglingOpen.value) return;
+  togglingOpen.value = true;
+  const newValue = !isOpen.value;
+  try {
+    await api.patch("/profile/", { is_open: newValue });
+    tenant.mergeProfile({ is_open: newValue });
+    toast.show(newValue ? t("ownerHome.openedToast") : t("ownerHome.closedToast"), newValue ? "success" : "info");
+  } catch {
+    toast.show(t("ownerHome.toggleFailed"), "error");
+  } finally {
+    togglingOpen.value = false;
+  }
+};
 const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsapp = computed(() => tenant.entitlements?.can_whatsapp_order === true);
 const planModeLabel = computed(() => {

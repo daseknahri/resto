@@ -312,7 +312,15 @@ const arabicMessages = {
     "statusApproved": "مقبول",
     "statusRejected": "مرفوض",
     "statusCanceled": "ملغى",
-    "statusPending": "قيد الانتظار"
+    "statusPending": "قيد الانتظار",
+    "openNow": "افتح الآن",
+    "closeNow": "أغلق الآن",
+    "openToggleHint": "يرى العملاء هذا الحالة في صفحة القائمة",
+    "openedToast": "المطعم مفتوح الآن",
+    "closedToast": "المطعم مغلق الآن",
+    "toggleFailed": "فشل تحديث حالة المطعم",
+    "todayOrders": "طلبات اليوم",
+    "todayRevenue": "إيرادات اليوم"
   },
   "ownerTables": {
     "kicker": "مساحة المالك",
