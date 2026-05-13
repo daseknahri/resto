@@ -1315,7 +1315,12 @@ const arabicMessages = {
     "options": "الخيارات",
     "refreshOrders": "تحديث",
     "newOrderNotifTitle": "طلب جديد | {count} طلبات جديدة",
-    "newOrderNotifBody": "هناك طلب (طلبات) جديدة تنتظر تأكيدك."
+    "newOrderNotifBody": "هناك طلب (طلبات) جديدة تنتظر تأكيدك.",
+    "todayOrders": "اليوم",
+    "todayRevenue": "الإيرادات",
+    "todayPending": "معلق",
+    "printTicket": "طباعة",
+    "printBlocked": "تم حظر النوافذ المنبثقة — يرجى السماح بها للطباعة."
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",

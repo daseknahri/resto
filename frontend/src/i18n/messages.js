@@ -1399,7 +1399,12 @@ export const messages = {
       options: "Options",
       refreshOrders: "Refresh",
       newOrderNotifTitle: "{count} new order | {count} new orders",
-      newOrderNotifBody: "New order(s) are waiting for your confirmation."
+      newOrderNotifBody: "New order(s) are waiting for your confirmation.",
+      todayOrders: "Today",
+      todayRevenue: "Revenue",
+      todayPending: "Pending",
+      printTicket: "Print",
+      printBlocked: "Pop-up blocked — please allow pop-ups to print.",
     },
     orderStatus: {
       kicker: "Order tracking",

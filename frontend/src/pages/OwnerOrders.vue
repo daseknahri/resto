@@ -14,6 +14,25 @@
         </button>
       </div>
 
+      <!-- Today's stats bar -->
+      <div class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
+        <div class="text-center">
+          <p class="text-xl font-bold text-white tabular-nums">{{ todayStats.count }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayOrders") }}</p>
+        </div>
+        <div class="border-x border-slate-800 text-center">
+          <p class="text-xl font-bold text-[var(--color-secondary)] tabular-nums">{{ formatCurrency(todayStats.revenue, todayStats.currency) }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayRevenue") }}</p>
+        </div>
+        <div class="text-center">
+          <p
+            class="text-xl font-bold tabular-nums transition-colors"
+            :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-white'"
+          >{{ todayStats.pending }}</p>
+          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
+        </div>
+      </div>
+
       <!-- Status filter tabs -->
       <div class="flex flex-wrap gap-1.5">
         <button
@@ -52,8 +71,8 @@
       <article
         v-for="o in filteredOrders"
         :key="o.id"
-        class="ui-panel space-y-4 p-4 sm:p-5"
-        :class="o.status === 'pending' ? 'border-amber-500/40' : o.status === 'cancelled' ? 'border-red-500/20' : ''"
+        class="ui-panel space-y-4 p-4 sm:p-5 transition-colors"
+        :class="orderCardClass(o)"
       >
         <!-- Order header -->
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -64,6 +83,16 @@
                 {{ statusLabel(o.status) }}
               </span>
               <span class="ui-data-strip">{{ fulfillmentLabel(o) }}</span>
+              <!-- Age warning badge -->
+              <span
+                v-if="orderAgeMin(o) >= 5 && ['pending', 'confirmed'].includes(o.status)"
+                class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                :class="orderAgeMin(o) >= 10
+                  ? 'bg-red-500/25 text-red-300'
+                  : 'bg-amber-500/25 text-amber-300'"
+              >
+                ⏱ {{ orderAgeMin(o) }}m
+              </span>
             </div>
             <p class="text-xs text-slate-400">{{ formatTime(o.created_at) }}</p>
           </div>
@@ -172,6 +201,14 @@
           >
             {{ t("ownerOrders.ownerNote") }}
           </button>
+
+          <!-- Print ticket -->
+          <button
+            class="ui-btn-outline px-3 py-1.5 text-xs"
+            @click="printTicket(o)"
+          >
+            🖨 {{ t("ownerOrders.printTicket") }}
+          </button>
         </div>
       </article>
     </div>
@@ -194,6 +231,7 @@ const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
 
+// ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
   const counts = {};
   order.orders.forEach((o) => { counts[o.status] = (counts[o.status] || 0) + 1; });
@@ -208,17 +246,35 @@ const statusTabs = computed(() => {
   ];
 });
 
-const filteredOrders = computed(() => {
-  if (!activeStatus.value) return order.orders;
-  return order.orders.filter((o) => o.status === activeStatus.value);
+// ── Today's stats ─────────────────────────────────────────────────────────────
+const todayStats = computed(() => {
+  const today = new Date().toDateString();
+  const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const pending = todayOrders.filter((o) => o.status === "pending").length;
+  const revenue = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const currency = todayOrders.find((o) => o.currency)?.currency || "USD";
+  return { count: todayOrders.length, revenue, pending, currency };
 });
 
-const setFilter = (val) => {
-  activeStatus.value = val;
-};
+// ── Filtered + sorted orders ──────────────────────────────────────────────────
+const STATUS_SORT = { pending: 0, confirmed: 1, preparing: 2, ready: 3, completed: 4, cancelled: 5 };
 
+const filteredOrders = computed(() => {
+  const base = activeStatus.value
+    ? order.orders.filter((o) => o.status === activeStatus.value)
+    : order.orders;
+  return [...base].sort((a, b) => {
+    const sd = (STATUS_SORT[a.status] ?? 9) - (STATUS_SORT[b.status] ?? 9);
+    if (sd !== 0) return sd;
+    // Within same status: newest first
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+});
+
+const setFilter = (val) => { activeStatus.value = val; };
 const refresh = () => order.fetchOrders();
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const statusClass = (s) => ({
   pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
@@ -256,14 +312,28 @@ const formatTime = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
-  const diffMs = now - d;
-  const diffMin = Math.floor(diffMs / 60000);
+  const diffMin = Math.floor((now - d) / 60000);
   if (diffMin < 1) return t("ownerOrders.justNow");
   if (diffMin < 60) return `${diffMin}m`;
   if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
   return d.toLocaleDateString();
 };
 
+// ── Order age ─────────────────────────────────────────────────────────────────
+const orderAgeMin = (o) => Math.floor((Date.now() - new Date(o.created_at)) / 60000);
+
+const orderCardClass = (o) => {
+  if (["pending", "confirmed"].includes(o.status)) {
+    const age = orderAgeMin(o);
+    if (age >= 10) return "border-red-500/60 bg-red-950/5";
+    if (age >= 5)  return "border-amber-400/60";
+    return "border-amber-500/40";
+  }
+  if (o.status === "cancelled") return "border-red-500/20";
+  return "";
+};
+
+// ── Status actions ────────────────────────────────────────────────────────────
 const updateStatus = async (o, newStatus) => {
   try {
     await order.updateOrderStatus(o.id, { status: newStatus });
@@ -292,13 +362,74 @@ const saveNote = async (o) => {
   }
 };
 
-// ── New-order alert ──────────────────────────────────────────────────────────
+// ── Print ticket ──────────────────────────────────────────────────────────────
+const printTicket = (o) => {
+  const itemRows = (o.items || []).map((item) => {
+    const opts = item.options?.length ? `<div style="font-size:11px;color:#555">${item.options.map((x) => x.name).join(", ")}</div>` : "";
+    const note = item.note ? `<div style="font-size:11px;color:#555;font-style:italic">${item.note}</div>` : "";
+    return `<tr>
+      <td style="padding:3px 0;vertical-align:top">
+        <strong>${item.qty}×</strong> ${item.dish_name}${opts}${note}
+      </td>
+      <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top">
+        ${formatCurrency(item.subtotal, o.currency)}
+      </td>
+    </tr>`;
+  }).join("");
+
+  const meta = [
+    fulfillmentLabel(o),
+    o.customer_name ? `Customer: ${o.customer_name}` : "",
+    o.customer_phone ? `Phone: ${o.customer_phone}` : "",
+    o.delivery_address ? `Address: ${o.delivery_address}` : "",
+    new Date(o.created_at).toLocaleString(),
+  ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
+
+  const note = o.customer_note
+    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>Note:</strong> ${o.customer_note}</div>`
+    : "";
+
+  const html = `<!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <title>Order ${o.order_number}</title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: 'Courier New', monospace; font-size: 13px; width: 300px; padding: 12px; }
+      h1 { font-size: 18px; text-align: center; letter-spacing: 1px; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+      .meta { font-size: 11px; margin-bottom: 8px; line-height: 1.6; }
+      table { width: 100%; border-collapse: collapse; }
+      .divider { border-top: 1px dashed #000; margin: 8px 0; }
+      .total td { font-weight: bold; font-size: 15px; padding: 4px 0; }
+      .footer { text-align: center; font-size: 10px; color: #666; margin-top: 12px; border-top: 1px dashed #000; padding-top: 8px; }
+      @media print { @page { margin: 0; size: 80mm auto; } }
+    </style>
+  </head><body>
+    <h1>#${o.order_number}</h1>
+    <div class="meta">${meta}</div>
+    <div class="divider"></div>
+    <table>${itemRows}</table>
+    <div class="divider"></div>
+    <table><tr class="total"><td>TOTAL</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr></table>
+    ${note}
+    <div class="footer">Printed ${new Date().toLocaleTimeString()}</div>
+  </body></html>`;
+
+  const win = window.open("", "_blank", "width=420,height=620");
+  if (!win) { toast.show(t("ownerOrders.printBlocked"), "error"); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 300);
+};
+
+// ── New-order alert ───────────────────────────────────────────────────────────
 const knownOrderIds = ref(new Set());
+const lastAlertTime = ref(0);
+const RECURRING_ALERT_MS = 2 * 60 * 1000; // re-ping every 2 min while pending orders sit
 
 const playAlertSound = () => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Two quick ascending beeps
     [0, 0.18].forEach((delay, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -312,7 +443,7 @@ const playAlertSound = () => {
       osc.stop(ctx.currentTime + delay + 0.25);
     });
   } catch {
-    // AudioContext not available (e.g. SSR or blocked)
+    // AudioContext not available
   }
 };
 
@@ -329,41 +460,49 @@ const showBrowserNotification = (count) => {
 
 const checkForNewOrders = (freshOrders) => {
   if (!knownOrderIds.value.size) {
-    // First load — seed known IDs without alerting
+    // First load — seed known IDs, no alert
     freshOrders.forEach((o) => knownOrderIds.value.add(o.id));
     return;
   }
   const newPending = freshOrders.filter(
-    (o) => o.status === "pending" && !knownOrderIds.value.has(o.id)
+    (o) => o.status === "pending" && !knownOrderIds.value.has(o.id),
   );
   freshOrders.forEach((o) => knownOrderIds.value.add(o.id));
   if (newPending.length) {
     playAlertSound();
     showBrowserNotification(newPending.length);
     toast.show(t("ownerOrders.newOrderNotifTitle", { count: newPending.length }), "info");
+    lastAlertTime.value = Date.now();
   }
 };
 
 const requestNotificationPermission = async () => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    await Notification.requestPermission();
-  }
+  if (Notification.permission === "default") await Notification.requestPermission();
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ── Polling ───────────────────────────────────────────────────────────────────
 let pollTimer = null;
+
 onMounted(async () => {
   await requestNotificationPermission();
   const initial = await order.fetchOrders();
-  if (Array.isArray(initial)) checkForNewOrders(initial);
-  else checkForNewOrders(order.orders);
+  checkForNewOrders(Array.isArray(initial) ? initial : order.orders);
 
   pollTimer = setInterval(async () => {
-    await order.fetchOrders(activeStatus.value);
-    checkForNewOrders(order.orders);
-  }, 30000);
+    const fresh = await order.fetchOrders(activeStatus.value);
+    const orders = Array.isArray(fresh) ? fresh : order.orders;
+    checkForNewOrders(orders);
+
+    // Recurring alert: re-ping if there are still unhandled pending orders
+    const hasPending = orders.some((o) => o.status === "pending");
+    const cooldownPassed = Date.now() - lastAlertTime.value > RECURRING_ALERT_MS;
+    if (hasPending && knownOrderIds.value.size > 0 && cooldownPassed) {
+      playAlertSound();
+      lastAlertTime.value = Date.now();
+    }
+  }, 15000); // 15 s — faster than layout's 30 s
 });
+
 onUnmounted(() => clearInterval(pollTimer));
 </script>
