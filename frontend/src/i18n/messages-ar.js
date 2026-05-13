@@ -1358,7 +1358,12 @@ const arabicMessages = {
     "fulfillmentPickup": "استلام",
     "fulfillmentDelivery": "توصيل",
     "fulfillmentTable": "طاولة {table}",
-    "backToMenu": "العودة إلى القائمة"
+    "backToMenu": "العودة إلى القائمة",
+    "orderReadyTitle": "طلبك جاهز!",
+    "readyBodyPickup": "يُرجى التوجه إلى الكاونتر لاستلام طلبك.",
+    "readyBodyDelivery": "طلبك في الطريق إليك!",
+    "readyNotifTitle": "الطلب جاهز!",
+    "readyNotifBody": "الطلب رقم #{number} جاهز لاستلامك."
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",

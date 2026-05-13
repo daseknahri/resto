@@ -14,6 +14,17 @@
     </div>
 
     <template v-else-if="orderData">
+      <!-- Order-ready banner -->
+      <div
+        v-if="orderData.status === 'ready'"
+        class="ui-reveal rounded-2xl border border-emerald-400/60 bg-emerald-500/15 p-4 text-center shadow-lg shadow-emerald-900/20 sm:p-5"
+      >
+        <p class="text-2xl font-bold text-emerald-200">🎉 {{ t("orderStatus.orderReadyTitle") }}</p>
+        <p class="mt-1 text-sm text-emerald-100/80">
+          {{ fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
+        </p>
+      </div>
+
       <!-- Header -->
       <div class="ui-hero-ribbon ui-reveal p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -117,8 +128,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 
@@ -126,13 +136,13 @@ const props = defineProps({
   orderNumber: { type: String, required: true },
 });
 
-const route = useRoute();
 const { t } = useI18n();
 
 const POLL_INTERVAL_S = 15;
 const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
+const readyAlertShown = ref(false);
 
 const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)
@@ -205,11 +215,73 @@ const formatCurrency = (amount, currency = "USD") => {
   }
 };
 
+// ── Order-ready alert ──────────────────────────────────────────────────────────
+
+const playReadyChime = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.28, start + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.52);
+      osc.start(start);
+      osc.stop(start + 0.55);
+    });
+  } catch {
+    // AudioContext blocked or unavailable — silent fallback
+  }
+};
+
+const sendReadyBrowserNotification = () => {
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const n = new Notification(t("orderStatus.readyNotifTitle"), {
+      body: t("orderStatus.readyNotifBody", { number: props.orderNumber }),
+      tag: `order-ready-${props.orderNumber}`,
+      renotify: false,
+    });
+    // Auto-close after 8 seconds
+    setTimeout(() => n.close(), 8000);
+  } catch {
+    // Notification API unavailable
+  }
+};
+
+const triggerReadyAlert = () => {
+  if (readyAlertShown.value) return;
+  readyAlertShown.value = true;
+  playReadyChime();
+  sendReadyBrowserNotification();
+};
+
+// Watch for status transitioning to "ready" during polling
+watch(
+  () => orderData.value?.status,
+  (newStatus, oldStatus) => {
+    if (newStatus === "ready" && oldStatus && oldStatus !== "ready") {
+      triggerReadyAlert();
+    }
+  }
+);
+
 const fetchStatus = async () => {
   loading.value = true;
   try {
     const res = await api.get(`/order-status/${props.orderNumber}/`);
+    const prev = orderData.value?.status;
     orderData.value = res.data;
+    // If the order was already "ready" when the page first loaded, show alert too
+    if (res.data?.status === "ready" && !prev) {
+      triggerReadyAlert();
+    }
     notFound.value = false;
   } catch (err) {
     if (err?.response?.status === 404) {
@@ -222,6 +294,10 @@ const fetchStatus = async () => {
 
 let pollTimer = null;
 onMounted(() => {
+  // Request notification permission proactively (non-blocking)
+  if (typeof Notification !== "undefined" && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
   fetchStatus();
   pollTimer = setInterval(() => {
     if (isLiveStatus.value) fetchStatus();

@@ -1444,7 +1444,12 @@ export const messages = {
       fulfillmentPickup: "Pickup",
       fulfillmentDelivery: "Delivery",
       fulfillmentTable: "Table {table}",
-      backToMenu: "Back to menu"
+      backToMenu: "Back to menu",
+      orderReadyTitle: "Your order is ready!",
+      readyBodyPickup: "Please come collect your order at the counter.",
+      readyBodyDelivery: "Your order is on its way!",
+      readyNotifTitle: "Order ready!",
+      readyNotifBody: "Order #{number} is ready for you.",
     },
     cartPage_order: {
       placeOrder: "Place Order",
