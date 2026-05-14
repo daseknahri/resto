@@ -706,7 +706,6 @@ const arabicMessages = {
     "preparedAndCopied": "تم تجهيز {count} تذكيرات. نُسخت الروابط للإرسال اليدوي.",
     "skippedSummary": "تم تجاوز {noPhone} بدون هاتف، و{unavailable} غير متاح، و{notFailed} ليس فاشلاً.",
     "prepareBulkReminderFailed": "تعذر تجهيز التذكيرات الجماعية",
-    "clearedPending": "تم مسح المعلقة",
     "reconciledWithMissing": "تم تحديث {updated} تذكيرات ({missing} غير موجود).",
     "reconciled": "تم تحديث {updated} تذكيرات.",
     "reconcileFailed": "تعذر تسوية التذكيرات الجاهزة",

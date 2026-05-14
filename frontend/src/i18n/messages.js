@@ -1377,7 +1377,6 @@ export const messages = {
       preparedAndCopied: "Prepared {count} reminders. Links copied for manual send.",
       skippedSummary: "Skipped {noPhone} no-phone, {unavailable} unavailable, {notFailed} not-failed.",
       prepareBulkReminderFailed: "Unable to prepare bulk reminders",
-      clearedPending: "Clear pending",
       reconciledWithMissing: "Updated {updated} reminders ({missing} missing).",
       reconciled: "Updated {updated} reminders.",
       reconcileFailed: "Unable to reconcile prepared reminders",
