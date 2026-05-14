@@ -262,7 +262,7 @@
           </div>
 
           <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
-            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor"><AppIcon name="check" class="h-4 w-4" />{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor"><AppIcon name="check" class="h-4 w-4" />{{ t("common.done") }}</button>
           </div>
         </div>
       </div>
@@ -305,11 +305,14 @@
                   </div>
                 </div>
                 <input
+                  ref="quickNameInputRef"
                   :value="localizedQuickFieldValue('name', quickFieldLocales.name)"
                   class="ui-input"
+                  :class="quickAddError ? 'border-red-400' : ''"
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
-                  @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value)"
+                  @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddError = ''"
                 />
+                <p v-if="quickAddError" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
@@ -360,7 +363,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -376,6 +379,8 @@ const saving = ref(false);
 const status = ref("");
 const search = ref("");
 const quickModalOpen = ref(false);
+const quickNameInputRef = ref(null);
+const quickAddError = ref("");
 const editorOpen = ref(false);
 const editorLocalId = ref("");
 const tenant = useTenantStore();
@@ -586,7 +591,9 @@ const openQuickModal = () => {
   quickRow.is_temporarily_disabled = false;
   quickRow.disabled_note = "";
   quickFieldLocales.name = defaultLocale.value;
+  quickAddError.value = "";
   quickModalOpen.value = true;
+  nextTick(() => quickNameInputRef.value?.focus());
 };
 const closeQuickModal = () => {
   quickModalOpen.value = false;
@@ -595,9 +602,10 @@ const closeQuickModal = () => {
 const quickAdd = () => {
   const name = String(quickRow.name || "").trim();
   if (name.length < 2) {
-    toast.show(t("stepSuperCategories.nameMin"), "error");
+    quickAddError.value = t("stepSuperCategories.nameMin");
     return;
   }
+  quickAddError.value = "";
   const allowedTranslationLocales = availableContentLocales.value.map((locale) => locale.code).filter((locale) => locale !== defaultLocale.value);
   rows.push(normalizeRow({
     name,
@@ -666,7 +674,14 @@ const saveAll = async () => {
   }
 };
 
+const onModalEscape = (e) => {
+  if (e.key !== "Escape") return;
+  if (quickModalOpen.value) closeQuickModal();
+  else if (editorOpen.value) closeEditor();
+};
 onMounted(load);
+onMounted(() => document.addEventListener("keydown", onModalEscape));
+onUnmounted(() => document.removeEventListener("keydown", onModalEscape));
 </script>
 
 

@@ -181,7 +181,7 @@
           </div>
 
           <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
-            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeEditor">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeEditor">{{ t("common.done") }}</button>
           </div>
         </div>
       </div>
@@ -205,9 +205,10 @@
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
               <label class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.selectSuperCategory") }}</span>
-                <select v-model="quickCategory.super_category" class="ui-input">
+                <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" @change="quickAddErrors.superCategory = ''">
                   <option v-for="group in sortedSuperCategoryOptions" :key="group.id" :value="Number(group.id)">{{ superCategoryLabel(group) }}</option>
                 </select>
+                <p v-if="quickAddErrors.superCategory" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
               </label>
 
               <div class="space-y-1">
@@ -227,11 +228,14 @@
                   </div>
                 </div>
                 <input
+                  ref="quickNameInputRef"
                   :value="localizedQuickFieldValue('name', quickFieldLocales.name)"
                   class="ui-input"
+                  :class="quickAddErrors.name ? 'border-red-400' : ''"
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
-                  @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value)"
+                  @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddErrors.name = ''"
                 />
+                <p v-if="quickAddErrors.name" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
               </div>
 
               <div class="space-y-1">
@@ -289,7 +293,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -317,6 +321,8 @@ const editorLocalId = ref("");
 const fieldLocales = reactive({ name: "en", description: "en" });
 const quickFieldLocales = reactive({ name: "en", description: "en" });
 const quickModalOpen = ref(false);
+const quickNameInputRef = ref(null);
+const quickAddErrors = reactive({ name: "", superCategory: "" });
 const quickCategory = reactive({
   local_id: "quick-category",
   super_category: "",
@@ -554,20 +560,25 @@ const openQuickModal = () => {
   quickCategory.is_published = true;
   quickFieldLocales.name = defaultLocale.value;
   quickFieldLocales.description = defaultLocale.value;
+  quickAddErrors.name = "";
+  quickAddErrors.superCategory = "";
   quickModalOpen.value = true;
+  nextTick(() => quickNameInputRef.value?.focus());
 };
 const closeQuickModal = () => {
   quickModalOpen.value = false;
 };
 
 const quickAdd = () => {
+  quickAddErrors.name = "";
+  quickAddErrors.superCategory = "";
   const name = String(quickCategory.name || "").trim();
-  if (name.length < 2) {
-    toast.show(t("stepCategories.nameMin"), "error");
+  if (!quickCategory.super_category) {
+    quickAddErrors.superCategory = t("stepCategories.superCategoryRequired");
     return;
   }
-  if (!quickCategory.super_category) {
-    toast.show(t("stepCategories.superCategoryRequired"), "error");
+  if (name.length < 2) {
+    quickAddErrors.name = t("stepCategories.nameMin");
     return;
   }
   const allowedTranslationLocales = availableContentLocales.value.map((locale) => locale.code).filter((locale) => locale !== defaultLocale.value);
@@ -642,6 +653,14 @@ const saveAll = async () => {
     saving.value = false;
   }
 };
+
+const onModalEscape = (e) => {
+  if (e.key !== "Escape") return;
+  if (quickModalOpen.value) closeQuickModal();
+  else if (editorOpen.value) closeEditor();
+};
+onMounted(() => document.addEventListener("keydown", onModalEscape));
+onUnmounted(() => document.removeEventListener("keydown", onModalEscape));
 
 onMounted(load);
 </script>

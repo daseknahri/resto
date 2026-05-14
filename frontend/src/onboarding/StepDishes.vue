@@ -557,7 +557,7 @@
           </div>
 
           <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
-            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeDishEditor">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeDishEditor">{{ t("common.done") }}</button>
           </div>
         </div>
       </div>
@@ -581,10 +581,13 @@
           <div class="space-y-4 p-4">
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
               <div class="grid gap-3 sm:grid-cols-2">
-                <select v-model="quickDish.category" class="ui-input">
-                  <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
-                  <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
-                </select>
+                <div class="space-y-1">
+                  <select v-model="quickDish.category" class="ui-input" :class="quickDishErrors.category ? 'border-red-400' : ''" @change="quickDishErrors.category = ''">
+                    <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
+                    <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
+                  </select>
+                  <p v-if="quickDishErrors.category" class="text-xs text-red-300">{{ quickDishErrors.category }}</p>
+                </div>
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishNamePlaceholder") }}</p>
@@ -611,11 +614,14 @@
                     </div>
                   </div>
                   <input
+                    ref="quickDishNameInputRef"
                     :value="localizedQuickDishFieldValue('name', quickDishFieldLocales.name)"
                     class="ui-input"
+                    :class="quickDishErrors.name ? 'border-red-400' : ''"
                     :placeholder="t('stepDishes.dishNamePlaceholder')"
-                    @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value)"
+                    @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value); quickDishErrors.name = ''"
                   />
+                  <p v-if="quickDishErrors.name" class="text-xs text-red-300 mt-1">{{ quickDishErrors.name }}</p>
                 </div>
                 <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
                 <div
@@ -829,7 +835,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -873,6 +879,8 @@ const dishFieldLocales = reactive({
   groupOptionName: "en",
 });
 const quickDishModalOpen = ref(false);
+const quickDishNameInputRef = ref(null);
+const quickDishErrors = reactive({ category: "", name: "" });
 const quickDish = reactive({
   local_id: "quick-dish",
   category: "",
@@ -1589,7 +1597,10 @@ const openQuickDishModal = (categoryId = activeCategoryId.value) => {
     return;
   }
   resetQuickDish(categoryId);
+  quickDishErrors.category = "";
+  quickDishErrors.name = "";
   quickDishModalOpen.value = true;
+  nextTick(() => quickDishNameInputRef.value?.focus());
 };
 
 const closeQuickDishModal = () => {
@@ -1609,17 +1620,20 @@ const removeQuickOption = (idx) => {
 };
 
 const quickAddDish = () => {
+  quickDishErrors.category = "";
+  quickDishErrors.name = "";
   const name = String(quickDish.name || "").trim();
   const category = resolveQuickDishCategory(quickDish.category);
   const allowedTranslationLocales = availableContentLocales.value
     .map((locale) => locale.code)
     .filter((locale) => locale !== defaultLocale.value);
   if (!category) {
-    toast.show(t("stepDishes.selectCategoryError"), "error");
+    quickDishErrors.category = t("stepDishes.selectCategoryError");
     return;
   }
   if (name.length < 2) {
-    toast.show(t("stepDishes.nameMin"), "error");
+    quickDishErrors.name = t("stepDishes.nameMin");
+    nextTick(() => quickDishNameInputRef.value?.focus());
     return;
   }
   dishes.push(
@@ -1801,7 +1815,14 @@ const saveAndNext = async () => {
   }
 };
 
+const onModalEscape = (e) => {
+  if (e.key !== "Escape") return;
+  if (quickDishModalOpen.value) closeQuickDishModal();
+  else if (dishEditorModalOpen.value) closeDishEditor();
+};
 onMounted(load);
+onMounted(() => document.addEventListener("keydown", onModalEscape));
+onUnmounted(() => document.removeEventListener("keydown", onModalEscape));
 </script>
 
 

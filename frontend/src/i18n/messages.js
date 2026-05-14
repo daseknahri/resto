@@ -62,7 +62,8 @@ export const messages = {
       cancel: "Cancel",
       confirm: "Confirm",
       location: "Location",
-      more: "More"
+      more: "More",
+      done: "Done"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -1551,7 +1552,8 @@ export const messages = {
       translating: "Traduction…",
       translateErrorGeneric: "Traduction echouee.",
       translateErrorNotConfigured: "Traduction non configuree.",
-      more: "Plus"
+      more: "Plus",
+      done: "Terminer"
     },
     landingLayout: {
       kicker: "Resto Menu",

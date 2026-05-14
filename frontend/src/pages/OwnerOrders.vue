@@ -214,10 +214,11 @@
           </label>
           <div class="flex gap-2">
             <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="saveNote(o)">
-              {{ t("ownerOrders.saveNote") }}
+              {{ order.updatingOrderId === o.id ? t("common.saving") : t("ownerOrders.saveNote") }}
             </button>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="editingId = null">{{ t("common.close") }}</button>
           </div>
+          <p v-if="noteError" class="text-xs text-red-400">{{ noteError }}</p>
         </div>
 
         <div v-else class="flex flex-wrap items-center gap-2">
@@ -296,6 +297,7 @@ const searchQuery = ref("");
 const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
+const noteError = ref("");
 
 // Sound preference — persisted in localStorage per hostname
 const SOUND_KEY = typeof window === "undefined" ? "orders:sound" : `orders:sound:${window.location.hostname}`;
@@ -486,9 +488,11 @@ const openEdit = (o) => {
   editingId.value = o.id;
   editNote.value = o.owner_note || "";
   editMinutes.value = o.estimated_ready_minutes ?? null;
+  noteError.value = "";
 };
 
 const saveNote = async (o) => {
+  noteError.value = "";
   try {
     await order.updateOrderStatus(o.id, {
       owner_note: editNote.value,
@@ -497,7 +501,7 @@ const saveNote = async (o) => {
     editingId.value = null;
     toast.show(t("ownerOrders.updated"), "success");
   } catch {
-    toast.show(t("ownerOrders.updateFailed"), "error");
+    noteError.value = t("ownerOrders.updateFailed");
   }
 };
 

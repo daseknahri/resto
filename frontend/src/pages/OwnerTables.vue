@@ -317,10 +317,12 @@
                   <label class="text-sm text-slate-300">
                     {{ t("ownerTables.tableLabel") }}
                     <input
+                      ref="labelInputRef"
                       v-model.trim="newTable.label"
                       maxlength="40"
                       class="ui-input mt-1"
                       :placeholder="t('ownerTables.tableLabelPlaceholder')"
+                      @input="error = ''"
                     />
                   </label>
                   <label class="text-sm text-slate-300">
@@ -395,7 +397,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import QRCode from "qrcode";
 import AppIcon from "../components/AppIcon.vue";
 import api from "../lib/api";
@@ -414,6 +416,7 @@ const qrDataUrls = ref({});
 const error = ref("");
 const setupOpen = ref(false);
 const formMode = ref("create");
+const labelInputRef = ref(null);
 const searchQuery = ref("");
 const statusFilter = ref("all");
 const selectedTableId = ref(null);
@@ -530,7 +533,8 @@ const fetchTables = async () => {
 
 const createTable = async () => {
   if (!newTable.label.trim()) {
-    toast.show(t("ownerTables.labelRequired"), "error");
+    error.value = t("ownerTables.labelRequired");
+    nextTick(() => labelInputRef.value?.focus());
     return;
   }
   creating.value = true;
@@ -558,7 +562,7 @@ const createTable = async () => {
 
 const generateTables = async () => {
   if (!bulk.prefix.trim()) {
-    toast.show(t("ownerTables.prefixRequired"), "error");
+    error.value = t("ownerTables.prefixRequired");
     return;
   }
   generating.value = true;
@@ -574,6 +578,11 @@ const generateTables = async () => {
     const { data } = await api.post("/tables/bulk-generate/", payload);
     toast.show(data?.detail || t("ownerTables.generated"), "success");
     await fetchTables();
+    bulk.prefix = t("ownerTables.defaultPrefix");
+    bulk.start = 1;
+    bulk.count = 12;
+    bulk.position_start = 0;
+    bulk.is_active = true;
     setupOpen.value = false;
   } catch (err) {
     error.value = parseError(err, t("ownerTables.generateFailed"));
@@ -846,13 +855,23 @@ const printCards = () => {
 const openSetup = (mode = "create") => {
   error.value = "";
   formMode.value = mode;
+  newTable.label = "";
+  newTable.position = 0;
+  newTable.is_active = true;
   setupOpen.value = true;
+  nextTick(() => labelInputRef.value?.focus());
 };
 
 const closeSetup = () => {
   setupOpen.value = false;
   error.value = "";
 };
+
+const onSetupEscape = (e) => {
+  if (e.key === "Escape" && setupOpen.value) closeSetup();
+};
+onMounted(() => document.addEventListener("keydown", onSetupEscape));
+onUnmounted(() => document.removeEventListener("keydown", onSetupEscape));
 
 onMounted(fetchTables);
 </script>
