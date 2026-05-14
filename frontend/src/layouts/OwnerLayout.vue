@@ -296,7 +296,7 @@ const layoutCheckNewOrders = (orders) => {
   // Browser notification
   if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
     new Notification(
-      t("ownerOrders.newOrderNotifTitle", { count: newPending.length }),
+      t(newPending.length === 1 ? "ownerOrders.newOrderNotifTitle_one" : "ownerOrders.newOrderNotifTitle_other", { count: newPending.length }),
       { body: t("ownerOrders.newOrderNotifBody"), icon: "/favicon.ico", tag: "new-order", renotify: true }
     );
   }

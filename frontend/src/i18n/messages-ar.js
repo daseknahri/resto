@@ -57,7 +57,8 @@ const arabicMessages = {
     "moveDown": "تحريك لأسفل",
     "save": "حفظ",
     "open": "مفتوح",
-    "closed": "مغلق"
+    "closed": "مغلق",
+    "more": "المزيد"
   },
   "landingLayout": {
     "kicker": "منصة القوائم",
@@ -424,7 +425,8 @@ const arabicMessages = {
     "csvExported": "تم تصدير CSV",
     "htmlDownloaded": "تم تحميل حزمة HTML",
     "qrUnavailable": "QR غير متاح",
-    "scanHintPlain": "امسح لفتح القائمة"
+    "scanHintPlain": "امسح لفتح القائمة",
+    "statusFilter": "تصفية الحالة"
   },
   "ownerLaunchSuccess": {
     "launch": "إطلاق القائمة",
@@ -1327,7 +1329,6 @@ const arabicMessages = {
     "fulfillmentPickup": "استلام",
     "fulfillmentDelivery": "توصيل",
     "fulfillmentTable": "طاولة {table}",
-    "itemsCount": "{count} عنصر",
     "confirm": "تأكيد",
     "startPreparing": "بدء التحضير",
     "markReady": "جاهز",
@@ -1347,7 +1348,8 @@ const arabicMessages = {
     "note": "ملاحظة",
     "options": "الخيارات",
     "refreshOrders": "تحديث",
-    "newOrderNotifTitle": "طلب جديد | {count} طلبات جديدة",
+    "newOrderNotifTitle_one": "طلب جديد واحد",
+    "newOrderNotifTitle_other": "{count} طلبات جديدة",
     "newOrderNotifBody": "هناك طلب (طلبات) جديدة تنتظر تأكيدك.",
     "todayOrders": "اليوم",
     "todayRevenue": "الإيرادات",
@@ -1425,6 +1427,7 @@ Object.assign(arabicMessages, {
   stepBrand: {
     ...arabicMessages.stepBrand,
     businessHours: "\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644",
+    businessHoursSummary: "\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644",
     businessHoursHint: "\u062d\u062f\u0651\u062f \u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064a\u0629 \u0648\u0633\u062a\u0638\u0647\u0631 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b \u0641\u064a \u0635\u0641\u062d\u0629 \u0627\u0644\u0645\u0637\u0639\u0645.",
     businessHoursLegacyNotice: "\u0644\u062f\u064a\u0643 \u0646\u0635 \u0645\u062d\u0641\u0648\u0638 \u0644\u0644\u0633\u0627\u0639\u0627\u062a. \u0639\u0646\u062f \u0627\u0644\u062d\u0641\u0638 \u0628\u0647\u0630\u0627 \u0627\u0644\u062c\u062f\u0648\u0644 \u0633\u064a\u062a\u0645 \u0627\u0633\u062a\u0628\u062f\u0627\u0644 \u0627\u0644\u0635\u064a\u063a\u0629 \u0627\u0644\u0642\u062f\u064a\u0645\u0629.",
     openLabel: "\u0645\u0641\u062a\u0648\u062d \u0644\u0644\u062e\u062f\u0645\u0629",

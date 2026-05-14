@@ -61,7 +61,8 @@ export const messages = {
       translateErrorNotConfigured: "Translation not configured.",
       cancel: "Cancel",
       confirm: "Confirm",
-      location: "Location"
+      location: "Location",
+      more: "More"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -395,7 +396,8 @@ export const messages = {
       csvExported: "CSV exported",
       htmlDownloaded: "HTML pack downloaded",
       qrUnavailable: "QR unavailable",
-      scanHintPlain: "Scan to open menu"
+      scanHintPlain: "Scan to open menu",
+      statusFilter: "Status filter"
     },
     ownerLayout: {
       kicker: "Owner workspace",
@@ -430,6 +432,7 @@ export const messages = {
       address: "Address",
       description: "Description",
       businessHours: "Business hours",
+      businessHoursSummary: "Opening hours",
       businessHoursHint: "Set your weekly opening hours. These will appear automatically on the public menu.",
       businessHoursLegacyNotice: "You already have saved hours text. Once you save this schedule, it will replace the old text format.",
       openLabel: "Open for service",
@@ -1404,7 +1407,6 @@ export const messages = {
       fulfillmentPickup: "Pickup",
       fulfillmentDelivery: "Delivery",
       fulfillmentTable: "Table {table}",
-      itemsCount: "{count} item | {count} items",
       confirm: "Confirm",
       startPreparing: "Preparing",
       markReady: "Ready",
@@ -1424,7 +1426,8 @@ export const messages = {
       note: "Note",
       options: "Options",
       refreshOrders: "Refresh",
-      newOrderNotifTitle: "{count} new order | {count} new orders",
+      newOrderNotifTitle_one: "{count} new order",
+      newOrderNotifTitle_other: "{count} new orders",
       newOrderNotifBody: "New order(s) are waiting for your confirmation.",
       todayOrders: "Today",
       todayRevenue: "Revenue",
@@ -1540,7 +1543,8 @@ export const messages = {
       translate: "Traduire",
       translating: "Traduction…",
       translateErrorGeneric: "Traduction echouee.",
-      translateErrorNotConfigured: "Traduction non configuree."
+      translateErrorNotConfigured: "Traduction non configuree.",
+      more: "Plus"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -1874,7 +1878,8 @@ export const messages = {
       csvExported: "CSV exporte",
       htmlDownloaded: "Pack HTML telecharge",
       qrUnavailable: "QR indisponible",
-      scanHintPlain: "Scannez pour ouvrir le menu"
+      scanHintPlain: "Scannez pour ouvrir le menu",
+      statusFilter: "Filtre par statut"
     },
     ownerLayout: {
       kicker: "Espace proprietaire",
@@ -1908,6 +1913,7 @@ export const messages = {
       address: "Adresse",
       description: "Description",
       businessHours: "Horaires",
+      businessHoursSummary: "Horaires d'ouverture",
       businessHoursHint: "Definissez vos horaires d'ouverture hebdomadaires. Ils s'afficheront automatiquement sur le menu public.",
       businessHoursLegacyNotice: "Un ancien texte d'horaires est deja enregistre. En sauvegardant cette grille, vous remplacerez ce format texte.",
       openLabel: "Ouvert au service",
@@ -2780,7 +2786,6 @@ export const messages = {
       fulfillmentPickup: "A emporter",
       fulfillmentDelivery: "Livraison",
       fulfillmentTable: "Table {table}",
-      itemsCount: "{count} article | {count} articles",
       confirm: "Confirmer",
       startPreparing: "En preparation",
       markReady: "Prete",
@@ -2800,7 +2805,8 @@ export const messages = {
       note: "Note",
       options: "Options",
       refreshOrders: "Actualiser",
-      newOrderNotifTitle: "{count} nouvelle commande | {count} nouvelles commandes",
+      newOrderNotifTitle_one: "{count} nouvelle commande",
+      newOrderNotifTitle_other: "{count} nouvelles commandes",
       newOrderNotifBody: "De nouvelles commandes attendent votre confirmation.",
       todayOrders: "Aujourd'hui",
       todayRevenue: "Chiffre d'affaires",

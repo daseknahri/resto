@@ -617,7 +617,7 @@ const playAlertSound = () => {
 const showBrowserNotification = (count) => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
-  new Notification(t("ownerOrders.newOrderNotifTitle", { count }), {
+  new Notification(t(count === 1 ? "ownerOrders.newOrderNotifTitle_one" : "ownerOrders.newOrderNotifTitle_other", { count }), {
     body: t("ownerOrders.newOrderNotifBody"),
     icon: "/favicon.ico",
     tag: "new-order",
@@ -638,7 +638,7 @@ const checkForNewOrders = (freshOrders) => {
   if (newPending.length) {
     playAlertSound();
     showBrowserNotification(newPending.length);
-    toast.show(t("ownerOrders.newOrderNotifTitle", { count: newPending.length }), "info");
+    toast.show(t(newPending.length === 1 ? "ownerOrders.newOrderNotifTitle_one" : "ownerOrders.newOrderNotifTitle_other", { count: newPending.length }), "info");
     lastAlertTime.value = Date.now();
   }
 };
