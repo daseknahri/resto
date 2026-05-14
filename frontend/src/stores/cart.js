@@ -53,6 +53,17 @@ const customerPhoneStorageKey = () =>
   typeof window === "undefined" ? "cart:customer-phone" : `cart:customer-phone:${window.location.hostname}`;
 
 const cartStorageKey = () => (typeof window === "undefined" ? "cart" : `cart:${window.location.hostname}`);
+const recentOrdersStorageKey = () => (typeof window === "undefined" ? "cart:recent-orders" : `cart:recent-orders:${window.location.hostname}`);
+
+const loadRecentOrders = () => {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(recentOrdersStorageKey()) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+};
 
 const sanitizeTableLabel = (value) =>
   String(value || "")
@@ -123,6 +134,7 @@ export const useCartStore = defineStore("cart", {
     customerPhone: loadStoredCustomerPhone(),
     canCheckout: false,
     canWhatsapp: false,
+    recentOrders: loadRecentOrders(),
   }),
   getters: {
     total(state) {
@@ -244,6 +256,34 @@ export const useCartStore = defineStore("cart", {
     clear() {
       this.items = [];
       this.persist();
+    },
+    // Save a completed order to the recent-orders list (max 5, deduplicated by order_number).
+    // Call this BEFORE clearing the cart, passing the API response + current cart items.
+    pushRecentOrder({ order_number, total, currency, created_at, items }) {
+      const entry = {
+        order_number: String(order_number || ""),
+        total: Number(total || 0),
+        currency: String(currency || "USD"),
+        created_at: created_at || new Date().toISOString(),
+        items: Array.isArray(items)
+          ? items.map((item) => ({
+              key: item.key || `${item.slug}::`,
+              slug: String(item.slug || ""),
+              name: String(item.name || ""),
+              price: Number(item.price || 0),
+              currency: String(item.currency || currency || "USD"),
+              qty: Number(item.qty || 1),
+              note: String(item.note || ""),
+              option_ids: Array.isArray(item.option_ids) ? item.option_ids : [],
+              option_labels: Array.isArray(item.option_labels) ? item.option_labels : [],
+            }))
+          : [],
+      };
+      // Remove duplicate if same order was already saved, then prepend
+      this.recentOrders = [entry, ...this.recentOrders.filter((r) => r.order_number !== entry.order_number)].slice(0, 5);
+      try {
+        localStorage.setItem(recentOrdersStorageKey(), JSON.stringify(this.recentOrders));
+      } catch { /* storage full — ignore */ }
     },
   },
 });

@@ -1265,6 +1265,14 @@ const placeInAppOrder = async () => {
       },
     });
     const result = await order.placeOrder(buildPayload());
+    // Save to recent orders BEFORE clearing the cart so we still have item data
+    cart.pushRecentOrder({
+      order_number: result.order_number,
+      total: result.total ?? cart.total,
+      currency: result.currency ?? currency.value,
+      created_at: result.created_at ?? new Date().toISOString(),
+      items: cart.items,
+    });
     cart.clear();
     // Persist the order number so the layout can show a "track order" banner
     try {

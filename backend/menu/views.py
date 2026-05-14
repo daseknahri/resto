@@ -1227,10 +1227,12 @@ class CustomerOrderStatusView(APIView):
 
         items = [
             {
+                "dish_slug": item.dish_slug,
                 "dish_name": item.dish_name,
                 "qty": item.qty,
                 "unit_price": str(item.unit_price),
                 "subtotal": str(item.subtotal),
+                "currency": order.currency,
                 "options": item.options,
                 "note": item.note,
             }

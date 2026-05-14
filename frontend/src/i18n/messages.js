@@ -961,6 +961,9 @@ export const messages = {
       tomorrow: "tomorrow",
       tableContextSet: "Ordering for {table} — add items and go to cart when ready",
       tableNotFound: "Table link is no longer active.",
+      allDishes: "All",
+      filterByTag: "Filter by tag",
+      noMatchDish: "No dishes match your search.",
     },
     category: {
       kicker: "Category",
@@ -1481,6 +1484,9 @@ export const messages = {
       cancelledBody: "This order was cancelled. Please contact the restaurant if you have questions.",
       readyNotifTitle: "Order ready!",
       readyNotifBody: "Order #{number} is ready for you.",
+      readyAnyMoment: "Ready any moment now…",
+      reorder: "Order Again",
+      reorderAdded: "Items added to your cart",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -2353,6 +2359,9 @@ export const messages = {
       tomorrow: "demain",
       tableContextSet: "Commande pour {table} — ajoutez des articles et allez au panier",
       tableNotFound: "Ce lien de table n est plus actif.",
+      allDishes: "Tous",
+      filterByTag: "Filtrer par tag",
+      noMatchDish: "Aucun plat ne correspond a votre recherche.",
     },
     category: {
       kicker: "Categorie",
@@ -2893,7 +2902,10 @@ export const messages = {
       cancelledTitle: "Commande annulee",
       cancelledBody: "Cette commande a ete annulee. Veuillez contacter le restaurant si vous avez des questions.",
       readyNotifTitle: "Commande prete !",
-      readyNotifBody: "La commande #{number} est prete pour vous."
+      readyNotifBody: "La commande #{number} est prete pour vous.",
+      readyAnyMoment: "Prete d'un moment a l'autre…",
+      reorder: "Commander a nouveau",
+      reorderAdded: "Articles ajoutes a votre panier",
     }
   },
   ar: {}

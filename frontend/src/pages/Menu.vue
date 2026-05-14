@@ -99,6 +99,26 @@
           {{ cat.name }}
         </button>
       </div>
+
+      <!-- Tag filter pills — only shown when current category has tagged dishes -->
+      <div v-if="availableTags.length" class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
+          :data-active="selectedTag === ''"
+          @click="selectedTag = ''"
+        >
+          {{ t('menu.allDishes') }}
+        </button>
+        <button
+          v-for="tag in availableTags"
+          :key="tag"
+          class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
+          :data-active="selectedTag === tag"
+          @click="selectedTag = tag"
+        >
+          {{ t(`dishPage.tag_${tag}`) }}
+        </button>
+      </div>
     </div>
 
     <!-- Category heading -->
@@ -263,6 +283,7 @@ const resolveTableContext = async () => {
 };
 
 const search = ref('');
+const selectedTag = ref('');
 const selectedSuperCategorySlug = ref('');
 const selectedCategorySlug = ref('');
 const meta = computed(() => tenant.resolvedMeta || null);
@@ -324,10 +345,24 @@ const visibleCategories = computed(() => {
 const selectedSuperCategory = computed(() => superCategories.value.find((group) => group.slug === selectedSuperCategorySlug.value) || null);
 const selectedCategory = computed(() => visibleCategories.value.find((category) => category.slug === selectedCategorySlug.value) || null);
 const selectedDishes = computed(() => menu.dishes[selectedCategorySlug.value] || []);
+
+// Unique tags present in the current category (drives the filter pill row)
+const availableTags = computed(() => {
+  const tags = new Set();
+  selectedDishes.value.forEach((dish) => (dish.tags || []).forEach((tag) => tags.add(tag)));
+  return [...tags].sort();
+});
+
 const filteredDishes = computed(() => {
+  let dishes = selectedDishes.value;
+  // Tag filter
+  if (selectedTag.value) {
+    dishes = dishes.filter((dish) => (dish.tags || []).includes(selectedTag.value));
+  }
+  // Text search
   const query = search.value.trim().toLowerCase();
-  if (!query) return selectedDishes.value;
-  return selectedDishes.value.filter((dish) => {
+  if (!query) return dishes;
+  return dishes.filter((dish) => {
     if ([dish.name, dish.description, dish.slug].filter(Boolean).some((value) => String(value).toLowerCase().includes(query))) return true;
     return (dish.tags || []).some((tag) => tag.replace('_', ' ').includes(query));
   });
@@ -381,6 +416,7 @@ const quickAdd = (dish) => {
 };
 const clearSearch = () => {
   search.value = '';
+  selectedTag.value = '';
 };
 
 const handleHeroImageError = (event) => withImageFallback(event);
@@ -391,6 +427,7 @@ watch([superCategories, menuCategories], syncSelection, { immediate: true });
 watch(
   () => selectedCategorySlug.value,
   async (slug) => {
+    selectedTag.value = ''; // reset tag filter on category change
     if (!slug) return;
     await menu.fetchDishesByCategory(slug);
   },

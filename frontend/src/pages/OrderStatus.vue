@@ -96,7 +96,18 @@
         class="ui-panel border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2"
       >
         <p v-if="orderData.estimated_ready_minutes" class="text-sm font-semibold text-emerald-200">
-          ⏱ {{ t("orderStatus.estimatedReady", { minutes: orderData.estimated_ready_minutes }) }}
+          <template v-if="countdownSeconds !== null && countdownSeconds > 0">
+            ⏱ {{ t("orderStatus.estimatedReady", { minutes: Math.ceil(countdownSeconds / 60) }) }}
+            <span class="ml-1 font-mono text-xs font-normal text-emerald-300/70 tabular-nums">
+              ({{ Math.floor(countdownSeconds / 60) }}:{{ String(countdownSeconds % 60).padStart(2, "0") }})
+            </span>
+          </template>
+          <template v-else-if="countdownSeconds !== null && countdownSeconds <= 0">
+            ⏱ {{ t("orderStatus.readyAnyMoment") }}
+          </template>
+          <template v-else>
+            ⏱ {{ t("orderStatus.estimatedReady", { minutes: orderData.estimated_ready_minutes }) }}
+          </template>
         </p>
         <p v-if="orderData.owner_note" class="text-sm text-slate-200">
           <span class="text-slate-400 text-xs block mb-0.5">{{ t("orderStatus.ownerNote") }}</span>
@@ -128,12 +139,23 @@
         </div>
       </div>
 
-      <!-- Auto-refresh notice + back -->
-      <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-        <span v-if="isLiveStatus">{{ t("orderStatus.autoRefresh", { seconds: POLL_INTERVAL_S }) }}</span>
-        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-3 py-1.5 text-xs">
-          {{ t("orderStatus.backToMenu") }}
-        </RouterLink>
+      <!-- Re-order + navigation -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <span v-if="isLiveStatus" class="text-xs text-slate-500">
+          {{ t("orderStatus.autoRefresh", { seconds: POLL_INTERVAL_S }) }}
+        </span>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-if="orderData.items?.some(i => i.dish_slug)"
+            class="ui-btn-primary inline-flex px-4 py-2 text-sm"
+            @click="reorder"
+          >
+            {{ t("orderStatus.reorder") }}
+          </button>
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-3 py-1.5 text-xs">
+            {{ t("orderStatus.backToMenu") }}
+          </RouterLink>
+        </div>
       </div>
     </template>
   </div>
@@ -141,13 +163,19 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
+import { useCartStore } from "../stores/cart";
+import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 
 const props = defineProps({
   orderNumber: { type: String, required: true },
 });
 
+const router = useRouter();
+const cart = useCartStore();
+const toast = useToastStore();
 const { t } = useI18n();
 
 const POLL_INTERVAL_S = 15;
@@ -159,6 +187,54 @@ const readyAlertShown = ref(false);
 const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)
 );
+
+// ── Countdown timer ───────────────────────────────────────────────────────────
+const countdownSeconds = ref(null);
+let countdownTimer = null;
+
+const updateCountdown = () => {
+  const d = orderData.value;
+  if (!d?.estimated_ready_minutes || !d?.created_at || !isLiveStatus.value) {
+    countdownSeconds.value = null;
+    return;
+  }
+  const readyAt = new Date(d.created_at).getTime() + d.estimated_ready_minutes * 60_000;
+  countdownSeconds.value = Math.floor((readyAt - Date.now()) / 1000);
+};
+
+const startCountdown = () => {
+  clearInterval(countdownTimer);
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 1000);
+};
+
+const stopCountdown = () => {
+  clearInterval(countdownTimer);
+  countdownTimer = null;
+  countdownSeconds.value = null;
+};
+
+// ── Re-order ──────────────────────────────────────────────────────────────────
+const reorder = () => {
+  const items = orderData.value?.items;
+  if (!items?.length) return;
+  items.forEach((item) => {
+    if (!item.dish_slug) return;
+    cart.add({
+      key: `${item.dish_slug}::`,
+      slug: item.dish_slug,
+      name: item.dish_name,
+      price: Number(item.unit_price || 0),
+      currency: item.currency || orderData.value.currency,
+      qty: item.qty,
+      note: item.note || "",
+      option_ids: [],
+      option_labels: item.options?.map((o) => o.name).filter(Boolean) || [],
+    });
+  });
+  toast.show(t("orderStatus.reorderAdded"), "success");
+  router.push({ name: "cart" });
+};
 
 const statusSteps = computed(() => [
   { value: "pending", label: t("orderStatus.statusPending") },
@@ -284,6 +360,15 @@ watch(
   }
 );
 
+// Start/stop countdown whenever order data arrives or status changes
+watch(
+  () => [orderData.value?.estimated_ready_minutes, orderData.value?.created_at, isLiveStatus.value],
+  () => {
+    if (orderData.value?.estimated_ready_minutes && isLiveStatus.value) startCountdown();
+    else stopCountdown();
+  }
+);
+
 const fetchStatus = async () => {
   loading.value = true;
   try {
@@ -328,6 +413,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   clearInterval(pollTimer);
+  stopCountdown();
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onStatusPageVisible);
   }
