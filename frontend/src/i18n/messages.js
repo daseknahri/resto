@@ -178,7 +178,9 @@ export const messages = {
       activationLink: "Use activation link",
       forgotPassword: "Forgot password?",
       resetHere: "Reset it here",
-      failed: "Sign in failed"
+      failed: "Sign in failed",
+      identifierRequired: "Username or email is required",
+      passwordRequired: "Password is required"
     },
     unauthorized: {
       kicker: "Access control",
@@ -269,7 +271,8 @@ export const messages = {
       signInLink: "sign in",
       requestFailed: "Unable to send reset link",
       successFallback: "If the account exists, a reset link has been sent.",
-      debugUrlPrefix: "Debug URL"
+      debugUrlPrefix: "Debug URL",
+      identifierRequired: "Username or email is required"
     },
     resetPassword: {
       kicker: "Account recovery",
@@ -282,7 +285,9 @@ export const messages = {
       continueTo: "Continue to",
       signInLink: "sign in",
       failed: "Unable to reset password",
-      successFallback: "Password reset successful. You can now sign in."
+      successFallback: "Password reset successful. You can now sign in.",
+      tokenRequired: "Reset token is required",
+      passwordTooShort: "Password must be at least 8 characters"
     },
     activateAccount: {
       kicker: "Account activation",
@@ -292,7 +297,9 @@ export const messages = {
       newPassword: "New password",
       activating: "Activating...",
       activate: "Activate account",
-      activated: "Activated. You can now continue."
+      activated: "Activated. You can now continue.",
+      tokenRequired: "Token is required",
+      passwordTooShort: "Password must be at least 8 characters"
     },
     ownerLaunchSuccess: {
       launch: "Menu launch",
@@ -1478,6 +1485,7 @@ export const messages = {
       placeOrder: "Place Order",
       placing: "Placing order…",
       placeOrderError: "Could not place order. Please try again.",
+      placeOrderSuccess: "Order placed!",
       switchToInApp: "Order in-app",
       switchToWhatsapp: "Order via WhatsApp"
     }
@@ -1659,7 +1667,9 @@ export const messages = {
       activationLink: "Utiliser le lien d'activation",
       forgotPassword: "Mot de passe oublie ?",
       resetHere: "Reinitialiser ici",
-      failed: "Connexion impossible"
+      failed: "Connexion impossible",
+      identifierRequired: "Nom d'utilisateur ou e-mail requis",
+      passwordRequired: "Mot de passe requis"
     },
     unauthorized: {
       kicker: "Controle d acces",
@@ -1750,7 +1760,8 @@ export const messages = {
       signInLink: "la connexion",
       requestFailed: "Impossible d'envoyer le lien de reinitialisation",
       successFallback: "Si le compte existe, un lien de reinitialisation a ete envoye.",
-      debugUrlPrefix: "URL debug"
+      debugUrlPrefix: "URL debug",
+      identifierRequired: "Nom d'utilisateur ou e-mail requis"
     },
     resetPassword: {
       kicker: "Recuperation de compte",
@@ -1763,7 +1774,9 @@ export const messages = {
       continueTo: "Continuer vers",
       signInLink: "la connexion",
       failed: "Impossible de reinitialiser le mot de passe",
-      successFallback: "Mot de passe reinitialise. Vous pouvez maintenant vous connecter."
+      successFallback: "Mot de passe reinitialise. Vous pouvez maintenant vous connecter.",
+      tokenRequired: "Token de reinitialisation requis",
+      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres"
     },
     activateAccount: {
       kicker: "Activation du compte",
@@ -1773,7 +1786,9 @@ export const messages = {
       newPassword: "Nouveau mot de passe",
       activating: "Activation...",
       activate: "Activer le compte",
-      activated: "Active. Vous pouvez continuer."
+      activated: "Active. Vous pouvez continuer.",
+      tokenRequired: "Token requis",
+      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres"
     },
     ownerLaunchSuccess: {
       launch: "Lancement du menu",
@@ -2765,6 +2780,7 @@ export const messages = {
       placeOrder: "Passer la commande",
       placing: "Envoi de la commande…",
       placeOrderError: "Impossible de passer la commande. Veuillez reessayer.",
+      placeOrderSuccess: "Commande passee !",
       switchToInApp: "Commander en app",
       switchToWhatsapp: "Commander via WhatsApp"
     },

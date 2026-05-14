@@ -400,6 +400,9 @@ const socialLinks = computed(() =>
 );
 
 const openLeadModal = () => {
+  lead.reset();
+  Object.assign(form, { name: "", phone: "", email: "", note: "", hp: "" });
+  Object.assign(errors, { name: "", phone: "", email: "" });
   showLeadModal.value = true;
 };
 
@@ -453,6 +456,7 @@ const buildNotes = () => {
 
 const submitLead = async () => {
   if (lead.success) return;
+  lead.$patch({ error: null });
   if (!validate()) return;
 
   await lead.submitLead({

@@ -218,8 +218,8 @@
                 <AppIcon name="copy" class="owner-table-icon" />
                 {{ t("ownerTables.copyQr") }}
               </button>
-              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
-                {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
+                {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
               </button>
               <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="confirmDeleteId = table.id">
                 {{ t("ownerTables.delete") }}
@@ -257,8 +257,8 @@
               <AppIcon name="download" class="owner-table-icon" />
               {{ t("ownerTables.downloadQr") }}
             </button>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
-              {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+            <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
+              {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
             </button>
             <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="confirmDeleteId = table.id">
               {{ t("ownerTables.delete") }}
@@ -418,6 +418,7 @@ const searchQuery = ref("");
 const statusFilter = ref("all");
 const selectedTableId = ref(null);
 const confirmDeleteId = ref(null);
+const togglingId = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -583,6 +584,8 @@ const generateTables = async () => {
 };
 
 const toggleTable = async (table) => {
+  if (togglingId.value === table.id) return;
+  togglingId.value = table.id;
   try {
     await api.put(`/tables/${table.id}/`, {
       ...table,
@@ -592,6 +595,8 @@ const toggleTable = async (table) => {
     toast.show(table.is_active ? t("ownerTables.enabledToast") : t("ownerTables.disabledToast"), "success");
   } catch (err) {
     toast.show(parseError(err, t("ownerTables.updateFailed")), "error");
+  } finally {
+    togglingId.value = null;
   }
 };
 

@@ -10,11 +10,25 @@
       <form class="space-y-4" @submit.prevent="submit">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("activateAccount.token") }}
-          <input v-model="token" class="ui-input" required />
+          <input
+            v-model="token"
+            class="ui-input"
+            :class="fieldErrors.token ? 'border-red-400' : ''"
+            @input="fieldErrors.token = ''"
+          />
+          <p v-if="fieldErrors.token" class="text-xs text-red-300">{{ fieldErrors.token }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("activateAccount.newPassword") }}
-          <input v-model="password" type="password" class="ui-input" required minlength="8" />
+          <input
+            v-model="password"
+            type="password"
+            autocomplete="new-password"
+            class="ui-input"
+            :class="fieldErrors.password ? 'border-red-400' : ''"
+            @input="fieldErrors.password = ''"
+          />
+          <p v-if="fieldErrors.password" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
         </label>
         <button
           type="submit"
@@ -31,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { reactive, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useActivationStore } from "../stores/activation";
@@ -45,12 +59,23 @@ const { t } = useI18n();
 
 const token = ref("");
 const password = ref("");
+const fieldErrors = reactive({ token: "", password: "" });
 
 onMounted(() => {
   if (typeof route.query.token === "string") token.value = route.query.token;
 });
 
 const submit = async () => {
+  fieldErrors.token = "";
+  fieldErrors.password = "";
+  if (!token.value.trim()) {
+    fieldErrors.token = t("activateAccount.tokenRequired");
+    return;
+  }
+  if (password.value.length < 8) {
+    fieldErrors.password = t("activateAccount.passwordTooShort");
+    return;
+  }
   await store.activate(token.value, password.value);
   if (store.success) {
     try {

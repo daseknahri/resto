@@ -36,8 +36,10 @@
               v-model="identifier"
               autocomplete="username"
               class="ui-input"
-              required
+              :class="identifierError ? 'border-red-400' : ''"
+              @input="identifierError = ''"
             />
+            <p v-if="identifierError" class="text-xs text-red-300">{{ identifierError }}</p>
           </label>
           <button
             type="submit"
@@ -71,6 +73,7 @@ const identifier = ref("");
 const submitting = ref(false);
 const message = ref("");
 const error = ref("");
+const identifierError = ref("");
 
 const signinLink = computed(() => {
   const next = typeof route.query.next === "string" ? route.query.next : "";
@@ -78,6 +81,11 @@ const signinLink = computed(() => {
 });
 
 const submit = async () => {
+  identifierError.value = "";
+  if (!identifier.value.trim()) {
+    identifierError.value = t("forgotPassword.identifierRequired");
+    return;
+  }
   submitting.value = true;
   message.value = "";
   error.value = "";

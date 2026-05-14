@@ -282,6 +282,10 @@ const validate = () => {
 const submit = async () => {
   if (!validate()) return;
   await lead.submitLead({ ...form, source: "landing" });
+  if (lead.success) {
+    Object.assign(form, { name: "", email: "", phone: "", notes: "", hp: "" });
+    Object.keys(errors).forEach((k) => { errors[k] = ""; });
+  }
 };
 
 onMounted(applyPlanFromQuery);

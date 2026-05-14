@@ -35,19 +35,22 @@
             <input
               v-model="token"
               class="ui-input"
-              required
+              :class="fieldErrors.token ? 'border-red-400' : ''"
+              @input="fieldErrors.token = ''"
             />
+            <p v-if="fieldErrors.token" class="text-xs text-red-300">{{ fieldErrors.token }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("resetPassword.newPassword") }}
             <input
               v-model="password"
               type="password"
-              minlength="8"
               autocomplete="new-password"
               class="ui-input"
-              required
+              :class="fieldErrors.password ? 'border-red-400' : ''"
+              @input="fieldErrors.password = ''"
             />
+            <p v-if="fieldErrors.password" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
           </label>
           <button
             type="submit"
@@ -70,7 +73,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -82,6 +85,7 @@ const password = ref("");
 const submitting = ref(false);
 const message = ref("");
 const error = ref("");
+const fieldErrors = reactive({ token: "", password: "" });
 
 const signinLink = computed(() => {
   const next = typeof route.query.next === "string" ? route.query.next : "";
@@ -95,6 +99,16 @@ onMounted(() => {
 });
 
 const submit = async () => {
+  fieldErrors.token = "";
+  fieldErrors.password = "";
+  if (!token.value.trim()) {
+    fieldErrors.token = t("resetPassword.tokenRequired");
+    return;
+  }
+  if (password.value.length < 8) {
+    fieldErrors.password = t("resetPassword.passwordTooShort");
+    return;
+  }
   submitting.value = true;
   message.value = "";
   error.value = "";

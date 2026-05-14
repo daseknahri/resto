@@ -51,8 +51,10 @@
               v-model="identifier"
               autocomplete="username"
               class="ui-input"
-              required
+              :class="fieldErrors.identifier ? 'border-red-400' : ''"
+              @input="fieldErrors.identifier = ''"
             />
+            <p v-if="fieldErrors.identifier" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("signIn.password") }}
@@ -61,8 +63,10 @@
               type="password"
               autocomplete="current-password"
               class="ui-input"
-              required
+              :class="fieldErrors.password ? 'border-red-400' : ''"
+              @input="fieldErrors.password = ''"
             />
+            <p v-if="fieldErrors.password" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
           </label>
           <button
             type="submit"
@@ -91,7 +95,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { currentHostname, isPlatformPublicHost } from "../lib/runtimeHost";
@@ -105,6 +109,7 @@ const { t } = useI18n();
 const identifier = ref("");
 const password = ref("");
 const error = ref("");
+const fieldErrors = reactive({ identifier: "", password: "" });
 
 const activateLink = computed(() => {
   const next = typeof route.query.next === "string" ? route.query.next : "";
@@ -134,7 +139,17 @@ const redirectOwnerToTenantHost = (user) => {
 };
 
 const submit = async () => {
+  fieldErrors.identifier = "";
+  fieldErrors.password = "";
   error.value = "";
+  if (!identifier.value.trim()) {
+    fieldErrors.identifier = t("signIn.identifierRequired");
+    return;
+  }
+  if (!password.value) {
+    fieldErrors.password = t("signIn.passwordRequired");
+    return;
+  }
   try {
     const user = await session.signIn(identifier.value, password.value);
     if (session.canEditTenantMenu && redirectOwnerToTenantHost(user)) {

@@ -446,20 +446,25 @@
               <li v-if="!timelineFor(reservation.id).length" class="text-slate-500">{{ t("ownerReservations.noTimelineEntries") }}</li>
             </ul>
 
-            <div class="flex flex-wrap items-start gap-2">
-              <textarea
-                v-model.trim="timelineNote[reservation.id]"
-                rows="2"
-                class="ui-textarea min-w-[220px] flex-1"
-                :placeholder="t('ownerReservations.addFollowUpNote')"
-              ></textarea>
-              <button
-                class="ui-btn-outline px-3 py-2 text-xs disabled:opacity-60"
-                :disabled="isTimelineSubmitting(reservation.id)"
-                @click="addTimelineNote(reservation.id)"
-              >
-                {{ isTimelineSubmitting(reservation.id) ? t("ownerReservations.saving") : t("ownerReservations.addNote") }}
-              </button>
+            <div class="space-y-1.5">
+              <div class="flex flex-wrap items-start gap-2">
+                <textarea
+                  v-model.trim="timelineNote[reservation.id]"
+                  rows="2"
+                  class="ui-textarea min-w-[220px] flex-1"
+                  :class="timelineNoteError[reservation.id] ? 'border-red-400' : ''"
+                  :placeholder="t('ownerReservations.addFollowUpNote')"
+                  @input="timelineNoteError[reservation.id] = ''"
+                ></textarea>
+                <button
+                  class="ui-btn-outline px-3 py-2 text-xs disabled:opacity-60"
+                  :disabled="isTimelineSubmitting(reservation.id)"
+                  @click="addTimelineNote(reservation.id)"
+                >
+                  {{ isTimelineSubmitting(reservation.id) ? t("ownerReservations.saving") : t("ownerReservations.addNote") }}
+                </button>
+              </div>
+              <p v-if="timelineNoteError[reservation.id]" class="text-xs text-red-300">{{ timelineNoteError[reservation.id] }}</p>
             </div>
           </div>
         </article>
@@ -511,6 +516,7 @@ const timelineOpen = ref({});
 const timelineLoading = ref({});
 const timelineItems = ref({});
 const timelineNote = ref({});
+const timelineNoteError = ref({});
 const timelineSubmitting = ref({});
 const page = ref(1);
 const pageSize = ref(20);
@@ -1018,9 +1024,10 @@ const toggleTimeline = async (reservationId) => {
 const addTimelineNote = async (reservationId) => {
   const note = String(timelineNote.value[reservationId] || "").trim();
   if (!note) {
-    toast.show(t("ownerReservations.writeShortNote"), "info");
+    timelineNoteError.value = { ...timelineNoteError.value, [reservationId]: t("ownerReservations.writeShortNote") };
     return;
   }
+  timelineNoteError.value = { ...timelineNoteError.value, [reservationId]: "" };
   timelineSubmitting.value = { ...timelineSubmitting.value, [reservationId]: true };
   try {
     const res = await api.post(`/owner/reservations/${reservationId}/timeline/`, { note });

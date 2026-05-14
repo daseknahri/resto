@@ -1271,7 +1271,7 @@ const placeInAppOrder = async () => {
       localStorage.setItem('lastOrderNumber', result.order_number);
       localStorage.setItem('lastOrderAt', String(Date.now()));
     } catch {}
-    toast.show(t('cartPage_order.placeOrder'), 'success');
+    toast.show(t('cartPage_order.placeOrderSuccess'), 'success');
     router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
   } catch (err) {
     const detail = mapOrderApiError(err, t('cartPage_order.placeOrderError'));

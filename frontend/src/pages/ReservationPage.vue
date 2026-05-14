@@ -324,6 +324,7 @@ const reservationNotes = () => {
 
 const submitReservation = async () => {
   if (submitted.value) return;
+  lead.$patch({ error: null });
   if (!validate()) return;
   await lead.submitLead({
     name: form.name,
