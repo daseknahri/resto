@@ -145,7 +145,7 @@
           </div>
           <div class="text-right">
             <p class="text-lg font-bold text-[var(--color-secondary)]">{{ formatCurrency(o.total, o.currency) }}</p>
-            <p class="text-xs text-slate-400">{{ t("ownerOrders.itemsCount", { count: o.items_count }, o.items_count) }}</p>
+            <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
         </div>
 
@@ -286,7 +286,7 @@ import { useI18n } from "../composables/useI18n";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 
-const { t } = useI18n();
+const { t, itemCountLabel } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
 
