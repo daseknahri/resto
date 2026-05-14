@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from sales.audit import log_admin_action
 from sales.models import AdminAuditLog
 
-from .models import PasswordResetToken, User
+from .models import Customer, PasswordResetToken, User, WalletTransaction
 
 
 @admin.register(User)
@@ -40,3 +40,30 @@ class PasswordResetTokenAdmin(admin.ModelAdmin):
     list_display = ("user", "token", "expires_at", "used_at", "created_at")
     search_fields = ("user__username", "user__email", "token")
     list_filter = ("used_at",)
+
+
+class WalletTransactionInline(admin.TabularInline):
+    model = WalletTransaction
+    extra = 0
+    readonly_fields = ("type", "amount", "reference", "tenant_id", "note", "created_at")
+    can_delete = False
+    ordering = ("-created_at",)
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ("phone", "name", "email", "wallet_balance", "locale", "created_at")
+    search_fields = ("phone", "name", "email")
+    list_filter = ("locale", "created_at")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-created_at",)
+    inlines = [WalletTransactionInline]
+
+
+@admin.register(WalletTransaction)
+class WalletTransactionAdmin(admin.ModelAdmin):
+    list_display = ("customer", "type", "amount", "reference", "tenant_id", "created_at")
+    search_fields = ("customer__phone", "customer__name", "reference")
+    list_filter = ("type", "created_at")
+    readonly_fields = ("created_at",)
+    ordering = ("-created_at",)

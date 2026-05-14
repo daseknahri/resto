@@ -135,6 +135,15 @@ class Order(models.Model):
 
     order_number = models.CharField(max_length=20, unique=True, db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    # Platform-level customer link — null for anonymous orders, populated when the customer
+    # has a platform account. Anonymous fields below are retained for backward compatibility.
+    customer = models.ForeignKey(
+        "accounts.Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+    )
     customer_name = models.CharField(max_length=80, blank=True)
     customer_phone = models.CharField(max_length=30, blank=True)
     customer_note = models.TextField(blank=True)

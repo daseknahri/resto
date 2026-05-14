@@ -6,6 +6,54 @@ from django.db import models
 from django.utils import timezone
 
 
+class Customer(models.Model):
+    """Platform-level customer identity — lives in the public schema, shared across all tenants."""
+
+    phone = models.CharField(max_length=30, unique=True, db_index=True)
+    email = models.EmailField(blank=True)
+    name = models.CharField(max_length=80, blank=True)
+    locale = models.CharField(max_length=10, default="en")
+    wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.name or self.phone
+
+
+class WalletTransaction(models.Model):
+    """Records every credit movement on a customer's wallet (top-up, payment, refund, bonus)."""
+
+    class Type(models.TextChoices):
+        TOPUP = "topup", "Top-up"
+        PAYMENT = "payment", "Payment"
+        REFUND = "refund", "Refund"
+        BONUS = "bonus", "Bonus"
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="wallet_transactions",
+    )
+    type = models.CharField(max_length=20, choices=Type.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # reference: order_number for payments/refunds, external ref for top-ups
+    reference = models.CharField(max_length=100, blank=True)
+    # tenant_id: which restaurant this payment was for (null for top-ups and bonuses)
+    tenant_id = models.IntegerField(null=True, blank=True, db_index=True)
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.get_type_display()} {self.amount} — {self.customer}"
+
+
 class User(AbstractUser):
     class Roles(models.TextChoices):
         PLATFORM_SUPERADMIN = "platform_superadmin", "Platform Superadmin"
