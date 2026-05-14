@@ -131,7 +131,7 @@
         :key="table.id"
         class="table-card ui-spotlight-card space-y-3 p-4 ui-press cursor-pointer"
         :class="selectedTableId === table.id ? 'border-brand-secondary/60 shadow-brand-secondary/10' : ''"
-        @click="selectedTableId = table.id"
+        @click="selectedTableId = table.id; if (confirmDeleteId !== table.id) confirmDeleteId = null"
       >
         <div class="rounded-xl border border-slate-800/80 bg-slate-950/55 p-3">
           <div class="flex items-center gap-2">
@@ -198,46 +198,72 @@
         <details class="no-print sm:hidden rounded-xl border border-slate-800/80 bg-slate-950/45 p-2.5">
           <summary class="cursor-pointer text-xs font-semibold text-slate-200">{{ t("ownerTables.cardsTitle") }}</summary>
           <div class="mt-2 grid grid-cols-2 gap-2">
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
-              <AppIcon name="copy" class="owner-table-icon" />
-              {{ t("ownerTables.copyFull") }}
-            </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
-              <AppIcon name="copy" class="owner-table-icon" />
-              {{ t("ownerTables.copyQr") }}
-            </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
-              {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
-            </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
-              {{ t("ownerTables.delete") }}
-            </button>
+            <template v-if="confirmDeleteId === table.id">
+              <p class="col-span-2 text-center text-xs font-medium text-red-300 py-1">
+                {{ t("ownerTables.deleteConfirm", { label: table.label }) }}
+              </p>
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="confirmDeleteId = null">
+                {{ t("common.cancel") }}
+              </button>
+              <button class="ui-btn-outline owner-table-btn border-red-500/60 bg-red-500/10 px-3 py-1.5 text-xs text-red-200" @click.stop="removeTable(table)">
+                {{ t("ownerTables.delete") }}
+              </button>
+            </template>
+            <template v-else>
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
+                <AppIcon name="copy" class="owner-table-icon" />
+                {{ t("ownerTables.copyFull") }}
+              </button>
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
+                <AppIcon name="copy" class="owner-table-icon" />
+                {{ t("ownerTables.copyQr") }}
+              </button>
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
+                {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+              </button>
+              <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="confirmDeleteId = table.id">
+                {{ t("ownerTables.delete") }}
+              </button>
+            </template>
           </div>
         </details>
 
         <div class="no-print hidden gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-3">
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">
-            <AppIcon name="link" class="owner-table-icon" />
-            {{ t("ownerTables.copyShort") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
-            <AppIcon name="copy" class="owner-table-icon" />
-            {{ t("ownerTables.copyFull") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
-            <AppIcon name="copy" class="owner-table-icon" />
-            {{ t("ownerTables.copyQr") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">
-            <AppIcon name="download" class="owner-table-icon" />
-            {{ t("ownerTables.downloadQr") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
-            {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="removeTable(table)">
-            {{ t("ownerTables.delete") }}
-          </button>
+          <template v-if="confirmDeleteId === table.id">
+            <p class="col-span-2 text-center text-xs font-medium text-red-300 py-1 lg:col-span-3">
+              {{ t("ownerTables.deleteConfirm", { label: table.label }) }}
+            </p>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="confirmDeleteId = null">
+              {{ t("common.cancel") }}
+            </button>
+            <button class="ui-btn-outline border-red-500/60 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 lg:col-span-2" @click.stop="removeTable(table)">
+              {{ t("ownerTables.delete") }}
+            </button>
+          </template>
+          <template v-else>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyShortUrl(table)">
+              <AppIcon name="link" class="owner-table-icon" />
+              {{ t("ownerTables.copyShort") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
+              <AppIcon name="copy" class="owner-table-icon" />
+              {{ t("ownerTables.copyFull") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="copyQrUrl(table)">
+              <AppIcon name="copy" class="owner-table-icon" />
+              {{ t("ownerTables.copyQr") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">
+              <AppIcon name="download" class="owner-table-icon" />
+              {{ t("ownerTables.downloadQr") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="toggleTable(table)">
+              {{ table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60" @click.stop="confirmDeleteId = table.id">
+              {{ t("ownerTables.delete") }}
+            </button>
+          </template>
         </div>
       </article>
     </div>
@@ -391,6 +417,7 @@ const formMode = ref("create");
 const searchQuery = ref("");
 const statusFilter = ref("all");
 const selectedTableId = ref(null);
+const confirmDeleteId = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -569,8 +596,7 @@ const toggleTable = async (table) => {
 };
 
 const removeTable = async (table) => {
-  const confirmed = typeof window === "undefined" ? true : window.confirm(t("ownerTables.deleteConfirm", { label: table.label }));
-  if (!confirmed) return;
+  confirmDeleteId.value = null;
   try {
     await api.delete(`/tables/${table.id}/`);
     tables.value = tables.value.filter((item) => item.id !== table.id);

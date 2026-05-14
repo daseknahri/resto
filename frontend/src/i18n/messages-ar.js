@@ -47,7 +47,17 @@ const arabicMessages = {
     "translate": "ترجم",
     "translating": "جارٍ الترجمة…",
     "translateErrorGeneric": "فشل الترجمة.",
-    "translateErrorNotConfigured": "خدمة الترجمة غير مُهيأة."
+    "translateErrorNotConfigured": "خدمة الترجمة غير مُهيأة.",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "location": "الموقع",
+    "edit": "تعديل",
+    "remove": "حذف",
+    "moveUp": "تحريك لأعلى",
+    "moveDown": "تحريك لأسفل",
+    "save": "حفظ",
+    "open": "مفتوح",
+    "closed": "مغلق"
   },
   "landingLayout": {
     "kicker": "منصة القوائم",

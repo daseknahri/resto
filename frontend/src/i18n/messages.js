@@ -58,7 +58,10 @@ export const messages = {
       translate: "Translate",
       translating: "Translating…",
       translateErrorGeneric: "Translation failed.",
-      translateErrorNotConfigured: "Translation not configured."
+      translateErrorNotConfigured: "Translation not configured.",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      location: "Location"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -1526,7 +1529,18 @@ export const messages = {
       copy: "Copier",
       call: "Appeler",
       item_one: "{count} article",
-      item_other: "{count} articles"
+      item_other: "{count} articles",
+      cancel: "Annuler",
+      confirm: "Confirmer",
+      location: "Adresse",
+      edit: "Modifier",
+      remove: "Supprimer",
+      moveUp: "Monter",
+      moveDown: "Descendre",
+      translate: "Traduire",
+      translating: "Traduction…",
+      translateErrorGeneric: "Traduction echouee.",
+      translateErrorNotConfigured: "Traduction non configuree."
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2739,6 +2753,35 @@ export const messages = {
       exportReady: "Export reservation pret",
       exportFailed: "Impossible d exporter les reservations",
       byActor: "par {actor}"
+    },
+    orderStatus: {
+      kicker: "Suivi de commande",
+      title: "Votre commande",
+      orderNumber: "Commande {number}",
+      statusPending: "En attente",
+      statusConfirmed: "Confirmee",
+      statusPreparing: "En preparation",
+      statusReady: "Prete pour retrait",
+      statusCompleted: "Terminee",
+      statusCancelled: "Annulee",
+      estimatedReady: "Prete dans environ {minutes} min",
+      ownerNote: "Message du restaurant",
+      items: "Vos articles",
+      total: "Total",
+      pollError: "Impossible d'actualiser le statut.",
+      notFound: "Commande introuvable.",
+      autoRefresh: "Actualisation automatique toutes les {seconds}s",
+      fulfillmentPickup: "A emporter",
+      fulfillmentDelivery: "Livraison",
+      fulfillmentTable: "Table {table}",
+      backToMenu: "Retour au menu",
+      orderReadyTitle: "Votre commande est prete !",
+      readyBodyPickup: "Venez recuperer votre commande au comptoir.",
+      readyBodyDelivery: "Votre commande est en chemin !",
+      cancelledTitle: "Commande annulee",
+      cancelledBody: "Cette commande a ete annulee. Veuillez contacter le restaurant si vous avez des questions.",
+      readyNotifTitle: "Commande prete !",
+      readyNotifBody: "La commande #{number} est prete pour vous."
     }
   },
   ar: {}
