@@ -528,8 +528,12 @@ const printTicket = (o) => {
     new Date(o.created_at).toLocaleString(),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
 
+  const noteLabel = t("ownerOrders.ticketNote");
+  const totalLabel = t("ownerOrders.ticketTotal");
+  const printedLabel = t("ownerOrders.ticketPrinted");
+
   const note = o.customer_note
-    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>Note:</strong> ${o.customer_note}</div>`
+    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${o.customer_note}</div>`
     : "";
 
   const html = `<!DOCTYPE html><html><head>
@@ -552,9 +556,9 @@ const printTicket = (o) => {
     <div class="divider"></div>
     <table>${itemRows}</table>
     <div class="divider"></div>
-    <table><tr class="total"><td>TOTAL</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr></table>
+    <table><tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr></table>
     ${note}
-    <div class="footer">Printed ${new Date().toLocaleTimeString()}</div>
+    <div class="footer">${printedLabel} ${new Date().toLocaleTimeString()}</div>
   </body></html>`;
 
   const win = window.open("", "_blank", "width=420,height=620");

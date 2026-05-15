@@ -54,6 +54,7 @@ const api = axios.create({
   withCredentials: true,
   xsrfCookieName: "csrftoken",
   xsrfHeaderName: "X-CSRFToken",
+  timeout: 30000,
 });
 
 const isUnsafeMethod = (method) => ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());

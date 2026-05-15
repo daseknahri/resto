@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 import zipfile
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.http import HttpResponse
 from django.utils import timezone
@@ -1185,26 +1185,34 @@ class PlaceOrderView(APIView):
         if table_slug:
             fulfillment_type = Order.FulfillmentType.TABLE
 
-        with transaction.atomic():
-            order_number = _generate_order_number()
-            order = Order.objects.create(
-                order_number=order_number,
-                status=Order.Status.PENDING,
-                customer_name=validated.get("customer_name", ""),
-                customer_phone=validated.get("customer_phone", ""),
-                customer_note=validated.get("customer_note", ""),
-                fulfillment_type=fulfillment_type,
-                table_label=validated.get("table_label", ""),
-                table_slug=table_slug,
-                delivery_address=validated.get("delivery_address", ""),
-                delivery_location_url=validated.get("delivery_location_url", ""),
-                delivery_lat=validated.get("delivery_lat"),
-                delivery_lng=validated.get("delivery_lng"),
-                total=total,
-                currency=currency,
+        try:
+            with transaction.atomic():
+                order_number = _generate_order_number()
+                order = Order.objects.create(
+                    order_number=order_number,
+                    status=Order.Status.PENDING,
+                    customer_name=validated.get("customer_name", ""),
+                    customer_phone=validated.get("customer_phone", ""),
+                    customer_note=validated.get("customer_note", ""),
+                    fulfillment_type=fulfillment_type,
+                    table_label=validated.get("table_label", ""),
+                    table_slug=table_slug,
+                    delivery_address=validated.get("delivery_address", ""),
+                    delivery_location_url=validated.get("delivery_location_url", ""),
+                    delivery_lat=validated.get("delivery_lat"),
+                    delivery_lng=validated.get("delivery_lng"),
+                    total=total,
+                    currency=currency,
+                )
+                for item_data in order_items_data:
+                    OrderItem.objects.create(order=order, **item_data)
+        except IntegrityError:
+            # Rare TOCTOU race: two requests generated the same order number.
+            # Return 503 so the client can retry; a fresh number will be picked.
+            return Response(
+                {"detail": "Order could not be placed due to a conflict. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-            for item_data in order_items_data:
-                OrderItem.objects.create(order=order, **item_data)
 
         return Response({
             "order_number": order.order_number,
