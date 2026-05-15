@@ -78,6 +78,27 @@
         </p>
       </div>
 
+      <!-- Delivery address confirmation -->
+      <div
+        v-if="orderData.fulfillment_type === 'delivery' && orderData.delivery_address"
+        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+      >
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+          {{ t("orderStatus.deliveryAddress") }}
+        </p>
+        <p class="mt-1.5 text-sm text-slate-200">{{ orderData.delivery_address }}</p>
+        <a
+          v-if="orderData.delivery_location_url"
+          :href="orderData.delivery_location_url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-2 inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
+        >
+          <AppIcon name="location" class="h-3.5 w-3.5" />
+          {{ t("orderStatus.openMap") }}
+        </a>
+      </div>
+
       <!-- Status timeline -->
       <div class="ui-panel p-4 sm:p-5">
         <div class="flex items-center justify-between gap-1">

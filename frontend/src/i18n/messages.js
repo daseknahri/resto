@@ -1505,6 +1505,10 @@ export const messages = {
       readyAnyMoment: "Ready any moment now…",
       reorder: "Order Again",
       reorderAdded: "Items added to your cart",
+      deliveryAddress: "Delivery address",
+      openMap: "Open map",
+      deliveryAddress: "Delivery address",
+      openMap: "Open map",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -3094,6 +3098,10 @@ export const messages = {
       readyAnyMoment: "Prete d'un moment a l'autre…",
       reorder: "Commander a nouveau",
       reorderAdded: "Articles ajoutes a votre panier",
+      deliveryAddress: "Adresse de livraison",
+      openMap: "Ouvrir la carte",
+      deliveryAddress: "Adresse de livraison",
+      openMap: "Ouvrir la carte",
     },
     customerAccount: {
       kicker: "Votre compte",
