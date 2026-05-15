@@ -166,7 +166,7 @@
               💬 {{ t("ownerOrders.whatsapp") }}
             </a>
           </div>
-          <div v-if="o.customer_email && !o.customer_phone">
+          <div v-if="o.customer_email">
             <a :href="`mailto:${o.customer_email}`" class="font-medium text-sky-300 hover:text-sky-200">{{ o.customer_email }}</a>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
@@ -528,7 +528,7 @@ const printTicket = (o) => {
     fulfillmentLabel(o),
     o.customer_name ? `Customer: ${o.customer_name}` : "",
     o.customer_phone ? `Phone: ${o.customer_phone}` : "",
-    o.customer_email && !o.customer_phone ? `Email: ${o.customer_email}` : "",
+    o.customer_email ? `Email: ${o.customer_email}` : "",
     o.delivery_address ? `Address: ${o.delivery_address}` : "",
     new Date(o.created_at).toLocaleString(),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");

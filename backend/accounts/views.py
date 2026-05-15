@@ -21,6 +21,7 @@ from .throttles import (
     ActivationThrottle,
     CustomerEmailOtpRequestThrottle,
     CustomerEmailOtpVerifyThrottle,
+    CustomerGoogleAuthThrottle,
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
     LoginBurstThrottle,
@@ -345,6 +346,7 @@ class CustomerGoogleAuthView(APIView):
     """Verify a Google One-Tap credential and create or retrieve the matching Customer."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [CustomerGoogleAuthThrottle]
 
     def post(self, request):
         credential = (request.data.get("credential") or "").strip()

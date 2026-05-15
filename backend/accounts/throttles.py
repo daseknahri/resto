@@ -45,3 +45,7 @@ class CustomerEmailOtpRequestThrottle(_IPThrottle):
 
 class CustomerEmailOtpVerifyThrottle(_IPThrottle):
     scope = "customer_email_otp_verify"
+
+
+class CustomerGoogleAuthThrottle(_IPThrottle):
+    scope = "customer_google_auth"

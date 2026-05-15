@@ -9,8 +9,20 @@
       </div>
     </header>
 
+    <!-- Loading skeleton (before session fetch resolves) -->
+    <div v-if="!customerStore.loaded" class="ui-panel ui-reveal p-6 space-y-4 text-center">
+      <div class="flex justify-center">
+        <span class="flex h-14 w-14 animate-pulse items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60" />
+      </div>
+      <div class="space-y-2">
+        <div class="mx-auto h-4 w-32 animate-pulse rounded bg-slate-800" />
+        <div class="mx-auto h-3 w-48 animate-pulse rounded bg-slate-800/70" />
+      </div>
+      <div class="mx-auto h-9 w-44 animate-pulse rounded-full bg-slate-800" />
+    </div>
+
     <!-- Not signed in -->
-    <div v-if="!customerStore.isAuthenticated" class="ui-panel ui-reveal p-6 space-y-4 text-center">
+    <div v-else-if="!customerStore.isAuthenticated" class="ui-panel ui-reveal p-6 space-y-4 text-center">
       <div class="flex justify-center">
         <span class="flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60">
           <AppIcon name="user" class="h-7 w-7 text-slate-400" />
@@ -27,7 +39,7 @@
     </div>
 
     <!-- Signed in: profile + orders -->
-    <template v-else>
+    <template v-else>  <!-- customerStore.loaded && isAuthenticated -->
       <!-- Profile card -->
       <section class="ui-panel ui-reveal p-4 space-y-4">
         <p class="ui-kicker">{{ t('customerAccount.profileTitle') }}</p>
@@ -141,7 +153,7 @@
                 order.fulfillment_type === 'table' ? t('orderStatus.fulfillmentTable', { table: order.table_label || '' }) :
                 order.fulfillment_type
               }}</span>
-              <span v-if="order.total">{{ order.total }} {{ order.currency }}</span>
+              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
               <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
             </div>
           </li>
@@ -164,7 +176,7 @@
               {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
             </RouterLink>
             <div class="mt-1 text-slate-400">
-              <span v-if="order.total">{{ order.total }} {{ order.currency }}</span>
+              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
             </div>
           </li>
         </ul>
@@ -189,7 +201,7 @@ import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 
-const { t } = useI18n();
+const { t, formatCurrency } = useI18n();
 const customerStore = useCustomerStore();
 const cart = useCartStore();
 

@@ -27,6 +27,7 @@
         "customer_otp_verify": "20/hour",
         "customer_email_otp_request": "6/hour",
         "customer_email_otp_verify": "20/hour",
+        "customer_google_auth": "20/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }
