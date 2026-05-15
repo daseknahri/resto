@@ -24,6 +24,7 @@ from .throttles import (
     CustomerGoogleAuthThrottle,
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
+    CustomerProfileUpdateThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     PasswordResetConfirmThrottle,
@@ -510,6 +511,7 @@ class CustomerProfileUpdateView(APIView):
     """PATCH /api/customer/profile/ — update name for the current customer session."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [CustomerProfileUpdateThrottle]
 
     def patch(self, request):
         customer_id = request.session.get("customer_id")
