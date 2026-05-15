@@ -149,6 +149,17 @@ api.interceptors.response.use(
         // If refresh fails, keep original error.
       }
     }
+    if (error?.response?.status === 401 && typeof window !== "undefined") {
+      const url = String(error?.config?.url || "");
+      const authPaths = ["/session/", "/signin/", "/signout/", "/forgot-password/", "/reset-password/", "/activate/"];
+      const isAuthEndpoint = authPaths.some((p) => url.includes(p));
+      if (!isAuthEndpoint) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/signin?next=${next}`;
+        // Return a never-resolving promise so callers don't see a spurious rejection
+        return new Promise(() => {});
+      }
+    }
     if (error.response?.status === 429) {
       error.response.data = { detail: translate("apiClient.rateLimitRetry") };
     }

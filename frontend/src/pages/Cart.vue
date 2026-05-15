@@ -920,7 +920,15 @@ watch(fulfillmentType, (value) => {
 });
 
 watch(showMapModal, async (value) => {
-  if (!value) return;
+  if (!value) {
+    // Destroy the map instance when the modal closes to free memory
+    if (leafletMap.value) {
+      leafletMap.value.remove();
+      leafletMap.value = null;
+      leafletMarker.value = null;
+    }
+    return;
+  }
   await nextTick();
   try {
     await initLeafletMap();

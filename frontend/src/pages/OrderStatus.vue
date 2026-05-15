@@ -166,6 +166,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
+import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 
@@ -175,6 +176,7 @@ const props = defineProps({
 
 const router = useRouter();
 const cart = useCartStore();
+const orderStore = useOrderStore();
 const toast = useToastStore();
 const { t } = useI18n();
 
@@ -414,6 +416,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(pollTimer);
   stopCountdown();
+  orderStore.clearPlacedOrder();
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onStatusPageVisible);
   }

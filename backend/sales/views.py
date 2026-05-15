@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from math import ceil
 from urllib.parse import quote_plus
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, F, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
@@ -684,6 +684,17 @@ class ProvisioningJobViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = ProvisioningJobSerializer
     permission_classes = [IsPlatformAdmin]
 
+    def list(self, request, *args, **kwargs):
+        limit = _parse_positive_int(
+            request.query_params.get("limit"),
+            default=100,
+            min_value=1,
+            max_value=500,
+        )
+        queryset = self.get_queryset()[:limit]
+        data = self.get_serializer(queryset, many=True).data
+        return Response(data)
+
 
 class AdminAuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = AdminAuditLog.objects.select_related("actor", "tenant", "lead").order_by("-created_at")
@@ -1020,6 +1031,12 @@ class AdminTenantSettingsImportView(APIView):
                 return Response(detail, status=status.HTTP_400_BAD_REQUEST)
             except (TypeError, serializers.ValidationError) as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            except IntegrityError as exc:
+                logger.warning("Settings import IntegrityError tenant=%s: %s", tenant_id, exc)
+                return Response(
+                    {"detail": "Import failed due to a data conflict (duplicate slug or constraint violation)."},
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             log_admin_action(
                 action=(

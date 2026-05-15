@@ -677,12 +677,16 @@ const hydrateOwnerInsights = async () => {
 
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
 
+let copyResetTimer = null;
+
 const copyMenuUrl = async () => {
   try {
     await navigator.clipboard.writeText(menuUrl.value);
     copied.value = true;
-    setTimeout(() => {
+    if (copyResetTimer !== null) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
       copied.value = false;
+      copyResetTimer = null;
     }, 1800);
   } catch {
     toast.show(t("ownerHome.copyFailed"), "error");
@@ -839,6 +843,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearInterval(homePollTimer);
+  if (copyResetTimer !== null) {
+    clearTimeout(copyResetTimer);
+    copyResetTimer = null;
+  }
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onHomePageVisible);
   }

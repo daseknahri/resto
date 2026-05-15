@@ -21,6 +21,15 @@ export const useOrderStore = defineStore("order", {
 
   actions: {
     // -------------------------------------------------------
+    // Customer: clear placed order (call after navigating away from order status)
+    // -------------------------------------------------------
+    clearPlacedOrder() {
+      this.placedOrderNumber = null;
+      this.placeError = null;
+      this.placeFieldErrors = {};
+    },
+
+    // -------------------------------------------------------
     // Customer: place order
     // -------------------------------------------------------
     async placeOrder(payload) {
