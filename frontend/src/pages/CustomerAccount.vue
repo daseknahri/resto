@@ -132,10 +132,15 @@
               >
                 {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
               </RouterLink>
-              <span class="ui-chip text-[10px]">{{ order.status }}</span>
+              <span class="ui-chip text-[10px]">{{ statusLabel(order.status) }}</span>
             </div>
             <div class="mt-1 flex flex-wrap items-center gap-2 text-slate-400">
-              <span v-if="order.fulfillment_type">{{ order.fulfillment_type }}</span>
+              <span v-if="order.fulfillment_type">{{
+                order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
+                order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
+                order.fulfillment_type === 'table' ? t('orderStatus.fulfillmentTable', { table: order.table_label || '' }) :
+                order.fulfillment_type
+              }}</span>
               <span v-if="order.total">{{ order.total }} {{ order.currency }}</span>
               <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
             </div>
@@ -204,6 +209,16 @@ const formatDate = (iso) => {
   }
 };
 
+const STATUS_I18N = {
+  pending: 'orderStatus.statusPending',
+  confirmed: 'orderStatus.statusConfirmed',
+  preparing: 'orderStatus.statusPreparing',
+  ready: 'orderStatus.statusReady',
+  completed: 'orderStatus.statusCompleted',
+  cancelled: 'orderStatus.statusCancelled',
+};
+const statusLabel = (s) => s ? t(STATUS_I18N[s] || 'orderStatus.statusPending') : '';
+
 const fetchOrders = async () => {
   if (!customerStore.isAuthenticated) return;
   loadingOrders.value = true;
@@ -219,11 +234,15 @@ const fetchOrders = async () => {
 };
 
 const saveName = async () => {
-  if (!editableName.value.trim()) return;
+  const trimmed = editableName.value.trim();
+  if (!trimmed) return;
   savingName.value = true;
   try {
-    // Optimistically update the store while we wait for a future PATCH endpoint
-    customerStore.customer = { ...customerStore.customer, name: editableName.value.trim() };
+    const res = await api.patch('/customer/profile/', { name: trimmed });
+    customerStore.setCustomer(res.data.customer);
+  } catch {
+    // revert to server value on failure
+    editableName.value = customerStore.customer?.name || '';
   } finally {
     savingName.value = false;
   }

@@ -489,3 +489,29 @@ class CustomerEmailVerifyView(APIView):
 
         request.session["customer_id"] = customer.pk
         return Response({"customer": _serialize_customer(customer)})
+
+
+# ── Customer profile update ───────────────────────────────────────────────────
+
+
+class CustomerProfileUpdateView(APIView):
+    """PATCH /api/customer/profile/ — update name for the current customer session."""
+
+    permission_classes = [AllowAny]
+
+    def patch(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            request.session.pop("customer_id", None)
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        name = (request.data.get("name") or "").strip()[:80]
+        if name:
+            customer.name = name
+            customer.save(update_fields=["name", "updated_at"])
+
+        return Response({"customer": _serialize_customer(customer)})

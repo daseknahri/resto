@@ -15,7 +15,7 @@ class Customer(models.Model):
     email_verified = models.BooleanField(default=False)
     # Google OAuth sub (unique identifier from Google's JWT). Null for phone-only customers.
     google_sub = models.CharField(max_length=200, unique=True, null=True, blank=True, db_index=True)
-    email = models.EmailField(blank=True)
+    email = models.EmailField(blank=True, db_index=True)
     name = models.CharField(max_length=80, blank=True)
     locale = models.CharField(max_length=10, default="en")
     wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)

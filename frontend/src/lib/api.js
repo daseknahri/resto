@@ -152,7 +152,7 @@ api.interceptors.response.use(
     }
     if (error?.response?.status === 401 && typeof window !== "undefined") {
       const url = String(error?.config?.url || "");
-      const authPaths = ["/session/", "/signin/", "/signout/", "/forgot-password/", "/reset-password/", "/activate/", "/customer/session/", "/customer/auth/"];
+      const authPaths = ["/session/", "/signin/", "/signout/", "/forgot-password/", "/reset-password/", "/activate/", "/customer/"];
       const isAuthEndpoint = authPaths.some((p) => url.includes(p));
       if (!isAuthEndpoint) {
         const next = encodeURIComponent(window.location.pathname + window.location.search);

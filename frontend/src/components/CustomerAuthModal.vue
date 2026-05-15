@@ -195,7 +195,7 @@
                 {{ verifyingEmailOtp ? t("customerAuth.verifying") : t("customerAuth.verify") }}
               </button>
               <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingEmailOtp" @click="backToEmail">
-                {{ t("customerAuth.useEmail") }}
+                {{ t("customerAuth.changeEmail") }}
               </button>
             </div>
           </template>

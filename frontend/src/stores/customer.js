@@ -3,7 +3,7 @@ import api from "../lib/api";
 
 export const useCustomerStore = defineStore("customer", {
   state: () => ({
-    /** @type {{ id: number, name: string, email: string, phone: string, phone_verified: boolean, has_google: boolean } | null} */
+    /** @type {{ id: number, name: string, email: string, phone: string, phone_verified: boolean, email_verified: boolean, has_google: boolean } | null} */
     customer: null,
     loaded: false,
     loading: false,
