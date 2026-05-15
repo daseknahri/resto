@@ -396,10 +396,20 @@ class CustomerGoogleAuthView(APIView):
 
 
 class CustomerOrdersView(APIView):
-    """Return a paginated list of orders for the current customer session."""
+    """Return a paginated list of orders for the current customer session.
+
+    Only runs when a tenant schema is active (i.e. the request is from a
+    tenant domain). Returns an empty list when called from the public schema
+    because Order lives in tenant schemas, not the public schema.
+    """
     permission_classes = [AllowAny]
 
     def get(self, request):
+        # Guard: Order only exists in tenant schemas.
+        from django.db import connection
+        if connection.schema_name == "public":
+            return Response({"orders": [], "count": 0})
+
         customer_id = request.session.get("customer_id")
         if not customer_id:
             return Response({"orders": [], "count": 0})
