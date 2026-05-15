@@ -29,3 +29,11 @@ class PasswordResetRequestThrottle(_IPThrottle):
 
 class PasswordResetConfirmThrottle(_IPThrottle):
     scope = "auth_password_reset_confirm"
+
+
+class CustomerOtpRequestThrottle(_IPThrottle):
+    scope = "customer_otp_request"
+
+
+class CustomerOtpVerifyThrottle(_IPThrottle):
+    scope = "customer_otp_verify"

@@ -23,6 +23,8 @@
         "auth_activation": "20/hour",
         "auth_password_reset_request": "8/hour",
         "auth_password_reset_confirm": "20/hour",
+        "customer_otp_request": "6/hour",
+        "customer_otp_verify": "20/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

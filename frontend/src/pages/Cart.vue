@@ -468,6 +468,29 @@
             </div>
           </div>
 
+          <!-- Customer auth CTA — shown for delivery orders when not signed in -->
+          <div
+            v-if="isDelivery && !customerStore.isAuthenticated"
+            class="rounded-2xl border border-sky-500/30 bg-sky-500/8 p-3 space-y-2"
+          >
+            <p class="text-xs font-semibold text-sky-300">{{ t('cartPage.authCTATitle') }}</p>
+            <p class="text-xs text-slate-400">{{ t('cartPage.authCTABody') }}</p>
+            <button
+              class="ui-btn-outline w-full justify-center text-xs border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
+              @click="showAuthModal = true"
+            >
+              {{ t('cartPage.authCTAButton') }}
+            </button>
+          </div>
+
+          <div
+            v-else-if="isDelivery && customerStore.isAuthenticated"
+            class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center gap-2"
+          >
+            <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+            {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+          </div>
+
           <div class="ui-section-band space-y-2.5 px-3 py-3">
             <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
 
@@ -543,6 +566,12 @@
       </aside>
     </div>
 
+    <CustomerAuthModal
+      v-if="showAuthModal"
+      @close="showAuthModal = false"
+      @authenticated="onCustomerAuthenticated"
+    />
+
     <Teleport to="body">
       <div
         v-if="showMapModal"
@@ -617,8 +646,10 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
+import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
+import { useCustomerStore } from '../stores/customer';
 import { useOrderStore } from '../stores/order';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
@@ -627,10 +658,13 @@ import { trackEvent } from '../lib/analytics';
 
 const router = useRouter();
 const cart = useCartStore();
+const customerStore = useCustomerStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { formatCurrency, itemCountLabel, t } = useI18n();
+
+const showAuthModal = ref(false);
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -1309,13 +1343,24 @@ const placeInAppOrder = async () => {
   }
 };
 
+const onCustomerAuthenticated = (customer) => {
+  customerStore.setCustomer(customer);
+  toast.show(t('cartPage.signedIn'), 'success');
+};
+
 const handleEscapeKey = (event) => {
+  if (showAuthModal.value) {
+    if (event?.key === 'Escape') showAuthModal.value = false;
+    return;
+  }
   if (!showMapModal.value) return;
   if (event?.key !== 'Escape') return;
   closeMapModal();
 };
 
 onMounted(() => {
+  // Silently pre-fetch the customer session so the auth CTA can show correct state
+  customerStore.fetchCustomer();
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },

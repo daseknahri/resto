@@ -1,5 +1,13 @@
+import json
+import logging
+import random
+import urllib.error
+import urllib.parse
+import urllib.request
+
 from django.conf import settings
 from django.contrib.auth import login, logout
+from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
@@ -8,8 +16,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .messaging import send_password_reset_email
+from .models import Customer
 from .throttles import (
     ActivationThrottle,
+    CustomerOtpRequestThrottle,
+    CustomerOtpVerifyThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     PasswordResetConfirmThrottle,
@@ -21,6 +32,8 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
 )
+
+logger = logging.getLogger("app.customer")
 
 
 def serialize_user_session(user):
@@ -157,3 +170,217 @@ class PasswordResetConfirmView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password reset successful. You can now sign in."}, status=status.HTTP_200_OK)
+
+
+# ── Customer auth helpers ──────────────────────────────────────────────────────
+
+
+def _serialize_customer(customer: Customer) -> dict:
+    return {
+        "id": customer.pk,
+        "name": customer.name,
+        "email": customer.email,
+        "phone": customer.phone or "",
+        "phone_verified": customer.phone_verified,
+        "has_google": bool(customer.google_sub),
+    }
+
+
+def _verify_google_token(credential: str, client_id: str) -> dict | None:
+    """Verify a Google ID token using Google's tokeninfo endpoint.
+
+    Returns the decoded payload dict on success, None on failure.
+    """
+    url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(credential)}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except (urllib.error.URLError, json.JSONDecodeError, Exception):
+        return None
+    # Validate audience when client_id is configured
+    if client_id and data.get("aud") != client_id:
+        return None
+    # Require a sub claim
+    if not data.get("sub"):
+        return None
+    return data
+
+
+def _send_otp(phone: str, code: str) -> None:
+    """Deliver OTP to customer's phone.
+
+    In dev (DEBUG=True) the code is logged so developers can find it in server output.
+    In production wire a real provider (Twilio, WhatsApp, etc.) here.
+    """
+    if getattr(settings, "DEBUG", False):
+        logger.info("Customer OTP for %s: %s", phone, code)
+    else:
+        # Production: add your SMS/WhatsApp provider here.
+        logger.info("OTP requested for phone ending ...%s", phone[-4:] if len(phone) >= 4 else "****")
+
+
+_OTP_CACHE_KEY = "customer_otp:{phone}"
+_OTP_TTL = 300  # 5 minutes
+_OTP_MAX_ATTEMPTS = 5
+
+
+# ── Customer session ──────────────────────────────────────────────────────────
+
+
+class CustomerSessionView(APIView):
+    """GET: return the current customer session. DELETE: sign out."""
+
+    permission_classes = [AllowAny]
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"customer": None})
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            request.session.pop("customer_id", None)
+            return Response({"customer": None})
+        return Response({"customer": _serialize_customer(customer)})
+
+    def delete(self, request):
+        request.session.pop("customer_id", None)
+        return Response({"ok": True})
+
+
+# ── Customer phone OTP ────────────────────────────────────────────────────────
+
+
+class CustomerPhoneRequestView(APIView):
+    """Request an OTP for the given phone number."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomerOtpRequestThrottle]
+
+    def post(self, request):
+        phone = (request.data.get("phone") or "").strip()
+        if not phone:
+            return Response({"detail": "Phone number is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(phone) > 30:
+            return Response({"detail": "Phone number too long."}, status=status.HTTP_400_BAD_REQUEST)
+
+        code = f"{random.randint(100000, 999999)}"
+        cache_key = _OTP_CACHE_KEY.format(phone=phone)
+        cache.set(cache_key, {"code": code, "attempts": 0}, timeout=_OTP_TTL)
+        _send_otp(phone, code)
+
+        resp = {"ok": True, "detail": "OTP sent. Check your phone."}
+        # In DEBUG, include the code in the response so developers can test without SMS
+        if getattr(settings, "DEBUG", False):
+            resp["debug_code"] = code
+        return Response(resp)
+
+
+class CustomerPhoneVerifyView(APIView):
+    """Verify the OTP and create or retrieve the matching Customer, then start a session."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomerOtpVerifyThrottle]
+
+    def post(self, request):
+        phone = (request.data.get("phone") or "").strip()
+        code = (request.data.get("code") or "").strip()
+        name = (request.data.get("name") or "").strip()[:80]
+
+        if not phone or not code:
+            return Response(
+                {"detail": "Phone and code are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cache_key = _OTP_CACHE_KEY.format(phone=phone)
+        data = cache.get(cache_key)
+        if data is None:
+            return Response(
+                {"detail": "OTP expired or not requested. Please request a new code.", "code": "otp_expired"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if data["attempts"] >= _OTP_MAX_ATTEMPTS:
+            cache.delete(cache_key)
+            return Response(
+                {"detail": "Too many incorrect attempts. Please request a new code.", "code": "too_many_attempts"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        if data["code"] != code:
+            data["attempts"] += 1
+            cache.set(cache_key, data, timeout=_OTP_TTL)
+            return Response(
+                {"detail": "Incorrect code.", "code": "invalid_code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cache.delete(cache_key)
+
+        customer, created = Customer.objects.get_or_create(
+            phone=phone,
+            defaults={"name": name, "phone_verified": True},
+        )
+        update_fields = ["phone_verified", "updated_at"]
+        if not customer.phone_verified:
+            customer.phone_verified = True
+        if not customer.name and name:
+            customer.name = name
+            update_fields.append("name")
+        if not created:
+            customer.save(update_fields=update_fields)
+
+        request.session["customer_id"] = customer.pk
+        return Response({"customer": _serialize_customer(customer)})
+
+
+# ── Customer Google auth ──────────────────────────────────────────────────────
+
+
+class CustomerGoogleAuthView(APIView):
+    """Verify a Google One-Tap credential and create or retrieve the matching Customer."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        credential = (request.data.get("credential") or "").strip()
+        if not credential:
+            return Response({"detail": "Google credential is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        payload = _verify_google_token(credential, client_id)
+        if payload is None:
+            return Response(
+                {"detail": "Invalid or expired Google credential. Please try again.", "code": "invalid_credential"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        google_sub = payload["sub"]
+        email = payload.get("email", "").strip()
+        name = payload.get("name", "").strip()[:80]
+
+        # 1. Find by google_sub (returning user)
+        customer = Customer.objects.filter(google_sub=google_sub).first()
+
+        if customer is None:
+            # 2. Find by email (link to phone-authed account)
+            if email:
+                customer = Customer.objects.filter(email=email).exclude(google_sub__isnull=False).first()
+
+            if customer is not None:
+                customer.google_sub = google_sub
+                update_fields = ["google_sub", "updated_at"]
+                if not customer.name and name:
+                    customer.name = name
+                    update_fields.append("name")
+                customer.save(update_fields=update_fields)
+            else:
+                # 3. Create new customer
+                customer = Customer.objects.create(
+                    google_sub=google_sub,
+                    email=email,
+                    name=name,
+                )
+
+        request.session["customer_id"] = customer.pk
+        return Response({"customer": _serialize_customer(customer)})

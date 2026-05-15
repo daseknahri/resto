@@ -9,7 +9,11 @@ from django.utils import timezone
 class Customer(models.Model):
     """Platform-level customer identity — lives in the public schema, shared across all tenants."""
 
-    phone = models.CharField(max_length=30, unique=True, db_index=True)
+    # Phone is optional so Google-only customers can exist without a phone number.
+    phone = models.CharField(max_length=30, unique=True, null=True, blank=True, db_index=True)
+    phone_verified = models.BooleanField(default=False)
+    # Google OAuth sub (unique identifier from Google's JWT). Null for phone-only customers.
+    google_sub = models.CharField(max_length=200, unique=True, null=True, blank=True, db_index=True)
     email = models.EmailField(blank=True)
     name = models.CharField(max_length=80, blank=True)
     locale = models.CharField(max_length=10, default="en")
@@ -21,7 +25,7 @@ class Customer(models.Model):
         ordering = ("-created_at",)
 
     def __str__(self) -> str:
-        return self.name or self.phone
+        return self.name or self.phone or self.email or f"Customer #{self.pk}"
 
 
 class WalletTransaction(models.Model):

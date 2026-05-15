@@ -1185,12 +1185,23 @@ class PlaceOrderView(APIView):
         if table_slug:
             fulfillment_type = Order.FulfillmentType.TABLE
 
+        # Attach the customer profile if the visitor has an active customer session
+        from accounts.models import Customer as CustomerModel
+        _customer_id = request.session.get("customer_id")
+        _linked_customer = None
+        if _customer_id:
+            try:
+                _linked_customer = CustomerModel.objects.get(pk=_customer_id)
+            except CustomerModel.DoesNotExist:
+                request.session.pop("customer_id", None)
+
         try:
             with transaction.atomic():
                 order_number = _generate_order_number()
                 order = Order.objects.create(
                     order_number=order_number,
                     status=Order.Status.PENDING,
+                    customer=_linked_customer,
                     customer_name=validated.get("customer_name", ""),
                     customer_phone=validated.get("customer_phone", ""),
                     customer_note=validated.get("customer_note", ""),
