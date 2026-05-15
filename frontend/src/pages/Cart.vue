@@ -191,7 +191,7 @@
             class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-sm text-emerald-100"
           >
             <p class="font-semibold">{{ t('cartPage.tableQrOrder') }}</p>
-            <p class="mt-1">
+            <p class="mt-1 text-emerald-200/80">
               {{
                 t('cartPage.tableContextDetected', {
                   table: cart.tableLabel || '-',
@@ -199,6 +199,17 @@
               }}
               {{ t('cartPage.optionalNoteOnly') }}
             </p>
+            <label class="mt-2.5 block space-y-1">
+              <span class="text-xs text-emerald-200/80">{{ t('cartPage.tableCustomerNameOptional') }}</span>
+              <input
+                v-model.trim="customerNameModel"
+                maxlength="80"
+                class="ui-input"
+                autocomplete="name"
+                :placeholder="t('cartPage.tableCustomerNamePlaceholder')"
+                @input="clearFieldError('customer_name')"
+              />
+            </label>
           </div>
 
           <div v-else class="space-y-3">
@@ -1062,10 +1073,10 @@ const buildPayload = () => {
   if (customerNote.value) payload.customer_note = customerNote.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
+  if (cart.customerName) payload.customer_name = cart.customerName;
 
   if (!isTableContextOrder.value) {
     if (fulfillmentType.value) payload.fulfillment_type = fulfillmentType.value;
-    if (cart.customerName) payload.customer_name = cart.customerName;
     if (cart.customerPhone) payload.customer_phone = cart.customerPhone;
     if (isDelivery.value) {
       const latValue = parseCoordinateValue(deliveryLat.value);

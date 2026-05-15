@@ -59,6 +59,25 @@
         </div>
       </div>
 
+      <!-- Table order banner -->
+      <div
+        v-if="orderData.fulfillment_type === 'table'"
+        class="ui-reveal rounded-2xl border border-emerald-500/40 bg-emerald-500/12 p-5 text-center"
+      >
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
+          {{ t("orderStatus.tableOrderLabel") }}
+        </p>
+        <p class="mt-1 text-5xl font-bold text-white tracking-tight">
+          {{ orderData.table_label || t("orderStatus.tableUnknown") }}
+        </p>
+        <p v-if="orderData.customer_name" class="mt-1.5 text-sm font-medium text-slate-300">
+          {{ orderData.customer_name }}
+        </p>
+        <p class="mt-2 text-sm text-emerald-300/75">
+          {{ t("orderStatus.tableOrderHint") }}
+        </p>
+      </div>
+
       <!-- Status timeline -->
       <div class="ui-panel p-4 sm:p-5">
         <div class="flex items-center justify-between gap-1">
