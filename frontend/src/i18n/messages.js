@@ -1528,7 +1528,6 @@ export const messages = {
       emailPlaceholder: "your@email.com",
       emailRequired: "Email address is required.",
       emailCodeSentTo: "Code sent to {email}. Enter it below.",
-      usePhone: "Use phone instead",
       changeEmail: "Change email address",
       sendCode: "Send code",
       sending: "Sending…",
@@ -1547,7 +1546,6 @@ export const messages = {
       verifying: "Verifying…",
       changePhone: "Change phone number",
       googleError: "Google sign-in failed. Please try again.",
-      verifiedAccount: "Verified account required for delivery.",
     },
     customerAccount: {
       kicker: "Your account",
@@ -2956,7 +2954,6 @@ export const messages = {
       emailPlaceholder: "votre@email.com",
       emailRequired: "L'adresse e-mail est obligatoire.",
       emailCodeSentTo: "Code envoye a {email}. Saisissez-le ci-dessous.",
-      usePhone: "Utiliser le telephone",
       changeEmail: "Changer d'adresse e-mail",
       sendCode: "Envoyer le code",
       sending: "Envoi…",
@@ -2975,7 +2972,6 @@ export const messages = {
       verifying: "Verification…",
       changePhone: "Changer de numero",
       googleError: "La connexion Google a echoue. Veuillez reessayer.",
-      verifiedAccount: "Compte verifie requis pour la livraison.",
     },
     ownerOrders: {
       kicker: "Gestion des commandes",
