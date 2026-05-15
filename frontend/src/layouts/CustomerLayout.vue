@@ -267,6 +267,8 @@ const syncTableFromQuery = async () => {
 onMounted(() => {
   loadOrderTracking();
   syncTableFromQuery();
+  // Pre-fetch customer session so the Account badge and auth gates are ready
+  customerStore.fetchCustomer();
 });
 watch(() => route.query?.table, syncTableFromQuery);
 watch(() => route.query?.t, syncTableFromQuery);

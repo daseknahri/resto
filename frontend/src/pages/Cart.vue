@@ -1318,8 +1318,7 @@ const handleEscapeKey = (event) => {
 };
 
 onMounted(() => {
-  // Silently pre-fetch the customer session so the auth CTA can show correct state
-  customerStore.fetchCustomer();
+  customerStore.fetchCustomer(); // no-op if layout already fetched it
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },
