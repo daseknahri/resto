@@ -304,11 +304,14 @@ const switchTab = (tab) => {
 // ── Phone OTP flow ────────────────────────────────────────────────────────────
 const requestOtp = async () => {
   phoneError.value = "";
+  phoneOtpError.value = "";
   generalError.value = "";
   if (!phone.value) {
     phoneError.value = t("customerAuth.phoneRequired");
     return;
   }
+  // Clear previous code when re-requesting
+  if (phoneStep.value === "verify") phoneOtpCode.value = "";
   requestingOtp.value = true;
   try {
     await api.post("/customer/auth/phone/request/", { phone: phone.value });
@@ -369,11 +372,14 @@ const backToPhone = () => {
 // ── Email OTP flow ────────────────────────────────────────────────────────────
 const requestEmailOtp = async () => {
   emailError.value = "";
+  emailOtpError.value = "";
   generalError.value = "";
   if (!email.value || !email.value.includes("@")) {
     emailError.value = t("customerAuth.emailRequired");
     return;
   }
+  // Clear previous code when re-requesting
+  if (emailStep.value === "verify") emailOtpCode.value = "";
   requestingEmailOtp.value = true;
   try {
     await api.post("/customer/auth/email/request/", { email: email.value });
