@@ -301,11 +301,13 @@ import { useI18n } from "../composables/useI18n";
 import { formatBusinessHoursRows, formatBusinessHoursSummary, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
+import { useCustomerStore } from "../stores/customer";
 import { isPublicDemoHost } from "../lib/runtimeHost";
 import { useTenantStore } from "../stores/tenant";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
+const customerStore = useCustomerStore();
 const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
@@ -483,6 +485,11 @@ const trackContactClick = (target) => {
 onMounted(async () => {
   lead.reset();
   trackEvent("customer_info_view", { source: "customer_landing_info" }, { onceKey: "customer:landing" });
+  // Pre-fill form from verified customer identity
+  const c = customerStore.customer;
+  if (c?.name && !form.name) form.name = c.name;
+  if (c?.phone && !form.phone) form.phone = c.phone;
+  if (c?.email && !form.email) form.email = c.email;
   if (typeof window !== "undefined") {
     window.addEventListener("keydown", onEscape);
   }

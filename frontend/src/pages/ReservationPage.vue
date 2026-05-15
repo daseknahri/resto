@@ -217,10 +217,12 @@ import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
 import { useCartStore } from "../stores/cart";
 import { useLeadStore } from "../stores/lead";
+import { useCustomerStore } from "../stores/customer";
 import { useTenantStore } from "../stores/tenant";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
+const customerStore = useCustomerStore();
 const cart = useCartStore();
 const submitted = ref(false);
 const meta = computed(() => tenant.resolvedMeta || null);
@@ -350,6 +352,11 @@ const trackContactClick = (target) => {
 onMounted(() => {
   lead.reset();
   submitted.value = false;
+  // Pre-fill from verified customer identity first, then fall back to cart localStorage
+  const c = customerStore.customer;
+  if (c?.name && !form.name) form.name = c.name;
+  if (c?.phone && !form.phone) form.phone = c.phone;
+  if (c?.email && !form.email) form.email = c.email;
   if (cart.customerName && !form.name) form.name = cart.customerName;
   if (cart.customerPhone && !form.phone) form.phone = cart.customerPhone;
 });
