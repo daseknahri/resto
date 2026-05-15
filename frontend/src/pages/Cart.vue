@@ -435,16 +435,24 @@
               {{ t('cartPage.deliveryAuthButton') }}
             </button>
           </div>
-          <div
-            v-else-if="isDelivery && customerStore.isAuthenticated"
-            class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2"
-          >
-            <div class="flex items-center gap-1.5">
-              <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
-              {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+          <template v-else-if="isDelivery && customerStore.isAuthenticated">
+            <!-- Verified: green banner -->
+            <div
+              v-if="customerStore.customer?.phone_verified || customerStore.customer?.email_verified || customerStore.customer?.has_google"
+              class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2"
+            >
+              <div class="flex items-center gap-1.5">
+                <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+                {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+              </div>
+              <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
             </div>
-            <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
-          </div>
+            <!-- Not verified: amber warning -->
+            <div v-else class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-1.5">
+              <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
+              <button class="text-xs text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
+            </div>
+          </template>
 
           <div class="ui-section-band space-y-2.5 px-3 py-3">
             <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
@@ -1012,6 +1020,15 @@ const validateForm = () => {
     showAuthModal.value = true;
     return false;
   }
+  // Delivery requires a verified customer (phone, email, or Google)
+  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated) {
+    const c = customerStore.customer;
+    const isVerified = c?.phone_verified || c?.email_verified || c?.has_google;
+    if (!isVerified) {
+      toast.show(t('cartPage.deliveryNotVerified'), 'error');
+      return false;
+    }
+  }
 
   const errors = {};
   if (!fulfillmentType.value) {
@@ -1124,6 +1141,13 @@ const mapOrderApiError = (err, fallback) => {
 
   assignFieldErrors(data);
 
+  if (code === 'auth_required') {
+    showAuthModal.value = true;
+    return t('cartPage.deliveryAuthRequired');
+  }
+  if (code === 'not_verified') {
+    return t('cartPage.deliveryNotVerified');
+  }
   if (code === 'items_unavailable' && unavailable.length) {
     return t('cartPage.itemsUnavailable', { items: unavailable.join(', ') });
   }

@@ -898,6 +898,7 @@ export const messages = {
       signedInAs: "Signed in as {name}",
       signedIn: "Signed in successfully",
       signOut: "Sign out",
+      deliveryNotVerified: "Please verify your phone or email before placing a delivery order.",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -1505,8 +1506,6 @@ export const messages = {
       readyAnyMoment: "Ready any moment now…",
       reorder: "Order Again",
       reorderAdded: "Items added to your cart",
-      deliveryAddress: "Delivery address",
-      openMap: "Open map",
       deliveryAddress: "Delivery address",
       openMap: "Open map",
     },
@@ -2426,6 +2425,7 @@ export const messages = {
       signedInAs: "Connecte en tant que {name}",
       signedIn: "Connexion reussie",
       signOut: "Se deconnecter",
+      deliveryNotVerified: "Veuillez verifier votre telephone ou e-mail avant de passer une commande de livraison.",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
@@ -3098,8 +3098,6 @@ export const messages = {
       readyAnyMoment: "Prete d'un moment a l'autre…",
       reorder: "Commander a nouveau",
       reorderAdded: "Articles ajoutes a votre panier",
-      deliveryAddress: "Adresse de livraison",
-      openMap: "Ouvrir la carte",
       deliveryAddress: "Adresse de livraison",
       openMap: "Ouvrir la carte",
     },
