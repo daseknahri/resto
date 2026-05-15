@@ -34,6 +34,7 @@ const OwnerProfile = () => import("../pages/OwnerProfile.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 const OwnerTables = () => import("../pages/OwnerTables.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
+const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
 const Activate = () => import("../pages/Activate.vue");
@@ -72,6 +73,7 @@ const routes = [
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },
       { path: "cart", name: "cart", component: Cart, meta: { interface: "customer" } },
       { path: "order/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
+      { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
       {
         path: "menu/:slug",
         redirect: (to) => ({ name: "category", params: { slug: to.params.slug } }),

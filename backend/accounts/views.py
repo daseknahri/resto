@@ -19,6 +19,8 @@ from .messaging import send_password_reset_email
 from .models import Customer
 from .throttles import (
     ActivationThrottle,
+    CustomerEmailOtpRequestThrottle,
+    CustomerEmailOtpVerifyThrottle,
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
     LoginBurstThrottle,
@@ -182,6 +184,7 @@ def _serialize_customer(customer: Customer) -> dict:
         "email": customer.email,
         "phone": customer.phone or "",
         "phone_verified": customer.phone_verified,
+        "email_verified": customer.email_verified,
         "has_google": bool(customer.google_sub),
     }
 
@@ -337,6 +340,7 @@ class CustomerPhoneVerifyView(APIView):
 # ── Customer Google auth ──────────────────────────────────────────────────────
 
 
+
 class CustomerGoogleAuthView(APIView):
     """Verify a Google One-Tap credential and create or retrieve the matching Customer."""
 
@@ -381,6 +385,107 @@ class CustomerGoogleAuthView(APIView):
                     email=email,
                     name=name,
                 )
+
+        request.session["customer_id"] = customer.pk
+        return Response({"customer": _serialize_customer(customer)})
+
+
+# ── Customer orders ───────────────────────────────────────────────────────────
+
+
+class CustomerOrdersView(APIView):
+    """Return a paginated list of orders for the current customer session."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"orders": [], "count": 0})
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            request.session.pop("customer_id", None)
+            return Response({"orders": [], "count": 0})
+
+        # Import Order from menu app — cross-app import is intentional here.
+        from menu.models import Order
+        qs = (
+            Order.objects.filter(customer=customer)
+            .order_by("-created_at")
+            .values(
+                "order_number", "status", "fulfillment_type",
+                "table_label", "total", "currency", "created_at",
+                "customer_name",
+            )[:20]
+        )
+        return Response({"orders": list(qs), "count": len(qs)})
+
+
+# ── Customer email OTP ────────────────────────────────────────────────────────
+
+
+class CustomerEmailRequestView(APIView):
+    """Request an OTP sent to the given email address."""
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomerEmailOtpRequestThrottle]
+
+    def post(self, request):
+        from .messaging import send_otp_email
+        email = (request.data.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return Response({"detail": "A valid email address is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(email) > 254:
+            return Response({"detail": "Email too long."}, status=status.HTTP_400_BAD_REQUEST)
+
+        code = f"{random.randint(100000, 999999)}"
+        cache_key = f"customer_email_otp:{email}"
+        cache.set(cache_key, {"code": code, "attempts": 0}, timeout=_OTP_TTL)
+        send_otp_email(email, code)
+
+        resp = {"ok": True, "detail": "OTP sent. Check your email."}
+        if getattr(settings, "DEBUG", False):
+            resp["debug_code"] = code
+        return Response(resp)
+
+
+class CustomerEmailVerifyView(APIView):
+    """Verify the email OTP and create or retrieve a Customer, then start a session."""
+    permission_classes = [AllowAny]
+    throttle_classes = [CustomerEmailOtpVerifyThrottle]
+
+    def post(self, request):
+        email = (request.data.get("email") or "").strip().lower()
+        code = (request.data.get("code") or "").strip()
+        name = (request.data.get("name") or "").strip()[:80]
+
+        if not email or not code:
+            return Response({"detail": "Email and code are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = f"customer_email_otp:{email}"
+        data = cache.get(cache_key)
+        if data is None:
+            return Response({"detail": "OTP expired or not requested.", "code": "otp_expired"}, status=status.HTTP_400_BAD_REQUEST)
+        if data["attempts"] >= _OTP_MAX_ATTEMPTS:
+            cache.delete(cache_key)
+            return Response({"detail": "Too many incorrect attempts.", "code": "too_many_attempts"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        if data["code"] != code:
+            data["attempts"] += 1
+            cache.set(cache_key, data, timeout=_OTP_TTL)
+            return Response({"detail": "Incorrect code.", "code": "invalid_code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache.delete(cache_key)
+
+        # Find by email, or create. Do NOT match google_sub rows (those are already linked).
+        customer = Customer.objects.filter(email=email).first()
+        if customer is None:
+            customer = Customer.objects.create(email=email, name=name, email_verified=True)
+        else:
+            update_fields = ["email_verified", "updated_at"]
+            customer.email_verified = True
+            if not customer.name and name:
+                customer.name = name
+                update_fields.append("name")
+            customer.save(update_fields=update_fields)
 
         request.session["customer_id"] = customer.pk
         return Response({"customer": _serialize_customer(customer)})

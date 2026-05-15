@@ -3,7 +3,10 @@ from rest_framework import routers
 
 from accounts.views import (
     ActivationView,
+    CustomerEmailRequestView,
+    CustomerEmailVerifyView,
     CustomerGoogleAuthView,
+    CustomerOrdersView,
     CustomerPhoneRequestView,
     CustomerPhoneVerifyView,
     CustomerSessionView,
@@ -54,6 +57,9 @@ shared_api_urlpatterns = [
     path("api/customer/auth/phone/request/", CustomerPhoneRequestView.as_view(), name="customer-phone-request"),
     path("api/customer/auth/phone/verify/", CustomerPhoneVerifyView.as_view(), name="customer-phone-verify"),
     path("api/customer/auth/google/", CustomerGoogleAuthView.as_view(), name="customer-google-auth"),
+    path("api/customer/auth/email/request/", CustomerEmailRequestView.as_view(), name="customer-email-request"),
+    path("api/customer/auth/email/verify/", CustomerEmailVerifyView.as_view(), name="customer-email-verify"),
+    path("api/customer/orders/", CustomerOrdersView.as_view(), name="customer-orders"),
     path("api/lead-provision-preview/<int:lead_id>/", LeadProvisionPreviewView.as_view(), name="lead-provision-preview"),
     path("api/lead-resend-activation/<int:lead_id>/", LeadResendActivationView.as_view(), name="lead-resend-activation"),
     path("api/lead-onboarding-package/<int:lead_id>/", LeadOnboardingPackageView.as_view(), name="lead-onboarding-package"),

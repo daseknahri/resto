@@ -12,6 +12,7 @@ class Customer(models.Model):
     # Phone is optional so Google-only customers can exist without a phone number.
     phone = models.CharField(max_length=30, unique=True, null=True, blank=True, db_index=True)
     phone_verified = models.BooleanField(default=False)
+    email_verified = models.BooleanField(default=False)
     # Google OAuth sub (unique identifier from Google's JWT). Null for phone-only customers.
     google_sub = models.CharField(max_length=200, unique=True, null=True, blank=True, db_index=True)
     email = models.EmailField(blank=True)

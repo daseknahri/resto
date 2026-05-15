@@ -246,48 +246,6 @@
               {{ fieldErrors.fulfillment_type }}
             </p>
 
-            <div class="ui-section-band grid gap-3 md:grid-cols-2">
-              <label class="block space-y-1">
-                <span class="text-xs text-slate-400">{{
-                  t('cartPage.customerNameRequired')
-                }}</span>
-                <input
-                  v-model.trim="customerNameModel"
-                  maxlength="80"
-                  class="ui-input"
-                  autocomplete="name"
-                  :placeholder="t('cartPage.customerNameExample')"
-                  @input="clearFieldError('customer_name')"
-                />
-                <p
-                  v-if="fieldErrors.customer_name"
-                  class="text-xs text-red-300"
-                >
-                  {{ fieldErrors.customer_name }}
-                </p>
-              </label>
-              <label class="block space-y-1">
-                <span class="text-xs text-slate-400">{{
-                  t('cartPage.customerPhoneRequired')
-                }}</span>
-                <input
-                  v-model.trim="customerPhoneModel"
-                  maxlength="30"
-                  class="ui-input"
-                  inputmode="tel"
-                  autocomplete="tel"
-                  placeholder="+212..."
-                  @input="clearFieldError('customer_phone')"
-                />
-                <p
-                  v-if="fieldErrors.customer_phone"
-                  class="text-xs text-red-300"
-                >
-                  {{ fieldErrors.customer_phone }}
-                </p>
-              </label>
-            </div>
-
             <div
               v-if="isDelivery"
               class="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3"
@@ -468,27 +426,24 @@
             </div>
           </div>
 
-          <!-- Customer auth CTA — shown for delivery orders when not signed in -->
-          <div
-            v-if="isDelivery && !customerStore.isAuthenticated"
-            class="rounded-2xl border border-sky-500/30 bg-sky-500/8 p-3 space-y-2"
-          >
-            <p class="text-xs font-semibold text-sky-300">{{ t('cartPage.authCTATitle') }}</p>
-            <p class="text-xs text-slate-400">{{ t('cartPage.authCTABody') }}</p>
-            <button
-              class="ui-btn-outline w-full justify-center text-xs border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
-              @click="showAuthModal = true"
-            >
-              {{ t('cartPage.authCTAButton') }}
+          <!-- Delivery auth gate -->
+          <div v-if="isDelivery && !customerStore.isAuthenticated" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-2">
+            <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryAuthRequired') }}</p>
+            <p class="text-xs text-slate-400">{{ t('cartPage.deliveryAuthBody') }}</p>
+            <button class="ui-btn-primary w-full justify-center text-sm" @click="showAuthModal = true">
+              <AppIcon name="user" class="h-3.5 w-3.5" />
+              {{ t('cartPage.deliveryAuthButton') }}
             </button>
           </div>
-
           <div
             v-else-if="isDelivery && customerStore.isAuthenticated"
-            class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center gap-2"
+            class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2"
           >
-            <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
-            {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+            <div class="flex items-center gap-1.5">
+              <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+              {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+            </div>
+            <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
           </div>
 
           <div class="ui-section-band space-y-2.5 px-3 py-3">
@@ -947,6 +902,9 @@ watch(isTableContextOrder, (value) => {
 
 watch(fulfillmentType, (value) => {
   clearFieldError('fulfillment_type');
+  if (value === 'delivery' && !customerStore.isAuthenticated) {
+    showAuthModal.value = true;
+  }
   if (value !== 'delivery') {
     closeMapModal();
     deliveryAddress.value = '';
@@ -1049,15 +1007,15 @@ const validateForm = () => {
     return true;
   }
 
+  // Delivery requires authenticated customer
+  if (fulfillmentType.value === 'delivery' && !customerStore.isAuthenticated) {
+    showAuthModal.value = true;
+    return false;
+  }
+
   const errors = {};
   if (!fulfillmentType.value) {
     errors.fulfillment_type = t('cartPage.selectPickupOrDelivery');
-  }
-  if (!cart.customerName) {
-    errors.customer_name = t('cartPage.customerNameRequiredError');
-  }
-  if (!cart.customerPhone) {
-    errors.customer_phone = t('cartPage.customerPhoneRequiredError');
   }
   if (fulfillmentType.value === 'delivery') {
     if (!deliveryAddress.value) {
@@ -1107,11 +1065,12 @@ const buildPayload = () => {
   if (customerNote.value) payload.customer_note = customerNote.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
-  if (cart.customerName) payload.customer_name = cart.customerName;
+  // customer_name: only for table context (optional)
+  if (isTableContextOrder.value && cart.customerName) payload.customer_name = cart.customerName;
+  // customer_phone no longer sent (anonymous pickup, delivery uses customer profile)
 
   if (!isTableContextOrder.value) {
     if (fulfillmentType.value) payload.fulfillment_type = fulfillmentType.value;
-    if (cart.customerPhone) payload.customer_phone = cart.customerPhone;
     if (isDelivery.value) {
       const latValue = parseCoordinateValue(deliveryLat.value);
       const lngValue = parseCoordinateValue(deliveryLng.value);

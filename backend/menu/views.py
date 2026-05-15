@@ -675,7 +675,7 @@ class OrderHandoffSerializer(serializers.Serializer):
         attrs["table_label"] = table_label
         table_slug = (attrs.get("table_slug") or "").strip().lower()
         attrs["table_slug"] = table_slug
-        # Table-QR flow is intentionally minimal (note only). Non-table orders require customer + fulfillment context.
+        # Table-QR flow: optional name/note only. Pickup: anonymous. Delivery: requires customer session (enforced in the view).
         if table_slug or table_label:
             return attrs
 
@@ -685,11 +685,6 @@ class OrderHandoffSerializer(serializers.Serializer):
             errors["fulfillment_type"] = "Select pickup or delivery."
         else:
             attrs["fulfillment_type"] = fulfillment_type
-
-        if not attrs.get("customer_name"):
-            errors["customer_name"] = "Customer name is required for this order."
-        if not attrs.get("customer_phone"):
-            errors["customer_phone"] = "Customer phone is required for this order."
 
         if fulfillment_type == "delivery":
             has_coords = attrs.get("delivery_lat") is not None and attrs.get("delivery_lng") is not None
@@ -1185,7 +1180,7 @@ class PlaceOrderView(APIView):
         if table_slug:
             fulfillment_type = Order.FulfillmentType.TABLE
 
-        # Attach the customer profile if the visitor has an active customer session
+        # Resolve linked customer from session
         from accounts.models import Customer as CustomerModel
         _customer_id = request.session.get("customer_id")
         _linked_customer = None
@@ -1195,6 +1190,28 @@ class PlaceOrderView(APIView):
             except CustomerModel.DoesNotExist:
                 request.session.pop("customer_id", None)
 
+        # Delivery orders require an authenticated, verified customer
+        if fulfillment_type == Order.FulfillmentType.DELIVERY:
+            if _linked_customer is None:
+                return Response(
+                    {"detail": "Delivery orders require a signed-in account.", "code": "auth_required"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            is_verified = _linked_customer.phone_verified or _linked_customer.email_verified or bool(_linked_customer.google_sub)
+            if not is_verified:
+                return Response(
+                    {"detail": "Please verify your phone or email before placing a delivery order.", "code": "not_verified"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # For delivery, enrich order with customer identity; for pickup/table use payload values
+        if fulfillment_type == Order.FulfillmentType.DELIVERY and _linked_customer:
+            _customer_name = _linked_customer.name or validated.get("customer_name", "")
+            _customer_phone = _linked_customer.phone or validated.get("customer_phone", "")
+        else:
+            _customer_name = validated.get("customer_name", "")
+            _customer_phone = validated.get("customer_phone", "")
+
         try:
             with transaction.atomic():
                 order_number = _generate_order_number()
@@ -1202,8 +1219,8 @@ class PlaceOrderView(APIView):
                     order_number=order_number,
                     status=Order.Status.PENDING,
                     customer=_linked_customer,
-                    customer_name=validated.get("customer_name", ""),
-                    customer_phone=validated.get("customer_phone", ""),
+                    customer_name=_customer_name,
+                    customer_phone=_customer_phone,
                     customer_note=validated.get("customer_note", ""),
                     fulfillment_type=fulfillment_type,
                     table_label=validated.get("table_label", ""),

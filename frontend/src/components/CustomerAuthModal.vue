@@ -32,77 +32,173 @@
             <div class="flex-1 border-t border-slate-800" />
           </div>
 
-          <!-- Phone OTP flow -->
-          <div v-if="otpStep === 'phone'" class="space-y-3">
-            <label class="block space-y-1">
-              <span class="text-xs text-slate-400">{{ t("customerAuth.phoneLabel") }}</span>
-              <input
-                v-model.trim="phone"
-                type="tel"
-                inputmode="tel"
-                autocomplete="tel"
-                maxlength="30"
-                class="ui-input"
-                :placeholder="t('customerAuth.phonePlaceholder')"
-                :disabled="requestingOtp"
-                @keydown.enter.prevent="requestOtp"
-              />
-              <p v-if="phoneError" class="text-xs text-red-300">{{ phoneError }}</p>
-            </label>
+          <!-- Tab switcher: Phone | Email -->
+          <div class="flex rounded-full border border-slate-700/70 bg-slate-900/50 p-0.5">
             <button
-              class="ui-btn-primary w-full justify-center"
-              :disabled="requestingOtp || !phone"
-              @click="requestOtp"
+              class="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              :class="activeTab === 'phone' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
+              @click="switchTab('phone')"
             >
-              <AppIcon v-if="!requestingOtp" name="chat" class="h-3.5 w-3.5" />
-              {{ requestingOtp ? t("customerAuth.sending") : t("customerAuth.sendCode") }}
+              {{ t("customerAuth.tabPhone") }}
+            </button>
+            <button
+              class="flex-1 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              :class="activeTab === 'email' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
+              @click="switchTab('email')"
+            >
+              {{ t("customerAuth.tabEmail") }}
             </button>
           </div>
 
-          <!-- OTP verification flow -->
-          <div v-else-if="otpStep === 'verify'" class="space-y-3">
-            <p class="text-sm text-slate-300">
-              {{ t("customerAuth.codeSentTo", { phone }) }}
-            </p>
-            <label class="block space-y-1">
-              <span class="text-xs text-slate-400">{{ t("customerAuth.otpLabel") }}</span>
-              <input
-                ref="otpInputRef"
-                v-model.trim="otpCode"
-                type="text"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                maxlength="6"
-                class="ui-input text-center text-xl font-mono tracking-widest"
-                :placeholder="t('customerAuth.otpPlaceholder')"
-                :disabled="verifyingOtp"
-                @keydown.enter.prevent="verifyOtp"
-              />
-              <p v-if="otpError" class="text-xs text-red-300">{{ otpError }}</p>
-            </label>
-            <label v-if="!customerStore.isAuthenticated" class="block space-y-1">
-              <span class="text-xs text-slate-400">{{ t("customerAuth.nameOptional") }}</span>
-              <input
-                v-model.trim="name"
-                type="text"
-                autocomplete="name"
-                maxlength="80"
-                class="ui-input"
-                :placeholder="t('customerAuth.namePlaceholder')"
-                :disabled="verifyingOtp"
-              />
-            </label>
-            <button
-              class="ui-btn-primary w-full justify-center"
-              :disabled="verifyingOtp || otpCode.length < 4"
-              @click="verifyOtp"
-            >
-              {{ verifyingOtp ? t("customerAuth.verifying") : t("customerAuth.verify") }}
-            </button>
-            <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingOtp" @click="backToPhone">
-              {{ t("customerAuth.changePhone") }}
-            </button>
-          </div>
+          <!-- ── PHONE TAB ── -->
+          <template v-if="activeTab === 'phone'">
+            <!-- Phone entry step -->
+            <div v-if="phoneStep === 'phone'" class="space-y-3">
+              <label class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.phoneLabel") }}</span>
+                <input
+                  v-model.trim="phone"
+                  type="tel"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  maxlength="30"
+                  class="ui-input"
+                  :placeholder="t('customerAuth.phonePlaceholder')"
+                  :disabled="requestingOtp"
+                  @keydown.enter.prevent="requestOtp"
+                />
+                <p v-if="phoneError" class="text-xs text-red-300">{{ phoneError }}</p>
+              </label>
+              <button
+                class="ui-btn-primary w-full justify-center"
+                :disabled="requestingOtp || !phone"
+                @click="requestOtp"
+              >
+                <AppIcon v-if="!requestingOtp" name="chat" class="h-3.5 w-3.5" />
+                {{ requestingOtp ? t("customerAuth.sending") : t("customerAuth.sendCode") }}
+              </button>
+            </div>
+
+            <!-- Phone OTP verify step -->
+            <div v-else-if="phoneStep === 'verify'" class="space-y-3">
+              <p class="text-sm text-slate-300">
+                {{ t("customerAuth.codeSentTo", { phone }) }}
+              </p>
+              <label class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.otpLabel") }}</span>
+                <input
+                  ref="phoneOtpInputRef"
+                  v-model.trim="phoneOtpCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="6"
+                  class="ui-input text-center text-xl font-mono tracking-widest"
+                  :placeholder="t('customerAuth.otpPlaceholder')"
+                  :disabled="verifyingOtp"
+                  @keydown.enter.prevent="verifyPhoneOtp"
+                />
+                <p v-if="phoneOtpError" class="text-xs text-red-300">{{ phoneOtpError }}</p>
+              </label>
+              <label v-if="!customerStore.isAuthenticated" class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.nameOptional") }}</span>
+                <input
+                  v-model.trim="name"
+                  type="text"
+                  autocomplete="name"
+                  maxlength="80"
+                  class="ui-input"
+                  :placeholder="t('customerAuth.namePlaceholder')"
+                  :disabled="verifyingOtp"
+                />
+              </label>
+              <button
+                class="ui-btn-primary w-full justify-center"
+                :disabled="verifyingOtp || phoneOtpCode.length < 4"
+                @click="verifyPhoneOtp"
+              >
+                {{ verifyingOtp ? t("customerAuth.verifying") : t("customerAuth.verify") }}
+              </button>
+              <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingOtp" @click="backToPhone">
+                {{ t("customerAuth.changePhone") }}
+              </button>
+            </div>
+          </template>
+
+          <!-- ── EMAIL TAB ── -->
+          <template v-else-if="activeTab === 'email'">
+            <!-- Email entry step -->
+            <div v-if="emailStep === 'email'" class="space-y-3">
+              <label class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.emailLabel") }}</span>
+                <input
+                  v-model.trim="email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  maxlength="254"
+                  class="ui-input"
+                  :placeholder="t('customerAuth.emailPlaceholder')"
+                  :disabled="requestingEmailOtp"
+                  @keydown.enter.prevent="requestEmailOtp"
+                />
+                <p v-if="emailError" class="text-xs text-red-300">{{ emailError }}</p>
+              </label>
+              <button
+                class="ui-btn-primary w-full justify-center"
+                :disabled="requestingEmailOtp || !email"
+                @click="requestEmailOtp"
+              >
+                <AppIcon v-if="!requestingEmailOtp" name="chat" class="h-3.5 w-3.5" />
+                {{ requestingEmailOtp ? t("customerAuth.sending") : t("customerAuth.sendCode") }}
+              </button>
+            </div>
+
+            <!-- Email OTP verify step -->
+            <div v-else-if="emailStep === 'verify'" class="space-y-3">
+              <p class="text-sm text-slate-300">
+                {{ t("customerAuth.emailCodeSentTo", { email }) }}
+              </p>
+              <label class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.otpLabel") }}</span>
+                <input
+                  ref="emailOtpInputRef"
+                  v-model.trim="emailOtpCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="6"
+                  class="ui-input text-center text-xl font-mono tracking-widest"
+                  :placeholder="t('customerAuth.otpPlaceholder')"
+                  :disabled="verifyingEmailOtp"
+                  @keydown.enter.prevent="verifyEmailOtp"
+                />
+                <p v-if="emailOtpError" class="text-xs text-red-300">{{ emailOtpError }}</p>
+              </label>
+              <label v-if="!customerStore.isAuthenticated" class="block space-y-1">
+                <span class="text-xs text-slate-400">{{ t("customerAuth.nameOptional") }}</span>
+                <input
+                  v-model.trim="name"
+                  type="text"
+                  autocomplete="name"
+                  maxlength="80"
+                  class="ui-input"
+                  :placeholder="t('customerAuth.namePlaceholder')"
+                  :disabled="verifyingEmailOtp"
+                />
+              </label>
+              <button
+                class="ui-btn-primary w-full justify-center"
+                :disabled="verifyingEmailOtp || emailOtpCode.length < 4"
+                @click="verifyEmailOtp"
+              >
+                {{ verifyingEmailOtp ? t("customerAuth.verifying") : t("customerAuth.verify") }}
+              </button>
+              <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingEmailOtp" @click="backToEmail">
+                {{ t("customerAuth.useEmail") }}
+              </button>
+            </div>
+          </template>
 
           <!-- General error -->
           <p v-if="generalError" class="text-xs text-red-300">{{ generalError }}</p>
@@ -126,18 +222,41 @@ const customerStore = useCustomerStore();
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-// Phone OTP state
-const otpStep = ref("phone"); // 'phone' | 'verify'
-const phone = ref("");
-const otpCode = ref("");
+// Tab state
+const activeTab = ref("phone"); // 'phone' | 'email'
+
+// Shared name field
 const name = ref("");
+
+// General error
+const generalError = ref("");
+
+// ── Phone OTP state ───────────────────────────────────────────────────────────
+const phoneStep = ref("phone"); // 'phone' | 'verify'
+const phone = ref("");
+const phoneOtpCode = ref("");
 const requestingOtp = ref(false);
 const verifyingOtp = ref(false);
 const phoneError = ref("");
-const otpError = ref("");
-const generalError = ref("");
-const otpInputRef = ref(null);
+const phoneOtpError = ref("");
+const phoneOtpInputRef = ref(null);
 
+// ── Email OTP state ───────────────────────────────────────────────────────────
+const emailStep = ref("email"); // 'email' | 'verify'
+const email = ref("");
+const emailOtpCode = ref("");
+const requestingEmailOtp = ref(false);
+const verifyingEmailOtp = ref(false);
+const emailError = ref("");
+const emailOtpError = ref("");
+const emailOtpInputRef = ref(null);
+
+const switchTab = (tab) => {
+  activeTab.value = tab;
+  generalError.value = "";
+};
+
+// ── Phone OTP flow ────────────────────────────────────────────────────────────
 const requestOtp = async () => {
   phoneError.value = "";
   generalError.value = "";
@@ -148,9 +267,9 @@ const requestOtp = async () => {
   requestingOtp.value = true;
   try {
     await api.post("/customer/auth/phone/request/", { phone: phone.value });
-    otpStep.value = "verify";
+    phoneStep.value = "verify";
     await nextTick();
-    otpInputRef.value?.focus();
+    phoneOtpInputRef.value?.focus();
   } catch (err) {
     const detail = err?.response?.data?.detail;
     phoneError.value = detail || t("customerAuth.sendError");
@@ -159,18 +278,18 @@ const requestOtp = async () => {
   }
 };
 
-const verifyOtp = async () => {
-  otpError.value = "";
+const verifyPhoneOtp = async () => {
+  phoneOtpError.value = "";
   generalError.value = "";
-  if (!otpCode.value) {
-    otpError.value = t("customerAuth.otpRequired");
+  if (!phoneOtpCode.value) {
+    phoneOtpError.value = t("customerAuth.otpRequired");
     return;
   }
   verifyingOtp.value = true;
   try {
     const res = await api.post("/customer/auth/phone/verify/", {
       phone: phone.value,
-      code: otpCode.value,
+      code: phoneOtpCode.value,
       name: name.value,
     });
     customerStore.setCustomer(res.data.customer);
@@ -180,15 +299,15 @@ const verifyOtp = async () => {
     const code = err?.response?.data?.code;
     const detail = err?.response?.data?.detail;
     if (code === "otp_expired") {
-      otpError.value = t("customerAuth.otpExpired");
-      otpStep.value = "phone";
+      phoneOtpError.value = t("customerAuth.otpExpired");
+      phoneStep.value = "phone";
     } else if (code === "invalid_code") {
-      otpError.value = t("customerAuth.otpInvalid");
+      phoneOtpError.value = t("customerAuth.otpInvalid");
     } else if (code === "too_many_attempts") {
-      otpError.value = t("customerAuth.tooManyAttempts");
-      otpStep.value = "phone";
+      phoneOtpError.value = t("customerAuth.tooManyAttempts");
+      phoneStep.value = "phone";
     } else {
-      otpError.value = detail || t("customerAuth.verifyError");
+      phoneOtpError.value = detail || t("customerAuth.verifyError");
     }
   } finally {
     verifyingOtp.value = false;
@@ -196,9 +315,73 @@ const verifyOtp = async () => {
 };
 
 const backToPhone = () => {
-  otpStep.value = "phone";
-  otpCode.value = "";
-  otpError.value = "";
+  phoneStep.value = "phone";
+  phoneOtpCode.value = "";
+  phoneOtpError.value = "";
+};
+
+// ── Email OTP flow ────────────────────────────────────────────────────────────
+const requestEmailOtp = async () => {
+  emailError.value = "";
+  generalError.value = "";
+  if (!email.value || !email.value.includes("@")) {
+    emailError.value = t("customerAuth.emailRequired");
+    return;
+  }
+  requestingEmailOtp.value = true;
+  try {
+    await api.post("/customer/auth/email/request/", { email: email.value });
+    emailStep.value = "verify";
+    await nextTick();
+    emailOtpInputRef.value?.focus();
+  } catch (err) {
+    const detail = err?.response?.data?.detail;
+    emailError.value = detail || t("customerAuth.sendError");
+  } finally {
+    requestingEmailOtp.value = false;
+  }
+};
+
+const verifyEmailOtp = async () => {
+  emailOtpError.value = "";
+  generalError.value = "";
+  if (!emailOtpCode.value) {
+    emailOtpError.value = t("customerAuth.otpRequired");
+    return;
+  }
+  verifyingEmailOtp.value = true;
+  try {
+    const res = await api.post("/customer/auth/email/verify/", {
+      email: email.value,
+      code: emailOtpCode.value,
+      name: name.value,
+    });
+    customerStore.setCustomer(res.data.customer);
+    emit("authenticated", res.data.customer);
+    emit("close");
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    const detail = err?.response?.data?.detail;
+    if (code === "otp_expired") {
+      emailOtpError.value = t("customerAuth.otpExpired");
+      emailStep.value = "email";
+    } else if (code === "invalid_code") {
+      emailOtpError.value = t("customerAuth.otpInvalid");
+    } else if (code === "too_many_attempts") {
+      emailOtpError.value = t("customerAuth.tooManyAttempts");
+      emailStep.value = "email";
+    } else {
+      emailOtpError.value = detail || t("customerAuth.verifyError");
+    }
+  } finally {
+    verifyingEmailOtp.value = false;
+  }
+};
+
+const backToEmail = () => {
+  emailStep.value = "email";
+  emailOtpCode.value = "";
+  emailOtpError.value = "";
 };
 
 // ── Google One-Tap ────────────────────────────────────────────────────────────
@@ -239,7 +422,6 @@ const initGoogleOneTap = () => {
 
 onMounted(async () => {
   if (!googleClientId) return;
-  // Load Google Identity Services script if not already loaded
   if (!window.google?.accounts?.id) {
     await new Promise((resolve) => {
       googleScriptEl = document.createElement("script");
@@ -247,7 +429,7 @@ onMounted(async () => {
       googleScriptEl.async = true;
       googleScriptEl.defer = true;
       googleScriptEl.onload = resolve;
-      googleScriptEl.onerror = resolve; // don't block if GSI unavailable
+      googleScriptEl.onerror = resolve;
       document.head.appendChild(googleScriptEl);
     });
   }
@@ -256,7 +438,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // Cancel any pending One-Tap prompt
   try {
     if (window.google?.accounts?.id) {
       window.google.accounts.id.cancel();

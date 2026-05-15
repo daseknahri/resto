@@ -103,7 +103,7 @@
     </main>
 
     <nav class="ui-bottom-dock md:hidden">
-      <div class="ui-bottom-dock-grid grid-cols-4 text-xs">
+      <div class="ui-bottom-dock-grid grid-cols-5 text-xs">
         <RouterLink
           v-for="item in navItems"
           :key="item.key"
@@ -134,9 +134,11 @@ import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
+import { useCustomerStore } from "../stores/customer";
 import { useTenantStore } from "../stores/tenant";
 
 const cart = useCartStore();
+const customerStore = useCustomerStore();
 const tenant = useTenantStore();
 const route = useRoute();
 const { currentLocale, t } = useI18n();
@@ -151,6 +153,7 @@ const activeCustomerSection = computed(() => {
   if (name === "menu" || name === "category" || name === "dish") return "menu";
   if (name === "cart") return "cart";
   if (name === "reserve") return "reserve";
+  if (name === "customer-account") return "account";
   return "info";
 });
 
@@ -159,6 +162,7 @@ const navItems = computed(() => [
   { key: "menu", icon: "menu", label: t("customerLayout.navMenu"), to: { name: "menu" }, badge: "" },
   { key: "cart", icon: "cart", label: t("customerLayout.navCart"), to: { name: "cart" }, badge: cart.count ? String(cart.count) : "" },
   { key: "reserve", icon: "calendar", label: t("customerLayout.navReserve"), to: { name: "reserve" }, badge: "" },
+  { key: "account", icon: "user", label: t("customerLayout.navAccount"), to: { name: "customer-account" }, badge: customerStore.isAuthenticated ? "●" : "" },
 ]);
 
 const navItemClass = (key) =>

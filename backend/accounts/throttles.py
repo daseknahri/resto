@@ -37,3 +37,11 @@ class CustomerOtpRequestThrottle(_IPThrottle):
 
 class CustomerOtpVerifyThrottle(_IPThrottle):
     scope = "customer_otp_verify"
+
+
+class CustomerEmailOtpRequestThrottle(_IPThrottle):
+    scope = "customer_email_otp_request"
+
+
+class CustomerEmailOtpVerifyThrottle(_IPThrottle):
+    scope = "customer_email_otp_verify"

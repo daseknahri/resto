@@ -31,7 +31,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-4 gap-3">
+      <div class="grid grid-cols-5 gap-3">
         <RouterLink
           v-for="step in steps"
           :key="step.name"
@@ -67,10 +67,12 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
+import { useCustomerStore } from "../stores/customer";
 import { useLeadStore } from "../stores/lead";
 
 const route = useRoute();
 const cart = useCartStore();
+const customerStore = useCustomerStore();
 const lead = useLeadStore();
 const { itemCountLabel, t } = useI18n();
 
@@ -80,6 +82,7 @@ const activeStep = computed(() => {
   if (name === "menu" || name === "category" || name === "dish") return 1;
   if (name === "cart") return 2;
   if (name === "reserve") return 3;
+  if (name === "customer-account") return 4;
   return 0;
 });
 
@@ -111,6 +114,13 @@ const steps = computed(() => [
     label: t("customerFlow.reserve"),
     to: { name: "reserve" },
     hint: t("customerFlow.book"),
+  },
+  {
+    index: 4,
+    name: "customer-account",
+    label: t("customerFlow.account"),
+    to: { name: "customer-account" },
+    hint: customerStore.isAuthenticated ? t("customerFlow.accountSignedIn") : t("customerFlow.accountSignIn"),
   },
 ].map((step) => {
   const isActive = activeStep.value === step.index;

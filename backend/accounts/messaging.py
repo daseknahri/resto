@@ -25,3 +25,23 @@ def send_password_reset_email(email: str, reset_url: str, token: str):
     if sent < 1:
         logger.warning("Password reset email not sent", extra={"target_email": email})
     return sent
+
+
+def send_otp_email(email: str, code: str):
+    subject = "Your verification code"
+    body = (
+        "Hello,\n\n"
+        f"Your one-time verification code is: {code}\n\n"
+        "This code expires in 5 minutes.\n\n"
+        "If you did not request this, you can ignore this message.\n"
+    )
+    sent = send_mail(
+        subject,
+        body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning("OTP email not sent", extra={"target_email": email})
+    return sent
