@@ -150,7 +150,7 @@
         </div>
 
         <!-- Customer info -->
-        <div v-if="o.customer_name || o.customer_phone" class="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs sm:grid-cols-2">
+        <div v-if="o.customer_name || o.customer_phone || o.customer_email" class="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs sm:grid-cols-2">
           <div v-if="o.customer_name">
             <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
             <span class="ml-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
@@ -165,6 +165,9 @@
             >
               💬 {{ t("ownerOrders.whatsapp") }}
             </a>
+          </div>
+          <div v-if="o.customer_email && !o.customer_phone">
+            <a :href="`mailto:${o.customer_email}`" class="font-medium text-sky-300 hover:text-sky-200">{{ o.customer_email }}</a>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
@@ -374,6 +377,7 @@ const filteredOrders = computed(() => {
         o.order_number,
         o.customer_name,
         o.customer_phone,
+        o.customer_email,
         o.delivery_address,
         o.table_label,
       ].filter(Boolean).join(" ").toLowerCase();
@@ -524,6 +528,7 @@ const printTicket = (o) => {
     fulfillmentLabel(o),
     o.customer_name ? `Customer: ${o.customer_name}` : "",
     o.customer_phone ? `Phone: ${o.customer_phone}` : "",
+    o.customer_email && !o.customer_phone ? `Email: ${o.customer_email}` : "",
     o.delivery_address ? `Address: ${o.delivery_address}` : "",
     new Date(o.created_at).toLocaleString(),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
@@ -573,7 +578,7 @@ const printTicket = (o) => {
 const exportCsv = () => {
   const cols = [
     "order_number", "status", "fulfillment_type", "table_label",
-    "customer_name", "customer_phone", "delivery_address",
+    "customer_name", "customer_phone", "customer_email", "delivery_address",
     "total", "currency", "items_count", "customer_note", "owner_note",
     "estimated_ready_minutes", "created_at",
   ];

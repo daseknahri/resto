@@ -1315,7 +1315,7 @@ class OwnerOrderListView(APIView):
         status_filter = request.query_params.get("status", "").strip().lower()
         valid_statuses = {s.value for s in Order.Status}
 
-        qs = Order.objects.prefetch_related("items").order_by("-created_at")
+        qs = Order.objects.select_related("customer").prefetch_related("items").order_by("-created_at")
         if status_filter and status_filter in valid_statuses:
             qs = qs.filter(status=status_filter)
 
@@ -1329,6 +1329,7 @@ class OwnerOrderListView(APIView):
                 "table_label": order.table_label,
                 "customer_name": order.customer_name,
                 "customer_phone": order.customer_phone,
+                "customer_email": order.customer.email if order.customer else "",
                 "customer_note": order.customer_note,
                 "delivery_address": order.delivery_address,
                 "delivery_location_url": order.delivery_location_url,
@@ -1366,7 +1367,7 @@ class OwnerOrderDetailView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        order = Order.objects.filter(id=order_id).prefetch_related("items").first()
+        order = Order.objects.select_related("customer").prefetch_related("items").filter(id=order_id).first()
         if order is None:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1379,6 +1380,7 @@ class OwnerOrderDetailView(APIView):
             "table_slug": order.table_slug,
             "customer_name": order.customer_name,
             "customer_phone": order.customer_phone,
+            "customer_email": order.customer.email if order.customer else "",
             "customer_note": order.customer_note,
             "delivery_address": order.delivery_address,
             "delivery_location_url": order.delivery_location_url,

@@ -122,6 +122,13 @@
               <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingOtp" @click="backToPhone">
                 {{ t("customerAuth.changePhone") }}
               </button>
+              <button
+                class="text-xs text-slate-400 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                :disabled="requestingOtp || phoneResendSeconds > 0"
+                @click="requestOtp"
+              >
+                {{ phoneResendSeconds > 0 ? t("customerAuth.resendIn", { seconds: phoneResendSeconds }) : t("customerAuth.resendCode") }}
+              </button>
             </div>
           </template>
 
@@ -197,6 +204,13 @@
               <button class="ui-btn-outline w-full justify-center text-xs" :disabled="requestingEmailOtp" @click="backToEmail">
                 {{ t("customerAuth.changeEmail") }}
               </button>
+              <button
+                class="text-xs text-slate-400 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                :disabled="requestingEmailOtp || emailResendSeconds > 0"
+                @click="requestEmailOtp"
+              >
+                {{ emailResendSeconds > 0 ? t("customerAuth.resendIn", { seconds: emailResendSeconds }) : t("customerAuth.resendCode") }}
+              </button>
             </div>
           </template>
 
@@ -251,6 +265,37 @@ const emailError = ref("");
 const emailOtpError = ref("");
 const emailOtpInputRef = ref(null);
 
+// ── Resend countdown ──────────────────────────────────────────────────────────
+const RESEND_COOLDOWN = 60;
+const phoneResendSeconds = ref(0);
+const emailResendSeconds = ref(0);
+let phoneResendTimer = null;
+let emailResendTimer = null;
+
+const startResendCountdown = (type) => {
+  if (type === "phone") {
+    phoneResendSeconds.value = RESEND_COOLDOWN;
+    clearInterval(phoneResendTimer);
+    phoneResendTimer = setInterval(() => {
+      phoneResendSeconds.value--;
+      if (phoneResendSeconds.value <= 0) {
+        clearInterval(phoneResendTimer);
+        phoneResendTimer = null;
+      }
+    }, 1000);
+  } else {
+    emailResendSeconds.value = RESEND_COOLDOWN;
+    clearInterval(emailResendTimer);
+    emailResendTimer = setInterval(() => {
+      emailResendSeconds.value--;
+      if (emailResendSeconds.value <= 0) {
+        clearInterval(emailResendTimer);
+        emailResendTimer = null;
+      }
+    }, 1000);
+  }
+};
+
 const switchTab = (tab) => {
   activeTab.value = tab;
   generalError.value = "";
@@ -268,6 +313,7 @@ const requestOtp = async () => {
   try {
     await api.post("/customer/auth/phone/request/", { phone: phone.value });
     phoneStep.value = "verify";
+    startResendCountdown("phone");
     await nextTick();
     phoneOtpInputRef.value?.focus();
   } catch (err) {
@@ -332,6 +378,7 @@ const requestEmailOtp = async () => {
   try {
     await api.post("/customer/auth/email/request/", { email: email.value });
     emailStep.value = "verify";
+    startResendCountdown("email");
     await nextTick();
     emailOtpInputRef.value?.focus();
   } catch (err) {
@@ -438,6 +485,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  clearInterval(phoneResendTimer);
+  clearInterval(emailResendTimer);
   try {
     if (window.google?.accounts?.id) {
       window.google.accounts.id.cancel();

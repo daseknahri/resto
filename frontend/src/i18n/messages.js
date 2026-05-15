@@ -1546,6 +1546,8 @@ export const messages = {
       verifying: "Verifying…",
       changePhone: "Change phone number",
       googleError: "Google sign-in failed. Please try again.",
+      resendCode: "Resend code",
+      resendIn: "Resend in {seconds}s",
     },
     customerAccount: {
       kicker: "Your account",
@@ -2972,6 +2974,8 @@ export const messages = {
       verifying: "Verification…",
       changePhone: "Changer de numero",
       googleError: "La connexion Google a echoue. Veuillez reessayer.",
+      resendCode: "Renvoyer le code",
+      resendIn: "Renvoyer dans {seconds}s",
     },
     ownerOrders: {
       kicker: "Gestion des commandes",
