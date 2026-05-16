@@ -65,7 +65,7 @@
 <script setup>
 import { onMounted, onUnmounted, computed } from "vue";
 import { useRouter } from "vue-router";
-import { useI18n } from "vue-i18n";
+import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useWaiterStore } from "../stores/waiter";

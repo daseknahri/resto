@@ -127,7 +127,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useI18n } from "vue-i18n";
+import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 
 const { t } = useI18n();
