@@ -213,17 +213,66 @@ def _verify_google_token(credential: str, client_id: str) -> dict | None:
     return data
 
 
-def _send_otp(phone: str, code: str) -> None:
-    """Deliver OTP to customer's phone.
+def _send_otp_whatsapp(phone: str, code: str) -> bool:
+    """Send OTP via Meta WhatsApp Business Cloud API.
 
-    In dev (DEBUG=True) the code is logged so developers can find it in server output.
-    In production wire a real provider (Twilio, WhatsApp, etc.) here.
+    Returns True on success, False if not configured or on error.
+    The phone number must be in E.164 format (e.g. +212612345678).
+    """
+    try:
+        import json
+        import urllib.request as _urlreq
+
+        access_token = getattr(settings, "WHATSAPP_ACCESS_TOKEN", "")
+        phone_number_id = getattr(settings, "WHATSAPP_PHONE_NUMBER_ID", "")
+        template_name = getattr(settings, "WHATSAPP_OTP_TEMPLATE_NAME", "otp_verification")
+        if not access_token or not phone_number_id:
+            return False
+
+        url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": "en"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [{"type": "text", "text": code}],
+                    }
+                ],
+            },
+        }
+        data = json.dumps(payload).encode()
+        req = _urlreq.Request(url, data=data, method="POST")
+        req.add_header("Authorization", f"Bearer {access_token}")
+        req.add_header("Content-Type", "application/json")
+        with _urlreq.urlopen(req, timeout=10):
+            pass
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _send_otp(phone: str, code: str) -> None:
+    """Deliver OTP to customer's phone via WhatsApp Business Cloud API.
+
+    Falls back to logging in DEBUG mode (so developers can test without credentials).
     """
     if getattr(settings, "DEBUG", False):
         logger.info("Customer OTP for %s: %s", phone, code)
-    else:
-        # Production: add your SMS/WhatsApp provider here.
-        logger.info("OTP requested for phone ending ...%s", phone[-4:] if len(phone) >= 4 else "****")
+        return
+
+    sent = _send_otp_whatsapp(phone, code)
+    if not sent:
+        # WhatsApp not configured — log so the operator knows delivery is missing
+        logger.warning(
+            "OTP delivery failed: WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set. "
+            "Phone ending ...%s did not receive a code.",
+            phone[-4:] if len(phone) >= 4 else "****",
+        )
 
 
 _OTP_CACHE_KEY = "customer_otp:{phone}"

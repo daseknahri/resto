@@ -295,6 +295,16 @@ EMAIL_USE_SSL = parse_bool_env("DJANGO_EMAIL_USE_SSL", False)
 EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "10"))
 EMAIL_FAIL_SILENTLY = parse_bool_env("DJANGO_EMAIL_FAIL_SILENTLY", DEBUG)
 
+# ── WhatsApp Business Cloud API (Meta) — OTP delivery ─────────────────────────
+# 1. Create a Meta Business account → add a WhatsApp Business phone number
+# 2. Go to Meta Developers → create an App → add WhatsApp product
+# 3. Copy the permanent access token and the Phone Number ID
+# 4. Create an authentication template named "otp_verification" (body: "{{1}}")
+#    in Meta Business Manager → approve takes minutes
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+# Name of the pre-approved OTP template in your WhatsApp Business account
+WHATSAPP_OTP_TEMPLATE_NAME = os.getenv("WHATSAPP_OTP_TEMPLATE_NAME", "otp_verification")
 
 SESSION_COOKIE_SECURE = parse_bool_env("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = parse_bool_env("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
