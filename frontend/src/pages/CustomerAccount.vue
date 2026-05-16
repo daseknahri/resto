@@ -93,7 +93,7 @@
                 {{ t('customerAccount.googleConnected') }}
               </span>
               <span
-                v-if="!customerStore.customer?.phone_verified && !customerStore.customer?.email_verified && !customerStore.customer?.has_google"
+                v-if="!customerStore.isVerified"
                 class="ui-chip border-amber-500/40 bg-amber-500/10 text-amber-300 text-[10px]"
               >
                 {{ t('customerAccount.notVerified') }}

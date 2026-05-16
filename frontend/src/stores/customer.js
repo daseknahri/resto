@@ -3,7 +3,7 @@ import api from "../lib/api";
 
 export const useCustomerStore = defineStore("customer", {
   state: () => ({
-    /** @type {{ id: number, name: string, email: string, phone: string, phone_verified: boolean, email_verified: boolean, has_google: boolean } | null} */
+    /** @type {{ id: number, name: string, email: string, phone: string, phone_verified: boolean, email_verified: boolean, has_google: boolean, wallet_balance: string } | null} */
     customer: null,
     loaded: false,
     loading: false,
@@ -12,6 +12,9 @@ export const useCustomerStore = defineStore("customer", {
   getters: {
     isAuthenticated: (state) => state.customer !== null,
     displayName: (state) => state.customer?.name || state.customer?.phone || state.customer?.email || "",
+    /** True when the customer has at least one verified contact method (phone OTP, email OTP, or Google). */
+    isVerified: (state) =>
+      !!(state.customer?.phone_verified || state.customer?.email_verified || state.customer?.has_google),
   },
 
   actions: {

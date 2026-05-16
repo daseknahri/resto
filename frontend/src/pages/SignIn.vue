@@ -123,6 +123,7 @@ const forgotPasswordLink = computed(() => {
 
 const fallbackRoute = () => {
   if (session.isPlatformAdmin) return { name: "admin-console" };
+  if (session.isTenantStaff) return { name: "waiter" };
   if (session.canEditTenantMenu) return { name: "owner-home" };
   return { name: "home" };
 };

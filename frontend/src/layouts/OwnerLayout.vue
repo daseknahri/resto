@@ -81,6 +81,15 @@
               </RouterLink>
             </div>
 
+            <!-- Waiter view shortcut (desktop) -->
+            <RouterLink
+              to="/waiter"
+              class="hidden md:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition-colors"
+            >
+              <AppIcon name="user" class="h-3.5 w-3.5" />
+              {{ t("ownerLayout.waiterView") }}
+            </RouterLink>
+
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <LanguageSwitcher compact dropdown />
               <div ref="settingsMenuRef" class="relative">
@@ -123,7 +132,7 @@
     </main>
 
     <nav class="ui-bottom-dock owner-bottom-dock md:hidden">
-      <div class="ui-bottom-dock-grid" :class="`grid-cols-${3 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
+      <div class="ui-bottom-dock-grid" :class="`grid-cols-${4 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
         <RouterLink
           to="/owner"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
@@ -148,6 +157,16 @@
             <span v-if="pendingOrdersCount > 0" class="owner-orders-badge-dock">{{ pendingOrdersCount }}</span>
           </span>
           <span>{{ t("ownerLayout.orders") }}</span>
+        </RouterLink>
+        <RouterLink
+          to="/waiter"
+          class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
+          :data-active="$route.path.startsWith('/waiter')"
+          active-class=""
+          exact-active-class=""
+        >
+          <AppIcon name="user" class="owner-dock-icon" />
+          <span>{{ t("ownerLayout.waiterView") }}</span>
         </RouterLink>
         <RouterLink
           :to="{ name: 'owner-menu-builder' }"

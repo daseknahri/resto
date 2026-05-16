@@ -587,6 +587,15 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
             tenant_for_lead = tenant
         lead = serializer.save(status=Lead.Status.NEW, tenant=tenant_for_lead)
         headers = self.get_success_headers(serializer.data)
+
+        # Notify tenant owner when a customer submits a reservation request.
+        if tenant_for_lead is not None and lead.source == "table_reservation":
+            try:
+                from menu.views import _send_owner_new_reservation_email
+                _send_owner_new_reservation_email(tenant_for_lead, lead)
+            except Exception:  # noqa: BLE001
+                pass
+
         return Response(self.get_serializer(lead).data, status=status.HTTP_201_CREATED, headers=headers)
 
     def destroy(self, request, *args, **kwargs):

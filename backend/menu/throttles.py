@@ -23,3 +23,7 @@ class AnalyticsEventThrottle(_IPThrottle):
 
 class PlaceOrderThrottle(_IPThrottle):
     scope = "place_order"
+
+
+class StaffOrderListThrottle(_IPThrottle):
+    scope = "staff_order_list"

@@ -438,7 +438,7 @@
           <template v-else-if="isDelivery && customerStore.isAuthenticated">
             <!-- Verified: green banner -->
             <div
-              v-if="customerStore.customer?.phone_verified || customerStore.customer?.email_verified || customerStore.customer?.has_google"
+              v-if="customerStore.isVerified"
               class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2"
             >
               <div class="flex items-center gap-1.5">
@@ -1021,13 +1021,9 @@ const validateForm = () => {
     return false;
   }
   // Delivery requires a verified customer (phone, email, or Google)
-  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated) {
-    const c = customerStore.customer;
-    const isVerified = c?.phone_verified || c?.email_verified || c?.has_google;
-    if (!isVerified) {
-      toast.show(t('cartPage.deliveryNotVerified'), 'error');
-      return false;
-    }
+  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated && !customerStore.isVerified) {
+    toast.show(t('cartPage.deliveryNotVerified'), 'error');
+    return false;
   }
 
   const errors = {};

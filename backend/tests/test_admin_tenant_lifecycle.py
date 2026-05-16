@@ -79,13 +79,25 @@ class _TenantQuerySet:
     def filter(self, *args, **kwargs):
         return self
 
+    def annotate(self, *args, **kwargs):
+        return self
+
     def distinct(self):
         return self
 
     def count(self):
         return len(self.rows)
 
+    def values(self, *field_names):
+        """Return rows as dicts of the requested fields (annotations return None)."""
+        return [
+            {f: getattr(row, f, None) for f in field_names}
+            for row in self.rows
+        ]
+
     def __getitem__(self, item):
+        if isinstance(item, slice):
+            return _TenantQuerySet(self.rows[item])
         return self.rows[item]
 
 

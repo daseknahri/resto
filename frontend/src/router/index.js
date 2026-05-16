@@ -15,6 +15,7 @@ import {
 const LandingLayout = () => import("../layouts/LandingLayout.vue");
 const CustomerLayout = () => import("../layouts/CustomerLayout.vue");
 const OwnerLayout = () => import("../layouts/OwnerLayout.vue");
+const WaiterLayout = () => import("../layouts/WaiterLayout.vue");
 
 const Home = () => import("../pages/Home.vue");
 const DemoLanding = () => import("../pages/DemoLanding.vue");
@@ -25,6 +26,8 @@ const DishPage = () => import("../pages/DishPage.vue");
 const Cart = () => import("../pages/Cart.vue");
 const ReservationPage = () => import("../pages/ReservationPage.vue");
 const LeadCapture = () => import("../pages/LeadCapture.vue");
+
+const WaiterPage = () => import("../pages/WaiterPage.vue");
 
 const OwnerHome = () => import("../pages/OwnerHome.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
@@ -136,6 +139,19 @@ const routes = [
         name: "owner-launch",
         component: OwnerLaunchSuccess,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+    ],
+  },
+  {
+    path: "/waiter",
+    component: WaiterLayout,
+    meta: { requiresAuth: true, tenantEditorOnly: true, interface: "waiter" },
+    children: [
+      {
+        path: "",
+        name: "waiter",
+        component: WaiterPage,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "waiter" },
       },
     ],
   },

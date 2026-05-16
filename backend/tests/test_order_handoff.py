@@ -214,12 +214,12 @@ class OrderHandoffTests(SimpleTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "mixed_currency")
 
-    def test_non_table_order_requires_fulfillment_and_customer_identity(self):
+    def test_non_table_order_requires_fulfillment(self):
+        # customer_name / customer_phone are optional (identity comes from
+        # the customer session), so only fulfillment_type is required here.
         response = self._request({"items": [{"slug": "burger", "qty": 1}]})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("fulfillment_type", response.data)
-        self.assertIn("customer_name", response.data)
-        self.assertIn("customer_phone", response.data)
 
     def test_delivery_order_requires_address_and_location(self):
         response = self._request(

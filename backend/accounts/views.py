@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -188,6 +189,7 @@ def _serialize_customer(customer: Customer) -> dict:
         "phone_verified": customer.phone_verified,
         "email_verified": customer.email_verified,
         "has_google": bool(customer.google_sub),
+        "wallet_balance": str(customer.wallet_balance),
     }
 
 
@@ -272,7 +274,7 @@ class CustomerPhoneRequestView(APIView):
 
         code = f"{random.randint(100000, 999999)}"
         cache_key = _OTP_CACHE_KEY.format(phone=phone)
-        cache.set(cache_key, {"code": code, "attempts": 0}, timeout=_OTP_TTL)
+        cache.set(cache_key, {"code": code, "attempts": 0, "expires_at": time.time() + _OTP_TTL}, timeout=_OTP_TTL)
         _send_otp(phone, code)
 
         resp = {"ok": True, "detail": "OTP sent. Check your phone."}
@@ -314,7 +316,8 @@ class CustomerPhoneVerifyView(APIView):
             )
         if data["code"] != code:
             data["attempts"] += 1
-            cache.set(cache_key, data, timeout=_OTP_TTL)
+            remaining = max(1, int(data.get("expires_at", time.time() + _OTP_TTL) - time.time()))
+            cache.set(cache_key, data, timeout=remaining)
             return Response(
                 {"detail": "Incorrect code.", "code": "invalid_code"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -452,7 +455,7 @@ class CustomerEmailRequestView(APIView):
 
         code = f"{random.randint(100000, 999999)}"
         cache_key = f"customer_email_otp:{email}"
-        cache.set(cache_key, {"code": code, "attempts": 0}, timeout=_OTP_TTL)
+        cache.set(cache_key, {"code": code, "attempts": 0, "expires_at": time.time() + _OTP_TTL}, timeout=_OTP_TTL)
         send_otp_email(email, code)
 
         resp = {"ok": True, "detail": "OTP sent. Check your email."}
@@ -483,7 +486,8 @@ class CustomerEmailVerifyView(APIView):
             return Response({"detail": "Too many incorrect attempts.", "code": "too_many_attempts"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         if data["code"] != code:
             data["attempts"] += 1
-            cache.set(cache_key, data, timeout=_OTP_TTL)
+            remaining = max(1, int(data.get("expires_at", time.time() + _OTP_TTL) - time.time()))
+            cache.set(cache_key, data, timeout=remaining)
             return Response({"detail": "Incorrect code.", "code": "invalid_code"}, status=status.HTTP_400_BAD_REQUEST)
 
         cache.delete(cache_key)

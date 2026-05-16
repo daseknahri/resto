@@ -29,6 +29,7 @@
         "customer_email_otp_verify": "20/hour",
         "customer_google_auth": "20/hour",
         "customer_profile_update": "30/hour",
+        "staff_order_list": "300/min",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

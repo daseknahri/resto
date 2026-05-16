@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
 from io import BytesIO, StringIO
@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 import zipfile
 
 from django.conf import settings
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.http import HttpResponse
@@ -34,7 +35,7 @@ from .serializers import (
     SuperCategorySerializer,
     TableLinkSerializer,
 )
-from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle
+from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
 
 
 class PublishAccessMixin:
@@ -1122,6 +1123,11 @@ class PlaceOrderView(APIView):
             return Response({"detail": "Menu is temporarily unavailable.", "code": "menu_temporarily_disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not profile.is_menu_published and not can_preview:
             return Response({"detail": "Menu is not published yet.", "code": "menu_unpublished"}, status=status.HTTP_403_FORBIDDEN)
+        if profile.is_open is False and not can_preview:
+            return Response(
+                {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         serializer = OrderHandoffSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1177,8 +1183,17 @@ class PlaceOrderView(APIView):
 
         table_slug = (validated.get("table_slug") or "").strip()
         fulfillment_type = (validated.get("fulfillment_type") or "")
+        table_label = (validated.get("table_label") or "").strip()
         if table_slug:
             fulfillment_type = Order.FulfillmentType.TABLE
+            resolved_table = TableLink.objects.filter(slug=table_slug, is_active=True).first()
+            if resolved_table is None:
+                return Response(
+                    {"detail": "Table link is unavailable.", "code": "table_unavailable"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Use DB label as authoritative source; fall back to client-supplied label
+            table_label = resolved_table.label or table_label
 
         # Resolve linked customer from session
         from accounts.models import Customer as CustomerModel
@@ -1223,7 +1238,7 @@ class PlaceOrderView(APIView):
                     customer_phone=_customer_phone,
                     customer_note=validated.get("customer_note", ""),
                     fulfillment_type=fulfillment_type,
-                    table_label=validated.get("table_label", ""),
+                    table_label=table_label,
                     table_slug=table_slug,
                     delivery_address=validated.get("delivery_address", ""),
                     delivery_location_url=validated.get("delivery_location_url", ""),
@@ -1241,6 +1256,10 @@ class PlaceOrderView(APIView):
                 {"detail": "Order could not be placed due to a conflict. Please try again."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
+        # Notify the tenant owner — outside the atomic block so SMTP latency
+        # never holds the DB transaction open.
+        _send_owner_new_order_email(request.tenant, order)
 
         return Response({
             "order_number": order.order_number,
@@ -1294,6 +1313,91 @@ class CustomerOrderStatusView(APIView):
         })
 
 
+def _send_owner_new_order_email(tenant, order) -> None:
+    """Send a plain-text new-order notification to the tenant owner.
+
+    Fails silently — a broken SMTP config must never prevent order creation.
+    """
+    try:
+        from accounts.models import User as _User
+        owner_email = (
+            _User.objects
+            .filter(tenant=tenant, role=_User.Roles.TENANT_OWNER)
+            .values_list("email", flat=True)
+            .first()
+        )
+        if not owner_email:
+            return
+
+        fulfillment = str(order.fulfillment_type).title()
+        items_lines = "\n".join(
+            f"  {i.qty}× {i.dish_name}" for i in order.items.all()
+        )
+        customer_line = ""
+        if order.customer_name:
+            customer_line = f"Customer: {order.customer_name}"
+            if order.customer_phone:
+                customer_line += f" ({order.customer_phone})"
+            customer_line += "\n"
+
+        table_line = f"Table: {order.table_label}\n" if order.table_label else ""
+
+        body = (
+            f"New order received — #{order.order_number}\n"
+            f"{'=' * 40}\n"
+            f"Type: {fulfillment}\n"
+            f"{table_line}"
+            f"{customer_line}"
+            f"\nItems:\n{items_lines}\n\n"
+            f"Total: {order.total} {order.currency}\n"
+        )
+
+        send_mail(
+            subject=f"New order #{order.order_number} — {tenant.name}",
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[owner_email],
+            fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+        )
+    except Exception:  # noqa: BLE001
+        pass  # Never let email failure block order creation
+
+
+def _send_owner_new_reservation_email(tenant, lead) -> None:
+    """Send a plain-text new-reservation notification to the tenant owner."""
+    try:
+        from accounts.models import User as _User
+        owner_email = (
+            _User.objects
+            .filter(tenant=tenant, role=_User.Roles.TENANT_OWNER)
+            .values_list("email", flat=True)
+            .first()
+        )
+        if not owner_email:
+            return
+
+        notes = lead.notes or ""
+        body = (
+            f"New reservation request — {tenant.name}\n"
+            f"{'=' * 40}\n"
+            f"Name:  {lead.name or '—'}\n"
+            f"Phone: {lead.phone or '—'}\n"
+            f"Email: {lead.email or '—'}\n"
+        )
+        if notes:
+            body += f"Notes: {notes}\n"
+
+        send_mail(
+            subject=f"New reservation request — {tenant.name}",
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[owner_email],
+            fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _can_edit_tenant_order(request) -> bool:
     user = getattr(request, "user", None)
     tenant = getattr(request, "tenant", None)
@@ -1305,6 +1409,77 @@ def _can_edit_tenant_order(request) -> bool:
         return False
     from accounts.models import User
     return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+
+
+class StaffOrderListView(APIView):
+    """GET /api/staff/orders/ — active orders for the waiter view, optimized for polling.
+
+    Returns only non-terminal orders (pending/confirmed/preparing/ready) ordered
+    oldest-first so the most urgent orders appear at the top.
+
+    Supports ?since=<ISO-8601> to fetch only orders whose ``updated_at`` is after
+    the given timestamp, enabling efficient 15-second polling without re-transmitting
+    the entire list on every tick.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [StaffOrderListThrottle]
+
+    _ACTIVE_STATUSES = [
+        Order.Status.PENDING,
+        Order.Status.CONFIRMED,
+        Order.Status.PREPARING,
+        Order.Status.READY,
+    ]
+
+    def get(self, request):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = (
+            Order.objects
+            .filter(status__in=self._ACTIVE_STATUSES)
+            .prefetch_related("items")
+            .order_by("created_at")  # oldest-first → most urgent at top
+        )
+
+        since_raw = request.query_params.get("since", "").strip()
+        if since_raw:
+            try:
+                since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+                qs = qs.filter(updated_at__gt=since_dt)
+            except ValueError:
+                pass  # ignore unparseable timestamp — return full active list
+
+        orders = []
+        for order in qs[:100]:
+            orders.append({
+                "id": order.id,
+                "order_number": order.order_number,
+                "status": order.status,
+                "fulfillment_type": order.fulfillment_type,
+                "table_label": order.table_label,
+                "customer_name": order.customer_name,
+                "customer_note": order.customer_note,
+                "owner_note": order.owner_note,
+                "estimated_ready_minutes": order.estimated_ready_minutes,
+                "total": str(order.total),
+                "currency": order.currency,
+                "items_count": sum(i.qty for i in order.items.all()),
+                "items": [
+                    {
+                        "dish_name": i.dish_name,
+                        "qty": i.qty,
+                        "options": i.options,
+                        "note": i.note,
+                    }
+                    for i in order.items.all()
+                ],
+                "created_at": order.created_at.isoformat(),
+                "updated_at": order.updated_at.isoformat(),
+            })
+
+        return Response({"results": orders, "count": len(orders)})
 
 
 class OwnerOrderListView(APIView):

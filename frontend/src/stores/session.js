@@ -23,6 +23,8 @@ export const useSessionStore = defineStore("session", {
     isAuthenticated: (state) => !!state.user,
     isPlatformAdmin: (state) => state.user?.can_access_admin_console === true,
     canEditTenantMenu: (state) => state.user?.can_edit_tenant_menu === true,
+    isTenantStaff: (state) => state.user?.role === "tenant_staff",
+    isTenantOwner: (state) => state.user?.role === "tenant_owner",
   },
   actions: {
     async fetchSession(force = false) {

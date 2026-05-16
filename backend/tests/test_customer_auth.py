@@ -64,7 +64,7 @@ class SerializeCustomerTests(SimpleTestCase):
     def test_all_expected_fields_present(self):
         c = _make_customer()
         data = _serialize_customer(c)
-        for field in ("id", "name", "email", "phone", "phone_verified", "email_verified", "has_google"):
+        for field in ("id", "name", "email", "phone", "phone_verified", "email_verified", "has_google", "wallet_balance"):
             self.assertIn(field, data, f"Missing field: {field}")
 
     def test_has_google_false_when_no_google_sub(self):
@@ -82,6 +82,10 @@ class SerializeCustomerTests(SimpleTestCase):
     def test_email_included(self):
         c = _make_customer(email="test@example.com")
         self.assertEqual(_serialize_customer(c)["email"], "test@example.com")
+
+    def test_wallet_balance_serialized_as_string(self):
+        c = _make_customer(wallet_balance=42)
+        self.assertEqual(_serialize_customer(c)["wallet_balance"], "42")
 
 
 # ── CustomerSessionView ───────────────────────────────────────────────────────
@@ -213,6 +217,20 @@ class CustomerPhoneVerifyViewTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "invalid_code")
         # Attempts counter should have been incremented and re-cached
         cache_mock.set.assert_called_once()
+
+    @patch("accounts.views.time")
+    @patch("accounts.views.cache")
+    def test_wrong_code_write_back_uses_remaining_ttl(self, cache_mock, time_mock):
+        """Wrong-guess write-back must use remaining TTL, not a fresh 5 min window."""
+        # Simulate OTP was created 3 minutes ago (expires in 2 min = 120 s)
+        expires_at = 1_000_120.0  # absolute timestamp
+        time_mock.time.return_value = 1_000_000.0
+        cache_mock.get.return_value = {"code": "999999", "attempts": 0, "expires_at": expires_at}
+        self._post({"phone": "+21261234567", "code": "000000"})
+        # The timeout kwarg passed to cache.set must be ~120 s (remaining), not 300 s
+        _, kwargs = cache_mock.set.call_args
+        timeout = kwargs.get("timeout") or cache_mock.set.call_args[0][2]
+        self.assertLessEqual(timeout, 120)
 
     @patch("accounts.views.cache")
     def test_locks_after_max_attempts(self, cache_mock):
