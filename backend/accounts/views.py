@@ -213,42 +213,26 @@ def _verify_google_token(credential: str, client_id: str) -> dict | None:
     return data
 
 
-def _send_otp_whatsapp(phone: str, code: str) -> bool:
-    """Send OTP via Meta WhatsApp Business Cloud API.
-
-    Returns True on success, False if not configured or on error.
-    The phone number must be in E.164 format (e.g. +212612345678).
-    """
+def _send_otp_sms(phone: str, code: str) -> bool:
+    """Send OTP via Twilio SMS. Returns True on success, False if not configured."""
     try:
-        import json
+        import base64
         import urllib.request as _urlreq
+        import urllib.parse as _urlparse
 
-        access_token = getattr(settings, "WHATSAPP_ACCESS_TOKEN", "")
-        phone_number_id = getattr(settings, "WHATSAPP_PHONE_NUMBER_ID", "")
-        template_name = getattr(settings, "WHATSAPP_OTP_TEMPLATE_NAME", "otp_verification")
-        if not access_token or not phone_number_id:
+        sid = getattr(settings, "TWILIO_ACCOUNT_SID", "")
+        token = getattr(settings, "TWILIO_AUTH_TOKEN", "")
+        from_number = getattr(settings, "TWILIO_FROM_NUMBER", "")
+        if not sid or not token or not from_number:
             return False
 
-        url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": phone,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": "en"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [{"type": "text", "text": code}],
-                    }
-                ],
-            },
-        }
-        data = json.dumps(payload).encode()
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        body = f"Your verification code is {code}. Valid for 5 minutes. Do not share it."
+        data = _urlparse.urlencode({"To": phone, "From": from_number, "Body": body}).encode()
+        creds = base64.b64encode(f"{sid}:{token}".encode()).decode()
         req = _urlreq.Request(url, data=data, method="POST")
-        req.add_header("Authorization", f"Bearer {access_token}")
-        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Basic {creds}")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with _urlreq.urlopen(req, timeout=10):
             pass
         return True
@@ -257,20 +241,21 @@ def _send_otp_whatsapp(phone: str, code: str) -> bool:
 
 
 def _send_otp(phone: str, code: str) -> None:
-    """Deliver OTP to customer's phone via WhatsApp Business Cloud API.
+    """Deliver OTP to the customer's phone via Twilio SMS.
 
-    Falls back to logging in DEBUG mode (so developers can test without credentials).
+    In DEBUG mode the code is logged to the console so developers can test
+    without real credentials. In production a warning is logged if Twilio
+    is not yet configured.
     """
     if getattr(settings, "DEBUG", False):
         logger.info("Customer OTP for %s: %s", phone, code)
         return
 
-    sent = _send_otp_whatsapp(phone, code)
+    sent = _send_otp_sms(phone, code)
     if not sent:
-        # WhatsApp not configured — log so the operator knows delivery is missing
         logger.warning(
-            "OTP delivery failed: WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set. "
-            "Phone ending ...%s did not receive a code.",
+            "OTP delivery failed: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / "
+            "TWILIO_FROM_NUMBER not configured. Phone ...%s did not receive a code.",
             phone[-4:] if len(phone) >= 4 else "****",
         )
 
