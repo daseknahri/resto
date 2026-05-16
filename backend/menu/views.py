@@ -1265,10 +1265,6 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        # Notify the tenant owner — outside the atomic block so SMTP latency
-        # never holds the DB transaction open.
-        _send_owner_new_order_email(request.tenant, order)
-
         return Response({
             "order_number": order.order_number,
             "status": order.status,
@@ -1320,94 +1316,6 @@ class CustomerOrderStatusView(APIView):
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
         })
 
-
-def _send_owner_sms_notification(to_phone: str, message: str) -> None:
-    """Send an SMS via Twilio REST API. Fails silently if not configured."""
-    try:
-        import base64
-        import urllib.request as _urlreq
-        import urllib.parse as _urlparse
-
-        sid = getattr(settings, "TWILIO_ACCOUNT_SID", "")
-        token = getattr(settings, "TWILIO_AUTH_TOKEN", "")
-        from_number = getattr(settings, "TWILIO_FROM_NUMBER", "")
-        if not sid or not token or not from_number or not to_phone:
-            return
-
-        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
-        data = _urlparse.urlencode({
-            "To": to_phone,
-            "From": from_number,
-            "Body": message[:1600],
-        }).encode()
-        creds = base64.b64encode(f"{sid}:{token}".encode()).decode()
-        req = _urlreq.Request(url, data=data, method="POST")
-        req.add_header("Authorization", f"Basic {creds}")
-        req.add_header("Content-Type", "application/x-www-form-urlencoded")
-        with _urlreq.urlopen(req, timeout=10):
-            pass
-    except Exception:  # noqa: BLE001
-        pass  # Never let SMS failure propagate
-
-
-def _send_owner_new_order_email(tenant, order) -> None:
-    """Notify the tenant owner of a new order via email and SMS.
-
-    Fails silently — a broken SMTP/Twilio config must never prevent order creation.
-    """
-    try:
-        from accounts.models import User as _User
-        owner_email = (
-            _User.objects
-            .filter(tenant=tenant, role=_User.Roles.TENANT_OWNER)
-            .values_list("email", flat=True)
-            .first()
-        )
-
-        fulfillment = str(order.fulfillment_type).title()
-        items_lines = "\n".join(
-            f"  {i.qty}× {i.dish_name}" for i in order.items.all()
-        )
-        customer_line = ""
-        if order.customer_name:
-            customer_line = f"Customer: {order.customer_name}"
-            if order.customer_phone:
-                customer_line += f" ({order.customer_phone})"
-            customer_line += "\n"
-
-        table_line = f"Table: {order.table_label}\n" if order.table_label else ""
-
-        body = (
-            f"New order received — #{order.order_number}\n"
-            f"{'=' * 40}\n"
-            f"Type: {fulfillment}\n"
-            f"{table_line}"
-            f"{customer_line}"
-            f"\nItems:\n{items_lines}\n\n"
-            f"Total: {order.total} {order.currency}\n"
-        )
-
-        if owner_email:
-            send_mail(
-                subject=f"New order #{order.order_number} — {tenant.name}",
-                message=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[owner_email],
-                fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
-            )
-
-        # SMS — uses the restaurant's profile phone / whatsapp
-        profile = Profile.objects.filter(tenant=tenant).first()
-        owner_phone = ((profile.phone or "") or (profile.whatsapp or "")).strip() if profile else ""
-        if owner_phone:
-            sms_body = (
-                f"New order #{order.order_number} at {tenant.name}\n"
-                f"Type: {fulfillment} | Total: {order.total} {order.currency}"
-            )
-            _send_owner_sms_notification(owner_phone, sms_body)
-
-    except Exception:  # noqa: BLE001
-        pass  # Never let notification failure block order creation
 
 
 def _send_owner_new_reservation_email(tenant, lead) -> None:

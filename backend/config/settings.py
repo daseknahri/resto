@@ -295,10 +295,6 @@ EMAIL_USE_SSL = parse_bool_env("DJANGO_EMAIL_USE_SSL", False)
 EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "10"))
 EMAIL_FAIL_SILENTLY = parse_bool_env("DJANGO_EMAIL_FAIL_SILENTLY", DEBUG)
 
-# ── Twilio (optional) — set these env vars to enable SMS / WhatsApp notifications ──
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")  # E.164 e.g. +12015551234
 
 SESSION_COOKIE_SECURE = parse_bool_env("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = parse_bool_env("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
