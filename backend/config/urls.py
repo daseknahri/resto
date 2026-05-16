@@ -5,6 +5,7 @@ from django.urls import include, path, re_path
 from django.views.static import serve as static_serve
 from rest_framework import routers
 
+from accounts.views import OwnerStaffDeleteView, OwnerStaffListCreateView
 from config.shared_api_urls import shared_api_urlpatterns
 from menu.views import (
     AnalyticsSummaryView,
@@ -79,6 +80,8 @@ urlpatterns = [
     path("api/owner/reservations/<int:lead_id>/", OwnerReservationDetailView.as_view(), name="owner-reservation-detail"),
     path("api/tier-upgrade-targets/", TierUpgradeTargetsView.as_view(), name="tier-upgrade-targets"),
     path("api/tier-upgrade-requests/", TierUpgradeRequestListCreateView.as_view(), name="tier-upgrade-requests"),
+    path("api/owner/staff/", OwnerStaffListCreateView.as_view(), name="owner-staff-list"),
+    path("api/owner/staff/<int:staff_id>/", OwnerStaffDeleteView.as_view(), name="owner-staff-delete"),
     path("api/", include(tenant_router.urls)),
     path("api-auth/", include("rest_framework.urls")),
     path("admin/", admin.site.urls),

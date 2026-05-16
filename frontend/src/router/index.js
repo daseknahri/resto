@@ -36,6 +36,7 @@ const OwnerOrders = () => import("../pages/OwnerOrders.vue");
 const OwnerProfile = () => import("../pages/OwnerProfile.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 const OwnerTables = () => import("../pages/OwnerTables.vue");
+const OwnerStaffPage = () => import("../pages/OwnerStaffPage.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 
@@ -138,6 +139,12 @@ const routes = [
         path: "launch",
         name: "owner-launch",
         component: OwnerLaunchSuccess,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "staff",
+        name: "owner-staff",
+        component: OwnerStaffPage,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
     ],

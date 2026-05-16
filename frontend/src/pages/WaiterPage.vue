@@ -116,7 +116,7 @@
             @click="advance(order.id)"
           >
             <span v-if="waiter.updatingOrderIds.has(order.id)">…</span>
-            <span v-else>{{ actionLabel(order.status) }}</span>
+            <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <span v-else class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
         </div>
@@ -223,12 +223,15 @@ const timeAgo = (iso) => {
   return t("waiterPage.hoursAgo", { n: Math.floor(diff / 3600) });
 };
 
-const actionLabel = (s) => ({
-  pending: t("waiterPage.actionAccept"),
-  confirmed: t("waiterPage.actionPreparing"),
-  preparing: t("waiterPage.actionReady"),
-  ready: t("waiterPage.actionDone"),
-}[s] ?? "");
+const actionLabel = (order) => {
+  const isDelivery = order.fulfillment_type === "delivery";
+  return {
+    pending: t("waiterPage.actionAccept"),
+    confirmed: t("waiterPage.actionPreparing"),
+    preparing: isDelivery ? t("waiterPage.actionOutForDelivery") : t("waiterPage.actionReady"),
+    ready: isDelivery ? t("waiterPage.actionDelivered") : t("waiterPage.actionDone"),
+  }[order.status] ?? "";
+};
 
 // ── Styling ────────────────────────────────────────────────────────────────────
 const statusCardClass = (s) => ({

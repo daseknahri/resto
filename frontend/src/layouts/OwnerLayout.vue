@@ -108,6 +108,10 @@
                       <AppIcon name="settings" class="owner-settings-item-icon" />
                       <span>{{ t("common.profile") }}</span>
                     </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">
+                      <AppIcon name="user" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.staff") }}</span>
+                    </RouterLink>
                     <button class="owner-settings-item owner-settings-item-danger" type="button" @click="handleSignOut">
                       <AppIcon name="logout" class="owner-settings-item-icon" />
                       <span>{{ t("common.signOut") }}</span>
@@ -233,6 +237,7 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/tables")) return t("ownerLayout.tablesQr");
   if (path.startsWith("/owner/reservations")) return t("ownerLayout.reservations");
   if (path.startsWith("/owner/orders")) return t("ownerLayout.orders");
+  if (path.startsWith("/owner/staff")) return t("ownerLayout.staff");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

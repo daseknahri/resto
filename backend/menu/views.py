@@ -1218,6 +1218,14 @@ class PlaceOrderView(APIView):
                     {"detail": "Please verify your phone or email before placing a delivery order.", "code": "not_verified"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            if not (_linked_customer.phone or "").strip():
+                return Response(
+                    {
+                        "detail": "Please add a phone number to your account so the delivery driver can reach you.",
+                        "code": "phone_required",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # For delivery, enrich order with customer identity; for pickup/table use payload values
         if fulfillment_type == Order.FulfillmentType.DELIVERY and _linked_customer:
@@ -1313,10 +1321,39 @@ class CustomerOrderStatusView(APIView):
         })
 
 
-def _send_owner_new_order_email(tenant, order) -> None:
-    """Send a plain-text new-order notification to the tenant owner.
+def _send_owner_sms_notification(to_phone: str, message: str) -> None:
+    """Send an SMS via Twilio REST API. Fails silently if not configured."""
+    try:
+        import base64
+        import urllib.request as _urlreq
+        import urllib.parse as _urlparse
 
-    Fails silently — a broken SMTP config must never prevent order creation.
+        sid = getattr(settings, "TWILIO_ACCOUNT_SID", "")
+        token = getattr(settings, "TWILIO_AUTH_TOKEN", "")
+        from_number = getattr(settings, "TWILIO_FROM_NUMBER", "")
+        if not sid or not token or not from_number or not to_phone:
+            return
+
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        data = _urlparse.urlencode({
+            "To": to_phone,
+            "From": from_number,
+            "Body": message[:1600],
+        }).encode()
+        creds = base64.b64encode(f"{sid}:{token}".encode()).decode()
+        req = _urlreq.Request(url, data=data, method="POST")
+        req.add_header("Authorization", f"Basic {creds}")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with _urlreq.urlopen(req, timeout=10):
+            pass
+    except Exception:  # noqa: BLE001
+        pass  # Never let SMS failure propagate
+
+
+def _send_owner_new_order_email(tenant, order) -> None:
+    """Notify the tenant owner of a new order via email and SMS.
+
+    Fails silently — a broken SMTP/Twilio config must never prevent order creation.
     """
     try:
         from accounts.models import User as _User
@@ -1326,8 +1363,6 @@ def _send_owner_new_order_email(tenant, order) -> None:
             .values_list("email", flat=True)
             .first()
         )
-        if not owner_email:
-            return
 
         fulfillment = str(order.fulfillment_type).title()
         items_lines = "\n".join(
@@ -1352,15 +1387,27 @@ def _send_owner_new_order_email(tenant, order) -> None:
             f"Total: {order.total} {order.currency}\n"
         )
 
-        send_mail(
-            subject=f"New order #{order.order_number} — {tenant.name}",
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[owner_email],
-            fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
-        )
+        if owner_email:
+            send_mail(
+                subject=f"New order #{order.order_number} — {tenant.name}",
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[owner_email],
+                fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+            )
+
+        # SMS — uses the restaurant's profile phone / whatsapp
+        profile = Profile.objects.filter(tenant=tenant).first()
+        owner_phone = ((profile.phone or "") or (profile.whatsapp or "")).strip() if profile else ""
+        if owner_phone:
+            sms_body = (
+                f"New order #{order.order_number} at {tenant.name}\n"
+                f"Type: {fulfillment} | Total: {order.total} {order.currency}"
+            )
+            _send_owner_sms_notification(owner_phone, sms_body)
+
     except Exception:  # noqa: BLE001
-        pass  # Never let email failure block order creation
+        pass  # Never let notification failure block order creation
 
 
 def _send_owner_new_reservation_email(tenant, lead) -> None:

@@ -533,3 +533,160 @@ class CustomerProfileUpdateView(APIView):
             customer.save(update_fields=["name", "updated_at"])
 
         return Response({"customer": _serialize_customer(customer)})
+
+
+# ── Staff management (owner only) ─────────────────────────────────────────────
+
+import re as _re
+import secrets as _secrets
+
+
+def _is_tenant_owner(request, tenant) -> bool:
+    """Return True if the request user is the owner of the given tenant."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    return user.role == user.Roles.TENANT_OWNER
+
+
+class OwnerStaffListCreateView(APIView):
+    """GET /api/owner/staff/ — list staff accounts for this tenant.
+       POST /api/owner/staff/ — create a new staff (waiter) account."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        if not _is_tenant_owner(request, tenant):
+            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        from .models import User
+        staff = list(
+            User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF)
+            .order_by("date_joined")
+            .values("id", "email", "first_name", "last_name", "username", "date_joined")
+        )
+        results = [
+            {
+                "id": s["id"],
+                "email": s["email"],
+                "name": f"{s['first_name']} {s['last_name']}".strip() or s["username"],
+                "username": s["username"],
+                "date_joined": s["date_joined"].isoformat() if s["date_joined"] else None,
+            }
+            for s in staff
+        ]
+        return Response({"results": results, "count": len(results)})
+
+    def post(self, request, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        if not _is_tenant_owner(request, tenant):
+            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        name = (request.data.get("name") or "").strip()
+        email = (request.data.get("email") or "").strip().lower()
+
+        if not name or len(name) < 2:
+            return Response({"detail": "Name must be at least 2 characters.", "code": "name_required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not email or "@" not in email:
+            return Response({"detail": "A valid email address is required.", "code": "email_required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not _re.match(r"^[^@]+@[^@]+\.[^@]+$", email):
+            return Response({"detail": "A valid email address is required.", "code": "email_invalid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .models import User
+        if User.objects.filter(email=email).exists():
+            return Response({"detail": "A user with this email already exists.", "code": "email_taken"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Derive username from email local-part; deduplicate
+        base_username = _re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:28] or "staff"
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+
+        # Split name into first / last
+        name_parts = name.split(" ", 1)
+        first_name = name_parts[0][:30]
+        last_name = (name_parts[1] if len(name_parts) > 1 else "")[:150]
+
+        # Generate a temporary password (12 URL-safe chars ≈ 72 bits entropy)
+        temp_password = _secrets.token_urlsafe(12)
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=temp_password,
+            first_name=first_name,
+            last_name=last_name,
+            role=User.Roles.TENANT_STAFF,
+            tenant=tenant,
+        )
+
+        # Email invite
+        try:
+            from django.core.mail import send_mail as _send_mail
+            from django.conf import settings as _cfg
+
+            # Best-effort: find the primary domain for the tenant sign-in URL
+            primary_domain = tenant.domains.filter(is_primary=True).values_list("domain", flat=True).first() if tenant else None
+            if primary_domain and not primary_domain.startswith("http"):
+                if primary_domain.endswith(".localhost") or primary_domain == "localhost":
+                    base_url = f"http://{primary_domain}:5173"
+                else:
+                    base_url = f"https://{primary_domain}"
+            else:
+                base_url = primary_domain or ""
+            signin_url = f"{base_url}/signin" if base_url else "/signin"
+
+            _send_mail(
+                subject=f"You've been added to {tenant.name}",
+                message=(
+                    f"Hi {first_name},\n\n"
+                    f"You've been added as a staff member at {tenant.name}.\n\n"
+                    f"Sign in at: {signin_url}\n"
+                    f"Email: {email}\n"
+                    f"Temporary password: {temp_password}\n\n"
+                    f"Please change your password after signing in.\n\n"
+                    f"— {tenant.name}"
+                ),
+                from_email=_cfg.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+        return Response(
+            {
+                "id": user.id,
+                "email": user.email,
+                "name": f"{first_name} {last_name}".strip(),
+                "username": user.username,
+                "temp_password": temp_password,  # Displayed once so owner can share it
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OwnerStaffDeleteView(APIView):
+    """DELETE /api/owner/staff/<staff_id>/ — remove a staff account from this tenant."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, staff_id, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        if not _is_tenant_owner(request, tenant):
+            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        from .models import User
+        staff_user = User.objects.filter(id=staff_id, tenant=tenant, role=User.Roles.TENANT_STAFF).first()
+        if staff_user is None:
+            return Response({"detail": "Staff member not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        staff_user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
