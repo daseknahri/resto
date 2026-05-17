@@ -959,6 +959,7 @@ export const messages = {
       signedIn: "Signed in successfully",
       signOut: "Sign out",
       deliveryNotVerified: "Please verify your phone or email before placing a delivery order.",
+      deliveryPhoneRequired: "Please add a phone number to your account so the delivery driver can reach you. Go to My Account → Add phone.",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -1627,6 +1628,7 @@ export const messages = {
       verifiedEmail: "Verified email",
       googleConnected: "Google connected",
       notVerified: "Not verified",
+      addPhone: "Add phone number",
       signOut: "Sign out",
       ordersTitle: "Order history",
       ordersEmpty: "No orders yet.",
@@ -2570,6 +2572,7 @@ export const messages = {
       signedIn: "Connexion reussie",
       signOut: "Se deconnecter",
       deliveryNotVerified: "Veuillez verifier votre telephone ou e-mail avant de passer une commande de livraison.",
+      deliveryPhoneRequired: "Ajoutez un numero de telephone a votre compte pour que le livreur puisse vous contacter. Allez dans Mon compte → Ajouter un telephone.",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
@@ -3260,6 +3263,7 @@ export const messages = {
       verifiedEmail: "Email verifie",
       googleConnected: "Google connecte",
       notVerified: "Non verifie",
+      addPhone: "Ajouter un numero de telephone",
       signOut: "Se deconnecter",
       ordersTitle: "Historique des commandes",
       ordersEmpty: "Aucune commande pour l'instant.",

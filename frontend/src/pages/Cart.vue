@@ -1025,6 +1025,11 @@ const validateForm = () => {
     toast.show(t('cartPage.deliveryNotVerified'), 'error');
     return false;
   }
+  // Delivery requires a phone number so the driver can call the customer
+  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated && customerStore.isVerified && !customerStore.customer?.phone) {
+    toast.show(t('cartPage.deliveryPhoneRequired'), 'error');
+    return false;
+  }
 
   const errors = {};
   if (!fulfillmentType.value) {
@@ -1143,6 +1148,9 @@ const mapOrderApiError = (err, fallback) => {
   }
   if (code === 'not_verified') {
     return t('cartPage.deliveryNotVerified');
+  }
+  if (code === 'phone_required') {
+    return t('cartPage.deliveryPhoneRequired');
   }
   if (code === 'items_unavailable' && unavailable.length) {
     return t('cartPage.itemsUnavailable', { items: unavailable.join(', ') });

@@ -229,6 +229,10 @@ import { useI18n } from "../composables/useI18n";
 import { useCustomerStore } from "../stores/customer";
 import api from "../lib/api";
 
+const props = defineProps({
+  initialTab: { type: String, default: "phone" }, // 'phone' | 'email'
+});
+
 const emit = defineEmits(["close", "authenticated"]);
 
 const { t } = useI18n();
@@ -237,7 +241,7 @@ const customerStore = useCustomerStore();
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 // Tab state
-const activeTab = ref("phone"); // 'phone' | 'email'
+const activeTab = ref(props.initialTab || "phone"); // 'phone' | 'email'
 
 // Shared name field
 const name = ref("");

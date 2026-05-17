@@ -359,6 +359,31 @@ class CustomerPhoneVerifyView(APIView):
 
         cache.delete(cache_key)
 
+        # If the customer is already signed in (e.g. via Google or email), add
+        # the verified phone to their existing account rather than creating a new one.
+        existing_id = request.session.get("customer_id")
+        if existing_id:
+            try:
+                existing = Customer.objects.get(pk=existing_id)
+                # Block if this phone is already owned by a *different* account
+                conflict = Customer.objects.filter(phone=phone).exclude(pk=existing_id).first()
+                if conflict:
+                    return Response(
+                        {"detail": "This phone number is already linked to another account.", "code": "phone_taken"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                update_fields = ["phone", "phone_verified", "updated_at"]
+                existing.phone = phone
+                existing.phone_verified = True
+                if not existing.name and name:
+                    existing.name = name
+                    update_fields.append("name")
+                existing.save(update_fields=update_fields)
+                return Response({"customer": _serialize_customer(existing)})
+            except Customer.DoesNotExist:
+                request.session.pop("customer_id", None)  # stale session — fall through
+
+        # No existing session: get or create customer by phone number
         customer, created = Customer.objects.get_or_create(
             phone=phone,
             defaults={"name": name, "phone_verified": True},

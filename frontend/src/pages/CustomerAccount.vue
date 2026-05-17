@@ -106,6 +106,16 @@
             <p v-if="customerStore.customer?.email" class="text-xs text-slate-400">
               {{ customerStore.customer.email }}
             </p>
+
+            <!-- Add phone CTA — shown when signed in but no phone yet -->
+            <button
+              v-if="!customerStore.customer?.phone"
+              class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-500/70 transition-colors"
+              @click="showAddPhone = true"
+            >
+              <AppIcon name="plus" class="h-3 w-3" />
+              {{ t('customerAccount.addPhone') }}
+            </button>
           </div>
         </div>
 
@@ -188,6 +198,14 @@
       @close="showAuthModal = false"
       @authenticated="onAuthenticated"
     />
+
+    <!-- Add phone modal (reuses auth modal, phone tab only) -->
+    <CustomerAuthModal
+      v-if="showAddPhone"
+      :initial-tab="'phone'"
+      @close="showAddPhone = false"
+      @authenticated="onPhoneAdded"
+    />
   </div>
 </template>
 
@@ -206,6 +224,7 @@ const customerStore = useCustomerStore();
 const cart = useCartStore();
 
 const showAuthModal = ref(false);
+const showAddPhone = ref(false);
 const editableName = ref('');
 const savingName = ref(false);
 const loadingOrders = ref(false);
@@ -270,6 +289,12 @@ const onAuthenticated = (customer) => {
   customerStore.setCustomer(customer);
   editableName.value = customer?.name || '';
   fetchOrders();
+};
+
+const onPhoneAdded = (customer) => {
+  customerStore.setCustomer(customer);
+  editableName.value = customer?.name || '';
+  showAddPhone.value = false;
 };
 
 watch(
