@@ -266,6 +266,8 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     super_category_slug = serializers.CharField(source="category.super_category.slug", read_only=True)
     super_category_name = serializers.SerializerMethodField()
     tags = serializers.JSONField(default=list, required=False)
+    allergens = serializers.JSONField(default=list, required=False)
+    is_schedule_available = serializers.SerializerMethodField()
 
     class Meta:
         model = Dish
@@ -285,8 +287,13 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "currency",
             "image_url",
             "tags",
+            "allergens",
             "position",
             "is_published",
+            "is_available",
+            "stock_qty",
+            "availability_schedule",
+            "is_schedule_available",
             "options",
             "option_groups",
         ]
@@ -294,6 +301,47 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     def get_options(self, instance):
         ungrouped = [opt for opt in instance.options.all() if opt.group_id is None]
         return DishOptionSerializer(ungrouped, many=True, context=self.context).data
+
+    def get_is_schedule_available(self, obj) -> bool | None:
+        """
+        Returns True/False based on the availability_schedule, or None if no
+        schedule is configured (meaning the dish is always available by schedule).
+        """
+        schedule = getattr(obj, "availability_schedule", None)
+        if not schedule or not isinstance(schedule, dict):
+            return None
+
+        from datetime import datetime as _dt
+        _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+        now = _dt.utcnow()
+
+        # Day restriction
+        days = schedule.get("days")
+        if days and isinstance(days, list) and len(days) > 0:
+            if _WDAY[now.weekday()] not in days:
+                return False
+
+        # Time restriction
+        time_start = str(schedule.get("time_start") or "").strip()
+        time_end = str(schedule.get("time_end") or "").strip()
+        if time_start and time_end:
+            try:
+                sh, sm = (int(p) for p in time_start.split(":")[:2])
+                eh, em = (int(p) for p in time_end.split(":")[:2])
+                now_m = now.hour * 60 + now.minute
+                start_m = sh * 60 + sm
+                end_m = eh * 60 + em
+                if end_m <= start_m:
+                    # Overnight window (e.g. 22:00 – 02:00)
+                    if not (now_m >= start_m or now_m < end_m):
+                        return False
+                else:
+                    if not (start_m <= now_m < end_m):
+                        return False
+            except (ValueError, TypeError):
+                pass
+
+        return True
 
     def validate_name(self, value):
         cleaned = (value or "").strip()
@@ -332,11 +380,38 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
                 cleaned.append(tag)
         return cleaned
 
+    def validate_allergens(self, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Allergens must be a list.")
+        allowed = {
+            "gluten", "crustaceans", "eggs", "fish", "peanuts", "soy",
+            "milk", "tree_nuts", "celery", "mustard", "sesame",
+            "sulphites", "lupin", "molluscs",
+        }
+        seen = set()
+        cleaned = []
+        for item in value:
+            key = str(item).strip().lower()[:32]
+            if key in allowed and key not in seen:
+                seen.add(key)
+                cleaned.append(key)
+        return cleaned
+
     def validate_currency(self, value):
         cleaned = (value or "").strip().upper()
         if len(cleaned) != 3 or not cleaned.isalpha():
             raise serializers.ValidationError("Currency must be a 3-letter code (for example, USD).")
         return cleaned
+
+    def validate_stock_qty(self, value):
+        # null = unlimited; any positive integer is valid
+        if value is None:
+            return None
+        if value < 0:
+            raise serializers.ValidationError("Stock quantity must be zero or greater.")
+        return value
 
     def get_category_name(self, instance):
         category = getattr(instance, "category", None)
@@ -447,13 +522,16 @@ class TableLinkSerializer(serializers.ModelSerializer):
     def _resolve_unique_slug(self, base_slug: str, instance_id=None) -> str:
         base = (base_slug or "table").strip("-") or "table"
         base = base[:55]
+        # Single DB round-trip: fetch all slugs sharing the prefix, then check
+        # candidates in memory instead of firing one query per iteration.
+        qs = TableLink.objects.filter(slug__startswith=base)
+        if instance_id is not None:
+            qs = qs.exclude(pk=instance_id)
+        existing = set(qs.values_list("slug", flat=True))
         for idx in range(1, 300):
             suffix = "" if idx == 1 else f"-{idx}"
             candidate = f"{base[: max(55 - len(suffix), 1)]}{suffix}"
-            exists = TableLink.objects.filter(slug=candidate)
-            if instance_id is not None:
-                exists = exists.exclude(pk=instance_id)
-            if not exists.exists():
+            if candidate not in existing:
                 return candidate
         raise serializers.ValidationError({"slug": "Unable to generate unique slug."})
 

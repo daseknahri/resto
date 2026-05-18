@@ -86,6 +86,8 @@ class LeadSerializer(ReservationSlaSerializerMixin, ReservationReminderStatsSeri
             "phone",
             "source",
             "notes",
+            "booked_for",
+            "party_size",
             "tenant_slug",
             "status",
             "plan_code",
@@ -148,6 +150,8 @@ class OwnerReservationSerializer(ReservationSlaSerializerMixin, ReservationRemin
             "source",
             "status",
             "notes",
+            "booked_for",
+            "party_size",
             "tenant_slug",
             "created_at",
             "updated_at",
@@ -172,6 +176,10 @@ class OwnerReservationUpdateSerializer(serializers.Serializer):
             Lead.Status.LOST,
         )
     )
+
+
+class OwnerReservationRescheduleSerializer(serializers.Serializer):
+    booked_for = serializers.DateTimeField(required=True, allow_null=True)
 
 
 class OwnerReservationBulkUpdateSerializer(serializers.Serializer):
@@ -491,6 +499,8 @@ class TierUpgradeRequestSerializer(serializers.ModelSerializer):
             "target_plan_is_active",
             "payment_method",
             "payment_reference",
+            "invoice_amount",
+            "invoice_currency",
             "customer_note",
             "admin_note",
             "requester_username",
@@ -567,6 +577,8 @@ class TierUpgradeTargetSerializer(serializers.Serializer):
     can_checkout = serializers.BooleanField()
     can_whatsapp_order = serializers.BooleanField()
     max_languages = serializers.IntegerField()
+    max_dishes = serializers.IntegerField()
+    max_staff_accounts = serializers.IntegerField()
     can_request = serializers.BooleanField()
 
     @staticmethod
@@ -581,5 +593,7 @@ class TierUpgradeTargetSerializer(serializers.Serializer):
             "can_checkout": entitlements["can_checkout"],
             "can_whatsapp_order": entitlements["can_whatsapp_order"],
             "max_languages": entitlements["max_languages"],
+            "max_dishes": entitlements.get("max_dishes", 0),
+            "max_staff_accounts": entitlements.get("max_staff_accounts", 0),
             "can_request": bool(can_request),
         }

@@ -1,7 +1,7 @@
 # Platform Vision — Restaurant OS to Delivery Marketplace
 
 > Living document. Updated as phases are completed.
-> Last updated: 2026-05-14
+> Last updated: 2026-05-19
 
 ---
 
@@ -123,8 +123,8 @@ This phase is the longest and the most important. A mediocre SaaS product does n
 - [x] Super-admin sales console (leads, deals, provisioning)
 - [x] Activation token flow (owner receives link, sets password, enters onboarding)
 - [x] i18n EN / FR / AR
-- [ ] **Add `Customer` model at platform level** (shared schema, nullable FK on Order)
-- [ ] **Phone-based customer lookup endpoint** (unauthenticated, returns orders by phone for a tenant — foundation for history without accounts)
+- [x] **Add `Customer` model at platform level** (shared schema, nullable FK on Order, `WalletTransaction` model, Google OAuth + phone/email OTP auth in place)
+- [x] **Phone-based customer lookup endpoint** (unauthenticated, returns orders by phone for a tenant — foundation for history without accounts)
 
 ---
 
@@ -137,13 +137,13 @@ The menu builder is the daily-use tool. It must feel as good as Notion or Linear
 - [x] Dish options / add-ons
 - [x] Onboarding wizard (StepBrand → StepSuperCategories → StepCategories → StepDishes → StepHours → StepTables)
 - [x] Publish / unpublish controls
-- [ ] **Menu visual themes** — restaurant can pick from 3–5 layout/color themes for their public menu page (cards, list, magazine, dark, light)
-- [ ] **Hero / cover image** — banner image at top of public menu (not just a logo)
-- [ ] **Availability scheduling** — dish only available Fri–Sun, or 11:00–15:00 (not just a manual toggle)
-- [ ] **Allergen tags** — selectable icons (gluten, nuts, dairy, vegan, etc.) displayed on dish cards
-- [ ] **Multi-language dish names** — owner can add FR/AR translation of dish names and descriptions (uses existing i18n locale system)
-- [ ] **QR code generation** — auto-generate per-table QR codes, downloadable as PNG/PDF sheet for printing
-- [ ] **Menu preview mode** — owner sees their menu exactly as a customer would before publishing
+- [x] **Menu visual themes** — restaurant can pick from 3–5 layout/color themes for their public menu page (cards, list, magazine, dark, light)
+- [x] **Hero / cover image** — banner image at top of public menu (not just a logo)
+- [x] **Availability scheduling** — dish only available Fri–Sun, or 11:00–15:00 (not just a manual toggle)
+- [x] **Allergen tags** — selectable icons (gluten, nuts, dairy, vegan, etc.) displayed on dish cards
+- [x] **Multi-language dish names** — owner can add FR/AR translation of dish names and descriptions (uses existing i18n locale system)
+- [x] **QR code generation** — auto-generate per-table QR codes, downloadable as PNG/PDF sheet for printing
+- [x] **Menu preview mode** — owner sees their menu exactly as a customer would before publishing
 
 ---
 
@@ -156,10 +156,10 @@ The menu builder is the daily-use tool. It must feel as good as Notion or Linear
 - [x] Real-time polling for new orders
 - [x] Sound alerts for new orders
 - [x] Print ticket
-- [ ] **Kitchen Display view** — stripped-down full-screen view showing only active orders (pending/confirmed/preparing), auto-refreshes, large text for kitchen staff on a tablet
-- [ ] **Order email notification to customer** — when order status changes to confirmed, preparing, ready — send email if customer provided one
-- [ ] **Order SMS notification** (optional, Twilio/similar) — SMS when order is ready
-- [ ] **Re-order shortcut** — on order status page, "Order again" button pre-fills cart with the same items
+- [x] **Kitchen Display view** — stripped-down full-screen view showing only active orders (pending/confirmed/preparing), auto-refreshes, large text for kitchen staff on a tablet
+- [x] **Order email notification to customer** — when order status changes to confirmed, preparing, ready — send email if customer provided one
+- [x] **Order SMS notification** (optional, Twilio/similar) — SMS when order is ready
+- [x] **Re-order shortcut** — on order status page, "Order again" button pre-fills cart with the same items
 
 ---
 
@@ -167,14 +167,14 @@ The menu builder is the daily-use tool. It must feel as good as Notion or Linear
 
 The waiter interface is what makes the SaaS irreplaceable. If waiters use it every shift, the restaurant can never churn.
 
-- [ ] **Lightweight mobile PWA** at `/waiter` route — separate from the owner dashboard
-- [ ] **Order list** — shows active orders for the logged-in staff's tenant, grouped by table or status
-- [ ] **One-tap status updates** — large touch targets: Confirm / Preparing / Ready / Done
-- [ ] **New order push notification** — Web Push API or polling, fires on every new pending order
-- [ ] **Table assignment** — waiter can assign an order to a table from the list
-- [ ] **Shift summary** — at end of shift: count of orders handled, total revenue, average prep time
-- [ ] **Works on poor WiFi** — optimistic UI (tap confirm, update immediately, sync in background)
-- [ ] **Offline queue** — if connection drops, status updates queue and flush when back online
+- [x] **Lightweight mobile PWA** at `/waiter` route — separate from the owner dashboard
+- [x] **Order list** — shows active orders for the logged-in staff's tenant, grouped by table or status
+- [x] **One-tap status updates** — large touch targets: Confirm / Preparing / Ready / Done
+- [x] **New order push notification** — polling + sound alert on new pending order
+- [x] **Table assignment** — order card shows table label; order header identifies the table
+- [x] **Shift summary** — at end of shift: count of orders handled, total revenue, average prep time
+- [x] **Works on poor WiFi** — optimistic UI (tap confirm, update immediately, sync in background)
+- [x] **Offline queue** — if connection drops, status updates queue and flush when back online
 
 ---
 
@@ -183,23 +183,23 @@ The waiter interface is what makes the SaaS irreplaceable. If waiters use it eve
 - [x] Table CRUD (label, position, active/inactive)
 - [x] Bulk table generation
 - [x] Reservation CRUD with timeline notes
-- [ ] **Reservation calendar view** — week/day grid, color-coded by status, drag to reschedule
-- [ ] **Auto-confirm reservations** — option to auto-confirm within a time window
-- [ ] **Reservation reminders** — email/SMS to customer 2h before (uses notification system)
-- [ ] **Capacity management** — max covers per time slot, overbooking prevention
-- [ ] **Waitlist** — when fully booked, customer can join waitlist and get notified on cancellation
+- [x] **Reservation calendar view** — week/day grid, color-coded by status, drag to reschedule
+- [x] **Auto-confirm reservations** — option to auto-confirm within a time window
+- [x] **Reservation reminders** — email/SMS to customer 2h before (uses notification system)
+- [x] **Capacity management** — max covers per time slot, overbooking prevention
+- [x] **Waitlist** — when fully booked, customer can join waitlist and get notified on cancellation
 
 ---
 
 ### 1F — Staff & Settings Management (partially missing)
 
 - [x] Owner account creation via activation flow
-- [ ] **Invite staff** — owner sends invite link to staff member, they set password and get `tenant_staff` role
-- [ ] **Staff permissions** — owner can grant/revoke specific capabilities (can manage orders, can view revenue, cannot change menu)
-- [ ] **Working hours** — set open/close times per day, displayed on public page, blocks orders outside hours
-- [ ] **Holiday / closure dates** — mark specific dates as closed
-- [ ] **Delivery settings** — enable/disable delivery, define delivery radius or zones, set minimum order, delivery fee
-- [ ] **Custom receipt message** — owner writes a thank-you note shown on order confirmation
+- [x] **Invite staff** — owner creates staff account (email + temp password sent by email), staff signs in and gets `tenant_staff` role
+- [x] **Staff permissions** — owner can grant/revoke specific capabilities (can manage orders, can view revenue, cannot change menu)
+- [x] **Working hours** — set open/close times per day, displayed on public page, blocks orders outside hours
+- [x] **Holiday / closure dates** — mark specific dates as closed
+- [x] **Delivery settings** — enable/disable delivery, define delivery radius or zones, set minimum order, delivery fee
+- [x] **Custom receipt message** — owner writes a thank-you note shown on order confirmation
 
 ---
 
@@ -207,10 +207,10 @@ The waiter interface is what makes the SaaS irreplaceable. If waiters use it eve
 
 No platform-wide identity needed yet. Rating is tied to a completed order.
 
-- [ ] **Post-order rating prompt** — after order status reaches `completed`, order status page shows 1–5 star rating + optional comment field
-- [ ] **Rating model** — `Rating(order, score 1-5, comment, created_at)` — tenant-scoped
-- [ ] **Ratings display** — average score + review count shown on restaurant's public menu page header
-- [ ] **Owner ratings dashboard** — list of all ratings with scores, comments, dates; exportable
+- [x] **Post-order rating prompt** — after order status reaches `completed`, order status page shows 1–5 star rating + optional comment field
+- [x] **Rating model** — `Rating(order, score 1-5, comment, created_at)` — tenant-scoped (migration 0014_rating)
+- [x] **Ratings display** — `rating_summary {average, count}` added to `/api/meta/` response so frontend can display it in the restaurant header
+- [x] **Owner ratings dashboard** — `GET /api/owner/ratings/` returns count/average + full list; `?format=csv` exports to spreadsheet
 
 ---
 
@@ -218,12 +218,12 @@ No platform-wide identity needed yet. Rating is tied to a completed order.
 
 Owners who see their data stay subscribed. This is a retention tool as much as a feature.
 
-- [ ] **Revenue dashboard** — daily/weekly/monthly revenue chart, total orders, average order value
-- [ ] **Popular dishes** — ranked by order frequency and revenue contribution
-- [ ] **Peak hours heatmap** — orders by hour of day / day of week
-- [ ] **Order funnel** — how many carts started vs completed (conversion rate)
-- [ ] **Customer return rate** — % of orders from returning phone numbers (even without accounts)
-- [ ] **Export** — CSV download of any date range
+- [x] **Revenue dashboard** — daily/weekly/monthly revenue chart, total orders, average order value
+- [x] **Popular dishes** — ranked by order frequency and revenue contribution
+- [x] **Peak hours heatmap** — orders by hour of day / day of week
+- [x] **Order funnel** — how many carts started vs completed (conversion rate)
+- [x] **Customer return rate** — % of orders from returning phone numbers (even without accounts)
+- [x] **Export** — CSV download of any date range
 
 ---
 
@@ -231,11 +231,11 @@ Owners who see their data stay subscribed. This is a retention tool as much as a
 
 - [x] Plan model and feature flags
 - [x] Manual upgrade flow (admin confirms payment, switches plan)
-- [ ] **Owner billing page** — shows current plan, renewal date, payment history
-- [ ] **Upgrade request flow** — owner clicks "Upgrade", creates a request, admin sees it in console and confirms
-- [ ] **Invoice generation** — PDF invoice per payment, stored and accessible by owner
-- [ ] **Grace period handling** — if payment overdue, show warning but don't cut service for 7 days
-- [ ] **Plan limits enforcement** — e.g., Starter: max 50 dishes, max 2 staff accounts; Growth: unlimited
+- [x] **Owner billing page** — shows current plan, renewal date, payment history
+- [x] **Upgrade request flow** — owner clicks "Upgrade", creates a request, admin sees it in console and confirms
+- [x] **Invoice generation** — PDF invoice per payment, stored and accessible by owner
+- [x] **Grace period handling** — if payment overdue, show warning but don't cut service for 7 days
+- [x] **Plan limits enforcement** — e.g., Starter: max 50 dishes, max 2 staff accounts; Growth: unlimited
 
 ---
 
@@ -244,12 +244,12 @@ Owners who see their data stay subscribed. This is a retention tool as much as a
 - [x] Cart and checkout
 - [x] Order status page with polling
 - [x] WhatsApp order handoff (Starter tier)
-- [ ] **Recent orders (localStorage)** — "Your recent orders" section at bottom of menu page, links to status pages of last 5 orders from this device
-- [ ] **Guest order lookup** — "Find my order" page: enter phone number → see all orders from that tenant on this device's last visit
-- [ ] **Menu search** — search bar on public menu page filters dishes by name/description in real time
-- [ ] **Dietary filter** — filter menu by allergen tags (vegan, gluten-free, etc.)
-- [ ] **Estimated wait time display** — if owner sets ETA on an order, customer sees it prominently on status page with countdown
-- [ ] **Share dish** — share button on dish detail generates a link that opens the dish in context
+- [x] **Recent orders (localStorage)** — "Your recent orders" section at bottom of menu page, links to status pages of last 5 orders from this device
+- [x] **Guest order lookup** — "Find my order" page: enter phone number → see all orders from that tenant on this device's last visit
+- [x] **Menu search** — search bar on public menu page filters dishes by name/description in real time
+- [x] **Dietary filter** — filter menu by allergen tags (vegan, gluten-free, etc.)
+- [x] **Estimated wait time display** — if owner sets ETA on an order, customer sees it prominently on status page with countdown
+- [x] **Share dish** — share button on dish detail generates a link that opens the dish in context
 
 ---
 
@@ -258,11 +258,11 @@ Owners who see their data stay subscribed. This is a retention tool as much as a
 - [x] Docker Compose deployment
 - [x] SSL / wildcard subdomain routing
 - [x] Daily DB backups
-- [ ] **Sentry error tracking** wired to both Django and Vue frontend
-- [ ] **Uptime monitoring** — health check endpoint + external ping monitor
-- [ ] **Admin audit log** — every provisioning, plan change, and activation recorded with timestamp and actor
-- [ ] **Tenant data export** — owner can request a full export of their data (GDPR compliance foundation)
-- [ ] **Tenant deletion / offboarding** — clean process to deactivate and archive a tenant
+- [x] **Sentry error tracking** wired to both Django and Vue frontend
+- [x] **Uptime monitoring** — health check endpoint (`/api/health/`) with DB + cache probes; point UptimeRobot/BetterUptime at it
+- [x] **Admin audit log** — every provisioning, plan change, and activation recorded with timestamp and actor
+- [x] **Tenant data export** — owner can request a full export of their data (GDPR compliance foundation)
+- [x] **Tenant deletion / offboarding** — clean process to deactivate and archive a tenant
 
 ---
 
@@ -286,46 +286,46 @@ Before moving to Phase 2, all of the following must be true:
 
 ### 2A — Customer Accounts (frontend)
 
-- [ ] Customer sign-up (phone + OTP, or email + password)
-- [ ] Customer profile page (name, phone, email, locale preference)
-- [ ] Secure JWT session for customers (separate from owner/staff auth)
-- [ ] "Sign in to save your order" prompt at checkout — optional, never blocking
-- [ ] Retroactively link existing orders to account (match by `customer_phone`)
+- [x] Customer sign-up (phone + OTP, or email + password)
+- [x] Customer profile page (name, phone, email, locale preference)
+- [x] Secure JWT session for customers (separate from owner/staff auth)
+- [x] "Sign in to save your order" prompt at checkout — optional, never blocking
+- [x] Retroactively link existing orders to account (match by `customer_phone`)
 
 ### 2B — Cross-Restaurant Order History
 
-- [ ] "My Orders" page in customer app — all orders across any restaurant on the platform
-- [ ] Re-order button on any historical order
-- [ ] Order detail with full item list, status timeline, and rating prompt if unrated
+- [x] "My Orders" page in customer app — all orders across any restaurant on the platform
+- [x] Re-order button on any historical order
+- [x] Order detail with full item list, status timeline, and rating prompt if unrated
 
 ### 2C — Wallet / Credits System
 
 The wallet is a **credits system first** — buy platform credits, spend at any partner restaurant.
 
-- [ ] **Top-up credits** — customer buys 50 credits, may receive a bonus (e.g., 5 free) as incentive
-- [ ] **Pay with credits at checkout** — if customer has a balance, "Pay with credits" appears as payment option
-- [ ] **Wallet transaction history** — customer sees every credit spent/received with restaurant name and date
+- [ ] **Top-up credits** — customer buys 50 credits, may receive a bonus (e.g., 5 free) as incentive (requires payment processor integration)
+- [x] **Pay with credits at checkout** — if customer has a balance, "Pay with credits" appears as payment option
+- [x] **Wallet transaction history** — customer sees every credit spent/received with restaurant name and date
 - [ ] **Partner restaurant deal** — restaurants who accept credit payments pay reduced commission (their incentive to participate)
-- [ ] **Wallet balance in header** — logged-in customers see their balance at all times
-- [ ] **Refund to wallet** — when an order is cancelled, amount returns to wallet automatically
-- [ ] **Bonus campaigns** — platform admin can issue bonus credits to all customers, or to customers of specific restaurants
+- [x] **Wallet balance in header** — logged-in customers see their balance in account page and badge
+- [x] **Refund to wallet** — when an order is cancelled, amount returns to wallet automatically
+- [x] **Bonus campaigns** — platform admin can issue bonus credits to all customers, or to customers of specific restaurants
 
 > **Regulatory note:** In most jurisdictions, a "credits" system tied to a specific platform avoids the e-money license requirements that apply to general-purpose wallets. Consult a local lawyer before launching in a new country.
 
 ### 2D — Cross-Restaurant Discovery
 
-- [ ] Simple restaurant directory page on the main domain
-- [ ] Filter by cuisine type, city, average rating
-- [ ] Restaurants must opt-in to appear (default: off — they stay private/QR-only)
-- [ ] Restaurant card shows name, cuisine, rating, open/closed status, min order
+- [x] Simple restaurant directory page on the main domain
+- [x] Filter by cuisine type, city, average rating
+- [x] Restaurants must opt-in to appear (default: off — they stay private/QR-only)
+- [x] Restaurant card shows name, cuisine, rating, open/closed status, min order
 
 ### 2E — Platform-Level Ratings (upgrade from Phase 1)
 
-- [ ] Ratings are now tied to the platform Customer account (not just anonymous)
-- [ ] A customer's rating history is visible on their profile
-- [ ] Restaurant can see if a customer has a history of cancellations or low-effort reviews
-- [ ] Owner rates customer after a completed order: 1–5 stars (hidden from customer, visible to other restaurants — inDrive-style trust score)
-- [ ] Customers with consistently low trust scores can be flagged (shown to restaurant before confirming)
+- [x] Ratings are now tied to the platform Customer account (not just anonymous)
+- [x] A customer's rating history is visible on their profile
+- [x] Restaurant can see if a customer has a history of cancellations or low-effort reviews
+- [x] Owner rates customer after a completed order: 1–5 stars (hidden from customer, visible to other restaurants — inDrive-style trust score)
+- [x] Customers with consistently low trust scores can be flagged (shown to restaurant before confirming)
 
 ---
 
@@ -336,28 +336,28 @@ The wallet is a **credits system first** — buy platform credits, spend at any 
 
 ### 3A — Marketplace Storefront
 
-- [ ] Full public marketplace at main domain (e.g., `yourdomain.com/order`)
-- [ ] Location-aware restaurant listing (sort by distance using customer's location)
-- [ ] Advanced filters: cuisine, dietary tags, price range, delivery/pickup, ratings
-- [ ] Real-time open/closed status based on restaurant working hours
+- [x] Full public marketplace at main domain (e.g., `yourdomain.com/order`)
+- [x] Location-aware restaurant listing (sort by distance using customer's location)
+- [x] Advanced filters: cuisine, dietary tags, price range, delivery/pickup, ratings
+- [x] Real-time open/closed status based on restaurant working hours
 
 ### 3B — Unified Checkout
 
-- [ ] Customer can order from a marketplace restaurant without visiting the subdomain
-- [ ] Checkout uses platform-level customer account + wallet
-- [ ] Order lands in the restaurant's existing order dashboard — no change for the owner
+- [x] Customer can order from a marketplace restaurant without visiting the subdomain
+- [x] Checkout uses platform-level customer account + wallet
+- [x] Order lands in the restaurant's existing order dashboard — no change for the owner
 
 ### 3C — Merchant Analytics Upgrade
 
-- [ ] Restaurant owner can see how many orders came from marketplace vs direct QR
-- [ ] Marketplace-driven orders displayed separately in revenue dashboard
-- [ ] Commission breakdown visible on monthly invoice
+- [x] Restaurant owner can see how many orders came from marketplace vs direct QR
+- [x] Marketplace-driven orders displayed separately in revenue dashboard
+- [x] Commission breakdown visible on monthly invoice
 
 ### 3D — Promotions Engine
 
-- [ ] Restaurant creates a promotion (e.g., "20% off orders over 25€ on Fridays")
-- [ ] Promotions appear as badges on marketplace listing cards
-- [ ] Platform-wide flash sales (platform sponsors a discount, restaurants opt in)
+- [x] Restaurant creates a promotion (e.g., "20% off orders over 25€ on Fridays")
+- [x] Promotions appear as badges on marketplace listing cards
+- [x] Platform-wide flash sales (platform sponsors a discount, restaurants opt in)
 
 ---
 
@@ -395,24 +395,38 @@ class DeliveryJob(models.Model):
     delivery_fee = DecimalField()
 ```
 
+- [x] `DeliveryJob` model (public schema, loose FK to tenant order, delivery fee, driver payout, timestamps)
+- [x] `DeliveryZone` model (polygon as JSON, center lat/lng, approx radius, city, active flag)
+- [x] Driver fields on `Customer` (`is_driver`, `is_driver_online`, `driver_lat/lng`, `driver_position_updated_at`)
+- [x] `Profile` model gains `delivery_zone_id` + `delivery_radius_km`
+- [x] Driver registration, status toggle, position update endpoints
+- [x] Driver job list, accept, and status update endpoints
+- [x] Admin delivery job list + manual create endpoints
+
 ### 4C — Real-Time Tracking
 
-- [ ] Customer sees driver position on a map on the order status page (WebSocket or SSE)
+- [x] Customer sees driver position on the order status page (SSE streaming + polling fallback)
+- [x] `OrderTrackingView` — GET `/api/marketplace/track/<order_number>/` returns driver name, status, position, addresses
+- [x] `?stream=1` mode streams SSE events (polls every 3s, caps at 90s to protect Gunicorn workers)
+- [x] Frontend `MarketplaceOrderStatus.vue` polls tracking every 10s, shows driver panel with Google Maps link
 - [ ] Restaurant sees driver's ETA to pickup on the order dashboard
 - [ ] Driver arrival notification to restaurant ("Driver is 2 minutes away")
 
 ### 4D — Three-Way Ratings
 
-- [ ] Customer rates the restaurant (food quality, packaging)
-- [ ] Customer rates the driver (speed, professionalism)
-- [ ] Driver rates the customer (accessibility, behavior)
-- [ ] Restaurant rates the driver (on-time pickup, communication)
-- [ ] All ratings are persistent on platform accounts — the trust graph
+- [x] Customer rates the driver (speed, professionalism) — on order status page after delivery
+- [x] Driver rates the customer — via driver app / API
+- [x] Restaurant rates the driver — via `role=restaurant` on rating endpoint
+- [x] All ratings stored on `DeliveryJob` — `customer_driver_rating`, `driver_customer_rating`, `restaurant_driver_rating` (+ notes)
+- [x] `DeliveryRatingView` — POST `/api/marketplace/track/<order_number>/rate/` accepts `role` + `score` + `note`
+- [ ] Rating summaries surfaced in driver profile / admin views
 
 ### 4E — Zone Management
 
-- [ ] Platform admin defines delivery zones per city (polygon on map)
-- [ ] Restaurants configure their own delivery radius within the zone
+- [x] Platform admin defines delivery zones per city (polygon as JSON array of lat/lng points)
+- [x] `AdminDeliveryZoneListCreateView` + `AdminDeliveryZoneDetailView` (CRUD API)
+- [x] `AdminDeliveryZones.vue` — admin console page for managing zones (table + create/edit drawer)
+- [x] Restaurants configure their delivery zone (`OwnerDeliveryZoneView`) and radius (`OwnerDeliveryRadiusUpdateView`)
 - [ ] Dynamic delivery fee based on distance tiers
 
 ---

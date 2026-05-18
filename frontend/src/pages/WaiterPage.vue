@@ -18,10 +18,20 @@
           :class="tab.key === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-600 text-slate-200'"
         >{{ tab.count }}</span>
       </button>
+      <!-- Shift summary tab -->
+      <button
+        class="shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
+        :class="activeTab === 'shift'
+          ? 'border-violet-500/60 bg-violet-500/15 text-violet-300'
+          : 'border-slate-700/50 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
+        @click="openShiftSummary"
+      >
+        {{ t('waiterPage.tabShift') }}
+      </button>
     </div>
 
-    <!-- Loading skeleton -->
-    <div v-if="waiter.loading" class="space-y-3">
+    <!-- Loading skeleton (orders only) -->
+    <div v-if="activeTab !== 'shift' && waiter.loading" class="space-y-3">
       <div
         v-for="i in 3"
         :key="i"
@@ -29,17 +39,17 @@
       />
     </div>
 
-    <!-- Error -->
-    <div v-else-if="waiter.error" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-5 text-center">
+    <!-- Error (orders only) -->
+    <div v-else-if="activeTab !== 'shift' && waiter.error" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-5 text-center">
       <p class="text-sm text-red-300">{{ waiter.error }}</p>
       <button class="mt-3 text-xs text-slate-400 underline hover:text-slate-300" @click="reload">
         {{ t('waiterPage.retry') }}
       </button>
     </div>
 
-    <!-- Empty state -->
+    <!-- Empty state (orders only) -->
     <div
-      v-else-if="visibleOrders.length === 0"
+      v-else-if="activeTab !== 'shift' && visibleOrders.length === 0"
       class="rounded-2xl border border-slate-700/30 bg-slate-800/20 px-6 py-12 text-center"
     >
       <p class="text-2xl">✓</p>
@@ -47,8 +57,64 @@
       <p class="mt-1 text-xs text-slate-500">{{ t('waiterPage.noActiveOrdersBody') }}</p>
     </div>
 
+    <!-- Shift summary panel -->
+    <div v-else-if="activeTab === 'shift'" class="space-y-4">
+      <!-- Shift start picker -->
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">{{ t('waiterPage.shiftSince') }}</label>
+          <input
+            v-model="shiftSinceInput"
+            type="datetime-local"
+            class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+        <button
+          class="rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-500/25 disabled:opacity-50 transition-colors"
+          :disabled="waiter.shiftSummaryLoading"
+          @click="loadShiftSummary"
+        >
+          {{ waiter.shiftSummaryLoading ? t('waiterPage.shiftLoading') : t('waiterPage.shiftRefresh') }}
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div v-if="waiter.shiftSummaryError" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-4 text-center text-sm text-red-300">
+        {{ waiter.shiftSummaryError }}
+      </div>
+
+      <!-- Stats grid -->
+      <div v-else-if="waiter.shiftSummary" class="grid grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
+          <p class="text-3xl font-bold text-white">{{ waiter.shiftSummary.orders_handled }}</p>
+          <p class="text-[11px] text-slate-400 uppercase tracking-wide">{{ t('waiterPage.shiftOrders') }}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
+          <p class="text-3xl font-bold text-emerald-300">{{ shiftRevenue }}</p>
+          <p class="text-[11px] text-slate-400 uppercase tracking-wide">{{ t('waiterPage.shiftRevenue') }}</p>
+        </div>
+        <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
+          <p class="text-3xl font-bold text-sky-300">
+            {{ waiter.shiftSummary.average_prep_time_minutes != null ? waiter.shiftSummary.average_prep_time_minutes : '—' }}
+            <span v-if="waiter.shiftSummary.average_prep_time_minutes != null" class="text-base font-normal text-sky-400/70">m</span>
+          </p>
+          <p class="text-[11px] text-slate-400 uppercase tracking-wide">{{ t('waiterPage.shiftAvgPrep') }}</p>
+        </div>
+      </div>
+
+      <!-- Period caption -->
+      <p v-if="waiter.shiftSummary" class="text-center text-xs text-slate-500">
+        {{ t('waiterPage.shiftPeriod', { hours: waiter.shiftSummary.period_hours }) }}
+      </p>
+
+      <!-- Empty state while not yet loaded -->
+      <div v-else class="rounded-2xl border border-slate-700/30 bg-slate-800/20 px-6 py-12 text-center">
+        <p class="text-sm text-slate-400">{{ t('waiterPage.shiftHint') }}</p>
+      </div>
+    </div>
+
     <!-- Order cards -->
-    <div v-else class="space-y-3">
+    <div v-else-if="activeTab !== 'shift'" class="space-y-3">
       <div
         v-for="order in visibleOrders"
         :key="order.id"
@@ -132,6 +198,42 @@ import { useWaiterStore } from "../stores/waiter";
 
 const { t } = useI18n();
 const waiter = useWaiterStore();
+
+// ── Shift summary ──────────────────────────────────────────────────────────────
+// Default shift start: 8 hours ago, formatted for datetime-local input
+const _defaultSince = () => {
+  const d = new Date(Date.now() - 8 * 60 * 60 * 1000);
+  // Format as YYYY-MM-DDTHH:MM (local time, no seconds/tz for input compatibility)
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const shiftSinceInput = ref(_defaultSince());
+
+const shiftRevenue = computed(() => {
+  const s = waiter.shiftSummary;
+  if (!s) return "—";
+  const num = parseFloat(s.total_revenue || "0");
+  return `${num.toFixed(2)}${s.currency ? " " + s.currency : ""}`;
+});
+
+const openShiftSummary = () => {
+  activeTab.value = "shift";
+  if (!waiter.shiftSummary) loadShiftSummary();
+};
+
+const loadShiftSummary = () => {
+  // Convert local datetime-local value to ISO string
+  const raw = shiftSinceInput.value;
+  let sinceIso = null;
+  if (raw) {
+    try {
+      sinceIso = new Date(raw).toISOString();
+    } catch {
+      sinceIso = null;
+    }
+  }
+  waiter.fetchShiftSummary(sinceIso);
+};
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 const activeTab = ref("all");

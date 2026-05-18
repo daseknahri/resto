@@ -130,5 +130,7 @@ def plan_entitlements(plan) -> dict:
         "can_whatsapp_order": can_whatsapp_order,
         "can_in_app_order": can_in_app_order,
         "max_languages": int(getattr(plan, "max_languages", 1) or 1),
+        "max_dishes": int(getattr(plan, "max_dishes", 0) or 0),
+        "max_staff_accounts": int(getattr(plan, "max_staff_accounts", 0) or 0),
         "is_active": bool(getattr(plan, "is_active", True)),
     }

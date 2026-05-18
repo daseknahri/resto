@@ -9,6 +9,15 @@ class Plan(models.Model):
     can_checkout = models.BooleanField(default=False)
     can_whatsapp_order = models.BooleanField(default=False)
     max_languages = models.PositiveIntegerField(default=1)
+    # 0 = unlimited
+    max_dishes = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum number of dishes allowed. 0 means unlimited.",
+    )
+    max_staff_accounts = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum number of staff accounts allowed. 0 means unlimited.",
+    )
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:
@@ -54,6 +63,21 @@ class Tenant(TenantMixin):
     suspended_at = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
     canceled_reason = models.CharField(max_length=255, blank=True)
+    payment_overdue_since = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when subscription payment is overdue. Tenant enters a 7-day grace period; after that the account should be suspended.",
+    )
+    deletion_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Set when the owner requests account deletion. Admin should review and complete the offboarding.",
+    )
+    deletion_reason = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Optional reason provided by the owner when requesting deletion.",
+    )
 
     auto_create_schema = True
 
@@ -88,6 +112,135 @@ class Profile(models.Model):
     language = models.CharField(max_length=5, default="en")
     logo_url = models.URLField(blank=True)
     hero_url = models.URLField(blank=True)
+    delivery_enabled = models.BooleanField(
+        default=True,
+        help_text="When False, the delivery fulfillment option is hidden from the customer checkout.",
+    )
+    delivery_fee = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Fixed delivery fee added to the order total for delivery orders (0 = free delivery).",
+    )
+    delivery_minimum_order = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Minimum order total required to unlock the delivery option (0 = no minimum).",
+    )
+    delivery_zone_description = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Short description of the delivery area shown to customers (e.g. '5 km radius — city centre only').",
+    )
+    receipt_message = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Optional thank-you note shown to the customer on their order confirmation page.",
+    )
+    MENU_THEME_CHOICES = [
+        ("dark", "Dark (default)"),
+        ("light", "Light"),
+        ("warm", "Warm"),
+    ]
+    menu_theme = models.CharField(
+        max_length=20,
+        choices=MENU_THEME_CHOICES,
+        default="dark",
+        help_text="Visual colour theme for the public-facing menu page.",
+    )
+    sms_notifications_enabled = models.BooleanField(
+        default=False,
+        help_text="When enabled, customers receive an SMS when their order status changes to 'ready'. Requires Twilio credentials in environment.",
+    )
+    auto_confirm_reservations = models.BooleanField(
+        default=False,
+        help_text="Automatically confirm (status → won) new reservation requests that are far enough in advance.",
+    )
+    auto_confirm_min_hours = models.PositiveSmallIntegerField(
+        default=24,
+        help_text="Minimum hours in advance a reservation must be booked to qualify for auto-confirm. 0 = always auto-confirm regardless of timing.",
+    )
+    max_covers_per_slot = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Maximum number of covers (guests) per time slot. 0 = unlimited — capacity management disabled.",
+    )
+    SLOT_DURATION_CHOICES = [
+        (30, "30 minutes"),
+        (60, "1 hour"),
+        (90, "1.5 hours"),
+        (120, "2 hours"),
+    ]
+    slot_duration_minutes = models.PositiveSmallIntegerField(
+        default=60,
+        choices=SLOT_DURATION_CHOICES,
+        help_text="Duration of each reservation time slot in minutes. Used when max_covers_per_slot > 0.",
+    )
+    reservation_reminders_enabled = models.BooleanField(
+        default=False,
+        help_text="When enabled, customers receive an email (and SMS if configured) ~2 hours before their confirmed reservation.",
+    )
+    MENU_CARD_LAYOUT_CHOICES = [
+        ("row",     "Row (image-right compact card — Wolt/Deliveroo style)"),
+        ("card",    "Card (image-top grid card)"),
+        ("compact", "Compact (name + price + add button, single line)"),
+    ]
+    menu_card_layout = models.CharField(
+        max_length=10,
+        choices=MENU_CARD_LAYOUT_CHOICES,
+        default="row",
+        help_text="Controls how dish items appear on the public menu page.",
+    )
+    # ── Platform directory & marketplace ─────────────────────────────────────
+    directory_opt_in = models.BooleanField(
+        default=False,
+        help_text="Show this restaurant in the platform's public directory. Off by default.",
+    )
+    cuisine_type = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="Cuisine category shown in the directory (e.g. Italian, Moroccan, Japanese).",
+    )
+    city = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="City shown in the directory.",
+    )
+    # Coordinates for distance-aware marketplace sorting.
+    lat = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Latitude of the restaurant (decimal degrees). Used for distance sorting in the marketplace.",
+    )
+    lng = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Longitude of the restaurant (decimal degrees). Used for distance sorting in the marketplace.",
+    )
+    # 1 = budget (€), 2 = mid-range (€€), 3 = premium (€€€)
+    PRICE_TIER_CHOICES = [(1, "€"), (2, "€€"), (3, "€€€")]
+    price_tier = models.PositiveSmallIntegerField(
+        default=2,
+        choices=PRICE_TIER_CHOICES,
+        help_text="General price range indicator shown in the marketplace.",
+    )
+    # Freeform dietary / feature tags (e.g. ['vegetarian', 'halal', 'gluten-free'])
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Dietary and feature tags used for marketplace filtering.",
+    )
+
+    # ── Delivery zone & radius ─────────────────────────────────────────────────
+    delivery_zone_id = models.IntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="ID of the DeliveryZone this restaurant is assigned to (public schema).",
+    )
+    delivery_radius_km = models.FloatField(
+        null=True, blank=True,
+        help_text="Maximum delivery distance in km from the restaurant's coordinates.",
+    )
+
     is_open = models.BooleanField(default=True)
     is_menu_temporarily_disabled = models.BooleanField(default=False)
     menu_disabled_note = models.CharField(max_length=180, blank=True)

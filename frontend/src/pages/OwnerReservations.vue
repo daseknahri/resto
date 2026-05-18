@@ -14,6 +14,19 @@
           </div>
         </div>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <!-- View toggle -->
+          <div class="col-span-2 flex rounded-xl border border-slate-700 overflow-hidden sm:col-span-1">
+            <button
+              class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
+              @click="viewMode = 'list'"
+            >{{ t("ownerReservations.viewList") }}</button>
+            <button
+              class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="viewMode === 'calendar' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
+              @click="viewMode = 'calendar'"
+            >{{ t("ownerReservations.viewCalendar") }}</button>
+          </div>
           <button class="ui-btn-primary w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="loading" @click="fetchReservations">
             <AppIcon name="refresh" class="owner-res-icon" />
             {{ loading ? t("common.loading") : t("common.refresh") }}
@@ -209,6 +222,33 @@
         </div>
       </details>
 
+      <!-- Calendar view -->
+      <ReservationCalendar
+        v-if="viewMode === 'calendar'"
+        @select="selectedCalendarRes = $event"
+        @rescheduled="toast.show(t('ownerReservations.rescheduled'), 'success')"
+      />
+
+      <!-- Selected calendar reservation detail (quick panel) -->
+      <div
+        v-if="viewMode === 'calendar' && selectedCalendarRes"
+        class="rounded-2xl border border-slate-700/60 bg-slate-900/80 p-4 space-y-2 text-sm"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="font-semibold text-white">{{ selectedCalendarRes.name }}</p>
+            <p class="text-xs text-slate-400">{{ selectedCalendarRes.phone }} · {{ selectedCalendarRes.email }}</p>
+          </div>
+          <button class="text-xs text-slate-500 hover:text-slate-300" @click="selectedCalendarRes = null">✕</button>
+        </div>
+        <p v-if="selectedCalendarRes.booked_for" class="text-xs text-slate-300">
+          {{ t("ownerReservations.bookedFor") }}: {{ new Date(selectedCalendarRes.booked_for).toLocaleString() }}
+          <span v-if="selectedCalendarRes.party_size"> · {{ selectedCalendarRes.party_size }} {{ t("ownerReservations.guests") }}</span>
+        </p>
+        <p v-if="selectedCalendarRes.notes" class="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-line">{{ selectedCalendarRes.notes }}</p>
+      </div>
+
+      <template v-if="viewMode === 'list'">
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
       <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
         <article v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]"></article>
@@ -483,6 +523,7 @@
           </button>
         </div>
       </div>
+      </template>
     </section>
   </section>
 </template>
@@ -490,12 +531,15 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
+import ReservationCalendar from "../components/ReservationCalendar.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
 
 const toast = useToastStore();
 const { t, formatDateTime } = useI18n();
+const viewMode = ref("list"); // "list" | "calendar"
+const selectedCalendarRes = ref(null);
 const reservations = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -530,6 +574,9 @@ const pagination = ref({
   has_prev: false,
 });
 
+// Server-reported counts across all pages — populated by fetchReservations.
+const serverCounts = ref({ total: 0, new: 0, overdue_new: 0, contacted: 0, won: 0, lost: 0 });
+
 const statusOptions = computed(() => [
   { value: "", label: t("ownerReservations.allStatuses") },
   { value: "new", label: t("ownerReservations.new") },
@@ -545,18 +592,16 @@ const reminderOptions = computed(() => [
   { value: "opened", label: t("ownerReservations.opened") },
   { value: "none", label: t("ownerReservations.noReminders") },
 ]);
-const statusCounts = computed(() => {
-  // Use the server-reported total for the overall count; per-status counts
-  // are derived from the current page only (server doesn't return them).
-  const rows = Array.isArray(reservations.value) ? reservations.value : [];
-  return {
-    total: pagination.value.total || rows.length,
-    new: rows.filter((item) => item?.status === "new").length,
-    contacted: rows.filter((item) => item?.status === "contacted").length,
-    won: rows.filter((item) => item?.status === "won").length,
-    overdue: rows.filter((item) => item?.sla_state === "overdue").length,
-  };
-});
+const statusCounts = computed(() => ({
+  // All figures come from the server-side counts dict so they reflect the full
+  // dataset, not just the current page.  Falls back to pagination.total before
+  // the first successful API response.
+  total: serverCounts.value.total || pagination.value.total,
+  new: serverCounts.value.new,
+  contacted: serverCounts.value.contacted,
+  won: serverCounts.value.won,
+  overdue: serverCounts.value.overdue_new,
+}));
 const activeStatusLabel = computed(() => statusOptions.value.find((option) => option.value === statusFilter.value)?.label || t("ownerReservations.allStatuses"));
 const activeReminderLabel = computed(() => reminderOptions.value.find((option) => option.value === reminderFilter.value)?.label || t("ownerReservations.allReminders"));
 const activeFilterSummary = computed(() => `${activeStatusLabel.value} / ${activeReminderLabel.value}`);
@@ -706,6 +751,7 @@ const fetchReservations = async () => {
       reservations.value = Array.isArray(payload.results) ? payload.results : [];
       pagination.value = payload.pagination || pagination.value;
       page.value = Number(pagination.value.page || page.value);
+      if (payload.counts) serverCounts.value = { ...serverCounts.value, ...payload.counts };
     }
     selectedIds.value = [];
   } catch (err) {

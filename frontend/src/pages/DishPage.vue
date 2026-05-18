@@ -44,6 +44,8 @@
               <span v-for="tag in dish.tags" :key="tag" class="ui-chip">{{ t(`dishPage.tag_${tag}`) }}</span>
             </template>
             <span v-if="isBrowseOnlyPlan" class="ui-chip bg-sky-500/20 text-sky-200">{{ t('dishPage.menuOnly') }}</span>
+            <span v-if="dish.is_available === false" class="ui-chip border-red-500/40 bg-red-500/10 text-red-300 text-[10px]">{{ t('menu.soldOut') }}</span>
+            <span v-if="dish.is_schedule_available === false" class="ui-chip border-slate-600/50 bg-slate-800/60 text-slate-400 text-[10px]">{{ t('menu.notAvailableNow') }}</span>
           </div>
           <div class="flex items-end justify-between gap-3">
             <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ dish.name }}</h1>
@@ -236,6 +238,13 @@
                       : t('dishPage.addRestaurantPhoneToEnable')
                 }}
               </button>
+              <button
+                class="ui-btn-outline w-full justify-center"
+                @click="shareDish"
+              >
+                <AppIcon name="share" class="h-3.5 w-3.5" />
+                {{ t('dishPage.shareDish') }}
+              </button>
             </div>
 
             <p v-if="hasRequiredMissing" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
@@ -294,6 +303,14 @@
           <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
           <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
         </span>
+        <!-- Share button (icon-only on mobile to save space) -->
+        <button
+          class="shrink-0 rounded-xl border border-slate-700 bg-slate-800/60 p-2.5 text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
+          :aria-label="t('dishPage.shareDish')"
+          @click="shareDish"
+        >
+          <AppIcon name="share" class="h-4 w-4" />
+        </button>
         <button
           class="ui-btn-primary ml-auto px-4 py-2"
           :disabled="orderingDisabled"
@@ -470,11 +487,15 @@ const hasRequiredMissing = computed(
   () => hasUngroupedRequiredMissing.value || hasGroupMissing.value
 );
 
+const isDishSoldOut = computed(() => dish.value?.is_available === false);
+const isDishScheduleUnavailable = computed(() => dish.value?.is_schedule_available === false);
 const orderingDisabled = computed(
   () =>
     hasRequiredMissing.value ||
     !isRestaurantOpen.value ||
-    isBrowseOnlyPlan.value
+    isBrowseOnlyPlan.value ||
+    isDishSoldOut.value ||
+    isDishScheduleUnavailable.value
 );
 
 const canWhatsappShare = computed(
@@ -500,6 +521,14 @@ const decrementQty = () => {
 const addToCart = () => {
   if (!isRestaurantOpen.value) {
     toast.show(t('dishPage.restaurantCurrentlyClosed'), 'error');
+    return;
+  }
+  if (isDishSoldOut.value) {
+    toast.show(t('menu.soldOutToast'), 'error');
+    return;
+  }
+  if (isDishScheduleUnavailable.value) {
+    toast.show(t('menu.notAvailableNow'), 'error');
     return;
   }
   if (isBrowseOnlyPlan.value) {
@@ -558,6 +587,32 @@ const shareWhatsapp = () => {
     'noopener,noreferrer'
   );
   toast.show(t('dishPage.openingWhatsApp'), 'info');
+};
+
+// ── Share dish ────────────────────────────────────────────────────────────────
+
+const shareDish = async () => {
+  if (!dish.value) return;
+  const url = window.location.href;
+  const title = dish.value.name || '';
+  const text = dish.value.description ? `${dish.value.description.slice(0, 100)}` : title;
+
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title, text, url });
+      return; // native sheet handles feedback
+    } catch {
+      // User cancelled or share failed — fall through to clipboard copy
+    }
+  }
+
+  // Clipboard fallback
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.show(t('dishPage.shareDishCopied'), 'success');
+  } catch {
+    toast.show(t('dishPage.shareDishFailed'), 'error');
+  }
 };
 
 watch(

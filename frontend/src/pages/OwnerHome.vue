@@ -88,11 +88,23 @@
           </span>
         </summary>
         <div v-if="dishAvailOpen" class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2">
-          <input
-            v-model.trim="dishAvailSearch"
-            class="ui-input mb-2 text-xs"
-            :placeholder="t('common.search')"
-          />
+          <!-- Search + morning reset row -->
+          <div class="mb-2 flex items-center gap-2">
+            <input
+              v-model.trim="dishAvailSearch"
+              class="ui-input flex-1 text-xs"
+              :placeholder="t('common.search')"
+            />
+            <button
+              v-if="soldOutCount > 0"
+              class="shrink-0 rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+              :disabled="resettingAvailability"
+              :title="t('ownerHome.resetAvailabilityHint')"
+              @click="resetAllAvailability"
+            >
+              {{ resettingAvailability ? "…" : t("ownerHome.resetAllAvailable") }}
+            </button>
+          </div>
           <div v-if="!dishesData.length" class="py-2 text-center text-xs text-slate-500">
             {{ t("ownerHome.noDishesLoaded") }}
           </div>
@@ -100,22 +112,40 @@
             v-for="dish in filteredDishesAvail"
             :key="dish.id"
             class="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
-            :class="!dish.is_published ? 'opacity-60' : ''"
+            :class="!dish.is_available ? 'opacity-70' : ''"
           >
             <div class="min-w-0">
               <p class="truncate text-xs font-medium text-slate-100">{{ dish.name }}</p>
               <p class="text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
             </div>
-            <button
-              class="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-50"
-              :class="dish.is_published
-                ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
-                : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
-              :disabled="togglingDishId === dish.id"
-              @click="toggleDishPublished(dish)"
-            >
-              {{ togglingDishId === dish.id ? "…" : (dish.is_published ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
-            </button>
+            <!-- Stock qty input: blank = unlimited (∞), number = tracked inventory -->
+            <div class="flex shrink-0 items-center gap-1.5">
+              <div class="flex flex-col items-center gap-0.5">
+                <label class="text-[8px] uppercase tracking-wider text-slate-600">{{ t("ownerHome.stockLabel") }}</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  :value="dish.stock_qty ?? ''"
+                  :placeholder="t('ownerHome.stockUnlimited')"
+                  :disabled="settingStockId === dish.id"
+                  class="w-14 rounded-lg border border-slate-700 bg-slate-900/80 px-1.5 py-0.5 text-center text-[10px] text-slate-200 placeholder-slate-600 focus:border-slate-500 focus:outline-none disabled:opacity-40"
+                  :class="dish.stock_qty === 0 ? 'border-red-500/50 text-red-300' : dish.stock_qty !== null ? 'border-amber-500/30 text-amber-200' : ''"
+                  @change="setDishStock(dish, $event.target.value)"
+                  @keydown.enter="$event.target.blur()"
+                />
+              </div>
+              <button
+                class="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-50"
+                :class="dish.is_available
+                  ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
+                  : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
+                :disabled="togglingDishId === dish.id"
+                @click="toggleDishAvailability(dish)"
+              >
+                {{ togglingDishId === dish.id ? "…" : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
+              </button>
+            </div>
           </div>
         </div>
       </details>
@@ -181,8 +211,25 @@
           <AppIcon name="chart" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.analyticsTitle") }}</span>
         </h3>
-        <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
+        <div class="flex items-center gap-2">
+          <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
+          <button
+            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
+            :disabled="analyticsExporting"
+            @click="exportAnalytics"
+          >
+            <svg v-if="!analyticsExporting" class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 2v8M5 7l3 3 3-3"/>
+            </svg>
+            <svg v-else class="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="10"/>
+            </svg>
+            {{ t("ownerHome.exportCsv") }}
+          </button>
+        </div>
       </div>
+
+      <!-- KPI tiles -->
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
@@ -201,6 +248,40 @@
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
         </div>
       </div>
+
+      <!-- Order conversion funnel -->
+      <div v-if="funnelSteps.some(s => s.value > 0)" class="ui-admin-subcard space-y-3">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.funnelTitle") }}</p>
+        <div class="space-y-2">
+          <div v-for="(step, i) in funnelSteps" :key="step.key" class="funnel-step">
+            <div class="flex items-center justify-between gap-2 text-sm">
+              <span class="text-slate-300">{{ step.label }}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <span v-if="step.dropPct !== null" class="funnel-drop-badge">
+                  −{{ step.dropPct }}%
+                </span>
+                <span class="w-14 text-right tabular-nums font-semibold text-slate-100">{{ step.value.toLocaleString() }}</span>
+              </div>
+            </div>
+            <div class="mt-1.5 h-2 w-full rounded-full bg-slate-800">
+              <div
+                class="h-2 rounded-full transition-all duration-500"
+                :class="step.barClass"
+                :style="{ width: step.widthPct + '%' }"
+              />
+            </div>
+            <!-- Conversion rate below the bar (except last step) -->
+            <p v-if="i < funnelSteps.length - 1 && step.convRate !== null" class="mt-0.5 text-right text-[10px] text-slate-500">
+              {{ step.convRate }}% {{ t("ownerHome.funnelConvert") }}
+            </p>
+          </div>
+        </div>
+        <p v-if="funnelOverall !== null" class="border-t border-slate-800/60 pt-2 text-xs text-slate-500">
+          {{ t("ownerHome.funnelOverall", { pct: funnelOverall }) }}
+        </p>
+      </div>
+
+      <!-- Top categories / dishes -->
       <div class="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <div class="ui-admin-subcard">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
@@ -228,6 +309,133 @@
             <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noDataYet") }}</p>
           </div>
         </div>
+      </div>
+    </article>
+
+    <!-- Revenue analytics (hidden for staff without view_revenue permission) -->
+    <article v-if="revenueSummary && session.canViewRevenue" class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+          <AppIcon name="chart" class="owner-home-section-icon" />
+          <span>{{ t("ownerHome.revenueTitle") }}</span>
+        </h3>
+        <p class="text-xs text-slate-400">{{ t("ownerHome.revenuePeriod", { days: revenueSummary.days }) }}</p>
+      </div>
+
+      <!-- KPI row -->
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ formatRevenue(revenueSummary.total_revenue) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ revenueSummary.order_count }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ formatRevenue(revenueSummary.avg_order_value) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
+          <p
+            class="ui-stat-value"
+            :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'"
+          >
+            {{ returnRateLabel }}
+          </p>
+          <p v-if="returnRate !== null && returnData" class="mt-0.5 text-[10px] text-slate-500">
+            {{ t("ownerHome.customerReturnRateHint", { count: returnData.total_customers }) }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Daily revenue bar chart (CSS-only) -->
+      <div v-if="revenueSummary.daily.length > 1" class="space-y-1">
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.revenueDailyChart") }}</p>
+        <div class="flex items-end gap-0.5 h-20 overflow-x-auto pb-1">
+          <div
+            v-for="day in revenueChartDays"
+            :key="day.date"
+            class="flex flex-1 min-w-[0.5rem] flex-col items-center gap-0.5"
+            :title="`${day.date}: ${formatRevenue(day.revenue)} (${day.orders} orders)`"
+          >
+            <div
+              class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+              :style="{ height: `${day.heightPct}%`, minHeight: day.revenue > 0 ? '2px' : '0' }"
+            />
+          </div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-600">
+          <span>{{ revenueChartDays[0]?.shortDate }}</span>
+          <span>{{ revenueChartDays[revenueChartDays.length - 1]?.shortDate }}</span>
+        </div>
+      </div>
+
+      <!-- Peak hours charts (only when there are orders to show) -->
+      <div v-if="revenueSummary.order_count > 0" class="space-y-3 pt-2 border-t border-slate-800/60">
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.peakHoursTitle") }}</p>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <!-- Orders by hour of day -->
+          <div class="space-y-1.5">
+            <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByHour") }}</p>
+            <div class="flex items-end gap-px h-16 overflow-hidden">
+              <div
+                v-for="bar in peakHoursBars"
+                :key="bar.hour"
+                class="flex-1 rounded-sm transition-colors"
+                :class="hourBarColor(bar.hour)"
+                :style="{ height: `${bar.heightPct}%`, minHeight: bar.count > 0 ? '2px' : '0' }"
+                :title="`${bar.hour}:00 — ${bar.count}`"
+              />
+            </div>
+            <div class="flex justify-between text-[9px] text-slate-600">
+              <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+            </div>
+          </div>
+          <!-- Orders by day of week -->
+          <div class="space-y-1.5">
+            <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByDay") }}</p>
+            <div class="flex items-end gap-1 h-16">
+              <div
+                v-for="bar in peakWeekdayBars"
+                :key="bar.label"
+                class="flex flex-1 flex-col items-center gap-0.5"
+                :title="`${bar.label} — ${bar.count}`"
+              >
+                <div
+                  class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+                  :style="{ height: `${bar.heightPct}%`, minHeight: bar.count > 0 ? '2px' : '0' }"
+                />
+              </div>
+            </div>
+            <div class="flex justify-between text-[9px] text-slate-600">
+              <span v-for="bar in peakWeekdayBars" :key="bar.label">{{ bar.label }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Popular dishes (only when there are orders) -->
+      <div v-if="popularDishes.length" class="space-y-2 pt-2 border-t border-slate-800/60">
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.popularDishesTitle") }}</p>
+        <ol class="space-y-1.5">
+          <li
+            v-for="(dish, idx) in popularDishes"
+            :key="dish.dish_slug"
+            class="flex items-center gap-2 text-sm"
+          >
+            <span class="w-4 shrink-0 text-right text-xs font-bold text-slate-600">{{ idx + 1 }}</span>
+            <div class="relative flex-1 overflow-hidden rounded-sm bg-slate-800/50 h-6">
+              <div
+                class="absolute inset-y-0 left-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
+                :style="{ width: dish.barPct + '%' }"
+              />
+              <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
+            </div>
+            <span class="shrink-0 text-xs text-slate-400 tabular-nums">×{{ dish.order_count }}</span>
+          </li>
+        </ol>
       </div>
     </article>
 
@@ -284,121 +492,47 @@
       </div>
     </article>
 
-    <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+    <!-- Plan summary card → links to billing tab -->
+    <article class="ui-command-deck p-3 sm:p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="space-y-1">
+          <h3 class="inline-flex items-center gap-2 text-base font-semibold">
             <AppIcon name="plus" class="owner-home-section-icon" />
-            <span>{{ t("ownerHome.purchaseUpgrade") }}</span>
+            <span>{{ t("ownerHome.planSection") }}</span>
           </h3>
-          <p class="text-xs text-slate-400">{{ t("ownerHome.currentPlan", { plan: tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }) }}</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+              {{ tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }}
+            </span>
+            <span
+              v-if="hasPendingRequest"
+              class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300"
+            >
+              {{ t("ownerHome.pendingUpgradeShort") }}
+            </span>
+          </div>
         </div>
-        <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
-          <AppIcon name="refresh" class="owner-home-btn-icon" />
-          {{ upgradeLoading ? t("ownerHome.loadingRequests") : t("ownerHome.refreshRequests") }}
-        </button>
+        <RouterLink
+          :to="{ name: 'owner-profile', query: { tab: 'billing' } }"
+          class="ui-btn-outline px-3 py-1.5 text-xs"
+        >
+          {{ t("ownerBilling.manageBilling") }}
+          <svg viewBox="0 0 16 16" class="ml-1 inline h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8h10M9 4l4 4-4 4"/>
+          </svg>
+        </RouterLink>
       </div>
-
-      <p v-if="hasPendingRequest" class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+      <!-- Pending upgrade banner -->
+      <p
+        v-if="hasPendingRequest"
+        class="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200"
+      >
         {{
           pendingUpgrade
             ? t("ownerHome.pendingUpgrade", { plan: pendingUpgrade.target_plan_name })
             : t("ownerHome.pendingUpgradeFallback")
         }}
       </p>
-
-      <div v-if="upgradeTargets.length" class="grid gap-2 sm:gap-3 lg:grid-cols-[1fr,2fr,auto]">
-        <label class="text-sm text-slate-300">
-          {{ t("ownerHome.targetTier") }}
-          <select v-model="upgradeTargetCode" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
-            <option v-for="target in upgradeTargets" :key="target.code" :value="target.code">
-              {{ target.name }}{{ target.is_active ? "" : ` (${t("common.soon")})` }}
-            </option>
-          </select>
-        </label>
-        <label class="text-sm text-slate-300">
-          {{ t("ownerHome.messageToAdmin") }}
-          <input
-            v-model.trim="upgradeCustomerNote"
-            type="text"
-            maxlength="1500"
-            :placeholder="t('ownerHome.upgradePlaceholder')"
-            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          />
-        </label>
-        <div class="flex items-end">
-          <button
-            class="ui-btn-primary w-full px-4 py-2 text-sm disabled:opacity-60"
-            :disabled="upgradeSubmitting || hasPendingRequest || !upgradeTargetCode"
-            @click="submitUpgradeRequest"
-          >
-            {{ upgradeSubmitting ? t("ownerHome.sendingUpgrade") : t("ownerHome.purchaseTier") }}
-          </button>
-        </div>
-      </div>
-      <p v-else class="text-sm text-slate-400">{{ t("ownerHome.highestTier") }}</p>
-      <p v-if="upgradeError" class="text-sm text-red-300">{{ upgradeError }}</p>
-
-      <div class="space-y-2">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.recentRequests") }}</p>
-        <div class="overflow-hidden rounded-xl border border-slate-800 hidden md:block">
-          <table class="min-w-full text-sm">
-            <thead class="bg-slate-900/80 text-slate-400">
-              <tr>
-                <th class="px-3 py-2 text-start">{{ t("ownerHome.when") }}</th>
-                <th class="px-3 py-2 text-start">{{ t("ownerHome.from") }}</th>
-                <th class="px-3 py-2 text-start">{{ t("ownerHome.to") }}</th>
-                <th class="px-3 py-2 text-start">{{ t("common.status") }}</th>
-                <th class="px-3 py-2 text-start">{{ t("ownerHome.adminNote") }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="request in upgradeRequests" :key="request.id" class="border-t border-slate-800">
-                <td class="px-3 py-2 text-slate-300">{{ formatDateTime(request.requested_at) }}</td>
-                <td class="px-3 py-2 text-slate-200">{{ request.current_plan_name }}</td>
-                <td class="px-3 py-2 text-slate-200">{{ request.target_plan_name }}</td>
-                <td class="px-3 py-2">
-                  <span
-                    class="rounded-full px-2 py-1 text-xs font-semibold"
-                    :class="upgradeStatusClass(request.status)"
-                  >
-                    {{ upgradeStatusLabel(request.status) }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 text-slate-400">{{ request.admin_note || t("ownerHome.noAdminNote") }}</td>
-              </tr>
-              <tr v-if="!upgradeRequests.length && !upgradeLoading">
-                <td colspan="5" class="px-3 py-4">
-                  <div class="ui-empty-state px-4 py-4 text-center">
-                    <AppIcon name="plus" class="mx-auto h-5 w-5 text-slate-500" />
-                    <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noRequests") }}</p>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="space-y-2 md:hidden">
-          <article
-            v-for="request in upgradeRequests"
-            :key="`mobile-${request.id}`"
-            class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-xs text-slate-400">{{ formatDateTime(request.requested_at) }}</p>
-              <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="upgradeStatusClass(request.status)">
-                {{ upgradeStatusLabel(request.status) }}
-              </span>
-            </div>
-            <p class="text-sm text-slate-100">{{ request.current_plan_name }} -> {{ request.target_plan_name }}</p>
-            <p class="text-xs text-slate-400">{{ request.admin_note || t("ownerHome.noAdminNote") }}</p>
-          </article>
-          <div v-if="!upgradeRequests.length && !upgradeLoading" class="ui-empty-state px-4 py-4 text-center">
-            <AppIcon name="plus" class="mx-auto h-5 w-5 text-slate-500" />
-            <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noRequests") }}</p>
-          </div>
-        </div>
-      </div>
     </article>
   </section>
 </template>
@@ -409,10 +543,13 @@ import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
+import { bustCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
+import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
+const session = useSessionStore();
 const tenant = useTenantStore();
 const order = useOrderStore();
 const toast = useToastStore();
@@ -443,19 +580,24 @@ const analyticsSummary = ref({
   top_dishes: [],
   interaction_rate_pct: 0,
 });
+const revenueSummary = ref(null); // { total_revenue, order_count, avg_order_value, daily: [{date, revenue, orders}] }
 
 // ── Dish availability panel ───────────────────────────────────────────────────
 const dishAvailOpen = ref(false);
 const dishAvailSearch = ref("");
 const togglingDishId = ref(null);
+const settingStockId = ref(null);
+const resettingAvailability = ref(false);
 
-const soldOutCount = computed(() => dishesData.value.filter((d) => !d.is_published).length);
+// is_available = daily 86 toggle (sold-out but still visible on menu)
+// is_published = permanent visibility toggle (hide from menu entirely)
+const soldOutCount = computed(() => dishesData.value.filter((d) => d.is_published && !d.is_available).length);
 const filteredDishesAvail = computed(() => {
   const q = dishAvailSearch.value.toLowerCase();
-  const list = [...dishesData.value].sort((a, b) => {
+  const list = [...dishesData.value].filter((d) => d.is_published).sort((a, b) => {
     // 86'd dishes first
-    if (!a.is_published && b.is_published) return -1;
-    if (a.is_published && !b.is_published) return 1;
+    if (!a.is_available && b.is_available) return -1;
+    if (a.is_available && !b.is_available) return 1;
     return 0;
   });
   if (!q) return list;
@@ -466,13 +608,15 @@ const filteredDishesAvail = computed(() => {
   );
 });
 
-const toggleDishPublished = async (dish) => {
+const toggleDishAvailability = async (dish) => {
   if (togglingDishId.value === dish.id) return;
   togglingDishId.value = dish.id;
-  const newValue = !dish.is_published;
+  const newValue = !dish.is_available;
   try {
-    await api.patch(`/dishes/${dish.id}/`, { is_published: newValue });
-    dish.is_published = newValue;
+    await api.patch(`/dishes/${dish.id}/`, { is_available: newValue });
+    dish.is_available = newValue;
+    // Bust menu cache so customers see the updated availability immediately
+    bustCache("menu.categories");
     toast.show(
       newValue ? t("ownerHome.dishRestored", { name: dish.name }) : t("ownerHome.dish86dToast", { name: dish.name }),
       newValue ? "success" : "info"
@@ -481,6 +625,71 @@ const toggleDishPublished = async (dish) => {
     toast.show(t("ownerHome.dish86Failed"), "error");
   } finally {
     togglingDishId.value = null;
+  }
+};
+
+// Set or clear tracked stock count for a dish.
+// Empty input → null (unlimited). Positive int → tracked stock.
+// Re-enables availability automatically when restoring positive stock.
+const setDishStock = async (dish, rawValue) => {
+  if (settingStockId.value === dish.id) return;
+  const trimmed = String(rawValue ?? "").trim();
+  const newQty = trimmed === "" ? null : parseInt(trimmed, 10);
+  if (newQty !== null && (isNaN(newQty) || newQty < 0)) return;
+  if (newQty === dish.stock_qty) return; // no real change
+  settingStockId.value = dish.id;
+  try {
+    const payload = { stock_qty: newQty };
+    // Restore availability when owner sets positive stock (auto-disabled when it hit 0)
+    if (newQty !== null && newQty > 0 && !dish.is_available) {
+      payload.is_available = true;
+    }
+    await api.patch(`/dishes/${dish.id}/`, payload);
+    dish.stock_qty = newQty;
+    if (payload.is_available !== undefined) dish.is_available = payload.is_available;
+    bustCache("menu.categories");
+    toast.show(
+      newQty === null
+        ? t("ownerHome.stockUnlimitedSet", { name: dish.name })
+        : t("ownerHome.stockSet", { name: dish.name, qty: newQty }),
+      "success"
+    );
+  } catch {
+    toast.show(t("ownerHome.stockSetFailed"), "error");
+  } finally {
+    settingStockId.value = null;
+  }
+};
+
+// Morning reset: mark all published dishes available and clear auto-zeroed stock.
+// Shown only when soldOutCount > 0 — the "start of day" button.
+const resetAllAvailability = async () => {
+  if (resettingAvailability.value) return;
+  resettingAvailability.value = true;
+  try {
+    const { data } = await api.post("/owner/dishes/reset-availability/");
+    // Update local dish data optimistically — re-enable all sold-out dishes
+    dishesData.value.forEach((d) => {
+      if (d.is_published && !d.is_available) {
+        d.is_available = true;
+      }
+      // Clear stock_qty=0 entries (auto-zeroed) so the input shows blank again
+      if (d.stock_qty === 0) {
+        d.stock_qty = null;
+      }
+    });
+    bustCache("menu.categories");
+    const count = data?.restored ?? 0;
+    toast.show(
+      count > 0
+        ? t("ownerHome.resetAvailabilityDone", { count })
+        : t("ownerHome.resetAvailabilityNone"),
+      "success"
+    );
+  } catch {
+    toast.show(t("ownerHome.resetAvailabilityFailed"), "error");
+  } finally {
+    resettingAvailability.value = false;
   }
 };
 
@@ -525,6 +734,8 @@ const toggleOpen = async () => {
   try {
     await api.patch("/profile/", { is_open: newValue });
     tenant.mergeProfile({ is_open: newValue });
+    // Bust meta cache so customers see the updated open/closed status immediately
+    bustCache("meta");
     toast.show(newValue ? t("ownerHome.openedToast") : t("ownerHome.closedToast"), newValue ? "success" : "info");
   } catch {
     toast.show(t("ownerHome.toggleFailed"), "error");
@@ -557,6 +768,95 @@ const readinessScore = computed(() => {
 });
 
 const analyticsCounts = computed(() => analyticsSummary.value?.counts || {});
+
+// Revenue helpers
+const formatRevenue = (amount) => {
+  const n = Number(amount) || 0;
+  if (n === 0) return "—";
+  // Use the first order's currency or fallback to a plain number
+  const currency = revenueSummary.value?.currency || tenant.meta?.profile?.currency || null;
+  try {
+    if (currency) return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
+  } catch { /* unsupported currency */ }
+  return n.toFixed(2);
+};
+
+const revenueChartDays = computed(() => {
+  const days = revenueSummary.value?.daily || [];
+  if (!days.length) return [];
+  const maxRev = Math.max(...days.map((d) => d.revenue), 1);
+  return days.map((d) => ({
+    date: d.date,
+    revenue: d.revenue,
+    orders: d.orders,
+    heightPct: Math.round((d.revenue / maxRev) * 100),
+    shortDate: d.date.slice(5), // "MM-DD"
+  }));
+});
+
+// Peak hours helpers
+const hourBarColor = (hour) => {
+  if (hour >= 6 && hour <= 11) return "bg-amber-400/70 hover:bg-amber-400";
+  if (hour >= 12 && hour <= 14) return "bg-emerald-400/70 hover:bg-emerald-400";
+  if (hour >= 18 && hour <= 22) return "bg-violet-400/70 hover:bg-violet-400";
+  return "bg-slate-500/50 hover:bg-slate-400/60";
+};
+
+const peakHoursData = computed(() => revenueSummary.value?.peak_hours || null);
+
+const peakHoursBars = computed(() => {
+  const hours = peakHoursData.value?.by_hour || [];
+  const max = Math.max(...hours, 1);
+  return hours.map((count, hour) => ({
+    hour,
+    count,
+    heightPct: Math.round((count / max) * 100),
+  }));
+});
+
+const shortDayLabels = computed(() => {
+  // Jan 1 2023 was a Sunday — gives us Sun=0 … Sat=6 aligned with ExtractWeekDay 1-7
+  const locale = tenant.meta?.profile?.locale || "en";
+  return Array.from({ length: 7 }, (_, i) => {
+    try {
+      return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2023, 0, 1 + i));
+    } catch {
+      return ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][i];
+    }
+  });
+});
+
+const peakWeekdayBars = computed(() => {
+  const days = peakHoursData.value?.by_weekday || [];
+  const max = Math.max(...days, 1);
+  return days.map((count, idx) => ({
+    label: shortDayLabels.value[idx] || String(idx),
+    count,
+    heightPct: Math.round((count / max) * 100),
+  }));
+});
+
+const popularDishes = computed(() => {
+  const dishes = revenueSummary.value?.popular_dishes || [];
+  const maxCount = Math.max(...dishes.map((d) => d.order_count), 1);
+  return dishes.map((d) => ({
+    ...d,
+    barPct: Math.round((d.order_count / maxCount) * 100),
+  }));
+});
+
+const returnData = computed(() => revenueSummary.value?.customer_return || null);
+const returnRate = computed(() => {
+  const d = returnData.value;
+  if (!d || d.return_rate_pct === null || d.return_rate_pct === undefined) return null;
+  return d.return_rate_pct;
+});
+const returnRateLabel = computed(() =>
+  returnRate.value !== null
+    ? `${returnRate.value.toFixed(1)}%`
+    : t("ownerHome.customerReturnRateNA")
+);
+
 const orderActionsCount = computed(
   () => Number(analyticsCounts.value?.order_handoff_click || 0) + Number(analyticsCounts.value?.checkout_click || 0)
 );
@@ -571,6 +871,86 @@ const topDishes = computed(() => (analyticsSummary.value?.top_dishes || []).slic
 const categoryNameBySlug = computed(() => Object.fromEntries(categoriesData.value.map((c) => [c.slug, c.name])));
 const dishNameBySlug = computed(() => Object.fromEntries(dishesData.value.map((d) => [d.slug, d.name])));
 const resolveLabel = (map, slug) => map[slug] || humanizeSlug(slug);
+
+// ── Conversion funnel ─────────────────────────────────────────────────────────
+const funnelData = computed(() => analyticsSummary.value?.funnel || null);
+const funnelOverall = computed(() => {
+  const f = funnelData.value;
+  return f?.overall_rate_pct ?? null;
+});
+const funnelSteps = computed(() => {
+  const f = funnelData.value;
+  const menuViews = f?.menu_views ?? Number(analyticsCounts.value?.menu_view || 0);
+  const cartViews = f?.cart_views ?? Number(analyticsCounts.value?.cart_view || 0);
+  const intents = f?.order_intents ?? orderActionsCount.value;
+  const orders = f?.orders_placed ?? revenueSummary.value?.order_count ?? 0;
+
+  const steps = [
+    {
+      key: "menu",
+      label: t("ownerHome.funnelMenuViews"),
+      value: menuViews,
+      barClass: "bg-slate-400/70",
+      convRate: f?.cart_rate_pct ?? null,
+    },
+    {
+      key: "cart",
+      label: t("ownerHome.funnelCartViews"),
+      value: cartViews,
+      barClass: "bg-amber-400/70",
+      convRate: f?.intent_rate_pct ?? null,
+    },
+    {
+      key: "intent",
+      label: t("ownerHome.funnelOrderIntents"),
+      value: intents,
+      barClass: "bg-orange-400/70",
+      convRate: f?.completion_rate_pct ?? null,
+    },
+    {
+      key: "orders",
+      label: t("ownerHome.funnelOrdersPlaced"),
+      value: orders,
+      barClass: "bg-emerald-400/80",
+      convRate: null,
+    },
+  ];
+
+  const maxVal = Math.max(...steps.map((s) => s.value), 1);
+  return steps.map((step, i) => {
+    const prev = i > 0 ? steps[i - 1].value : null;
+    const dropped = prev !== null && prev > 0 ? Math.round(((prev - step.value) / prev) * 100) : null;
+    return {
+      ...step,
+      widthPct: Math.max(Math.round((step.value / maxVal) * 100), step.value > 0 ? 2 : 0),
+      dropPct: dropped,
+    };
+  });
+});
+
+// ── Analytics CSV export ──────────────────────────────────────────────────────
+const analyticsExporting = ref(false);
+const exportAnalytics = async () => {
+  if (analyticsExporting.value) return;
+  analyticsExporting.value = true;
+  try {
+    const response = await api.get("/owner/analytics/export/", {
+      params: { days: 30 },
+      responseType: "blob",
+      timeout: 15000,
+    });
+    const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "analytics_30d.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.show(t("ownerHome.exportFailed"), "error");
+  } finally {
+    analyticsExporting.value = false;
+  }
+};
 const pendingUpgrade = computed(() => upgradeRequests.value.find((request) => request.status === "pending") || null);
 const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgradeMeta.value.has_pending_request === true);
 const readinessItems = computed(() => [
@@ -645,6 +1025,9 @@ const hydrateOwnerInsights = async () => {
     });
     if (data?.analytics_summary) {
       analyticsSummary.value = data.analytics_summary;
+    }
+    if (data?.revenue_summary) {
+      revenueSummary.value = data.revenue_summary;
     }
     if (Array.isArray(data?.upgrade_targets)) {
       upgradeTargets.value = data.upgrade_targets;
@@ -863,5 +1246,22 @@ onUnmounted(() => {
   width: 1rem;
   height: 1rem;
   color: var(--color-secondary);
+}
+
+/* ── Funnel ─────────────────────────────────────────────────────────────────── */
+.funnel-step {
+  /* no extra styling needed – layout handled by flex in template */
+}
+
+.funnel-drop-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  letter-spacing: 0.02em;
 }
 </style>

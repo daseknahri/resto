@@ -59,6 +59,24 @@
           <p v-if="fieldError('whatsapp')" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
           <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
         </label>
+        <label class="space-y-1 text-sm text-slate-200">
+          {{ t("stepBrand.deliveryFee") }}
+          <div class="relative">
+            <input
+              v-model="form.delivery_fee"
+              type="number"
+              min="0"
+              step="0.01"
+              :class="inputClass('delivery_fee') + ' pr-14'"
+              @input="clearField('delivery_fee')"
+            />
+            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+              {{ t("stepBrand.deliveryFeeUnit") }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">{{ t("stepBrand.deliveryFeeHint") }}</p>
+          <p v-if="fieldError('delivery_fee')" class="text-xs text-red-300">{{ fieldError("delivery_fee") }}</p>
+        </label>
         <div class="space-y-1 text-sm text-slate-200">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span>{{ t("common.address") }}</span>
@@ -308,6 +326,7 @@ const form = reactive({
   business_hours_schedule: createEmptyBusinessHoursSchedule(),
   phone: "",
   whatsapp: "",
+  delivery_fee: "0",
   address: "",
   address_i18n: {},
   google_maps_url: "",

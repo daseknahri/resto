@@ -18,6 +18,9 @@ export const useWaiterStore = defineStore("waiter", {
     isSyncing: false,
     isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
     updatingOrderIds: new Set(),
+    shiftSummary: null,        // { orders_handled, total_revenue, currency, average_prep_time_minutes, since, period_hours }
+    shiftSummaryLoading: false,
+    shiftSummaryError: null,
   }),
 
   getters: {
@@ -126,6 +129,24 @@ export const useWaiterStore = defineStore("waiter", {
         ...this.offlineQueue.filter((e) => e.orderId !== orderId),
         { orderId, newStatus, queuedAt: Date.now() },
       ];
+    },
+
+    // -------------------------------------------------------
+    // Shift summary
+    // -------------------------------------------------------
+    async fetchShiftSummary(since = null) {
+      this.shiftSummaryLoading = true;
+      this.shiftSummaryError = null;
+      try {
+        const params = since ? { since } : {};
+        const res = await api.get("/staff/shift-summary/", { params });
+        this.shiftSummary = res.data;
+        return res.data;
+      } catch {
+        this.shiftSummaryError = "Failed to load shift summary.";
+      } finally {
+        this.shiftSummaryLoading = false;
+      }
     },
 
     async flushQueue() {

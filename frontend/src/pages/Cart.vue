@@ -176,12 +176,29 @@
               <div>
                 <p class="ui-kicker">{{ t('cartPage.total') }}</p>
                 <p class="text-3xl font-semibold text-white">
-                  {{ formatCurrency(cart.total, currency) }}
+                  {{ formatCurrency(orderGrandTotal, currency) }}
                 </p>
               </div>
               <div class="text-right text-xs text-slate-400">
                 <p>{{ itemCountLabel(cart.count) }}</p>
                 <p>{{ t('cartPage.channel') }}</p>
+              </div>
+            </div>
+            <!-- Delivery fee breakdown -->
+            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="border-t border-slate-700/50 pt-2 space-y-1">
+              <div class="flex items-center justify-between text-xs text-slate-400">
+                <span>{{ t('cartPage.subtotal') }}</span>
+                <span>{{ formatCurrency(cart.total, currency) }}</span>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-300">{{ t('cartPage.deliveryFee') }}</span>
+                <span class="text-slate-200 font-medium">{{ formatCurrency(deliveryFeeAmount, currency) }}</span>
+              </div>
+            </div>
+            <div v-else-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="border-t border-slate-700/50 pt-2">
+              <div class="flex items-center justify-between text-xs text-emerald-300">
+                <span>{{ t('cartPage.deliveryFee') }}</span>
+                <span class="font-medium">{{ t('cartPage.free') }}</span>
               </div>
             </div>
           </div>
@@ -213,7 +230,7 @@
           </div>
 
           <div v-else class="space-y-3">
-            <div class="grid gap-2 md:grid-cols-2">
+            <div :class="['grid gap-2', deliveryEnabled ? 'md:grid-cols-2' : 'md:grid-cols-1']">
               <button
                 class="ui-btn-outline justify-center text-sm"
                 :class="
@@ -227,6 +244,7 @@
                 {{ t('cartPage.pickup') }}
               </button>
               <button
+                v-if="deliveryEnabled"
                 class="ui-btn-outline justify-center text-sm"
                 :class="
                   fulfillmentType === 'delivery'
@@ -250,6 +268,21 @@
               v-if="isDelivery"
               class="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3"
             >
+              <!-- Zone description + min order info -->
+              <div v-if="deliveryZoneDesc || deliveryMinOrder > 0" class="flex flex-wrap gap-2">
+                <span v-if="deliveryZoneDesc" class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-[11px] text-slate-300">
+                  <AppIcon name="info" class="h-3 w-3 shrink-0 text-slate-400" />
+                  {{ t('cartPage.deliveryZoneInfo', { desc: deliveryZoneDesc }) }}
+                </span>
+                <span v-if="deliveryMinOrder > 0" class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+                  :class="Number(cart.total) >= deliveryMinOrder
+                    ? 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300'
+                    : 'border-amber-500/40 bg-amber-500/8 text-amber-300'"
+                >
+                  {{ t('cartPage.deliveryMinOrderLabel', { amount: formatCurrency(deliveryMinOrder, currency) }) }}
+                </span>
+              </div>
+
               <div
                 class="space-y-1 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2"
               >
@@ -397,6 +430,22 @@
             </div>
           </div>
 
+          <!-- Sign in to save order — soft non-blocking prompt for pickup/table -->
+          <div
+            v-if="!customerStore.isAuthenticated && !isDelivery"
+            class="rounded-2xl border border-sky-500/30 bg-sky-500/8 p-3 space-y-2"
+          >
+            <p class="text-xs font-semibold text-sky-300">{{ t('cartPage.saveOrderPrompt') }}</p>
+            <p class="text-xs text-slate-400">{{ t('cartPage.saveOrderPromptBody') }}</p>
+            <button
+              class="ui-btn-outline px-3 py-1.5 text-xs border-sky-500/40 text-sky-300 hover:border-sky-400/60"
+              @click="showAuthModal = true"
+            >
+              <AppIcon name="user" class="h-3.5 w-3.5" />
+              {{ t('cartPage.saveOrderSignIn') }}
+            </button>
+          </div>
+
           <label class="block space-y-1">
             <span class="text-xs text-slate-400">{{
               t('cartPage.optionalNoteForRestaurant')
@@ -414,16 +463,58 @@
             ></textarea>
           </label>
 
-          <div class="ui-section-band px-4 py-3">
-            <div
-              class="flex items-center justify-between text-sm text-slate-300"
-            >
+          <div class="ui-section-band px-4 py-3 space-y-1">
+            <div class="flex items-center justify-between text-sm text-slate-300">
               <span>{{ t('cartPage.total') }}</span>
-              <span
-                class="text-lg font-semibold text-[var(--color-secondary)]"
-              >{{ formatCurrency(cart.total, currency) }}</span
-              >
+              <span class="text-lg font-semibold text-[var(--color-secondary)]">
+                {{ formatCurrency(orderGrandTotal, currency) }}
+              </span>
             </div>
+            <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-xs text-emerald-300">
+              <span>{{ t('cartPage.payWithCredits') }}</span>
+              <span class="font-medium">-{{ walletDeduction }}</span>
+            </div>
+          </div>
+
+          <!-- Pay with wallet credits -->
+          <div
+            v-if="canPayWithCredits"
+            class="rounded-2xl border p-3 space-y-1.5 transition-colors"
+            :class="useWallet
+              ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8'
+              : 'border-slate-700/60 bg-slate-900/30'"
+          >
+            <label class="flex cursor-pointer items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold" :class="useWallet ? 'text-[var(--color-secondary)]' : 'text-slate-300'">
+                  {{ t('cartPage.payWithCredits') }}
+                </p>
+                <p class="text-[11px] text-slate-400">
+                  {{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}
+                </p>
+              </div>
+              <!-- Toggle switch -->
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="useWallet"
+                class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none"
+                :class="useWallet
+                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30'
+                  : 'border-slate-600 bg-slate-800'"
+                @click="useWallet = !useWallet"
+              >
+                <span
+                  class="absolute top-0.5 h-4 w-4 rounded-full transition-transform"
+                  :class="useWallet
+                    ? 'translate-x-4 bg-[var(--color-secondary)]'
+                    : 'translate-x-0.5 bg-slate-500'"
+                />
+              </button>
+            </label>
+            <p v-if="useWallet" class="text-[11px] text-emerald-300">
+              {{ t('cartPage.creditsApplied', { amount: walletDeduction }) }}
+            </p>
           </div>
 
           <!-- Delivery auth gate -->
@@ -628,6 +719,7 @@ const toast = useToastStore();
 const { formatCurrency, itemCountLabel, t } = useI18n();
 
 const showAuthModal = ref(false);
+const useWallet = ref(false);
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -658,6 +750,46 @@ const leafletAssetsReady = ref(false);
 const temporaryMapLat = ref(null);
 const temporaryMapLng = ref(null);
 const meta = computed(() => tenant.resolvedMeta || null);
+
+// Delivery settings from restaurant profile
+const deliveryEnabled = computed(() => meta.value?.profile?.delivery_enabled !== false);
+
+// Delivery fee from restaurant profile (0 means free delivery)
+const deliveryFeeAmount = computed(() => {
+  const raw = meta.value?.profile?.delivery_fee;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
+
+// Minimum order total required for delivery (0 = no minimum)
+const deliveryMinOrder = computed(() => {
+  const raw = meta.value?.profile?.delivery_minimum_order;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
+
+// Short zone description shown to customers (empty = not set)
+const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
+
+// Grand total = items subtotal + delivery fee (when applicable)
+const orderGrandTotal = computed(() => {
+  const subtotal = Number(cart.total) || 0;
+  if (fulfillmentType.value === 'delivery') {
+    return subtotal + deliveryFeeAmount.value;
+  }
+  return subtotal;
+});
+
+// Wallet credits
+const walletBalance = computed(() => {
+  const raw = customerStore.customer?.wallet_balance;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
+const canPayWithCredits = computed(() =>
+  customerStore.isAuthenticated && walletBalance.value > 0 && !isBrowseOnlyPlan.value
+);
+const walletDeduction = computed(() => Math.min(walletBalance.value, orderGrandTotal.value));
 
 const parseCoordinateValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -908,6 +1040,17 @@ watch(isTableContextOrder, (value) => {
   locationError.value = '';
 });
 
+// If delivery gets disabled server-side, reset to pickup automatically
+watch(deliveryEnabled, (enabled) => {
+  if (!enabled && fulfillmentType.value === 'delivery') {
+    fulfillmentType.value = 'pickup';
+  }
+});
+
+watch(canPayWithCredits, (val) => {
+  if (!val) useWallet.value = false;
+});
+
 watch(fulfillmentType, (value) => {
   clearFieldError('fulfillment_type');
   if (value === 'delivery' && !customerStore.isAuthenticated) {
@@ -1015,6 +1158,14 @@ const validateForm = () => {
     return true;
   }
 
+  // Delivery minimum order check
+  if (fulfillmentType.value === 'delivery' && deliveryMinOrder.value > 0 && Number(cart.total) < deliveryMinOrder.value) {
+    toast.show(t('cartPage.deliveryMinOrderNotMet', {
+      amount: formatCurrency(deliveryMinOrder.value, currency.value),
+    }), 'error');
+    return false;
+  }
+
   // Delivery requires authenticated customer
   if (fulfillmentType.value === 'delivery' && !customerStore.isAuthenticated) {
     showAuthModal.value = true;
@@ -1081,6 +1232,7 @@ const buildPayload = () => {
   };
 
   if (customerNote.value) payload.customer_note = customerNote.value;
+  if (useWallet.value && canPayWithCredits.value) payload.use_wallet = true;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
   // customer_name: only for table context (optional)

@@ -144,6 +144,10 @@ class CustomerSessionViewDeleteTests(SimpleTestCase):
 class CustomerPhoneRequestViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
+        # Unit tests should not be constrained by throttle state from other tests.
+        patcher = patch("accounts.views.CustomerOtpRequestThrottle.allow_request", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _post(self, data):
         req = self.factory.post("/api/customer/auth/phone/request/", data, format="json")
@@ -157,6 +161,18 @@ class CustomerPhoneRequestViewTests(SimpleTestCase):
     def test_rejects_phone_too_long(self):
         resp = self._post({"phone": "+" + "1" * 31})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rejects_phone_without_plus_prefix(self):
+        """E.164 requires a leading '+'; bare national numbers must be rejected."""
+        resp = self._post({"phone": "0612345678"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "invalid_phone")
+
+    def test_rejects_phone_with_letters(self):
+        """Non-digit characters other than the leading '+' must be rejected."""
+        resp = self._post({"phone": "+212abc5678"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "invalid_phone")
 
     @patch("accounts.views.cache")
     @patch("accounts.views._send_otp")
@@ -285,6 +301,41 @@ class CustomerPhoneVerifyViewTests(SimpleTestCase):
         resp = self._post({"phone": "+21261234567", "code": "123456", "name": "Other"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(customer.name, "Alice")  # unchanged
+
+    @patch("accounts.views.Customer.objects")
+    @patch("accounts.views.cache")
+    def test_links_phone_to_existing_session_customer(self, cache_mock, objects_mock):
+        """When a session customer already exists (e.g. Google/email auth), a verified
+        phone should be linked to that existing account rather than creating a new one."""
+        cache_mock.get.return_value = {"code": "123456", "attempts": 0}
+        existing = _make_customer(pk=42, phone=None, phone_verified=False)
+        objects_mock.get.return_value = existing
+        objects_mock.filter.return_value.exclude.return_value.first.return_value = None  # no conflict
+        sess = _session(customer_id=42)
+        resp = self._post({"phone": "+21261234567", "code": "123456"}, session=sess)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Phone and phone_verified should have been set
+        self.assertEqual(existing.phone, "+21261234567")
+        self.assertTrue(existing.phone_verified)
+        existing.save.assert_called_once()
+        # get_or_create should NOT be called — we updated the existing customer
+        objects_mock.get_or_create.assert_not_called()
+
+    @patch("accounts.views.Customer.objects")
+    @patch("accounts.views.cache")
+    def test_phone_taken_by_other_account_returns_error(self, cache_mock, objects_mock):
+        """If the phone is already registered to a *different* account, return phone_taken."""
+        cache_mock.get.return_value = {"code": "123456", "attempts": 0}
+        existing = _make_customer(pk=42, phone=None, phone_verified=False)
+        conflict = _make_customer(pk=99, phone="+21261234567", phone_verified=True)
+        objects_mock.get.return_value = existing
+        objects_mock.filter.return_value.exclude.return_value.first.return_value = conflict
+        sess = _session(customer_id=42)
+        resp = self._post({"phone": "+21261234567", "code": "123456"}, session=sess)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "phone_taken")
+        # Phone must NOT be updated on the existing customer
+        existing.save.assert_not_called()
 
 
 # ── CustomerEmailRequestView ──────────────────────────────────────────────────
@@ -441,6 +492,12 @@ class CustomerEmailVerifyViewTests(SimpleTestCase):
 class CustomerGoogleAuthViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
+        # The view guards against an unconfigured GOOGLE_OAUTH_CLIENT_ID.
+        # Patch settings so all tests that pass a credential reach token verification.
+        patcher = patch("accounts.views.settings")
+        self.mock_settings = patcher.start()
+        self.mock_settings.GOOGLE_OAUTH_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
+        self.addCleanup(patcher.stop)
 
     def _post(self, data, session=None):
         req = self.factory.post("/api/customer/auth/google/", data, format="json")

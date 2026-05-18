@@ -32,6 +32,21 @@ class Lead(models.Model):
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True)
+    booked_for = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the customer wants to come in (date + time combined). Populated on reservation submission.",
+    )
+    party_size = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of guests in the reservation.",
+    )
+    reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of when the pre-reservation reminder was sent to the customer. Null = not yet sent.",
+    )
     archived_at = models.DateTimeField(null=True, blank=True)
     onboarded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -167,6 +182,19 @@ class TierUpgradeRequest(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     payment_method = models.CharField(max_length=24, default="cash")
     payment_reference = models.CharField(max_length=120, blank=True)
+    invoice_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Amount paid for this upgrade (set by admin when approving). Used to generate the invoice PDF.",
+    )
+    invoice_currency = models.CharField(
+        max_length=8,
+        default="USD",
+        blank=True,
+        help_text="Currency code for the invoice amount (e.g. USD, EUR, MAD).",
+    )
     customer_note = models.TextField(blank=True)
     admin_note = models.TextField(blank=True)
     approved_by = models.ForeignKey(

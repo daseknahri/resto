@@ -1,6 +1,11 @@
 import api from "../lib/api";
 import { slugify } from "../lib/slug";
 import { translate } from "../i18n/translate";
+import { bustCache } from "../lib/staleCache";
+
+// Cache names — must match the constants in the stores.
+const META_CACHE = "meta";
+const MENU_CACHE = "menu.categories";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -142,6 +147,8 @@ export const profileApi = {
   async save(payload) {
     try {
       const { data } = await api.put("/profile/", sanitizeProfilePayload(payload));
+      // Profile is part of tenant meta — bust so next customer load gets fresh data.
+      bustCache(META_CACHE);
       return data;
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveProfileFailed"));
@@ -182,9 +189,11 @@ export const superCategoryApi = {
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveSuperCategoryFailed"));
     }
+    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/super-categories/${id}/`);
+    bustCache(MENU_CACHE);
   },
 };
 
@@ -223,9 +232,11 @@ export const categoryApi = {
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveCategoryFailed"));
     }
+    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/categories/${id}/`);
+    bustCache(MENU_CACHE);
   },
 };
 
@@ -247,6 +258,7 @@ export const dishApi = {
       currency: normalizeCurrency(dish.currency),
       image_url: normalizeOptionalUrl(dish.image_url),
       tags: Array.isArray(dish.tags) ? dish.tags : [],
+      allergens: Array.isArray(dish.allergens) ? dish.allergens : [],
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
     };
@@ -268,9 +280,11 @@ export const dishApi = {
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveDishFailed"));
     }
+    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/dishes/${id}/`);
+    bustCache(MENU_CACHE);
   },
 };
 

@@ -13,3 +13,5 @@ whitenoise==6.8.2
 sentry-sdk==2.16.0
 django-storages==1.14.4
 boto3==1.35.36
+django-redis==5.4.0
+redis==5.0.8

@@ -232,6 +232,21 @@
                   <p v-if="rowError(editingDish, 'slug')" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
                 </div>
 
+                <!-- Stock qty — null = unlimited; positive integer = tracked inventory -->
+                <div class="space-y-1">
+                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.stockQtyLabel") }}</p>
+                  <input
+                    :value="editingDish.stock_qty ?? ''"
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="ui-input border-slate-700"
+                    :placeholder="t('stepDishes.stockQtyPlaceholder')"
+                    @change="editingDish.stock_qty = $event.target.value === '' ? null : Math.max(0, parseInt($event.target.value, 10) || 0)"
+                  />
+                  <p class="text-[10px] text-slate-600">{{ t("stepDishes.stockQtyHint") }}</p>
+                </div>
+
                 <div class="rounded-xl border border-dashed p-3 transition-colors"
                   :class="draggingRows[editingDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
                   @dragenter="setDragState(editingDish.local_id, true)"
@@ -318,6 +333,89 @@
                     <input type="checkbox" class="sr-only" :checked="editingDish.tags?.includes(tag)" @change="toggleTag(editingDish, tag, $event.target.checked)" />
                     {{ t(`stepDishes.tag_${tag}`) }}
                   </label>
+                </div>
+              </div>
+
+              <!-- Allergen declarations -->
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.allergensTitle") }}</p>
+                  <p class="text-[10px] text-slate-500">{{ t("stepDishes.allergensHint") }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <label
+                    v-for="allergen in ALLERGENS"
+                    :key="allergen"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors select-none"
+                    :class="editingDish.allergens?.includes(allergen) ? 'border-amber-400/70 bg-amber-400/10 text-amber-300' : 'border-slate-700 text-slate-300 hover:border-amber-400/40'"
+                  >
+                    <input type="checkbox" class="sr-only" :checked="editingDish.allergens?.includes(allergen)" @change="toggleAllergen(editingDish, allergen, $event.target.checked)" />
+                    {{ t(`stepDishes.allergen_${allergen}`) }}
+                  </label>
+                </div>
+              </div>
+
+              <!-- Availability schedule -->
+              <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.availabilityTitle") }}</p>
+                    <p class="text-xs text-slate-500">{{ t("stepDishes.availabilityHint") }}</p>
+                  </div>
+                  <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300 select-none">
+                    <input
+                      type="checkbox"
+                      :checked="!!editingDish.availability_schedule"
+                      class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
+                      @change="toggleDishAvailabilitySchedule(editingDish, $event.target.checked)"
+                    />
+                    {{ t("stepDishes.availabilityRestrict") }}
+                  </label>
+                </div>
+
+                <div v-if="editingDish.availability_schedule" class="space-y-3">
+                  <div class="space-y-1.5">
+                    <p class="text-xs text-slate-400">{{ t("stepDishes.availabilityDays") }}</p>
+                    <div class="flex flex-wrap gap-2">
+                      <label
+                        v-for="day in WEEKDAYS"
+                        :key="day.key"
+                        class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors select-none"
+                        :class="(editingDish.availability_schedule.days || []).includes(day.key)
+                          ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary'
+                          : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+                      >
+                        <input
+                          type="checkbox"
+                          class="sr-only"
+                          :checked="(editingDish.availability_schedule.days || []).includes(day.key)"
+                          @change="toggleAvailabilityDay(editingDish, day.key, $event.target.checked)"
+                        />
+                        {{ t(`stepDishes.weekday_${day.key}`) }}
+                      </label>
+                    </div>
+                    <p class="text-[10px] text-slate-600">{{ t("stepDishes.availabilityDaysHint") }}</p>
+                  </div>
+
+                  <div class="flex flex-wrap items-end gap-4">
+                    <div class="space-y-1">
+                      <p class="text-xs text-slate-400">{{ t("stepDishes.availabilityFrom") }}</p>
+                      <input
+                        v-model="editingDish.availability_schedule.time_start"
+                        type="time"
+                        class="ui-input w-32 border-slate-700"
+                      />
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs text-slate-400">{{ t("stepDishes.availabilityTo") }}</p>
+                      <input
+                        v-model="editingDish.availability_schedule.time_end"
+                        type="time"
+                        class="ui-input w-32 border-slate-700"
+                      />
+                    </div>
+                    <p class="pb-1 text-[10px] text-slate-600">{{ t("stepDishes.availabilityTimeHint") }}</p>
+                  </div>
                 </div>
               </div>
 
@@ -862,6 +960,11 @@ const { t } = useI18n();
 const { translating: dishTranslating, translateError: dishTranslateError, translateField } = useTranslate();
 const emit = defineEmits(["next", "back"]);
 const DISH_TAGS = ["vegan", "vegetarian", "spicy", "gluten_free", "dairy_free", "nuts", "halal", "kosher"];
+const ALLERGENS = [
+  "gluten", "crustaceans", "eggs", "fish", "peanuts", "soy",
+  "milk", "tree_nuts", "celery", "mustard", "sesame",
+  "sulphites", "lupin", "molluscs",
+];
 const props = defineProps({
   standalone: {
     type: Boolean,
@@ -1292,6 +1395,11 @@ const normalizeOptionGroup = (group = {}) => ({
   options: Array.isArray(group.options) ? group.options.map(normalizeGroupOption) : [],
 });
 
+const WEEKDAYS = [
+  { key: "mon" }, { key: "tue" }, { key: "wed" }, { key: "thu" },
+  { key: "fri" }, { key: "sat" }, { key: "sun" },
+];
+
 const normalize = (dish = {}) => ({
   id: dish.id,
   local_id: dish.id || crypto.randomUUID(),
@@ -1306,10 +1414,31 @@ const normalize = (dish = {}) => ({
   description_i18n: dish.description_i18n && typeof dish.description_i18n === "object" ? { ...dish.description_i18n } : {},
   position: dish.position ?? dishes.length,
   is_published: dish.is_published ?? true,
+  stock_qty: dish.stock_qty != null ? parseInt(dish.stock_qty, 10) : null,
+  availability_schedule: dish.availability_schedule || null,
   options: Array.isArray(dish.options) ? dish.options.map((option) => normalizeOption(option)) : [],
   option_groups: Array.isArray(dish.option_groups) ? dish.option_groups.map(normalizeOptionGroup) : [],
   tags: Array.isArray(dish.tags) ? [...dish.tags] : [],
+  allergens: Array.isArray(dish.allergens) ? [...dish.allergens] : [],
 });
+
+const toggleDishAvailabilitySchedule = (dish, enabled) => {
+  if (enabled) {
+    dish.availability_schedule = { days: [], time_start: "", time_end: "" };
+  } else {
+    dish.availability_schedule = null;
+  }
+};
+
+const toggleAvailabilityDay = (dish, dayKey, checked) => {
+  if (!dish.availability_schedule) return;
+  const days = Array.isArray(dish.availability_schedule.days) ? [...dish.availability_schedule.days] : [];
+  if (checked && !days.includes(dayKey)) {
+    dish.availability_schedule.days = [...days, dayKey];
+  } else if (!checked) {
+    dish.availability_schedule.days = days.filter((d) => d !== dayKey);
+  }
+};
 
 const pickI18nMap = (input, allowedLocales = null) => {
   const out = {};
@@ -1404,6 +1533,15 @@ const toggleTag = (dish, tag, checked) => {
     if (!dish.tags.includes(tag)) dish.tags.push(tag);
   } else {
     dish.tags = dish.tags.filter((t) => t !== tag);
+  }
+};
+
+const toggleAllergen = (dish, allergen, checked) => {
+  if (!Array.isArray(dish.allergens)) dish.allergens = [];
+  if (checked) {
+    if (!dish.allergens.includes(allergen)) dish.allergens.push(allergen);
+  } else {
+    dish.allergens = dish.allergens.filter((a) => a !== allergen);
   }
 };
 

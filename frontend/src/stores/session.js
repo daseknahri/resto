@@ -25,6 +25,11 @@ export const useSessionStore = defineStore("session", {
     canEditTenantMenu: (state) => state.user?.can_edit_tenant_menu === true,
     isTenantStaff: (state) => state.user?.role === "tenant_staff",
     isTenantOwner: (state) => state.user?.role === "tenant_owner",
+    // Granular permissions — owners always have all; staff respect their flags.
+    // Falls back to true for owners (so no code changes needed in owner-only pages).
+    canManageOrders: (state) => state.user?.permissions?.manage_orders !== false,
+    canViewRevenue: (state) => state.user?.permissions?.view_revenue !== false,
+    canEditMenu: (state) => state.user?.permissions?.edit_menu !== false,
   },
   actions: {
     async fetchSession(force = false) {

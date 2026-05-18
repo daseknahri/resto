@@ -189,6 +189,7 @@ class LocalizedProfileContentMixin:
 
 class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerializer):
     published_at = serializers.DateTimeField(read_only=True)
+    is_open_now = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -214,12 +215,68 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "language",
             "logo_url",
             "hero_url",
+            "delivery_enabled",
+            "delivery_fee",
+            "delivery_minimum_order",
+            "delivery_zone_description",
+            "receipt_message",
+            "menu_theme",
+            "sms_notifications_enabled",
+            "auto_confirm_reservations",
+            "auto_confirm_min_hours",
+            "reservation_reminders_enabled",
+            "max_covers_per_slot",
+            "slot_duration_minutes",
+            "menu_card_layout",
+            "directory_opt_in",
+            "cuisine_type",
+            "city",
+            "lat",
+            "lng",
+            "price_tier",
+            "tags",
             "is_open",
+            "is_open_now",
             "is_menu_temporarily_disabled",
             "menu_disabled_note",
             "is_menu_published",
             "published_at",
         ]
+
+    def get_is_open_now(self, obj) -> bool:
+        """Server-side open/closed evaluation: manual toggle + closure dates + schedule."""
+        if obj.is_open is False:
+            return False
+        # Check if today is an explicit closure date (lazy import avoids circular dep).
+        try:
+            from menu.models import ClosureDate
+            from django.utils import timezone as _tz
+            if ClosureDate.objects.filter(date=_tz.localdate()).exists():
+                return False
+        except Exception:
+            pass
+        schedule = getattr(obj, "business_hours_schedule", None)
+        if not schedule or not isinstance(schedule, dict):
+            return bool(obj.is_open)
+        # Check whether any day is enabled; if none, schedule is unconfigured.
+        if not any(
+            isinstance(v, dict) and v.get("enabled", False)
+            for v in schedule.values()
+        ):
+            return bool(obj.is_open)
+        # Compare against current UTC time.
+        from datetime import datetime as _dt
+        _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+        now = _dt.utcnow()
+        entry = schedule.get(_WDAY[now.weekday()])
+        if not entry or not isinstance(entry, dict) or not entry.get("enabled", False):
+            return False
+        open_str = (entry.get("open") or "").strip()
+        close_str = (entry.get("close") or "").strip()
+        if not open_str or not close_str:
+            return False
+        current_hhmm = now.strftime("%H:%M")
+        return open_str <= current_hhmm < close_str
 
     def validate_phone(self, value):
         cleaned = (value or "").strip()
@@ -283,6 +340,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
 
     def validate_business_hours_i18n(self, value):
         return self._validate_i18n_map(value, field_label="Business hours", max_length=1000)
+
+    def validate_receipt_message(self, value):
+        return str(value or "").strip()[:300]
 
     def validate_business_hours_schedule(self, value):
         if value in (None, ""):
@@ -395,6 +455,28 @@ class TenantMetaSerializer(serializers.Serializer):
     profile = ProfileSerializer(allow_null=True)
     entitlements = serializers.DictField()
     feature_flags = serializers.ListField(child=serializers.DictField(), allow_empty=True)
+    # Per-restaurant rating summary — populated once the tenant has at least one rating.
+    # average: float rounded to 1 decimal, or null when no ratings exist yet.
+    rating_summary = serializers.DictField()
+    # Grace period billing fields
+    payment_overdue_since = serializers.DateTimeField(allow_null=True, read_only=True)
+    grace_period_days = serializers.IntegerField(read_only=True)
+    # Offboarding
+    deletion_requested_at = serializers.DateTimeField(allow_null=True, read_only=True)
+
+    @staticmethod
+    def _rating_summary() -> dict:
+        """Compute rating aggregate for the current tenant schema (one DB query)."""
+        try:
+            from django.db.models import Avg, Count
+            from menu.models import Rating
+            agg = Rating.objects.aggregate(avg=Avg("score"), total=Count("id"))
+            return {
+                "average": round(float(agg["avg"]), 1) if agg["avg"] is not None else None,
+                "count": agg["total"],
+            }
+        except Exception:
+            return {"average": None, "count": 0}
 
     @staticmethod
     def from_tenant(tenant: Tenant, *, request=None):
@@ -415,6 +497,10 @@ class TenantMetaSerializer(serializers.Serializer):
                 "profile": profile,
                 "entitlements": plan_entitlements(tenant.plan) if getattr(tenant, "plan", None) else {},
                 "feature_flags": plan_flags,
+                "rating_summary": TenantMetaSerializer._rating_summary(),
+                "payment_overdue_since": getattr(tenant, "payment_overdue_since", None),
+                "grace_period_days": 7,
+                "deletion_requested_at": getattr(tenant, "deletion_requested_at", None),
             },
             context={"request": request},
         )

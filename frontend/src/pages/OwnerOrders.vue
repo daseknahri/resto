@@ -17,8 +17,8 @@
           >
             {{ soundEnabled ? "🔔" : "🔕" }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="!order.orders.length" @click="exportCsv">
-            ⬇ {{ t("ownerOrders.exportCsv") }}
+          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="exporting || !order.orders.length" @click="exportCsv">
+            ⬇ {{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="order.ordersLoading" @click="refresh">
             <AppIcon name="refresh" class="h-3.5 w-3.5" />
@@ -96,6 +96,10 @@
       <p v-if="filteredOrders.length !== order.orders.length" class="text-xs text-slate-500">
         {{ t("ownerOrders.showingFiltered", { shown: filteredOrders.length, total: order.orders.length }) }}
       </p>
+      <!-- Truncation notice when server has more orders than the 200-row display cap -->
+      <p v-if="order.ordersHasMore" class="text-xs text-amber-400/80">
+        {{ t("ownerOrders.hasMore", { total: order.ordersTotal }) }}
+      </p>
     </div>
 
     <!-- Loading -->
@@ -130,6 +134,13 @@
                 {{ statusLabel(o.status) }}
               </span>
               <span class="ui-data-strip">{{ fulfillmentLabel(o) }}</span>
+              <!-- Marketplace source badge -->
+              <span
+                v-if="o.source === 'marketplace'"
+                class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
+              >
+                🛒 {{ t('ownerOrders.sourceMarketplace') }}
+              </span>
               <!-- Age warning badge -->
               <span
                 v-if="orderAgeMin(o) >= 5 && ['pending', 'confirmed'].includes(o.status)"
@@ -145,16 +156,52 @@
           </div>
           <div class="text-right">
             <p class="text-lg font-bold text-[var(--color-secondary)]">{{ formatCurrency(o.total, o.currency) }}</p>
+            <p v-if="o.promotion_discount && Number(o.promotion_discount) > 0" class="text-[10px] text-emerald-400">
+              {{ t('ownerOrders.promoDiscount') }} −{{ formatCurrency(o.promotion_discount, o.currency) }}
+            </p>
             <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
         </div>
 
         <!-- Customer info -->
         <div v-if="o.customer_name || o.customer_phone || o.customer_email" class="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs sm:grid-cols-2">
-          <div v-if="o.customer_name">
-            <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
-            <span class="ml-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
+          <div v-if="o.customer_name" class="flex flex-wrap items-center gap-2">
+            <div>
+              <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
+              <span class="ml-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
+            </div>
+            <!-- Customer trust badge -->
+            <template v-if="o.customer_trust?.rating_count">
+              <span
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="o.customer_trust.avg_score >= 4
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : o.customer_trust.avg_score >= 3
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'bg-red-500/15 text-red-300'"
+              >
+                ★ {{ o.customer_trust.avg_score }}
+                <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
+              </span>
+            </template>
           </div>
+          <!-- When no name but trust exists (phone/email-only orders) -->
+          <template v-else-if="o.customer_trust?.rating_count">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-500">{{ t("ownerOrders.customerTrustScore") }}</span>
+              <span
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="o.customer_trust.avg_score >= 4
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : o.customer_trust.avg_score >= 3
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'bg-red-500/15 text-red-300'"
+              >
+                ★ {{ o.customer_trust.avg_score }}
+                <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
+              </span>
+            </div>
+          </template>
           <div v-if="o.customer_phone" class="flex flex-wrap items-center gap-2">
             <a :href="`tel:${o.customer_phone}`" class="font-medium text-sky-300 hover:text-sky-200">{{ o.customer_phone }}</a>
             <a
@@ -168,6 +215,10 @@
           </div>
           <div v-if="o.customer_email">
             <a :href="`mailto:${o.customer_email}`" class="font-medium text-sky-300 hover:text-sky-200">{{ o.customer_email }}</a>
+          </div>
+          <div v-if="o.delivery_fee && Number(o.delivery_fee) > 0" class="sm:col-span-2">
+            <span class="text-slate-500">{{ t("ownerOrders.deliveryFee") }}</span>
+            <span class="ml-1.5 font-medium text-slate-200">{{ formatCurrency(o.delivery_fee, o.currency) }}</span>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
@@ -277,6 +328,57 @@
           >
             🖨 {{ t("ownerOrders.printTicket") }}
           </button>
+
+          <!-- Rate customer (only for linked customer accounts) -->
+          <button
+            v-if="o.customer_id && ['completed', 'cancelled'].includes(o.status)"
+            class="ui-btn-outline px-3 py-1.5 text-xs"
+            :class="o.my_customer_rating ? 'border-amber-500/40 text-amber-300' : ''"
+            @click="openRating(o)"
+          >
+            ★ {{ o.my_customer_rating ? t("ownerOrders.updateCustomerRating") : t("ownerOrders.rateCustomer") }}
+          </button>
+        </div>
+
+        <!-- Customer trust rating panel -->
+        <div v-if="ratingOrderId === o.id" class="space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+          <div class="flex items-start justify-between gap-2">
+            <div class="space-y-0.5">
+              <p class="text-xs font-semibold text-slate-200">{{ t("ownerOrders.customerRatingTitle") }}</p>
+              <p class="text-[10px] text-slate-500">{{ t("ownerOrders.customerRatingHint") }}</p>
+            </div>
+          </div>
+
+          <!-- Star selector -->
+          <div class="flex items-center gap-1">
+            <button
+              v-for="star in 5"
+              :key="star"
+              type="button"
+              class="text-xl transition-transform hover:scale-110 focus:outline-none"
+              :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-600'"
+              @click="ratingScore = star"
+            >★</button>
+            <span class="ml-2 text-xs text-slate-400">{{ ratingScore }}/5</span>
+          </div>
+
+          <!-- Note field -->
+          <label class="block space-y-1 text-xs text-slate-400">
+            {{ t("ownerOrders.customerRatingNote") }}
+            <input v-model="ratingNote" maxlength="200" class="ui-input mt-1 text-sm" />
+          </label>
+
+          <div class="flex gap-2">
+            <button
+              class="ui-btn-primary px-3 py-1.5 text-xs"
+              :disabled="submittingRating"
+              @click="submitCustomerRating(o)"
+            >
+              {{ submittingRating ? t("common.saving") : t("ownerOrders.customerRatingSubmit") }}
+            </button>
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="ratingOrderId = null">{{ t("common.close") }}</button>
+          </div>
+          <p v-if="ratingError" class="text-xs text-red-400">{{ ratingError }}</p>
         </div>
       </article>
     </div>
@@ -287,6 +389,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 
@@ -297,10 +400,18 @@ const toast = useToastStore();
 const activeStatus = ref("");
 const activeDateFilter = ref("all");
 const searchQuery = ref("");
+const exporting = ref(false);
 const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
 const noteError = ref("");
+
+// Customer trust rating
+const ratingOrderId = ref(null);
+const ratingScore = ref(5);
+const ratingNote = ref("");
+const submittingRating = ref(false);
+const ratingError = ref("");
 
 // Sound preference — persisted in localStorage per hostname
 const SOUND_KEY = typeof window === "undefined" ? "orders:sound" : `orders:sound:${window.location.hostname}`;
@@ -509,6 +620,39 @@ const saveNote = async (o) => {
   }
 };
 
+// ── Customer trust rating ─────────────────────────────────────────────────────
+const openRating = (o) => {
+  ratingOrderId.value = o.id;
+  ratingScore.value = o.my_customer_rating?.score ?? 5;
+  ratingNote.value = o.my_customer_rating?.note ?? "";
+  ratingError.value = "";
+  // Close the note editor if open
+  if (editingId.value === o.id) editingId.value = null;
+};
+
+const submitCustomerRating = async (o) => {
+  ratingError.value = "";
+  submittingRating.value = true;
+  try {
+    const res = await api.post(`/owner/orders/${o.id}/customer-rating/`, {
+      score: ratingScore.value,
+      note: ratingNote.value,
+    });
+    // Update in-place so the badge refreshes immediately
+    o.my_customer_rating = { score: ratingScore.value, note: ratingNote.value };
+    o.customer_trust = {
+      avg_score: res.data.avg_score,
+      rating_count: res.data.rating_count,
+    };
+    ratingOrderId.value = null;
+    toast.show(t("ownerOrders.customerRatingSubmitted"), "success");
+  } catch {
+    ratingError.value = t("ownerOrders.customerRatingFailed");
+  } finally {
+    submittingRating.value = false;
+  }
+};
+
 // ── Print ticket ──────────────────────────────────────────────────────────────
 const printTicket = (o) => {
   const itemRows = (o.items || []).map((item) => {
@@ -533,9 +677,11 @@ const printTicket = (o) => {
     new Date(o.created_at).toLocaleString(),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
 
-  const noteLabel = t("ownerOrders.ticketNote");
-  const totalLabel = t("ownerOrders.ticketTotal");
-  const printedLabel = t("ownerOrders.ticketPrinted");
+  const noteLabel      = t("ownerOrders.ticketNote");
+  const totalLabel     = t("ownerOrders.ticketTotal");
+  const printedLabel   = t("ownerOrders.ticketPrinted");
+  const feeLabel       = t("ownerOrders.deliveryFee");
+  const subtotalLabel  = t("ownerOrders.ticketSubtotal");
 
   const note = o.customer_note
     ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${o.customer_note}</div>`
@@ -561,7 +707,13 @@ const printTicket = (o) => {
     <div class="divider"></div>
     <table>${itemRows}</table>
     <div class="divider"></div>
-    <table><tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr></table>
+    <table>
+      ${Number(o.delivery_fee) > 0 ? `
+      <tr><td style="padding:2px 0;font-size:12px;color:#444">${subtotalLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(Number(o.total) - Number(o.delivery_fee), o.currency)}</td></tr>
+      <tr><td style="padding:2px 0;font-size:12px;color:#444">${feeLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.delivery_fee, o.currency)}</td></tr>
+      ` : ""}
+      <tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr>
+    </table>
     ${note}
     <div class="footer">${printedLabel} ${new Date().toLocaleTimeString()}</div>
   </body></html>`;
@@ -575,30 +727,50 @@ const printTicket = (o) => {
 };
 
 // ── CSV export ────────────────────────────────────────────────────────────────
-const exportCsv = () => {
-  const cols = [
-    "order_number", "status", "fulfillment_type", "table_label",
-    "customer_name", "customer_phone", "customer_email", "delivery_address",
-    "total", "currency", "items_count", "customer_note", "owner_note",
-    "estimated_ready_minutes", "created_at",
-  ];
-  const header = cols.join(",");
-  const rows = filteredOrders.value.map((o) =>
-    cols.map((col) => {
-      const val = o[col] ?? "";
-      return `"${String(val).replace(/"/g, '""')}"`;
-    }).join(",")
-  );
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+// Calls the server export endpoint (up to 5 000 rows, BOM-prefixed for Excel)
+// so owners always get the full history, not just the 200 currently in memory.
+const _toIsoDate = (d) => {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+const _buildExportParams = () => {
+  const params = {};
+  if (activeStatus.value) params.status = activeStatus.value;
+  const now = new Date();
+  if (activeDateFilter.value === "today") {
+    params.from = params.to = _toIsoDate(now);
+  } else if (activeDateFilter.value === "yesterday") {
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    params.from = params.to = _toIsoDate(y);
+  } else if (activeDateFilter.value === "week") {
+    const w = new Date(now); w.setDate(now.getDate() - 6);
+    params.from = _toIsoDate(w);
+  }
+  return params;
+};
+
+const exportCsv = async () => {
+  exporting.value = true;
+  try {
+    const response = await api.get("/owner/orders/export/", {
+      params: _buildExportParams(),
+      responseType: "blob",
+      headers: { Accept: "text/csv" },
+    });
+    const url = URL.createObjectURL(response.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.show(t("ownerOrders.exportFailed"), "error");
+  } finally {
+    exporting.value = false;
+  }
 };
 
 // ── New-order alert ───────────────────────────────────────────────────────────

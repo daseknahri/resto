@@ -1,0 +1,416 @@
+<template>
+  <div class="min-h-screen bg-slate-950 pb-32">
+
+    <!-- Back link -->
+    <div class="mx-auto max-w-3xl px-4 pt-5">
+      <router-link to="/order" class="text-xs text-slate-400 hover:text-slate-200">
+        {{ t('mktMenu.backToList') }}
+      </router-link>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="loading" class="py-24 text-center text-sm text-slate-400">
+      {{ t('mktMenu.loading') }}
+    </div>
+
+    <!-- Error -->
+    <div v-else-if="fetchError" class="py-24 text-center">
+      <p class="text-sm text-red-300">{{ t('mktMenu.error') }}</p>
+    </div>
+
+    <template v-else-if="restaurant">
+      <!-- Restaurant header -->
+      <div class="mx-auto max-w-3xl px-4 py-5">
+        <div class="flex items-start gap-4">
+          <div class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
+            <img v-if="restaurant.logo_url" :src="restaurant.logo_url" :alt="restaurant.name" class="h-full w-full object-cover" />
+            <span v-else class="text-2xl">🍽️</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="text-xl font-bold text-white">{{ restaurant.name }}</h1>
+              <span
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="restaurant.is_open
+                  ? 'bg-emerald-900/80 text-emerald-300'
+                  : 'bg-slate-800 text-slate-400'"
+              >
+                {{ restaurant.is_open ? t('mktMenu.open') : t('mktMenu.closed') }}
+              </span>
+            </div>
+            <p v-if="restaurant.tagline" class="mt-0.5 text-xs text-slate-400">{{ restaurant.tagline }}</p>
+            <div class="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span v-if="restaurant.cuisine_type">{{ restaurant.cuisine_type }}</span>
+              <span v-if="restaurant.city">· {{ restaurant.city }}</span>
+              <span v-if="restaurant.delivery_enabled">
+                · <span class="text-sky-400">{{ t('mktMenu.deliveryFee') }}:
+                  {{ Number(restaurant.delivery_fee) > 0 ? restaurant.delivery_fee : t('mktMenu.freeDelivery') }}
+                </span>
+              </span>
+              <span v-if="restaurant.delivery_enabled && Number(restaurant.delivery_minimum_order) > 0">
+                · {{ t('mktMenu.minOrder', { amount: restaurant.delivery_minimum_order }) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu -->
+      <div class="mx-auto max-w-3xl px-4 space-y-8">
+        <div
+          v-for="sc in restaurant.super_categories"
+          :key="sc.id"
+        >
+          <h2 class="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">{{ sc.name }}</h2>
+          <div
+            v-for="cat in sc.categories"
+            :key="cat.id"
+            class="mb-6"
+          >
+            <h3 class="mb-2 text-sm font-semibold text-slate-300">{{ cat.name }}</h3>
+            <div class="space-y-2">
+              <div
+                v-for="dish in cat.dishes"
+                :key="dish.slug"
+                class="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3"
+                :class="{ 'opacity-50': !dish.is_available }"
+              >
+                <!-- Image -->
+                <div v-if="dish.image_url" class="h-14 w-14 shrink-0 rounded-lg overflow-hidden">
+                  <img :src="dish.image_url" :alt="dish.name" class="h-full w-full object-cover" />
+                </div>
+                <!-- Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-slate-100 leading-snug">{{ dish.name }}</p>
+                  <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2">{{ dish.description }}</p>
+                  <div class="mt-1.5 flex items-center justify-between gap-2">
+                    <span class="text-sm font-semibold text-[var(--color-secondary,#f59e0b)]">
+                      {{ dish.price }} {{ restaurant.currency }}
+                    </span>
+                    <button
+                      v-if="dish.is_available"
+                      class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-3 py-1 text-xs font-semibold text-slate-950 hover:opacity-90 transition-opacity"
+                      @click="addToCart(dish)"
+                    >
+                      {{ t('mktMenu.addToCart') }}
+                      <span v-if="cartQty(dish.slug)" class="ml-1 opacity-70">+{{ cartQty(dish.slug) }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Cart bottom bar (visible when cart has items) -->
+    <div
+      v-if="cart.length && !checkoutOpen"
+      class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4 pb-4"
+    >
+      <button
+        class="w-full max-w-md rounded-2xl bg-[var(--color-secondary,#f59e0b)] px-6 py-3.5 text-sm font-bold text-slate-950 shadow-xl hover:opacity-90 transition-opacity flex items-center justify-between"
+        @click="checkoutOpen = true"
+      >
+        <span class="rounded-full bg-slate-950/20 px-2 py-0.5 text-xs">{{ cartTotalQty }}</span>
+        <span>{{ t('mktMenu.checkout') }}</span>
+        <span>{{ cartTotal }} {{ restaurant?.currency }}</span>
+      </button>
+    </div>
+
+    <!-- Checkout drawer -->
+    <Transition name="slide-up">
+      <div
+        v-if="checkoutOpen"
+        class="fixed inset-0 z-40 flex flex-col bg-slate-950/95 backdrop-blur-sm overflow-y-auto"
+      >
+        <div class="mx-auto w-full max-w-md px-4 py-6 space-y-5">
+          <!-- Header -->
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-white">{{ t('mktMenu.yourOrder') }}</h2>
+            <button class="text-slate-400 hover:text-white text-xl leading-none" @click="checkoutOpen = false">✕</button>
+          </div>
+
+          <!-- Cart items -->
+          <div class="space-y-2">
+            <div
+              v-for="item in cart"
+              :key="item.slug"
+              class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2"
+            >
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-slate-100 truncate">{{ item.name }}</p>
+                <p class="text-xs text-slate-500">{{ item.price }} × {{ item.qty }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  class="h-6 w-6 rounded-full border border-slate-700 text-slate-300 text-xs hover:border-slate-500"
+                  @click="removeFromCart(item.slug)"
+                >−</button>
+                <span class="text-sm text-white w-4 text-center">{{ item.qty }}</span>
+                <button
+                  class="h-6 w-6 rounded-full border border-slate-700 text-slate-300 text-xs hover:border-slate-500"
+                  @click="addToCartBySlug(item.slug)"
+                >+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fulfillment type -->
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5">{{ t('mktMenu.fulfillmentLabel') }}</label>
+            <div class="flex gap-2">
+              <button
+                class="flex-1 rounded-xl border py-2 text-xs font-medium transition-colors"
+                :class="form.fulfillment_type === 'pickup'
+                  ? 'border-[var(--color-secondary,#f59e0b)]/60 bg-[var(--color-secondary,#f59e0b)]/10 text-[var(--color-secondary,#f59e0b)]'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                @click="form.fulfillment_type = 'pickup'"
+              >{{ t('mktMenu.fulfillmentPickup') }}</button>
+              <button
+                v-if="restaurant?.delivery_enabled"
+                class="flex-1 rounded-xl border py-2 text-xs font-medium transition-colors"
+                :class="form.fulfillment_type === 'delivery'
+                  ? 'border-sky-500/60 bg-sky-500/10 text-sky-300'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                @click="form.fulfillment_type = 'delivery'"
+              >{{ t('mktMenu.fulfillmentDelivery') }}</button>
+            </div>
+          </div>
+
+          <!-- Customer info -->
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.customerName') }}</label>
+              <input
+                v-model="form.customer_name"
+                type="text"
+                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.customerPhone') }}</label>
+              <input
+                v-model="form.customer_phone"
+                type="tel"
+                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+            <div v-if="form.fulfillment_type === 'delivery'">
+              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.deliveryAddress') }}</label>
+              <textarea
+                v-model="form.delivery_address"
+                rows="2"
+                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none resize-none"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.note') }}</label>
+              <input
+                v-model="form.customer_note"
+                type="text"
+                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Wallet toggle -->
+          <div v-if="customer && Number(customer.wallet_balance) > 0">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" v-model="form.use_wallet" class="rounded" />
+              <span class="text-sm text-slate-300">
+                {{ t('mktMenu.walletApply', { balance: `${customer.wallet_balance} ${restaurant?.currency}` }) }}
+              </span>
+            </label>
+          </div>
+
+          <!-- Totals -->
+          <div class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 space-y-1.5 text-sm">
+            <div class="flex justify-between text-slate-400">
+              <span>{{ t('mktMenu.subtotal') }}</span>
+              <span>{{ cartTotal }} {{ restaurant?.currency }}</span>
+            </div>
+            <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
+              <span>{{ t('mktMenu.deliveryFeeLabel') }}</span>
+              <span>{{ restaurant?.delivery_fee || '0' }} {{ restaurant?.currency }}</span>
+            </div>
+            <div class="flex justify-between font-bold text-white border-t border-slate-800 pt-1.5 mt-1.5">
+              <span>{{ t('mktMenu.total') }}</span>
+              <span>{{ orderTotal }} {{ restaurant?.currency }}</span>
+            </div>
+          </div>
+
+          <!-- Error -->
+          <p v-if="checkoutError" class="text-xs text-red-400">{{ checkoutError }}</p>
+
+          <!-- Submit -->
+          <button
+            class="w-full rounded-2xl bg-[var(--color-secondary,#f59e0b)] py-3.5 text-sm font-bold text-slate-950 hover:opacity-90 disabled:opacity-50 transition-opacity"
+            :disabled="placing"
+            @click="placeOrder"
+          >
+            {{ placing ? t('mktMenu.placing') : t('mktMenu.placeOrder') }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from '../composables/useI18n';
+import { useCustomerStore } from '../stores/customer';
+import api from '../lib/api';
+
+const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
+const customerStore = useCustomerStore();
+
+const slug = route.params.slug;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const loading = ref(true);
+const fetchError = ref(false);
+const restaurant = ref(null);
+const checkoutOpen = ref(false);
+const placing = ref(false);
+const checkoutError = ref('');
+
+// Cart: [{slug, name, price, qty}]
+const cart = ref([]);
+
+const form = reactive({
+  fulfillment_type: 'pickup',
+  customer_name: '',
+  customer_phone: '',
+  delivery_address: '',
+  customer_note: '',
+  use_wallet: false,
+});
+
+// ── Customer ─────────────────────────────────────────────────────────────────
+const customer = computed(() => customerStore.customer);
+
+// ── Cart helpers ──────────────────────────────────────────────────────────────
+const cartQty = (dishSlug) => {
+  const item = cart.value.find((i) => i.slug === dishSlug);
+  return item ? item.qty : 0;
+};
+
+const addToCart = (dish) => {
+  const existing = cart.value.find((i) => i.slug === dish.slug);
+  if (existing) {
+    existing.qty++;
+  } else {
+    cart.value.push({ slug: dish.slug, name: dish.name, price: dish.price, qty: 1 });
+  }
+};
+
+const addToCartBySlug = (dishSlug) => {
+  const existing = cart.value.find((i) => i.slug === dishSlug);
+  if (existing) existing.qty++;
+};
+
+const removeFromCart = (dishSlug) => {
+  const idx = cart.value.findIndex((i) => i.slug === dishSlug);
+  if (idx < 0) return;
+  if (cart.value[idx].qty > 1) {
+    cart.value[idx].qty--;
+  } else {
+    cart.value.splice(idx, 1);
+  }
+};
+
+const cartTotalQty = computed(() => cart.value.reduce((s, i) => s + i.qty, 0));
+
+const cartTotal = computed(() => {
+  return cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0).toFixed(2);
+});
+
+const orderTotal = computed(() => {
+  let total = Number(cartTotal.value);
+  if (form.fulfillment_type === 'delivery' && restaurant.value) {
+    total += Number(restaurant.value.delivery_fee || 0);
+  }
+  return total.toFixed(2);
+});
+
+// ── API ───────────────────────────────────────────────────────────────────────
+const fetchMenu = async () => {
+  loading.value = true;
+  fetchError.value = false;
+  try {
+    const res = await api.get(`/marketplace/menu/${slug}/`);
+    restaurant.value = res.data;
+    // Pre-fill customer info if signed in
+    if (customer.value) {
+      form.customer_name = customer.value.name || '';
+      form.customer_phone = customer.value.phone || '';
+    }
+  } catch {
+    fetchError.value = true;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const placeOrder = async () => {
+  checkoutError.value = '';
+  if (!form.customer_name.trim()) {
+    checkoutError.value = t('mktMenu.customerName') + ' is required.';
+    return;
+  }
+  placing.value = true;
+  try {
+    const items = cart.value.map((i) => ({ slug: i.slug, qty: i.qty }));
+    const payload = {
+      restaurant: slug,
+      items,
+      fulfillment_type: form.fulfillment_type,
+      customer_name: form.customer_name,
+      customer_phone: form.customer_phone,
+      customer_note: form.customer_note,
+      delivery_address: form.delivery_address,
+      use_wallet: form.use_wallet,
+    };
+    const res = await api.post('/marketplace/order/', payload);
+    // Navigate to order status page
+    router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code === 'auth_required') {
+      checkoutError.value = t('mktMenu.authRequired');
+    } else if (code === 'restaurant_closed') {
+      checkoutError.value = t('mktMenu.restaurantClosed');
+    } else if (code === 'items_unavailable') {
+      checkoutError.value = t('mktMenu.itemsUnavailable');
+    } else {
+      checkoutError.value = t('mktMenu.orderError');
+    }
+  } finally {
+    placing.value = false;
+  }
+};
+
+onMounted(async () => {
+  await customerStore.fetchCustomer();
+  fetchMenu();
+});
+</script>
+
+<style scoped>
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+</style>

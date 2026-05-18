@@ -113,6 +113,40 @@ DATABASE_ROUTERS = (
     "django_tenants.routers.TenantSyncRouter",
 )
 
+# ── Cache (Redis when REDIS_URL is set; falls back to in-process LocMemCache) ──
+# Set REDIS_URL in your .env / Coolify environment to enable shared Redis cache.
+# IGNORE_EXCEPTIONS=True lets the site degrade gracefully (DB fallback) if Redis
+# is temporarily unreachable — no 500 errors, just a slower cache miss.
+_REDIS_URL = os.getenv("REDIS_URL", "").strip()
+if _REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": _REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": True,
+            },
+            "KEY_PREFIX": "resto",
+            "TIMEOUT": 300,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+
+# ── Session store ──────────────────────────────────────────────────────────────
+# With Redis, store sessions in the shared cache so every Gunicorn worker reads
+# the same session data (required for OTP verify to see the session written by
+# the OTP request in a different worker).  Without Redis, Django falls back to
+# its default database-backed sessions automatically — no extra config needed.
+if _REDIS_URL:
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "default"
+
 AUTH_USER_MODEL = "accounts.User"
 
 from .rest_framework import REST_FRAMEWORK  # noqa: E402
@@ -390,3 +424,9 @@ if SECURITY_LOG_FILE:
     LOGGING["loggers"]["app.request"]["handlers"].append("security_file")
     LOGGING["loggers"]["sales.provisioning"]["handlers"].append("security_file")
     LOGGING["loggers"]["app.email"]["handlers"].append("security_file")
+
+# ── Sentry error tracking ──────────────────────────────────────────────────────
+# Activated when DJANGO_SENTRY_DSN is set in the environment.
+# Safe to call unconditionally — init_sentry() is a no-op when DSN is absent.
+from config.sentry import init_sentry as _init_sentry  # noqa: E402
+_init_sentry()

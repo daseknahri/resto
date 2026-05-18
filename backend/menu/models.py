@@ -1,4 +1,5 @@
-﻿from django.db import models
+﻿from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
 
 
 class SuperCategory(models.Model):
@@ -55,7 +56,39 @@ class Dish(models.Model):
     image_url = models.URLField(blank=True)
     position = models.PositiveIntegerField(default=0)
     tags = models.JSONField(default=list, blank=True)
+    allergens = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of allergen keys present in this dish (e.g. ['gluten', 'eggs']).",
+    )
     is_published = models.BooleanField(default=True)
+    is_available = models.BooleanField(
+        default=True,
+        help_text=(
+            "Temporary daily availability. False = sold out (still visible on menu "
+            "but cannot be ordered). Use is_published=False to permanently hide the dish."
+        ),
+    )
+    stock_qty = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Remaining stock count. null = unlimited. When an order is placed, "
+            "the qty is decremented atomically. Reaching 0 automatically sets "
+            "is_available=False so the dish shows as sold-out on the menu."
+        ),
+    )
+    availability_schedule = models.JSONField(
+        default=None,
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional time-based availability window. "
+            "Schema: {days: ['mon','tue',...], time_start: 'HH:MM', time_end: 'HH:MM'}. "
+            "null = always available. Empty days list = any day."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -155,7 +188,48 @@ class Order(models.Model):
     delivery_lat = models.FloatField(null=True, blank=True)
     delivery_lng = models.FloatField(null=True, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_fee = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Delivery fee snapshot captured at order placement time.",
+    )
     currency = models.CharField(max_length=8, default="USD")
+    wallet_amount_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Amount deducted from the customer's wallet at order placement.",
+    )
+    # Order source — 'direct' (QR/subdomain), 'marketplace' (platform unified checkout)
+    class Source(models.TextChoices):
+        DIRECT = "direct", "Direct"
+        MARKETPLACE = "marketplace", "Marketplace"
+
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.DIRECT,
+        db_index=True,
+        help_text="Whether this order originated from a direct QR/menu visit or the platform marketplace.",
+    )
+    commission_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Platform commission for marketplace orders (10% of food subtotal).",
+    )
+    promotion_discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Discount amount applied by a promotion at order placement time.",
+    )
+    applied_promotion_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Snapshot of the promotion name that was applied to this order.",
+    )
     owner_note = models.TextField(blank=True)
     estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -209,3 +283,184 @@ class AnalyticsEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.event_type} @ {self.created_at:%Y-%m-%d %H:%M:%S}"
+
+
+class ClosureDate(models.Model):
+    """
+    A specific calendar date on which the restaurant is closed.
+    Any date listed here will cause get_is_open_now (in tenancy/serializers.py)
+    to return False regardless of the weekly business-hours schedule.
+    """
+
+    date = models.DateField(
+        unique=True,
+        db_index=True,
+        help_text="The calendar date on which the restaurant is closed (YYYY-MM-DD).",
+    )
+    label = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Optional reason / holiday name shown to the owner (e.g. 'Christmas Day').",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("date",)
+
+    def __str__(self) -> str:
+        suffix = f" — {self.label}" if self.label else ""
+        return f"Closure {self.date}{suffix}"
+
+
+class Rating(models.Model):
+    """
+    Customer rating for a completed order — tenant-scoped (stored per restaurant schema).
+
+    One rating per order, enforced by the OneToOneField.  Score is 1–5.
+    Comment is optional.  No auth required — any caller who knows the order
+    number and the order is completed can post a rating.
+    """
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="rating",
+    )
+    # Platform-level customer link — populated when the customer has an account.
+    # Enables per-customer rating history without exposing anonymous ratings.
+    customer = models.ForeignKey(
+        "accounts.Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restaurant_ratings",
+    )
+    score = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Rating {self.score}/5 for {self.order.order_number}"
+
+
+class WaitlistEntry(models.Model):
+    """
+    Customer waitlist entry for a fully-booked time slot.
+    Tenant-scoped — stored per restaurant schema.
+    """
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        NOTIFIED = "notified", "Notified"
+        CONVERTED = "converted", "Converted"
+        EXPIRED = "expired", "Expired"
+
+    booked_for = models.DateTimeField(
+        help_text="The desired date/time slot the customer is waiting for.",
+        db_index=True,
+    )
+    party_size = models.PositiveSmallIntegerField(default=1)
+    name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+    )
+    notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("created_at",)
+
+    def __str__(self) -> str:
+        return f"Waitlist: {self.name} for {self.booked_for} (party of {self.party_size})"
+
+
+class Promotion(models.Model):
+    """
+    Restaurant-level promotion (discount applied automatically at checkout).
+
+    Promotions are tenant-scoped. The best (highest discount) currently-active
+    promotion is applied when a customer places an order. The discount amount is
+    snapshotted on the Order and the use_count is incremented atomically inside
+    the order-placement transaction.
+
+    Types:
+      - percentage   → discount_value % off the food subtotal
+      - fixed        → discount_value fixed amount off the food subtotal
+      - free_delivery → waive the delivery fee entirely
+    """
+
+    class Type(models.TextChoices):
+        PERCENTAGE = "percentage", "Percentage off"
+        FIXED = "fixed", "Fixed amount off"
+        FREE_DELIVERY = "free_delivery", "Free delivery"
+
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=200, blank=True)
+    promo_type = models.CharField(max_length=20, choices=Type.choices, default=Type.PERCENTAGE)
+    discount_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Percentage (0–100) for percentage type; fixed amount for fixed type. Ignored for free_delivery.",
+    )
+    min_order_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Minimum food subtotal required to apply this promotion.",
+    )
+    days = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Days active: ['mon','tue',...]. Empty list = every day.",
+    )
+    time_start = models.CharField(
+        max_length=5,
+        blank=True,
+        help_text="HH:MM — start of active time window. Blank = all day.",
+    )
+    time_end = models.CharField(
+        max_length=5,
+        blank=True,
+        help_text="HH:MM — end of active time window. Blank = all day.",
+    )
+    active_from = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Start date (inclusive). Null = no start boundary.",
+    )
+    active_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="End date (inclusive). Null = no end boundary.",
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    max_uses = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum number of orders this promotion applies to. Null = unlimited.",
+    )
+    use_count = models.PositiveIntegerField(default=0)
+    is_platform_flash = models.BooleanField(
+        default=False,
+        help_text="True if created by the platform as a flash sale campaign.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.promo_type})"

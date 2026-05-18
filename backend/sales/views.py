@@ -6,7 +6,8 @@ from math import ceil
 from urllib.parse import quote_plus
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, OuterRef, Q, Subquery, Value
+from django.db.models import Count, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import TruncDate, ExtractHour, ExtractWeekDay
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -20,7 +21,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from menu.models import AnalyticsEvent, Category, Dish, DishOption, TableLink
+from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
 from tenancy.tiering import (
@@ -51,6 +52,7 @@ from .serializers import (
     ReservationTimelineCreateSerializer,
     ReservationTimelineEventSerializer,
     OwnerReservationUpdateSerializer,
+    OwnerReservationRescheduleSerializer,
     ProvisioningJobSerializer,
     TierUpgradeDecisionSerializer,
     TenantLifecycleUpdateSerializer,
@@ -585,11 +587,91 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
         tenant_for_lead = None
         if tenant is not None and getattr(tenant, "schema_name", None) != get_public_schema_name():
             tenant_for_lead = tenant
+
+        # ── Capacity check ────────────────────────────────────────────────────
+        # When capacity management is enabled (max_covers_per_slot > 0) and the
+        # incoming reservation has a booked_for time and a party_size, verify
+        # there is room in that time slot before persisting the lead.
+        incoming_booked_for = serializer.validated_data.get("booked_for")
+        incoming_party_size = int(serializer.validated_data.get("party_size") or 0)
+        incoming_source = serializer.validated_data.get("source", "")
+        if (
+            tenant_for_lead is not None
+            and incoming_source in RESERVATION_SOURCES
+            and incoming_booked_for is not None
+            and incoming_party_size > 0
+        ):
+            try:
+                from django_tenants.utils import schema_context as _schema_ctx
+                with _schema_ctx(tenant_for_lead.schema_name):
+                    from tenancy.models import Profile as _Profile
+                    _profile = _Profile.objects.filter(tenant=tenant_for_lead).first()
+                _max_covers = int(getattr(_profile, "max_covers_per_slot", 0) or 0)
+                _slot_minutes = int(getattr(_profile, "slot_duration_minutes", 60) or 60)
+                if _max_covers > 0:
+                    from django.db.models import Sum as _Sum
+                    _bf = incoming_booked_for
+                    _total = _bf.hour * 60 + _bf.minute
+                    _start_mins = (_total // _slot_minutes) * _slot_minutes
+                    _slot_start = _bf.replace(
+                        hour=_start_mins // 60,
+                        minute=_start_mins % 60,
+                        second=0,
+                        microsecond=0,
+                    )
+                    _slot_end = _slot_start + timedelta(minutes=_slot_minutes)
+                    _active = {Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON}
+                    _used = (
+                        Lead.objects
+                        .filter(
+                            tenant_id=tenant_for_lead.id,
+                            booked_for__gte=_slot_start,
+                            booked_for__lt=_slot_end,
+                            status__in=_active,
+                        )
+                        .aggregate(total=_Sum("party_size"))
+                    )["total"] or 0
+                    if _used + incoming_party_size > _max_covers:
+                        return Response(
+                            {
+                                "detail": "fully_booked",
+                                "booked_for": _slot_start.isoformat(),
+                                "used": _used,
+                                "max": _max_covers,
+                            },
+                            status=status.HTTP_409_CONFLICT,
+                        )
+            except Exception:  # noqa: BLE001
+                pass  # Capacity check failure is non-fatal; allow reservation through
+
         lead = serializer.save(status=Lead.Status.NEW, tenant=tenant_for_lead)
         headers = self.get_success_headers(serializer.data)
 
-        # Notify tenant owner when a customer submits a reservation request.
-        if tenant_for_lead is not None and lead.source == "table_reservation":
+        if tenant_for_lead is not None and lead.source in RESERVATION_SOURCES:
+            # Auto-confirm: if the tenant has auto_confirm_reservations enabled,
+            # immediately set status to "won" when the reservation is far enough in advance.
+            try:
+                from django_tenants.utils import schema_context as _schema_ctx
+                with _schema_ctx(tenant_for_lead.schema_name):
+                    from tenancy.models import Profile as _Profile
+                    _profile = _Profile.objects.filter(tenant=tenant_for_lead).first()
+                if _profile and getattr(_profile, "auto_confirm_reservations", False):
+                    _min_hours = int(getattr(_profile, "auto_confirm_min_hours", 24) or 0)
+                    _qualify = True
+                    if _min_hours > 0 and lead.booked_for:
+                        _cutoff = timezone.now() + timedelta(hours=_min_hours)
+                        if lead.booked_for < _cutoff:
+                            _qualify = False
+                    elif _min_hours > 0 and not lead.booked_for:
+                        # No booked_for set → don't auto-confirm (can't verify timing)
+                        _qualify = False
+                    if _qualify:
+                        lead.status = Lead.Status.WON
+                        lead.save(update_fields=["status", "updated_at"])
+            except Exception:  # noqa: BLE001
+                pass
+
+            # Notify tenant owner of new reservation request.
             try:
                 from menu.views import _send_owner_new_reservation_email
                 _send_owner_new_reservation_email(tenant_for_lead, lead)
@@ -1440,6 +1522,29 @@ class OwnerReservationDetailView(APIView):
 
         return Response(payload)
 
+    def patch(self, request, lead_id):
+        """PATCH /api/owner/reservations/<id>/ — update booked_for for drag-to-reschedule."""
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = OwnerReservationRescheduleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with schema_context(get_public_schema_name()):
+            lead = get_object_or_404(
+                Lead,
+                pk=lead_id,
+                tenant_id=tenant.id,
+                source__in=RESERVATION_SOURCES,
+                archived_at__isnull=True,
+            )
+            lead.booked_for = serializer.validated_data["booked_for"]
+            lead.save(update_fields=["booked_for", "updated_at"])
+            payload = OwnerReservationSerializer(lead).data
+
+        return Response(payload)
+
 
 class OwnerReservationBulkStatusView(APIView):
     permission_classes = [IsAuthenticated, IsTenantEditor]
@@ -1981,6 +2086,11 @@ class OwnerDashboardView(APIView):
         if tenant is None:
             return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
 
+        user = request.user
+        # Staff without view_revenue permission get a stripped response
+        # (analytics counts only, no financial data).
+        can_view_revenue = user.is_tenant_owner or getattr(user, "perm_view_revenue", False)
+
         try:
             requested_days = int(request.query_params.get("days", "30"))
         except (TypeError, ValueError):
@@ -1995,6 +2105,7 @@ class OwnerDashboardView(APIView):
         tracked_events = (
             "menu_view",
             "dish_view",
+            "cart_view",
             "order_handoff_click",
             "checkout_click",
         )
@@ -2004,6 +2115,7 @@ class OwnerDashboardView(APIView):
         }
         counts = {event_type: int(raw_counts.get(event_type, 0)) for event_type in tracked_events}
         menu_views = counts.get("menu_view", 0)
+        cart_views = counts.get("cart_view", 0)
         order_actions = counts.get("order_handoff_click", 0) + counts.get("checkout_click", 0)
         interaction_rate = round((order_actions / menu_views) * 100, 2) if menu_views else 0.0
         top_categories = list(
@@ -2052,6 +2164,136 @@ class OwnerDashboardView(APIView):
             )
             upgrade_requests = TierUpgradeRequestSerializer(upgrade_rows, many=True).data
 
+        # Revenue analytics — aggregate completed orders in the window
+        # Staff without view_revenue permission receive null revenue_summary.
+        if not can_view_revenue:
+            return Response(
+                {
+                    "categories_count": categories_count,
+                    "dishes_count": dishes_count,
+                    "analytics_summary": {
+                        "days": days,
+                        "since": since.isoformat(),
+                        "total_events": analytics_qs.count(),
+                        "counts": counts,
+                        "top_categories": top_categories,
+                        "top_dishes": top_dishes,
+                        "interaction_rate_pct": interaction_rate,
+                        "funnel": {
+                            "menu_views": menu_views,
+                            "cart_views": cart_views,
+                            "order_intents": order_actions,
+                            "orders_placed": 0,
+                            "cart_rate_pct": round(cart_views / menu_views * 100, 1) if menu_views else None,
+                            "intent_rate_pct": round(order_actions / cart_views * 100, 1) if cart_views else None,
+                            "completion_rate_pct": None,
+                            "overall_rate_pct": None,
+                        },
+                    },
+                    "upgrade_meta": None,
+                    "upgrade_targets": [],
+                    "upgrade_requests": [],
+                    "revenue_summary": None,
+                }
+            )
+
+        billable_statuses = [Order.Status.COMPLETED, Order.Status.READY, Order.Status.PREPARING, Order.Status.CONFIRMED]
+        revenue_qs = Order.objects.filter(
+            created_at__gte=since,
+            status__in=billable_statuses,
+        )
+        revenue_agg = revenue_qs.aggregate(total_revenue=Sum("total"), order_count=Count("id"))
+        total_revenue = float(revenue_agg["total_revenue"] or 0)
+        order_count = revenue_agg["order_count"] or 0
+        avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
+
+        daily_rows = (
+            revenue_qs.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(revenue=Sum("total"), orders=Count("id"))
+            .order_by("day")
+        )
+        daily_revenue = [
+            {
+                "date": row["day"].isoformat(),
+                "revenue": float(row["revenue"] or 0),
+                "orders": row["orders"],
+            }
+            for row in daily_rows
+        ]
+
+        hourly_rows = (
+            revenue_qs.annotate(hour=ExtractHour("created_at"))
+            .values("hour")
+            .annotate(orders=Count("id"))
+            .order_by("hour")
+        )
+        hourly_map = {row["hour"]: row["orders"] for row in hourly_rows}
+        orders_by_hour = [hourly_map.get(h, 0) for h in range(24)]
+
+        weekday_rows = (
+            revenue_qs.annotate(weekday=ExtractWeekDay("created_at"))
+            .values("weekday")
+            .annotate(orders=Count("id"))
+            .order_by("weekday")
+        )
+        # ExtractWeekDay returns 1=Sunday … 7=Saturday
+        weekday_map = {row["weekday"]: row["orders"] for row in weekday_rows}
+        orders_by_weekday = [weekday_map.get(d, 0) for d in range(1, 8)]
+
+        popular_dish_rows = (
+            OrderItem.objects.filter(order__in=revenue_qs)
+            .exclude(dish_slug="")
+            .values("dish_slug", "dish_name")
+            .annotate(order_count=Count("id"), total_revenue=Sum("subtotal"))
+            .order_by("-order_count", "-total_revenue")[:10]
+        )
+        popular_dishes = [
+            {
+                "dish_slug": row["dish_slug"],
+                "dish_name": row["dish_name"],
+                "order_count": row["order_count"],
+                "total_revenue": float(row["total_revenue"] or 0),
+            }
+            for row in popular_dish_rows
+        ]
+
+        # Marketplace breakdown — orders that came via the platform marketplace
+        from menu.models import Order as _OrderM
+        _mkt_agg = revenue_qs.filter(source=_OrderM.Source.MARKETPLACE).aggregate(
+            mkt_count=Count("id"),
+            mkt_revenue=Sum("total"),
+            mkt_commission=Sum("commission_amount"),
+        )
+        marketplace_stats = {
+            "order_count": _mkt_agg["mkt_count"] or 0,
+            "revenue": float(_mkt_agg["mkt_revenue"] or 0),
+            "commission_total": float(_mkt_agg["mkt_commission"] or 0),
+        }
+
+        # Customer return rate — among phone-identified customers in this window,
+        # what % had placed an order at least once BEFORE the window opened?
+        phones_in_range = set(
+            revenue_qs
+            .exclude(customer_phone="")
+            .values_list("customer_phone", flat=True)
+            .distinct()
+        )
+        if phones_in_range:
+            returning_count = (
+                Order.objects
+                .filter(customer_phone__in=phones_in_range, created_at__lt=since)
+                .values("customer_phone")
+                .distinct()
+                .count()
+            )
+            total_phone_customers = len(phones_in_range)
+            return_rate_pct = round(returning_count / total_phone_customers * 100, 1)
+        else:
+            returning_count = 0
+            total_phone_customers = 0
+            return_rate_pct = None  # null = insufficient data to compute
+
         return Response(
             {
                 "categories_count": categories_count,
@@ -2064,6 +2306,16 @@ class OwnerDashboardView(APIView):
                     "top_categories": top_categories,
                     "top_dishes": top_dishes,
                     "interaction_rate_pct": interaction_rate,
+                    "funnel": {
+                        "menu_views": menu_views,
+                        "cart_views": cart_views,
+                        "order_intents": order_actions,
+                        "orders_placed": order_count,
+                        "cart_rate_pct": round(cart_views / menu_views * 100, 1) if menu_views else None,
+                        "intent_rate_pct": round(order_actions / cart_views * 100, 1) if cart_views else None,
+                        "completion_rate_pct": round(order_count / order_actions * 100, 1) if order_actions else None,
+                        "overall_rate_pct": round(order_count / menu_views * 100, 1) if menu_views else None,
+                    },
                 },
                 "upgrade_meta": {
                     "current_tier_code": external_plan_code(getattr(current_plan, "code", "")),
@@ -2075,6 +2327,24 @@ class OwnerDashboardView(APIView):
                 },
                 "upgrade_targets": upgrade_targets,
                 "upgrade_requests": upgrade_requests,
+                "revenue_summary": {
+                    "days": days,
+                    "total_revenue": total_revenue,
+                    "order_count": order_count,
+                    "avg_order_value": avg_order_value,
+                    "daily": daily_revenue,
+                    "peak_hours": {
+                        "by_hour": orders_by_hour,
+                        "by_weekday": orders_by_weekday,
+                    },
+                    "popular_dishes": popular_dishes,
+                    "customer_return": {
+                        "total_customers": total_phone_customers,
+                        "returning_customers": returning_count,
+                        "return_rate_pct": return_rate_pct,
+                    },
+                    "marketplace": marketplace_stats,
+                },
             }
         )
 

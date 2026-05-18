@@ -98,7 +98,7 @@
             <div class="grid gap-3 md:grid-cols-2 md:gap-4">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("reservationPage.preferredDate") }}
-                <input v-model="form.date" type="date" class="ui-input" />
+                <input v-model="form.date" type="date" class="ui-input" @change="onDateChange" />
               </label>
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("reservationPage.preferredTime") }}
@@ -107,16 +107,23 @@
             </div>
 
             <div class="rounded-[1.35rem] border border-slate-800/80 bg-slate-950/45 p-3">
-              <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
+              <div class="flex items-center justify-between gap-2">
+                <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
+                <span v-if="availabilityLoading" class="text-[10px] text-slate-500 animate-pulse">…</span>
+              </div>
               <div class="mt-3 flex flex-wrap gap-2">
                 <button
                   v-for="slot in quickTimes"
                   :key="slot"
-                  class="ui-pill-nav"
-                  :class="form.time === slot ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
-                  @click="form.time = slot"
+                  class="relative flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-xs transition-colors focus:outline-none"
+                  :class="slotButtonClass(slot)"
+                  :disabled="isSlotFull(slot)"
+                  @click="!isSlotFull(slot) && (form.time = slot)"
                 >
-                  {{ slot }}
+                  <span class="font-medium">{{ slot }}</span>
+                  <span v-if="capacityEnabled && form.date" class="mt-0.5 text-[10px] leading-none" :class="isSlotFull(slot) ? 'text-red-400' : 'text-emerald-400/80'">
+                    {{ slotAvailabilityLabel(slot) }}
+                  </span>
                 </button>
               </div>
             </div>
@@ -134,7 +141,48 @@
 
           <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
 
-          <div class="mt-4 flex flex-wrap items-center gap-3">
+          <!-- Fully-booked state with waitlist offer -->
+          <div v-if="lead.fullyBooked && !waitlistSubmitted" class="mt-4 space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4">
+            <div class="space-y-1">
+              <p class="text-sm font-semibold text-amber-200">{{ t("reservationPage.fullyBookedTitle") }}</p>
+              <p class="text-xs text-amber-300/80">{{ t("reservationPage.fullyBookedHint") }}</p>
+            </div>
+            <div v-if="!showWaitlistForm" class="flex flex-wrap gap-2">
+              <button class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25" @click="showWaitlistForm = true">
+                {{ t("reservationPage.joinWaitlist") }}
+              </button>
+              <button class="rounded-full border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors" @click="lead.$patch({ fullyBooked: false })">
+                {{ t("reservationPage.backToForm") }}
+              </button>
+            </div>
+            <div v-else class="space-y-3">
+              <p class="text-xs font-medium text-amber-100">{{ t("reservationPage.waitlistFormHint") }}</p>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <input v-model.trim="waitlistForm.name" :placeholder="t('common.name')" class="ui-input text-sm" />
+                <input v-model.trim="waitlistForm.phone" :placeholder="t('common.phone')" inputmode="tel" class="ui-input text-sm" />
+              </div>
+              <input v-model.trim="waitlistForm.email" type="email" :placeholder="t('common.email')" class="ui-input text-sm" />
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 disabled:opacity-60 transition-colors hover:bg-amber-500/25"
+                  :disabled="joiningWaitlist"
+                  @click="joinWaitlist"
+                >
+                  {{ joiningWaitlist ? t("reservationPage.waitlistSubmitting") : t("reservationPage.waitlistSubmit") }}
+                </button>
+                <button class="rounded-full border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors" @click="showWaitlistForm = false">
+                  {{ t("common.cancel") }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Waitlist success -->
+          <div v-if="waitlistSubmitted" class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            {{ t("reservationPage.waitlistSuccess") }}
+          </div>
+
+          <div v-if="!lead.fullyBooked" class="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
               class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65"
@@ -211,23 +259,119 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { trackEvent } from "../lib/analytics";
+import api from "../lib/api";
 import { useCartStore } from "../stores/cart";
 import { useLeadStore } from "../stores/lead";
 import { useCustomerStore } from "../stores/customer";
 import { useTenantStore } from "../stores/tenant";
+import { useToastStore } from "../stores/toast";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
 const customerStore = useCustomerStore();
 const cart = useCartStore();
+const toast = useToastStore();
 const submitted = ref(false);
 const meta = computed(() => tenant.resolvedMeta || null);
 const { t } = useI18n();
-const quickTimes = ["12:30", "14:00", "19:30", "21:00"];
+const quickTimes = ["12:00", "13:00", "14:00", "19:00", "20:00", "21:00"];
+
+// ── Availability ─────────────────────────────────────────────────────────────
+const availabilityLoading = ref(false);
+const availabilitySlots = ref([]); // [{ time, datetime, used, max, available, full }]
+const capacityEnabled = computed(() => {
+  const p = meta.value?.profile;
+  return Boolean(p?.max_covers_per_slot && Number(p.max_covers_per_slot) > 0);
+});
+
+const fetchAvailability = async (date) => {
+  if (!date || !capacityEnabled.value) {
+    availabilitySlots.value = [];
+    return;
+  }
+  availabilityLoading.value = true;
+  try {
+    const res = await api.get('/availability/', { params: { date } });
+    availabilitySlots.value = Array.isArray(res.data?.slots) ? res.data.slots : [];
+  } catch {
+    availabilitySlots.value = [];
+  } finally {
+    availabilityLoading.value = false;
+  }
+};
+
+const slotDataFor = (timeStr) => {
+  return availabilitySlots.value.find((s) => s.time === timeStr) || null;
+};
+
+const isSlotFull = (timeStr) => {
+  if (!capacityEnabled.value || !form.date) return false;
+  const s = slotDataFor(timeStr);
+  return s ? s.full : false;
+};
+
+const slotAvailabilityLabel = (timeStr) => {
+  const s = slotDataFor(timeStr);
+  if (!s) return t('reservationPage.slotUnlimited');
+  if (s.full) return t('reservationPage.slotFull');
+  if (s.available !== null && s.available <= 3) return t('reservationPage.slotAvailableCount', { available: s.available });
+  return t('reservationPage.slotUnlimited');
+};
+
+const slotButtonClass = (slot) => {
+  const full = isSlotFull(slot);
+  const active = form.time === slot;
+  if (full) return 'border-red-500/30 bg-red-500/8 text-red-400 opacity-70 cursor-not-allowed';
+  if (active) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]';
+  return 'border-slate-700 bg-slate-900/50 text-slate-300 hover:border-slate-500 hover:text-slate-200';
+};
+
+const onDateChange = () => {
+  fetchAvailability(form.date);
+};
+
+// ── Waitlist ──────────────────────────────────────────────────────────────────
+const showWaitlistForm = ref(false);
+const joiningWaitlist = ref(false);
+const waitlistSubmitted = ref(false);
+const waitlistForm = reactive({ name: '', phone: '', email: '' });
+
+const joinWaitlist = async () => {
+  if (joiningWaitlist.value) return;
+  if (!waitlistForm.name || waitlistForm.name.length < 2) {
+    toast.show(t('reservationPage.nameError'), 'error');
+    return;
+  }
+  if (!waitlistForm.phone && !waitlistForm.email) {
+    toast.show(t('reservationPage.contactRequired'), 'error');
+    return;
+  }
+  joiningWaitlist.value = true;
+  try {
+    let bookedFor = null;
+    if (form.date) {
+      const timeStr = form.time || '00:00';
+      try { bookedFor = new Date(`${form.date}T${timeStr}`).toISOString(); } catch { bookedFor = null; }
+    }
+    await api.post('/waitlist/', {
+      name: waitlistForm.name,
+      phone: waitlistForm.phone,
+      email: waitlistForm.email,
+      booked_for: bookedFor,
+      party_size: Number(form.party_size) || 1,
+    });
+    waitlistSubmitted.value = true;
+    showWaitlistForm.value = false;
+  } catch {
+    toast.show(t('reservationPage.waitlistFailed'), 'error');
+  } finally {
+    joiningWaitlist.value = false;
+  }
+};
 
 const form = reactive({
   name: "",
@@ -328,12 +472,26 @@ const submitReservation = async () => {
   if (submitted.value) return;
   lead.$patch({ error: null });
   if (!validate()) return;
+
+  // Combine date + time into an ISO datetime string for booked_for field
+  let bookedFor = null;
+  if (form.date) {
+    const timeStr = form.time || "00:00";
+    try {
+      bookedFor = new Date(`${form.date}T${timeStr}`).toISOString();
+    } catch {
+      bookedFor = null;
+    }
+  }
+
   await lead.submitLead({
     name: form.name,
     email: form.email,
     phone: form.phone,
     source: "table_reservation",
     notes: reservationNotes(),
+    booked_for: bookedFor,
+    party_size: Number(form.party_size) || null,
     hp: form.hp,
   });
   if (lead.success) {
@@ -352,6 +510,8 @@ const trackContactClick = (target) => {
 onMounted(() => {
   lead.reset();
   submitted.value = false;
+  waitlistSubmitted.value = false;
+  showWaitlistForm.value = false;
   // Pre-fill from verified customer identity first, then fall back to cart localStorage
   const c = customerStore.customer;
   if (c?.name && !form.name) form.name = c.name;
@@ -359,5 +519,16 @@ onMounted(() => {
   if (c?.email && !form.email) form.email = c.email;
   if (cart.customerName && !form.name) form.name = cart.customerName;
   if (cart.customerPhone && !form.phone) form.phone = cart.customerPhone;
+  // Pre-fill waitlist form too
+  waitlistForm.name = form.name || '';
+  waitlistForm.phone = form.phone || '';
+  waitlistForm.email = form.email || '';
+  // Fetch availability if date is already set
+  if (form.date) fetchAvailability(form.date);
 });
+
+// Pre-fill waitlist form when main form changes
+watch(() => form.name, (v) => { if (v && !waitlistForm.name) waitlistForm.name = v; });
+watch(() => form.phone, (v) => { if (v && !waitlistForm.phone) waitlistForm.phone = v; });
+watch(() => form.email, (v) => { if (v && !waitlistForm.email) waitlistForm.email = v; });
 </script>

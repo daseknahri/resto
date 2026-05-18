@@ -10,7 +10,8 @@
                 :src="tenantLogo"
                 :alt="`${tenantName} logo`"
                 class="h-8 w-8 shrink-0 rounded-xl border border-slate-700/70 object-cover md:h-9 md:w-9"
-                loading="lazy"
+                loading="eager"
+                decoding="async"
               />
               <div class="min-w-0">
                 <h1 class="ui-display truncate text-base font-semibold text-white sm:text-lg md:text-2xl">{{ tenantName }}</h1>
@@ -112,6 +113,26 @@
                       <AppIcon name="user" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.staff") }}</span>
                     </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-ratings' }" @click="closeSettingsMenu">
+                      <AppIcon name="star" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.ratings") }}</span>
+                    </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-promotions' }" @click="closeSettingsMenu">
+                      <AppIcon name="tag" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.promotions") }}</span>
+                    </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-flash-sales' }" @click="closeSettingsMenu">
+                      <AppIcon name="sparkles" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.flashSales") }}</span>
+                    </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-delivery' }" @click="closeSettingsMenu">
+                      <AppIcon name="truck" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.delivery") }}</span>
+                    </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
+                      <AppIcon name="menu" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.kitchen") }}</span>
+                    </RouterLink>
                     <button class="owner-settings-item owner-settings-item-danger" type="button" @click="handleSignOut">
                       <AppIcon name="logout" class="owner-settings-item-icon" />
                       <span>{{ t("common.signOut") }}</span>
@@ -124,6 +145,27 @@
         </div>
       </div>
     </header>
+
+    <!-- Grace period / payment overdue banner -->
+    <Transition name="ui-fade">
+      <div
+        v-if="tenant.isInGracePeriod || tenant.graceExpired"
+        class="sticky top-0 z-[1900] w-full border-b px-4 py-2.5 text-center text-xs font-semibold"
+        :class="tenant.graceExpired
+          ? 'border-red-500/40 bg-red-500/15 text-red-200'
+          : tenant.graceDaysRemaining <= 1
+            ? 'border-orange-500/40 bg-orange-500/15 text-orange-200'
+            : 'border-amber-500/40 bg-amber-500/12 text-amber-200'"
+      >
+        <span v-if="tenant.graceExpired">{{ t('ownerLayout.graceExpiredWarning') }}</span>
+        <span v-else-if="tenant.graceDaysRemaining <= 1">{{ t('ownerLayout.gracePeriodCritical') }}</span>
+        <span v-else>{{ t('ownerLayout.gracePeriodWarning', { days: tenant.graceDaysRemaining }) }}</span>
+        <RouterLink
+          :to="{ name: 'owner-profile', query: { tab: 'billing' } }"
+          class="ml-2 underline opacity-80 hover:opacity-100"
+        >{{ t('ownerLayout.gracePeriodCta') }}</RouterLink>
+      </div>
+    </Transition>
 
     <main class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
       <RouterView v-slot="{ Component, route: viewRoute }">
@@ -238,6 +280,8 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/reservations")) return t("ownerLayout.reservations");
   if (path.startsWith("/owner/orders")) return t("ownerLayout.orders");
   if (path.startsWith("/owner/staff")) return t("ownerLayout.staff");
+  if (path.startsWith("/owner/ratings")) return t("ownerLayout.ratings");
+  if (path.startsWith("/owner/kitchen")) return t("ownerLayout.kitchen");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

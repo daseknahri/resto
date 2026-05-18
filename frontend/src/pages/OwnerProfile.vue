@@ -40,6 +40,7 @@ import { useI18n } from "../composables/useI18n";
 import StepBrand from "../onboarding/StepBrand.vue";
 import StepPublish from "../onboarding/StepPublish.vue";
 import StepTheme from "../onboarding/StepTheme.vue";
+import OwnerBilling from "./OwnerBilling.vue";
 import { useTenantStore } from "../stores/tenant";
 
 const route = useRoute();
@@ -65,6 +66,12 @@ const tabs = computed(() => [
     label: t("stepPublish.title"),
     icon: "check-circle",
     component: StepPublish,
+  },
+  {
+    key: "billing",
+    label: t("ownerBilling.tabLabel"),
+    icon: "plus",
+    component: OwnerBilling,
   },
 ]);
 
@@ -112,10 +119,10 @@ const handlePublish = () => {
 <style scoped>
 .owner-profile-nav {
   display: inline-grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
   width: 100%;
-  max-width: 32rem;
+  max-width: 42rem;
   border: 1px solid rgba(51, 65, 85, 0.72);
   border-radius: 1rem;
   background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(3, 15, 35, 0.78));

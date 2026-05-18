@@ -108,10 +108,16 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(TierUpgradeRequest)
 class TierUpgradeRequestAdmin(admin.ModelAdmin):
-    list_display = ("tenant", "current_plan", "target_plan", "status", "payment_method", "requested_at", "decided_at")
+    list_display = ("tenant", "current_plan", "target_plan", "status", "payment_method", "invoice_amount", "invoice_currency", "requested_at", "decided_at")
     list_filter = ("status", "payment_method", "target_plan", "requested_at")
     search_fields = ("tenant__slug", "requester__username", "payment_reference")
     readonly_fields = ("requested_at", "updated_at", "decided_at")
+    fieldsets = (
+        (None, {"fields": ("tenant", "requester", "current_plan", "target_plan", "status", "approved_by", "decided_at")}),
+        ("Payment", {"fields": ("payment_method", "payment_reference", "invoice_amount", "invoice_currency")}),
+        ("Notes", {"fields": ("customer_note", "admin_note")}),
+        ("Timestamps", {"fields": ("requested_at", "updated_at")}),
+    )
 
 
 @admin.register(ProvisioningJob)

@@ -1,0 +1,234 @@
+<template>
+  <div class="space-y-4">
+    <!-- Week navigation -->
+    <div class="flex items-center justify-between gap-3">
+      <button
+        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        @click="prevWeek"
+      >
+        ← {{ t("reservationCalendar.prevWeek") }}
+      </button>
+      <p class="text-sm font-semibold text-slate-100">{{ weekLabel }}</p>
+      <button
+        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        @click="nextWeek"
+      >
+        {{ t("reservationCalendar.nextWeek") }} →
+      </button>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="loading" class="grid grid-cols-7 gap-2">
+      <div v-for="i in 7" :key="i" class="h-40 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
+    </div>
+
+    <!-- Week grid -->
+    <div v-else class="grid grid-cols-7 gap-1.5 overflow-x-auto">
+      <div
+        v-for="day in weekDays"
+        :key="day.iso"
+        class="min-h-[140px] rounded-2xl border transition-colors"
+        :class="[
+          isToday(day.iso) ? 'border-violet-500/40 bg-violet-500/5' : 'border-slate-700/40 bg-slate-800/20',
+          dragOverDay === day.iso ? 'ring-2 ring-violet-400/50' : '',
+        ]"
+        @dragover.prevent="dragOverDay = day.iso"
+        @dragleave="dragOverDay = null"
+        @drop.prevent="onDrop(day.iso)"
+      >
+        <!-- Day header -->
+        <div
+          class="rounded-t-2xl px-2 py-1.5 text-center"
+          :class="isToday(day.iso) ? 'bg-violet-500/20' : 'bg-slate-800/40'"
+        >
+          <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{{ day.dayName }}</p>
+          <p class="text-lg font-bold" :class="isToday(day.iso) ? 'text-violet-300' : 'text-slate-100'">
+            {{ day.dayNum }}
+          </p>
+        </div>
+
+        <!-- Reservation chips -->
+        <div class="space-y-1 p-1.5">
+          <div
+            v-for="res in reservationsByDay[day.iso] || []"
+            :key="res.id"
+            class="group cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing"
+            :class="statusChipClass(res.status)"
+            draggable="true"
+            @dragstart="onDragStart(res)"
+            @click="$emit('select', res)"
+          >
+            <p class="font-semibold text-slate-100 truncate">{{ res.name }}</p>
+            <p v-if="res.booked_for" class="text-slate-400">{{ timeLabel(res.booked_for) }}</p>
+            <p v-if="res.party_size" class="text-slate-500">{{ t("reservationCalendar.guests", { n: res.party_size }) }}</p>
+            <span class="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide" :class="statusBadgeClass(res.status)">
+              {{ statusLabelShort(res.status) }}
+            </span>
+          </div>
+
+          <!-- Empty hint -->
+          <p v-if="!(reservationsByDay[day.iso] || []).length" class="px-1 py-2 text-center text-[10px] text-slate-600">
+            —
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- No-date reservations note -->
+    <p v-if="undatedCount > 0" class="text-center text-xs text-slate-500">
+      {{ t("reservationCalendar.undatedNote", { count: undatedCount }) }}
+    </p>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, onMounted } from "vue";
+import api from "../lib/api";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
+
+const emit = defineEmits(["select", "rescheduled"]);
+
+// ── Week navigation ────────────────────────────────────────────────────────────
+const weekOffset = ref(0); // 0 = current week, -1 = last week, etc.
+
+const mondayOfWeek = computed(() => {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const diff = (day === 0 ? -6 : 1 - day); // shift to Monday
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diff + weekOffset.value * 7);
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+});
+
+const weekDays = computed(() => {
+  const days = [];
+  const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mondayOfWeek.value);
+    d.setDate(d.getDate() + i);
+    days.push({
+      iso: d.toISOString().slice(0, 10),
+      dayName: DAY_NAMES[i],
+      dayNum: d.getDate(),
+      date: d,
+    });
+  }
+  return days;
+});
+
+const weekLabel = computed(() => {
+  const start = weekDays.value[0];
+  const end = weekDays.value[6];
+  const fmtDate = (d) => new Date(d.iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${fmtDate(start)} – ${fmtDate(end)}`;
+});
+
+const isToday = (iso) => iso === new Date().toISOString().slice(0, 10);
+
+const prevWeek = () => weekOffset.value--;
+const nextWeek = () => weekOffset.value++;
+
+// ── Data fetching ──────────────────────────────────────────────────────────────
+const reservations = ref([]);
+const loading = ref(false);
+
+const fetchWeek = async () => {
+  loading.value = true;
+  try {
+    const from = weekDays.value[0].iso;
+    const to = weekDays.value[6].iso;
+    // Fetch reservations with booked_for in this week range
+    const res = await api.get("/owner/reservations/", {
+      params: { from, to, page_size: 200 },
+    });
+    reservations.value = Array.isArray(res.data?.results) ? res.data.results : [];
+  } catch {
+    reservations.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+watch(weekOffset, fetchWeek);
+onMounted(fetchWeek);
+
+// ── Group by day ───────────────────────────────────────────────────────────────
+const reservationsByDay = computed(() => {
+  const groups = {};
+  for (const r of reservations.value) {
+    if (!r.booked_for) continue;
+    const dayIso = r.booked_for.slice(0, 10);
+    if (!groups[dayIso]) groups[dayIso] = [];
+    groups[dayIso].push(r);
+  }
+  // Sort each day by time
+  for (const day of Object.keys(groups)) {
+    groups[day].sort((a, b) => (a.booked_for || "").localeCompare(b.booked_for || ""));
+  }
+  return groups;
+});
+
+const undatedCount = computed(() => reservations.value.filter((r) => !r.booked_for).length);
+
+const timeLabel = (iso) => {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+};
+
+// ── Drag and drop ──────────────────────────────────────────────────────────────
+const dragging = ref(null);
+const dragOverDay = ref(null);
+
+const onDragStart = (res) => {
+  dragging.value = res;
+};
+
+const onDrop = async (targetDayIso) => {
+  dragOverDay.value = null;
+  const res = dragging.value;
+  dragging.value = null;
+  if (!res) return;
+
+  // Compute new booked_for: keep existing time if present, use noon otherwise
+  let newBookedFor;
+  if (res.booked_for) {
+    const existingTime = res.booked_for.slice(11, 16); // HH:MM
+    newBookedFor = new Date(`${targetDayIso}T${existingTime}`).toISOString();
+  } else {
+    newBookedFor = new Date(`${targetDayIso}T12:00`).toISOString();
+  }
+
+  try {
+    const updated = await api.patch(`/owner/reservations/${res.id}/`, { booked_for: newBookedFor });
+    // Update local state
+    const idx = reservations.value.findIndex((r) => r.id === res.id);
+    if (idx !== -1) reservations.value[idx] = { ...reservations.value[idx], booked_for: newBookedFor };
+    emit("rescheduled", updated.data);
+  } catch {
+    // Silently fail — the list will refresh on next fetch
+  }
+};
+
+// ── Status styling ─────────────────────────────────────────────────────────────
+const statusChipClass = (s) => ({
+  new: "border-amber-500/40 bg-amber-500/10",
+  contacted: "border-sky-500/40 bg-sky-500/10",
+  won: "border-emerald-500/40 bg-emerald-500/10",
+  lost: "border-slate-600/50 bg-slate-800/40",
+}[s] ?? "border-slate-600/40 bg-slate-800/30");
+
+const statusBadgeClass = (s) => ({
+  new: "bg-amber-500/20 text-amber-300",
+  contacted: "bg-sky-500/20 text-sky-300",
+  won: "bg-emerald-500/20 text-emerald-300",
+  lost: "bg-slate-700 text-slate-400",
+}[s] ?? "bg-slate-700 text-slate-400");
+
+const statusLabelShort = (s) => ({ new: "new", contacted: "contacted", won: "confirmed", lost: "lost" }[s] ?? s);
+</script>

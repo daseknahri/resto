@@ -17,6 +17,8 @@ export const useLeadStore = defineStore("lead", {
     submitting: false,
     error: null,
     success: false,
+    fullyBooked: false,
+    fullyBookedData: null, // { booked_for, used, max }
   }),
   actions: {
     async submitLead(payload) {
@@ -24,6 +26,8 @@ export const useLeadStore = defineStore("lead", {
       this.submitting = true;
       this.error = null;
       this.success = false;
+      this.fullyBooked = false;
+      this.fullyBookedData = null;
       try {
         await api.post("/leads/", payload);
         this.success = true;
@@ -35,6 +39,12 @@ export const useLeadStore = defineStore("lead", {
         );
         toast.show(translate("leadStore.received"), "success");
       } catch (err) {
+        // Handle capacity-full (409) without showing a generic toast
+        if (err?.response?.status === 409 && err?.response?.data?.detail === "fully_booked") {
+          this.fullyBooked = true;
+          this.fullyBookedData = err.response.data || null;
+          return;
+        }
         this.error = extractErrorMessage(err, translate("leadStore.submitFailed"));
         toast.show(this.error, "error");
       } finally {
@@ -45,6 +55,8 @@ export const useLeadStore = defineStore("lead", {
       this.submitting = false;
       this.error = null;
       this.success = false;
+      this.fullyBooked = false;
+      this.fullyBookedData = null;
     },
   },
 });

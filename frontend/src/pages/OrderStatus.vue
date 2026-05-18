@@ -173,10 +173,95 @@
           <p class="shrink-0 font-medium text-[var(--color-secondary)]">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
         </div>
 
-        <div class="flex justify-between border-t border-slate-800 pt-3">
+        <!-- Delivery fee breakdown — only shown for delivery orders with a fee -->
+        <template v-if="orderData.fulfillment_type === 'delivery' && Number(orderData.delivery_fee) > 0">
+          <div class="flex justify-between border-t border-slate-800 pt-3 text-sm text-slate-400">
+            <span>{{ t("orderStatus.subtotal") }}</span>
+            <span>{{ formatCurrency(Number(orderData.total) - Number(orderData.delivery_fee), orderData.currency) }}</span>
+          </div>
+          <div class="flex justify-between text-sm text-slate-400">
+            <span>{{ t("orderStatus.deliveryFee") }}</span>
+            <span>{{ formatCurrency(orderData.delivery_fee, orderData.currency) }}</span>
+          </div>
+          <div class="flex justify-between border-t border-slate-700 pt-2">
+            <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
+            <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
+          </div>
+        </template>
+        <div v-else class="flex justify-between border-t border-slate-800 pt-3">
           <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
           <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
         </div>
+        <!-- Wallet credits applied -->
+        <div
+          v-if="Number(orderData.wallet_amount_paid) > 0"
+          class="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs"
+        >
+          <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: orderData.wallet_amount_paid }) }}</span>
+          <span class="font-semibold text-emerald-200">💰 {{ orderData.wallet_amount_paid }}</span>
+        </div>
+      </div>
+
+      <!-- Receipt message (thank-you note from the restaurant owner) -->
+      <div
+        v-if="orderData.receipt_message && ['confirmed', 'ready', 'completed'].includes(orderData.status)"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-1.5 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
+      >
+        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--color-secondary)]/70">
+          {{ t("orderStatus.receiptMessage") }}
+        </p>
+        <p class="text-sm text-slate-200 leading-relaxed">{{ orderData.receipt_message }}</p>
+      </div>
+
+      <!-- Rating prompt (completed, not yet rated) -->
+      <div
+        v-if="orderData.status === 'completed' && !orderData.has_rating"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-4"
+      >
+        <div>
+          <p class="text-sm font-semibold text-slate-200">{{ t("orderStatus.rateTitle") }}</p>
+          <p class="text-xs text-slate-400 mt-0.5">{{ t("orderStatus.rateSubtitle") }}</p>
+        </div>
+        <!-- Star picker -->
+        <div class="flex gap-2">
+          <button
+            v-for="star in 5"
+            :key="star"
+            type="button"
+            class="text-3xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            :aria-label="t('orderStatus.ratingLabel', { score: star })"
+            @click="ratingScore = star"
+          >
+            <span :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
+          </button>
+        </div>
+        <!-- Comment -->
+        <textarea
+          v-model="ratingComment"
+          rows="2"
+          :placeholder="t('orderStatus.commentPlaceholder')"
+          class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+        />
+        <button
+          :disabled="ratingScore === 0 || ratingSubmitting"
+          class="ui-btn-primary inline-flex px-5 py-2 text-sm disabled:opacity-40"
+          @click="submitRating"
+        >
+          {{ ratingSubmitting ? t("orderStatus.rateSubmitting") : t("orderStatus.rateSubmit") }}
+        </button>
+      </div>
+
+      <!-- Already rated — show submitted rating -->
+      <div
+        v-else-if="orderData.status === 'completed' && orderData.has_rating && orderData.rating"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-1"
+      >
+        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{{ t("orderStatus.yourRating") }}</p>
+        <div class="flex items-center gap-2">
+          <span class="text-2xl text-amber-400">{{ "★".repeat(orderData.rating.score) }}<span class="text-slate-700">{{ "★".repeat(5 - orderData.rating.score) }}</span></span>
+          <span class="text-sm font-semibold text-slate-200">{{ orderData.rating.score }}/5</span>
+        </div>
+        <p v-if="orderData.rating.comment" class="text-sm text-slate-400 italic">{{ orderData.rating.comment }}</p>
       </div>
 
       <!-- Re-order + navigation -->
@@ -225,6 +310,29 @@ const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
 const readyAlertShown = ref(false);
+
+// ── Rating ────────────────────────────────────────────────────────────────────
+const ratingScore = ref(0);
+const ratingComment = ref("");
+const ratingSubmitting = ref(false);
+
+const submitRating = async () => {
+  if (ratingScore.value === 0 || ratingSubmitting.value) return;
+  ratingSubmitting.value = true;
+  try {
+    await api.post(`/orders/${props.orderNumber}/rate/`, {
+      score: ratingScore.value,
+      comment: ratingComment.value.trim(),
+    });
+    toast.show(t("orderStatus.rateSubmitted"), "success");
+    // Refresh so has_rating flips to true and the prompt hides
+    await fetchStatus();
+  } catch {
+    toast.show(t("orderStatus.rateError"), "error");
+  } finally {
+    ratingSubmitting.value = false;
+  }
+};
 
 const isLiveStatus = computed(() =>
   orderData.value && !["completed", "cancelled"].includes(orderData.value.status)

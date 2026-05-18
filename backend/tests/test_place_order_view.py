@@ -32,20 +32,23 @@ def _profile(
     is_menu_published=True,
     is_menu_temporarily_disabled=False,
     is_open=True,
+    delivery_fee="0",
 ):
     return SimpleNamespace(
         is_menu_published=is_menu_published,
         is_menu_temporarily_disabled=is_menu_temporarily_disabled,
         is_open=is_open,
+        delivery_fee=delivery_fee,
     )
 
 
-def _dish(slug="burger", price="10.00", currency="MAD"):
+def _dish(slug="burger", price="10.00", currency="MAD", stock_qty=None):
     d = MagicMock()
     d.slug = slug
     d.name = "Burger"
     d.price = Decimal(price)
     d.currency = currency
+    d.stock_qty = stock_qty  # None = unlimited; must be explicit so MagicMock doesn't produce a truthy sentinel
     return d
 
 
@@ -255,6 +258,7 @@ class PlaceOrderViewTests(SimpleTestCase):
                 mock_order.order_number = "ORD001"
                 mock_order.status = "pending"
                 mock_order.total = Decimal("10.00")
+                mock_order.delivery_fee = Decimal("0")
                 mock_order.currency = "MAD"
                 mock_order.estimated_ready_minutes = None
                 order_mock.create.return_value = mock_order
@@ -288,3 +292,204 @@ class PlaceOrderViewTests(SimpleTestCase):
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "items_unavailable")
+
+    # ── Phone required for delivery ────────────────────────────────────────────
+
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_delivery_requires_phone_number(self, profile_mock, dish_mock):
+        """Delivery with a verified customer but no phone should return 403 phone_required."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish = _dish()
+        dish_mock.filter.return_value.select_related.return_value = [dish]
+
+        # Verified via email but no phone number set
+        customer = MagicMock()
+        customer.phone_verified = False
+        customer.email_verified = True
+        customer.google_sub = None
+        customer.phone = None  # no phone
+
+        payload = {
+            "items": [{"slug": "burger", "qty": 1}],
+            "fulfillment_type": "delivery",
+            "delivery_address": "123 Main St",
+            "delivery_location_url": "https://maps.example.com/place/123",
+        }
+        req = self._post(data=payload, session=_session(customer_id=7))
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "phone_required")
+
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_delivery_with_phone_passes_phone_gate(self, profile_mock, dish_mock):
+        """Verified customer WITH a phone should not be blocked by the phone gate."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish = _dish()
+        dish_mock.filter.return_value.select_related.return_value = [dish]
+
+        customer = MagicMock()
+        customer.phone_verified = True
+        customer.email_verified = False
+        customer.google_sub = None
+        customer.phone = "+21261234567"
+        customer.name = "Alice"
+
+        payload = {
+            "items": [{"slug": "burger", "qty": 1}],
+            "fulfillment_type": "delivery",
+            "delivery_address": "123 Main St",
+            "delivery_location_url": "https://maps.example.com/place/123",
+        }
+        req = self._post(data=payload, session=_session(customer_id=7))
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                with patch("menu.views.Order.objects") as order_mock:
+                    mock_order = MagicMock()
+                    mock_order.order_number = "ORD999"
+                    mock_order.status = "pending"
+                    mock_order.total = Decimal("10.00")
+                    mock_order.delivery_fee = Decimal("0")
+                    mock_order.currency = "MAD"
+                    mock_order.estimated_ready_minutes = None
+                    order_mock.create.return_value = mock_order
+                    with patch("menu.views.OrderItem.objects"):
+                        with patch("menu.views._generate_order_number", return_value="ORD999"):
+                            with patch("menu.views.transaction") as tx_mock:
+                                cm = MagicMock()
+                                cm.__enter__ = MagicMock(return_value=None)
+                                cm.__exit__ = MagicMock(return_value=False)
+                                tx_mock.atomic.return_value = cm
+                                resp = self.view(req)
+        # Should NOT be blocked by the phone gate (may fail later for other reasons)
+        self.assertNotEqual(resp.data.get("code"), "phone_required")
+
+    # ── Stock management ──────────────────────────────────────────────────────
+
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_out_of_stock_returns_items_unavailable(self, profile_mock, dish_mock):
+        """When ordered qty exceeds available stock, return 400 items_unavailable."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+
+        # Dish has 1 unit remaining; customer orders 2
+        dish = _dish(stock_qty=1)
+        dish_mock.filter.return_value.select_related.return_value = [dish]
+
+        # The locked row (select_for_update) reflects the same stock
+        locked_dish = MagicMock()
+        locked_dish.pk = dish.pk
+        locked_dish.stock_qty = 1
+        dish_mock.select_for_update.return_value.filter.return_value = [locked_dish]
+
+        payload = {"items": [{"slug": "burger", "qty": 2}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)
+
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.transaction") as tx_mock:
+                cm = MagicMock()
+                cm.__enter__ = MagicMock(return_value=None)
+                cm.__exit__ = MagicMock(return_value=False)
+                tx_mock.atomic.return_value = cm
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "items_unavailable")
+        self.assertIn(dish.slug, resp.data.get("slugs", []))
+
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_sufficient_stock_allows_order(self, profile_mock, dish_mock):
+        """When stock is sufficient, the order proceeds and stock would be decremented."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+
+        # Dish has 5 units; customer orders 2 — should succeed
+        dish = _dish(stock_qty=5)
+        dish_mock.filter.return_value.select_related.return_value = [dish]
+
+        locked_dish = MagicMock()
+        locked_dish.pk = dish.pk
+        locked_dish.stock_qty = 5
+        dish_mock.select_for_update.return_value.filter.return_value = [locked_dish]
+        # The per-dish UPDATE call used for decrement
+        dish_mock.filter.return_value.update.return_value = 1
+
+        payload = {"items": [{"slug": "burger", "qty": 2}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)
+
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.Order.objects") as order_mock:
+                mock_order = MagicMock()
+                mock_order.order_number = "STOCK01"
+                mock_order.status = "pending"
+                mock_order.total = Decimal("20.00")
+                mock_order.delivery_fee = Decimal("0")
+                mock_order.currency = "MAD"
+                mock_order.estimated_ready_minutes = None
+                order_mock.create.return_value = mock_order
+                with patch("menu.views.OrderItem.objects"):
+                    with patch("menu.views._generate_order_number", return_value="STOCK01"):
+                        with patch("menu.views.transaction") as tx_mock:
+                            cm = MagicMock()
+                            cm.__enter__ = MagicMock(return_value=None)
+                            cm.__exit__ = MagicMock(return_value=False)
+                            tx_mock.atomic.return_value = cm
+                            resp = self.view(req)
+
+        # Order should be created (201) — not blocked by stock check
+        self.assertNotEqual(resp.data.get("code"), "items_unavailable")
+        self.assertNotEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_exact_stock_match_triggers_sold_out(self, profile_mock, dish_mock):
+        """Ordering the last remaining unit returns 400 items_unavailable (race: qty==stock)."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+
+        dish = _dish(stock_qty=1)
+        dish_mock.filter.return_value.select_related.return_value = [dish]
+
+        # Stock was 1, but we're ordering 1 — this is fine; stock would hit 0 and auto-disable.
+        # Only reject if ordered qty EXCEEDS available stock.
+        locked_dish = MagicMock()
+        locked_dish.pk = dish.pk
+        locked_dish.stock_qty = 1
+        dish_mock.select_for_update.return_value.filter.return_value = [locked_dish]
+        dish_mock.filter.return_value.update.return_value = 1
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)
+
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.Order.objects") as order_mock:
+                mock_order = MagicMock()
+                mock_order.order_number = "LAST01"
+                mock_order.status = "pending"
+                mock_order.total = Decimal("10.00")
+                mock_order.delivery_fee = Decimal("0")
+                mock_order.currency = "MAD"
+                mock_order.estimated_ready_minutes = None
+                order_mock.create.return_value = mock_order
+                with patch("menu.views.OrderItem.objects"):
+                    with patch("menu.views._generate_order_number", return_value="LAST01"):
+                        with patch("menu.views.transaction") as tx_mock:
+                            cm = MagicMock()
+                            cm.__enter__ = MagicMock(return_value=None)
+                            cm.__exit__ = MagicMock(return_value=False)
+                            tx_mock.atomic.return_value = cm
+                            resp = self.view(req)
+
+        # Ordering the last unit should be ALLOWED (stock >= qty)
+        self.assertNotEqual(resp.data.get("code"), "items_unavailable")

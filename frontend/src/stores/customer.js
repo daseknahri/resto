@@ -15,6 +15,8 @@ export const useCustomerStore = defineStore("customer", {
     /** True when the customer has at least one verified contact method (phone OTP, email OTP, or Google). */
     isVerified: (state) =>
       !!(state.customer?.phone_verified || state.customer?.email_verified || state.customer?.has_google),
+    /** Preferred locale for the customer (en/fr/ar). */
+    locale: (state) => state.customer?.locale || "en",
   },
 
   actions: {

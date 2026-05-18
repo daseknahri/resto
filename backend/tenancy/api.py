@@ -9,6 +9,7 @@ from datetime import datetime
 from urllib.parse import unquote, urlparse
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils.decorators import method_decorator
@@ -162,6 +163,28 @@ def _extract_relative_media_path(value: str) -> str:
     return candidate
 
 
+# ── Meta cache constants ────────────────────────────────────────────────────────
+# Cache key pattern: meta:v1:{tenant_slug}:{locale_key}
+# locale_key = "_auth"   → authenticated owner (canonical, unlocalized fields)
+#            = "en"/"fr"/"ar" → customer with explicit ?lang= param
+#            = ""             → unauthenticated customer with no ?lang= param
+# On profile save every known variant is evicted so the cache is never stale.
+_META_CACHE_TTL = 300  # 5 minutes — matches the frontend SWR TTL
+_META_CACHE_LOCALE_VARIANTS = ("", "en", "fr", "ar", "_auth")
+
+
+def _meta_cache_key(tenant_slug: str, locale_key: str) -> str:
+    return f"meta:v1:{tenant_slug}:{locale_key}"
+
+
+def _bust_tenant_meta_cache(tenant_slug: str) -> None:
+    """Delete every known locale variant of the meta cache for this tenant."""
+    if not tenant_slug:
+        return
+    keys = [_meta_cache_key(tenant_slug, loc) for loc in _META_CACHE_LOCALE_VARIANTS]
+    cache.delete_many(keys)
+
+
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class TenantMetaView(APIView):
     permission_classes = [AllowAny]
@@ -170,8 +193,32 @@ class TenantMetaView(APIView):
         tenant = getattr(request, "tenant", None)
         if tenant is None:
             return Response({"detail": "Tenant not resolved"}, status=400)
+
+        tenant_slug = getattr(tenant, "slug", "")
+
+        # Determine locale scope for the cache key.
+        # Authenticated users (owners) always get canonical (unlocalized) data.
+        # Anonymous customers use the ?lang= query param; Accept-Language header
+        # requests fall under the same "" bucket (the minority path).
+        user = getattr(request, "user", None)
+        is_auth = user is not None and getattr(user, "is_authenticated", False)
+        if is_auth:
+            locale_key = "_auth"
+        else:
+            query_params = getattr(request, "query_params", None) or getattr(request, "GET", {})
+            lang_param = str(query_params.get("lang", "") or "").strip().lower()[:8]
+            locale_key = lang_param  # "" when no ?lang= is given
+
+        cache_key = _meta_cache_key(tenant_slug, locale_key)
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
         serializer = TenantMetaSerializer.from_tenant(tenant, request=request)
-        return Response(serializer.data)
+        data = serializer.data
+        # Pickle-safe: DRF ReturnDict/ReturnList are picklable by django-redis.
+        cache.set(cache_key, data, timeout=_META_CACHE_TTL)
+        return Response(data)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -182,6 +229,12 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         tenant = getattr(self.request, "tenant", None)
         profile, _ = Profile.objects.get_or_create(tenant=tenant)
         return profile
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        # Evict every cached locale variant so the next /api/meta/ read is fresh.
+        tenant = getattr(self.request, "tenant", None)
+        _bust_tenant_meta_cache(getattr(tenant, "slug", ""))
 
 
 class ImageUploadView(APIView):
@@ -347,3 +400,75 @@ class ImageDeleteView(APIView):
             default_storage.delete(rel_path)
 
         return Response({"deleted": bool(existed), "path": rel_path}, status=200)
+
+
+class OwnerDeletionRequestView(APIView):
+    """
+    POST /api/owner/deletion-request/
+
+    Owner requests account deletion.  Sets `deletion_requested_at` on the
+    Tenant record (public schema) and sends an admin notification email.
+    The actual deactivation is carried out manually by an admin.
+
+    Body (optional):
+        { "reason": "Closing my business" }
+
+    Responses:
+        200 OK  — request recorded (idempotent — calling twice is safe)
+        403     — non-owner access
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        tenant = getattr(request, "tenant", None)
+
+        # Only the restaurant owner may request deletion.
+        if not getattr(user, "is_tenant_owner", False):
+            return Response({"detail": "Owner access required."}, status=403)
+
+        if tenant is None:
+            return Response({"detail": "No tenant context."}, status=400)
+
+        reason = str(request.data.get("reason", "") or "").strip()[:500]
+
+        from django.utils import timezone as _tz
+        from django_tenants.utils import schema_context
+
+        # Write to public schema (Tenant lives there).
+        with schema_context("public"):
+            from tenancy.models import Tenant as _Tenant
+            try:
+                t = _Tenant.objects.get(pk=tenant.pk)
+            except _Tenant.DoesNotExist:
+                return Response({"detail": "Tenant not found."}, status=404)
+
+            # Idempotent — only set if not already requested.
+            if not t.deletion_requested_at:
+                t.deletion_requested_at = _tz.now()
+            t.deletion_reason = reason
+            t.save(update_fields=["deletion_requested_at", "deletion_reason"])
+
+        # Notify admin via email (best-effort — never fail the response).
+        try:
+            from django.conf import settings as _s
+            from django.core.mail import send_mail as _send
+            admin_email = getattr(_s, "DEFAULT_FROM_EMAIL", "")
+            if admin_email:
+                _send(
+                    subject=f"[Resto] Deletion request — {tenant.slug}",
+                    message=(
+                        f"Restaurant '{tenant.name}' (slug: {tenant.slug}) has requested account deletion.\n\n"
+                        f"Owner: {user.email}\n"
+                        f"Reason: {reason or '(none provided)'}\n\n"
+                        "Please review in the admin console and complete the offboarding process."
+                    ),
+                    from_email=admin_email,
+                    recipient_list=[admin_email],
+                    fail_silently=True,
+                )
+        except Exception:
+            pass
+
+        return Response({"status": "requested", "deletion_requested_at": t.deletion_requested_at.isoformat()})

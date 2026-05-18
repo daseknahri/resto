@@ -123,6 +123,9 @@
 ## Phase 2 - Early Post-Launch Hardening (After First Sales)
 
 ### 1. Observability and Reliability
+- [x] Add Redis cache layer: CACHES block with django-redis + graceful LocMemCache fallback, OTP storage, throttle counts, and `TenantMetaView` cache-aside with locale-keyed bust on profile save (300 s TTL, `IGNORE_EXCEPTIONS=True`).
+- [x] Add Redis-backed sessions (`SESSION_ENGINE = cache` when `REDIS_URL` is set) so all Gunicorn workers share session state — required for multi-worker OTP verify correctness.
+- [x] Add server-side menu list cache for public reads (`CategoryViewSet`, `DishViewSet`, `SuperCategoryViewSet`, `DishOptionViewSet`) with version-counter bust on every owner CMS write — 60 s TTL, auth users bypass cache. Tests in `test_menu_list_cache.py`.
 - [x] Add structured logging for backend API and provisioning jobs.
 - [x] Add Sentry (backend + frontend) with environment tagging.
 - [x] Configure production DSN values and verify first captured backend/frontend error event.
@@ -275,6 +278,13 @@
 - [x] Add tenant analytics events (menu views, category taps, dish views, cart views, checkout/WhatsApp clicks, owner publish).
 - [x] Add dashboard cards for tenant performance and conversion trend (30-day interaction snapshot + top categories/dishes).
 - [x] Add analytics retention cleanup command (`prune_analytics_events`) for scheduled maintenance on long-running tenants.
+
+### 4. Per-Restaurant Ratings (Phase 1 exit criterion 6)
+- [x] Add `Rating` model (tenant-scoped, `OneToOneField → Order`, score 1–5, optional comment). Migration `0014_rating`.
+- [x] Add `POST /api/orders/<order_number>/rate/` — anonymous customer submits rating after order `completed`; busts meta cache; 400 if already rated / not completed / score out of range.
+- [x] Add `GET /api/owner/ratings/` — owner lists all ratings (count/average/list); `?format=csv` exports spreadsheet.
+- [x] Extend `/api/meta/` response with `rating_summary {average, count}` so frontend can show restaurant rating in the public header without a separate request.
+- [x] **Frontend**: add 1–5 star UI prompt on order status page when `status == completed` and order not yet rated.
 
 ## Deployment and Infrastructure Checklist (Production VPS)
 - [ ] Provision PostgreSQL with backups and secure credentials.

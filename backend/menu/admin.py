@@ -1,6 +1,6 @@
 ﻿from django.contrib import admin
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
+from .models import AnalyticsEvent, Category, ClosureDate, Dish, DishOption, OptionGroup, SuperCategory, TableLink, WaitlistEntry
 
 
 @admin.register(SuperCategory)
@@ -70,3 +70,19 @@ class TableLinkAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = ("label", "slug")
     ordering = ("position", "label", "id")
+
+
+@admin.register(ClosureDate)
+class ClosureDateAdmin(admin.ModelAdmin):
+    list_display = ("date", "label", "created_at")
+    search_fields = ("label",)
+    ordering = ("date",)
+
+
+@admin.register(WaitlistEntry)
+class WaitlistEntryAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "email", "booked_for", "party_size", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("name", "phone", "email")
+    readonly_fields = ("created_at",)
+    ordering = ("booked_for", "created_at")

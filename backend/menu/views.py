@@ -1,15 +1,18 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
+import hashlib
 from io import BytesIO, StringIO
 import re
+import threading
 from urllib.parse import quote_plus
 import zipfile
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Count
+from django.db.models import Count, F
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
@@ -25,7 +28,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, Order, OrderItem, SuperCategory, TableLink
+from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .serializers import (
     CategorySerializer,
@@ -36,6 +39,92 @@ from .serializers import (
     TableLinkSerializer,
 )
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
+
+
+# ── Menu cache helpers ────────────────────────────────────────────────────────
+# Public list responses (unauthenticated customers) are cached per-tenant,
+# per-viewset, and per-query-params for _MENU_CACHE_TTL seconds.  Any write
+# through the owner CMS increments a version counter, orphaning stale entries
+# without requiring pattern-based deletion (works with both LocMemCache and
+# Redis).  Authenticated owner/staff requests always bypass the cache so they
+# see live DB state immediately.
+
+_MENU_CACHE_TTL = 60  # seconds — acceptable staleness window for menu reads
+
+
+def _bust_menu_cache(tenant_slug: str) -> None:
+    """Increment the version counter, orphaning all existing list-cache entries."""
+    if not tenant_slug:
+        return
+    ver_key = f"menu_ver:{tenant_slug}"
+    try:
+        cache.incr(ver_key)
+    except ValueError:
+        # Key missing (LocMemCache raises ValueError; Redis raises ResponseError)
+        cache.set(ver_key, 2, timeout=None)
+
+
+# ── Business hours helpers ────────────────────────────────────────────────────
+
+_WEEKDAY_TO_KEY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+
+
+def _schedule_open(profile) -> bool | None:
+    """Check *profile.business_hours_schedule* against the current UTC time.
+
+    Returns:
+      True  — schedule exists and says the restaurant is open right now.
+      False — schedule exists and says the restaurant is currently closed.
+      None  — no schedule configured (or no enabled days) — caller falls back
+               to the manual ``profile.is_open`` boolean.
+
+    NOTE: Comparison is done in **UTC**.  A per-restaurant ``timezone`` field
+    would make this more accurate; add that when rolling out timezone support.
+    """
+    schedule = getattr(profile, "business_hours_schedule", None)
+    if not schedule or not isinstance(schedule, dict):
+        return None
+
+    # Check whether any day has been enabled; if none, treat as unconfigured.
+    if not any(
+        isinstance(v, dict) and v.get("enabled", False)
+        for v in schedule.values()
+    ):
+        return None
+
+    now_utc = datetime.utcnow()
+    day_key = _WEEKDAY_TO_KEY.get(now_utc.weekday())
+    entry = schedule.get(day_key)
+
+    if not entry or not isinstance(entry, dict):
+        return False  # today not represented → closed today
+
+    if not entry.get("enabled", False):
+        return False
+
+    open_str = (entry.get("open") or "").strip()
+    close_str = (entry.get("close") or "").strip()
+    if not open_str or not close_str:
+        return False
+
+    current_hhmm = now_utc.strftime("%H:%M")
+    return open_str <= current_hhmm < close_str
+
+
+def _is_restaurant_currently_open(profile) -> bool:
+    """Return True iff the restaurant should accept new orders right now.
+
+    Decision tree:
+    1. ``is_open = False`` (manual closed toggle) → always closed.
+    2. A configured schedule (at least one enabled day) → schedule wins.
+    3. No schedule → rely on ``is_open`` boolean (True = open).
+    """
+    if profile.is_open is False:
+        return False
+    result = _schedule_open(profile)
+    if result is not None:
+        return result
+    return bool(profile.is_open)
 
 
 class PublishAccessMixin:
@@ -91,17 +180,73 @@ class PublishAccessMixin:
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    # ── Cache helpers ─────────────────────────────────────────────────────────
+
+    def _menu_list_cache_key(self) -> str | None:
+        """
+        Return a server-side cache key for this request's list response,
+        or None when the request should bypass the cache.
+
+        Bypassed when:
+          • the requesting user is a tenant owner/staff (they need live DB state)
+          • no tenant is attached to the request
+        """
+        if self._can_preview_unpublished():
+            return None  # owners/staff always read live data
+        tenant = self._tenant()
+        if tenant is None:
+            return None
+        slug = getattr(tenant, "slug", str(getattr(tenant, "id", "0")))
+        # Version counter acts as a cheap bust mechanism — incremented on any write
+        version = cache.get(f"menu_ver:{slug}") or 1
+        # Digest the query params so different filter combos get separate entries
+        params_sig = hashlib.md5(
+            repr(sorted(self.request.query_params.items())).encode()
+        ).hexdigest()[:8]
+        resource = type(self).__name__.lower()
+        return f"menu:{slug}:{resource}:{version}:{params_sig}"
+
+    def _bust_current_tenant_menu_cache(self) -> None:
+        tenant = self._tenant()
+        if tenant:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
+    # ── ViewSet action overrides ──────────────────────────────────────────────
+
     def list(self, request, *args, **kwargs):
         blocked = self._enforce_public_menu_policy()
         if blocked is not None:
             return blocked
-        return super().list(request, *args, **kwargs)
+
+        # Serve from cache when available (public requests only)
+        key = self._menu_list_cache_key()
+        if key is not None:
+            hit = cache.get(key)
+            if hit is not None:
+                return Response(hit)
+
+        response = super().list(request, *args, **kwargs)
+        if key is not None and response.status_code == 200:
+            cache.set(key, response.data, timeout=_MENU_CACHE_TTL)
+        return response
 
     def retrieve(self, request, *args, **kwargs):
         blocked = self._enforce_public_menu_policy()
         if blocked is not None:
             return blocked
         return super().retrieve(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._bust_current_tenant_menu_cache()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._bust_current_tenant_menu_cache()
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        self._bust_current_tenant_menu_cache()
 
 
 def _filter_by_reference(qs, raw_value, *, id_field, slug_field):
@@ -188,6 +333,42 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             return [AllowAny()]
         return super().get_permissions()
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        # Pass can_preview flag so serializer/UI can distinguish owners vs. guests
+        ctx["can_preview"] = self._can_preview_unpublished()
+        return ctx
+
+    def perform_create(self, serializer):
+        """Enforce per-plan dish limit before saving."""
+        tenant = getattr(self.request, "tenant", None)
+        if tenant is not None:
+            try:
+                from django_tenants.utils import get_public_schema_name, schema_context
+                from tenancy.models import Plan
+                with schema_context(get_public_schema_name()):
+                    plan = Plan.objects.filter(
+                        tenants__id=tenant.id
+                    ).values_list("max_dishes", flat=True).first()
+                max_dishes = plan if plan is not None else 0
+                if max_dishes and max_dishes > 0:
+                    current_count = Dish.objects.count()
+                    if current_count >= max_dishes:
+                        from rest_framework.exceptions import ValidationError
+                        raise ValidationError(
+                            {
+                                "detail": f"Your plan allows a maximum of {max_dishes} dishes. "
+                                          f"You have {current_count}. Upgrade to add more.",
+                                "code": "dish_limit_reached",
+                                "limit": max_dishes,
+                                "current": current_count,
+                            }
+                        )
+            except Exception as exc:
+                if getattr(exc, "detail", None):
+                    raise
+        serializer.save()
+
 
 class DishOptionViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     serializer_class = DishOptionSerializer
@@ -231,6 +412,23 @@ class OptionGroupViewSet(viewsets.ModelViewSet):
         if self.request.method in ("GET", "HEAD", "OPTIONS"):
             return [AllowAny()]
         return super().get_permissions()
+
+    def _bust(self):
+        tenant = getattr(self.request, "tenant", None)
+        if tenant:
+            _bust_menu_cache(getattr(tenant, "slug", str(getattr(tenant, "id", "0"))))
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._bust()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._bust()
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        self._bust()
 
 
 class TableLinkViewSet(viewsets.ModelViewSet):
@@ -596,6 +794,46 @@ class AnalyticsSummaryView(APIView):
         )
 
 
+class OwnerAnalyticsExportView(APIView):
+    """CSV export of analytics events grouped by date and event type."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        if tenant is None or getattr(tenant, "schema_name", "") == "public":
+            return Response({"detail": "Not available on public schema."}, status=status.HTTP_400_BAD_REQUEST)
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            requested_days = int(request.query_params.get("days", "30"))
+        except (TypeError, ValueError):
+            requested_days = 30
+        days = max(1, min(365, requested_days))
+        since = timezone.now() - timedelta(days=days)
+
+        from django.db.models.functions import TruncDate
+        rows = (
+            AnalyticsEvent.objects.filter(created_at__gte=since)
+            .annotate(day=TruncDate("created_at"))
+            .values("day", "event_type")
+            .annotate(count=Count("id"))
+            .order_by("day", "event_type")
+        )
+
+        filename = f"analytics_{days}d.csv"
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+        writer.writerow(["date", "event_type", "count"])
+        for row in rows:
+            writer.writerow([row["day"].isoformat(), row["event_type"], row["count"]])
+
+        return response
+
+
 class OrderItemInputSerializer(serializers.Serializer):
     slug = serializers.SlugField(max_length=210)
     qty = serializers.IntegerField(min_value=1, max_value=99)
@@ -761,7 +999,7 @@ class OrderHandoffView(APIView):
     def _fetch_dishes(self, slugs, can_preview):
         qs = Dish.objects.filter(slug__in=slugs).select_related("category")
         if not can_preview:
-            qs = qs.filter(is_published=True, category__is_published=True)
+            qs = qs.filter(is_published=True, is_available=True, category__is_published=True)
         return {dish.slug: dish for dish in qs}
 
     def _fetch_options(self, option_ids, can_preview):
@@ -811,7 +1049,7 @@ class OrderHandoffView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if profile.is_open is False and not can_preview:
+        if not can_preview and not _is_restaurant_currently_open(profile):
             return Response(
                 {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
                 status=status.HTTP_409_CONFLICT,
@@ -926,7 +1164,23 @@ class OrderHandoffView(APIView):
                 line += f" | note: {item['note']}"
             lines.append(line)
 
-        lines.append(f"Total: {total} {currency or 'USD'}")
+        # Add delivery fee for delivery orders (snapshot from profile at handoff time)
+        _wa_delivery_fee = Decimal("0")
+        if payload.get("fulfillment_type") == "delivery":
+            try:
+                _profile = getattr(tenant, "profile", None)
+                _raw_fee = getattr(_profile, "delivery_fee", 0) or 0
+                _wa_delivery_fee = Decimal(str(_raw_fee))
+            except Exception:
+                _wa_delivery_fee = Decimal("0")
+
+        if _wa_delivery_fee > 0:
+            lines.append(f"Subtotal: {total} {currency or 'USD'}")
+            lines.append(f"Delivery fee: {_wa_delivery_fee} {currency or 'USD'}")
+            lines.append(f"Total: {total + _wa_delivery_fee} {currency or 'USD'}")
+        else:
+            lines.append(f"Total: {total} {currency or 'USD'}")
+
         if payload.get("customer_note"):
             lines.append(f"Customer note: {payload['customer_note']}")
 
@@ -947,7 +1201,9 @@ class OrderHandoffView(APIView):
                 "delivery_location_url": payload.get("delivery_location_url", ""),
                 "delivery_lat": payload.get("delivery_lat", None),
                 "delivery_lng": payload.get("delivery_lng", None),
-                "total": str(total),
+                "subtotal": str(total),
+                "delivery_fee": str(_wa_delivery_fee),
+                "total": str(total + _wa_delivery_fee),
                 "currency": currency or "USD",
             },
             status=status.HTTP_200_OK,
@@ -987,7 +1243,7 @@ class CheckoutIntentView(OrderHandoffView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if profile.is_open is False and not can_preview:
+        if not can_preview and not _is_restaurant_currently_open(profile):
             return Response(
                 {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
                 status=status.HTTP_409_CONFLICT,
@@ -1085,6 +1341,41 @@ class CheckoutIntentView(OrderHandoffView):
 import secrets as _secrets
 
 
+def _is_promo_active_now(promo) -> bool:
+    """Return True if a Promotion is currently active (schedule + date boundaries)."""
+    from datetime import datetime as _dt, date as _date
+    _WDAY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
+    today = _date.today()
+    if promo.active_from and today < promo.active_from:
+        return False
+    if promo.active_until and today > promo.active_until:
+        return False
+    allowed_days = promo.days or []
+    if allowed_days:
+        if _WDAY[_dt.utcnow().weekday()] not in allowed_days:
+            return False
+    ts = (promo.time_start or "").strip()
+    te = (promo.time_end or "").strip()
+    if ts and te:
+        now_hhmm = _dt.utcnow().strftime("%H:%M")
+        if not (ts <= now_hhmm < te):
+            return False
+    return True
+
+
+def _compute_promo_discount(promo, food_subtotal, delivery_fee) -> "Decimal":
+    """Compute the discount amount (Decimal) for a given Promotion."""
+    from decimal import Decimal as _Dec
+    if promo.promo_type == "percentage":
+        pct = min(_Dec("100"), max(_Dec("0"), _Dec(str(promo.discount_value))))
+        return (food_subtotal * pct / _Dec("100")).quantize(_Dec("0.01"))
+    elif promo.promo_type == "fixed":
+        return min(food_subtotal, _Dec(str(promo.discount_value))).quantize(_Dec("0.01"))
+    elif promo.promo_type == "free_delivery":
+        return delivery_fee
+    return _Dec("0")
+
+
 def _generate_order_number() -> str:
     """Generate a unique order number like ORD-A3F2C1."""
     for _ in range(10):
@@ -1092,6 +1383,91 @@ def _generate_order_number() -> str:
         if not Order.objects.filter(order_number=candidate).exists():
             return candidate
     raise RuntimeError("Could not generate unique order number after 10 attempts.")
+
+
+def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str) -> None:
+    """Send a WhatsApp notification to the restaurant when a new order arrives.
+
+    Uses Twilio's WhatsApp API. If any configuration is missing or the call
+    fails, the error is silently logged — the order has already been saved and
+    this must never block the customer-facing response.
+    """
+    import logging as _logging
+    import urllib.error as _urlerror
+    import urllib.parse as _urlparse
+    import urllib.request as _urlrequest
+
+    _log = _logging.getLogger(__name__)
+
+    try:
+        from django.conf import settings as _settings
+        account_sid = getattr(_settings, "TWILIO_ACCOUNT_SID", "").strip()
+        auth_token = getattr(_settings, "TWILIO_AUTH_TOKEN", "").strip()
+        from_number = getattr(_settings, "TWILIO_FROM_NUMBER", "").strip()
+        if not (account_sid and auth_token and from_number and whatsapp_phone):
+            return  # Not configured — skip silently
+
+        # Build a concise notification message
+        fulfillment = order.fulfillment_type or "pickup"
+        if fulfillment == Order.FulfillmentType.TABLE and order.table_label:
+            fulfillment_label = f"Table {order.table_label}"
+        elif fulfillment == Order.FulfillmentType.DELIVERY:
+            fulfillment_label = "Delivery"
+        else:
+            fulfillment_label = "Pickup"
+
+        item_lines = []
+        for item in order.items.all():
+            opt_names = ", ".join(o.get("name", "") for o in (item.options or []) if o.get("name"))
+            line = f"  • {item.qty}x {item.dish_name}"
+            if opt_names:
+                line += f" ({opt_names})"
+            item_lines.append(line)
+
+        note_line = f"\nNote: {order.customer_note}" if order.customer_note else ""
+        body = (
+            f"🔔 New order {order.order_number}\n"
+            f"Restaurant: {tenant_name}\n"
+            f"Type: {fulfillment_label}\n"
+            f"Customer: {order.customer_name or 'Anonymous'}\n"
+            + "\n".join(item_lines)
+            + f"\nTotal: {order.total} {order.currency}"
+            + note_line
+        )
+
+        # Normalise recipient WhatsApp number
+        digits = "".join(ch for ch in whatsapp_phone if ch.isdigit() or ch == "+")
+        if not digits.startswith("+"):
+            digits = f"+{digits}"
+
+        to_wa = f"whatsapp:{digits}"
+        from_wa = from_number if from_number.startswith("whatsapp:") else f"whatsapp:{from_number}"
+
+        payload = _urlparse.urlencode({
+            "From": from_wa,
+            "To": to_wa,
+            "Body": body,
+        }).encode("utf-8")
+
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+        import base64 as _base64
+        credentials = _base64.b64encode(f"{account_sid}:{auth_token}".encode()).decode()
+        req = _urlrequest.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
+        )
+        with _urlrequest.urlopen(req, timeout=8):
+            pass  # success
+
+    except Exception as exc:
+        # Never fail the order — just log the issue
+        _log = _logging.getLogger(__name__)
+        _log.warning("Could not send new-order WhatsApp notification: %s", exc)
 
 
 class PlaceOrderView(APIView):
@@ -1123,7 +1499,7 @@ class PlaceOrderView(APIView):
             return Response({"detail": "Menu is temporarily unavailable.", "code": "menu_temporarily_disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not profile.is_menu_published and not can_preview:
             return Response({"detail": "Menu is not published yet.", "code": "menu_unpublished"}, status=status.HTTP_403_FORBIDDEN)
-        if profile.is_open is False and not can_preview:
+        if not can_preview and not _is_restaurant_currently_open(profile):
             return Response(
                 {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
                 status=status.HTTP_409_CONFLICT,
@@ -1140,7 +1516,7 @@ class PlaceOrderView(APIView):
         all_option_ids = [oid for i in items_input for oid in i.get("option_ids", [])]
 
         dishes_map = {d.slug: d for d in Dish.objects.filter(
-            slug__in=slugs, is_published=True, category__is_published=True
+            slug__in=slugs, is_published=True, is_available=True, category__is_published=True
         ).select_related("category")}
 
         missing = [s for s in slugs if s not in dishes_map]
@@ -1153,7 +1529,7 @@ class PlaceOrderView(APIView):
 
         # Build order items and compute total
         order_items_data = []
-        total = Decimal("0")
+        _food_subtotal = Decimal("0")
         currency = "USD"
 
         for item_input in items_input:
@@ -1170,7 +1546,7 @@ class PlaceOrderView(APIView):
 
             qty = item_input["qty"]
             subtotal = unit_price * qty
-            total += subtotal
+            _food_subtotal += subtotal
             order_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -1180,6 +1556,15 @@ class PlaceOrderView(APIView):
                 "options": option_snapshots,
                 "subtotal": subtotal,
             })
+
+        # Collect dishes that track stock so we can decrement inside the transaction
+        _stock_updates = []  # list of (dish_pk, ordered_qty)
+        _pk_to_slug = {}
+        for _item_d in order_items_data:
+            _d = dishes_map[_item_d["dish_slug"]]
+            _pk_to_slug[_d.pk] = _d.slug
+            if _d.stock_qty is not None:
+                _stock_updates.append((_d.pk, _item_d["qty"]))
 
         table_slug = (validated.get("table_slug") or "").strip()
         fulfillment_type = (validated.get("fulfillment_type") or "")
@@ -1235,8 +1620,74 @@ class PlaceOrderView(APIView):
             _customer_name = validated.get("customer_name", "")
             _customer_phone = validated.get("customer_phone", "")
 
+        # Apply delivery fee for delivery orders
+        _delivery_fee = Decimal("0")
+        if fulfillment_type == Order.FulfillmentType.DELIVERY:
+            try:
+                _delivery_fee = Decimal(str(profile.delivery_fee or "0"))
+            except Exception:
+                _delivery_fee = Decimal("0")
+
+        # Apply best currently-active promotion (highest discount wins)
+        _best_promo = None
+        _promo_discount = Decimal("0")
+        for _promo in Promotion.objects.filter(is_active=True):
+            if _promo.max_uses is not None and _promo.use_count >= _promo.max_uses:
+                continue
+            if Decimal(str(_promo.min_order_amount or "0")) > _food_subtotal:
+                continue
+            if not _is_promo_active_now(_promo):
+                continue
+            _d = _compute_promo_discount(_promo, _food_subtotal, _delivery_fee)
+            if _d > _promo_discount:
+                _promo_discount = _d
+                _best_promo = _promo
+
+        total = max(Decimal("0"), _food_subtotal + _delivery_fee - _promo_discount)
+
+        # Wallet payment — customer may opt in to paying with their credits balance
+        _use_wallet = bool(request.data.get("use_wallet")) and _linked_customer is not None
+        _wallet_deduction = Decimal("0")
+        if _use_wallet:
+            _available = Decimal(str(_linked_customer.wallet_balance or "0"))
+            _wallet_deduction = min(_available, total)
+            if _wallet_deduction <= Decimal("0"):
+                _use_wallet = False
+                _wallet_deduction = Decimal("0")
+
+        class _OutOfStock(Exception):
+            """Raised inside the atomic block when a dish's stock is exhausted."""
+            def __init__(self, slug):
+                self.slug = slug
+
         try:
             with transaction.atomic():
+                # --- Stock check + decrement (before creating the order so a failed
+                #     stock check never leaves a dangling order row) ---
+                if _stock_updates:
+                    _locked_dishes = {
+                        d.pk: d
+                        for d in Dish.objects.select_for_update().filter(
+                            pk__in=[pk for pk, _ in _stock_updates]
+                        )
+                    }
+                    # Validate sufficient stock for every item in this order
+                    for _dish_pk, _ordered_qty in _stock_updates:
+                        _ld = _locked_dishes.get(_dish_pk)
+                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
+                            raise _OutOfStock(_pk_to_slug.get(_dish_pk, ""))
+                    # Atomically decrement; mark sold-out when stock reaches zero
+                    for _dish_pk, _ordered_qty in _stock_updates:
+                        _ld = _locked_dishes.get(_dish_pk)
+                        if _ld and _ld.stock_qty is not None:
+                            _new_qty = max(0, _ld.stock_qty - _ordered_qty)
+                            if _new_qty == 0:
+                                Dish.objects.filter(pk=_dish_pk).update(
+                                    stock_qty=0, is_available=False
+                                )
+                            else:
+                                Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
+
                 order_number = _generate_order_number()
                 order = Order.objects.create(
                     order_number=order_number,
@@ -1253,10 +1704,43 @@ class PlaceOrderView(APIView):
                     delivery_lat=validated.get("delivery_lat"),
                     delivery_lng=validated.get("delivery_lng"),
                     total=total,
+                    delivery_fee=_delivery_fee,
                     currency=currency,
+                    promotion_discount=_promo_discount,
+                    applied_promotion_name=_best_promo.name if _best_promo else "",
                 )
                 for item_data in order_items_data:
                     OrderItem.objects.create(order=order, **item_data)
+
+                # Increment promo use_count atomically
+                if _best_promo is not None:
+                    Promotion.objects.filter(pk=_best_promo.pk).update(
+                        use_count=models.F("use_count") + 1
+                    )
+
+                # Deduct wallet balance (select_for_update prevents race conditions)
+                if _use_wallet and _wallet_deduction > Decimal("0"):
+                    from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+                    _cust_locked = _CustM.objects.select_for_update().get(pk=_linked_customer.pk)
+                    # Re-check available balance under lock
+                    _actual = min(Decimal(str(_cust_locked.wallet_balance or "0")), _wallet_deduction)
+                    if _actual > Decimal("0"):
+                        _cust_locked.wallet_balance = _cust_locked.wallet_balance - _actual
+                        _cust_locked.save(update_fields=["wallet_balance", "updated_at"])
+                        _WTM.objects.create(
+                            customer=_cust_locked,
+                            type=_WTM.Type.PAYMENT,
+                            amount=_actual,
+                            reference=order.order_number,
+                            tenant_id=tenant.id,
+                        )
+                        order.wallet_amount_paid = _actual
+                        order.save(update_fields=["wallet_amount_paid"])
+        except _OutOfStock as _e:
+            return Response(
+                {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except IntegrityError:
             # Rare TOCTOU race: two requests generated the same order number.
             # Return 503 so the client can retry; a fresh number will be picked.
@@ -1264,11 +1748,32 @@ class PlaceOrderView(APIView):
                 {"detail": "Order could not be placed due to a conflict. Please try again."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        except RuntimeError:
+            # _generate_order_number() exhausted 10 candidates — astronomically
+            # unlikely under normal load but must never surface as an unhandled 500.
+            return Response(
+                {"detail": "Order could not be placed. Please try again.", "code": "order_number_exhausted"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Send WhatsApp notification to the restaurant (truly non-blocking daemon thread).
+        # The order is already committed — a slow/failed Twilio call must never delay
+        # the customer-facing 201 response.
+        _wa_number = (getattr(profile, "whatsapp", "") or getattr(profile, "phone", "") or "").strip()
+        if _wa_number:
+            threading.Thread(
+                target=_notify_restaurant_new_order,
+                args=(order,),
+                kwargs={"tenant_name": getattr(tenant, "name", ""), "whatsapp_phone": _wa_number},
+                daemon=True,
+            ).start()
 
         return Response({
             "order_number": order.order_number,
             "status": order.status,
             "total": str(order.total),
+            "delivery_fee": str(order.delivery_fee),
+            "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
         }, status=status.HTTP_201_CREATED)
@@ -1280,7 +1785,13 @@ class CustomerOrderStatusView(APIView):
 
     def get(self, request, order_number, *args, **kwargs):
         order_number = (order_number or "").strip().upper()
-        order = Order.objects.filter(order_number=order_number).prefetch_related("items").first()
+        order = (
+            Order.objects
+            .filter(order_number=order_number)
+            .prefetch_related("items")
+            .select_related("rating")
+            .first()
+        )
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1298,15 +1809,36 @@ class CustomerOrderStatusView(APIView):
             for item in order.items.all()
         ]
 
+        # Expose rating state so the frontend can show the prompt for completed
+        # orders that haven't been rated yet.
+        existing_rating = getattr(order, "rating", None)
+        rating_data = None
+        if existing_rating is not None:
+            rating_data = {
+                "score": existing_rating.score,
+                "comment": existing_rating.comment,
+            }
+
+        # Pull the receipt message from the tenant profile (safe fallback to "").
+        receipt_message = ""
+        try:
+            receipt_message = getattr(request.tenant.profile, "receipt_message", "") or ""
+        except Exception:
+            pass
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
             "fulfillment_type": order.fulfillment_type,
             "table_label": order.table_label,
             "customer_name": order.customer_name,
+            # NOTE: customer_phone is intentionally omitted — this endpoint is
+            # AllowAny so exposing phone numbers would let anyone enumerate PII
+            # by guessing order numbers (ORD-XXXXXX ≈ 16M space).
             "delivery_address": order.delivery_address,
-            "delivery_location_url": order.delivery_location_url,
             "total": str(order.total),
+            "delivery_fee": str(order.delivery_fee),
+            "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -1314,8 +1846,77 @@ class CustomerOrderStatusView(APIView):
             "items": items,
             "created_at": order.created_at.isoformat(),
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+            # Rating state — frontend shows 1–5 star prompt when status=completed and has_rating=false
+            "has_rating": existing_rating is not None,
+            "rating": rating_data,
+            # Thank-you message written by the restaurant owner (shown for confirmed/ready/completed).
+            "receipt_message": receipt_message,
         })
 
+
+
+class CustomerOrdersByPhoneView(APIView):
+    """GET /api/orders/by-phone/?phone=<number> — unauthenticated guest lookup.
+
+    Returns a brief list (max 20, last 90 days) of orders matching the given
+    phone number at this tenant.  Only safe, non-PII fields are returned —
+    the full phone number is *not* echoed back.  A simple IP-based rate-limit
+    (10 requests / minute) is applied via the cache backend.
+    """
+    permission_classes = [AllowAny]
+    _RATE_LIMIT = 10  # requests per window
+    _RATE_WINDOW = 60  # seconds
+
+    def _is_rate_limited(self, request) -> bool:
+        ip = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("REMOTE_ADDR", "unknown")
+        )
+        cache_key = f"phone_lookup_{ip}"
+        hits = cache.get(cache_key, 0)
+        if hits >= self._RATE_LIMIT:
+            return True
+        cache.set(cache_key, hits + 1, self._RATE_WINDOW)
+        return False
+
+    def get(self, request, *args, **kwargs):
+        if self._is_rate_limited(request):
+            return Response(
+                {"detail": "Too many requests. Please wait a moment.", "code": "rate_limited"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        phone = (request.query_params.get("phone") or "").strip()
+        # Normalize: strip non-digit chars for flexible matching
+        digits = "".join(c for c in phone if c.isdigit())
+        if len(digits) < 6:
+            return Response(
+                {"detail": "Please enter at least 6 digits of your phone number.", "code": "phone_too_short"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        since = timezone.now() - timedelta(days=90)
+        orders = (
+            Order.objects
+            .filter(customer_phone__icontains=digits[-9:], created_at__gte=since)
+            .prefetch_related("items")
+            .order_by("-created_at")[:20]
+        )
+
+        results = []
+        for order in orders:
+            results.append({
+                "order_number": order.order_number,
+                "status": order.status,
+                "fulfillment_type": order.fulfillment_type,
+                "total": str(order.total),
+                "currency": order.currency,
+                "items_count": sum(i.qty for i in order.items.all()),
+                "created_at": order.created_at.isoformat(),
+                "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+            })
+
+        return Response({"results": results, "count": len(results)})
 
 
 def _send_owner_new_reservation_email(tenant, lead) -> None:
@@ -1347,6 +1948,56 @@ def _send_owner_new_reservation_email(tenant, lead) -> None:
             message=body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[owner_email],
+            fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _send_order_status_email(order, tenant, new_status: str) -> None:
+    """Send a plain-text order status notification to the customer, if they have an email."""
+    try:
+        customer_email = order.customer.email if order.customer else None
+        if not customer_email:
+            return
+
+        status_labels = {
+            Order.Status.CONFIRMED: "confirmed",
+            Order.Status.PREPARING: "being prepared",
+            Order.Status.READY: "ready",
+            Order.Status.COMPLETED: "completed",
+            Order.Status.CANCELLED: "cancelled",
+        }
+        label = status_labels.get(new_status, new_status)
+        subject = f"Order #{order.order_number} update — {tenant.name}"
+
+        lines = [
+            f"Hi {order.customer_name or 'there'},",
+            "",
+            f"Your order #{order.order_number} at {tenant.name} is now {label}.",
+        ]
+
+        if new_status == Order.Status.CONFIRMED and order.estimated_ready_minutes:
+            lines.append(f"Estimated wait: {order.estimated_ready_minutes} minutes.")
+
+        if new_status == Order.Status.READY:
+            if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+                lines.append("Your order is on its way!")
+            elif order.fulfillment_type == Order.FulfillmentType.PICKUP:
+                lines.append("Your order is ready for pickup.")
+            else:
+                lines.append("Your order is ready.")
+
+        if order.owner_note:
+            lines.append(f"\nNote from restaurant: {order.owner_note}")
+
+        lines += ["", f"— {tenant.name}"]
+
+        send_mail(
+            subject=subject,
+            message="\n".join(lines),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[customer_email],
             fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
         )
     except Exception:  # noqa: BLE001
@@ -1419,6 +2070,7 @@ class StaffOrderListView(APIView):
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "total": str(order.total),
+                "delivery_fee": str(order.delivery_fee),
                 "currency": order.currency,
                 "items_count": sum(i.qty for i in order.items.all()),
                 "items": [
@@ -1437,6 +2089,88 @@ class StaffOrderListView(APIView):
         return Response({"results": orders, "count": len(orders)})
 
 
+class StaffShiftSummaryView(APIView):
+    """GET /api/staff/shift-summary/ — end-of-shift stats for the waiter view.
+
+    Query params:
+      - since: ISO-8601 datetime marking shift start. Defaults to 8 hours ago.
+
+    Returns:
+      orders_handled   — count of orders that reached 'completed' within the window
+      total_revenue    — sum of their totals (Decimal string)
+      currency         — currency code (from first order, or empty)
+      average_prep_time_minutes — mean seconds from created_at → status_updated_at (null if none)
+      since            — ISO-8601 of the window start actually used
+      period_hours     — float hours covered
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Parse 'since' — default 8 h ago
+        since_raw = (request.query_params.get("since") or "").strip()
+        if since_raw:
+            try:
+                since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+                if since_dt.tzinfo is None:
+                    from django.utils.timezone import make_aware
+                    since_dt = make_aware(since_dt)
+            except ValueError:
+                since_dt = None
+        else:
+            since_dt = None
+
+        if since_dt is None:
+            since_dt = timezone.now() - timedelta(hours=8)
+
+        qs = Order.objects.filter(
+            status=Order.Status.COMPLETED,
+            status_updated_at__gte=since_dt,
+        )
+
+        from django.db.models import Avg, Count, Sum
+        agg = qs.aggregate(
+            total_count=Count("id"),
+            total_revenue=Sum("total"),
+        )
+
+        orders_handled = agg["total_count"] or 0
+        total_revenue = agg["total_revenue"] or Decimal("0.00")
+
+        # Average prep time: mean of (status_updated_at - created_at) in minutes
+        avg_prep_minutes = None
+        if orders_handled > 0:
+            total_seconds = 0
+            count_with_both = 0
+            for o in qs.only("created_at", "status_updated_at"):
+                if o.status_updated_at and o.created_at:
+                    delta = (o.status_updated_at - o.created_at).total_seconds()
+                    if delta >= 0:
+                        total_seconds += delta
+                        count_with_both += 1
+            if count_with_both > 0:
+                avg_prep_minutes = round(total_seconds / count_with_both / 60, 1)
+
+        currency = ""
+        first = qs.only("currency").first()
+        if first:
+            currency = first.currency or ""
+
+        now = timezone.now()
+        period_hours = round((now - since_dt).total_seconds() / 3600, 1)
+
+        return Response({
+            "orders_handled": orders_handled,
+            "total_revenue": str(total_revenue),
+            "currency": currency,
+            "average_prep_time_minutes": avg_prep_minutes,
+            "since": since_dt.isoformat(),
+            "period_hours": period_hours,
+        })
+
+
 class OwnerOrderListView(APIView):
     """GET /api/owner/orders/ — owner lists all orders, optionally filtered by status."""
     permission_classes = [IsAuthenticated]
@@ -1452,8 +2186,37 @@ class OwnerOrderListView(APIView):
         if status_filter and status_filter in valid_statuses:
             qs = qs.filter(status=status_filter)
 
+        total = qs.count()
+        all_orders = list(qs[:200])
+
+        # ── Batch-load customer trust scores ─────────────────────────────────
+        from accounts.models import CustomerRating as _CR
+        from django.db.models import Avg as _Avg, Count as _Count2
+        tenant = getattr(request, "tenant", None)
+        tenant_id = tenant.id if tenant else None
+
+        customer_ids = list({o.customer_id for o in all_orders if o.customer_id})
+        trust_map: dict = {}      # customer_id → {avg_score, rating_count}
+        my_rating_map: dict = {}  # order_number → {score, note}
+        if customer_ids:
+            for agg in (_CR.objects
+                        .filter(customer_id__in=customer_ids)
+                        .values("customer_id")
+                        .annotate(avg=_Avg("score"), cnt=_Count2("id"))):
+                trust_map[agg["customer_id"]] = {
+                    "avg_score": round(float(agg["avg"]), 1) if agg["avg"] else None,
+                    "rating_count": agg["cnt"],
+                }
+            if tenant_id:
+                order_nums = [o.order_number for o in all_orders if o.customer_id]
+                for cr in (_CR.objects
+                           .filter(tenant_id=tenant_id, order_number__in=order_nums,
+                                   customer_id__in=customer_ids)
+                           .values("order_number", "score", "note")):
+                    my_rating_map[cr["order_number"]] = {"score": cr["score"], "note": cr["note"]}
+
         orders = []
-        for order in qs[:200]:
+        for order in all_orders:
             orders.append({
                 "id": order.id,
                 "order_number": order.order_number,
@@ -1469,6 +2232,7 @@ class OwnerOrderListView(APIView):
                 "delivery_lat": order.delivery_lat,
                 "delivery_lng": order.delivery_lng,
                 "total": str(order.total),
+                "delivery_fee": str(order.delivery_fee),
                 "currency": order.currency,
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -1487,9 +2251,18 @@ class OwnerOrderListView(APIView):
                 ],
                 "created_at": order.created_at.isoformat(),
                 "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+                # Platform-level customer trust data (public schema, cross-tenant)
+                "customer_id": order.customer_id,
+                "customer_trust": trust_map.get(order.customer_id) if order.customer_id else None,
+                "my_customer_rating": my_rating_map.get(order.order_number),
+                # Order source, commission & promotion
+                "source": order.source,
+                "commission_amount": str(order.commission_amount),
+                "promotion_discount": str(order.promotion_discount),
+                "applied_promotion_name": order.applied_promotion_name,
             })
 
-        return Response({"results": orders, "count": len(orders)})
+        return Response({"results": orders, "count": len(orders), "total": total, "has_more": total > len(orders)})
 
 
 class OwnerOrderDetailView(APIView):
@@ -1503,6 +2276,30 @@ class OwnerOrderDetailView(APIView):
         order = Order.objects.select_related("customer").prefetch_related("items").filter(id=order_id).first()
         if order is None:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # ── Customer trust info (public schema) ───────────────────────────────
+        from accounts.models import CustomerRating as _CR
+        from django.db.models import Avg as _Avg, Count as _Count2
+        customer_trust = None
+        if order.customer_id:
+            _tenant = getattr(request, "tenant", None)
+            _tid = _tenant.id if _tenant else None
+            agg = (_CR.objects
+                   .filter(customer_id=order.customer_id)
+                   .aggregate(avg=_Avg("score"), cnt=_Count2("id")))
+            my_rating = None
+            if _tid:
+                _cr = (_CR.objects
+                       .filter(customer_id=order.customer_id, tenant_id=_tid,
+                               order_number=order.order_number)
+                       .first())
+                if _cr:
+                    my_rating = {"score": _cr.score, "note": _cr.note}
+            customer_trust = {
+                "avg_score": round(float(agg["avg"]), 1) if agg["avg"] else None,
+                "rating_count": agg["cnt"],
+                "my_rating": my_rating,
+            }
 
         return Response({
             "id": order.id,
@@ -1520,6 +2317,8 @@ class OwnerOrderDetailView(APIView):
             "delivery_lat": order.delivery_lat,
             "delivery_lng": order.delivery_lng,
             "total": str(order.total),
+            "delivery_fee": str(order.delivery_fee),
+            "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -1539,7 +2338,310 @@ class OwnerOrderDetailView(APIView):
             "created_at": order.created_at.isoformat(),
             "updated_at": order.updated_at.isoformat(),
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+            "customer_id": order.customer_id,
+            "customer_trust": customer_trust,
+            "source": order.source,
+            "commission_amount": str(order.commission_amount),
+            "promotion_discount": str(order.promotion_discount),
+            "applied_promotion_name": order.applied_promotion_name,
         })
+
+
+class OwnerCustomerRatingView(APIView):
+    """
+    POST /api/owner/orders/<order_id>/customer-rating/
+
+    Owner rates a customer's trustworthiness after a completed order.
+    The rating is stored in the public schema (shared across tenants) and is
+    never shown directly to customers — it contributes to an aggregate trust
+    score visible to restaurants when the same customer orders again.
+
+    Request body:
+        { "score": 1–5, "note": "optional text" }
+
+    Responses:
+        200 OK — rating saved or updated; body: {score, note, avg_score, rating_count}
+        400 Bad Request — invalid score or order has no linked customer
+        403 Forbidden — caller is not a tenant editor
+        404 Not Found — unknown order_id
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.select_related("customer").filter(id=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not order.customer_id:
+            return Response(
+                {"detail": "This order has no linked customer account.", "code": "no_customer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate score
+        score_raw = request.data.get("score")
+        try:
+            score = int(score_raw)
+            if score < 1 or score > 5:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Score must be an integer between 1 and 5.", "code": "invalid_score"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = str(request.data.get("note", "") or "").strip()[:200]
+
+        tenant = getattr(request, "tenant", None)
+        tenant_id = tenant.id if tenant else 0
+
+        from accounts.models import CustomerRating as _CR
+        from django.db.models import Avg as _Avg, Count as _Count2
+
+        cr, _ = _CR.objects.update_or_create(
+            customer_id=order.customer_id,
+            tenant_id=tenant_id,
+            order_number=order.order_number,
+            defaults={"score": score, "note": note},
+        )
+
+        # Return updated aggregate trust score
+        agg = (_CR.objects
+               .filter(customer_id=order.customer_id)
+               .aggregate(avg=_Avg("score"), cnt=_Count2("id")))
+
+        return Response({
+            "score": cr.score,
+            "note": cr.note,
+            "avg_score": round(float(agg["avg"]), 1) if agg["avg"] else None,
+            "rating_count": agg["cnt"],
+        }, status=status.HTTP_200_OK)
+
+
+def _serialize_promotion(p) -> dict:
+    return {
+        "id": p.id,
+        "name": p.name,
+        "description": p.description,
+        "promo_type": p.promo_type,
+        "discount_value": str(p.discount_value),
+        "min_order_amount": str(p.min_order_amount),
+        "days": p.days or [],
+        "time_start": p.time_start or "",
+        "time_end": p.time_end or "",
+        "active_from": p.active_from.isoformat() if p.active_from else None,
+        "active_until": p.active_until.isoformat() if p.active_until else None,
+        "is_active": p.is_active,
+        "max_uses": p.max_uses,
+        "use_count": p.use_count,
+        "is_platform_flash": p.is_platform_flash,
+        "created_at": p.created_at.isoformat(),
+    }
+
+
+class OwnerPromotionListCreateView(APIView):
+    """GET /api/owner/promotions/ — list promotions.
+       POST /api/owner/promotions/ — create a promotion."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        promos = Promotion.objects.all()
+        return Response([_serialize_promotion(p) for p in promos])
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal as _Dec, InvalidOperation
+        from datetime import date as _date
+
+        name = str(request.data.get("name") or "").strip()[:100]
+        if not name:
+            return Response({"detail": "name is required.", "code": "missing_name"}, status=status.HTTP_400_BAD_REQUEST)
+
+        promo_type = str(request.data.get("promo_type") or "percentage").strip()
+        if promo_type not in ("percentage", "fixed", "free_delivery"):
+            return Response({"detail": "Invalid promo_type.", "code": "invalid_type"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            discount_value = _Dec(str(request.data.get("discount_value") or "0")).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            discount_value = _Dec("0")
+
+        try:
+            min_order_amount = _Dec(str(request.data.get("min_order_amount") or "0")).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            min_order_amount = _Dec("0")
+
+        _VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+        raw_days = request.data.get("days") or []
+        days = [d for d in (raw_days if isinstance(raw_days, list) else []) if d in _VALID_DAYS]
+
+        def _parse_hhmm(val):
+            v = str(val or "").strip()
+            if len(v) == 5 and v[2] == ":" and v[:2].isdigit() and v[3:].isdigit():
+                return v
+            return ""
+
+        time_start = _parse_hhmm(request.data.get("time_start"))
+        time_end = _parse_hhmm(request.data.get("time_end"))
+
+        def _parse_date(val):
+            try:
+                return _date.fromisoformat(str(val))
+            except (ValueError, TypeError):
+                return None
+
+        active_from = _parse_date(request.data.get("active_from"))
+        active_until = _parse_date(request.data.get("active_until"))
+
+        max_uses_raw = request.data.get("max_uses")
+        max_uses = None
+        if max_uses_raw is not None:
+            try:
+                max_uses = max(1, int(max_uses_raw))
+            except (TypeError, ValueError):
+                max_uses = None
+
+        promo = Promotion.objects.create(
+            name=name,
+            description=str(request.data.get("description") or "").strip()[:200],
+            promo_type=promo_type,
+            discount_value=discount_value,
+            min_order_amount=min_order_amount,
+            days=days,
+            time_start=time_start,
+            time_end=time_end,
+            active_from=active_from,
+            active_until=active_until,
+            is_active=bool(request.data.get("is_active", True)),
+            max_uses=max_uses,
+        )
+        return Response(_serialize_promotion(promo), status=status.HTTP_201_CREATED)
+
+
+class OwnerPromotionDetailView(APIView):
+    """GET /api/owner/promotions/<id>/ — retrieve.
+       PATCH /api/owner/promotions/<id>/ — update.
+       DELETE /api/owner/promotions/<id>/ — delete."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_promo(self, request, promo_id):
+        if not _can_edit_tenant_order(request):
+            return None, Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        p = Promotion.objects.filter(pk=promo_id).first()
+        if p is None:
+            return None, Response({"detail": "Promotion not found."}, status=status.HTTP_404_NOT_FOUND)
+        return p, None
+
+    def get(self, request, promo_id, *args, **kwargs):
+        p, err = self._get_promo(request, promo_id)
+        if err:
+            return err
+        return Response(_serialize_promotion(p))
+
+    def patch(self, request, promo_id, *args, **kwargs):
+        from decimal import Decimal as _Dec, InvalidOperation
+        from datetime import date as _date
+
+        p, err = self._get_promo(request, promo_id)
+        if err:
+            return err
+
+        data = request.data
+        if "name" in data:
+            p.name = str(data["name"] or "").strip()[:100]
+        if "description" in data:
+            p.description = str(data["description"] or "").strip()[:200]
+        if "promo_type" in data:
+            pt = str(data["promo_type"]).strip()
+            if pt in ("percentage", "fixed", "free_delivery"):
+                p.promo_type = pt
+        if "discount_value" in data:
+            try:
+                p.discount_value = _Dec(str(data["discount_value"])).quantize(_Dec("0.01"))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+        if "min_order_amount" in data:
+            try:
+                p.min_order_amount = _Dec(str(data["min_order_amount"])).quantize(_Dec("0.01"))
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+        _VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+        if "days" in data:
+            raw = data["days"] or []
+            p.days = [d for d in (raw if isinstance(raw, list) else []) if d in _VALID_DAYS]
+        if "time_start" in data:
+            v = str(data["time_start"] or "").strip()
+            p.time_start = v if len(v) == 5 and v[2] == ":" else ""
+        if "time_end" in data:
+            v = str(data["time_end"] or "").strip()
+            p.time_end = v if len(v) == 5 and v[2] == ":" else ""
+        if "active_from" in data:
+            try:
+                p.active_from = _date.fromisoformat(str(data["active_from"])) if data["active_from"] else None
+            except (ValueError, TypeError):
+                pass
+        if "active_until" in data:
+            try:
+                p.active_until = _date.fromisoformat(str(data["active_until"])) if data["active_until"] else None
+            except (ValueError, TypeError):
+                pass
+        if "is_active" in data:
+            p.is_active = bool(data["is_active"])
+        if "max_uses" in data:
+            raw = data["max_uses"]
+            p.max_uses = max(1, int(raw)) if raw is not None else None
+        p.save()
+        return Response(_serialize_promotion(p))
+
+    def delete(self, request, promo_id, *args, **kwargs):
+        p, err = self._get_promo(request, promo_id)
+        if err:
+            return err
+        p.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _refund_wallet_for_cancelled_order(order) -> None:
+    """Credit the customer's wallet when a wallet-paid order is cancelled.
+    Idempotent — checks for an existing refund transaction before writing.
+    """
+    from decimal import Decimal as _Dec
+    from django.db import transaction as _dbtx
+    from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+
+    if not order.customer_id:
+        return
+    refund_amount = _Dec(str(order.wallet_amount_paid or "0"))
+    if refund_amount <= _Dec("0"):
+        return
+    # Idempotency guard
+    if _WTM.objects.filter(
+        customer_id=order.customer_id,
+        type=_WTM.Type.REFUND,
+        reference=order.order_number,
+    ).exists():
+        return
+    with _dbtx.atomic():
+        _cust = _CustM.objects.select_for_update().get(pk=order.customer_id)
+        _cust.wallet_balance = _cust.wallet_balance + refund_amount
+        _cust.save(update_fields=["wallet_balance", "updated_at"])
+        _WTM.objects.create(
+            customer=_cust,
+            type=_WTM.Type.REFUND,
+            amount=refund_amount,
+            reference=order.order_number,
+            note="Refund for cancelled order",
+        )
 
 
 class OwnerOrderStatusUpdateView(APIView):
@@ -1559,7 +2661,7 @@ class OwnerOrderStatusUpdateView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        order = Order.objects.filter(id=order_id).first()
+        order = Order.objects.select_related("customer").filter(id=order_id).first()
         if order is None:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1589,6 +2691,34 @@ class OwnerOrderStatusUpdateView(APIView):
 
         order.save(update_fields=["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"])
 
+        # Auto-refund wallet credits when an order is cancelled
+        if new_status == Order.Status.CANCELLED:
+            try:
+                _refund_wallet_for_cancelled_order(order)
+            except Exception:
+                pass  # Non-fatal — refund failure must not block the status update response
+
+        tenant = getattr(request, "tenant", None)
+        if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.CANCELLED}:
+            if tenant:
+                _send_order_status_email(order, tenant, new_status)
+
+        # SMS notification — only when transitioning to "ready"
+        if new_status == Order.Status.READY and tenant:
+            try:
+                profile = tenant.profile
+            except Exception:
+                profile = None
+            if profile and getattr(profile, "sms_notifications_enabled", False):
+                customer_phone = (getattr(order, "customer_phone", "") or "").strip()
+                if customer_phone:
+                    from menu.sms import send_order_ready_sms  # noqa: PLC0415
+                    send_order_ready_sms(
+                        phone=customer_phone,
+                        tenant_name=getattr(tenant, "name", ""),
+                        order_number=order.order_number,
+                    )
+
         return Response({
             "id": order.id,
             "order_number": order.order_number,
@@ -1599,3 +2729,1084 @@ class OwnerOrderStatusUpdateView(APIView):
         })
 
 
+class OwnerOrderExportView(APIView):
+    """GET /api/owner/orders/export/ — download all orders as CSV (max 5000 rows).
+
+    Supports optional query filters:
+      - status: filter by order status value
+      - from: ISO date (YYYY-MM-DD) — include orders created on or after this date
+      - to: ISO date (YYYY-MM-DD) — include orders created on or before this date
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        status_filter = (request.query_params.get("status") or "").strip().lower()
+        valid_statuses = {s.value for s in Order.Status}
+        if status_filter and status_filter not in valid_statuses:
+            return Response({"detail": "Invalid status filter."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from_raw = (request.query_params.get("from") or "").strip()
+        to_raw = (request.query_params.get("to") or "").strip()
+        from_date = None
+        to_date = None
+        if from_raw:
+            try:
+                from_date = datetime.strptime(from_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "Invalid 'from' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if to_raw:
+            try:
+                to_date = datetime.strptime(to_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "Invalid 'to' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if from_date and to_date and from_date > to_date:
+            return Response({"detail": "'from' date cannot be after 'to' date."}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = Order.objects.prefetch_related("items").order_by("-created_at")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if from_date:
+            qs = qs.filter(created_at__date__gte=from_date)
+        if to_date:
+            qs = qs.filter(created_at__date__lte=to_date)
+
+        tenant_slug = getattr(getattr(request, "tenant", None), "slug", "export")
+        filename = f"{tenant_slug}-orders-{timezone.now():%Y%m%d}.csv"
+
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            "order_number", "created_at", "status", "fulfillment_type",
+            "table_label", "customer_name", "customer_phone",
+            "customer_note", "delivery_address",
+            "items", "subtotal", "delivery_fee", "total", "currency",
+        ])
+
+        for order in qs[:5000]:
+            items_text = " | ".join(
+                f"{i.qty}x {i.dish_name}"
+                + (
+                    f" ({', '.join(o.get('name', '') for o in (i.options or []) if o.get('name'))})"
+                    if i.options
+                    else ""
+                )
+                for i in order.items.all()
+            )
+            subtotal = order.total - order.delivery_fee
+            writer.writerow([
+                order.order_number,
+                timezone.localtime(order.created_at).isoformat(),
+                order.status,
+                order.fulfillment_type or "",
+                order.table_label or "",
+                order.customer_name or "",
+                order.customer_phone or "",
+                order.customer_note or "",
+                order.delivery_address or "",
+                items_text,
+                str(subtotal),
+                str(order.delivery_fee),
+                str(order.total),
+                order.currency or "",
+            ])
+
+        return response
+
+
+class DishBulkAvailabilityResetView(APIView):
+    """POST /api/owner/dishes/reset-availability/
+
+    Marks all published dishes as is_available=True and clears auto-zeroed
+    stock counts. This is the morning-reset workflow: start the day with
+    everything available, ready for the owner to track stock afresh.
+
+    Optional body: { "clear_stock": true } — also clears ALL stock_qty tracking,
+    not just auto-zeroed dishes.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        clear_stock = bool(request.data.get("clear_stock", False))
+
+        # Re-enable all published dishes that are currently sold-out (is_available=False)
+        restored_count = Dish.objects.filter(
+            is_published=True, is_available=False
+        ).update(is_available=True)
+
+        stock_cleared_count = 0
+        if clear_stock:
+            # Clear ALL tracked stock counts so the owner sets fresh numbers each day
+            stock_cleared_count = Dish.objects.filter(
+                is_published=True, stock_qty__isnull=False
+            ).update(stock_qty=None)
+        else:
+            # Only clear auto-zeroed entries (stock reached 0 during service)
+            stock_cleared_count = Dish.objects.filter(
+                is_published=True, stock_qty=0
+            ).update(stock_qty=None)
+
+        return Response({
+            "restored": restored_count,
+            "stock_cleared": stock_cleared_count,
+            "clear_stock_all": clear_stock,
+        }, status=status.HTTP_200_OK)
+
+
+# ── Ratings ───────────────────────────────────────────────────────────────────
+
+class CustomerOrderRateView(APIView):
+    """
+    POST /api/orders/<order_number>/rate/
+
+    Customers submit a 1–5 star rating (+ optional comment) after their order
+    reaches 'completed' status.  No authentication required — any caller who
+    knows the order number can rate it once.
+
+    Request body:
+        { "score": 4, "comment": "Great food!" }
+
+    Responses:
+        201 Created — rating stored; body: {score, comment, created_at}
+        400 Bad Request — invalid score / already rated / order not complete
+        404 Not Found — unknown order_number
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, order_number, *args, **kwargs):
+        # Normalise the order number (strip whitespace, upper-case for lookup)
+        order_number = str(order_number or "").strip()
+        try:
+            order = Order.objects.get(order_number=order_number)
+        except Order.DoesNotExist:
+            return Response(
+                {"detail": "Order not found.", "code": "order_not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if order.status != Order.Status.COMPLETED:
+            return Response(
+                {
+                    "detail": "You can only rate a completed order.",
+                    "code": "order_not_completed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if hasattr(order, "rating"):
+            return Response(
+                {"detail": "This order has already been rated.", "code": "already_rated"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate input
+        score_raw = request.data.get("score")
+        try:
+            score = int(score_raw)
+            if score < 1 or score > 5:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Score must be an integer between 1 and 5.", "code": "invalid_score"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        comment = str(request.data.get("comment", "") or "").strip()[:1000]
+
+        # Link to platform customer when one is in session
+        from accounts.models import Customer as _CustM
+        _customer_id = request.session.get("customer_id")
+        _linked_customer = None
+        if _customer_id:
+            try:
+                _linked_customer = _CustM.objects.get(pk=_customer_id)
+            except _CustM.DoesNotExist:
+                pass
+
+        rating = Rating.objects.create(
+            order=order,
+            score=score,
+            comment=comment,
+            customer=_linked_customer,
+        )
+
+        # Bust the meta cache so the updated average is reflected promptly
+        tenant = getattr(request, "tenant", None)
+        if tenant:
+            from tenancy.api import _bust_tenant_meta_cache
+            _bust_tenant_meta_cache(getattr(tenant, "slug", ""))
+
+        return Response(
+            {
+                "score": rating.score,
+                "comment": rating.comment,
+                "created_at": rating.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OwnerRatingListView(APIView):
+    """
+    GET /api/owner/ratings/
+
+    Returns all ratings for the current tenant, newest first.
+    Supports ?format=csv for a spreadsheet export.
+
+    Requires: authenticated tenant owner or staff.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = (
+            Rating.objects
+            .select_related("order")
+            .order_by("-created_at")
+        )
+
+        # CSV export
+        if request.query_params.get("format", "").lower() == "csv":
+            return self._csv_response(qs)
+
+        # Aggregate summary
+        from django.db.models import Avg, Count
+        agg = Rating.objects.aggregate(avg=Avg("score"), total=Count("id"))
+        average = round(float(agg["avg"]), 1) if agg["avg"] is not None else None
+
+        ratings = [
+            {
+                "id": r.id,
+                "order_number": r.order.order_number,
+                "customer_name": r.order.customer_name,
+                "score": r.score,
+                "comment": r.comment,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in qs[:500]
+        ]
+
+        return Response({
+            "count": agg["total"],
+            "average": average,
+            "ratings": ratings,
+        })
+
+    def _csv_response(self, qs):
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Date", "Order Number", "Customer", "Score", "Comment"])
+        for r in qs:
+            writer.writerow([
+                r.created_at.strftime("%Y-%m-%d %H:%M"),
+                r.order.order_number,
+                r.order.customer_name,
+                r.score,
+                r.comment,
+            ])
+        response = HttpResponse(output.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="ratings.csv"'
+        return response
+
+
+# ── Closure dates (holiday / one-off closures) ────────────────────────────────
+
+def _is_tenant_owner(request) -> bool:
+    """Return True if the requesting user has owner or above access on this tenant."""
+    user = request.user
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    tenant = getattr(request, "tenant", None)
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    return user.role in {user.Roles.TENANT_OWNER, user.Roles.TENANT_STAFF}
+
+
+class OwnerClosureDateListCreateView(APIView):
+    """
+    GET  /api/owner/closure-dates/  — list all closure dates (soonest first)
+    POST /api/owner/closure-dates/  — add a new closure date
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+        from .models import ClosureDate
+        qs = ClosureDate.objects.order_by("date")
+        data = [{"id": c.id, "date": c.date.isoformat(), "label": c.label} for c in qs]
+        return Response(data)
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+        date_str = (request.data.get("date") or "").strip()
+        label = (request.data.get("label") or "").strip()[:100]
+        if not date_str:
+            return Response({"detail": "date is required (YYYY-MM-DD)."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from datetime import date as _date
+            parsed_date = _date.fromisoformat(date_str)
+        except ValueError:
+            return Response({"detail": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        from .models import ClosureDate
+        try:
+            obj = ClosureDate.objects.create(date=parsed_date, label=label)
+        except IntegrityError:
+            return Response({"detail": "This date is already marked as closed."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"id": obj.id, "date": obj.date.isoformat(), "label": obj.label},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OwnerClosureDateDeleteView(APIView):
+    """
+    DELETE /api/owner/closure-dates/<closure_id>/  — remove a closure date
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, closure_id, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+        from .models import ClosureDate
+        try:
+            obj = ClosureDate.objects.get(id=closure_id)
+        except ClosureDate.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OwnerInvoiceView(APIView):
+    """
+    GET /api/owner/invoice/?request_id=<id>
+
+    Generates and streams a PDF invoice for an approved TierUpgradeRequest.
+    Only accessible by the tenant owner. The request must belong to the
+    current tenant and have status=approved plus a non-null invoice_amount.
+
+    Returns HTTP 400 if invoice_amount is not set (admin must fill it in first).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=403)
+
+        request_id = request.query_params.get("request_id", "")
+        if not request_id:
+            return Response({"detail": "request_id query parameter is required."}, status=400)
+
+        # Load from public schema — TierUpgradeRequest lives there.
+        from django_tenants.utils import schema_context
+        from sales.models import TierUpgradeRequest
+
+        try:
+            with schema_context("public"):
+                upgrade_req = TierUpgradeRequest.objects.select_related(
+                    "tenant", "current_plan", "target_plan", "approved_by"
+                ).get(pk=request_id, tenant=request.tenant)
+        except (TierUpgradeRequest.DoesNotExist, ValueError):
+            return Response({"detail": "Invoice not found."}, status=404)
+
+        if upgrade_req.status != TierUpgradeRequest.Status.APPROVED:
+            return Response({"detail": "Invoice is only available for approved requests."}, status=400)
+
+        if upgrade_req.invoice_amount is None:
+            return Response(
+                {"detail": "Invoice amount has not been set. Contact support to complete your invoice."},
+                status=400,
+            )
+
+        # Build PDF
+        buffer = BytesIO()
+        doc = canvas.Canvas(buffer, pagesize=A4)
+        page_w, page_h = A4
+        margin = 20 * mm
+
+        # ── Header ────────────────────────────────────────────────────────
+        doc.setFillColorRGB(0.059, 0.737, 0.545)  # brand teal
+        doc.rect(0, page_h - 40 * mm, page_w, 40 * mm, fill=1, stroke=0)
+
+        doc.setFillColorRGB(1, 1, 1)
+        doc.setFont("Helvetica-Bold", 22)
+        doc.drawString(margin, page_h - 20 * mm, "INVOICE")
+
+        tenant_name = upgrade_req.tenant.name or upgrade_req.tenant.slug
+        doc.setFont("Helvetica", 11)
+        doc.drawRightString(page_w - margin, page_h - 18 * mm, tenant_name)
+        doc.setFont("Helvetica", 9)
+        doc.drawRightString(page_w - margin, page_h - 26 * mm, upgrade_req.tenant.slug)
+
+        # ── Invoice metadata ──────────────────────────────────────────────
+        y = page_h - 55 * mm
+        doc.setFillColorRGB(0.2, 0.2, 0.2)
+        doc.setFont("Helvetica-Bold", 9)
+        doc.drawString(margin, y, "INVOICE NUMBER")
+        doc.drawString(page_w / 2, y, "DATE")
+        doc.setFont("Helvetica", 10)
+        doc.setFillColorRGB(0, 0, 0)
+        doc.drawString(margin, y - 5 * mm, f"INV-{upgrade_req.id:05d}")
+        issued_date = (upgrade_req.decided_at or upgrade_req.requested_at).strftime("%d %b %Y")
+        doc.drawString(page_w / 2, y - 5 * mm, issued_date)
+
+        # ── Divider ───────────────────────────────────────────────────────
+        y -= 14 * mm
+        doc.setStrokeColorRGB(0.85, 0.85, 0.85)
+        doc.setLineWidth(0.4)
+        doc.line(margin, y, page_w - margin, y)
+
+        # ── Line items header ─────────────────────────────────────────────
+        y -= 8 * mm
+        doc.setFont("Helvetica-Bold", 9)
+        doc.setFillColorRGB(0.4, 0.4, 0.4)
+        doc.drawString(margin, y, "DESCRIPTION")
+        doc.drawRightString(page_w - margin, y, "AMOUNT")
+
+        y -= 5 * mm
+        doc.line(margin, y, page_w - margin, y)
+
+        # ── Line item ─────────────────────────────────────────────────────
+        y -= 8 * mm
+        doc.setFont("Helvetica", 10)
+        doc.setFillColorRGB(0, 0, 0)
+        plan_desc = f"Plan upgrade: {upgrade_req.current_plan.name} → {upgrade_req.target_plan.name}"
+        doc.drawString(margin, y, plan_desc)
+
+        currency = upgrade_req.invoice_currency or "USD"
+        amount_str = f"{currency} {upgrade_req.invoice_amount:,.2f}"
+        doc.drawRightString(page_w - margin, y, amount_str)
+
+        if upgrade_req.payment_reference:
+            y -= 6 * mm
+            doc.setFont("Helvetica-Oblique", 8)
+            doc.setFillColorRGB(0.5, 0.5, 0.5)
+            doc.drawString(margin, y, f"Payment ref: {upgrade_req.payment_reference}")
+
+        # ── Total ─────────────────────────────────────────────────────────
+        y -= 10 * mm
+        doc.line(margin, y, page_w - margin, y)
+        y -= 7 * mm
+        doc.setFont("Helvetica-Bold", 12)
+        doc.setFillColorRGB(0, 0, 0)
+        doc.drawString(margin, y, "TOTAL")
+        doc.drawRightString(page_w - margin, y, amount_str)
+
+        # ── Footer ────────────────────────────────────────────────────────
+        doc.setFont("Helvetica", 8)
+        doc.setFillColorRGB(0.6, 0.6, 0.6)
+        doc.drawCentredString(
+            page_w / 2,
+            15 * mm,
+            "Thank you for your business. For billing questions, contact support.",
+        )
+
+        doc.save()
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+
+        filename = f"invoice-INV-{upgrade_req.id:05d}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class OwnerCommissionStatementView(APIView):
+    """
+    GET /api/owner/commission-statement/?year=YYYY&month=M[&format=pdf]
+
+    Monthly commission breakdown for marketplace orders.
+    Returns JSON by default; add ?format=pdf for a downloadable PDF statement.
+
+    The statement shows every marketplace order in the requested month with its
+    food subtotal, commission charged (10 %), and net payout, plus summary totals.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=403)
+
+        from django.db.models import Sum, Count, Avg
+        from calendar import month_name
+
+        # Parse year/month, defaulting to current month
+        now = timezone.now()
+        try:
+            year = int(request.query_params.get("year", now.year))
+            month = int(request.query_params.get("month", now.month))
+            if not (1 <= month <= 12) or year < 2000:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid year/month parameters."}, status=400)
+
+        fmt = request.query_params.get("format", "json").lower()
+
+        # Query marketplace orders for this month
+        qs = (
+            Order.objects
+            .filter(
+                source=Order.Source.MARKETPLACE,
+                created_at__year=year,
+                created_at__month=month,
+            )
+            .order_by("created_at")
+        )
+
+        agg = qs.aggregate(
+            order_count=Count("id"),
+            total_revenue=Sum("total"),
+            total_commission=Sum("commission_amount"),
+        )
+        order_count = agg["order_count"] or 0
+        total_revenue = float(agg["total_revenue"] or 0)
+        total_commission = float(agg["total_commission"] or 0)
+        net_payout = round(total_revenue - total_commission, 2)
+
+        orders_data = [
+            {
+                "order_number": o.order_number,
+                "created_at": o.created_at.isoformat(),
+                "customer_name": o.customer_name or "",
+                "total": float(o.total),
+                "commission_amount": float(o.commission_amount),
+                "net_payout": round(float(o.total) - float(o.commission_amount), 2),
+                "currency": o.currency,
+                "status": o.status,
+            }
+            for o in qs
+        ]
+
+        if fmt != "pdf":
+            return Response({
+                "year": year,
+                "month": month,
+                "month_name": month_name[month],
+                "summary": {
+                    "order_count": order_count,
+                    "total_revenue": total_revenue,
+                    "total_commission": total_commission,
+                    "net_payout": net_payout,
+                },
+                "orders": orders_data,
+            })
+
+        # ── PDF ───────────────────────────────────────────────────────────────
+        currency = orders_data[0]["currency"] if orders_data else ""
+
+        buffer = BytesIO()
+        doc = canvas.Canvas(buffer, pagesize=A4)
+        page_w, page_h = A4
+        margin = 20 * mm
+
+        # Header bar
+        doc.setFillColorRGB(0.059, 0.059, 0.314)  # deep indigo
+        doc.rect(0, page_h - 38 * mm, page_w, 38 * mm, fill=1, stroke=0)
+
+        doc.setFillColorRGB(1, 1, 1)
+        doc.setFont("Helvetica-Bold", 18)
+        doc.drawString(margin, page_h - 18 * mm, "Marketplace Commission Statement")
+        doc.setFont("Helvetica", 10)
+        doc.drawString(margin, page_h - 29 * mm, f"{month_name[month]} {year}")
+
+        y = page_h - 50 * mm
+
+        # Summary box
+        doc.setFillColorRGB(0.94, 0.95, 0.98)
+        doc.rect(margin, y - 28 * mm, page_w - 2 * margin, 28 * mm, fill=1, stroke=0)
+        doc.setFillColorRGB(0, 0, 0)
+
+        summary_items = [
+            ("Orders placed via marketplace:", str(order_count)),
+            ("Total revenue:", f"{currency} {total_revenue:,.2f}"),
+            ("Platform commission (10%):", f"{currency} {total_commission:,.2f}"),
+            ("Net payout to restaurant:", f"{currency} {net_payout:,.2f}"),
+        ]
+        sy = y - 8 * mm
+        for label, value in summary_items:
+            doc.setFont("Helvetica", 9)
+            doc.drawString(margin + 4 * mm, sy, label)
+            doc.setFont("Helvetica-Bold", 9)
+            doc.drawRightString(page_w - margin - 4 * mm, sy, value)
+            sy -= 5 * mm
+
+        y -= 35 * mm
+
+        # Table header
+        col_widths = [45 * mm, 32 * mm, 35 * mm, 30 * mm, 30 * mm]
+        col_labels = ["Order #", "Date", "Revenue", "Commission", "Net Payout"]
+        col_x = [margin]
+        for w in col_widths[:-1]:
+            col_x.append(col_x[-1] + w)
+
+        doc.setFillColorRGB(0.2, 0.2, 0.4)
+        doc.rect(margin, y - 7 * mm, page_w - 2 * margin, 7 * mm, fill=1, stroke=0)
+        doc.setFillColorRGB(1, 1, 1)
+        doc.setFont("Helvetica-Bold", 8)
+        for i, label in enumerate(col_labels):
+            if i < 2:
+                doc.drawString(col_x[i] + 2 * mm, y - 5 * mm, label)
+            else:
+                doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 5 * mm, label)
+        y -= 7 * mm
+
+        # Table rows
+        doc.setFillColorRGB(0, 0, 0)
+        row_h = 6 * mm
+        for idx, o in enumerate(orders_data):
+            if y < 25 * mm:  # new page
+                doc.showPage()
+                y = page_h - 20 * mm
+            bg = 0.97 if idx % 2 == 0 else 1.0
+            doc.setFillColorRGB(bg, bg, bg)
+            doc.rect(margin, y - row_h, page_w - 2 * margin, row_h, fill=1, stroke=0)
+            doc.setFillColorRGB(0, 0, 0)
+            doc.setFont("Helvetica", 8)
+            date_str = o["created_at"][:10]
+            row_vals = [o["order_number"], date_str,
+                        f"{o['currency']} {o['total']:,.2f}",
+                        f"{o['currency']} {o['commission_amount']:,.2f}",
+                        f"{o['currency']} {o['net_payout']:,.2f}"]
+            for i, val in enumerate(row_vals):
+                if i < 2:
+                    doc.drawString(col_x[i] + 2 * mm, y - 4.5 * mm, val)
+                else:
+                    doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 4.5 * mm, val)
+            y -= row_h
+
+        # Totals row
+        y -= 2 * mm
+        doc.line(margin, y, page_w - margin, y)
+        y -= 5 * mm
+        doc.setFont("Helvetica-Bold", 9)
+        doc.drawString(margin + 2 * mm, y, "TOTALS")
+        doc.drawRightString(col_x[2] + col_widths[2] - 2 * mm, y, f"{currency} {total_revenue:,.2f}")
+        doc.drawRightString(col_x[3] + col_widths[3] - 2 * mm, y, f"{currency} {total_commission:,.2f}")
+        doc.drawRightString(col_x[4] + col_widths[4] - 2 * mm, y, f"{currency} {net_payout:,.2f}")
+
+        # Footer
+        doc.setFont("Helvetica", 7)
+        doc.setFillColorRGB(0.55, 0.55, 0.55)
+        doc.drawCentredString(page_w / 2, 12 * mm, "This statement is auto-generated. Contact support for billing queries.")
+
+        doc.save()
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+
+        filename = f"commission-{year}-{month:02d}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class OwnerDataExportView(APIView):
+    """
+    GET /api/owner/data-export/
+
+    Returns a JSON file containing a complete snapshot of all tenant-owned data.
+    Intended for GDPR-compliant data portability and backup purposes.
+
+    Requires owner authentication.
+
+    Exported sections:
+        - profile              Restaurant settings & branding
+        - menu                 Super categories, categories, dishes, option groups
+        - orders               All orders with items (capped at 10 000 rows for performance)
+        - ratings              All ratings
+        - staff                Staff accounts (no password hashes)
+        - tables               Table link configurations
+        - closure_dates        Holiday / closure date records
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        import json
+        from django.db import connection as _conn
+
+        tenant = getattr(request, "tenant", None)
+        schema = getattr(_conn, "schema_name", "unknown")
+        exported_at = timezone.now().isoformat()
+
+        # ── Profile ──────────────────────────────────────────────────────────
+        profile_data = {}
+        try:
+            from tenancy.models import Profile as _Profile
+            p = _Profile.objects.get(tenant=tenant)
+            profile_data = {
+                "tagline": p.tagline,
+                "description": p.description,
+                "business_hours": p.business_hours,
+                "phone": p.phone,
+                "whatsapp": p.whatsapp,
+                "address": p.address,
+                "google_maps_url": p.google_maps_url,
+                "reservation_url": p.reservation_url,
+                "facebook_url": p.facebook_url,
+                "instagram_url": p.instagram_url,
+                "tiktok_url": p.tiktok_url,
+                "language": p.language,
+                "logo_url": p.logo_url,
+                "hero_url": p.hero_url,
+                "delivery_enabled": p.delivery_enabled,
+                "delivery_fee": str(p.delivery_fee),
+                "delivery_minimum_order": str(p.delivery_minimum_order),
+                "delivery_zone_description": p.delivery_zone_description,
+                "receipt_message": p.receipt_message,
+                "is_open": p.is_open,
+                "is_menu_published": p.is_menu_published,
+                "published_at": p.published_at.isoformat() if p.published_at else None,
+            }
+        except Exception:
+            pass
+
+        # ── Menu ─────────────────────────────────────────────────────────────
+        super_cats = list(
+            SuperCategory.objects.values(
+                "name", "name_i18n", "slug", "position", "is_published"
+            )
+        )
+        categories = list(
+            Category.objects.select_related("super_category").values(
+                "name", "name_i18n", "slug", "description", "description_i18n",
+                "position", "is_published", "super_category__slug",
+            )
+        )
+        dishes = list(
+            Dish.objects.select_related("category").values(
+                "name", "name_i18n", "slug", "description", "description_i18n",
+                "price", "currency", "position", "tags", "allergens",
+                "is_published", "is_available", "category__slug",
+            )
+        )
+        option_groups = []
+        try:
+            for og in OptionGroup.objects.prefetch_related("options").all():
+                option_groups.append({
+                    "name": og.name,
+                    "required": og.required,
+                    "multi_select": og.multi_select,
+                    "max_selections": og.max_selections,
+                    "dish_slug": og.dish.slug if og.dish_id else None,
+                    "options": list(og.options.values("name", "price_delta", "currency", "is_available")),
+                })
+        except Exception:
+            pass
+
+        # ── Orders ───────────────────────────────────────────────────────────
+        orders_qs = Order.objects.prefetch_related("items").order_by("-created_at")[:10000]
+        orders_data = []
+        for o in orders_qs:
+            orders_data.append({
+                "order_number": o.order_number,
+                "status": o.status,
+                "fulfillment_type": o.fulfillment_type,
+                "total": str(o.total),
+                "currency": o.currency,
+                "customer_name": o.customer_name,
+                "customer_phone": o.customer_phone,
+                "customer_note": o.customer_note,
+                "table_label": o.table_label,
+                "delivery_address": getattr(o, "delivery_address", ""),
+                "created_at": o.created_at.isoformat(),
+                "items": [
+                    {
+                        "dish_name": item.dish_name,
+                        "qty": item.qty,
+                        "unit_price": str(item.unit_price),
+                        "currency": item.currency,
+                    }
+                    for item in o.items.all()
+                ],
+            })
+
+        # ── Ratings ──────────────────────────────────────────────────────────
+        ratings_data = list(
+            Rating.objects.values("score", "comment", "order__order_number", "created_at")
+        )
+        for r in ratings_data:
+            if r.get("created_at"):
+                r["created_at"] = r["created_at"].isoformat()
+
+        # ── Staff ────────────────────────────────────────────────────────────
+        staff_data = []
+        try:
+            from django.db import connection as _c
+            from django_tenants.utils import schema_context
+            with schema_context("public"):
+                from accounts.models import User as _User
+                for u in _User.objects.filter(tenant=tenant, role="tenant_staff").values(
+                    "email", "name", "is_active",
+                    "perm_manage_orders", "perm_view_revenue", "perm_edit_menu",
+                ):
+                    staff_data.append(dict(u))
+        except Exception:
+            pass
+
+        # ── Tables ───────────────────────────────────────────────────────────
+        tables_data = list(TableLink.objects.values("slug", "label", "is_active", "position"))
+
+        # ── Closure dates ────────────────────────────────────────────────────
+        closure_data = []
+        try:
+            from .models import ClosureDate
+            closure_data = [
+                {"date": cd.date.isoformat(), "label": cd.label}
+                for cd in ClosureDate.objects.order_by("date")
+            ]
+        except Exception:
+            pass
+
+        export = {
+            "exported_at": exported_at,
+            "schema": schema,
+            "profile": profile_data,
+            "menu": {
+                "super_categories": super_cats,
+                "categories": categories,
+                "dishes": dishes,
+                "option_groups": option_groups,
+            },
+            "orders": orders_data,
+            "ratings": ratings_data,
+            "staff": staff_data,
+            "tables": tables_data,
+            "closure_dates": closure_data,
+        }
+
+        filename = f"restaurant-export-{timezone.now().strftime('%Y%m%d')}.json"
+        response = HttpResponse(
+            json.dumps(export, indent=2, default=str),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+# ── Capacity helpers ──────────────────────────────────────────────────────────
+
+def _slot_floor(dt, slot_minutes):
+    """Floor a datetime to the nearest slot boundary."""
+    total = dt.hour * 60 + dt.minute
+    start = (total // slot_minutes) * slot_minutes
+    return dt.replace(hour=start // 60, minute=start % 60, second=0, microsecond=0)
+
+
+def _build_day_slots(date_obj, slot_minutes, tz):
+    """
+    Generate all slot start times for a given calendar date from 09:00 to 22:00.
+    Returns a list of timezone-aware datetimes.
+    """
+    from django.utils.timezone import make_aware
+    slots = []
+    current_minutes = 9 * 60
+    end_minutes = 22 * 60
+    while current_minutes < end_minutes:
+        h, m = divmod(current_minutes, 60)
+        dt = make_aware(
+            datetime(date_obj.year, date_obj.month, date_obj.day, h, m, 0),
+            tz,
+        )
+        slots.append(dt)
+        current_minutes += slot_minutes
+    return slots
+
+
+class SlotAvailabilityView(APIView):
+    """
+    GET /api/availability/?date=YYYY-MM-DD
+    Public endpoint. Returns reservation slot availability for the given date.
+    Only meaningful when max_covers_per_slot > 0 on the restaurant profile.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from datetime import date as date_cls
+        from django.db.models import Sum
+        from django.utils import timezone as tz_utils
+        from django_tenants.utils import get_public_schema_name, schema_context as _sc
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant not resolved."}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_raw = request.query_params.get("date", "").strip()
+        if not date_raw:
+            return Response({"detail": "date parameter is required (YYYY-MM-DD)."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target_date = date_cls.fromisoformat(date_raw)
+        except ValueError:
+            return Response({"detail": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = Profile.objects.filter(tenant=tenant).first()
+        max_covers = getattr(profile, "max_covers_per_slot", 0) or 0
+        slot_minutes = getattr(profile, "slot_duration_minutes", 60) or 60
+
+        local_tz = tz_utils.get_current_timezone()
+        slots = _build_day_slots(target_date, slot_minutes, local_tz)
+
+        if not slots:
+            return Response({
+                "date": date_raw,
+                "slots": [],
+                "max_covers": max_covers,
+                "slot_duration_minutes": slot_minutes,
+                "capacity_enabled": max_covers > 0,
+            })
+
+        slot_end_dt = slots[-1] + timedelta(minutes=slot_minutes)
+        used_by_slot = {}
+
+        if max_covers > 0:
+            try:
+                with _sc(get_public_schema_name()):
+                    from sales.models import Lead as _Lead
+                    ACTIVE = {_Lead.Status.NEW, _Lead.Status.CONTACTED, _Lead.Status.WON}
+                    qs = _Lead.objects.filter(
+                        tenant_id=tenant.id,
+                        booked_for__gte=slots[0],
+                        booked_for__lt=slot_end_dt,
+                        status__in=ACTIVE,
+                    ).values("booked_for", "party_size")
+                    for row in qs:
+                        if row["booked_for"] is None:
+                            continue
+                        slot_key = _slot_floor(row["booked_for"].astimezone(local_tz), slot_minutes)
+                        used_by_slot[slot_key] = used_by_slot.get(slot_key, 0) + (row["party_size"] or 0)
+            except Exception:
+                pass
+
+        result = []
+        for slot_dt in slots:
+            used = used_by_slot.get(slot_dt, 0)
+            result.append({
+                "time": slot_dt.strftime("%H:%M"),
+                "datetime": slot_dt.isoformat(),
+                "used": used,
+                "max": max_covers,
+                "available": max(0, max_covers - used) if max_covers > 0 else None,
+                "full": (used >= max_covers) if max_covers > 0 else False,
+            })
+
+        return Response({
+            "date": date_raw,
+            "slots": result,
+            "max_covers": max_covers,
+            "slot_duration_minutes": slot_minutes,
+            "capacity_enabled": max_covers > 0,
+        })
+
+
+class WaitlistJoinView(APIView):
+    """
+    POST /api/waitlist/
+    Public endpoint. Adds a customer to the waitlist for a full time slot.
+    Body: { name, phone, email, booked_for (ISO datetime), party_size, notes, hp }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from django.utils.dateparse import parse_datetime
+        from django.utils.timezone import make_aware, is_naive
+
+        name = str(request.data.get("name") or "").strip()
+        phone = str(request.data.get("phone") or "").strip()
+        email = str(request.data.get("email") or "").strip()
+        booked_for_raw = str(request.data.get("booked_for") or "").strip()
+        party_size_raw = request.data.get("party_size") or 1
+        notes = str(request.data.get("notes") or "").strip()
+
+        if not name or len(name) < 2:
+            return Response({"detail": "name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not phone and not email:
+            return Response({"detail": "phone or email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not booked_for_raw:
+            return Response({"detail": "booked_for is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            booked_for = parse_datetime(booked_for_raw)
+            if booked_for is None:
+                raise ValueError("unparseable")
+            if is_naive(booked_for):
+                booked_for = make_aware(booked_for)
+        except (ValueError, TypeError):
+            return Response({"detail": "Invalid booked_for datetime."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            party_size = max(1, int(party_size_raw))
+        except (TypeError, ValueError):
+            party_size = 1
+
+        # Honeypot check
+        if str(request.data.get("hp") or "").strip():
+            return Response({"status": "ok"})
+
+        entry = WaitlistEntry.objects.create(
+            booked_for=booked_for,
+            party_size=party_size,
+            name=name,
+            phone=phone,
+            email=email,
+            notes=notes,
+        )
+        return Response({"status": "waitlisted", "id": entry.id}, status=status.HTTP_201_CREATED)
+
+
+class OwnerWaitlistView(APIView):
+    """
+    GET /api/owner/waitlist/?date=YYYY-MM-DD
+    Owner only. Returns waitlist entries (filtered by date if provided).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from datetime import date as date_cls
+        from django.utils.timezone import make_aware, get_current_timezone
+
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        date_raw = request.query_params.get("date", "").strip()
+        qs = WaitlistEntry.objects.all()
+
+        if date_raw:
+            try:
+                target_date = date_cls.fromisoformat(date_raw)
+            except ValueError:
+                return Response({"detail": "Invalid date format."}, status=status.HTTP_400_BAD_REQUEST)
+            local_tz = get_current_timezone()
+            day_start = make_aware(
+                datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0), local_tz
+            )
+            day_end = day_start + timedelta(days=1)
+            qs = qs.filter(booked_for__gte=day_start, booked_for__lt=day_end)
+
+        entries = list(qs.values(
+            "id", "booked_for", "party_size", "name", "phone", "email",
+            "notes", "status", "notified_at", "created_at",
+        ))
+        for e in entries:
+            for field in ("booked_for", "notified_at", "created_at"):
+                if e.get(field):
+                    e[field] = e[field].isoformat()
+
+        return Response({"results": entries, "count": len(entries)})

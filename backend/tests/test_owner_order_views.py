@@ -36,7 +36,7 @@ def _user(role=User.Roles.TENANT_OWNER, tenant_id=1):
 
 
 def _tenant(tenant_id=1):
-    return SimpleNamespace(id=tenant_id)
+    return SimpleNamespace(id=tenant_id, name="Test Restaurant")
 
 
 def _make_order(
@@ -151,6 +151,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
     def test_owner_gets_200_with_results_shape(self, objects_mock):
         order = _make_order()
         qs_mock = MagicMock()
+        qs_mock.count.return_value = 1
         qs_mock.__iter__ = lambda s: iter([order])
         qs_mock.__getitem__ = lambda s, sl: [order]
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
@@ -164,6 +165,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_staff_can_access_owner_list(self, objects_mock):
         qs_mock = MagicMock()
+        qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
@@ -180,6 +182,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
             delivery_lng=-6.85,
         )
         qs_mock = MagicMock()
+        qs_mock.count.return_value = 1
         qs_mock.__iter__ = lambda s: iter([order])
         qs_mock.__getitem__ = lambda s, sl: [order]
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
@@ -194,6 +197,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
     def test_status_filter_applied_when_valid(self, objects_mock):
         qs_base = MagicMock()
         qs_filtered = MagicMock()
+        qs_filtered.count.return_value = 0
         qs_filtered.__iter__ = lambda s: iter([])
         qs_filtered.__getitem__ = lambda s, sl: []
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_base
@@ -205,6 +209,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_invalid_status_filter_ignored(self, objects_mock):
         qs_mock = MagicMock()
+        qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
@@ -217,6 +222,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_orders_sorted_newest_first(self, objects_mock):
         qs_mock = MagicMock()
+        qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
         objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
@@ -322,7 +328,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_not_found_returns_404(self, objects_mock):
-        objects_mock.filter.return_value.first.return_value = None
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = None
         resp = self._patch(order_id=999, data={"status": "confirmed"})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -332,7 +338,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_pending_to_confirmed_succeeds(self, objects_mock, tz_mock):
         order = _make_order(order_status="pending")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "confirmed"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -343,7 +349,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_confirmed_to_preparing_succeeds(self, objects_mock, tz_mock):
         order = _make_order(order_status="confirmed")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "preparing"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -353,7 +359,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_preparing_to_ready_succeeds(self, objects_mock, tz_mock):
         order = _make_order(order_status="preparing")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "ready"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -363,7 +369,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_ready_to_completed_succeeds(self, objects_mock, tz_mock):
         order = _make_order(order_status="ready")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "completed"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -374,7 +380,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     def test_any_active_status_can_be_cancelled(self, objects_mock, tz_mock):
         for current in ("pending", "confirmed", "preparing", "ready"):
             order = _make_order(order_status=current)
-            objects_mock.filter.return_value.first.return_value = order
+            objects_mock.select_related.return_value.filter.return_value.first.return_value = order
             resp = self._patch(data={"status": "cancelled"})
             self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Cancel from '{current}' failed")
 
@@ -383,7 +389,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_invalid_transition_returns_400(self, objects_mock):
         order = _make_order(order_status="pending")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "completed"})  # pending → completed not allowed
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -392,7 +398,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_completed_order_cannot_change_status(self, objects_mock):
         order = _make_order(order_status="completed")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "pending"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -401,7 +407,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_cancelled_order_cannot_change_status(self, objects_mock):
         order = _make_order(order_status="cancelled")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"status": "pending"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -413,7 +419,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_owner_note_updated_without_status_change(self, objects_mock, tz_mock):
         order = _make_order(order_status="pending", owner_note="")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"owner_note": "Allergy: nuts"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -424,7 +430,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_estimated_ready_minutes_updated(self, objects_mock, tz_mock):
         order = _make_order(order_status="confirmed")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"estimated_ready_minutes": 15})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -434,7 +440,7 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_invalid_estimated_ready_minutes_sets_none(self, objects_mock, tz_mock):
         order = _make_order(order_status="confirmed")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(data={"estimated_ready_minutes": "bad"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -444,10 +450,79 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_staff_can_update_status(self, objects_mock, tz_mock):
         order = _make_order(order_status="pending")
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
 
         resp = self._patch(
             data={"status": "confirmed"},
             user=_user(role=User.Roles.TENANT_STAFF),
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    # ── Order status email notifications ──────────────────────────────────────
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_email_sent_on_confirmed(self, objects_mock, tz_mock, send_mail_mock):
+        customer = MagicMock()
+        customer.email = "customer@example.com"
+        order = _make_order(order_status="pending", customer=customer)
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "confirmed"})
+
+        send_mail_mock.assert_called_once()
+        call_kwargs = send_mail_mock.call_args
+        self.assertIn("customer@example.com", call_kwargs[1]["recipient_list"])
+        self.assertIn("ORD001", call_kwargs[1]["subject"])
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_email_sent_on_ready(self, objects_mock, tz_mock, send_mail_mock):
+        customer = MagicMock()
+        customer.email = "customer@example.com"
+        order = _make_order(order_status="preparing", customer=customer)
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "ready"})
+
+        send_mail_mock.assert_called_once()
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_email_sent_on_cancelled(self, objects_mock, tz_mock, send_mail_mock):
+        customer = MagicMock()
+        customer.email = "customer@example.com"
+        order = _make_order(order_status="pending", customer=customer)
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "cancelled"})
+
+        send_mail_mock.assert_called_once()
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_no_email_when_no_customer_account(self, objects_mock, tz_mock, send_mail_mock):
+        order = _make_order(order_status="pending", customer=None)
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "confirmed"})
+
+        send_mail_mock.assert_not_called()
+
+    @patch("menu.views.send_mail")
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_no_email_on_completed(self, objects_mock, tz_mock, send_mail_mock):
+        """'completed' status does not trigger a customer email."""
+        customer = MagicMock()
+        customer.email = "customer@example.com"
+        order = _make_order(order_status="ready", customer=customer)
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+
+        self._patch(data={"status": "completed"})
+
+        send_mail_mock.assert_not_called()

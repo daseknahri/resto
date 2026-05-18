@@ -14,6 +14,8 @@ export const useOrderStore = defineStore("order", {
     ordersLoading: false,
     ordersError: null,
     ordersStatusFilter: "",
+    ordersTotal: 0,      // server-side total (may exceed 200 displayed)
+    ordersHasMore: false, // true when total > returned count
 
     // Owner status update
     updatingOrderId: null,
@@ -67,6 +69,8 @@ export const useOrderStore = defineStore("order", {
         const params = statusFilter ? { status: statusFilter } : {};
         const res = await api.get("/owner/orders/", { params });
         this.orders = Array.isArray(res.data?.results) ? res.data.results : [];
+        this.ordersTotal = res.data?.total ?? this.orders.length;
+        this.ordersHasMore = Boolean(res.data?.has_more);
         return this.orders;
       } catch (err) {
         this.ordersError = err?.response?.data?.detail || "Failed to load orders.";

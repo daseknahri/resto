@@ -34,6 +34,14 @@
                 {{ t("adminConsole.djangoAdmin") }}
               </a>
             </div>
+            <div class="grid grid-cols-1 gap-2">
+              <router-link
+                :to="{ name: 'admin-delivery-zones' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+              >
+                🗺 {{ t("adminConsole.deliveryZones") }}
+              </router-link>
+            </div>
           </article>
           <article class="ui-orbit-card space-y-2">
             <p class="ui-kicker">{{ activeAdminViewLabel }}</p>

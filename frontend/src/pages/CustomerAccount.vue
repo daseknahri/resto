@@ -98,6 +98,12 @@
               >
                 {{ t('customerAccount.notVerified') }}
               </span>
+              <span
+                v-if="walletBalance > 0"
+                class="ui-chip border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-[10px]"
+              >
+                💰 {{ walletBalance }} {{ t('customerAccount.walletTitle') }}
+              </span>
             </div>
 
             <p v-if="customerStore.customer?.phone" class="text-xs text-slate-400">
@@ -116,6 +122,26 @@
               <AppIcon name="plus" class="h-3 w-3" />
               {{ t('customerAccount.addPhone') }}
             </button>
+          </div>
+        </div>
+
+        <!-- Locale preference -->
+        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+          <div class="space-y-0.5">
+            <p class="text-xs font-semibold text-slate-300">{{ t('customerAccount.localeTitle') }}</p>
+            <p class="text-[11px] text-slate-500">{{ t('customerAccount.localeHint') }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="lang in [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' }]"
+              :key="lang.code"
+              class="rounded-full border px-3 py-1 text-xs transition-colors"
+              :class="selectedLocale === lang.code
+                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+              :disabled="savingLocale"
+              @click="setLocale(lang.code)"
+            >{{ lang.label }}</button>
           </div>
         </div>
 
@@ -166,6 +192,42 @@
               <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
               <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
             </div>
+            <!-- Rating the customer submitted for this order -->
+            <div v-if="order.has_rating" class="mt-1.5 flex items-center gap-1">
+              <span class="text-amber-400 tracking-tight">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
+              <span class="text-slate-500 text-[10px]">{{ t('customerAccount.orderRating') }} · {{ t('customerAccount.orderRatingStars', { score: order.rating_score }) }}</span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Wallet -->
+      <section class="ui-panel ui-reveal p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-kicker">{{ t('customerAccount.walletTitle') }}</p>
+          <p class="text-lg font-bold text-[var(--color-secondary)]">
+            {{ walletBalance }} <span class="text-xs font-normal text-slate-400">{{ t('customerAccount.walletTitle') }}</span>
+          </p>
+        </div>
+
+        <div v-if="loadingWallet" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
+        <div v-else-if="!walletTransactions.length" class="text-xs text-slate-500">{{ t('customerAccount.walletNoTransactions') }}</div>
+        <ul v-else class="space-y-1.5">
+          <li
+            v-for="tx in walletTransactions"
+            :key="tx.id"
+            class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
+          >
+            <div class="min-w-0 space-y-0.5">
+              <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
+              <p class="text-slate-500">{{ formatDate(tx.created_at) }}</p>
+            </div>
+            <span
+              class="shrink-0 font-semibold"
+              :class="tx.type === 'payment' ? 'text-red-300' : 'text-emerald-300'"
+            >
+              {{ tx.type === 'payment' ? '-' : '+' }}{{ tx.amount }}
+            </span>
           </li>
         </ul>
       </section>
@@ -210,26 +272,37 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
+import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
 const { t, formatCurrency } = useI18n();
 const customerStore = useCustomerStore();
 const cart = useCartStore();
+const toast = useToastStore();
 
 const showAuthModal = ref(false);
 const showAddPhone = ref(false);
 const editableName = ref('');
 const savingName = ref(false);
+const savingLocale = ref(false);
+const selectedLocale = ref('en');
 const loadingOrders = ref(false);
 const ordersError = ref(false);
 const apiOrders = ref([]);
+const loadingWallet = ref(false);
+const walletTransactions = ref([]);
+const walletBalance = computed(() => {
+  const raw = customerStore.customer?.wallet_balance;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+});
 
 const formatDate = (iso) => {
   if (!iso) return '';
@@ -249,6 +322,34 @@ const STATUS_I18N = {
   cancelled: 'orderStatus.statusCancelled',
 };
 const statusLabel = (s) => s ? t(STATUS_I18N[s] || 'orderStatus.statusPending') : '';
+
+const TX_LABEL_MAP = {
+  topup: 'customerAccount.walletTxTopup',
+  payment: 'customerAccount.walletTxPayment',
+  refund: 'customerAccount.walletTxRefund',
+  bonus: 'customerAccount.walletTxBonus',
+};
+const txLabel = (tx) => {
+  const base = t(TX_LABEL_MAP[tx.type] || 'customerAccount.walletTxFallback');
+  return tx.reference ? `${base} ${tx.reference}` : base;
+};
+
+const fetchWallet = async () => {
+  if (!customerStore.isAuthenticated) return;
+  loadingWallet.value = true;
+  try {
+    const res = await api.get('/customer/wallet/');
+    walletTransactions.value = res.data.transactions || [];
+    // Sync the live balance into the customer store (balance may have changed)
+    if (res.data.balance !== undefined && customerStore.customer) {
+      customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
+    }
+  } catch {
+    // Silent — wallet section shows empty state
+  } finally {
+    loadingWallet.value = false;
+  }
+};
 
 const fetchOrders = async () => {
   if (!customerStore.isAuthenticated) return;
@@ -279,21 +380,41 @@ const saveName = async () => {
   }
 };
 
+const setLocale = async (code) => {
+  if (savingLocale.value || code === selectedLocale.value) return;
+  savingLocale.value = true;
+  try {
+    const res = await api.patch('/customer/profile/', { locale: code });
+    customerStore.setCustomer(res.data.customer);
+    selectedLocale.value = code;
+    toast.show(t('customerAccount.localeSaved'), 'success');
+  } catch {
+    toast.show(t('customerAccount.localeSaveFailed'), 'error');
+  } finally {
+    savingLocale.value = false;
+  }
+};
+
 const handleLogout = async () => {
   await customerStore.logout();
   apiOrders.value = [];
+  walletTransactions.value = [];
   editableName.value = '';
+  selectedLocale.value = 'en';
 };
 
 const onAuthenticated = (customer) => {
   customerStore.setCustomer(customer);
   editableName.value = customer?.name || '';
+  selectedLocale.value = customer?.locale || 'en';
   fetchOrders();
+  fetchWallet();
 };
 
 const onPhoneAdded = (customer) => {
   customerStore.setCustomer(customer);
   editableName.value = customer?.name || '';
+  selectedLocale.value = customer?.locale || 'en';
   showAddPhone.value = false;
 };
 
@@ -301,6 +422,7 @@ watch(
   () => customerStore.customer,
   (val) => {
     editableName.value = val?.name || '';
+    selectedLocale.value = val?.locale || 'en';
   },
   { immediate: true }
 );
@@ -309,6 +431,7 @@ onMounted(async () => {
   await customerStore.fetchCustomer();
   if (customerStore.isAuthenticated) {
     fetchOrders();
+    fetchWallet();
   }
 });
 </script>
