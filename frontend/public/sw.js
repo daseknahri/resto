@@ -25,8 +25,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       tag: 'new-order',          // Replace previous unread notification of same tag
       renotify: true,             // Re-alert even if a 'new-order' notification already exists
       requireInteraction: false,

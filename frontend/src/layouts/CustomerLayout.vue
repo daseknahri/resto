@@ -21,6 +21,13 @@
 
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
+              <!-- PWA install -->
+              <button
+                v-if="pwaCanInstall"
+                class="hidden sm:inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                type="button"
+                @click="pwaInstall"
+              >⬇ {{ t('customerLayout.installApp') }}</button>
               <RouterLink to="/cart" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
                 <AppIcon name="cart" class="h-4 w-4 sm:hidden" />
                 <span class="hidden sm:inline">{{ t("common.cart") }}</span>
@@ -133,6 +140,7 @@ import api from "../lib/api";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
+import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
 import { useTenantStore } from "../stores/tenant";
@@ -142,6 +150,7 @@ const customerStore = useCustomerStore();
 const tenant = useTenantStore();
 const route = useRoute();
 const { currentLocale, t } = useI18n();
+const { canInstall: pwaCanInstall, install: pwaInstall } = useInstallPrompt();
 
 const meta = computed(() => tenant.resolvedMeta || null);
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));

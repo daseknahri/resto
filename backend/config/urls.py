@@ -67,7 +67,7 @@ from sales.views import (
     TierUpgradeTargetsView,
     TierUpgradeRequestListCreateView,
 )
-from tenancy.api import ImageDeleteView, ImageUploadView, OwnerDeletionRequestView, ProfileView, TenantMetaView, TranslateView
+from tenancy.api import AppManifestView, ImageDeleteView, ImageUploadView, OwnerDeletionRequestView, ProfileView, TenantMetaView, TranslateView
 
 tenant_router = routers.DefaultRouter()
 tenant_router.register(r"super-categories", SuperCategoryViewSet, basename="super-category")
@@ -80,6 +80,7 @@ tenant_router.register(r"tables", TableLinkViewSet, basename="table-link")
 urlpatterns = [
     *shared_api_urlpatterns,
     path("api/meta/", TenantMetaView.as_view(), name="tenant-meta"),
+    path("app-manifest.json", AppManifestView.as_view(), name="app-manifest"),
     path("api/profile/", ProfileView.as_view(), name="tenant-profile"),
     path("api/uploads/image/", ImageUploadView.as_view(), name="image-upload"),
     path("api/uploads/image-delete/", ImageDeleteView.as_view(), name="image-delete"),

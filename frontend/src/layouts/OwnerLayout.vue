@@ -93,6 +93,16 @@
 
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <LanguageSwitcher compact dropdown />
+              <!-- PWA install button -->
+              <button
+                v-if="canInstall"
+                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors"
+                type="button"
+                :title="t('ownerLayout.installApp')"
+                @click="pwaInstall"
+              >
+                ⬇ {{ t('ownerLayout.installApp') }}
+              </button>
               <!-- Web Push bell (only when VAPID is configured) -->
               <button
                 v-if="pushSupported && pushEnabled"
@@ -273,6 +283,7 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
+import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
@@ -283,6 +294,9 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
+
+// ── PWA install prompt ────────────────────────────────────────────────────────
+const { canInstall, install: pwaInstall } = useInstallPrompt();
 
 // ── Web Push notifications ────────────────────────────────────────────────────
 const {

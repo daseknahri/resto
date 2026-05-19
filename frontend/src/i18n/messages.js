@@ -155,7 +155,8 @@ export const messages = {
       navReserve: "Reserve",
       navAccount: "Account",
       trackOrderBanner: "Order #{number} — Tap to track",
-      trackOrderDismiss: "Dismiss order tracker"
+      trackOrderDismiss: "Dismiss order tracker",
+      installApp: "Install app"
     },
     customerFlow: {
       title: "Guest journey",
@@ -569,6 +570,7 @@ export const messages = {
       kitchen: "Kitchen Display",
       pushEnable: "Enable order notifications",
       pushDisable: "Disable order notifications",
+      installApp: "Install app",
       gracePeriodWarning: "Payment overdue — {days} day(s) remaining before your account may be suspended.",
       gracePeriodCritical: "Payment overdue — 1 day remaining. Your account may be suspended tomorrow.",
       graceExpiredWarning: "Grace period ended. Please settle your subscription to avoid service interruption. Contact support.",
@@ -2553,7 +2555,8 @@ export const messages = {
       navReserve: "Reserver",
       navAccount: "Compte",
       trackOrderBanner: "Commande #{number} — Suivre",
-      trackOrderDismiss: "Fermer le suivi"
+      trackOrderDismiss: "Fermer le suivi",
+      installApp: "Installer l'app"
     },
     customerFlow: {
       title: "Parcours client",
@@ -2967,6 +2970,7 @@ export const messages = {
       kitchen: "Affichage cuisine",
       pushEnable: "Activer les notifications de commandes",
       pushDisable: "Desactiver les notifications de commandes",
+      installApp: "Installer l'app",
       gracePeriodWarning: "Paiement en retard — {days} jour(s) restant(s) avant la suspension eventuelle de votre compte.",
       gracePeriodCritical: "Paiement en retard — 1 jour restant. Votre compte pourrait etre suspendu demain.",
       graceExpiredWarning: "Periode de grace terminee. Regularisez votre abonnement pour eviter toute interruption. Contactez le support.",

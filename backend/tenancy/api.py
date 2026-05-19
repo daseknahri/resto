@@ -472,3 +472,55 @@ class OwnerDeletionRequestView(APIView):
             pass
 
         return Response({"status": "requested", "deletion_requested_at": t.deletion_requested_at.isoformat()})
+
+
+class AppManifestView(APIView):
+    """
+    GET /app-manifest.json
+    Returns a W3C Web App Manifest for the current tenant, used by the customer-
+    facing PWA so the installed app shows the restaurant's own name and colours.
+    Served with the correct Content-Type so browsers recognise it as a manifest.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        from django.http import JsonResponse
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return JsonResponse({"error": "tenant not found"}, status=400)
+
+        # Pull profile fields
+        profile = getattr(tenant, "profile", None)
+        restaurant_name = getattr(tenant, "name", "Restaurant") or "Restaurant"
+        short_name = restaurant_name[:12]  # manifest short_name limit
+        logo_url = (getattr(profile, "logo_url", "") or "").strip()
+        primary_color = (getattr(profile, "primary_color", "") or "#0b1c1a").strip() or "#0b1c1a"
+        secondary_color = (getattr(profile, "secondary_color", "") or "#F59E0B").strip() or "#F59E0B"
+
+        icons = [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+        ]
+        if logo_url:
+            icons.insert(0, {"src": logo_url, "sizes": "any", "type": "image/png", "purpose": "any"})
+
+        manifest = {
+            "name": restaurant_name,
+            "short_name": short_name,
+            "description": f"Order online from {restaurant_name}",
+            "start_url": "/browse",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "portrait-primary",
+            "background_color": primary_color,
+            "theme_color": secondary_color,
+            "icons": icons,
+            "categories": ["food"],
+        }
+
+        response = JsonResponse(manifest)
+        response["Content-Type"] = "application/manifest+json"
+        response["Cache-Control"] = "public, max-age=3600"
+        return response

@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- PWA manifest — dynamic (tenant-branded) for customer pages, static for owner/admin -->
+    <script>
+      (function () {
+        var path = location.pathname;
+        var isCustomer = !path.startsWith('/owner') && !path.startsWith('/waiter') && !path.startsWith('/admin') && !path.startsWith('/signin') && !path.startsWith('/activate') && !path.startsWith('/forgot') && !path.startsWith('/reset');
+        var href = isCustomer ? '/app-manifest.json' : '/manifest.json';
+        var link = document.createElement('link');
+        link.rel = 'manifest'; link.href = href;
+        document.head.appendChild(link);
+      })();
+    </script>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Resto" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="theme-color" content="#0b1c1a" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="dns-prefetch" href="//images.unsplash.com" />

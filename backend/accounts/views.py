@@ -2303,6 +2303,29 @@ class DriverJobStatusUpdateView(APIView):
             update_fields.append("failed_at")
 
         job.save(update_fields=update_fields)
+
+        # Push notification to restaurant when driver arrives at pickup
+        if new_status == DeliveryJob.Status.AT_RESTAURANT:
+            try:
+                import threading as _threading
+                from tenancy.models import Tenant as _Tenant
+                from menu.push import _push_to_tenant as _push_restaurant
+                _tenant = _Tenant.objects.filter(pk=job.tenant_id).first()
+                if _tenant:
+                    _driver_name = (getattr(job.driver, "name", "") or "Driver").strip()
+                    _threading.Thread(
+                        target=_push_restaurant,
+                        args=(
+                            _tenant.schema_name,
+                            f"Driver arrived \U0001f6f5",
+                            f"{_driver_name} is at your restaurant — order #{job.order_number}",
+                            "/owner/orders",
+                        ),
+                        daemon=True,
+                    ).start()
+            except Exception:
+                pass  # Never fail the driver status update due to push errors
+
         return Response(_serialize_delivery_job(job))
 
 
