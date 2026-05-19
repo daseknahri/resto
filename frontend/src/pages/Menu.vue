@@ -39,19 +39,31 @@
             </div>
           </div>
           <div class="flex flex-wrap gap-2">
-            <span class="ui-chip-strong">{{ statusLabel }}</span>
+            <!-- Open/closed status -->
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-sm"
+              :style="isRestaurantOpen
+                ? 'border-color:rgba(52,211,153,0.40); background:rgba(16,185,129,0.12); color:rgb(110,231,183)'
+                : 'border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.10); color:rgb(252,165,165)'"
+            >
+              <span
+                class="inline-block h-1.5 w-1.5 rounded-full"
+                :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'"
+              />
+              {{ statusLabel }}
+            </span>
             <span v-if="locationLine" class="ui-chip">
               <AppIcon name="info" class="h-3.5 w-3.5" />
               {{ locationLine }}
             </span>
             <span
               v-if="ratingSummary && ratingSummary.count > 0"
-              class="ui-chip"
+              class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs backdrop-blur-sm"
               :title="t('menu.ratingChipTitle', { count: ratingSummary.count })"
             >
-              <span class="text-amber-400 text-xs">★</span>
-              {{ ratingSummary.average !== null ? ratingSummary.average.toFixed(1) : '' }}
-              <span class="text-slate-500 text-[10px]">({{ ratingSummary.count }})</span>
+              <span class="text-amber-400">★</span>
+              <span class="font-semibold text-amber-200">{{ ratingSummary.average !== null ? ratingSummary.average.toFixed(1) : '' }}</span>
+              <span class="text-amber-400/60 text-[10px]">({{ ratingSummary.count }})</span>
             </span>
           </div>
         </div>
@@ -65,7 +77,7 @@
     >✓ {{ tableContextBanner }}</div>
 
     <!-- ── Search + super-category + allergen filter panel ──────────────── -->
-    <div class="ui-panel space-y-3 p-3 sm:p-4">
+    <div class="rounded-2xl border border-slate-700/40 bg-slate-950/60 backdrop-blur-xl shadow-lg shadow-black/20 space-y-3 p-3 sm:p-4">
       <!-- Search -->
       <div class="relative">
         <input
@@ -205,12 +217,17 @@
         class="scroll-mt-28 space-y-3 md:scroll-mt-36"
       >
         <!-- Section heading -->
-        <div class="flex items-center gap-3 pt-2">
-          <div class="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/40 to-transparent" />
-          <h2 class="ui-display px-1 text-xl font-semibold text-white sm:text-2xl">{{ cat.name }}</h2>
-          <div class="h-px flex-1 bg-gradient-to-l from-transparent via-slate-700/40 to-transparent" />
+        <div class="flex items-center justify-between gap-3 pt-1">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="shrink-0 block h-5 w-[3px] rounded-full" style="background: var(--color-secondary)" />
+            <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl truncate">{{ cat.name }}</h2>
+          </div>
+          <span
+            v-if="menu.dishes[cat.slug]?.length"
+            class="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-0.5 text-[11px] text-slate-500 tabular-nums"
+          >{{ sectionDishes(cat.slug).length }}</span>
         </div>
-        <p v-if="cat.description" class="px-1 text-sm text-slate-400">{{ cat.description }}</p>
+        <p v-if="cat.description" class="pl-[1.35rem] text-sm text-slate-400/80">{{ cat.description }}</p>
 
         <!-- Loading skeleton -->
         <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass">
@@ -276,20 +293,26 @@
     </div>
 
     <!-- ── Sticky cart bar (mobile) ──────────────────────────────────────── -->
-    <RouterLink
-      v-if="cart.count"
-      :to="{ name: 'cart' }"
-      class="fixed bottom-[5.15rem] left-2.5 right-2.5 z-20 flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-slate-950/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur sm:hidden"
-    >
-      <div>
-        <p class="text-xs text-slate-400">{{ t('common.cart') }}</p>
-        <p class="font-semibold text-white">{{ itemCountLabel(cart.count) }}</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <p class="text-base font-bold" style="color:var(--color-secondary)">{{ formatCurrency(cart.total, cartCurrency) }}</p>
-        <AppIcon name="cart" class="h-4 w-4" style="color:var(--color-secondary)" />
-      </div>
-    </RouterLink>
+    <Transition name="cart-bar">
+      <RouterLink
+        v-if="cart.count"
+        :to="{ name: 'cart' }"
+        class="fixed bottom-[5.15rem] left-3 right-3 z-20 sm:hidden flex items-center justify-between rounded-2xl px-4 py-3 backdrop-blur-xl"
+        style="background: rgba(6,11,18,0.97); border: 1px solid rgba(245,158,11,0.38); box-shadow: 0 0 0 1px rgba(245,158,11,0.06) inset, 0 12px 40px rgba(0,0,0,0.6), 0 0 24px rgba(245,158,11,0.06)"
+      >
+        <div class="flex items-center gap-2.5">
+          <span
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-slate-950"
+            style="background:var(--color-secondary)"
+          >{{ cart.count }}</span>
+          <p class="text-sm font-semibold text-white">{{ t('common.cart') }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <p class="text-base font-bold" style="color:var(--color-secondary)">{{ formatCurrency(cart.total, cartCurrency) }}</p>
+          <AppIcon name="cart" class="h-4 w-4" style="color:var(--color-secondary)" />
+        </div>
+      </RouterLink>
+    </Transition>
   </div>
 </template>
 
@@ -616,3 +639,21 @@ const toggleAllergenFilter = (allergen) => {
 const handleHeroImageError  = e => withImageFallback(e)
 const handleLogoImageError  = e => withImageFallback(e)
 </script>
+
+<style scoped>
+/* Cart bar slide-up / fade transition */
+.cart-bar-enter-active {
+  transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22,1,0.36,1);
+}
+.cart-bar-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.cart-bar-enter-from {
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+}
+.cart-bar-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+}
+</style>

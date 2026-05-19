@@ -1041,9 +1041,17 @@ body[dir="rtl"] .ui-kicker {
   /* Row-layout dish card base — hover lift on pointer devices */
   @media (hover: hover) {
     .ui-dish-row:hover {
-      border-color: rgba(148, 163, 184, 0.20);
-      background: rgba(6, 11, 18, 0.90);
+      border-color: rgba(245, 158, 11, 0.22);
+      background: rgba(8, 13, 24, 0.92);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
+      transform: translateY(-1px);
     }
+  }
+
+  /* Active category nav pill — glow shadow */
+  .ui-pill-nav[data-active="true"] {
+    font-weight: 600;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.18);
   }
 
 /* ==========================================================================
@@ -1181,6 +1189,14 @@ html[data-menu-theme="light"] .ui-dish-row {
 html[data-menu-theme="light"] .ui-dish-row h3 { color: #0f172a; }
 html[data-menu-theme="light"] .ui-dish-row p  { color: #475569; }
 
+@media (hover: hover) {
+  html[data-menu-theme="light"] .ui-dish-row:hover {
+    background: #f8fafc;
+    border-color: rgba(245, 158, 11, 0.35);
+    box-shadow: 0 6px 18px rgba(100, 116, 139, 0.16);
+  }
+}
+
 /* ── Warm theme ── */
 html[data-menu-theme="warm"] {
   --color-border: rgba(160, 100, 40, 0.2);
@@ -1312,5 +1328,13 @@ html[data-menu-theme="warm"] .ui-dish-row {
 
 html[data-menu-theme="warm"] .ui-dish-row h3 { color: #1c1009; }
 html[data-menu-theme="warm"] .ui-dish-row p  { color: #78350f; }
+
+@media (hover: hover) {
+  html[data-menu-theme="warm"] .ui-dish-row:hover {
+    background: #fffbf5;
+    border-color: rgba(245, 158, 11, 0.40);
+    box-shadow: 0 6px 18px rgba(160, 100, 40, 0.14);
+  }
+}
 
 

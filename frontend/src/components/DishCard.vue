@@ -5,62 +5,92 @@
        ══════════════════════════════════════════════════════ -->
   <article
     v-if="layout === 'row'"
-    class="ui-dish-row group relative flex overflow-hidden rounded-2xl border border-slate-800/70 bg-slate-950/80 transition-colors duration-200 active:scale-[0.99] cursor-pointer select-none"
-    :class="{ 'opacity-60': isSoldOut || isScheduleUnavailable }"
+    class="ui-dish-row group relative flex overflow-hidden rounded-2xl border bg-slate-950/80 transition-all duration-200 active:scale-[0.99] cursor-pointer select-none"
+    :class="[
+      isSoldOut || isScheduleUnavailable ? 'opacity-55' : '',
+      qtyInCart > 0
+        ? 'border-[var(--color-secondary)]/40 shadow-[0_0_0_1px_rgba(245,158,11,0.07)_inset]'
+        : 'border-slate-800/70',
+    ]"
     role="button"
     :aria-label="dish.name"
     @click="handleOpen"
   >
+    <!-- In-cart top accent line -->
+    <div
+      v-if="qtyInCart > 0"
+      class="pointer-events-none absolute inset-x-0 top-0 h-[2px] z-10"
+      style="background: linear-gradient(90deg, transparent, var(--color-secondary), transparent)"
+    />
+
     <!-- Left: text -->
-    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 pl-3 pr-2">
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 pl-3.5 pr-2.5">
       <div class="space-y-1">
         <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white">{{ dish.name }}</h3>
-        <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400">{{ dish.description }}</p>
+        <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90">{{ dish.description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-sm font-bold" style="color:var(--color-secondary)">{{ formatCurrency(dish.price, currency) }}</span>
+        <!-- Price pill -->
+        <span
+          class="inline-flex items-center rounded-full px-2 py-[3px] text-[13px] font-bold"
+          style="color:var(--color-secondary); background: rgba(245,158,11,0.10)"
+        >{{ formatCurrency(dish.price, currency) }}</span>
         <span
           v-for="tag in (dish.tags || []).slice(0, 2)"
           :key="tag"
-          class="rounded-full border border-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400"
+          class="rounded-full border border-slate-700/50 bg-slate-900/60 px-1.5 py-0.5 text-[10px] text-slate-400"
         >{{ t(`dishPage.tag_${tag}`) }}</span>
         <span v-if="isSoldOut"         class="rounded-full border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">{{ t('menu.soldOut') }}</span>
         <span v-else-if="isScheduleUnavailable" class="rounded-full border border-slate-700/50 px-1.5 py-0.5 text-[10px] text-slate-500">{{ t('menu.notAvailableNow') }}</span>
+        <!-- Customisable indicator -->
+        <span
+          v-if="needsDetailPage && canOrder"
+          class="rounded-full border border-slate-700/40 px-1.5 py-0.5 text-[10px] text-slate-500"
+        >{{ t('dishPage.customisable') }}</span>
       </div>
     </div>
 
     <!-- Right: square image + add controls -->
-    <div class="relative h-28 w-28 shrink-0 sm:h-32 sm:w-32">
+    <div class="relative h-[6.5rem] w-[6.5rem] shrink-0 sm:h-32 sm:w-32">
       <img
         v-if="dish.image_url"
         :src="dish.image_url"
         :alt="dish.name"
-        class="h-full w-full object-cover"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
         loading="lazy"
         decoding="async"
         @error="onImgError"
       />
-      <div v-else class="ui-menu-dish-placeholder flex h-full w-full items-center justify-center bg-slate-900/80">
-        <AppIcon name="menu" class="h-8 w-8 text-slate-700" />
+      <div
+        v-else
+        class="ui-menu-dish-placeholder flex h-full w-full items-center justify-center"
+        style="background: linear-gradient(145deg, rgba(245,158,11,0.10) 0%, rgba(15,118,110,0.07) 100%)"
+      >
+        <span class="text-2xl font-black select-none" style="color: rgba(245,158,11,0.35)">
+          {{ (dish.name || '?')[0].toUpperCase() }}
+        </span>
       </div>
-      <!-- subtle left-edge blend -->
-      <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/30 to-transparent" />
+      <!-- left-edge blend from card background -->
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/40 via-transparent to-transparent" />
 
       <!-- Add / qty controls overlaid at bottom-right -->
       <div v-if="canOrder" class="absolute bottom-2 right-2 z-10" @click.stop>
         <!-- qty stepper when already in cart -->
         <div
           v-if="qtyInCart > 0"
-          class="flex items-center gap-0.5 rounded-full border border-amber-500/40 bg-slate-950/92 px-1 py-0.5 shadow-xl backdrop-blur"
+          class="flex items-center gap-0.5 rounded-full border bg-slate-950/95 px-1.5 py-0.5 shadow-xl backdrop-blur-md"
+          style="border-color: rgba(245,158,11,0.50); box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.08) inset"
         >
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-full text-amber-400 transition hover:bg-amber-500/10 active:scale-90"
+            class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
+            style="color:var(--color-secondary)"
             aria-label="Decrease"
             @click.stop="handleDecrement"
           ><AppIcon name="minus" class="h-3 w-3" /></button>
-          <span class="min-w-[1rem] text-center text-xs font-bold text-white tabular-nums">{{ qtyInCart }}</span>
+          <span class="min-w-[1.1rem] text-center text-xs font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-full text-amber-400 transition hover:bg-amber-500/10 active:scale-90"
+            class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
+            style="color:var(--color-secondary)"
             aria-label="Increase"
             @click.stop="handleAdd"
           ><AppIcon name="plus" class="h-3 w-3" /></button>
@@ -68,7 +98,7 @@
         <!-- plain + button -->
         <button
           v-else
-          class="flex h-7 w-7 items-center justify-center rounded-full shadow-xl transition hover:brightness-110 active:scale-90"
+          class="flex h-8 w-8 items-center justify-center rounded-full shadow-xl ring-[3px] ring-[var(--color-secondary)]/15 transition hover:brightness-110 hover:ring-[var(--color-secondary)]/28 active:scale-90"
           style="background-color:var(--color-secondary)"
           aria-label="Add to cart"
           @click.stop="handleAdd"
@@ -78,38 +108,64 @@
   </article>
 
   <!-- ══════════════════════════════════════════════════════
-       CARD layout  —  image-top grid card (current style)
+       CARD layout  —  image-top grid card
        ══════════════════════════════════════════════════════ -->
   <article
     v-else-if="layout === 'card'"
-    class="group ui-menu-dish-card overflow-hidden rounded-[1.8rem] border border-slate-800/80 bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-all duration-300 hover:border-slate-700/80 cursor-pointer"
+    class="group ui-menu-dish-card overflow-hidden rounded-[1.8rem] border bg-slate-950/82 transition-all duration-300 cursor-pointer"
+    :class="[
+      isSoldOut || isScheduleUnavailable ? 'opacity-60' : '',
+      qtyInCart > 0
+        ? 'border-[var(--color-secondary)]/40 shadow-[0_20px_50px_rgba(2,6,23,0.42),0_0_0_1px_rgba(245,158,11,0.06)_inset]'
+        : 'border-slate-800/80 shadow-[0_20px_50px_rgba(2,6,23,0.36)] hover:border-slate-700/70 hover:shadow-[0_24px_60px_rgba(2,6,23,0.48)]',
+    ]"
     role="button"
     :aria-label="dish.name"
     @click="handleOpen"
   >
+    <!-- In-cart top accent -->
+    <div
+      v-if="qtyInCart > 0"
+      class="pointer-events-none absolute inset-x-0 top-0 h-[2px] z-10 rounded-t-[1.8rem]"
+      style="background: linear-gradient(90deg, transparent, var(--color-secondary), transparent)"
+    />
     <!-- Image -->
     <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
       <img
         v-if="dish.image_url"
         :src="dish.image_url"
         :alt="dish.name"
-        class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+        class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
         loading="lazy"
         decoding="async"
         @error="onImgError"
       />
-      <div v-else class="ui-menu-dish-placeholder absolute inset-0 flex items-center justify-center bg-slate-900">
-        <AppIcon name="menu" class="h-12 w-12 text-slate-700" />
+      <div
+        v-else
+        class="ui-menu-dish-placeholder absolute inset-0 flex items-center justify-center"
+        style="background: linear-gradient(145deg, rgba(245,158,11,0.10) 0%, rgba(15,118,110,0.07) 100%)"
+      >
+        <span class="text-4xl font-black select-none" style="color: rgba(245,158,11,0.30)">
+          {{ (dish.name || '?')[0].toUpperCase() }}
+        </span>
       </div>
-      <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
-      <!-- Price badge top-right -->
-      <div class="absolute right-3 top-3">
-        <span class="rounded-full px-3 py-1 text-xs font-bold text-slate-950 shadow-lg" style="background-color:var(--color-secondary)">
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/88 via-slate-950/15 to-transparent" />
+      <!-- Price badge — repositioned bottom-left for visual harmony -->
+      <div class="absolute left-3 bottom-3">
+        <span class="rounded-full px-3 py-1 text-xs font-bold shadow-lg" style="background-color:var(--color-secondary); color: #0f172a">
           {{ formatCurrency(dish.price, currency) }}
         </span>
       </div>
+      <!-- Tags top-left -->
+      <div v-if="dish.tags?.length" class="absolute left-3 top-3 flex flex-wrap gap-1">
+        <span
+          v-for="tag in dish.tags.slice(0,2)"
+          :key="tag"
+          class="rounded-full border border-slate-700/50 bg-slate-950/70 px-2 py-0.5 text-[10px] text-slate-300 backdrop-blur-sm"
+        >{{ t(`dishPage.tag_${tag}`) }}</span>
+      </div>
       <!-- Sold-out overlay -->
-      <div v-if="isSoldOut" class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/60">
+      <div v-if="isSoldOut" class="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-[1px]">
         <span class="rounded-full border border-red-500/60 bg-slate-950/80 px-3 py-1 text-xs font-bold text-red-300">{{ t('menu.soldOut') }}</span>
       </div>
     </div>
@@ -118,23 +174,21 @@
     <div class="space-y-3 p-4" @click.stop>
       <div class="space-y-1">
         <h3 class="text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
-        <p v-if="dish.description" class="line-clamp-2 text-sm text-slate-400">{{ dish.description }}</p>
-      </div>
-      <div v-if="dish.tags?.length" class="flex flex-wrap gap-1">
-        <span v-for="tag in dish.tags" :key="tag" class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400">{{ t(`dishPage.tag_${tag}`) }}</span>
+        <p v-if="dish.description" class="line-clamp-2 text-[13px] text-slate-400">{{ dish.description }}</p>
       </div>
       <!-- Qty stepper or Add -->
       <template v-if="canOrder">
         <div
           v-if="qtyInCart > 0"
-          class="flex items-center justify-between rounded-full border border-amber-500/30 bg-slate-900/60 px-3 py-1.5"
+          class="flex items-center justify-between rounded-full border px-3 py-1.5"
+          style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
-          <button class="flex h-6 w-6 items-center justify-center text-amber-400 transition active:scale-90" @click.stop="handleDecrement">
+          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" @click.stop="handleDecrement">
             <AppIcon name="minus" class="h-3.5 w-3.5" />
           </button>
-          <span class="text-sm font-bold tabular-nums text-white">{{ qtyInCart }}</span>
-          <button class="flex h-6 w-6 items-center justify-center text-amber-400 transition active:scale-90" @click.stop="handleAdd">
+          <span class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
+          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" @click.stop="handleAdd">
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
