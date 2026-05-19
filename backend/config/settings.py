@@ -219,6 +219,14 @@ RESERVATION_SLA_DUE_SOON_MINUTES = int(os.getenv("RESERVATION_SLA_DUE_SOON_MINUT
 # Set GOOGLE_OAUTH_CLIENT_ID in your .env to enable Google sign-in.
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 
+# ── Web Push (VAPID) ──────────────────────────────────────────────────────────
+# Generate a key pair once with:  python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print('PRIVATE:', v.private_pem().decode()); print('PUBLIC:', v.public_key.public_bytes_raw().hex())"
+# Or use:  vapid --gen  (installs with pywebpush)
+# Store in Coolify env as VAPID_PRIVATE_KEY / VAPID_PUBLIC_KEY (PEM / URL-safe base64 respectively).
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+VAPID_ADMIN_EMAIL = os.getenv("VAPID_ADMIN_EMAIL", "admin@example.com").strip()
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",

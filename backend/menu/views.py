@@ -1768,6 +1768,20 @@ class PlaceOrderView(APIView):
                 daemon=True,
             ).start()
 
+        # Send Web Push notification to subscribed owner/staff (daemon thread).
+        try:
+            from django.db import connection as _db_conn
+            from .push import push_new_order as _push_new_order
+            _push_new_order(
+                schema_name=_db_conn.tenant.schema_name,
+                order_number=order.order_number,
+                customer_name=order.customer_name or "",
+                total=str(order.total),
+                currency=order.currency,
+            )
+        except Exception:
+            pass  # Never fail the order response due to push errors
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
@@ -3875,3 +3889,60 @@ class OwnerWaitlistView(APIView):
                     e[field] = e[field].isoformat()
 
         return Response({"results": entries, "count": len(entries)})
+
+
+# ── Web Push notification endpoints ───────────────────────────────────────────
+
+
+class OwnerPushVapidKeyView(APIView):
+    """
+    GET /api/owner/push-vapid-key/
+    Returns the VAPID public key for frontend subscription registration.
+    Public endpoint — needed before the user is authenticated to register the SW.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        vapid_public = (settings.VAPID_PUBLIC_KEY or "").strip()
+        if not vapid_public:
+            return Response({"enabled": False, "public_key": None})
+        return Response({"enabled": True, "public_key": vapid_public})
+
+
+class OwnerPushSubscribeView(APIView):
+    """
+    POST   /api/owner/push-subscribe/   — register a browser push subscription
+    DELETE /api/owner/push-subscribe/   — remove a browser push subscription
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        endpoint = (request.data.get("endpoint") or "").strip()
+        p256dh = (request.data.get("p256dh") or "").strip()
+        auth_key = (request.data.get("auth") or "").strip()
+
+        if not all([endpoint, p256dh, auth_key]):
+            return Response(
+                {"detail": "endpoint, p256dh, and auth are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .models import PushSubscription
+        PushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={"user_id": request.user.id, "p256dh": p256dh, "auth": auth_key},
+        )
+        return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        endpoint = (request.data.get("endpoint") or "").strip()
+        if endpoint:
+            from .models import PushSubscription
+            PushSubscription.objects.filter(endpoint=endpoint).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

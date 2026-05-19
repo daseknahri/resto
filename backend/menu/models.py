@@ -1,4 +1,5 @@
-﻿from django.core.validators import MaxValueValidator, MinValueValidator
+﻿from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -464,3 +465,26 @@ class Promotion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.promo_type})"
+
+
+class PushSubscription(models.Model):
+    """
+    Browser Web Push subscription for a tenant owner/staff member.
+    Stored in the tenant schema so each restaurant's subscriptions are isolated.
+    Subscriptions are registered from the owner dashboard and used to send
+    native OS notifications when a new order arrives, even when the tab is closed.
+    """
+
+    # Loose integer reference to accounts.User — avoids cross-app FK at model level.
+    user_id = models.IntegerField(db_index=True, help_text="accounts.User pk")
+    # W3C Push API subscription fields
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField(help_text="Client public key (URL-safe base64)")
+    auth = models.CharField(max_length=200, help_text="Auth secret (URL-safe base64)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"PushSubscription user={self.user_id} {self.endpoint[:60]}"

@@ -93,6 +93,22 @@
 
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <LanguageSwitcher compact dropdown />
+              <!-- Web Push bell (only when VAPID is configured) -->
+              <button
+                v-if="pushSupported && pushEnabled"
+                class="relative flex h-8 w-8 items-center justify-center rounded-xl border transition-colors"
+                :class="pushSubscribed
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-slate-700/50 bg-slate-800/50 text-slate-400 hover:border-slate-600'"
+                :title="pushSubscribed ? t('ownerLayout.pushDisable') : t('ownerLayout.pushEnable')"
+                :disabled="pushLoading"
+                type="button"
+                @click="pushSubscribed ? pushUnsubscribe() : pushSubscribe()"
+              >
+                <span class="text-sm leading-none" :class="pushLoading ? 'animate-pulse' : ''">
+                  {{ pushSubscribed ? '🔔' : '🔕' }}
+                </span>
+              </button>
               <div ref="settingsMenuRef" class="relative">
                 <button
                   class="owner-settings-trigger"
@@ -257,6 +273,7 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
+import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
@@ -266,6 +283,19 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
+
+// ── Web Push notifications ────────────────────────────────────────────────────
+const {
+  supported: pushSupported,
+  enabled: pushEnabled,
+  subscribed: pushSubscribed,
+  loading: pushLoading,
+  subscribe: pushSubscribe,
+  unsubscribe: pushUnsubscribe,
+  autoRestore: pushAutoRestore,
+  checkEnabled: pushCheckEnabled,
+} = usePushNotifications();
+
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
 // Always show all features until tier gating is configured
@@ -397,6 +427,10 @@ onMounted(async () => {
     document.addEventListener("visibilitychange", onLayoutPageVisible);
   }
   layoutRequestNotifPermission();
+  // Web Push: check if VAPID is configured, then auto-restore existing subscription.
+  pushCheckEnabled().then(() => {
+    if (pushEnabled.value) pushAutoRestore();
+  });
   // Background order poll — keeps the nav badge live on every page.
   // Always silent so we never trigger the loading spinner shown in OwnerOrders.
   const initial = await order.fetchOrders("", { silent: true });
