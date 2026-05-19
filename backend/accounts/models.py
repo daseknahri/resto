@@ -400,3 +400,30 @@ class DeliveryJob(models.Model):
     @property
     def is_terminal(self) -> bool:
         return self.status in (self.Status.DELIVERED, self.Status.FAILED)
+
+
+class SavedAddress(models.Model):
+    """A delivery address saved by a customer for quick reuse at checkout."""
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="saved_addresses",
+    )
+    label = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="Friendly label, e.g. 'Home', 'Work'. Optional.",
+    )
+    address = models.TextField(max_length=300)
+    location_url = models.URLField(max_length=500, blank=True)
+    lat = models.FloatField(null=True, blank=True)
+    lng = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        label = self.label or "Saved address"
+        return f"{label} — {self.address[:60]}"

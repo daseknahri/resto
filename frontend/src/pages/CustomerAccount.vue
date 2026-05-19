@@ -329,6 +329,34 @@
         <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
       </section>
 
+      <!-- Saved Delivery Addresses -->
+      <section v-if="customerStore.isAuthenticated" class="ui-panel ui-reveal p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-kicker">{{ t('customerAccount.savedAddressesTitle') }}</p>
+          <span class="text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesMax') }}</span>
+        </div>
+        <div v-if="loadingAddresses" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
+        <p v-else-if="!savedAddresses.length" class="text-xs text-slate-500">{{ t('customerAccount.savedAddressesEmpty') }}</p>
+        <ul v-else class="space-y-1.5">
+          <li
+            v-for="addr in savedAddresses"
+            :key="addr.id"
+            class="flex items-start gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
+          >
+            <div class="min-w-0 flex-1 space-y-0.5">
+              <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
+              <p class="text-slate-400">{{ addr.address }}</p>
+            </div>
+            <button
+              class="shrink-0 text-slate-500 hover:text-red-400 transition-colors mt-0.5"
+              @click="deleteAddress(addr.id)"
+            >
+              <AppIcon name="close" class="h-3.5 w-3.5" />
+            </button>
+          </li>
+        </ul>
+      </section>
+
       <!-- Local (localStorage) recent orders -->
       <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
         <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
@@ -447,6 +475,33 @@ const redeemableCredit = computed(() => {
   const pts = Math.min(redeemAmount.value || loyaltyConfig.value.redeem_threshold, loyaltyPoints.value);
   return (pts * Number(loyaltyConfig.value.points_value)).toFixed(2);
 });
+
+// ── Saved addresses ───────────────────────────────────────────────────────────
+const savedAddresses = ref([]);
+const loadingAddresses = ref(false);
+
+const fetchAddresses = async () => {
+  if (!customerStore.isAuthenticated) return;
+  loadingAddresses.value = true;
+  try {
+    const res = await api.get('/customer/addresses/');
+    savedAddresses.value = res.data || [];
+  } catch {
+    // silent
+  } finally {
+    loadingAddresses.value = false;
+  }
+};
+
+const deleteAddress = async (id) => {
+  try {
+    await api.delete(`/customer/addresses/${id}/`);
+    savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
+    toast.show(t('customerAccount.savedAddressDeleted'), 'success');
+  } catch {
+    toast.show(t('customerAccount.savedAddressDeleteFailed'), 'error');
+  }
+};
 
 const fetchLoyaltyConfig = async () => {
   try {
@@ -614,6 +669,7 @@ onMounted(async () => {
     fetchOrders();
     fetchWallet();
     fetchLoyaltyConfig();
+    fetchAddresses();
   }
 });
 </script>

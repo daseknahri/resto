@@ -2530,6 +2530,97 @@ class DeliveryRatingView(APIView):
         return Response({"detail": "Rating saved.", "score": score})
 
 
+def _resolve_customer_from_request(request):
+    """Return (Customer, error_response) from a customer-session request."""
+    customer_id = request.session.get("customer_id") if hasattr(request, "session") else None
+    if not customer_id:
+        return None, Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+    try:
+        customer = Customer.objects.get(pk=customer_id)
+    except Customer.DoesNotExist:
+        return None, Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+    return customer, None
+
+
+class CustomerSavedAddressListCreateView(APIView):
+    """GET  /api/customer/addresses/  — list saved addresses (newest first, max 10).
+       POST /api/customer/addresses/  — save a new address."""
+
+    permission_classes = [AllowAny]
+
+    def _get_customer(self, request):
+        return _resolve_customer_from_request(request)
+
+    def get(self, request, *args, **kwargs):
+        from .models import SavedAddress
+        customer, err = self._get_customer(request)
+        if err:
+            return err
+        addresses = SavedAddress.objects.filter(customer=customer)[:10]
+        return Response([_serialize_address(a) for a in addresses])
+
+    def post(self, request, *args, **kwargs):
+        from .models import SavedAddress
+        customer, err = self._get_customer(request)
+        if err:
+            return err
+        # Enforce max 10 saved addresses per customer
+        if SavedAddress.objects.filter(customer=customer).count() >= 10:
+            return Response(
+                {"detail": "Maximum 10 saved addresses allowed.", "code": "address_limit"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        address_text = str(request.data.get("address") or "").strip()[:300]
+        if not address_text:
+            return Response({"detail": "address is required.", "code": "missing_address"}, status=status.HTTP_400_BAD_REQUEST)
+        label = str(request.data.get("label") or "").strip()[:60]
+        location_url = str(request.data.get("location_url") or "").strip()[:500]
+        try:
+            lat = float(request.data["lat"]) if request.data.get("lat") is not None else None
+            lng = float(request.data["lng"]) if request.data.get("lng") is not None else None
+        except (TypeError, ValueError):
+            lat = lng = None
+        addr = SavedAddress.objects.create(
+            customer=customer,
+            label=label,
+            address=address_text,
+            location_url=location_url,
+            lat=lat,
+            lng=lng,
+        )
+        return Response(_serialize_address(addr), status=status.HTTP_201_CREATED)
+
+
+class CustomerSavedAddressDeleteView(APIView):
+    """DELETE /api/customer/addresses/<id>/ — remove a saved address."""
+
+    permission_classes = [AllowAny]
+
+    def delete(self, request, address_id, *args, **kwargs):
+        from .models import SavedAddress
+        customer, err = _resolve_customer_from_request(request)
+        if err:
+            return err
+        try:
+            addr = SavedAddress.objects.get(pk=address_id, customer=customer)
+        except SavedAddress.DoesNotExist:
+            return Response({"detail": "Address not found."}, status=status.HTTP_404_NOT_FOUND)
+        addr.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _serialize_address(addr) -> dict:
+    return {
+        "id": addr.pk,
+        "label": addr.label or "",
+        "address": addr.address,
+        "location_url": addr.location_url or "",
+        "lat": addr.lat,
+        "lng": addr.lng,
+        "created_at": addr.created_at.isoformat(),
+    }
+
+
 # ── Admin: delivery zone management ───────────────────────────────────────────
 
 

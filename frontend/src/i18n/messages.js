@@ -1342,6 +1342,10 @@ export const messages = {
       promoRemove: "Remove",
       promoInvalid: "This promo code is not valid.",
       promoCheckFailed: "Could not verify promo code. Try again.",
+      savedAddresses: "Saved addresses",
+      saveAddress: "Save this address for next time",
+      saveAddressLabelPlaceholder: "Label (e.g. Home, Work) — optional",
+      addressDeleteFailed: "Could not remove address.",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -2509,6 +2513,11 @@ export const messages = {
       loyaltyRedeemSuccess: "Redeemed {pts} points for {credit} in wallet credits!",
       loyaltyRedeemFailed: "Redemption failed. Please try again.",
       loyaltyNotActive: "No active loyalty programme at this restaurant.",
+      savedAddressesTitle: "Saved Delivery Addresses",
+      savedAddressesMax: "Up to 10",
+      savedAddressesEmpty: "No saved addresses yet. Save one at checkout!",
+      savedAddressDeleted: "Address removed.",
+      savedAddressDeleteFailed: "Could not remove address.",
     }
   },
   fr: {
@@ -3828,6 +3837,10 @@ export const messages = {
       promoRemove: "Retirer",
       promoInvalid: "Ce code promo n'est pas valide.",
       promoCheckFailed: "Impossible de verifier le code promo. Reessayez.",
+      savedAddresses: "Adresses enregistrees",
+      saveAddress: "Sauvegarder cette adresse pour la prochaine fois",
+      saveAddressLabelPlaceholder: "Libelle (ex. Maison, Travail) — optionnel",
+      addressDeleteFailed: "Impossible de supprimer l'adresse.",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
@@ -5017,6 +5030,11 @@ export const messages = {
       loyaltyRedeemSuccess: "{pts} points echanges contre {credit} de credits !",
       loyaltyRedeemFailed: "Echange echoue. Veuillez reessayer.",
       loyaltyNotActive: "Aucun programme de fidelite actif dans ce restaurant.",
+      savedAddressesTitle: "Adresses de livraison enregistrees",
+      savedAddressesMax: "Jusqu'a 10",
+      savedAddressesEmpty: "Aucune adresse enregistree. Sauvegardez-en une lors de la commande !",
+      savedAddressDeleted: "Adresse supprimee.",
+      savedAddressDeleteFailed: "Impossible de supprimer l'adresse.",
     }
   },
   ar: {}

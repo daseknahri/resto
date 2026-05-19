@@ -268,6 +268,32 @@
               v-if="isDelivery"
               class="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3"
             >
+              <!-- Saved addresses picker (only for authenticated customers) -->
+              <div v-if="customerStore.isAuthenticated && savedAddresses.length" class="space-y-1.5">
+                <p class="text-xs font-medium text-slate-400">{{ t('cartPage.savedAddresses') }}</p>
+                <div class="space-y-1">
+                  <div
+                    v-for="addr in savedAddresses"
+                    :key="addr.id"
+                    class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
+                  >
+                    <button
+                      class="min-w-0 flex-1 text-left hover:text-indigo-300 transition-colors"
+                      @click="applySavedAddress(addr)"
+                    >
+                      <span v-if="addr.label" class="font-medium text-slate-200 mr-1.5">{{ addr.label }}</span>
+                      <span class="text-slate-400 truncate">{{ addr.address }}</span>
+                    </button>
+                    <button
+                      class="shrink-0 text-slate-600 hover:text-red-400 transition-colors"
+                      @click="deleteSavedAddress(addr.id)"
+                    >
+                      <AppIcon name="close" class="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <!-- Zone description + min order info -->
               <div v-if="deliveryZoneDesc || deliveryMinOrder > 0" class="flex flex-wrap gap-2">
                 <span v-if="deliveryZoneDesc" class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-[11px] text-slate-300">
@@ -315,6 +341,22 @@
                   {{ fieldErrors.delivery_address }}
                 </p>
               </label>
+
+              <!-- Save address for later -->
+              <div v-if="customerStore.isAuthenticated && deliveryAddress" class="space-y-1.5">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" v-model="saveAddressAfterOrder" class="rounded" />
+                  <span class="text-xs text-slate-400">{{ t('cartPage.saveAddress') }}</span>
+                </label>
+                <input
+                  v-if="saveAddressAfterOrder"
+                  v-model.trim="saveAddressLabel"
+                  type="text"
+                  maxlength="60"
+                  class="ui-input text-xs"
+                  :placeholder="t('cartPage.saveAddressLabelPlaceholder')"
+                />
+              </div>
 
               <div class="grid gap-2 md:grid-cols-[auto,1fr] md:items-center">
                 <button
@@ -767,6 +809,39 @@ const promoCode = ref('');
 const promoChecking = ref(false);
 const promoApplied = ref(null);   // { name, promo_type, discount_value, min_order_amount }
 const promoError = ref('');
+
+// Saved addresses
+const savedAddresses = ref([]);
+const saveAddressAfterOrder = ref(false);
+const saveAddressLabel = ref('');
+
+const fetchSavedAddresses = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/customer/addresses/');
+    savedAddresses.value = res.data || [];
+  } catch {
+    // silent
+  }
+};
+
+const applySavedAddress = (addr) => {
+  deliveryAddress.value = addr.address;
+  deliveryLocationUrl.value = addr.location_url || '';
+  deliveryLat.value = addr.lat ?? null;
+  deliveryLng.value = addr.lng ?? null;
+  clearFieldError('delivery_address');
+  clearFieldError('delivery_location_url');
+};
+
+const deleteSavedAddress = async (id) => {
+  try {
+    await api.delete(`/customer/addresses/${id}/`);
+    savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
+  } catch {
+    toast.show(t('cartPage.addressDeleteFailed'), 'error');
+  }
+};
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -1551,6 +1626,18 @@ const placeInAppOrder = async () => {
       localStorage.setItem('lastOrderNumber', result.order_number);
       localStorage.setItem('lastOrderAt', String(Date.now()));
     } catch {}
+    // Optionally save the delivery address for future use
+    if (isDelivery.value && saveAddressAfterOrder.value && deliveryAddress.value) {
+      try {
+        await api.post('/customer/addresses/', {
+          label: saveAddressLabel.value.trim() || '',
+          address: deliveryAddress.value,
+          location_url: deliveryLocationUrl.value || '',
+          lat: deliveryLat.value,
+          lng: deliveryLng.value,
+        });
+      } catch { /* non-critical */ }
+    }
     toast.show(t('cartPage_order.placeOrderSuccess'), 'success');
     router.push({ name: 'order-status', params: { orderNumber: result.order_number } });
   } catch (err) {
@@ -1579,6 +1666,7 @@ const handleEscapeKey = (event) => {
 
 onMounted(() => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
+  fetchSavedAddresses();
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },
