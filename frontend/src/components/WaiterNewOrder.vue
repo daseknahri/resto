@@ -313,7 +313,7 @@ const submit = async () => {
       customer_name: '',
       customer_note: '',
     };
-    await api.post('/api/place-order/', payload);
+    await api.post('/place-order/', payload);
     toast.show(t('waiterPage.newOrderSuccess'), 'success');
     emit('placed');
     emit('close');

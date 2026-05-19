@@ -232,7 +232,7 @@ const load = async () => {
   loading.value = true;
   error.value = false;
   try {
-    const { data } = await api.get('/api/owner/revenue-chart/', {
+    const { data } = await api.get('/owner/revenue-chart/', {
       params: { period: period.value },
     });
     days.value = data.days || [];

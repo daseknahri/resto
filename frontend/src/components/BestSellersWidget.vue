@@ -76,7 +76,7 @@ const currency = ref('USD');
 const load = async () => {
   loading.value = true;
   try {
-    const { data: d } = await api.get('/api/owner/best-sellers/', { params: { period: props.period } });
+    const { data: d } = await api.get('/owner/best-sellers/', { params: { period: props.period } });
     data.value = d;
     currency.value = d.currency || 'USD';
   } catch {
