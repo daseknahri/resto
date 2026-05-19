@@ -1367,6 +1367,8 @@ export const messages = {
       saveAddress: "Save this address for next time",
       saveAddressLabelPlaceholder: "Label (e.g. Home, Work) — optional",
       addressDeleteFailed: "Could not remove address.",
+      tipLabel: "Add a tip",
+      tipCustomPlaceholder: "Custom amount",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -2120,6 +2122,7 @@ export const messages = {
       customerTrustLow: "Low trust",
       sourceMarketplace: "Marketplace",
       promoDiscount: "Promo",
+      tip: "Tip",
       deliveryJobTitle: "Delivery",
       djStatus_searching: "Searching",
       djStatus_assigned: "Assigned",
@@ -3883,6 +3886,8 @@ export const messages = {
       saveAddress: "Sauvegarder cette adresse pour la prochaine fois",
       saveAddressLabelPlaceholder: "Libelle (ex. Maison, Travail) — optionnel",
       addressDeleteFailed: "Impossible de supprimer l'adresse.",
+      tipLabel: "Ajouter un pourboire",
+      tipCustomPlaceholder: "Montant libre",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
@@ -4677,6 +4682,7 @@ export const messages = {
       customerTrustLow: "Faible confiance",
       sourceMarketplace: "Marketplace",
       promoDiscount: "Promo",
+      tip: "Pourboire",
       deliveryJobTitle: "Livraison",
       djStatus_searching: "Recherche",
       djStatus_assigned: "Assigne",

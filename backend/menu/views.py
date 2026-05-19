@@ -1828,6 +1828,19 @@ class PlaceOrderView(APIView):
 
         total = max(Decimal("0"), _food_subtotal + _delivery_fee - _promo_discount)
 
+        # Tip — optional gratuity; must be non-negative and capped at a sane ceiling
+        _tip_raw = request.data.get("tip_amount", 0)
+        try:
+            _tip_amount = Decimal(str(_tip_raw)).quantize(Decimal("0.01"))
+        except Exception:
+            _tip_amount = Decimal("0")
+        if _tip_amount < Decimal("0"):
+            _tip_amount = Decimal("0")
+        # Sanity cap: tip ≤ 100% of food subtotal (prevents fat-finger runaway amounts)
+        if _food_subtotal > Decimal("0") and _tip_amount > _food_subtotal:
+            _tip_amount = _food_subtotal
+        total = total + _tip_amount
+
         # Wallet payment — customer may opt in to paying with their credits balance
         _use_wallet = bool(request.data.get("use_wallet")) and _linked_customer is not None
         _wallet_deduction = Decimal("0")
@@ -1888,6 +1901,7 @@ class PlaceOrderView(APIView):
                     delivery_lng=validated.get("delivery_lng"),
                     total=total,
                     delivery_fee=_delivery_fee,
+                    tip_amount=_tip_amount,
                     currency=currency,
                     promotion_discount=_promo_discount,
                     applied_promotion_name=_best_promo.name if _best_promo else "",
@@ -1986,6 +2000,7 @@ class PlaceOrderView(APIView):
             "status": order.status,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
+            "tip_amount": str(order.tip_amount),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -2479,6 +2494,7 @@ class OwnerOrderListView(APIView):
                 "delivery_lng": order.delivery_lng,
                 "total": str(order.total),
                 "delivery_fee": str(order.delivery_fee),
+                "tip_amount": str(order.tip_amount),
                 "currency": order.currency,
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -2596,6 +2612,7 @@ class OwnerOrderDetailView(APIView):
             "delivery_lng": order.delivery_lng,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
+            "tip_amount": str(order.tip_amount),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "owner_note": order.owner_note,
@@ -3069,7 +3086,7 @@ class OwnerOrderExportView(APIView):
             "order_number", "created_at", "status", "fulfillment_type",
             "table_label", "customer_name", "customer_phone",
             "customer_note", "delivery_address",
-            "items", "subtotal", "delivery_fee", "total", "currency",
+            "items", "subtotal", "delivery_fee", "tip_amount", "total", "currency",
         ])
 
         for order in qs[:5000]:
@@ -3096,6 +3113,7 @@ class OwnerOrderExportView(APIView):
                 items_text,
                 str(subtotal),
                 str(order.delivery_fee),
+                str(order.tip_amount),
                 str(order.total),
                 order.currency or "",
             ])

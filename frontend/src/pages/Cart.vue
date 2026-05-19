@@ -505,7 +505,53 @@
             ></textarea>
           </label>
 
+          <!-- Tip selector -->
+          <div class="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-3 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.tipLabel') }}</p>
+              <span v-if="tipAmount > 0" class="text-xs font-semibold text-[var(--color-secondary)]">
+                + {{ formatCurrency(tipAmount, currency) }}
+              </span>
+            </div>
+            <!-- Preset buttons -->
+            <div class="flex gap-1.5 flex-wrap">
+              <button
+                v-for="opt in TIP_OPTIONS"
+                :key="opt.value"
+                type="button"
+                class="flex-1 min-w-[3.25rem] rounded-xl border py-1.5 text-xs font-semibold transition-colors"
+                :class="tipPercent === opt.value
+                  ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                  : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                @click="setTipPercent(opt.value)"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+            <!-- Custom amount input -->
+            <div v-if="tipPercent === 'custom'" class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">{{ currency }}</span>
+              <input
+                v-model="customTipInput"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input flex-1 text-sm"
+                :placeholder="t('cartPage.tipCustomPlaceholder')"
+                @blur="clampCustomTip"
+              />
+            </div>
+          </div>
+
           <div class="ui-section-band px-4 py-3 space-y-1">
+            <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-slate-400">
+              <span>{{ t('cartPage.subtotal') }}</span>
+              <span>{{ formatCurrency(orderGrandTotal - tipAmount, currency) }}</span>
+            </div>
+            <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-[var(--color-secondary)]/80">
+              <span>{{ t('cartPage.tipLabel') }}</span>
+              <span>+ {{ formatCurrency(tipAmount, currency) }}</span>
+            </div>
             <div class="flex items-center justify-between text-sm text-slate-300">
               <span>{{ t('cartPage.total') }}</span>
               <span class="text-lg font-semibold text-[var(--color-secondary)]">
@@ -804,6 +850,38 @@ const { formatCurrency, itemCountLabel, t } = useI18n();
 const showAuthModal = ref(false);
 const useWallet = ref(false);
 
+// ── Tip ──────────────────────────────────────────────────────────────────────
+const TIP_OPTIONS = [
+  { value: 0,        label: '0%' },
+  { value: 10,       label: '10%' },
+  { value: 15,       label: '15%' },
+  { value: 20,       label: '20%' },
+  { value: 'custom', label: '…' },
+];
+const tipPercent    = ref(0);
+const customTipInput = ref('');
+
+const tipAmount = computed(() => {
+  if (tipPercent.value === 'custom') {
+    const v = parseFloat(customTipInput.value);
+    return Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : 0;
+  }
+  const pct = Number(tipPercent.value) || 0;
+  if (pct === 0) return 0;
+  const base = Number(cart.total) || 0;
+  return Math.round(base * pct) / 100;
+});
+
+const setTipPercent = (val) => {
+  tipPercent.value = val;
+  if (val !== 'custom') customTipInput.value = '';
+};
+
+const clampCustomTip = () => {
+  const v = parseFloat(customTipInput.value);
+  if (!Number.isFinite(v) || v < 0) customTipInput.value = '';
+};
+
 // Promo code
 const promoCode = ref('');
 const promoChecking = ref(false);
@@ -896,10 +974,10 @@ const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zon
 // Grand total = items subtotal + delivery fee (when applicable)
 const orderGrandTotal = computed(() => {
   const subtotal = Number(cart.total) || 0;
-  if (fulfillmentType.value === 'delivery') {
-    return subtotal + deliveryFeeAmount.value;
-  }
-  return subtotal;
+  const base = fulfillmentType.value === 'delivery'
+    ? subtotal + deliveryFeeAmount.value
+    : subtotal;
+  return base + tipAmount.value;
 });
 
 // Wallet credits
@@ -1384,6 +1462,7 @@ const buildPayload = () => {
   if (customerNote.value) payload.customer_note = customerNote.value;
   if (useWallet.value && canPayWithCredits.value) payload.use_wallet = true;
   if (promoApplied.value) payload.promo_code = promoCode.value.trim().toUpperCase();
+  if (tipAmount.value > 0) payload.tip_amount = tipAmount.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
   // customer_name: only for table context (optional)

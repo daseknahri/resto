@@ -233,6 +233,12 @@ class Order(models.Model):
     )
     owner_note = models.TextField(blank=True)
     estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
+    tip_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Optional gratuity added by the customer at checkout.",
+    )
     points_earned = models.PositiveIntegerField(
         null=True,
         blank=True,

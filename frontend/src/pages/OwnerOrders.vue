@@ -159,6 +159,9 @@
             <p v-if="o.promotion_discount && Number(o.promotion_discount) > 0" class="text-[10px] text-emerald-400">
               {{ t('ownerOrders.promoDiscount') }} −{{ formatCurrency(o.promotion_discount, o.currency) }}
             </p>
+            <p v-if="o.tip_amount && Number(o.tip_amount) > 0" class="text-[10px] text-sky-400">
+              {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}
+            </p>
             <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
         </div>
@@ -219,6 +222,10 @@
           <div v-if="o.delivery_fee && Number(o.delivery_fee) > 0" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.deliveryFee") }}</span>
             <span class="ml-1.5 font-medium text-slate-200">{{ formatCurrency(o.delivery_fee, o.currency) }}</span>
+          </div>
+          <div v-if="o.tip_amount && Number(o.tip_amount) > 0" class="sm:col-span-2">
+            <span class="text-slate-500">{{ t("ownerOrders.tip") }}</span>
+            <span class="ml-1.5 font-medium text-emerald-300">{{ formatCurrency(o.tip_amount, o.currency) }}</span>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
