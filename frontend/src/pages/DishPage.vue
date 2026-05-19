@@ -49,7 +49,7 @@
           </div>
           <div class="flex items-end justify-between gap-3">
             <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ dish.name }}</h1>
-            <p class="rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-slate-900">
+            <p class="rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-sm font-bold text-slate-900 shadow-lg shadow-[var(--color-secondary)]/25">
               {{ formatCurrency(dish.price, dish.currency) }}
             </p>
           </div>
@@ -187,7 +187,7 @@
           <div class="ui-spotlight-card space-y-3 p-4">
             <div>
               <p class="ui-kicker">{{ t('dishPage.total') }}</p>
-              <p class="text-3xl font-semibold text-white">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
+              <p class="text-3xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
             </div>
 
             <label class="inline-flex items-center gap-2 text-sm text-slate-300">
@@ -201,7 +201,7 @@
 
             <div class="grid gap-2">
               <button
-                class="ui-btn-primary w-full justify-center"
+                class="ui-btn-primary w-full justify-center py-3 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
                 :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
                 :disabled="orderingDisabled"
                 @click="addToCart"
@@ -279,8 +279,10 @@
 
     <div
       v-if="dish"
-      class="fixed bottom-20 left-3 right-3 z-20 rounded-2xl border border-slate-800/80 bg-slate-900/92 px-3.5 py-2.5 backdrop-blur sm:hidden"
+      class="fixed bottom-20 left-3 right-3 z-20 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900/95 px-3.5 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-xl sm:hidden"
     >
+      <!-- top accent shimmer -->
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-px" style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.5), transparent)" />
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-slate-100">{{ dish.name }}</p>
@@ -312,14 +314,14 @@
           <AppIcon name="share" class="h-4 w-4" />
         </button>
         <button
-          class="ui-btn-primary ml-auto px-4 py-2"
+          class="ui-btn-primary ml-auto px-5 py-2.5 text-sm font-semibold"
           :disabled="orderingDisabled"
           :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
           @click="addToCart"
           @keydown.enter.prevent="addToCart"
           @keydown.space.prevent="addToCart"
         >
-          <AppIcon name="plus" class="h-3.5 w-3.5" />
+          <AppIcon name="plus" class="h-4 w-4" />
           {{ isBrowseOnlyPlan ? t('dishPage.viewOnly') : t('dishPage.add') }}
         </button>
       </div>

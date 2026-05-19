@@ -17,12 +17,17 @@
       <!-- Order-ready banner -->
       <div
         v-if="orderData.status === 'ready'"
-        class="ui-reveal rounded-2xl border border-emerald-400/60 bg-emerald-500/15 p-4 text-center shadow-lg shadow-emerald-900/20 sm:p-5"
+        class="ui-reveal relative overflow-hidden rounded-2xl border border-emerald-400/50 bg-emerald-500/12 p-5 text-center shadow-xl shadow-emerald-900/25 sm:p-6"
       >
-        <p class="text-2xl font-bold text-emerald-200">🎉 {{ t("orderStatus.orderReadyTitle") }}</p>
-        <p class="mt-1 text-sm text-emerald-100/80">
-          {{ fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
-        </p>
+        <!-- background glow -->
+        <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.18),transparent_60%)]" />
+        <div class="relative space-y-2">
+          <p class="text-3xl">🎉</p>
+          <p class="text-2xl font-bold text-emerald-200">{{ t("orderStatus.orderReadyTitle") }}</p>
+          <p class="text-sm text-emerald-100/75">
+            {{ fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
+          </p>
+        </div>
       </div>
 
       <!-- Order-cancelled banner -->
@@ -53,8 +58,8 @@
             </div>
           </div>
           <div class="text-right space-y-1">
-            <p class="text-2xl font-bold text-[var(--color-secondary)]">{{ formatCurrency(orderData.total, orderData.currency) }}</p>
-            <p class="text-xs text-slate-400">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
+            <p class="text-2xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(orderData.total, orderData.currency) }}</p>
+            <p class="text-[10px] text-slate-500">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
           </div>
         </div>
       </div>
@@ -107,18 +112,25 @@
             :key="step.value"
             class="flex flex-1 flex-col items-center gap-1.5"
           >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors"
-              :class="stepClass(step.value)"
-            >
-              <span v-if="isStepDone(step.value)">✓</span>
-              <span v-else>{{ idx + 1 }}</span>
+            <!-- step circle with optional pulse ring on the active step -->
+            <div class="relative flex items-center justify-center">
+              <div
+                v-if="idx === currentStepIndex && currentStepIndex >= 0 && orderData.status !== 'completed'"
+                class="absolute -inset-1.5 animate-ping rounded-full border border-[var(--color-secondary)]/35"
+              />
+              <div
+                class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-500"
+                :class="stepClass(step.value)"
+              >
+                <span v-if="isStepDone(step.value) && idx !== currentStepIndex">✓</span>
+                <span v-else-if="idx === currentStepIndex">
+                  <!-- spinning dot for current step -->
+                  <span class="block h-2.5 w-2.5 rounded-full bg-current" />
+                </span>
+                <span v-else>{{ idx + 1 }}</span>
+              </div>
             </div>
             <p class="text-center text-[10px] leading-tight text-slate-400 sm:text-xs">{{ step.label }}</p>
-            <div
-              v-if="idx < statusSteps.length - 1"
-              class="absolute hidden"
-            />
           </div>
         </div>
         <!-- Progress bar -->
@@ -161,16 +173,19 @@
         <div
           v-for="item in orderData.items"
           :key="item.dish_name + item.note"
-          class="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2.5 text-sm"
+          class="flex items-start justify-between gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm transition-colors hover:border-slate-700/60"
         >
-          <div class="space-y-0.5">
-            <p class="font-semibold text-slate-100">{{ item.qty }}× {{ item.dish_name }}</p>
-            <p v-if="item.options?.length" class="text-xs text-slate-400">
-              {{ item.options.map(o => o.name).join(", ") }}
-            </p>
-            <p v-if="item.note" class="text-xs text-slate-400">{{ item.note }}</p>
+          <div class="flex items-start gap-2.5 min-w-0">
+            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-400 tabular-nums">{{ item.qty }}</span>
+            <div class="min-w-0 space-y-0.5">
+              <p class="font-semibold text-slate-100 truncate">{{ item.dish_name }}</p>
+              <p v-if="item.options?.length" class="text-xs text-slate-400">
+                {{ item.options.map(o => o.name).join(" · ") }}
+              </p>
+              <p v-if="item.note" class="text-xs italic text-slate-500">{{ item.note }}</p>
+            </div>
           </div>
-          <p class="shrink-0 font-medium text-[var(--color-secondary)]">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
+          <p class="shrink-0 font-semibold text-[var(--color-secondary)] tabular-nums">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
         </div>
 
         <!-- Delivery fee breakdown — only shown for delivery orders with a fee -->

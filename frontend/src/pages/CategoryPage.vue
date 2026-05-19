@@ -54,8 +54,17 @@
       <article
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
-        class="group ui-content-auto overflow-hidden rounded-[1.8rem] border border-slate-800/80 bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-all duration-300 hover:border-slate-700/80 hover:shadow-[0_28px_64px_rgba(2,6,23,0.48)]"
+        class="group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-all duration-300"
+        :class="cartQty(dish) > 0
+          ? 'border-[var(--color-secondary)]/45 shadow-[0_20px_50px_rgba(245,158,11,0.10)]'
+          : 'border-slate-800/80 hover:border-slate-700/80 hover:shadow-[0_28px_64px_rgba(2,6,23,0.48)]'"
       >
+        <!-- in-cart top accent -->
+        <div
+          v-if="cartQty(dish) > 0"
+          class="pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-[1.8rem]"
+          style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.7), transparent)"
+        />
         <!-- Image -->
         <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block">
           <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
@@ -69,6 +78,12 @@
               @error="handleDishImageError"
             />
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
+            <!-- In-cart badge -->
+            <div v-if="cartQty(dish) > 0" class="absolute left-3 top-3">
+              <span class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-0.5 text-[11px] font-bold text-slate-950 shadow-lg">
+                ✓ {{ cartQty(dish) }}×
+              </span>
+            </div>
             <!-- Price badge -->
             <div class="absolute right-3 top-3">
               <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold text-slate-950 shadow-lg">
@@ -192,6 +207,12 @@ const filteredDishes = computed(() => {
     return name.includes(term) || description.includes(term) || tagMatch;
   });
 });
+
+// How many of this dish are in the cart (across all option combos)
+const cartQty = (dish) =>
+  cart.items
+    .filter((i) => i.slug === dish.slug)
+    .reduce((sum, i) => sum + i.qty, 0);
 
 const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80";
 const handleCategoryImageError = (event) => withImageFallback(event);

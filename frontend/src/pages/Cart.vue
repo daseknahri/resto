@@ -64,9 +64,12 @@
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal space-y-3 p-3.5 sm:p-4"
+          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden p-3.5 sm:p-4"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
+          <!-- left accent -->
+          <div class="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l-xl" style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))" />
+          <div class="space-y-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 space-y-1">
               <div class="flex flex-wrap items-center gap-2">
@@ -132,6 +135,7 @@
               {{ t('cartPage.remove') }}
             </button>
           </div>
+          </div>
         </article>
 
         <div
@@ -175,7 +179,7 @@
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="ui-kicker">{{ t('cartPage.total') }}</p>
-                <p class="text-3xl font-semibold text-white">
+                <p class="text-3xl font-bold text-[var(--color-secondary)]">
                   {{ formatCurrency(orderGrandTotal, currency) }}
                 </p>
               </div>
@@ -230,31 +234,57 @@
           </div>
 
           <div v-else class="space-y-3">
-            <div :class="['grid gap-2', deliveryEnabled ? 'md:grid-cols-2' : 'md:grid-cols-1']">
+            <div :class="['grid gap-2.5', deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1']">
+              <!-- Pickup tile -->
               <button
-                class="ui-btn-outline justify-center text-sm"
-                :class="
-                  fulfillmentType === 'pickup'
-                    ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                    : ''
-                "
+                class="group relative flex flex-col items-center gap-2 rounded-2xl border px-3 py-3.5 transition-all duration-200 focus:outline-none"
+                :class="fulfillmentType === 'pickup'
+                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10'
+                  : 'border-slate-700/60 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'"
                 @click="fulfillmentType = 'pickup'"
               >
-                <AppIcon name="menu" class="h-3.5 w-3.5" />
-                {{ t('cartPage.pickup') }}
+                <span
+                  class="flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors"
+                  :class="fulfillmentType === 'pickup'
+                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-500'"
+                >
+                  <AppIcon name="menu" class="h-4 w-4" />
+                </span>
+                <span
+                  class="text-xs font-semibold transition-colors"
+                  :class="fulfillmentType === 'pickup' ? 'text-[var(--color-secondary)]' : 'text-slate-300'"
+                >{{ t('cartPage.pickup') }}</span>
+                <span
+                  v-if="fulfillmentType === 'pickup'"
+                  class="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--color-secondary)]"
+                />
               </button>
+              <!-- Delivery tile -->
               <button
                 v-if="deliveryEnabled"
-                class="ui-btn-outline justify-center text-sm"
-                :class="
-                  fulfillmentType === 'delivery'
-                    ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                    : ''
-                "
+                class="group relative flex flex-col items-center gap-2 rounded-2xl border px-3 py-3.5 transition-all duration-200 focus:outline-none"
+                :class="fulfillmentType === 'delivery'
+                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10'
+                  : 'border-slate-700/60 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'"
                 @click="fulfillmentType = 'delivery'"
               >
-                <AppIcon name="table" class="h-3.5 w-3.5" />
-                {{ t('cartPage.delivery') }}
+                <span
+                  class="flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors"
+                  :class="fulfillmentType === 'delivery'
+                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-500'"
+                >
+                  <AppIcon name="table" class="h-4 w-4" />
+                </span>
+                <span
+                  class="text-xs font-semibold transition-colors"
+                  :class="fulfillmentType === 'delivery' ? 'text-[var(--color-secondary)]' : 'text-slate-300'"
+                >{{ t('cartPage.delivery') }}</span>
+                <span
+                  v-if="fulfillmentType === 'delivery'"
+                  class="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--color-secondary)]"
+                />
               </button>
             </div>
             <p class="text-xs text-slate-400">
@@ -674,13 +704,13 @@
             </div>
           </template>
 
-          <div class="ui-section-band space-y-2.5 px-3 py-3">
+          <div class="ui-section-band space-y-2.5 px-3 py-4">
             <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
 
             <!-- Primary: in-app order tracking (shown when ordering is enabled) -->
             <button
               v-if="!isBrowseOnlyPlan"
-              class="ui-btn-primary w-full justify-center"
+              class="ui-btn-primary w-full justify-center py-3.5 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
               :disabled="placingOrder"
               @click="placeInAppOrder"
             >

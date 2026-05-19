@@ -45,12 +45,12 @@
               <span class="ui-chip-strong shrink-0">{{ statusLabel }}</span>
             </div>
 
-            <div class="flex flex-wrap justify-center gap-2">
-              <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm">
+            <div class="flex flex-wrap justify-center gap-2.5">
+              <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold shadow-lg shadow-[var(--color-secondary)]/20">
                 <AppIcon name="menu" class="h-4 w-4" />
                 <span>{{ t("customerLayout.navMenu") }}</span>
               </RouterLink>
-              <button type="button" class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2 text-sm" @click="openLeadModal">
+              <button type="button" class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2.5 text-sm" @click="openLeadModal">
                 <AppIcon name="chat" class="h-4 w-4" />
                 <span>{{ t("customerLeadPage.contactMe") }}</span>
               </button>
@@ -59,7 +59,7 @@
                 :href="reservationUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2 text-sm"
+                class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2.5 text-sm"
                 @click="trackContactClick('reservation_url')"
               >
                 <AppIcon name="calendar" class="h-4 w-4" />
@@ -69,26 +69,26 @@
 
             <div class="mx-auto w-full max-w-4xl rounded-2xl border border-slate-700/80 bg-slate-950/80 p-3.5 text-left shadow-xl shadow-black/35 backdrop-blur-sm sm:p-4">
               <div class="mb-3 grid gap-2 sm:grid-cols-3">
-                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                <div class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
                   <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
                     <AppIcon name="info" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
                     <span>{{ t("common.status") }}</span>
                   </p>
-                  <p class="text-sm font-medium text-slate-100">{{ statusLabel }}</p>
+                  <p class="text-sm font-semibold text-slate-100">{{ statusLabel }}</p>
                 </div>
-                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                <div v-if="locationLine" class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
                   <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
                     <AppIcon name="home" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
                     <span>{{ t("common.location") }}</span>
                   </p>
-                  <p class="text-sm font-medium text-slate-100">{{ locationLine || t("customerLeadPage.fallbackDescription") }}</p>
+                  <p class="text-sm font-semibold text-slate-100">{{ locationLine }}</p>
                 </div>
-                <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
+                <div class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
                   <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
                     <AppIcon name="calendar" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
                     <span>{{ t("stepBrand.businessHoursSummary") }}</span>
                   </p>
-                  <p class="text-sm font-medium text-slate-100">{{ businessHoursSummary || t("stepBrand.closedAllDay") }}</p>
+                  <p class="text-sm font-semibold text-slate-100">{{ businessHoursSummary || t("stepBrand.closedAllDay") }}</p>
                 </div>
               </div>
               <div class="grid gap-3 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
