@@ -278,6 +278,57 @@
         </ul>
       </section>
 
+      <!-- Loyalty Points -->
+      <section v-if="loyaltyPoints > 0 || loyaltyConfig" class="ui-panel ui-reveal p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-kicker">{{ t('customerAccount.loyaltyTitle') }}</p>
+          <p class="text-lg font-bold text-indigo-300">
+            {{ loyaltyPoints }} <span class="text-xs font-normal text-slate-400">{{ t('customerAccount.loyaltyPts') }}</span>
+          </p>
+        </div>
+
+        <div v-if="loyaltyConfig && loyaltyConfig.enabled">
+          <p class="text-xs text-slate-400">
+            {{ t('customerAccount.loyaltyEarnRate', { pts: loyaltyConfig.points_per_unit }) }}
+          </p>
+          <p v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="text-xs text-emerald-300 mt-1">
+            {{ t('customerAccount.loyaltyCanRedeem', {
+              threshold: loyaltyConfig.redeem_threshold,
+              credit: redeemableCredit,
+            }) }}
+          </p>
+          <p v-else class="text-xs text-slate-500 mt-1">
+            {{ t('customerAccount.loyaltyNeedMore', {
+              need: loyaltyConfig.redeem_threshold - loyaltyPoints,
+            }) }}
+          </p>
+
+          <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="mt-3 flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-slate-400">{{ t('customerAccount.loyaltyRedeemLabel') }}</label>
+              <input
+                v-model.number="redeemAmount"
+                type="number"
+                :min="loyaltyConfig.redeem_threshold"
+                :max="loyaltyPoints"
+                :step="loyaltyConfig.redeem_threshold"
+                class="ui-input w-24 text-sm"
+              />
+            </div>
+            <button
+              class="ui-btn-primary px-3 py-1.5 text-xs"
+              :disabled="redeeming || redeemAmount < loyaltyConfig.redeem_threshold"
+              @click="redeemPoints"
+            >
+              {{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}
+            </button>
+          </div>
+          <p v-if="redeemError" class="mt-1 text-xs text-red-300">{{ redeemError }}</p>
+          <p v-if="redeemSuccess" class="mt-1 text-xs text-emerald-300">{{ redeemSuccess }}</p>
+        </div>
+        <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
+      </section>
+
       <!-- Local (localStorage) recent orders -->
       <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
         <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
@@ -383,6 +434,56 @@ const walletBalance = computed(() => {
   return Number.isFinite(n) ? n : 0;
 });
 
+// ── Loyalty ───────────────────────────────────────────────────────────────────
+const loyaltyPoints = computed(() => customerStore.customer?.loyalty_points || 0);
+const loyaltyConfig = ref(null);
+const redeemAmount = ref(0);
+const redeeming = ref(false);
+const redeemError = ref('');
+const redeemSuccess = ref('');
+
+const redeemableCredit = computed(() => {
+  if (!loyaltyConfig.value || !loyaltyPoints.value) return '0.00';
+  const pts = Math.min(redeemAmount.value || loyaltyConfig.value.redeem_threshold, loyaltyPoints.value);
+  return (pts * Number(loyaltyConfig.value.points_value)).toFixed(2);
+});
+
+const fetchLoyaltyConfig = async () => {
+  try {
+    const res = await api.get('/owner/loyalty/');
+    loyaltyConfig.value = res.data;
+    redeemAmount.value = res.data.redeem_threshold;
+  } catch {
+    // Silent — loyalty section will show nothing if not configured
+  }
+};
+
+const redeemPoints = async () => {
+  redeemError.value = '';
+  redeemSuccess.value = '';
+  redeeming.value = true;
+  try {
+    const res = await api.post('/customer/loyalty/redeem/', { points: redeemAmount.value });
+    // Update customer store with new balances
+    if (customerStore.customer) {
+      customerStore.setCustomer({
+        ...customerStore.customer,
+        loyalty_points: res.data.new_points_balance,
+        wallet_balance: res.data.new_wallet_balance,
+      });
+    }
+    redeemSuccess.value = t('customerAccount.loyaltyRedeemSuccess', {
+      pts: res.data.redeemed_points,
+      credit: res.data.credit_amount,
+    });
+    redeemAmount.value = loyaltyConfig.value?.redeem_threshold || 100;
+  } catch (err) {
+    redeemError.value = err?.response?.data?.detail || t('customerAccount.loyaltyRedeemFailed');
+  } finally {
+    redeeming.value = false;
+  }
+};
+
 const formatDate = (iso) => {
   if (!iso) return '';
   try {
@@ -407,6 +508,7 @@ const TX_LABEL_MAP = {
   payment: 'customerAccount.walletTxPayment',
   refund: 'customerAccount.walletTxRefund',
   bonus: 'customerAccount.walletTxBonus',
+  loyalty: 'customerAccount.walletTxLoyalty',
 };
 const txLabel = (tx) => {
   const base = t(TX_LABEL_MAP[tx.type] || 'customerAccount.walletTxFallback');
@@ -511,6 +613,7 @@ onMounted(async () => {
   if (customerStore.isAuthenticated) {
     fetchOrders();
     fetchWallet();
+    fetchLoyaltyConfig();
   }
 });
 </script>

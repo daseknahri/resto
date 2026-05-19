@@ -19,6 +19,10 @@ class Customer(models.Model):
     name = models.CharField(max_length=80, blank=True)
     locale = models.CharField(max_length=10, default="en")
     wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    loyalty_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Accumulated loyalty points, redeemable for wallet credits at each restaurant.",
+    )
     # Driver flags — set by the platform when a customer registers as a delivery driver
     is_driver = models.BooleanField(default=False, db_index=True)
     is_driver_online = models.BooleanField(default=False)
@@ -43,6 +47,7 @@ class WalletTransaction(models.Model):
         PAYMENT = "payment", "Payment"
         REFUND = "refund", "Refund"
         BONUS = "bonus", "Bonus"
+        LOYALTY = "loyalty", "Loyalty redemption"
 
     customer = models.ForeignKey(
         Customer,

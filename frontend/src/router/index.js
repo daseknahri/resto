@@ -43,6 +43,7 @@ const OwnerPromotions = () => import("../pages/OwnerPromotions.vue");
 const OwnerFlashSales = () => import("../pages/OwnerFlashSales.vue");
 const OwnerDeliverySettings = () => import("../pages/OwnerDeliverySettings.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
+const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const FindMyOrder = () => import("../pages/FindMyOrder.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
@@ -201,6 +202,12 @@ const routes = [
         path: "customers",
         name: "owner-customers",
         component: OwnerCustomers,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "loyalty",
+        name: "owner-loyalty",
+        component: OwnerLoyalty,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
     ],

@@ -159,6 +159,10 @@
                       <AppIcon name="user" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.customers") }}</span>
                     </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
+                      <AppIcon name="star" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.loyalty") }}</span>
+                    </RouterLink>
                     <RouterLink class="owner-settings-item" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
                       <AppIcon name="menu" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.kitchen") }}</span>
@@ -331,6 +335,7 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/ratings")) return t("ownerLayout.ratings");
   if (path.startsWith("/owner/kitchen")) return t("ownerLayout.kitchen");
   if (path.startsWith("/owner/customers")) return t("ownerLayout.customers");
+  if (path.startsWith("/owner/loyalty")) return t("ownerLayout.loyalty");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

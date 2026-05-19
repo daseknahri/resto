@@ -190,6 +190,7 @@ def _serialize_customer(customer: Customer) -> dict:
         "email_verified": customer.email_verified,
         "has_google": bool(customer.google_sub),
         "wallet_balance": str(customer.wallet_balance),
+        "loyalty_points": customer.loyalty_points or 0,
     }
 
 

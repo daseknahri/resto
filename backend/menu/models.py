@@ -233,6 +233,11 @@ class Order(models.Model):
     )
     owner_note = models.TextField(blank=True)
     estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
+    points_earned = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Loyalty points credited to the customer for this order. Null = loyalty not active at placement time.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     status_updated_at = models.DateTimeField(null=True, blank=True)
@@ -498,3 +503,37 @@ class PushSubscription(models.Model):
 
     def __str__(self) -> str:
         return f"PushSubscription user={self.user_id} {self.endpoint[:60]}"
+
+
+class LoyaltyConfig(models.Model):
+    """
+    Per-tenant loyalty programme configuration.
+    Only one row should exist per tenant schema (enforced in the view layer).
+    """
+
+    enabled = models.BooleanField(
+        default=False,
+        help_text="Whether the loyalty programme is active for this restaurant.",
+    )
+    points_per_unit = models.PositiveIntegerField(
+        default=10,
+        help_text="Loyalty points earned per 1 unit of currency spent (e.g. 10 = 10 pts per $1).",
+    )
+    redeem_threshold = models.PositiveIntegerField(
+        default=100,
+        help_text="Minimum points balance required before a customer can redeem.",
+    )
+    points_value = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default="0.0100",
+        help_text="Currency value of one loyalty point (e.g. 0.01 = 1 pt is worth $0.01).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Loyalty Config"
+
+    def __str__(self) -> str:
+        return f"LoyaltyConfig (enabled={self.enabled}, {self.points_per_unit}pts/unit)"

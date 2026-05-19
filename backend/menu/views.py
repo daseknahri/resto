@@ -28,7 +28,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
+from .models import AnalyticsEvent, Category, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .serializers import (
     CategorySerializer,
@@ -1919,6 +1919,21 @@ class PlaceOrderView(APIView):
                         )
                         order.wallet_amount_paid = _actual
                         order.save(update_fields=["wallet_amount_paid"])
+
+                # Award loyalty points to linked customer (if programme is active)
+                try:
+                    _loyalty_cfg = LoyaltyConfig.objects.filter(enabled=True).first()
+                    if _loyalty_cfg and _linked_customer is not None:
+                        _pts = int(float(_food_subtotal) * int(_loyalty_cfg.points_per_unit))
+                        if _pts > 0:
+                            from accounts.models import Customer as _CustM2
+                            _CustM2.objects.filter(pk=_linked_customer.pk).update(
+                                loyalty_points=models.F("loyalty_points") + _pts
+                            )
+                            Order.objects.filter(pk=order.pk).update(points_earned=_pts)
+                except Exception:
+                    pass  # Never fail the order due to loyalty errors
+
         except _OutOfStock as _e:
             return Response(
                 {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},
@@ -1965,6 +1980,7 @@ class PlaceOrderView(APIView):
         except Exception:
             pass  # Never fail the order response due to push errors
 
+        order.refresh_from_db(fields=["points_earned"])
         return Response({
             "order_number": order.order_number,
             "status": order.status,
@@ -1973,6 +1989,7 @@ class PlaceOrderView(APIView):
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            "points_earned": order.points_earned,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -4355,6 +4372,143 @@ class OwnerCustomerListView(APIView):
                 "at_risk": at_risk_count,
             },
             "customers": customers,
+        })
+
+
+class OwnerLoyaltyView(APIView):
+    """GET /api/owner/loyalty/  — retrieve loyalty config (creates default if missing).
+       PATCH /api/owner/loyalty/ — update loyalty config."""
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_or_create_config(self):
+        cfg, _ = LoyaltyConfig.objects.get_or_create(
+            pk=1,
+            defaults={
+                "enabled": False,
+                "points_per_unit": 10,
+                "redeem_threshold": 100,
+                "points_value": "0.0100",
+            },
+        )
+        return cfg
+
+    def _serialize(self, cfg):
+        return {
+            "enabled": cfg.enabled,
+            "points_per_unit": cfg.points_per_unit,
+            "redeem_threshold": cfg.redeem_threshold,
+            "points_value": str(cfg.points_value),
+            "updated_at": cfg.updated_at.isoformat(),
+        }
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        cfg = self._get_or_create_config()
+        return Response(self._serialize(cfg))
+
+    def patch(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        from decimal import Decimal as _Dec, InvalidOperation
+        cfg = self._get_or_create_config()
+        data = request.data
+        if "enabled" in data:
+            cfg.enabled = bool(data["enabled"])
+        if "points_per_unit" in data:
+            try:
+                val = max(1, int(data["points_per_unit"]))
+                cfg.points_per_unit = val
+            except (TypeError, ValueError):
+                pass
+        if "redeem_threshold" in data:
+            try:
+                val = max(1, int(data["redeem_threshold"]))
+                cfg.redeem_threshold = val
+            except (TypeError, ValueError):
+                pass
+        if "points_value" in data:
+            try:
+                val = _Dec(str(data["points_value"])).quantize(_Dec("0.0001"))
+                if val > _Dec("0"):
+                    cfg.points_value = val
+            except (InvalidOperation, TypeError, ValueError):
+                pass
+        cfg.save()
+        return Response(self._serialize(cfg))
+
+
+class CustomerLoyaltyRedeemView(APIView):
+    """POST /api/customer/loyalty/redeem/ — convert loyalty points into wallet credits.
+    Requires authenticated customer. Body: { points: int }"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        from decimal import Decimal as _Dec
+        from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+        from django.db import connection as _dbc
+
+        # Resolve the platform Customer from the authenticated request
+        try:
+            _customer = _CustM.objects.get(pk=request.user.customer_id)
+        except (AttributeError, _CustM.DoesNotExist):
+            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get loyalty config
+        try:
+            _cfg = LoyaltyConfig.objects.filter(enabled=True).first()
+        except Exception:
+            _cfg = None
+        if not _cfg:
+            return Response({"detail": "Loyalty programme is not active.", "code": "loyalty_disabled"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Parse requested points
+        try:
+            _requested_pts = max(1, int(request.data.get("points") or 0))
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid points value."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate threshold and balance
+        if _customer.loyalty_points < _cfg.redeem_threshold:
+            return Response(
+                {"detail": f"You need at least {_cfg.redeem_threshold} points to redeem. You have {_customer.loyalty_points}.",
+                 "code": "below_threshold"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _redeemable = min(_requested_pts, _customer.loyalty_points)
+        _credit_amount = (_Dec(str(_redeemable)) * _Dec(str(_cfg.points_value))).quantize(_Dec("0.01"))
+        if _credit_amount <= _Dec("0"):
+            return Response({"detail": "Redemption amount too small."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Atomically deduct points and credit wallet
+        try:
+            from django.db import transaction as _dbtx
+            with _dbtx.atomic():
+                _locked = _CustM.objects.select_for_update().get(pk=_customer.pk)
+                if _locked.loyalty_points < _redeemable:
+                    return Response({"detail": "Insufficient points.", "code": "insufficient_points"}, status=status.HTTP_400_BAD_REQUEST)
+                _locked.loyalty_points -= _redeemable
+                _locked.wallet_balance = _Dec(str(_locked.wallet_balance or "0")) + _credit_amount
+                _locked.save(update_fields=["loyalty_points", "wallet_balance", "updated_at"])
+                tenant_id = getattr(_dbc.tenant, "id", None)
+                _WTM.objects.create(
+                    customer=_locked,
+                    type=_WTM.Type.LOYALTY,
+                    amount=_credit_amount,
+                    reference=f"loyalty:{_redeemable}pts",
+                    tenant_id=tenant_id,
+                    note=f"Redeemed {_redeemable} loyalty points",
+                )
+        except Exception as _exc:
+            return Response({"detail": "Redemption failed. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "redeemed_points": _redeemable,
+            "credit_amount": str(_credit_amount),
+            "new_points_balance": _locked.loyalty_points,
+            "new_wallet_balance": str(_locked.wallet_balance),
         })
 
 
