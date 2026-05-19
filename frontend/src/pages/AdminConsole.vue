@@ -47,6 +47,12 @@
               >
                 🛵 {{ t("adminConsole.drivers") }}
               </router-link>
+              <router-link
+                :to="{ name: 'admin-analytics' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center col-span-2"
+              >
+                📊 {{ t("adminConsole.analytics") }}
+              </router-link>
             </div>
           </article>
           <article class="ui-orbit-card space-y-2">

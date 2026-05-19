@@ -2524,6 +2524,123 @@ class AdminDriverListView(APIView):
         return Response(result)
 
 
+class AdminPlatformAnalyticsView(APIView):
+    """GET /api/admin/platform-analytics/ — cross-platform aggregate stats (platform admin only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from .models import User
+        u = request.user
+        if not isinstance(u, User) or not u.is_platform_admin:
+            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.db.models import Avg, Count, Q, Sum
+        from django.utils import timezone
+        from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, WalletTransaction
+        from tenancy.models import Tenant
+
+        now = timezone.now()
+
+        # ── Tenants ───────────────────────────────────────────────────────────
+        tenant_qs = Tenant.objects.all()
+        total_tenants = tenant_qs.count()
+        active_tenants = tenant_qs.filter(lifecycle_status="active").count()
+        suspended_tenants = tenant_qs.filter(lifecycle_status="suspended").count()
+        canceled_tenants = tenant_qs.filter(lifecycle_status="canceled").count()
+
+        # ── Customers & drivers ───────────────────────────────────────────────
+        total_customers = Customer.objects.count()
+        driver_stats = Customer.objects.filter(is_driver=True).aggregate(
+            total=Count("id"),
+            online=Count("id", filter=Q(is_driver_online=True)),
+        )
+        total_drivers = driver_stats["total"] or 0
+        drivers_online = driver_stats["online"] or 0
+
+        # ── Delivery jobs ─────────────────────────────────────────────────────
+        job_agg = DeliveryJob.objects.aggregate(
+            total=Count("id"),
+            delivered=Count("id", filter=Q(status="delivered")),
+            failed=Count("id", filter=Q(status="failed")),
+            searching=Count("id", filter=Q(status="searching")),
+            avg_rating=Avg("customer_driver_rating"),
+            total_fees=Sum("delivery_fee"),
+            total_payouts=Sum("driver_payout"),
+        )
+        active_jobs = (
+            DeliveryJob.objects.exclude(status__in=["delivered", "failed"]).count()
+        )
+
+        # ── Delivery zones ────────────────────────────────────────────────────
+        zone_agg = DeliveryZone.objects.aggregate(
+            total=Count("id"),
+            active=Count("id", filter=Q(is_active=True)),
+        )
+
+        # ── Flash sales ───────────────────────────────────────────────────────
+        fs_agg = PlatformFlashSale.objects.aggregate(
+            total=Count("id"),
+            active=Count("id", filter=Q(is_active=True, active_from__lte=now, active_until__gte=now)),
+            total_redemptions=Sum("redemption_count"),
+        )
+
+        # ── Wallet ────────────────────────────────────────────────────────────
+        wallet_agg = Customer.objects.aggregate(
+            total_balance=Sum("wallet_balance"),
+        )
+        txn_agg = WalletTransaction.objects.aggregate(
+            total=Count("id"),
+            total_bonus=Sum("amount", filter=Q(type="bonus")),
+            total_payments=Sum("amount", filter=Q(type="payment")),
+        )
+
+        def _f(val, decimals=2):
+            """Safely convert decimal/float/None to rounded float."""
+            if val is None:
+                return None
+            return round(float(val), decimals)
+
+        return Response({
+            "tenants": {
+                "total": total_tenants,
+                "active": active_tenants,
+                "suspended": suspended_tenants,
+                "canceled": canceled_tenants,
+            },
+            "customers": {
+                "total": total_customers,
+                "drivers_total": total_drivers,
+                "drivers_online": drivers_online,
+            },
+            "deliveries": {
+                "total_jobs": job_agg["total"] or 0,
+                "delivered": job_agg["delivered"] or 0,
+                "failed": job_agg["failed"] or 0,
+                "active": active_jobs,
+                "searching": job_agg["searching"] or 0,
+                "avg_driver_rating": _f(job_agg["avg_rating"], 1),
+                "total_fees": _f(job_agg["total_fees"]),
+                "total_driver_payouts": _f(job_agg["total_payouts"]),
+            },
+            "zones": {
+                "total": zone_agg["total"] or 0,
+                "active": zone_agg["active"] or 0,
+            },
+            "flash_sales": {
+                "total": fs_agg["total"] or 0,
+                "live": fs_agg["active"] or 0,
+                "total_redemptions": fs_agg["total_redemptions"] or 0,
+            },
+            "wallet": {
+                "total_balance": _f(wallet_agg["total_balance"]),
+                "total_transactions": txn_agg["total"] or 0,
+                "total_bonus_issued": _f(txn_agg["total_bonus"]),
+                "total_payments": _f(txn_agg["total_payments"]),
+            },
+        })
+
+
 class AdminDeliveryZoneListCreateView(APIView):
     """
     GET  /api/admin/delivery-zones/   — list all zones (platform admin only)
