@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4">
-    <!-- Status tabs -->
+    <!-- Status tabs + New Order button -->
     <div class="flex gap-1.5 overflow-x-auto pb-1">
       <button
         v-for="tab in tabs"
@@ -28,7 +28,21 @@
       >
         {{ t('waiterPage.tabShift') }}
       </button>
+      <!-- New Order -->
+      <button
+        class="ml-auto shrink-0 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/25"
+        @click="showNewOrder = true"
+      >
+        + {{ t('waiterPage.newOrderBtn') }}
+      </button>
     </div>
+
+    <!-- New Order modal -->
+    <WaiterNewOrder
+      v-if="showNewOrder"
+      @close="showNewOrder = false"
+      @placed="onOrderPlaced"
+    />
 
     <!-- Loading skeleton (orders only) -->
     <div v-if="activeTab !== 'shift' && waiter.loading" class="space-y-3">
@@ -195,9 +209,16 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
+import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 
 const { t } = useI18n();
 const waiter = useWaiterStore();
+
+const showNewOrder = ref(false);
+const onOrderPlaced = () => {
+  // Immediately reload the order list so the new order appears
+  waiter.fetchOrders({ silent: true });
+};
 
 // ── Shift summary ──────────────────────────────────────────────────────────────
 // Default shift start: 8 hours ago, formatted for datetime-local input

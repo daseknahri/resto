@@ -47,9 +47,14 @@
         </div>
       </div>
 
-      <!-- Revenue bar chart -->
-      <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-        <RevenueBarChart />
+      <!-- Revenue chart + best sellers side-by-side on wider screens -->
+      <div class="grid gap-3 xl:grid-cols-2">
+        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
+          <RevenueBarChart />
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
+          <BestSellersWidget />
+        </div>
       </div>
 
       <!-- Restaurant open/closed quick toggle -->
@@ -546,6 +551,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import BestSellersWidget from "../components/BestSellersWidget.vue";
 import RevenueBarChart from "../components/RevenueBarChart.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";

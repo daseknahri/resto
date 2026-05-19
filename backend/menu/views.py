@@ -728,6 +728,86 @@ class AnalyticsEventIngestView(APIView):
         return Response({"detail": "event_recorded", "id": event.id}, status=status.HTTP_202_ACCEPTED)
 
 
+class OwnerBestSellersView(APIView):
+    """
+    GET /api/owner/best-sellers/?period=30
+
+    Returns the top-10 dishes by order count and by revenue for the last N days,
+    derived from OrderItem rows on completed orders.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _COUNTED = [
+        "confirmed", "preparing", "ready", "out_for_delivery",
+        "delivered", "completed",
+    ]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            period = int(request.query_params.get("period", "30"))
+        except (TypeError, ValueError):
+            period = 30
+        period = max(7, min(90, period))
+
+        from django.db.models import Count as _C, Sum as _S, FloatField as _FF
+        from django.utils import timezone as _tz
+        import datetime
+
+        since = _tz.now() - datetime.timedelta(days=period)
+
+        base_qs = (
+            OrderItem.objects
+            .filter(
+                order__status__in=self._COUNTED,
+                order__created_at__gte=since,
+            )
+        )
+
+        by_count = list(
+            base_qs
+            .values("dish_slug", "dish_name")
+            .annotate(total_qty=_C("qty"), revenue=_S("subtotal", output_field=_FF()))
+            .order_by("-total_qty")[:10]
+        )
+
+        by_revenue = list(
+            base_qs
+            .values("dish_slug", "dish_name")
+            .annotate(total_qty=_C("qty"), revenue=_S("subtotal", output_field=_FF()))
+            .order_by("-revenue")[:10]
+        )
+
+        currency = (
+            Order.objects
+            .filter(status__in=self._COUNTED, created_at__gte=since)
+            .order_by("-created_at")
+            .values_list("currency", flat=True)
+            .first()
+        ) or "USD"
+
+        def fmt(rows):
+            return [
+                {
+                    "dish_slug": r["dish_slug"],
+                    "dish_name": r["dish_name"],
+                    "total_qty": r["total_qty"],
+                    "revenue": round(float(r["revenue"] or 0), 2),
+                }
+                for r in rows
+            ]
+
+        return Response({
+            "period": period,
+            "currency": currency,
+            "by_count": fmt(by_count),
+            "by_revenue": fmt(by_revenue),
+        })
+
+
 class OwnerRevenueChartView(APIView):
     """
     GET /api/owner/revenue-chart/?period=7|14|30
