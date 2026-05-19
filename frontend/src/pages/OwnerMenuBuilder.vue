@@ -206,8 +206,9 @@ const importError = ref('');
 const importResult = ref(null);
 
 const templateUrl = computed(() => {
-  const base = api.defaults?.baseURL || '';
-  return `${base}/api/owner/menu/import/`;
+  // api.defaults.baseURL is already "/api" — don't prefix with it again.
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/api/owner/menu/import/`;
 });
 
 const closeImport = () => {
