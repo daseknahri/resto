@@ -155,6 +155,10 @@
                       <AppIcon name="truck" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.delivery") }}</span>
                     </RouterLink>
+                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-customers' }" @click="closeSettingsMenu">
+                      <AppIcon name="user" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.customers") }}</span>
+                    </RouterLink>
                     <RouterLink class="owner-settings-item" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
                       <AppIcon name="menu" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.kitchen") }}</span>
@@ -326,6 +330,7 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/staff")) return t("ownerLayout.staff");
   if (path.startsWith("/owner/ratings")) return t("ownerLayout.ratings");
   if (path.startsWith("/owner/kitchen")) return t("ownerLayout.kitchen");
+  if (path.startsWith("/owner/customers")) return t("ownerLayout.customers");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

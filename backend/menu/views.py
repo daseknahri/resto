@@ -3946,3 +3946,224 @@ class OwnerPushSubscribeView(APIView):
             from .models import PushSubscription
             PushSubscription.objects.filter(endpoint=endpoint).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Owner Customer CRM ────────────────────────────────────────────────────────
+
+class OwnerCustomerListView(APIView):
+    """
+    GET /api/owner/customers/
+
+    Returns aggregated customer profiles from Order data, merging:
+      • Linked orders  — grouped by customer_id (platform accounts)
+      • Anonymous orders — grouped by customer_phone (no account)
+
+    Query params:
+      segment  = all | new | returning | at_risk   (default: all)
+      search   = free-text match on name / phone / email
+      sort     = last_order | total_spend | order_count   (default: last_order)
+      order    = asc | desc                                 (default: desc)
+      format   = json | csv                                 (default: json)
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # Statuses that count as real completed orders
+    _COUNTED = [
+        "confirmed", "preparing", "ready", "out_for_delivery",
+        "delivered", "completed",
+    ]
+    _AT_RISK_DAYS = 30   # days since last order before considered at-risk
+    _NEW_THRESHOLD = 1   # ≤ this many orders → "new"
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.db.models import Count, Sum, Max, Avg, FloatField
+        from django.db.models.functions import Coalesce
+        from django.utils import timezone as _tz
+        import datetime, csv
+        from io import StringIO
+
+        now = _tz.now()
+        at_risk_cutoff = now - datetime.timedelta(days=self._AT_RISK_DAYS)
+
+        # ── 1. Aggregate linked orders (customer_id is set) ──────────────────
+        linked_qs = (
+            Order.objects
+            .filter(customer_id__isnull=False, status__in=self._COUNTED)
+            .values("customer_id")
+            .annotate(
+                order_count=Count("id"),
+                total_spend=Coalesce(Sum("total"), 0, output_field=FloatField()),
+                last_order_at=Max("created_at"),
+                avg_order_value=Coalesce(Avg("total"), 0, output_field=FloatField()),
+                last_name=Max("customer_name"),
+                last_phone=Max("customer_phone"),
+                currency=Max("currency"),
+            )
+        )
+
+        # ── 2. Aggregate anonymous orders (no customer_id, phone only) ───────
+        anon_qs = (
+            Order.objects
+            .filter(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
+            .values("customer_phone")
+            .annotate(
+                order_count=Count("id"),
+                total_spend=Coalesce(Sum("total"), 0, output_field=FloatField()),
+                last_order_at=Max("created_at"),
+                avg_order_value=Coalesce(Avg("total"), 0, output_field=FloatField()),
+                last_name=Max("customer_name"),
+                currency=Max("currency"),
+            )
+        )
+
+        # ── 3. Fetch CustomerRating for linked customers (public schema) ──────
+        linked_customer_ids = [r["customer_id"] for r in linked_qs]
+        rating_map = {}  # customer_id → avg_score
+        if linked_customer_ids:
+            try:
+                from django.db import connection as _conn
+                from accounts.models import CustomerRating
+                ratings = (
+                    CustomerRating.objects
+                    .filter(customer_id__in=linked_customer_ids)
+                    .values("customer_id")
+                    .annotate(avg_score=Avg("score"))
+                )
+                rating_map = {r["customer_id"]: float(r["avg_score"] or 0) for r in ratings}
+            except Exception:
+                pass
+
+        # ── 4. Fetch platform account emails for linked customers ─────────────
+        email_map = {}
+        if linked_customer_ids:
+            try:
+                from accounts.models import Customer as PlatformCustomer
+                accounts = PlatformCustomer.objects.filter(id__in=linked_customer_ids).values("id", "email")
+                email_map = {a["id"]: a["email"] for a in accounts}
+            except Exception:
+                pass
+
+        # ── 5. Build unified list ─────────────────────────────────────────────
+        customers = []
+
+        for row in linked_qs:
+            cid = row["customer_id"]
+            customers.append({
+                "id": f"acc-{cid}",
+                "type": "account",
+                "customer_id": cid,
+                "name": (row["last_name"] or "").strip() or "—",
+                "phone": (row["last_phone"] or "").strip(),
+                "email": email_map.get(cid, ""),
+                "order_count": row["order_count"],
+                "total_spend": float(row["total_spend"]),
+                "avg_order_value": float(row["avg_order_value"]),
+                "last_order_at": row["last_order_at"].isoformat() if row["last_order_at"] else None,
+                "currency": row["currency"] or "",
+                "trust_score": rating_map.get(cid),
+            })
+
+        for row in anon_qs:
+            phone = (row["customer_phone"] or "").strip()
+            customers.append({
+                "id": f"anon-{phone}",
+                "type": "anonymous",
+                "customer_id": None,
+                "name": (row["last_name"] or "").strip() or "—",
+                "phone": phone,
+                "email": "",
+                "order_count": row["order_count"],
+                "total_spend": float(row["total_spend"]),
+                "avg_order_value": float(row["avg_order_value"]),
+                "last_order_at": row["last_order_at"].isoformat() if row["last_order_at"] else None,
+                "currency": row["currency"] or "",
+                "trust_score": None,
+            })
+
+        # ── 6. Segment tagging ────────────────────────────────────────────────
+        for c in customers:
+            last_at = c["last_order_at"]
+            if last_at:
+                import datetime as _dt
+                last_dt = _dt.datetime.fromisoformat(last_at)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=_dt.timezone.utc)
+                is_stale = last_dt < at_risk_cutoff.replace(tzinfo=_dt.timezone.utc) if at_risk_cutoff.tzinfo is None else last_dt < at_risk_cutoff
+            else:
+                is_stale = True
+
+            if c["order_count"] <= self._NEW_THRESHOLD:
+                c["segment"] = "new"
+            elif is_stale:
+                c["segment"] = "at_risk"
+            else:
+                c["segment"] = "returning"
+
+        # ── 7. Filter — segment & search ─────────────────────────────────────
+        segment = (request.query_params.get("segment") or "all").strip().lower()
+        if segment in ("new", "returning", "at_risk"):
+            customers = [c for c in customers if c["segment"] == segment]
+
+        search = (request.query_params.get("search") or "").strip().lower()
+        if search:
+            customers = [
+                c for c in customers
+                if search in c["name"].lower()
+                or search in c["phone"].lower()
+                or search in c["email"].lower()
+            ]
+
+        # ── 8. Sort ───────────────────────────────────────────────────────────
+        sort_field_map = {
+            "last_order": "last_order_at",
+            "total_spend": "total_spend",
+            "order_count": "order_count",
+        }
+        sort_key = sort_field_map.get(
+            (request.query_params.get("sort") or "last_order").strip().lower(),
+            "last_order_at",
+        )
+        reverse = (request.query_params.get("order") or "desc").strip().lower() != "asc"
+        customers.sort(key=lambda c: (c[sort_key] or ""), reverse=reverse)
+
+        # ── 9. Summary stats ─────────────────────────────────────────────────
+        total_count = len(customers)
+        new_count = sum(1 for c in customers if c["segment"] == "new")
+        returning_count = sum(1 for c in customers if c["segment"] == "returning")
+        at_risk_count = sum(1 for c in customers if c["segment"] == "at_risk")
+
+        # ── 10. CSV export ────────────────────────────────────────────────────
+        if (request.query_params.get("format") or "").strip().lower() == "csv":
+            buf = StringIO()
+            writer = csv.writer(buf)
+            writer.writerow([
+                "Name", "Phone", "Email", "Type", "Segment",
+                "Orders", "Total Spend", "Avg Order", "Currency",
+                "Last Order", "Trust Score",
+            ])
+            for c in customers:
+                writer.writerow([
+                    c["name"], c["phone"], c["email"], c["type"], c["segment"],
+                    c["order_count"], f"{c['total_spend']:.2f}",
+                    f"{c['avg_order_value']:.2f}", c["currency"],
+                    (c["last_order_at"] or "")[:10],
+                    f"{c['trust_score']:.1f}" if c["trust_score"] is not None else "",
+                ])
+            from django.http import HttpResponse
+            response = HttpResponse(buf.getvalue(), content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="customers.csv"'
+            return response
+
+        return Response({
+            "summary": {
+                "total": total_count,
+                "new": new_count,
+                "returning": returning_count,
+                "at_risk": at_risk_count,
+            },
+            "customers": customers,
+        })
