@@ -476,6 +476,47 @@
             </div>
           </div>
 
+          <!-- Promo code input -->
+          <div class="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-3 space-y-2">
+            <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.promoCodeLabel') }}</p>
+            <!-- Applied state -->
+            <div v-if="promoApplied" class="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/8 px-3 py-2">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold text-emerald-300">{{ promoApplied.name }}</p>
+                <p class="text-[10px] text-emerald-400/70">
+                  {{ promoApplied.promo_type === 'percentage'
+                    ? `${promoApplied.discount_value}% off`
+                    : promoApplied.promo_type === 'fixed'
+                      ? `-${promoApplied.discount_value}`
+                      : t('ownerPromotions.typeFreeDelivery') }}
+                </p>
+              </div>
+              <button class="shrink-0 text-[10px] text-slate-400 hover:text-red-300 transition-colors" @click="removePromoCode">
+                {{ t('cartPage.promoRemove') }}
+              </button>
+            </div>
+            <!-- Input state -->
+            <div v-else class="flex gap-2">
+              <input
+                v-model="promoCode"
+                type="text"
+                maxlength="20"
+                class="ui-input flex-1 uppercase text-sm"
+                :placeholder="t('cartPage.promoPlaceholder')"
+                @keyup.enter="applyPromoCode"
+                @input="promoCode = promoCode.toUpperCase(); promoError = ''"
+              />
+              <button
+                class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                :disabled="promoChecking || !promoCode.trim()"
+                @click="applyPromoCode"
+              >
+                {{ promoChecking ? '…' : t('cartPage.promoApply') }}
+              </button>
+            </div>
+            <p v-if="promoError" class="text-[10px] text-red-300">{{ promoError }}</p>
+          </div>
+
           <!-- Pay with wallet credits -->
           <div
             v-if="canPayWithCredits"
@@ -720,6 +761,12 @@ const { formatCurrency, itemCountLabel, t } = useI18n();
 
 const showAuthModal = ref(false);
 const useWallet = ref(false);
+
+// Promo code
+const promoCode = ref('');
+const promoChecking = ref(false);
+const promoApplied = ref(null);   // { name, promo_type, discount_value, min_order_amount }
+const promoError = ref('');
 
 const sendingWhatsapp = ref(false);
 const processingCheckout = ref(false);
@@ -1219,6 +1266,34 @@ const validateForm = () => {
   return true;
 };
 
+const applyPromoCode = async () => {
+  const code = promoCode.value.trim().toUpperCase();
+  if (!code) return;
+  promoError.value = '';
+  promoChecking.value = true;
+  try {
+    const res = await api.get(`/promo-code-check/?code=${encodeURIComponent(code)}`);
+    if (res.data?.valid) {
+      promoApplied.value = res.data;
+      promoError.value = '';
+    } else {
+      promoApplied.value = null;
+      promoError.value = res.data?.detail || t('cartPage.promoInvalid');
+    }
+  } catch {
+    promoApplied.value = null;
+    promoError.value = t('cartPage.promoCheckFailed');
+  } finally {
+    promoChecking.value = false;
+  }
+};
+
+const removePromoCode = () => {
+  promoApplied.value = null;
+  promoCode.value = '';
+  promoError.value = '';
+};
+
 const buildPayload = () => {
   const payload = {
     items: cart.items.map((item) => ({
@@ -1233,6 +1308,7 @@ const buildPayload = () => {
 
   if (customerNote.value) payload.customer_note = customerNote.value;
   if (useWallet.value && canPayWithCredits.value) payload.use_wallet = true;
+  if (promoApplied.value) payload.promo_code = promoCode.value.trim().toUpperCase();
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
   // customer_name: only for table context (optional)
@@ -1294,6 +1370,10 @@ const mapOrderApiError = (err, fallback) => {
 
   assignFieldErrors(data);
 
+  if (code === 'promo_not_found' || code === 'promo_invalid') {
+    promoApplied.value = null;
+    return data?.detail || t('cartPage.promoInvalid');
+  }
   if (code === 'auth_required') {
     showAuthModal.value = true;
     return t('cartPage.deliveryAuthRequired');

@@ -453,6 +453,16 @@ class Promotion(models.Model):
         help_text="Maximum number of orders this promotion applies to. Null = unlimited.",
     )
     use_count = models.PositiveIntegerField(default=0)
+    code = models.CharField(
+        max_length=20,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Optional customer-redeemable code (e.g. WELCOME10). "
+            "When set, the promotion is NOT applied automatically — the customer must enter it at checkout. "
+            "Leave blank for auto-applied promotions."
+        ),
+    )
     is_platform_flash = models.BooleanField(
         default=False,
         help_text="True if created by the platform as a flash sale campaign.",

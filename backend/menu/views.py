@@ -1781,20 +1781,50 @@ class PlaceOrderView(APIView):
             except Exception:
                 _delivery_fee = Decimal("0")
 
-        # Apply best currently-active promotion (highest discount wins)
+        # Apply promotion — either by customer-supplied code or best auto-applied promo
         _best_promo = None
         _promo_discount = Decimal("0")
-        for _promo in Promotion.objects.filter(is_active=True):
-            if _promo.max_uses is not None and _promo.use_count >= _promo.max_uses:
-                continue
-            if Decimal(str(_promo.min_order_amount or "0")) > _food_subtotal:
-                continue
-            if not _is_promo_active_now(_promo):
-                continue
-            _d = _compute_promo_discount(_promo, _food_subtotal, _delivery_fee)
-            if _d > _promo_discount:
-                _promo_discount = _d
-                _best_promo = _promo
+        _promo_code_input = str(request.data.get("promo_code") or "").strip().upper()
+        if _promo_code_input:
+            # Code-based lookup: find an active promotion matching this code
+            try:
+                _code_promo = Promotion.objects.get(
+                    code__iexact=_promo_code_input,
+                    is_active=True,
+                )
+                _code_valid = True
+                if _code_promo.max_uses is not None and _code_promo.use_count >= _code_promo.max_uses:
+                    _code_valid = False
+                if Decimal(str(_code_promo.min_order_amount or "0")) > _food_subtotal:
+                    _code_valid = False
+                if not _is_promo_active_now(_code_promo):
+                    _code_valid = False
+                if _code_valid:
+                    _best_promo = _code_promo
+                    _promo_discount = _compute_promo_discount(_code_promo, _food_subtotal, _delivery_fee)
+                else:
+                    return Response(
+                        {"detail": "Promo code is not valid for this order.", "code": "promo_invalid"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except Promotion.DoesNotExist:
+                return Response(
+                    {"detail": "Promo code not found.", "code": "promo_not_found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # Auto-apply best currently-active promotion (code-based promos are excluded)
+            for _promo in Promotion.objects.filter(is_active=True, code=""):
+                if _promo.max_uses is not None and _promo.use_count >= _promo.max_uses:
+                    continue
+                if Decimal(str(_promo.min_order_amount or "0")) > _food_subtotal:
+                    continue
+                if not _is_promo_active_now(_promo):
+                    continue
+                _d = _compute_promo_discount(_promo, _food_subtotal, _delivery_fee)
+                if _d > _promo_discount:
+                    _promo_discount = _d
+                    _best_promo = _promo
 
         total = max(Decimal("0"), _food_subtotal + _delivery_fee - _promo_discount)
 
@@ -2671,6 +2701,7 @@ def _serialize_promotion(p) -> dict:
         "max_uses": p.max_uses,
         "use_count": p.use_count,
         "is_platform_flash": p.is_platform_flash,
+        "code": p.code or "",
         "created_at": p.created_at.isoformat(),
     }
 
@@ -2742,6 +2773,8 @@ class OwnerPromotionListCreateView(APIView):
             except (TypeError, ValueError):
                 max_uses = None
 
+        raw_code = str(request.data.get("code") or "").strip().upper()[:20]
+
         promo = Promotion.objects.create(
             name=name,
             description=str(request.data.get("description") or "").strip()[:200],
@@ -2755,6 +2788,7 @@ class OwnerPromotionListCreateView(APIView):
             active_until=active_until,
             is_active=bool(request.data.get("is_active", True)),
             max_uses=max_uses,
+            code=raw_code,
         )
         return Response(_serialize_promotion(promo), status=status.HTTP_201_CREATED)
 
@@ -2832,6 +2866,8 @@ class OwnerPromotionDetailView(APIView):
         if "max_uses" in data:
             raw = data["max_uses"]
             p.max_uses = max(1, int(raw)) if raw is not None else None
+        if "code" in data:
+            p.code = str(data["code"] or "").strip().upper()[:20]
         p.save()
         return Response(_serialize_promotion(p))
 
@@ -4319,4 +4355,40 @@ class OwnerCustomerListView(APIView):
                 "at_risk": at_risk_count,
             },
             "customers": customers,
+        })
+
+
+class PromoCodeCheckView(APIView):
+    """GET /api/promo-code-check/?code=XXX
+    Returns promo validity and a preview of the discount without placing an order.
+    Accessible to any authenticated customer (or unauthenticated for simplicity).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        from decimal import Decimal as _Dec
+        code = str(request.query_params.get("code") or "").strip().upper()
+        if not code:
+            return Response({"valid": False, "detail": "No code provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            promo = Promotion.objects.get(code__iexact=code, is_active=True)
+        except Promotion.DoesNotExist:
+            return Response({"valid": False, "detail": "Promo code not found."})
+
+        # Check usage cap
+        if promo.max_uses is not None and promo.use_count >= promo.max_uses:
+            return Response({"valid": False, "detail": "Promo code has reached its usage limit."})
+
+        # Check schedule
+        if not _is_promo_active_now(promo):
+            return Response({"valid": False, "detail": "Promo code is not active at this time."})
+
+        return Response({
+            "valid": True,
+            "name": promo.name,
+            "description": promo.description or "",
+            "promo_type": promo.promo_type,
+            "discount_value": str(promo.discount_value),
+            "min_order_amount": str(promo.min_order_amount),
         })

@@ -37,6 +37,9 @@
             </span>
           </div>
           <p class="text-xs text-slate-400">{{ promoLabel(promo) }}</p>
+          <p v-if="promo.code" class="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-indigo-300">
+            <span class="opacity-60 font-sans font-normal">{{ t('ownerPromotions.codeLabel') }}:</span> {{ promo.code }}
+          </p>
           <p v-if="promo.description" class="text-xs text-slate-500">{{ promo.description }}</p>
           <div class="flex flex-wrap gap-3 text-[11px] text-slate-500 mt-1">
             <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
@@ -83,6 +86,20 @@
           <div>
             <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.descriptionLabel') }}</label>
             <input v-model="form.description" type="text" class="owner-input" />
+          </div>
+
+          <!-- Promo code (optional) -->
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.codeLabel') }}</label>
+            <input
+              v-model="form.code"
+              type="text"
+              maxlength="20"
+              class="owner-input uppercase"
+              :placeholder="t('ownerPromotions.codePlaceholder')"
+              @input="form.code = form.code.toUpperCase()"
+            />
+            <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerPromotions.codeHint') }}</p>
           </div>
 
           <!-- Type -->
@@ -226,6 +243,7 @@ const drawerError = ref('');
 const form = reactive({
   name: '',
   description: '',
+  code: '',
   promo_type: 'percentage',
   discount_value: '',
   min_order_amount: '0',
@@ -241,6 +259,7 @@ const form = reactive({
 const resetForm = () => {
   form.name = '';
   form.description = '';
+  form.code = '';
   form.promo_type = 'percentage';
   form.discount_value = '';
   form.min_order_amount = '0';
@@ -288,6 +307,7 @@ const openEdit = (promo) => {
   form.active_until = promo.active_until || '';
   form.max_uses = promo.max_uses != null ? String(promo.max_uses) : '';
   form.is_active = promo.is_active;
+  form.code = promo.code || '';
   drawerError.value = '';
   drawerOpen.value = true;
 };
@@ -325,6 +345,7 @@ const submitForm = async () => {
     active_until: form.active_until || null,
     max_uses: form.max_uses ? parseInt(form.max_uses) : null,
     is_active: form.is_active,
+    code: form.code.trim().toUpperCase(),
   };
   try {
     if (editingPromo.value) {
