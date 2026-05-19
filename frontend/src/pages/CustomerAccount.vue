@@ -171,32 +171,78 @@
           <li
             v-for="order in apiOrders"
             :key="order.order_number"
-            class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+            class="rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs"
           >
-            <div class="flex items-center justify-between gap-2">
-              <RouterLink
-                :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-                class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+            <!-- Order header row -->
+            <div class="flex items-start gap-2 px-3 py-2.5">
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <RouterLink
+                    :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                    class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+                  >
+                    {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
+                  </RouterLink>
+                  <span class="ui-chip text-[10px]">{{ statusLabel(order.status) }}</span>
+                </div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-slate-400">
+                  <span v-if="order.fulfillment_type">{{
+                    order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
+                    order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
+                    order.fulfillment_type === 'table' ? t('orderStatus.fulfillmentTable', { table: order.table_label || '' }) :
+                    order.fulfillment_type
+                  }}</span>
+                  <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+                  <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
+                </div>
+                <!-- Rating -->
+                <div v-if="order.has_rating" class="mt-1 flex items-center gap-1">
+                  <span class="text-amber-400 tracking-tight text-[11px]">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
+                  <span class="text-slate-500 text-[10px]">{{ t('customerAccount.orderRatingStars', { score: order.rating_score }) }}</span>
+                </div>
+              </div>
+
+              <!-- Expand toggle -->
+              <button
+                v-if="order.items?.length"
+                class="shrink-0 mt-0.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
+                @click="toggleOrder(order.order_number)"
               >
-                {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
-              </RouterLink>
-              <span class="ui-chip text-[10px]">{{ statusLabel(order.status) }}</span>
+                {{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}
+              </button>
             </div>
-            <div class="mt-1 flex flex-wrap items-center gap-2 text-slate-400">
-              <span v-if="order.fulfillment_type">{{
-                order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
-                order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
-                order.fulfillment_type === 'table' ? t('orderStatus.fulfillmentTable', { table: order.table_label || '' }) :
-                order.fulfillment_type
-              }}</span>
-              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
-              <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
-            </div>
-            <!-- Rating the customer submitted for this order -->
-            <div v-if="order.has_rating" class="mt-1.5 flex items-center gap-1">
-              <span class="text-amber-400 tracking-tight">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
-              <span class="text-slate-500 text-[10px]">{{ t('customerAccount.orderRating') }} · {{ t('customerAccount.orderRatingStars', { score: order.rating_score }) }}</span>
-            </div>
+
+            <!-- Expanded: item list + reorder button -->
+            <Transition name="ui-expand">
+              <div v-if="expandedOrders.has(order.order_number) && order.items?.length"
+                class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
+              >
+                <ul class="space-y-1">
+                  <li
+                    v-for="(item, idx) in order.items"
+                    :key="idx"
+                    class="flex items-start justify-between gap-2 text-slate-300"
+                  >
+                    <span class="min-w-0 flex-1">
+                      <span class="text-slate-400">{{ item.qty }}×</span>
+                      {{ item.dish_name }}
+                      <span v-if="item.options?.length" class="ml-1 text-slate-500">
+                        ({{ item.options.map(o => o.name).join(', ') }})
+                      </span>
+                      <span v-if="item.note" class="ml-1 italic text-slate-500">— {{ item.note }}</span>
+                    </span>
+                    <span class="shrink-0 text-slate-400">{{ formatCurrency(item.subtotal, order.currency) }}</span>
+                  </li>
+                </ul>
+                <button
+                  class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/20 transition-colors"
+                  @click="reorder(order)"
+                >
+                  <AppIcon name="cart" class="h-3 w-3" />
+                  {{ t('customerAccount.reorder') }}
+                </button>
+              </div>
+            </Transition>
           </li>
         </ul>
       </section>
@@ -273,7 +319,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
@@ -286,9 +332,42 @@ const { t, formatCurrency } = useI18n();
 const customerStore = useCustomerStore();
 const cart = useCartStore();
 const toast = useToastStore();
+const router = useRouter();
 
 const showAuthModal = ref(false);
 const showAddPhone = ref(false);
+
+// ── Order expand / reorder ────────────────────────────────────────────────────
+const expandedOrders = ref(new Set());
+
+const toggleOrder = (orderNumber) => {
+  const s = new Set(expandedOrders.value);
+  if (s.has(orderNumber)) s.delete(orderNumber);
+  else s.add(orderNumber);
+  expandedOrders.value = s;
+};
+
+const reorder = (order) => {
+  const items = order.items || [];
+  if (!items.length) {
+    toast.show(t('customerAccount.reorderEmpty'), 'info');
+    return;
+  }
+  items.forEach((item) => {
+    cart.add({
+      slug: item.dish_slug,
+      name: item.dish_name,
+      price: parseFloat(item.unit_price) || 0,
+      currency: order.currency || 'USD',
+      qty: item.qty,
+      note: item.note || '',
+      option_ids: (item.options || []).map((o) => o.id).filter(Boolean),
+      option_labels: (item.options || []).map((o) => o.name).filter(Boolean),
+    });
+  });
+  toast.show(t('customerAccount.reorderAdded'), 'success');
+  router.push({ name: 'cart' });
+};
 const editableName = ref('');
 const savingName = ref(false);
 const savingLocale = ref(false);
@@ -435,3 +514,18 @@ onMounted(async () => {
   }
 });
 </script>
+
+<style scoped>
+/* Expand / collapse transition for order item lists */
+.ui-expand-enter-active,
+.ui-expand-leave-active {
+  transition: opacity 0.2s ease, max-height 0.25s ease;
+  overflow: hidden;
+  max-height: 600px;
+}
+.ui-expand-enter-from,
+.ui-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+</style>

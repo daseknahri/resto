@@ -482,18 +482,60 @@ class CustomerOrdersView(APIView):
             request.session.pop("customer_id", None)
             return Response({"orders": [], "count": 0})
 
-        # Import Order from menu app — cross-app import is intentional here.
-        from menu.models import Order
-        qs = (
-            Order.objects.filter(customer=customer)
-            .order_by("-created_at")
-            .values(
-                "order_number", "status", "fulfillment_type",
-                "table_label", "total", "currency", "created_at",
-                "customer_name",
-            )[:20]
+        # Import Order + OrderItem from menu app — cross-app import is intentional here.
+        from menu.models import Order, OrderItem
+
+        orders = list(
+            Order.objects
+            .filter(customer=customer)
+            .prefetch_related("items")
+            .order_by("-created_at")[:20]
         )
-        return Response({"orders": list(qs), "count": len(qs)})
+
+        # Fetch CustomerRating rows for this customer at this tenant
+        # (CustomerRating lives in the public schema; we access it directly)
+        order_numbers = [o.order_number for o in orders]
+        rating_map = {}  # order_number → score
+        try:
+            from accounts.models import CustomerRating
+            ratings = CustomerRating.objects.filter(
+                customer_id=customer.id,
+                order_number__in=order_numbers,
+            ).values("order_number", "score")
+            rating_map = {r["order_number"]: r["score"] for r in ratings}
+        except Exception:
+            pass
+
+        result = []
+        for order in orders:
+            items = [
+                {
+                    "dish_slug": item.dish_slug,
+                    "dish_name": item.dish_name,
+                    "unit_price": str(item.unit_price),
+                    "qty": item.qty,
+                    "note": item.note,
+                    "subtotal": str(item.subtotal),
+                    "options": item.options or [],
+                }
+                for item in order.items.all()
+            ]
+            score = rating_map.get(order.order_number)
+            result.append({
+                "order_number": order.order_number,
+                "status": order.status,
+                "fulfillment_type": order.fulfillment_type,
+                "table_label": order.table_label,
+                "total": str(order.total),
+                "currency": order.currency,
+                "created_at": order.created_at,
+                "customer_name": order.customer_name,
+                "has_rating": score is not None,
+                "rating_score": score,
+                "items": items,
+            })
+
+        return Response({"orders": result, "count": len(result)})
 
 
 # ── Customer email OTP ────────────────────────────────────────────────────────

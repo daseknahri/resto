@@ -2426,6 +2426,12 @@ export const messages = {
       walletTxFallback: "Transaction",
       orderRating: "Your rating",
       orderRatingStars: "{score}/5",
+      orderItems: "Items",
+      orderShowItems: "Show items",
+      orderHideItems: "Hide items",
+      reorder: "Reorder",
+      reorderAdded: "Items added to cart",
+      reorderEmpty: "Nothing to reorder.",
     }
   },
   fr: {
@@ -4851,6 +4857,12 @@ export const messages = {
       walletTxFallback: "Transaction",
       orderRating: "Votre avis",
       orderRatingStars: "{score}/5",
+      orderItems: "Articles",
+      orderShowItems: "Voir les articles",
+      orderHideItems: "Masquer les articles",
+      reorder: "Recommander",
+      reorderAdded: "Articles ajoutes au panier",
+      reorderEmpty: "Rien a recommander.",
     }
   },
   ar: {}
