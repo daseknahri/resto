@@ -164,15 +164,6 @@
       </Transition>
     </Teleport>
 
-    <!-- Toast -->
-    <Teleport to="body">
-      <Transition enter-active-class="transition-all duration-200" enter-from-class="opacity-0 translate-y-2" leave-active-class="transition-all duration-150" leave-to-class="opacity-0 translate-y-2">
-        <div v-if="toast" class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl"
-          :class="toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'">
-          {{ toast.message }}
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -180,8 +171,10 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { useToastStore } from '../stores/toast';
 
 const { t } = useI18n();
+const toast = useToastStore();
 
 const loading = ref(true);
 const fetchError = ref(false);
@@ -189,7 +182,6 @@ const zones = ref([]);
 const showForm = ref(false);
 const editing = ref(null); // zone being edited, or null for create
 const saving = ref(false);
-const toast = ref(null);
 const polygonJson = ref('[]');
 const polygonError = ref('');
 const feeTiersJson = ref('[]');
@@ -205,10 +197,6 @@ const defaultForm = () => ({
 });
 const form = ref(defaultForm());
 
-const showToast = (message, type = 'success') => {
-  toast.value = { message, type };
-  setTimeout(() => { toast.value = null; }, 3000);
-};
 
 const fetchZones = async () => {
   loading.value = true;
@@ -284,15 +272,15 @@ const save = async () => {
       const res = await api.patch(`/admin/delivery-zones/${editing.value.id}/`, payload);
       const idx = zones.value.findIndex(z => z.id === editing.value.id);
       if (idx >= 0) zones.value[idx] = res.data;
-      showToast(t('adminZones.saved'));
+      toast.show(t('adminZones.saved'));
     } else {
       const res = await api.post('/admin/delivery-zones/', payload);
       zones.value.unshift(res.data);
-      showToast(t('adminZones.created'));
+      toast.show(t('adminZones.created'));
     }
     closeForm();
   } catch {
-    showToast(t('adminZones.saveFailed'), 'error');
+    toast.show(t('adminZones.saveFailed'), 'error');
   } finally {
     saving.value = false;
   }
@@ -303,9 +291,9 @@ const confirmDelete = async (zone) => {
   try {
     await api.delete(`/admin/delivery-zones/${zone.id}/`);
     zones.value = zones.value.filter(z => z.id !== zone.id);
-    showToast(t('adminZones.deleted'));
+    toast.show(t('adminZones.deleted'));
   } catch {
-    showToast(t('adminZones.deleteFailed'), 'error');
+    toast.show(t('adminZones.deleteFailed'), 'error');
   }
 };
 

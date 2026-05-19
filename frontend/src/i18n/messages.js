@@ -600,6 +600,7 @@ export const messages = {
       resultWarnings: "Warnings",
     },
     ownerLoyalty: {
+      kicker: "Loyalty",
       title: "Loyalty Programme",
       subtitle: "Reward repeat customers with points they can redeem for wallet credits.",
       enableLabel: "Enable loyalty programme",
@@ -651,6 +652,7 @@ export const messages = {
       trustNa: "—",
     },
     ownerStaff: {
+      kicker: "Staff",
       title: "Staff management",
       subtitle: "Create waiter accounts so staff can access the waiter view.",
       inviteSection: "Invite a staff member",
@@ -988,6 +990,12 @@ export const messages = {
       enabledSummary: "active now",
       enabled: "Enabled",
       disabled: "Disabled",
+      descriptionLabel: "Tagline",
+      descriptionPlaceholder: "e.g. Served 11 am – 3 pm",
+      descriptionHint: "Short subtitle shown on the menu-selector card (max 280 characters).",
+      imageUrlLabel: "Cover image URL",
+      imageUrlPlaceholder: "https://...",
+      imageUrlHint: "Optional. Displayed as the card background on the menu selection screen.",
       savedToast: "Menu groups saved",
       saveFailed: "Menu groups save failed",
       fixValidation: "Fix validation errors"
@@ -1157,6 +1165,18 @@ export const messages = {
       weekday_fri: "Fri",
       weekday_sat: "Sat",
       weekday_sun: "Sun",
+    },
+    menuSelect: {
+      kicker: "Choose a menu",
+      title: "What are you looking for?",
+      subtitle: "{count} menus available",
+      categoryCount: "{count} sections",
+      dishCount: "{count} dishes",
+      browse: "Browse",
+      unavailable: "Unavailable",
+      temporarilyUnavailable: "Temporarily unavailable",
+      switchMenu: "Switch menu",
+      backToMenus: "All menus",
     },
     customerLeadPage: {
       openNow: "Open now",
@@ -2142,6 +2162,7 @@ export const messages = {
       djRated: "You rated this driver {score}/5",
     },
     ownerPromotions: {
+      kicker: "Promotions",
       title: "Promotions",
       subtitle: "Create automatic discounts that apply at checkout.",
       newPromotion: "New promotion",
@@ -3144,6 +3165,7 @@ export const messages = {
       resultWarnings: "Avertissements",
     },
     ownerLoyalty: {
+      kicker: "Fidelite",
       title: "Programme de fidelite",
       subtitle: "Recompensez les clients reguliers avec des points echangeables contre des credits.",
       enableLabel: "Activer le programme de fidelite",
@@ -3195,6 +3217,7 @@ export const messages = {
       trustNa: "—",
     },
     ownerStaff: {
+      kicker: "Personnel",
       title: "Gestion du personnel",
       subtitle: "Creez des comptes serveurs pour que le staff puisse acceder a la vue serveur.",
       inviteSection: "Inviter un membre du personnel",
@@ -3677,6 +3700,18 @@ export const messages = {
       weekday_fri: "Ven",
       weekday_sat: "Sam",
       weekday_sun: "Dim",
+    },
+    menuSelect: {
+      kicker: "Choisir un menu",
+      title: "Que recherchez-vous ?",
+      subtitle: "{count} menus disponibles",
+      categoryCount: "{count} sections",
+      dishCount: "{count} plats",
+      browse: "Parcourir",
+      unavailable: "Indisponible",
+      temporarilyUnavailable: "Temporairement indisponible",
+      switchMenu: "Changer de menu",
+      backToMenus: "Tous les menus",
     },
     customerLeadPage: {
       openNow: "Ouvert",
@@ -4703,6 +4738,7 @@ export const messages = {
       djRated: "Vous avez note ce livreur {score}/5",
     },
     ownerPromotions: {
+      kicker: "Promotions",
       title: "Promotions",
       subtitle: "Creez des remises automatiques appliquees a la caisse.",
       newPromotion: "Nouvelle promotion",
@@ -4961,6 +4997,12 @@ export const messages = {
       enabledSummary: "actif maintenant",
       enabled: "Actif",
       disabled: "Desactive",
+      descriptionLabel: "Accroche",
+      descriptionPlaceholder: "ex. Servi de 11h a 15h",
+      descriptionHint: "Sous-titre court affiche sur la carte de selection du menu (max 280 caracteres).",
+      imageUrlLabel: "URL de l'image de couverture",
+      imageUrlPlaceholder: "https://...",
+      imageUrlHint: "Optionnel. Affiche en arriere-plan sur l'ecran de selection du menu.",
       savedToast: "Groupes de menu enregistres",
       saveFailed: "Echec de l'enregistrement des groupes de menu",
       fixValidation: "Corrigez les erreurs de validation"

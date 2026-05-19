@@ -1,38 +1,32 @@
 <template>
-  <div class="min-h-screen bg-slate-950 px-3 py-6 pb-20 sm:px-4 sm:py-10">
+  <div class="space-y-6 pb-6">
 
     <!-- Header -->
-    <header class="mx-auto mb-8 max-w-3xl">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-secondary,#f59e0b)] mb-1">
-            {{ t('ownerFlashSales.kicker') }}
-          </p>
-          <h1 class="text-2xl font-bold text-white sm:text-3xl">{{ t('ownerFlashSales.title') }}</h1>
-          <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
-        </div>
-      </div>
-    </header>
+    <div>
+      <p class="ui-kicker">{{ t('ownerFlashSales.kicker') }}</p>
+      <h1 class="text-2xl font-bold text-white">{{ t('ownerFlashSales.title') }}</h1>
+      <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
+    </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="mx-auto max-w-3xl py-16 text-center text-sm text-slate-400">
+    <div v-if="loading" class="py-16 text-center text-sm text-slate-400">
       {{ t('ownerFlashSales.loading') }}
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="mx-auto max-w-3xl py-16 text-center text-sm text-red-300">
+    <div v-else-if="fetchError" class="py-16 text-center text-sm text-red-300">
       {{ t('ownerFlashSales.fetchError') }}
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!sales.length" class="mx-auto max-w-3xl py-16 text-center space-y-2">
+    <div v-else-if="!sales.length" class="py-16 text-center space-y-2">
       <p class="text-3xl">⚡</p>
       <p class="text-base font-semibold text-slate-300">{{ t('ownerFlashSales.empty') }}</p>
       <p class="text-sm text-slate-500">{{ t('ownerFlashSales.emptyHint') }}</p>
     </div>
 
     <!-- Sales list -->
-    <ul v-else class="mx-auto max-w-3xl space-y-4">
+    <ul v-else class="space-y-4">
       <li
         v-for="sale in sales"
         :key="sale.id"
@@ -107,7 +101,7 @@
     </ul>
 
     <!-- How it works info box -->
-    <div class="mx-auto mt-8 max-w-3xl rounded-2xl border border-slate-700/40 bg-slate-900/30 p-5">
+    <div class="rounded-2xl border border-slate-700/40 bg-slate-900/30 p-5">
       <h3 class="mb-2 text-sm font-semibold text-slate-200">{{ t('ownerFlashSales.howItWorksTitle') }}</h3>
       <ul class="space-y-1.5 text-xs text-slate-400">
         <li>⚡ {{ t('ownerFlashSales.howItWorks1') }}</li>
@@ -117,25 +111,6 @@
       </ul>
     </div>
 
-    <!-- Toast -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-all duration-200"
-        enter-from-class="opacity-0 translate-y-2"
-        leave-active-class="transition-all duration-150"
-        leave-to-class="opacity-0 translate-y-2"
-      >
-        <div
-          v-if="toast"
-          class="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium shadow-xl"
-          :class="toast.type === 'error'
-            ? 'bg-red-600 text-white'
-            : 'bg-emerald-600 text-white'"
-        >
-          {{ toast.message }}
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -143,14 +118,15 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { useToastStore } from '../stores/toast';
 
 const { t } = useI18n();
+const toast = useToastStore();
 
 const loading = ref(true);
 const fetchError = ref(false);
 const sales = ref([]);
 const toggling = ref(null); // sale.id currently being toggled
-const toast = ref(null);
 
 const formatDate = (iso) => {
   if (!iso) return '';
@@ -159,11 +135,6 @@ const formatDate = (iso) => {
   } catch {
     return iso.slice(0, 10);
   }
-};
-
-const showToast = (message, type = 'success') => {
-  toast.value = { message, type };
-  setTimeout(() => { toast.value = null; }, 3000);
 };
 
 const fetchSales = async () => {
@@ -184,9 +155,9 @@ const optIn = async (sale) => {
   try {
     await api.post(`/owner/flash-sales/${sale.id}/opt-in/`);
     sale.opted_in = true;
-    showToast(t('ownerFlashSales.optInSuccess'));
+    toast.show(t('ownerFlashSales.optInSuccess'));
   } catch {
-    showToast(t('ownerFlashSales.optInError'), 'error');
+    toast.show(t('ownerFlashSales.optInError'), 'error');
   } finally {
     toggling.value = null;
   }
@@ -197,9 +168,9 @@ const optOut = async (sale) => {
   try {
     await api.delete(`/owner/flash-sales/${sale.id}/opt-in/`);
     sale.opted_in = false;
-    showToast(t('ownerFlashSales.optOutSuccess'));
+    toast.show(t('ownerFlashSales.optOutSuccess'));
   } catch {
-    showToast(t('ownerFlashSales.optOutError'), 'error');
+    toast.show(t('ownerFlashSales.optOutError'), 'error');
   } finally {
     toggling.value = null;
   }

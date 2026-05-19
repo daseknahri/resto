@@ -229,6 +229,43 @@
                 <p v-if="rowError(editingRow, 'name')" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
               </div>
 
+              <!-- Description (tagline for menu-selector card) -->
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-400">{{ t("stepSuperCategories.descriptionLabel") }}</p>
+                  <div class="flex flex-wrap gap-1">
+                    <button
+                      v-for="locale in availableContentLocales"
+                      :key="`super-desc-${locale.code}`"
+                      type="button"
+                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                      :class="fieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      @click="fieldLocales.description = locale.code"
+                    >{{ locale.nativeLabel }}</button>
+                  </div>
+                </div>
+                <input
+                  :value="localizedFieldValue(editingRow, 'description', fieldLocales.description)"
+                  class="ui-input"
+                  :placeholder="t('stepSuperCategories.descriptionPlaceholder')"
+                  maxlength="280"
+                  @input="setLocalizedFieldValue(editingRow, 'description', fieldLocales.description, $event.target.value)"
+                />
+                <p class="text-[11px] text-slate-500">{{ t("stepSuperCategories.descriptionHint") }}</p>
+              </div>
+
+              <!-- Cover image URL -->
+              <div class="space-y-1">
+                <p class="text-xs text-slate-400">{{ t("stepSuperCategories.imageUrlLabel") }}</p>
+                <input
+                  v-model.trim="editingRow.image_url"
+                  class="ui-input"
+                  type="url"
+                  :placeholder="t('stepSuperCategories.imageUrlPlaceholder')"
+                />
+                <p class="text-[11px] text-slate-500">{{ t("stepSuperCategories.imageUrlHint") }}</p>
+              </div>
+
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="space-y-1 text-sm text-slate-300">
                   <span class="text-xs text-slate-400">{{ t("stepSuperCategories.position") }}</span>
@@ -387,7 +424,7 @@ const tenant = useTenantStore();
 const toast = useToastStore();
 const { t } = useI18n();
 
-const fieldLocales = reactive({ name: "en" });
+const fieldLocales = reactive({ name: "en", description: "en" });
 const quickFieldLocales = reactive({ name: "en" });
 const quickRow = reactive({
   local_id: "quick-super-category",
@@ -422,6 +459,7 @@ const orderedRows = computed(() => [...rows].sort((a, b) => (Number(a.position |
 const syncFieldLocales = () => {
   const allowed = new Set(availableContentLocales.value.map((locale) => locale.code));
   if (!allowed.has(fieldLocales.name)) fieldLocales.name = defaultLocale.value;
+  if (!allowed.has(fieldLocales.description)) fieldLocales.description = defaultLocale.value;
   if (!allowed.has(quickFieldLocales.name)) quickFieldLocales.name = defaultLocale.value;
 };
 watch([availableContentLocales, defaultLocale], syncFieldLocales, { immediate: true });
@@ -432,6 +470,9 @@ const normalizeRow = (row = {}) => ({
   name: row.name || "",
   name_i18n: row.name_i18n && typeof row.name_i18n === "object" ? { ...row.name_i18n } : {},
   slug: row.slug || "",
+  description: row.description || "",
+  description_i18n: row.description_i18n && typeof row.description_i18n === "object" ? { ...row.description_i18n } : {},
+  image_url: row.image_url || "",
   position: row.position ?? rows.length,
   is_published: row.is_published ?? true,
   is_temporarily_disabled: row.is_temporarily_disabled === true,

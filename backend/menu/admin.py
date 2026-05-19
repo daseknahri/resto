@@ -9,6 +9,11 @@ class SuperCategoryAdmin(admin.ModelAdmin):
     list_filter = ("is_published", "is_temporarily_disabled")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("position", "name")
+    fields = (
+        "name", "name_i18n", "slug",
+        "description", "description_i18n", "image_url",
+        "position", "is_published", "is_temporarily_disabled", "disabled_note",
+    )
 
 
 @admin.register(Category)

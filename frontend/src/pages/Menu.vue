@@ -52,6 +52,15 @@
               />
               {{ statusLabel }}
             </span>
+            <!-- Switch menu chip — shown when more than one menu exists -->
+            <RouterLink
+              v-if="superCategories.length > 1"
+              :to="{ name: 'menu' }"
+              class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-300 backdrop-blur-sm transition-colors hover:border-[var(--color-secondary)]/40 hover:text-[var(--color-secondary)]"
+            >
+              <AppIcon name="arrowLeft" class="h-3 w-3" />
+              {{ t('menuSelect.backToMenus') }}
+            </RouterLink>
             <span v-if="locationLine" class="ui-chip">
               <AppIcon name="info" class="h-3.5 w-3.5" />
               {{ locationLine }}
@@ -93,17 +102,6 @@
           <span class="sr-only">{{ t('common.clear') }}</span>
           <AppIcon name="close" class="h-3.5 w-3.5" />
         </button>
-      </div>
-
-      <!-- Super-category pills -->
-      <div v-if="superCategories.length > 1" class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          v-for="group in superCategories"
-          :key="group.slug"
-          class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
-          :data-active="selectedSuperCategorySlug === group.slug"
-          @click="onSuperCategorySelect(group.slug)"
-        >{{ group.name }}</button>
       </div>
 
       <!-- Allergen-free filter -->
@@ -339,6 +337,11 @@ const router = useRouter()
 const route  = useRoute()
 const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n()
 
+// ── Route props (passed by /m/:menuSlug) ─────────────────────────────────────
+const props = defineProps({
+  menuSlug: { type: String, default: '' },
+})
+
 // ── Table QR context ─────────────────────────────────────────────────────────
 const tableContextBanner = ref('')
 const resolveTableContext = async () => {
@@ -440,7 +443,12 @@ const visibleCategories = computed(() => {
 // ── Search mode ──────────────────────────────────────────────────────────────
 const isSearching = computed(() => search.value.trim().length > 0)
 
-const allLoadedDishes = computed(() => Object.values(menu.dishes || {}).flat())
+const allLoadedDishes = computed(() => {
+  const slugs = new Set(visibleCategories.value.map(c => c.slug))
+  return Object.entries(menu.dishes || {})
+    .filter(([slug]) => slugs.has(slug))
+    .flatMap(([, dishes]) => dishes)
+})
 
 const availableTags = computed(() => {
   const tags = new Set()
@@ -536,18 +544,6 @@ const scrollToSection = (slug) => {
   try { navigator.vibrate?.(10) } catch { /* not supported */ }
 }
 
-const onSuperCategorySelect = (slug) => {
-  selectedSuperCategorySlug.value = slug
-  // After the DOM updates, snap to the first section in this super-category
-  nextTick(() => {
-    const first = visibleCategories.value[0]
-    if (first) {
-      activeCategorySlug.value = first.slug
-      scrollToSection(first.slug)
-    }
-  })
-}
-
 // ── Lazy dish loading per section ────────────────────────────────────────────
 const loadedSlugs = ref(new Set())
 let loadObserver = null
@@ -562,7 +558,10 @@ const registerSection = (el, slug) => {
 // ── Sync / initialise selection ──────────────────────────────────────────────
 const syncSelection = () => {
   if (!superCategories.value.length) { selectedSuperCategorySlug.value = ''; return }
-  if (!superCategories.value.some(g => g.slug === selectedSuperCategorySlug.value)) {
+  // When a menuSlug prop is provided (route /m/:menuSlug), lock to that menu
+  if (props.menuSlug && superCategories.value.some(g => g.slug === props.menuSlug)) {
+    selectedSuperCategorySlug.value = props.menuSlug
+  } else if (!superCategories.value.some(g => g.slug === selectedSuperCategorySlug.value)) {
     selectedSuperCategorySlug.value = String(superCategories.value[0]?.slug || '')
   }
   if (visibleCategories.value.length && !activeCategorySlug.value) {
@@ -573,6 +572,14 @@ const syncSelection = () => {
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 watch(menuTheme, theme => document.documentElement.setAttribute('data-menu-theme', theme), { immediate: true })
 watch([superCategories, menuCategories], syncSelection, { immediate: true })
+
+// React to route prop changes (e.g. navigating directly from one menu to another)
+watch(() => props.menuSlug, (slug) => {
+  if (slug) {
+    activeCategorySlug.value = ''
+    syncSelection()
+  }
+})
 
 watch(() => currentLocale.value, () => menu.fetchCategories(true))
 

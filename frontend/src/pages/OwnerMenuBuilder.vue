@@ -97,7 +97,7 @@
             <p v-if="importError" class="mt-2 text-xs text-red-300">{{ importError }}</p>
 
             <button
-              class="mt-4 w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-opacity hover:bg-indigo-500 disabled:opacity-50"
+              class="ui-btn-primary mt-4 w-full justify-center"
               :disabled="!selectedFile || importing"
               @click="runImport"
             >
@@ -131,7 +131,7 @@
               <button class="flex-1 rounded-xl border border-slate-700 py-2 text-sm text-slate-300 hover:border-slate-500 transition-colors" @click="resetImport">
                 {{ t("ownerMenuBuilder.importAgain") }}
               </button>
-              <button class="flex-1 rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors" @click="closeImport">
+              <button class="ui-btn-primary flex-1 justify-center" @click="closeImport">
                 {{ t("common.close") }}
               </button>
             </div>

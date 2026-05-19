@@ -2,6 +2,7 @@
   <div class="space-y-6 max-w-2xl">
     <!-- Header -->
     <div>
+      <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
       <h2 class="text-xl font-bold text-white">{{ t("ownerStaff.title") }}</h2>
       <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
     </div>
@@ -14,7 +15,7 @@
           v-model="form.name"
           type="text"
           :placeholder="t('ownerStaff.namePlaceholder')"
-          class="rounded-xl border border-slate-700/60 bg-slate-900/50 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
+          class="ui-input"
           :disabled="creating"
           @keyup.enter="createStaff"
         />
@@ -22,14 +23,14 @@
           v-model="form.email"
           type="email"
           :placeholder="t('ownerStaff.emailPlaceholder')"
-          class="rounded-xl border border-slate-700/60 bg-slate-900/50 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 transition-colors"
+          class="ui-input"
           :disabled="creating"
           @keyup.enter="createStaff"
         />
       </div>
       <p v-if="formError" class="text-xs text-red-400">{{ formError }}</p>
       <button
-        class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:bg-indigo-500 disabled:opacity-50"
+        class="ui-btn-primary"
         :disabled="creating || !form.name.trim() || !form.email.trim()"
         @click="createStaff"
       >
@@ -359,7 +360,7 @@ const copyCredentials = async () => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.staff-toggle-on  { background: #4f46e5; }
+.staff-toggle-on  { background: var(--color-secondary, #f59e0b); }
 .staff-toggle-off { background: #334155; }
 
 .staff-toggle-thumb {

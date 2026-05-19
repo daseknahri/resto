@@ -1,30 +1,30 @@
 <template>
-  <div class="owner-page-root">
-    <div class="owner-page-header">
-      <div>
-        <h1 class="owner-page-title">{{ t('ownerLoyalty.title') }}</h1>
-        <p class="owner-page-subtitle">{{ t('ownerLoyalty.subtitle') }}</p>
-      </div>
+  <div class="space-y-4 pb-6">
+    <!-- Page header -->
+    <div class="space-y-0.5">
+      <p class="ui-kicker">{{ t('ownerLoyalty.kicker') }}</p>
+      <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerLoyalty.title') }}</h1>
+      <p class="text-sm text-slate-400">{{ t('ownerLoyalty.subtitle') }}</p>
     </div>
 
-    <div v-if="loading" class="owner-section-card py-10 text-center text-sm text-slate-400">
+    <div v-if="loading" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 py-10 text-center text-sm text-slate-400">
       {{ t('common.loading') }}
     </div>
 
     <template v-else>
-      <!-- Enable / disable toggle -->
-      <div class="owner-section-card space-y-4">
+      <!-- Settings card -->
+      <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-5">
+        <!-- Enable / disable toggle -->
         <div class="flex items-center justify-between gap-4">
           <div>
             <p class="text-sm font-semibold text-slate-100">{{ t('ownerLoyalty.enableLabel') }}</p>
             <p class="text-xs text-slate-400 mt-0.5">{{ t('ownerLoyalty.enableHint') }}</p>
           </div>
-          <!-- Toggle switch -->
           <button
             type="button"
             role="switch"
             :aria-checked="form.enabled"
-            class="relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none"
+            class="relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             :class="form.enabled
               ? 'border-emerald-500/60 bg-emerald-500/30'
               : 'border-slate-600 bg-slate-800'"
@@ -39,56 +39,58 @@
           </button>
         </div>
 
+        <div class="border-t border-slate-700/50" />
+
         <!-- Points per unit -->
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerLoyalty.pointsPerUnitLabel') }}</label>
-          <div class="flex items-center gap-2">
+        <div class="space-y-1.5">
+          <label class="block text-xs font-semibold text-slate-300">{{ t('ownerLoyalty.pointsPerUnitLabel') }}</label>
+          <div class="flex items-center gap-3">
             <input
               v-model.number="form.points_per_unit"
               type="number"
               min="1"
               step="1"
-              class="owner-input w-32"
+              class="ui-input w-32"
             />
-            <span class="text-xs text-slate-500">{{ t('ownerLoyalty.pointsPerUnitSuffix') }}</span>
+            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsPerUnitSuffix') }}</span>
           </div>
-          <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerLoyalty.pointsPerUnitHint') }}</p>
+          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.pointsPerUnitHint') }}</p>
         </div>
 
         <!-- Redeem threshold -->
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerLoyalty.redeemThresholdLabel') }}</label>
-          <div class="flex items-center gap-2">
+        <div class="space-y-1.5">
+          <label class="block text-xs font-semibold text-slate-300">{{ t('ownerLoyalty.redeemThresholdLabel') }}</label>
+          <div class="flex items-center gap-3">
             <input
               v-model.number="form.redeem_threshold"
               type="number"
               min="1"
               step="1"
-              class="owner-input w-32"
+              class="ui-input w-32"
             />
-            <span class="text-xs text-slate-500">{{ t('ownerLoyalty.redeemThresholdSuffix') }}</span>
+            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.redeemThresholdSuffix') }}</span>
           </div>
-          <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerLoyalty.redeemThresholdHint') }}</p>
+          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.redeemThresholdHint') }}</p>
         </div>
 
         <!-- Points value -->
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerLoyalty.pointsValueLabel') }}</label>
-          <div class="flex items-center gap-2">
+        <div class="space-y-1.5">
+          <label class="block text-xs font-semibold text-slate-300">{{ t('ownerLoyalty.pointsValueLabel') }}</label>
+          <div class="flex items-center gap-3">
             <input
               v-model="form.points_value"
               type="number"
               min="0.0001"
               step="0.001"
-              class="owner-input w-32"
+              class="ui-input w-32"
             />
-            <span class="text-xs text-slate-500">{{ t('ownerLoyalty.pointsValueSuffix') }}</span>
+            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsValueSuffix') }}</span>
           </div>
-          <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerLoyalty.pointsValueHint') }}</p>
+          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.pointsValueHint') }}</p>
         </div>
 
         <!-- Preview card -->
-        <div class="rounded-xl border border-indigo-500/25 bg-indigo-500/8 p-3 space-y-1">
+        <div class="rounded-xl border border-indigo-500/25 bg-indigo-500/8 px-4 py-3 space-y-1">
           <p class="text-xs font-semibold text-indigo-300">{{ t('ownerLoyalty.previewTitle') }}</p>
           <p class="text-xs text-slate-400">{{ previewEarn }}</p>
           <p class="text-xs text-slate-400">{{ previewRedeem }}</p>
@@ -97,7 +99,7 @@
         <p v-if="saveError" class="text-xs text-red-400">{{ saveError }}</p>
 
         <button
-          class="btn-primary"
+          class="ui-btn-primary"
           :disabled="saving"
           @click="save"
         >
@@ -106,13 +108,13 @@
       </div>
 
       <!-- How it works info box -->
-      <div class="owner-section-card space-y-2 mt-3">
+      <div class="rounded-2xl border border-slate-700/40 bg-slate-900/40 p-5 space-y-3">
         <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider">{{ t('ownerLoyalty.howItWorksTitle') }}</p>
-        <ul class="space-y-1.5 text-xs text-slate-400">
-          <li>• {{ t('ownerLoyalty.how1') }}</li>
-          <li>• {{ t('ownerLoyalty.how2') }}</li>
-          <li>• {{ t('ownerLoyalty.how3') }}</li>
-          <li>• {{ t('ownerLoyalty.how4') }}</li>
+        <ul class="space-y-2 text-xs text-slate-400">
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how1') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how2') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how3') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how4') }}</li>
         </ul>
       </div>
     </template>

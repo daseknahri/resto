@@ -48,7 +48,9 @@ body[dir="rtl"] .ui-display {
 }
 
 html[lang="ar"] .ui-kicker,
-body[dir="rtl"] .ui-kicker {
+html[lang="ar"] .ui-section-kicker,
+body[dir="rtl"] .ui-kicker,
+body[dir="rtl"] .ui-section-kicker {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -662,7 +664,8 @@ body[dir="rtl"] .ui-kicker {
     @apply w-full rounded-xl border border-slate-700/70 bg-slate-950/75 px-3 py-2 text-sm text-slate-100 transition focus:outline-none;
   }
 
-  .ui-kicker {
+  .ui-kicker,
+  .ui-section-kicker {
     @apply text-xs uppercase tracking-[0.24em] text-slate-400;
   }
 
@@ -925,7 +928,9 @@ body[dir="rtl"] .ui-display {
 }
 
 html[lang="ar"] .ui-kicker,
-body[dir="rtl"] .ui-kicker {
+html[lang="ar"] .ui-section-kicker,
+body[dir="rtl"] .ui-kicker,
+body[dir="rtl"] .ui-section-kicker {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -1132,7 +1137,8 @@ html[data-menu-theme="light"] .ui-input::placeholder {
   color: #94a3b8;
 }
 
-html[data-menu-theme="light"] .ui-kicker {
+html[data-menu-theme="light"] .ui-kicker,
+html[data-menu-theme="light"] .ui-section-kicker {
   color: #64748b;
 }
 
@@ -1272,7 +1278,8 @@ html[data-menu-theme="warm"] .ui-input::placeholder {
   color: #b45309;
 }
 
-html[data-menu-theme="warm"] .ui-kicker {
+html[data-menu-theme="warm"] .ui-kicker,
+html[data-menu-theme="warm"] .ui-section-kicker {
   color: #92400e;
 }
 

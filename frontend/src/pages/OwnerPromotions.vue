@@ -1,20 +1,23 @@
 <template>
-  <div class="owner-page-root">
-    <div class="owner-page-header">
-      <div>
-        <h1 class="owner-page-title">{{ t('ownerPromotions.title') }}</h1>
-        <p class="owner-page-subtitle">{{ t('ownerPromotions.subtitle') }}</p>
+  <div class="space-y-4 pb-6">
+    <!-- Page header -->
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="space-y-0.5">
+        <p class="ui-kicker">{{ t('ownerPromotions.kicker') }}</p>
+        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerPromotions.title') }}</h1>
+        <p class="text-sm text-slate-400">{{ t('ownerPromotions.subtitle') }}</p>
       </div>
-      <button class="btn-primary" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
+      <button class="ui-btn-primary" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="owner-section-card py-10 text-center text-sm text-slate-400">
+    <div v-if="loading" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 py-10 text-center text-sm text-slate-400">
       {{ t('common.loading') }}
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!promotions.length" class="owner-section-card py-12 text-center space-y-1">
+    <div v-else-if="!promotions.length" class="rounded-2xl border border-slate-700/40 bg-slate-900/40 py-12 text-center space-y-1.5">
+      <p class="text-2xl">🏷️</p>
       <p class="text-sm font-semibold text-slate-300">{{ t('ownerPromotions.noPromotions') }}</p>
       <p class="text-xs text-slate-500">{{ t('ownerPromotions.noPromotionsHint') }}</p>
     </div>
@@ -24,14 +27,16 @@
       <div
         v-for="promo in promotions"
         :key="promo.id"
-        class="owner-section-card flex items-start justify-between gap-4"
+        class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 flex items-start justify-between gap-4 transition-colors hover:border-slate-600"
       >
-        <div class="flex-1 min-w-0 space-y-1">
+        <div class="flex-1 min-w-0 space-y-1.5">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-semibold text-white">{{ promo.name }}</span>
             <span
               class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              :class="promo.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-400'"
+              :class="promo.is_active
+                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                : 'bg-slate-700/50 border border-slate-600 text-slate-400'"
             >
               {{ promo.is_active ? t('ownerPromotions.activeNow') : t('ownerPromotions.inactive') }}
             </span>
@@ -41,7 +46,7 @@
             <span class="opacity-60 font-sans font-normal">{{ t('ownerPromotions.codeLabel') }}:</span> {{ promo.code }}
           </p>
           <p v-if="promo.description" class="text-xs text-slate-500">{{ promo.description }}</p>
-          <div class="flex flex-wrap gap-3 text-[11px] text-slate-500 mt-1">
+          <div class="flex flex-wrap gap-3 text-[11px] text-slate-500">
             <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
               Min {{ promo.min_order_amount }}
             </span>
@@ -54,57 +59,70 @@
           </div>
         </div>
         <div class="flex gap-2 shrink-0">
-          <button class="btn-sm-ghost" @click="openEdit(promo)">{{ t('common.edit') }}</button>
-          <button class="btn-sm-danger" @click="deletePromo(promo)">{{ t('common.delete') }}</button>
+          <button
+            class="rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-colors"
+            @click="openEdit(promo)"
+          >{{ t('common.edit') }}</button>
+          <button
+            class="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:border-red-500/50 hover:text-red-300 transition-colors"
+            @click="deletePromo(promo)"
+          >{{ t('common.delete') }}</button>
         </div>
       </div>
     </div>
 
     <!-- Create / Edit drawer -->
     <Teleport to="body">
-      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0">
-        <div class="w-full max-w-md bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0">
+        <div class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
           <div class="flex items-center justify-between">
             <h2 class="text-base font-bold text-white">
               {{ editingPromo ? t('common.edit') : t('ownerPromotions.newPromotion') }}
             </h2>
-            <button class="text-slate-400 hover:text-white text-xl leading-none" @click="drawerOpen = false">✕</button>
+            <button
+              class="rounded-lg border border-slate-700/50 bg-slate-800/50 p-1.5 text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+              @click="drawerOpen = false"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
           </div>
 
           <!-- Name -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.nameLabel') }}</label>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.nameLabel') }}</label>
             <input
               v-model="form.name"
               type="text"
               :placeholder="t('ownerPromotions.namePlaceholder')"
-              class="owner-input"
+              class="ui-input w-full"
             />
           </div>
 
           <!-- Description -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.descriptionLabel') }}</label>
-            <input v-model="form.description" type="text" class="owner-input" />
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
+            <input v-model="form.description" type="text" class="ui-input w-full" />
           </div>
 
-          <!-- Promo code (optional) -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.codeLabel') }}</label>
+          <!-- Promo code -->
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.codeLabel') }}</label>
             <input
               v-model="form.code"
               type="text"
               maxlength="20"
-              class="owner-input uppercase"
+              class="ui-input w-full uppercase"
               :placeholder="t('ownerPromotions.codePlaceholder')"
               @input="form.code = form.code.toUpperCase()"
             />
-            <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerPromotions.codeHint') }}</p>
+            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.codeHint') }}</p>
           </div>
 
           <!-- Type -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1.5">{{ t('ownerPromotions.typeLabel') }}</label>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.typeLabel') }}</label>
             <div class="flex gap-2 flex-wrap">
               <button
                 v-for="opt in promoTypes"
@@ -112,32 +130,32 @@
                 type="button"
                 class="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
                 :class="form.promo_type === opt.value
-                  ? 'border-[var(--color-secondary,#f59e0b)]/60 bg-[var(--color-secondary,#f59e0b)]/10 text-[var(--color-secondary,#f59e0b)]'
+                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
                 @click="form.promo_type = opt.value"
               >{{ opt.label }}</button>
             </div>
           </div>
 
-          <!-- Discount value (not shown for free_delivery) -->
-          <div v-if="form.promo_type !== 'free_delivery'">
-            <label class="block text-xs font-medium text-slate-400 mb-1">
+          <!-- Discount value -->
+          <div v-if="form.promo_type !== 'free_delivery'" class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">
               {{ t('ownerPromotions.discountValueLabel') }}
-              <span class="text-slate-600 font-normal ml-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
+              <span class="text-slate-500 font-normal ml-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
             </label>
-            <input v-model="form.discount_value" type="number" min="0" step="0.01" class="owner-input" />
-            <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerPromotions.discountValueHint') }}</p>
+            <input v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" />
+            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.discountValueHint') }}</p>
           </div>
 
           <!-- Min order -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.minOrderLabel') }}</label>
-            <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="owner-input" />
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
+            <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" />
           </div>
 
           <!-- Days checkboxes -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1.5">{{ t('ownerPromotions.daysLabel') }}</label>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</label>
             <div class="flex flex-wrap gap-1.5">
               <button
                 v-for="d in DAYS"
@@ -145,43 +163,43 @@
                 type="button"
                 class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
                 :class="form.days.includes(d.key)
-                  ? 'border-[var(--color-secondary,#f59e0b)]/60 bg-[var(--color-secondary,#f59e0b)]/10 text-[var(--color-secondary,#f59e0b)]'
+                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
                 @click="toggleDay(d.key)"
               >{{ d.label }}</button>
             </div>
-            <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerPromotions.daysHint') }}</p>
+            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.daysHint') }}</p>
           </div>
 
           <!-- Time window -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1.5">{{ t('ownerPromotions.timeLabel') }}</label>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</label>
             <div class="flex items-center gap-2">
-              <input v-model="form.time_start" type="time" class="owner-input flex-1" />
-              <span class="text-slate-500 text-sm">—</span>
-              <input v-model="form.time_end" type="time" class="owner-input flex-1" />
+              <input v-model="form.time_start" type="time" class="ui-input flex-1" />
+              <span class="text-slate-500">—</span>
+              <input v-model="form.time_end" type="time" class="ui-input flex-1" />
             </div>
           </div>
 
           <!-- Date range -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1.5">{{ t('ownerPromotions.dateRangeLabel') }}</label>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</label>
             <div class="flex items-center gap-2">
-              <input v-model="form.active_from" type="date" class="owner-input flex-1" />
-              <span class="text-slate-500 text-sm">—</span>
-              <input v-model="form.active_until" type="date" class="owner-input flex-1" />
+              <input v-model="form.active_from" type="date" class="ui-input flex-1" />
+              <span class="text-slate-500">—</span>
+              <input v-model="form.active_until" type="date" class="ui-input flex-1" />
             </div>
           </div>
 
           <!-- Max uses -->
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('ownerPromotions.maxUsesLabel') }}</label>
-            <input v-model="form.max_uses" type="number" min="1" step="1" class="owner-input" placeholder="∞" />
-            <p class="mt-0.5 text-[10px] text-slate-600">{{ t('ownerPromotions.maxUsesHint') }}</p>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
+            <input v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" />
+            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.maxUsesHint') }}</p>
           </div>
 
           <!-- Active toggle -->
-          <label class="flex items-center gap-2 cursor-pointer">
+          <label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2.5">
             <input type="checkbox" v-model="form.is_active" class="rounded" />
             <span class="text-sm text-slate-300">{{ t('ownerPromotions.isActiveLabel') }}</span>
           </label>
@@ -191,7 +209,7 @@
 
           <!-- Submit -->
           <button
-            class="btn-primary w-full"
+            class="ui-btn-primary w-full justify-center"
             :disabled="submitting"
             @click="submitForm"
           >
@@ -352,11 +370,11 @@ const submitForm = async () => {
       const res = await api.patch(`/owner/promotions/${editingPromo.value.id}/`, payload);
       const idx = promotions.value.findIndex((p) => p.id === editingPromo.value.id);
       if (idx >= 0) promotions.value[idx] = res.data;
-      toast.show(t('ownerPromotions.save'));
+      toast.show(t('ownerPromotions.save'), 'success');
     } else {
       const res = await api.post('/owner/promotions/', payload);
       promotions.value.unshift(res.data);
-      toast.show(t('ownerPromotions.create'));
+      toast.show(t('ownerPromotions.create'), 'success');
     }
     drawerOpen.value = false;
   } catch {
@@ -373,7 +391,7 @@ const deletePromo = async (promo) => {
   try {
     await api.delete(`/owner/promotions/${promo.id}/`);
     promotions.value = promotions.value.filter((p) => p.id !== promo.id);
-    toast.show(t('ownerPromotions.deleted'));
+    toast.show(t('ownerPromotions.deleted'), 'success');
   } catch {
     toast.show(t('ownerPromotions.deleteFailed'), 'error');
   }

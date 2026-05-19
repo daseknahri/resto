@@ -20,6 +20,7 @@ const WaiterLayout = () => import("../layouts/WaiterLayout.vue");
 const Home = () => import("../pages/Home.vue");
 const DemoLanding = () => import("../pages/DemoLanding.vue");
 const CustomerLeadPage = () => import("../pages/CustomerLeadPage.vue");
+const MenuSelect = () => import("../pages/MenuSelect.vue");
 const Menu = () => import("../pages/Menu.vue");
 const CategoryPage = () => import("../pages/CategoryPage.vue");
 const DishPage = () => import("../pages/DishPage.vue");
@@ -91,7 +92,12 @@ const routes = [
     children: [
       { path: "t/:tableSlug", name: "table-link", component: Menu, meta: { interface: "customer" } },
       { path: "menu", name: "customer-home", component: CustomerLeadPage, meta: { interface: "customer" } },
-      { path: "browse", name: "menu", component: Menu, meta: { interface: "customer" } },
+      // Menu hub — shows menu selection cards; auto-redirects when only one menu exists
+      { path: "browse", name: "menu", component: MenuSelect, meta: { interface: "customer" } },
+      // Per-menu browsing view: /m/<super-category-slug>
+      // Separate namespace from /browse/:slug (category) to avoid route conflicts
+      { path: "m/:menuSlug", name: "menu-browse", component: Menu, props: true, meta: { interface: "customer" } },
+      // Category / dish routes stay shallow under /browse/ — unchanged
       { path: "browse/:slug", name: "category", component: CategoryPage, props: true, meta: { interface: "customer" } },
       { path: "browse/:category/:dish", name: "dish", component: DishPage, props: true, meta: { interface: "customer" } },
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },

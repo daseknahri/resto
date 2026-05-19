@@ -7,6 +7,16 @@ class SuperCategory(models.Model):
     name = models.CharField(max_length=150)
     name_i18n = models.JSONField(default=dict, blank=True)
     slug = models.SlugField(max_length=160, unique=True)
+    description = models.CharField(
+        max_length=280,
+        blank=True,
+        help_text="Short tagline shown on the menu-selector card (e.g. 'Served 11 am – 3 pm').",
+    )
+    description_i18n = models.JSONField(default=dict, blank=True)
+    image_url = models.URLField(
+        blank=True,
+        help_text="Cover image displayed on the menu-selector card.",
+    )
     position = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=True)
     is_temporarily_disabled = models.BooleanField(default=False)

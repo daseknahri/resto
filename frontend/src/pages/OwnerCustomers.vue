@@ -197,7 +197,7 @@ const fetchCustomers = async () => {
     if (activeSegment.value !== "total") params.segment = activeSegment.value;
     if (search.value.trim()) params.search = search.value.trim();
 
-    const { data } = await api.get("/api/owner/customers/", { params });
+    const { data } = await api.get("/owner/customers/", { params });
     customers.value = data.customers || [];
     summary.value = data.summary || null;
   } catch {

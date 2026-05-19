@@ -34,6 +34,8 @@ const normalizeSuperCategories = (value) => {
   const rows = Array.isArray(value) ? value : Array.isArray(value?.results) ? value.results : [];
   return rows.map((item) => ({
     ...item,
+    description: item?.description || "",
+    image_url: item?.image_url || "",
   }));
 };
 

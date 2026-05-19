@@ -159,7 +159,7 @@ const tenantTagline = computed(() => String(meta.value?.profile?.tagline || meta
 const activeCustomerSection = computed(() => {
   const name = String(route.name || "");
   if (name === "customer-home") return "info";
-  if (name === "menu" || name === "category" || name === "dish") return "menu";
+  if (name === "menu" || name === "menu-browse" || name === "table-link" || name === "category" || name === "dish") return "menu";
   if (name === "cart") return "cart";
   if (name === "reserve") return "reserve";
   if (name === "customer-account") return "account";
