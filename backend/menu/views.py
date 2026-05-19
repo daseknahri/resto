@@ -4546,3 +4546,169 @@ class PromoCodeCheckView(APIView):
             "discount_value": str(promo.discount_value),
             "min_order_amount": str(promo.min_order_amount),
         })
+
+
+# ── CSV template columns ──────────────────────────────────────────────────────
+_CSV_COLUMNS = ["category_name", "dish_name", "description", "price", "tags", "allergens"]
+_CSV_EXAMPLE_ROWS = [
+    ["Starters", "Spring Rolls", "Crispy veggie rolls with sweet chilli dip", "6.50", "vegetarian", "gluten"],
+    ["Starters", "Soup of the Day", "Ask your waiter for today's selection", "5.00", "", ""],
+    ["Mains", "Grilled Salmon", "Atlantic salmon with lemon butter sauce", "18.00", "", "fish"],
+    ["Mains", "Chicken Burger", "Free-range chicken with house slaw", "13.50", "", "gluten,dairy"],
+    ["Desserts", "Chocolate Fondant", "Warm fondant with vanilla ice cream", "7.00", "vegetarian", "gluten,dairy,eggs"],
+]
+
+
+class OwnerMenuImportView(APIView):
+    """POST /api/owner/menu/import/   — import dishes from a CSV upload.
+       GET  /api/owner/menu/import/   — download a CSV template."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """Return a ready-to-fill CSV template."""
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        import io as _io
+        buf = _io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(_CSV_COLUMNS)
+        writer.writerows(_CSV_EXAMPLE_ROWS)
+        response = HttpResponse(buf.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="menu_import_template.csv"'
+        return response
+
+    def post(self, request, *args, **kwargs):
+        """Parse an uploaded CSV and create categories + dishes."""
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            return Response({"detail": "No file uploaded.", "code": "no_file"}, status=status.HTTP_400_BAD_REQUEST)
+        if not uploaded.name.lower().endswith(".csv"):
+            return Response({"detail": "Only CSV files are accepted.", "code": "bad_format"}, status=status.HTTP_400_BAD_REQUEST)
+        if uploaded.size > 2 * 1024 * 1024:  # 2 MB hard cap
+            return Response({"detail": "File too large (max 2 MB).", "code": "too_large"}, status=status.HTTP_400_BAD_REQUEST)
+
+        import io as _io
+        from decimal import Decimal as _Dec, InvalidOperation
+        from django.utils.text import slugify as _slugify
+
+        try:
+            text = uploaded.read().decode("utf-8-sig")  # utf-8-sig strips BOM if present
+        except UnicodeDecodeError:
+            return Response({"detail": "Could not decode file. Please save as UTF-8 CSV.", "code": "decode_error"}, status=status.HTTP_400_BAD_REQUEST)
+
+        reader = csv.DictReader(_io.StringIO(text))
+        # Normalise header names: lowercase + strip
+        reader.fieldnames = [f.strip().lower() for f in (reader.fieldnames or [])]
+
+        required = {"category_name", "dish_name", "price"}
+        missing = required - set(reader.fieldnames)
+        if missing:
+            return Response(
+                {"detail": f"Missing required columns: {', '.join(sorted(missing))}.", "code": "missing_columns"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created_categories = 0
+        created_dishes = 0
+        skipped = 0
+        errors = []
+        category_cache = {}  # name.lower() → Category instance
+
+        # Fetch the default super-category (position=0 / first) or create one for imports
+        try:
+            default_super_cat = SuperCategory.objects.order_by("position", "id").first()
+            if default_super_cat is None:
+                default_super_cat = SuperCategory.objects.create(
+                    name="Menu",
+                    slug=_make_unique_slug("menu", SuperCategory),
+                    position=0,
+                )
+        except Exception as _e:
+            return Response({"detail": f"Could not access menu structure: {_e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        for row_num, row in enumerate(reader, start=2):  # row 1 = header
+            cat_name = str(row.get("category_name") or "").strip()[:150]
+            dish_name = str(row.get("dish_name") or "").strip()[:200]
+            price_raw = str(row.get("price") or "").strip()
+
+            if not cat_name or not dish_name:
+                skipped += 1
+                continue
+
+            try:
+                price = _Dec(price_raw).quantize(_Dec("0.01"))
+                if price < _Dec("0"):
+                    raise ValueError("negative price")
+            except (InvalidOperation, ValueError):
+                errors.append(f"Row {row_num}: invalid price '{price_raw}' for '{dish_name}' — skipped.")
+                skipped += 1
+                continue
+
+            # Get or create category
+            cat_key = cat_name.lower()
+            if cat_key not in category_cache:
+                existing = Category.objects.filter(name__iexact=cat_name).first()
+                if existing:
+                    category_cache[cat_key] = existing
+                else:
+                    cat_slug = _make_unique_slug(cat_name, Category)
+                    new_cat = Category.objects.create(
+                        super_category=default_super_cat,
+                        name=cat_name,
+                        slug=cat_slug,
+                        position=Category.objects.count(),
+                    )
+                    category_cache[cat_key] = new_cat
+                    created_categories += 1
+
+            category = category_cache[cat_key]
+
+            # Skip duplicate dish names in the same category
+            if Dish.objects.filter(category=category, name__iexact=dish_name).exists():
+                skipped += 1
+                errors.append(f"Row {row_num}: '{dish_name}' already exists in '{cat_name}' — skipped.")
+                continue
+
+            description = str(row.get("description") or "").strip()
+            # tags: comma-separated, e.g. "vegetarian,spicy"
+            raw_tags = str(row.get("tags") or "").strip()
+            tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+            # allergens: same format
+            raw_allergens = str(row.get("allergens") or "").strip()
+            allergens = [a.strip().lower() for a in raw_allergens.split(",") if a.strip()]
+
+            dish_slug = _make_unique_slug(dish_name, Dish)
+            Dish.objects.create(
+                category=category,
+                name=dish_name,
+                slug=dish_slug,
+                description=description,
+                price=price,
+                tags=tags,
+                allergens=allergens,
+                position=Dish.objects.filter(category=category).count(),
+            )
+            created_dishes += 1
+
+        return Response({
+            "created_categories": created_categories,
+            "created_dishes": created_dishes,
+            "skipped": skipped,
+            "errors": errors[:20],  # cap at 20 to avoid huge payloads
+        })
+
+
+def _make_unique_slug(name: str, model_class, max_length: int = 200) -> str:
+    """Generate a slug from name that doesn't collide with existing rows."""
+    from django.utils.text import slugify as _slugify
+    base = _slugify(name)[:max_length - 8] or "item"
+    slug = base
+    suffix = 1
+    while model_class.objects.filter(slug=slug).exists():
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    return slug
