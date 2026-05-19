@@ -47,6 +47,11 @@
         </div>
       </div>
 
+      <!-- Revenue bar chart -->
+      <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
+        <RevenueBarChart />
+      </div>
+
       <!-- Restaurant open/closed quick toggle -->
       <div
         class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors"
@@ -541,6 +546,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import RevenueBarChart from "../components/RevenueBarChart.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";

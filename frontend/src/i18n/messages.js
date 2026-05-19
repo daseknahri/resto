@@ -1615,6 +1615,15 @@ export const messages = {
       planSection: "Your plan",
       pendingUpgradeShort: "Upgrade pending",
     },
+    revenueChart: {
+      title: "Revenue",
+      totalRevenue: "Total revenue",
+      totalOrders: "Orders",
+      avgOrder: "Avg order",
+      orders: "{count} order | {count} orders",
+      noData: "No revenue data yet.",
+      loadError: "Could not load chart data.",
+    },
     ownerBilling: {
       tabLabel: "Billing",
       currentPlanSection: "Subscription",
@@ -4023,6 +4032,15 @@ export const messages = {
       noDishesLoaded: "Aucun plat charge — cliquez sur Actualiser.",
       planSection: "Votre offre",
       pendingUpgradeShort: "Montee en gamme en attente",
+    },
+    revenueChart: {
+      title: "Chiffre d affaires",
+      totalRevenue: "CA total",
+      totalOrders: "Commandes",
+      avgOrder: "Commande moy.",
+      orders: "{count} commande | {count} commandes",
+      noData: "Aucune donnee de CA pour l instant.",
+      loadError: "Impossible de charger les donnees.",
     },
     ownerBilling: {
       tabLabel: "Facturation",

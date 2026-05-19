@@ -728,6 +728,79 @@ class AnalyticsEventIngestView(APIView):
         return Response({"detail": "event_recorded", "id": event.id}, status=status.HTTP_202_ACCEPTED)
 
 
+class OwnerRevenueChartView(APIView):
+    """
+    GET /api/owner/revenue-chart/?period=7|14|30
+
+    Returns daily aggregated revenue + order count for the last N days,
+    based on completed/delivered orders.  Used by the owner dashboard chart.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _COUNTED = [
+        "confirmed", "preparing", "ready", "out_for_delivery",
+        "delivered", "completed",
+    ]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            period = int(request.query_params.get("period", "14"))
+        except (TypeError, ValueError):
+            period = 14
+        period = max(7, min(90, period))
+
+        from django.db.models import Count as _Count, Sum as _Sum, FloatField as _FF
+        from django.db.models.functions import TruncDate
+        from django.utils import timezone as _tz
+        import datetime
+
+        now = _tz.now()
+        since = now - datetime.timedelta(days=period - 1)
+        since_date = since.date()
+
+        rows = (
+            Order.objects
+            .filter(status__in=self._COUNTED, created_at__date__gte=since_date)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                revenue=_Sum("total", output_field=_FF()),
+                order_count=_Count("id"),
+            )
+            .order_by("day")
+        )
+
+        # Build a full date-range map so every day is present (even with 0)
+        day_map = {}
+        for i in range(period):
+            d = (since + datetime.timedelta(days=i)).date()
+            day_map[d] = {"date": d.isoformat(), "revenue": 0.0, "order_count": 0}
+        for row in rows:
+            d = row["day"]
+            if d in day_map:
+                day_map[d]["revenue"] = float(row["revenue"] or 0)
+                day_map[d]["order_count"] = row["order_count"]
+
+        # Currency from the most recent order (best-effort)
+        currency = (
+            Order.objects
+            .filter(status__in=self._COUNTED, created_at__date__gte=since_date)
+            .order_by("-created_at")
+            .values_list("currency", flat=True)
+            .first()
+        ) or "USD"
+
+        return Response({
+            "period": period,
+            "currency": currency,
+            "days": list(day_map.values()),
+        })
+
+
 class AnalyticsSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
