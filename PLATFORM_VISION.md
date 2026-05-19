@@ -409,8 +409,9 @@ class DeliveryJob(models.Model):
 - [x] `OrderTrackingView` — GET `/api/marketplace/track/<order_number>/` returns driver name, status, position, addresses
 - [x] `?stream=1` mode streams SSE events (polls every 3s, caps at 90s to protect Gunicorn workers)
 - [x] Frontend `MarketplaceOrderStatus.vue` polls tracking every 10s, shows driver panel with Google Maps link
-- [ ] Restaurant sees driver's ETA to pickup on the order dashboard
-- [ ] Driver arrival notification to restaurant ("Driver is 2 minutes away")
+- [x] Restaurant sees driver status + driver phone in order dashboard (delivery job panel in OwnerOrders.vue)
+- [x] Restaurant can rate the driver from within the order dashboard (POST role=restaurant to rating endpoint)
+- [ ] Driver arrival push notification to restaurant ("Driver is 2 minutes away") — requires WebSocket/push infrastructure
 
 ### 4D — Three-Way Ratings
 
@@ -419,7 +420,7 @@ class DeliveryJob(models.Model):
 - [x] Restaurant rates the driver — via `role=restaurant` on rating endpoint
 - [x] All ratings stored on `DeliveryJob` — `customer_driver_rating`, `driver_customer_rating`, `restaurant_driver_rating` (+ notes)
 - [x] `DeliveryRatingView` — POST `/api/marketplace/track/<order_number>/rate/` accepts `role` + `score` + `note`
-- [ ] Rating summaries surfaced in driver profile / admin views
+- [x] Rating summaries surfaced in admin driver list — `AdminDrivers.vue` + `GET /api/admin/drivers/` with avg rating, total/completed jobs, online status
 
 ### 4E — Zone Management
 
@@ -427,7 +428,7 @@ class DeliveryJob(models.Model):
 - [x] `AdminDeliveryZoneListCreateView` + `AdminDeliveryZoneDetailView` (CRUD API)
 - [x] `AdminDeliveryZones.vue` — admin console page for managing zones (table + create/edit drawer)
 - [x] Restaurants configure their delivery zone (`OwnerDeliveryZoneView`) and radius (`OwnerDeliveryRadiusUpdateView`)
-- [ ] Dynamic delivery fee based on distance tiers
+- [x] Dynamic delivery fee based on distance tiers — `fee_tiers` JSONField on `DeliveryZone`, `compute_fee(distance_km)` method, auto-calculated in `AdminCreateDeliveryJobView`, editable in `AdminDeliveryZones.vue`
 
 ---
 

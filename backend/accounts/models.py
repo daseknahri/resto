@@ -275,6 +275,13 @@ class DeliveryZone(models.Model):
     # Rough radius in km (used as a quick pre-filter before point-in-polygon check)
     approx_radius_km = models.FloatField(default=5.0)
     is_active = models.BooleanField(default=True)
+    # Distance-based fee tiers: [{"km_up_to": 3, "fee": 2.50}, {"km_up_to": 7, "fee": 4.00}, {"km_up_to": null, "fee": 6.00}]
+    # Tiers are evaluated in order; first matching tier wins. null km_up_to = catch-all.
+    fee_tiers = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='e.g. [{"km_up_to": 3, "fee": 2.5}, {"km_up_to": null, "fee": 5.0}]',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -282,6 +289,18 @@ class DeliveryZone(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.city})"
+
+    def compute_fee(self, distance_km: float) -> float:
+        """Return the delivery fee for a given distance using this zone's fee_tiers."""
+        if not self.fee_tiers:
+            return 0.0
+        for tier in sorted(
+            self.fee_tiers,
+            key=lambda t: t.get("km_up_to") if t.get("km_up_to") is not None else float("inf"),
+        ):
+            if tier.get("km_up_to") is None or distance_km <= float(tier["km_up_to"]):
+                return float(tier.get("fee", 0))
+        return 0.0
 
 
 class DeliveryJob(models.Model):

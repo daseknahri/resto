@@ -125,6 +125,21 @@
                 />
                 <p v-if="polygonError" class="text-xs text-red-400 mt-1">{{ polygonError }}</p>
               </div>
+              <!-- Fee tiers JSON -->
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">
+                  {{ t('adminZones.fieldFeeTiers') }}
+                  <span class="text-slate-600"> — JSON array of &#123;km_up_to, fee&#125;</span>
+                </label>
+                <textarea
+                  v-model="feeTiersJson"
+                  rows="3"
+                  class="admin-input font-mono text-[11px] resize-y"
+                  :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
+                />
+                <p v-if="feeTiersError" class="text-xs text-red-400 mt-1">{{ feeTiersError }}</p>
+                <p class="text-[10px] text-slate-600 mt-0.5">{{ t('adminZones.feeTiersHint') }}</p>
+              </div>
               <!-- Active -->
               <label class="flex items-center gap-2 cursor-pointer">
                 <input v-model="form.is_active" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" />
@@ -177,6 +192,8 @@ const saving = ref(false);
 const toast = ref(null);
 const polygonJson = ref('[]');
 const polygonError = ref('');
+const feeTiersJson = ref('[]');
+const feeTiersError = ref('');
 
 const defaultForm = () => ({
   name: '',
@@ -211,6 +228,8 @@ const openCreate = () => {
   form.value = defaultForm();
   polygonJson.value = '[]';
   polygonError.value = '';
+  feeTiersJson.value = '[]';
+  feeTiersError.value = '';
   showForm.value = true;
 };
 
@@ -226,6 +245,8 @@ const openEdit = (zone) => {
   };
   polygonJson.value = JSON.stringify(zone.polygon, null, 2);
   polygonError.value = '';
+  feeTiersJson.value = JSON.stringify(zone.fee_tiers || [], null, 2);
+  feeTiersError.value = '';
   showForm.value = true;
 };
 
@@ -235,6 +256,7 @@ const closeForm = () => {
 
 const save = async () => {
   polygonError.value = '';
+  feeTiersError.value = '';
   let polygon;
   try {
     polygon = JSON.parse(polygonJson.value);
@@ -243,10 +265,21 @@ const save = async () => {
     polygonError.value = t('adminZones.polygonError');
     return;
   }
+  let feeTiers = [];
+  const tiersRaw = feeTiersJson.value?.trim();
+  if (tiersRaw && tiersRaw !== '[]') {
+    try {
+      feeTiers = JSON.parse(tiersRaw);
+      if (!Array.isArray(feeTiers)) throw new Error();
+    } catch {
+      feeTiersError.value = t('adminZones.feeTiersError');
+      return;
+    }
+  }
 
   saving.value = true;
   try {
-    const payload = { ...form.value, polygon };
+    const payload = { ...form.value, polygon, fee_tiers: feeTiers };
     if (editing.value) {
       const res = await api.patch(`/admin/delivery-zones/${editing.value.id}/`, payload);
       const idx = zones.value.findIndex(z => z.id === editing.value.id);

@@ -2215,6 +2215,38 @@ class OwnerOrderListView(APIView):
                            .values("order_number", "score", "note")):
                     my_rating_map[cr["order_number"]] = {"score": cr["score"], "note": cr["note"]}
 
+        # ── Batch-load delivery job data (public schema — shared model) ─────────
+        from accounts.models import DeliveryJob as _DJ
+        delivery_job_map: dict = {}  # order_number → serialised job dict
+        if tenant_id:
+            marketplace_order_nums = [
+                o.order_number for o in all_orders if getattr(o, "source", "") == "marketplace"
+            ]
+            if marketplace_order_nums:
+                for _dj in (_DJ.objects.select_related("driver")
+                            .filter(tenant_id=tenant_id,
+                                    order_number__in=marketplace_order_nums)):
+                    _drv = _dj.driver
+                    delivery_job_map[_dj.order_number] = {
+                        "id": _dj.id,
+                        "status": _dj.status,
+                        "driver": {
+                            "id": _drv.id,
+                            "name": _drv.name or "",
+                            "phone": _drv.phone or "",
+                            "is_online": _drv.is_driver_online,
+                        } if _drv else None,
+                        "pickup_address": _dj.pickup_address,
+                        "delivery_address": _dj.delivery_address,
+                        "delivery_fee": str(_dj.delivery_fee),
+                        "driver_payout": str(_dj.driver_payout),
+                        "assigned_at": _dj.assigned_at.isoformat() if _dj.assigned_at else None,
+                        "picked_up_at": _dj.picked_up_at.isoformat() if _dj.picked_up_at else None,
+                        "delivered_at": _dj.delivered_at.isoformat() if _dj.delivered_at else None,
+                        "restaurant_driver_rating": _dj.restaurant_driver_rating,
+                        "restaurant_driver_note": _dj.restaurant_driver_note,
+                    }
+
         orders = []
         for order in all_orders:
             orders.append({
@@ -2260,6 +2292,8 @@ class OwnerOrderListView(APIView):
                 "commission_amount": str(order.commission_amount),
                 "promotion_discount": str(order.promotion_discount),
                 "applied_promotion_name": order.applied_promotion_name,
+                # Delivery job (marketplace orders with active delivery)
+                "delivery_job": delivery_job_map.get(order.order_number),
             })
 
         return Response({"results": orders, "count": len(orders), "total": total, "has_more": total > len(orders)})
@@ -2300,6 +2334,36 @@ class OwnerOrderDetailView(APIView):
                 "rating_count": agg["cnt"],
                 "my_rating": my_rating,
             }
+
+        # ── Delivery job lookup (public schema shared model) ─────────────────
+        _dj_data = None
+        _detail_tenant = getattr(request, "tenant", None)
+        if _detail_tenant and getattr(order, "source", "") == "marketplace":
+            from accounts.models import DeliveryJob as _DJD
+            _dj = (_DJD.objects.select_related("driver")
+                   .filter(tenant_id=_detail_tenant.id,
+                           order_number=order.order_number).first())
+            if _dj:
+                _drv = _dj.driver
+                _dj_data = {
+                    "id": _dj.id,
+                    "status": _dj.status,
+                    "driver": {
+                        "id": _drv.id,
+                        "name": _drv.name or "",
+                        "phone": _drv.phone or "",
+                        "is_online": _drv.is_driver_online,
+                    } if _drv else None,
+                    "pickup_address": _dj.pickup_address,
+                    "delivery_address": _dj.delivery_address,
+                    "delivery_fee": str(_dj.delivery_fee),
+                    "driver_payout": str(_dj.driver_payout),
+                    "assigned_at": _dj.assigned_at.isoformat() if _dj.assigned_at else None,
+                    "picked_up_at": _dj.picked_up_at.isoformat() if _dj.picked_up_at else None,
+                    "delivered_at": _dj.delivered_at.isoformat() if _dj.delivered_at else None,
+                    "restaurant_driver_rating": _dj.restaurant_driver_rating,
+                    "restaurant_driver_note": _dj.restaurant_driver_note,
+                }
 
         return Response({
             "id": order.id,
@@ -2344,6 +2408,7 @@ class OwnerOrderDetailView(APIView):
             "commission_amount": str(order.commission_amount),
             "promotion_discount": str(order.promotion_discount),
             "applied_promotion_name": order.applied_promotion_name,
+            "delivery_job": _dj_data,
         })
 
 

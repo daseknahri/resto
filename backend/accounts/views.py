@@ -2051,6 +2051,7 @@ def _serialize_zone(zone) -> dict:
         "center_lng": zone.center_lng,
         "approx_radius_km": zone.approx_radius_km,
         "is_active": zone.is_active,
+        "fee_tiers": zone.fee_tiers or [],
         "created_at": zone.created_at.isoformat(),
     }
 
@@ -2466,6 +2467,63 @@ class DeliveryRatingView(APIView):
 # ── Admin: delivery zone management ───────────────────────────────────────────
 
 
+class AdminDriverListView(APIView):
+    """GET /api/admin/drivers/ — list all registered drivers with job stats (platform admin)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from .models import User
+        u = request.user
+        if not isinstance(u, User) or not u.is_platform_admin:
+            return Response({"detail": "Platform admin access required."}, status=403)
+
+        from .models import Customer, DeliveryJob
+        from django.db.models import Avg, Count, Q
+
+        drivers = list(
+            Customer.objects.filter(is_driver=True)
+            .order_by("-driver_position_updated_at", "-id")
+        )
+
+        # Batch job stats per driver
+        stats_map = {}
+        if drivers:
+            driver_ids = [d.id for d in drivers]
+            for s in (DeliveryJob.objects
+                      .filter(driver_id__in=driver_ids)
+                      .values("driver_id")
+                      .annotate(
+                          total_jobs=Count("id"),
+                          completed_jobs=Count("id", filter=Q(status="delivered")),
+                          avg_rating=Avg("customer_driver_rating"),
+                      )):
+                stats_map[s["driver_id"]] = s
+
+        result = []
+        for d in drivers:
+            s = stats_map.get(d.id, {})
+            avg = s.get("avg_rating")
+            result.append({
+                "id": d.id,
+                "name": d.name or "",
+                "phone": d.phone or "",
+                "email": d.email or "",
+                "is_online": d.is_driver_online,
+                "driver_lat": d.driver_lat,
+                "driver_lng": d.driver_lng,
+                "position_updated_at": (
+                    d.driver_position_updated_at.isoformat()
+                    if d.driver_position_updated_at else None
+                ),
+                "total_jobs": s.get("total_jobs", 0),
+                "completed_jobs": s.get("completed_jobs", 0),
+                "avg_rating": round(float(avg), 1) if avg is not None else None,
+                "created_at": d.created_at.isoformat(),
+            })
+        return Response(result)
+
+
 class AdminDeliveryZoneListCreateView(APIView):
     """
     GET  /api/admin/delivery-zones/   — list all zones (platform admin only)
@@ -2512,6 +2570,10 @@ class AdminDeliveryZoneListCreateView(APIView):
         center_lng = data.get("center_lng")
         approx_radius_km = float(data.get("approx_radius_km", 5.0))
 
+        fee_tiers = data.get("fee_tiers") or []
+        if not isinstance(fee_tiers, list):
+            fee_tiers = []
+
         with schema_context("public"):
             zone = DeliveryZone.objects.create(
                 name=name,
@@ -2521,6 +2583,7 @@ class AdminDeliveryZoneListCreateView(APIView):
                 center_lng=float(center_lng) if center_lng is not None else None,
                 approx_radius_km=approx_radius_km,
                 is_active=bool(data.get("is_active", True)),
+                fee_tiers=fee_tiers,
             )
         return Response(_serialize_zone(zone), status=status.HTTP_201_CREATED)
 
@@ -2590,6 +2653,9 @@ class AdminDeliveryZoneDetailView(APIView):
             if "is_active" in data:
                 zone.is_active = bool(data["is_active"])
                 update_fields.append("is_active")
+            if "fee_tiers" in data:
+                zone.fee_tiers = data["fee_tiers"] if isinstance(data["fee_tiers"], list) else []
+                update_fields.append("fee_tiers")
 
             if update_fields:
                 zone.save(update_fields=update_fields)
@@ -2739,18 +2805,31 @@ class AdminCreateDeliveryJobView(APIView):
         if DeliveryJob.objects.filter(tenant_id=tenant_id, order_number=order_number).exists():
             return Response({"detail": "A delivery job already exists for this order."}, status=409)
 
-        try:
-            delivery_fee = Decimal(str(data.get("delivery_fee", "0")))
-            driver_payout = Decimal(str(data.get("driver_payout", "0")))
-        except (InvalidOperation, TypeError):
-            return Response({"detail": "Invalid delivery_fee or driver_payout."}, status=400)
-
         zone = None
         if data.get("zone_id"):
             try:
                 zone = DeliveryZone.objects.get(pk=data["zone_id"])
             except DeliveryZone.DoesNotExist:
                 pass
+
+        # Auto-compute fee from zone tiers when distance coords are available
+        # and caller hasn't explicitly provided a fee.
+        _explicit_fee = data.get("delivery_fee")
+        _explicit_payout = data.get("driver_payout")
+        if _explicit_fee is None and zone and zone.fee_tiers:
+            pickup_lat = float(data["pickup_lat"]) if data.get("pickup_lat") else None
+            pickup_lng = float(data["pickup_lng"]) if data.get("pickup_lng") else None
+            del_lat = float(data["delivery_lat"]) if data.get("delivery_lat") else None
+            del_lng = float(data["delivery_lng"]) if data.get("delivery_lng") else None
+            if all(v is not None for v in (pickup_lat, pickup_lng, del_lat, del_lng)):
+                distance = _haversine_km(pickup_lat, pickup_lng, del_lat, del_lng)
+                _explicit_fee = str(zone.compute_fee(distance))
+
+        try:
+            delivery_fee = Decimal(str(_explicit_fee or "0"))
+            driver_payout = Decimal(str(_explicit_payout or "0"))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "Invalid delivery_fee or driver_payout."}, status=400)
 
         job = DeliveryJob.objects.create(
             tenant_id=tenant_id,

@@ -34,12 +34,18 @@
                 {{ t("adminConsole.djangoAdmin") }}
               </a>
             </div>
-            <div class="grid grid-cols-1 gap-2">
+            <div class="grid grid-cols-2 gap-2">
               <router-link
                 :to="{ name: 'admin-delivery-zones' }"
                 class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
               >
                 🗺 {{ t("adminConsole.deliveryZones") }}
+              </router-link>
+              <router-link
+                :to="{ name: 'admin-drivers' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+              >
+                🛵 {{ t("adminConsole.drivers") }}
               </router-link>
             </div>
           </article>

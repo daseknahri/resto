@@ -233,6 +233,71 @@
               📍 {{ t("ownerOrders.openMap") }}
             </a>
           </div>
+
+          <!-- Delivery job panel -->
+          <div v-if="o.delivery_job" class="sm:col-span-2 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 space-y-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-slate-300">🛵 {{ t('ownerOrders.deliveryJobTitle') }}</span>
+              <span
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="{
+                  'bg-amber-500/15 border border-amber-500/30 text-amber-300': o.delivery_job.status === 'searching',
+                  'bg-sky-500/15 border border-sky-500/30 text-sky-300': ['assigned','at_restaurant'].includes(o.delivery_job.status),
+                  'bg-violet-500/15 border border-violet-500/30 text-violet-300': o.delivery_job.status === 'picked_up',
+                  'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300': o.delivery_job.status === 'delivered',
+                  'bg-red-500/15 border border-red-500/30 text-red-300': o.delivery_job.status === 'failed',
+                }"
+              >{{ t(`ownerOrders.djStatus_${o.delivery_job.status}`) }}</span>
+            </div>
+            <div v-if="o.delivery_job.driver" class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span>{{ o.delivery_job.driver.name || t('ownerOrders.djDriverUnnamed') }}</span>
+                <span v-if="o.delivery_job.driver.is_online" class="text-emerald-400">● {{ t('ownerOrders.djOnline') }}</span>
+              </div>
+              <a
+                v-if="o.delivery_job.driver.phone"
+                :href="`tel:${o.delivery_job.driver.phone}`"
+                class="text-sky-400 hover:text-sky-300"
+              >{{ o.delivery_job.driver.phone }}</a>
+            </div>
+            <p v-else class="text-slate-500">{{ t('ownerOrders.djSearching') }}</p>
+
+            <!-- Rate driver button (only when delivered and not yet rated) -->
+            <div v-if="o.delivery_job.status === 'delivered' && !o.delivery_job.restaurant_driver_rating">
+              <div v-if="ratingJobId === o.id" class="space-y-1.5">
+                <div class="flex gap-1">
+                  <button
+                    v-for="n in 5"
+                    :key="n"
+                    class="text-lg transition-transform hover:scale-110"
+                    :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+                    @click="ratingScore = n"
+                  >★</button>
+                </div>
+                <input
+                  v-model="ratingNote"
+                  class="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 placeholder-slate-500 focus:outline-none text-[11px]"
+                  :placeholder="t('ownerOrders.djRatingNotePlaceholder')"
+                />
+                <div class="flex gap-2">
+                  <button
+                    class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-3 py-1 text-[11px] font-semibold text-slate-950 disabled:opacity-50"
+                    :disabled="!ratingScore || submittingRating"
+                    @click="submitJobRating(o)"
+                  >{{ submittingRating ? '…' : t('ownerOrders.djSubmitRating') }}</button>
+                  <button class="text-slate-500 hover:text-slate-300 text-[11px]" @click="ratingJobId = null; ratingScore = 0; ratingNote = ''">{{ t('common.cancel') }}</button>
+                </div>
+              </div>
+              <button
+                v-else
+                class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20"
+                @click="ratingJobId = o.id; ratingScore = 0; ratingNote = ''"
+              >★ {{ t('ownerOrders.djRateDriver') }}</button>
+            </div>
+            <div v-else-if="o.delivery_job.restaurant_driver_rating" class="text-slate-500">
+              {{ t('ownerOrders.djRated', { score: o.delivery_job.restaurant_driver_rating }) }}
+            </div>
+          </div>
         </div>
 
         <!-- Items -->
@@ -408,6 +473,8 @@ const noteError = ref("");
 
 // Customer trust rating
 const ratingOrderId = ref(null);
+// Driver rating (from restaurant side — shared score/note refs)
+const ratingJobId = ref(null);
 const ratingScore = ref(5);
 const ratingNote = ref("");
 const submittingRating = ref(false);
@@ -648,6 +715,32 @@ const submitCustomerRating = async (o) => {
     toast.show(t("ownerOrders.customerRatingSubmitted"), "success");
   } catch {
     ratingError.value = t("ownerOrders.customerRatingFailed");
+  } finally {
+    submittingRating.value = false;
+  }
+};
+
+// ── Driver rating (restaurant rates driver) ───────────────────────────────────
+const submitJobRating = async (o) => {
+  if (!ratingScore.value || submittingRating.value) return;
+  submittingRating.value = true;
+  try {
+    await api.post(`/marketplace/track/${o.order_number}/rate/`, {
+      role: 'restaurant',
+      score: ratingScore.value,
+      note: ratingNote.value,
+    });
+    // Update in-place so the rate button disappears
+    if (o.delivery_job) {
+      o.delivery_job.restaurant_driver_rating = ratingScore.value;
+      o.delivery_job.restaurant_driver_note = ratingNote.value;
+    }
+    ratingJobId.value = null;
+    ratingScore.value = 0;
+    ratingNote.value = '';
+    toast.show(t('ownerOrders.djRatingSubmitted'), 'success');
+  } catch {
+    toast.show(t('ownerOrders.djRatingFailed'), 'error');
   } finally {
     submittingRating.value = false;
   }
