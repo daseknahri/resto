@@ -496,6 +496,22 @@ watch(soundEnabled, (val) => {
   try { localStorage.setItem(SOUND_KEY, val ? "on" : "off"); } catch { /* ignore */ }
 });
 
+// Shared AudioContext — created once on first user gesture so Chrome's autoplay
+// policy is satisfied. Any click on the page (including the mute toggle) will
+// initialise it; subsequent calls from setInterval simply reuse the same ctx.
+let _audioCtx = null;
+const _getAudioCtx = () => {
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* not supported */ }
+  }
+  return _audioCtx;
+};
+// Prime the context on the first user interaction on this page
+if (typeof window !== "undefined") {
+  const _prime = () => { _getAudioCtx(); window.removeEventListener("click", _prime, true); };
+  window.addEventListener("click", _prime, { capture: true, once: true });
+}
+
 // ── Date filter tabs ──────────────────────────────────────────────────────────
 const dateTabs = computed(() => [
   { value: "all",       label: t("ownerOrders.dateAll") },
@@ -881,19 +897,28 @@ const RECURRING_ALERT_MS = 2 * 60 * 1000; // re-ping every 2 min while pending o
 const playAlertSound = () => {
   if (!soundEnabled.value) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.18].forEach((delay, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(i === 0 ? 780 : 980, ctx.currentTime + delay);
-      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
-      osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.25);
-    });
+    const ctx = _getAudioCtx();
+    if (!ctx) return;
+    // Resume if suspended (e.g., tab was backgrounded and context auto-suspended)
+    const play = () => {
+      [0, 0.18].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(i === 0 ? 780 : 980, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      });
+    };
+    if (ctx.state === "suspended") {
+      ctx.resume().then(play).catch(() => {});
+    } else {
+      play();
+    }
   } catch {
     // AudioContext not available
   }
