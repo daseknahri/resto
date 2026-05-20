@@ -471,23 +471,17 @@ const syncSelection = () => {
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 const applyMenuTheme = (restaurantTheme) => {
-  const userPref = localStorage.getItem('ui-color-scheme') // 'dark' | 'system' | null
+  // Default to 'dark' so first-time visitors always start in dark mode.
+  // 'system' is only active if the user explicitly toggled to it.
+  const userPref = localStorage.getItem('ui-color-scheme') || 'dark'
   if (userPref === 'dark') {
     document.documentElement.removeAttribute('data-menu-theme')
     return
   }
-  if (userPref === 'system') {
-    const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (osDark) document.documentElement.removeAttribute('data-menu-theme')
-    else document.documentElement.setAttribute('data-menu-theme', restaurantTheme || 'light')
-    return
-  }
-  // No user pref — use restaurant config
-  if (restaurantTheme && restaurantTheme !== 'dark') {
-    document.documentElement.setAttribute('data-menu-theme', restaurantTheme)
-  } else {
-    document.documentElement.removeAttribute('data-menu-theme')
-  }
+  // userPref === 'system' — follow OS; restaurantTheme drives which light palette to use
+  const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  if (osDark) document.documentElement.removeAttribute('data-menu-theme')
+  else document.documentElement.setAttribute('data-menu-theme', restaurantTheme || 'light')
 }
 
 watch(menuTheme, applyMenuTheme, { immediate: true })
