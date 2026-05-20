@@ -922,6 +922,26 @@ body[dir="rtl"] .ui-section-kicker {
     box-shadow: 0 0 0 1px rgba(245,158,11,0.06) inset, 0 12px 40px rgba(0,0,0,0.60), 0 0 24px rgba(245,158,11,0.06);
   }
 
+  /* Dish detail: sticky mobile bottom bar */
+  .ui-dish-bar {
+    background: rgba(6, 11, 18, 0.96);
+    border: 1px solid rgba(245, 158, 11, 0.32);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 20px rgba(245,158,11,0.06);
+    color: rgb(241, 245, 249);
+  }
+
+  /* Dish detail: qty stepper control */
+  .ui-qty-control {
+    border-color: rgba(71, 85, 105, 0.70);
+    background: rgba(15, 23, 42, 0.60);
+  }
+
+  /* Dish detail: share icon button */
+  .ui-share-btn {
+    border-color: rgba(71, 85, 105, 0.70);
+    background: rgba(15, 23, 42, 0.55);
+  }
+
   .ui-touch-target {
     min-height: 2.75rem;
   }
@@ -1530,4 +1550,122 @@ html[data-menu-theme="warm"] .border-slate-800    { border-color: rgba(160,100,4
 html[data-menu-theme="warm"] .border-slate-800\/40 { border-color: rgba(160,100,40,0.12); }
 html[data-menu-theme="warm"] .border-slate-800\/50 { border-color: rgba(160,100,40,0.16); }
 html[data-menu-theme="warm"] .border-slate-800\/80 { border-color: rgba(160,100,40,0.20); }
+
+/* ==========================================================================
+   Dish detail page — light theme
+   ========================================================================== */
+
+/* Sticky bottom bar */
+html[data-menu-theme="light"] .ui-dish-bar {
+  background: rgba(255, 255, 255, 0.97);
+  border-color: rgba(245, 158, 11, 0.40);
+  box-shadow: 0 8px 28px rgba(100,116,139,0.18), 0 0 16px rgba(245,158,11,0.08);
+  color: #0f172a;
+}
+html[data-menu-theme="light"] .ui-dish-bar .text-slate-100 { color: #1e293b; }
+html[data-menu-theme="light"] .ui-dish-bar .text-slate-400 { color: #64748b; }
+
+/* Qty stepper */
+html[data-menu-theme="light"] .ui-qty-control {
+  border-color: rgba(100, 116, 139, 0.32);
+  background: rgba(248, 250, 252, 0.90);
+}
+html[data-menu-theme="light"] .ui-qty-control .text-slate-200 { color: #334155; }
+
+/* Share button */
+html[data-menu-theme="light"] .ui-share-btn {
+  border-color: rgba(100, 116, 139, 0.30);
+  background: rgba(248, 250, 252, 0.88);
+}
+html[data-menu-theme="light"] .ui-share-btn .text-slate-400 { color: #64748b; }
+
+/* Additional bg surface fills missing from the broad list */
+html[data-menu-theme="light"] .bg-slate-900\/95  { background-color: rgba(255,255,255,0.97); }
+html[data-menu-theme="light"] .bg-slate-900\/60  { background-color: rgba(248,250,252,0.84); }
+html[data-menu-theme="light"] .bg-slate-800\/60  { background-color: rgba(241,245,249,0.82); }
+html[data-menu-theme="light"] .bg-slate-800      { background-color: #f1f5f9; }
+html[data-menu-theme="light"] .bg-slate-800\/70  { background-color: rgba(241,245,249,0.88); }
+
+/* Similar dish cards */
+html[data-menu-theme="light"] .ui-surface-lift {
+  background: rgba(255,255,255,0.88);
+  border-color: rgba(100,116,139,0.20);
+}
+@media (hover: hover) {
+  html[data-menu-theme="light"] .ui-surface-lift:hover {
+    background: #ffffff;
+    border-color: rgba(245, 158, 11, 0.38);
+    box-shadow: 0 6px 20px rgba(100,116,139,0.16);
+  }
+}
+
+/* Segmented nav (desktop tab bar in header) */
+html[data-menu-theme="light"] .ui-segmented {
+  background: rgba(240, 244, 248, 0.88);
+  border-color: rgba(100, 116, 139, 0.22);
+}
+html[data-menu-theme="light"] .ui-segmented-button {
+  color: #334155;
+}
+html[data-menu-theme="light"] .ui-segmented-button[data-active="true"] {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-secondary);
+  border-color: rgba(100, 116, 139, 0.24);
+}
+
+/* ==========================================================================
+   Dish detail page — warm theme
+   ========================================================================== */
+
+html[data-menu-theme="warm"] .ui-dish-bar {
+  background: rgba(253, 246, 239, 0.97);
+  border-color: rgba(245, 158, 11, 0.40);
+  box-shadow: 0 8px 28px rgba(160,100,40,0.16), 0 0 16px rgba(245,158,11,0.08);
+  color: #1c1009;
+}
+html[data-menu-theme="warm"] .ui-dish-bar .text-slate-100 { color: #2c1810; }
+html[data-menu-theme="warm"] .ui-dish-bar .text-slate-400 { color: #92400e; }
+
+html[data-menu-theme="warm"] .ui-qty-control {
+  border-color: rgba(160, 100, 40, 0.32);
+  background: rgba(255, 248, 237, 0.90);
+}
+html[data-menu-theme="warm"] .ui-qty-control .text-slate-200 { color: #431407; }
+
+html[data-menu-theme="warm"] .ui-share-btn {
+  border-color: rgba(160, 100, 40, 0.30);
+  background: rgba(255, 248, 237, 0.88);
+}
+html[data-menu-theme="warm"] .ui-share-btn .text-slate-400 { color: #92400e; }
+
+html[data-menu-theme="warm"] .bg-slate-900\/95  { background-color: rgba(253,246,239,0.97); }
+html[data-menu-theme="warm"] .bg-slate-900\/60  { background-color: rgba(255,248,237,0.84); }
+html[data-menu-theme="warm"] .bg-slate-800\/60  { background-color: rgba(254,240,220,0.82); }
+html[data-menu-theme="warm"] .bg-slate-800      { background-color: #fef0dc; }
+html[data-menu-theme="warm"] .bg-slate-800\/70  { background-color: rgba(254,240,220,0.88); }
+
+html[data-menu-theme="warm"] .ui-surface-lift {
+  background: rgba(255,248,237,0.88);
+  border-color: rgba(160,100,40,0.18);
+}
+@media (hover: hover) {
+  html[data-menu-theme="warm"] .ui-surface-lift:hover {
+    background: #fff8ed;
+    border-color: rgba(245, 158, 11, 0.40);
+    box-shadow: 0 6px 20px rgba(160,100,40,0.14);
+  }
+}
+
+html[data-menu-theme="warm"] .ui-segmented {
+  background: rgba(255, 248, 237, 0.88);
+  border-color: rgba(160, 100, 40, 0.22);
+}
+html[data-menu-theme="warm"] .ui-segmented-button {
+  color: #431407;
+}
+html[data-menu-theme="warm"] .ui-segmented-button[data-active="true"] {
+  background: rgba(255, 252, 245, 0.92);
+  color: var(--color-secondary);
+  border-color: rgba(160, 100, 40, 0.26);
+}
 
