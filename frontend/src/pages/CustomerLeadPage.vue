@@ -42,7 +42,13 @@
                   <p class="text-sm text-slate-300">{{ tenantDescription }}</p>
                 </div>
               </div>
-              <span class="ui-chip-strong shrink-0">{{ statusLabel }}</span>
+              <span class="ui-chip-strong inline-flex shrink-0 items-center gap-1.5">
+                <span v-if="isOpen" class="relative inline-flex h-1.5 w-1.5 shrink-0">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                  <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                {{ statusLabel }}
+              </span>
             </div>
 
             <div class="flex flex-wrap justify-center gap-2.5">

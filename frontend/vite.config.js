@@ -5,7 +5,20 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     host: "0.0.0.0",
-    port: 5173,
+    port: 5180,
+    proxy: {
+      '/api': {
+        target: 'https://daseknahri.menu.ibnbatoutaweb.com',
+        changeOrigin: true,
+        secure: true,
+        cookieDomainRewrite: 'localhost',
+      },
+      '/api-auth': {
+        target: 'https://daseknahri.menu.ibnbatoutaweb.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   test: {
     environment: "jsdom",

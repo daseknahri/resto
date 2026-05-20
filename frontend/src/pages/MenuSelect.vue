@@ -38,7 +38,10 @@
                 ? 'border-color:rgba(52,211,153,0.40); background:rgba(16,185,129,0.12); color:rgb(110,231,183)'
                 : 'border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.10); color:rgb(252,165,165)'"
             >
-              <span class="inline-block h-1.5 w-1.5 rounded-full" :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'" />
+              <span class="relative inline-flex shrink-0">
+                <span v-if="isRestaurantOpen" class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 opacity-60" />
+                <span class="relative inline-block h-1.5 w-1.5 rounded-full" :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'" />
+              </span>
               {{ statusLabel }}
             </span>
           </div>
@@ -80,10 +83,11 @@
             <!-- Gradient placeholder when no image -->
             <div
               v-else
-              class="absolute inset-0 flex items-center justify-center"
-              :style="`background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(15,118,110,0.12) 50%, rgba(6,11,18,0.80) 100%)`"
+              class="absolute inset-0 flex items-center justify-center overflow-hidden"
+              :style="`background: linear-gradient(135deg, rgba(245,158,11,0.16) 0%, rgba(15,118,110,0.13) 50%, rgba(6,11,18,0.80) 100%)`"
             >
-              <span class="text-5xl font-bold text-[var(--color-secondary)]/30 select-none tracking-tight">
+              <div class="pointer-events-none absolute inset-0" style="background-image: radial-gradient(rgba(245,158,11,0.20) 1px, transparent 1px); background-size: 14px 14px;" />
+              <span class="relative text-5xl font-bold text-[var(--color-secondary)]/30 select-none tracking-tight">
                 {{ sc.name.charAt(0).toUpperCase() }}
               </span>
             </div>

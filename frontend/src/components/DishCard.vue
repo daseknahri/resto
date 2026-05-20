@@ -63,10 +63,11 @@
       />
       <div
         v-else
-        class="ui-menu-dish-placeholder flex h-full w-full items-center justify-center"
-        style="background: linear-gradient(145deg, rgba(245,158,11,0.10) 0%, rgba(15,118,110,0.07) 100%)"
+        class="ui-menu-dish-placeholder relative flex h-full w-full items-center justify-center overflow-hidden"
+        style="background: linear-gradient(145deg, rgba(245,158,11,0.13) 0%, rgba(15,118,110,0.09) 100%)"
       >
-        <span class="text-2xl font-black select-none" style="color: rgba(245,158,11,0.35)">
+        <div class="pointer-events-none absolute inset-0" style="background-image: radial-gradient(rgba(245,158,11,0.22) 1px, transparent 1px); background-size: 10px 10px;" />
+        <span class="relative text-2xl font-black select-none" style="color: rgba(245,158,11,0.30)">
           {{ (dish.name || '?')[0].toUpperCase() }}
         </span>
       </div>
@@ -142,10 +143,11 @@
       />
       <div
         v-else
-        class="ui-menu-dish-placeholder absolute inset-0 flex items-center justify-center"
-        style="background: linear-gradient(145deg, rgba(245,158,11,0.10) 0%, rgba(15,118,110,0.07) 100%)"
+        class="ui-menu-dish-placeholder absolute inset-0 flex items-center justify-center overflow-hidden"
+        style="background: linear-gradient(145deg, rgba(245,158,11,0.13) 0%, rgba(15,118,110,0.09) 100%)"
       >
-        <span class="text-4xl font-black select-none" style="color: rgba(245,158,11,0.30)">
+        <div class="pointer-events-none absolute inset-0" style="background-image: radial-gradient(rgba(245,158,11,0.22) 1px, transparent 1px); background-size: 12px 12px;" />
+        <span class="relative text-4xl font-black select-none" style="color: rgba(245,158,11,0.25)">
           {{ (dish.name || '?')[0].toUpperCase() }}
         </span>
       </div>

@@ -27,7 +27,8 @@
               v-if="logoImage"
               :src="logoImage"
               :alt="`${tenantName} logo`"
-              class="h-16 w-16 shrink-0 rounded-2xl border-2 border-white/20 object-cover shadow-2xl shadow-black/50 sm:h-20 sm:w-20"
+              class="h-16 w-16 shrink-0 rounded-2xl border-2 object-cover shadow-2xl shadow-black/50 sm:h-20 sm:w-20 transition-colors duration-500"
+              :class="isRestaurantOpen ? 'border-[var(--color-secondary)]/50' : 'border-white/20'"
               loading="eager"
               decoding="async"
               @error="handleLogoImageError"
@@ -46,10 +47,16 @@
                 ? 'border-color:rgba(52,211,153,0.40); background:rgba(16,185,129,0.12); color:rgb(110,231,183)'
                 : 'border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.10); color:rgb(252,165,165)'"
             >
-              <span
-                class="inline-block h-1.5 w-1.5 rounded-full"
-                :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'"
-              />
+              <span class="relative inline-flex shrink-0">
+                <span
+                  v-if="isRestaurantOpen"
+                  class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 opacity-60"
+                />
+                <span
+                  class="relative inline-block h-1.5 w-1.5 rounded-full"
+                  :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'"
+                />
+              </span>
               {{ statusLabel }}
             </span>
             <!-- Switch menu chip — shown when more than one menu exists -->
@@ -215,17 +222,22 @@
         class="scroll-mt-28 space-y-3 md:scroll-mt-36"
       >
         <!-- Section heading -->
-        <div class="flex items-center justify-between gap-3 pt-1">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <span class="shrink-0 block h-5 w-[3px] rounded-full" style="background: var(--color-secondary)" />
-            <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl truncate">{{ cat.name }}</h2>
+        <div class="flex items-start justify-between gap-3 border-b border-slate-800/50 pb-3">
+          <div class="flex items-start gap-3 min-w-0">
+            <span
+              class="mt-[3px] shrink-0 block h-7 w-[3.5px] rounded-full"
+              style="background: linear-gradient(180deg, var(--color-secondary) 0%, var(--color-primary) 100%)"
+            />
+            <div class="min-w-0">
+              <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-2xl">{{ cat.name }}</h2>
+              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-xs text-slate-500">{{ cat.description }}</p>
+            </div>
           </div>
           <span
             v-if="menu.dishes[cat.slug]?.length"
-            class="shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-0.5 text-[11px] text-slate-500 tabular-nums"
+            class="mt-1 shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-0.5 text-[11px] text-slate-500 tabular-nums"
           >{{ sectionDishes(cat.slug).length }}</span>
         </div>
-        <p v-if="cat.description" class="pl-[1.35rem] text-sm text-slate-400/80">{{ cat.description }}</p>
 
         <!-- Loading skeleton -->
         <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass">
