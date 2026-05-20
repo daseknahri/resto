@@ -1247,6 +1247,20 @@ html[data-menu-theme="light"] .ui-nav-item-inactive {
   color: rgb(51, 65, 85);
 }
 
+/* Section bands & selection cards — light */
+html[data-menu-theme="light"] .ui-section-band {
+  background: rgba(248, 250, 252, 0.88);
+  border-color: rgba(100, 116, 139, 0.18);
+}
+html[data-menu-theme="light"] .ui-selection-card {
+  border-color: rgba(100, 116, 139, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+}
+html[data-menu-theme="light"] .ui-selection-card[data-active="true"] {
+  border-color: var(--color-secondary);
+  background: rgba(245, 158, 11, 0.08);
+}
+
 /* Text color system — light */
 html[data-menu-theme="light"] .text-white    { color: #0f172a; }
 html[data-menu-theme="light"] .text-slate-50,
@@ -1454,6 +1468,20 @@ html[data-menu-theme="warm"] .ui-nav-item-inactive {
   border-color: rgba(160, 100, 40, 0.26);
   background: rgba(255, 248, 237, 0.78);
   color: rgb(67, 20, 7);
+}
+
+/* Section bands & selection cards — warm */
+html[data-menu-theme="warm"] .ui-section-band {
+  background: rgba(255, 248, 237, 0.88);
+  border-color: rgba(160, 100, 40, 0.18);
+}
+html[data-menu-theme="warm"] .ui-selection-card {
+  border-color: rgba(160, 100, 40, 0.26);
+  background: rgba(255, 248, 237, 0.72);
+}
+html[data-menu-theme="warm"] .ui-selection-card[data-active="true"] {
+  border-color: var(--color-secondary);
+  background: rgba(245, 158, 11, 0.08);
 }
 
 /* Text color system — warm */
