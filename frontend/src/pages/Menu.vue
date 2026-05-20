@@ -89,12 +89,14 @@
             :data-active="activeCategorySlug === cat.slug"
             @click="scrollToSection(cat.slug)"
           >{{ cat.name }}</button>
-          <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" />
-          <button
-            class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-wider"
-            :data-active="catSheetOpen"
-            @click="catSheetOpen = !catSheetOpen"
-          >···</button>
+          <template v-if="isOverflowing">
+            <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" />
+            <button
+              class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-wider"
+              :data-active="catSheetOpen"
+              @click="catSheetOpen = !catSheetOpen"
+            >···</button>
+          </template>
         </div>
 
         <!-- All-categories sheet -->
@@ -388,7 +390,17 @@ const sectionDishes = (slug) => {
 
 // ── Sticky category nav ──────────────────────────────────────────────────────
 const activeCategorySlug = ref('')
-const pillRowEl = ref(null)
+const pillRowEl          = ref(null)
+const isOverflowing      = ref(false)
+let _pillObserver        = null
+
+const checkPillOverflow = () => {
+  if (!pillRowEl.value) return
+  isOverflowing.value = pillRowEl.value.scrollWidth > pillRowEl.value.clientWidth
+}
+
+watch(isOverflowing, (v) => { if (!v) catSheetOpen.value = false })
+watch(visibleCategories, () => nextTick(checkPillOverflow))
 
 /** Auto-scroll the pill row so the active pill is always centred */
 const syncPillScroll = (slug) => {
@@ -530,11 +542,18 @@ onMounted(async () => {
   // ③ Scroll listener for active pill tracking
   window.addEventListener('scroll', updateActiveCategory, { passive: true })
 
+  // ④ Pill-row overflow detector
+  await nextTick()
+  checkPillOverflow()
+  _pillObserver = new ResizeObserver(checkPillOverflow)
+  if (pillRowEl.value) _pillObserver.observe(pillRowEl.value)
+
   trackEvent('menu_view', { source: 'customer_menu_browse' })
 })
 
 onUnmounted(() => {
   loadObserver?.disconnect()
+  _pillObserver?.disconnect()
   window.removeEventListener('scroll', updateActiveCategory)
   document.documentElement.removeAttribute('data-menu-theme')
 })
