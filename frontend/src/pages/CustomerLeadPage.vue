@@ -89,14 +89,7 @@
                   </p>
                   <p class="text-sm font-semibold text-slate-100">{{ locationLine }}</p>
                 </div>
-                <div class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
-                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
-                    <AppIcon name="calendar" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                    <span>{{ t("stepBrand.businessHoursSummary") }}</span>
-                  </p>
-                  <p class="text-sm font-semibold text-slate-100">{{ businessHoursSummary || t("stepBrand.closedAllDay") }}</p>
                 </div>
-              </div>
               <div class="grid gap-3 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
                 <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
                   <div class="space-y-1">
@@ -149,23 +142,6 @@
                 </div>
 
                 <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
-                  <div class="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
-                    <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
-                      <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
-                        <AppIcon name="menu" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                        <span>{{ t("customerLayout.navMenu") }}</span>
-                      </p>
-                      <p class="text-sm text-slate-100">{{ t("customerLeadPage.helpText") }}</p>
-                    </div>
-                    <div class="rounded-xl border border-slate-800/80 bg-slate-950/58 px-3 py-2.5">
-                      <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
-                        <AppIcon name="chat" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                        <span>{{ t("customerLeadPage.contactMe") }}</span>
-                      </p>
-                      <p class="text-sm text-slate-100">{{ t("customerLeadPage.helpText") }}</p>
-                    </div>
-                  </div>
-
                   <div v-if="socialLinks.length" class="flex flex-wrap gap-2">
                     <a
                       v-for="social in socialLinks"
@@ -185,30 +161,6 @@
                     </a>
                   </div>
 
-                  <details v-if="businessHoursRows.length" class="group rounded-2xl border border-slate-800/80 bg-slate-950/52 p-3 text-left">
-                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-slate-100">
-                      <span class="inline-flex items-center gap-2">
-                        <AppIcon name="calendar" class="h-4 w-4 text-[var(--color-secondary)]" />
-                        <span>{{ businessHoursSummary }}</span>
-                      </span>
-                      <AppIcon
-                        name="chevronDown"
-                        class="h-4 w-4 text-slate-400 transition group-open:rotate-180"
-                      />
-                    </summary>
-                    <div class="mt-3 grid gap-1 sm:grid-cols-2">
-                      <div
-                        v-for="row in businessHoursRows"
-                        :key="`hours-${row.key}`"
-                        class="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 px-3 py-2 text-xs"
-                      >
-                        <span class="text-slate-300">{{ row.label }}</span>
-                        <span :class="row.enabled ? 'text-slate-100' : 'text-slate-500'">
-                          {{ row.enabled ? row.value : t("stepBrand.closedAllDay") }}
-                        </span>
-                      </div>
-                    </div>
-                  </details>
                 </div>
               </div>
             </div>

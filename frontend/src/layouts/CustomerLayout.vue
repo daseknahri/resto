@@ -21,6 +21,20 @@
 
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
+              <!-- Color scheme toggle -->
+              <button
+                class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                type="button"
+                :title="colorScheme === 'dark' ? 'Dark mode' : 'System mode'"
+                @click="toggleColorScheme"
+              >
+                <svg v-if="colorScheme === 'dark'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
+                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
+                </svg>
+              </button>
               <!-- PWA install -->
               <button
                 v-if="pwaCanInstall"
@@ -134,7 +148,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import AppIcon from "../components/AppIcon.vue";
@@ -202,6 +216,32 @@ const tenantNotice = computed(() => {
   }
   return null;
 });
+
+// ── Color scheme ─────────────────────────────────────────────────────────────
+let _mqDark = null
+const colorScheme = ref(
+  (() => { try { return localStorage.getItem('ui-color-scheme') || 'dark' } catch { return 'dark' } })()
+)
+
+const applyColorScheme = () => {
+  const restaurantTheme = meta.value?.profile?.menu_theme || 'light'
+  if (colorScheme.value === 'system') {
+    const osDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    if (osDark) document.documentElement.removeAttribute('data-menu-theme')
+    else document.documentElement.setAttribute('data-menu-theme', restaurantTheme)
+  } else {
+    document.documentElement.removeAttribute('data-menu-theme')
+  }
+}
+
+const toggleColorScheme = () => {
+  colorScheme.value = colorScheme.value === 'dark' ? 'system' : 'dark'
+  try { localStorage.setItem('ui-color-scheme', colorScheme.value) } catch {}
+  applyColorScheme()
+}
+
+const _onOsThemeChange = () => { if (colorScheme.value === 'system') applyColorScheme() }
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Track-order banner ────────────────────────────────────────────────────────
 const ORDER_TRACK_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -276,8 +316,14 @@ const syncTableFromQuery = async () => {
 onMounted(() => {
   loadOrderTracking();
   syncTableFromQuery();
-  // Pre-fetch customer session so the Account badge and auth gates are ready
   customerStore.fetchCustomer();
+  applyColorScheme();
+  _mqDark = window.matchMedia('(prefers-color-scheme: dark)')
+  _mqDark.addEventListener('change', _onOsThemeChange)
+});
+
+onUnmounted(() => {
+  _mqDark?.removeEventListener('change', _onOsThemeChange)
 });
 watch(() => route.query?.table, syncTableFromQuery);
 watch(() => route.query?.t, syncTableFromQuery);
@@ -285,6 +331,10 @@ watch(() => route.params?.tableSlug, syncTableFromQuery);
 // Re-read localStorage whenever leaving order-status so the banner appears immediately
 watch(() => route.name, (name) => {
   if (name !== 'order-status') loadOrderTracking();
+  // Re-apply color scheme when leaving menu (Menu.vue removes the attribute on unmount)
+  if (name !== 'menu' && name !== 'menu-browse' && name !== 'category' && name !== 'dish') {
+    applyColorScheme();
+  }
 });
 watch(
   () => currentLocale.value,
