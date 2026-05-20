@@ -670,7 +670,10 @@ class OwnerStaffListCreateView(APIView):
         staff = list(
             User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF)
             .order_by("date_joined")
-            .values("id", "email", "first_name", "last_name", "username", "date_joined")
+            .values(
+                "id", "email", "first_name", "last_name", "username", "date_joined",
+                "perm_manage_orders", "perm_view_revenue", "perm_edit_menu",
+            )
         )
         results = [
             {
@@ -679,6 +682,11 @@ class OwnerStaffListCreateView(APIView):
                 "name": f"{s['first_name']} {s['last_name']}".strip() or s["username"],
                 "username": s["username"],
                 "date_joined": s["date_joined"].isoformat() if s["date_joined"] else None,
+                "permissions": {
+                    "manage_orders": s["perm_manage_orders"],
+                    "view_revenue": s["perm_view_revenue"],
+                    "edit_menu": s["perm_edit_menu"],
+                },
             }
             for s in staff
         ]
@@ -776,19 +784,54 @@ class OwnerStaffListCreateView(APIView):
 
 
 class OwnerStaffDeleteView(APIView):
-    """DELETE /api/owner/staff/<staff_id>/ — remove a staff account from this tenant."""
+    """DELETE /api/owner/staff/<staff_id>/ — remove a staff account from this tenant.
+       PATCH  /api/owner/staff/<staff_id>/ — update staff permissions."""
 
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, staff_id, *args, **kwargs):
+    def _get_staff(self, request, staff_id):
+        """Return (tenant, staff_user) or raise a Response on error."""
         tenant = getattr(request, "tenant", None)
         if not _is_tenant_owner(request, tenant):
-            return Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
-
+            return None, Response({"detail": "Owner access required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
         from .models import User
         staff_user = User.objects.filter(id=staff_id, tenant=tenant, role=User.Roles.TENANT_STAFF).first()
         if staff_user is None:
-            return Response({"detail": "Staff member not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+            return None, Response({"detail": "Staff member not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        return staff_user, None
+
+    def patch(self, request, staff_id, *args, **kwargs):
+        staff_user, err = self._get_staff(request, staff_id)
+        if err is not None:
+            return err
+
+        permissions = request.data.get("permissions", {})
+        if not isinstance(permissions, dict):
+            return Response({"detail": "Invalid permissions payload.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed = {"manage_orders", "view_revenue", "edit_menu"}
+        update_fields = []
+        for key, val in permissions.items():
+            if key in allowed and isinstance(val, bool):
+                setattr(staff_user, f"perm_{key}", val)
+                update_fields.append(f"perm_{key}")
+
+        if update_fields:
+            staff_user.save(update_fields=update_fields)
+
+        return Response({
+            "id": staff_user.id,
+            "permissions": {
+                "manage_orders": staff_user.perm_manage_orders,
+                "view_revenue": staff_user.perm_view_revenue,
+                "edit_menu": staff_user.perm_edit_menu,
+            },
+        })
+
+    def delete(self, request, staff_id, *args, **kwargs):
+        staff_user, err = self._get_staff(request, staff_id)
+        if err is not None:
+            return err
 
         staff_user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

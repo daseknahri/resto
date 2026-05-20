@@ -303,7 +303,7 @@ const submit = async () => {
   try {
     const payload = {
       items: cartItems.value.map((i) => ({
-        dish_slug: i.dish_slug,
+        slug: i.dish_slug,
         qty: i.qty,
         note: '',
         option_ids: [],

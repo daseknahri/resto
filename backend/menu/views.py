@@ -1005,7 +1005,7 @@ class OrderHandoffSerializer(serializers.Serializer):
     table_label = serializers.CharField(max_length=40, required=False, allow_blank=True)
     table_slug = serializers.SlugField(max_length=55, required=False, allow_blank=True)
     fulfillment_type = serializers.ChoiceField(
-        choices=("pickup", "delivery"),
+        choices=("pickup", "delivery", "table"),
         required=False,
         allow_blank=True,
     )
