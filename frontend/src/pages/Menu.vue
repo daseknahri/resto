@@ -2,7 +2,7 @@
   <div :class="['relative ui-safe-bottom', cart.count ? 'pb-44' : 'pb-28']">
 
     <!-- ══ Full-bleed hero ══ -->
-    <header class="relative overflow-hidden bg-slate-950" style="min-height:240px; height:min(72vw,420px)">
+    <header data-theme-dark class="relative overflow-hidden bg-slate-950" style="min-height:240px; height:min(72vw,420px)">
       <img
         v-if="heroImage"
         :src="heroImage"
@@ -222,8 +222,7 @@
       <RouterLink
         v-if="cart.count"
         :to="{ name: 'cart' }"
-        class="fixed bottom-[5.15rem] left-3 right-3 z-20 sm:hidden flex items-center justify-between rounded-2xl px-4 py-3 backdrop-blur-xl"
-        style="background:rgba(6,11,18,0.97);border:1px solid rgba(245,158,11,0.38);box-shadow:0 0 0 1px rgba(245,158,11,0.06) inset,0 12px 40px rgba(0,0,0,0.6),0 0 24px rgba(245,158,11,0.06)"
+        class="ui-cart-bar fixed bottom-[5.15rem] left-3 right-3 z-20 sm:hidden flex items-center justify-between rounded-2xl px-4 py-3 backdrop-blur-xl"
       >
         <div class="flex items-center gap-2.5">
           <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-slate-950" style="background:var(--color-secondary)">{{ cart.count }}</span>

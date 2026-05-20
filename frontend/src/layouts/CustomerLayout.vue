@@ -56,14 +56,6 @@
             </div>
           </div>
 
-          <div class="mt-2 flex items-center justify-between gap-2 md:hidden">
-            <span class="ui-chip inline-flex items-center gap-1.5 text-[10px]">
-              <AppIcon :name="navItems.find((item) => item.key === activeCustomerSection)?.icon || 'info'" class="h-3.5 w-3.5" />
-              <span>{{ navItems.find((item) => item.key === activeCustomerSection)?.label }}</span>
-            </span>
-            <span v-if="tenantTagline" class="truncate text-[10px] text-slate-500">{{ tenantTagline }}</span>
-          </div>
-
         <div class="mt-2 hidden items-center justify-center gap-4 md:flex">
           <nav class="ui-segmented max-w-fit">
             <RouterLink
@@ -191,7 +183,7 @@ const navItems = computed(() => [
 const navItemClass = (key) =>
   activeCustomerSection.value === key
     ? "border-[var(--color-secondary)] bg-[var(--color-secondary)]/12 text-[var(--color-secondary)] shadow-lg shadow-black/30"
-    : "border-slate-700/70 bg-slate-950/55 text-slate-300";
+    : "ui-nav-item-inactive";
 
 const tenantNotice = computed(() => {
   const profile = meta.value?.profile;
