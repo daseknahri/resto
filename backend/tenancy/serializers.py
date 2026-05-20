@@ -488,7 +488,7 @@ class TenantMetaSerializer(serializers.Serializer):
             ]
         profile = None
         if hasattr(tenant, "profile"):
-            profile = ProfileSerializer(instance=tenant.profile, context={"request": request}).data
+            profile = tenant.profile  # Pass the model instance; TenantMetaSerializer's nested ProfileSerializer will serialize it
         return TenantMetaSerializer(
             {
                 "name": tenant.name,
