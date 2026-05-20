@@ -40,7 +40,25 @@ export const useSessionStore = defineStore("session", {
         const { data } = await api.get("/session/");
         const authenticated = data?.authenticated === true || (data?.user && data.user.id);
         const userPayload = data?.user ?? data;
-        this.user = authenticated ? userPayload : null;
+        let resolvedUser = authenticated ? userPayload : null;
+
+        // Auto-repair: if the user is a tenant_owner but their tenant FK was
+        // NULLed (e.g. tenant was deleted + recreated with a new PK), all
+        // owner API calls will 403.  Call the repair endpoint once so the link
+        // is restored, then re-read the refreshed session payload.
+        if (resolvedUser?.role === "tenant_owner" && resolvedUser?.tenant === null) {
+          try {
+            const repair = await api.post("/repair-tenant-link/");
+            if (repair.data?.user) {
+              resolvedUser = repair.data.user;
+            }
+          } catch {
+            // Best-effort; proceed with the original (broken) user so the UI
+            // can at least show a meaningful error rather than a blank page.
+          }
+        }
+
+        this.user = resolvedUser;
         this.loaded = true;
         return this.user;
       } catch (err) {

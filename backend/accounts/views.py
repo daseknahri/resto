@@ -139,6 +139,64 @@ class SessionView(APIView):
         return Response({"authenticated": True, "user": serialize_user_session(request.user)}, status=status.HTTP_200_OK)
 
 
+class RepairTenantLinkView(APIView):
+    """POST /api/repair-tenant-link/
+
+    Self-service endpoint for a tenant_owner whose tenant FK was NULLed by a
+    cascade delete (tenant row deleted then recreated → new PK → old FK gone).
+
+    Safe because:
+      1. Requires the user to already be authenticated.
+      2. Only works when the user's role is tenant_owner AND tenant FK is NULL.
+      3. Only links to the tenant that owns the domain the request arrived on.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.role != user.Roles.TENANT_OWNER:
+            return Response(
+                {"detail": "Only tenant owners can use this endpoint.", "code": "forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if user.tenant_id is not None:
+            # Already linked — just return current session so frontend can refresh
+            return Response(
+                {"detail": "Already linked.", "user": serialize_user_session(user)},
+                status=status.HTTP_200_OK,
+            )
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response(
+                {"detail": "Could not resolve tenant from request domain.", "code": "no_tenant"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Check no other owner is already linked to this tenant
+        from .models import User as _User
+        existing_owner = _User.objects.filter(
+            tenant=tenant, role=_User.Roles.TENANT_OWNER
+        ).exclude(id=user.id).first()
+        if existing_owner:
+            return Response(
+                {
+                    "detail": "Another tenant owner is already linked to this tenant. Contact support.",
+                    "code": "conflict",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        user.tenant = tenant
+        user.save(update_fields=["tenant"])
+        logger.info(
+            "repair_tenant_link: user %s (id=%s) re-linked to tenant %s (id=%s)",
+            user.email, user.id, tenant.schema_name, tenant.id,
+        )
+        return Response(
+            {"detail": "Tenant link repaired.", "user": serialize_user_session(user)},
+            status=status.HTTP_200_OK,
+        )
+
+
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetRequestThrottle]

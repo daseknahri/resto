@@ -12,6 +12,7 @@ from accounts.views import (
     OwnerFlashSaleOptInView,
     OwnerStaffDeleteView,
     OwnerStaffListCreateView,
+    RepairTenantLinkView,
 )
 from config.shared_api_urls import shared_api_urlpatterns
 from menu.views import (
@@ -134,6 +135,7 @@ urlpatterns = [
     path("api/owner/waitlist/", OwnerWaitlistView.as_view(), name="owner-waitlist"),
     path("api/tier-upgrade-targets/", TierUpgradeTargetsView.as_view(), name="tier-upgrade-targets"),
     path("api/tier-upgrade-requests/", TierUpgradeRequestListCreateView.as_view(), name="tier-upgrade-requests"),
+    path("api/repair-tenant-link/", RepairTenantLinkView.as_view(), name="repair-tenant-link"),
     path("api/owner/staff/", OwnerStaffListCreateView.as_view(), name="owner-staff-list"),
     path("api/owner/staff/<int:staff_id>/", OwnerStaffDeleteView.as_view(), name="owner-staff-delete"),
     path("api/owner/flash-sales/", OwnerFlashSaleListView.as_view(), name="owner-flash-sales"),
