@@ -549,7 +549,9 @@ onUnmounted(() => {
   loadObserver?.disconnect()
   _pillObserver?.disconnect()
   window.removeEventListener('scroll', updateActiveCategory)
-  document.documentElement.removeAttribute('data-menu-theme')
+  // NOTE: do NOT remove data-menu-theme here.
+  // CustomerLayout's route watcher fires before this hook runs, so removing
+  // the attribute here would undo the theme already re-applied by applyColorScheme().
 })
 
 // ── Utilities ────────────────────────────────────────────────────────────────

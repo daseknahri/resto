@@ -323,10 +323,8 @@ watch(() => route.params?.tableSlug, syncTableFromQuery);
 // Re-read localStorage whenever leaving order-status so the banner appears immediately
 watch(() => route.name, (name) => {
   if (name !== 'order-status') loadOrderTracking();
-  // Re-apply color scheme when leaving menu (Menu.vue removes the attribute on unmount)
-  if (name !== 'menu' && name !== 'menu-browse' && name !== 'category' && name !== 'dish') {
-    applyColorScheme();
-  }
+  // Re-apply color scheme on every route change so non-menu pages stay in sync
+  applyColorScheme();
 });
 watch(
   () => currentLocale.value,
