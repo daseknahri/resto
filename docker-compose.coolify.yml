@@ -82,6 +82,16 @@ services:
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.service=ibnbatoutaweb-api"
+      # Media files — route /media/* to the backend where the volume is mounted
+      - "traefik.http.routers.ibnbatoutaweb-media-menu.rule=Host(`menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
+      - "traefik.http.routers.ibnbatoutaweb-media-menu.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-media-menu.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-media-admin.rule=Host(`admin.menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
+      - "traefik.http.routers.ibnbatoutaweb-media-admin.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-media-admin.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-media-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
+      - "traefik.http.routers.ibnbatoutaweb-media-tenant.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-media-tenant.service=ibnbatoutaweb-api"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG}
