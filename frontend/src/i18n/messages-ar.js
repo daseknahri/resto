@@ -1192,7 +1192,13 @@ const arabicMessages = {
     "unableToStartCheckout": "تعذر بدء عملية الدفع.",
     "missingWhatsappHandoffUrl": "رابط تحويل واتساب غير موجود",
     "openingWhatsApp": "جارٍ فتح واتساب",
-    "unableToPrepareWhatsAppOrder": "تعذر تجهيز طلب واتساب."
+    "unableToPrepareWhatsAppOrder": "تعذر تجهيز طلب واتساب.",
+    "orderAuthRequired": "سجّل دخولك لإتمام الطلب",
+    "orderAuthBody": "أدخل رقم هاتفك للحصول على رمز التحقق وتأكيد طلبك.",
+    "deliveryAuthButton": "تسجيل الدخول برقم الهاتف",
+    "signedInAs": "مسجّل الدخول بصفة {name}",
+    "deliveryNotVerified": "يرجى التحقق من هاتفك أو بريدك الإلكتروني قبل تقديم طلب توصيل.",
+    "deliveryPhoneRequired": "أضف رقم هاتف إلى حسابك حتى يتمكن موظف التوصيل من التواصل معك. انتقل إلى حسابي ← إضافة هاتف."
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",
@@ -2184,8 +2190,8 @@ Object.assign(arabicMessages, {
   },
   customerAuth: {
     kicker: "\u062a\u0633\u062c\u064a\u0644 \u062f\u062e\u0648\u0644 \u0633\u0631\u064a\u0639",
-    title: "\u0633\u062c\u0651\u0644 \u062f\u062e\u0648\u0644\u0643 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629",
-    description: "\u0633\u062c\u0651\u0644 \u062f\u062e\u0648\u0644\u0643 \u0644\u062a\u062a\u0628\u0639 \u0637\u0644\u0628\u0627\u062a\u0643 \u0648\u062a\u0633\u0631\u064a\u0639 \u0627\u0644\u062f\u0641\u0639 \u0645\u0633\u062a\u0642\u0628\u0644\u0627\u064b.",
+    title: "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644 \u0628\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641",
+    description: "\u0623\u062f\u062e\u0644 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641\u0643 \u0648\u0633\u0646\u0631\u0633\u0644 \u0644\u0643 \u0631\u0645\u0632 \u062a\u062d\u0642\u0642 \u0644\u0645\u0631\u0629 \u0648\u0627\u062d\u062f\u0629.",
     or: "\u0623\u0648",
     tabPhone: "\u0627\u0644\u0647\u0627\u062a\u0641",
     tabEmail: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",

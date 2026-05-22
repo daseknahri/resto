@@ -502,21 +502,6 @@
             </div>
           </div>
 
-          <!-- Sign in to save order — soft non-blocking prompt for pickup/table -->
-          <div
-            v-if="!customerStore.isAuthenticated && !isDelivery"
-            class="rounded-2xl border border-sky-500/30 bg-sky-500/8 p-3 space-y-2"
-          >
-            <p class="text-xs font-semibold text-sky-300">{{ t('cartPage.saveOrderPrompt') }}</p>
-            <p class="text-xs text-slate-400">{{ t('cartPage.saveOrderPromptBody') }}</p>
-            <button
-              class="ui-btn-outline px-3 py-1.5 text-xs border-sky-500/40 text-sky-300 hover:border-sky-400/60"
-              @click="showAuthModal = true"
-            >
-              <AppIcon name="user" class="h-3.5 w-3.5" />
-              {{ t('cartPage.saveOrderSignIn') }}
-            </button>
-          </div>
 
           <label class="block space-y-1">
             <span class="text-xs text-slate-400">{{
@@ -676,32 +661,35 @@
             </p>
           </div>
 
-          <!-- Delivery auth gate -->
-          <div v-if="isDelivery && !customerStore.isAuthenticated" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-2">
-            <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryAuthRequired') }}</p>
-            <p class="text-xs text-slate-400">{{ t('cartPage.deliveryAuthBody') }}</p>
-            <button class="ui-btn-primary w-full justify-center text-sm" @click="showAuthModal = true">
-              <AppIcon name="user" class="h-3.5 w-3.5" />
-              {{ t('cartPage.deliveryAuthButton') }}
-            </button>
-          </div>
-          <template v-else-if="isDelivery && customerStore.isAuthenticated">
-            <!-- Verified: green banner -->
-            <div
-              v-if="customerStore.isVerified"
-              class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2"
-            >
-              <div class="flex items-center gap-1.5">
-                <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
-                {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+          <!-- Auth gate — required for all pickup and delivery orders -->
+          <template v-if="!isTableContextOrder">
+            <!-- Not signed in: hard block -->
+            <div v-if="!customerStore.isAuthenticated" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-4 space-y-2.5">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-amber-300">{{ t('cartPage.orderAuthRequired') }}</p>
+                <p class="text-xs text-slate-400">{{ t('cartPage.orderAuthBody') }}</p>
               </div>
-              <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
+              <button class="ui-btn-primary w-full justify-center" @click="showAuthModal = true">
+                <AppIcon name="user" class="h-3.5 w-3.5" />
+                {{ t('cartPage.deliveryAuthButton') }}
+              </button>
             </div>
-            <!-- Not verified: amber warning -->
-            <div v-else class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-1.5">
-              <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
-              <button class="text-xs text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
-            </div>
+            <!-- Signed in -->
+            <template v-else>
+              <!-- Delivery: needs phone verification -->
+              <div v-if="isDelivery && !customerStore.isVerified" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-1.5">
+                <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
+                <button class="text-xs text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
+              </div>
+              <!-- Confirmed: green signed-in badge -->
+              <div v-else class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                  <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+                  {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
+                </div>
+                <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
+              </div>
+            </template>
           </template>
 
           <div class="ui-section-band space-y-2.5 px-3 py-4">
@@ -1283,7 +1271,7 @@ watch(canPayWithCredits, (val) => {
 
 watch(fulfillmentType, (value) => {
   clearFieldError('fulfillment_type');
-  if (value === 'delivery' && !customerStore.isAuthenticated) {
+  if (value && !isTableContextOrder.value && !customerStore.isAuthenticated) {
     showAuthModal.value = true;
   }
   if (value !== 'delivery') {
@@ -1396,18 +1384,18 @@ const validateForm = () => {
     return false;
   }
 
-  // Delivery requires authenticated customer
-  if (fulfillmentType.value === 'delivery' && !customerStore.isAuthenticated) {
+  // All non-table orders require a signed-in customer
+  if (!customerStore.isAuthenticated) {
     showAuthModal.value = true;
     return false;
   }
-  // Delivery requires a verified customer (phone, email, or Google)
-  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated && !customerStore.isVerified) {
+  // Delivery also requires a verified account
+  if (fulfillmentType.value === 'delivery' && !customerStore.isVerified) {
     toast.show(t('cartPage.deliveryNotVerified'), 'error');
     return false;
   }
-  // Delivery requires a phone number so the driver can call the customer
-  if (fulfillmentType.value === 'delivery' && customerStore.isAuthenticated && customerStore.isVerified && !customerStore.customer?.phone) {
+  // Delivery requires a phone number so the driver can reach the customer
+  if (fulfillmentType.value === 'delivery' && !customerStore.customer?.phone) {
     toast.show(t('cartPage.deliveryPhoneRequired'), 'error');
     return false;
   }
