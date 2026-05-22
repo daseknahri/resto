@@ -167,13 +167,13 @@
         <div v-if="businessHoursRows.length" class="divide-y divide-slate-800/50">
           <div
             v-for="row in businessHoursRows"
-            :key="row.day"
+            :key="row.key"
             class="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
-            :class="row.isToday ? 'font-semibold' : ''"
+            :class="row.key === todayKey ? 'font-semibold' : ''"
           >
-            <span :class="row.isToday ? 'text-[var(--color-secondary)]' : 'text-slate-300'">{{ row.day }}</span>
-            <span class="tabular-nums" :class="row.isToday ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
-              {{ row.hours || row.range || '—' }}
+            <span :class="row.key === todayKey ? 'text-[var(--color-secondary)]' : 'text-slate-300'">{{ row.label }}</span>
+            <span class="tabular-nums" :class="row.key === todayKey ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
+              {{ row.value || '—' }}
             </span>
           </div>
         </div>
@@ -285,7 +285,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
-import { formatBusinessHoursRows, formatBusinessHoursSummary, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
+import { formatBusinessHoursRows, formatBusinessHoursSummary, getCurrentDayKey, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
 import { useLeadStore } from "../stores/lead";
 import { useCustomerStore } from "../stores/customer";
@@ -340,6 +340,7 @@ const logoImage = computed(() => String(profile.value?.logo_url || "").trim());
 const googleMapsUrl = computed(() => String(profile.value?.google_maps_url || "").trim());
 const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
 const businessHoursSchedule = computed(() => normalizeBusinessHoursSchedule(profile.value?.business_hours_schedule));
+const todayKey = getCurrentDayKey();
 const businessHoursRows = computed(() =>
   formatBusinessHoursRows(businessHoursSchedule.value, currentLocale.value).filter((row) => row.enabled)
 );
