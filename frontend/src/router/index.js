@@ -101,7 +101,10 @@ const routes = [
       { path: "browse/:category/:dish", name: "dish", component: DishPage, props: true, meta: { interface: "customer" } },
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },
       { path: "cart", name: "cart", component: Cart, meta: { interface: "customer" } },
-      { path: "order/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
+      // "orders/" (plural) avoids colliding with the LandingLayout "order/:slug"
+      // marketplace route which is defined earlier in the routes array and would
+      // otherwise win on a hard refresh of /order/ORD-XXXXXX.
+      { path: "orders/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
       { path: "find-my-order", redirect: { name: "customer-account" } },
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
       {
@@ -230,6 +233,11 @@ const routes = [
       },
     ],
   },
+  // Backward-compat: old order-status links used /order/ORD-XXXX.
+  // Redirect to the new /orders/ path so hard refreshes resolve correctly.
+  // The regex ensures this only fires for tenant order numbers (ORD-XXXXXX),
+  // not for marketplace restaurant slugs like /order/my-restaurant.
+  { path: "/order/:n([A-Z]+-[A-Z0-9]+)", redirect: (to) => ({ name: "order-status", params: { orderNumber: to.params.n } }) },
   { path: "/onboarding", redirect: { name: "onboarding" } },
   { path: "/signin", name: "signin", component: SignIn },
   { path: "/forgot-password", name: "forgot-password", component: ForgotPassword },

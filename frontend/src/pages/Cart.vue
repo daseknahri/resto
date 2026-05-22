@@ -721,7 +721,6 @@
                   <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
                   {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
                 </div>
-                <button class="text-slate-400 hover:text-slate-200" @click="customerStore.logout()">{{ t('cartPage.signOut') }}</button>
               </div>
             </template>
           </template>
