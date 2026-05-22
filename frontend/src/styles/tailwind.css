@@ -1287,8 +1287,8 @@ html[data-menu-theme="light"] .text-slate-50,
 html[data-menu-theme="light"] .text-slate-100 { color: #1e293b; }
 html[data-menu-theme="light"] .text-slate-200 { color: #334155; }
 html[data-menu-theme="light"] .text-slate-300 { color: #475569; }
-html[data-menu-theme="light"] .text-slate-400 { color: #64748b; }
-html[data-menu-theme="light"] .text-slate-500 { color: #94a3b8; }
+html[data-menu-theme="light"] .text-slate-400 { color: #475569; }
+html[data-menu-theme="light"] .text-slate-500 { color: #64748b; }
 
 /* Restore original light-on-dark text inside always-dark sections (hero image) */
 html[data-menu-theme="light"] [data-theme-dark] .text-white    { color: #ffffff; }
@@ -1325,6 +1325,7 @@ html[data-menu-theme="light"] .bg-slate-900\/70,
 html[data-menu-theme="light"] .bg-slate-900\/75 { background-color: rgba(248,250,252,0.82); }
 
 /* Bare (no-opacity) surface overrides — light */
+html[data-menu-theme="light"] .bg-slate-950   { background-color: #ffffff; }
 html[data-menu-theme="light"] .bg-slate-900   { background-color: #f8fafc; }
 html[data-menu-theme="light"] .bg-slate-800\/50 { background-color: rgba(241,245,249,0.85); }
 
@@ -1336,6 +1337,7 @@ html[data-menu-theme="light"] .hover\:bg-slate-800\/60:hover    { background-col
 
 /* Border overrides — light */
 html[data-menu-theme="light"] .border-slate-600    { border-color: rgba(100,116,139,0.32); }
+html[data-menu-theme="light"] .border-slate-600\/50 { border-color: rgba(100,116,139,0.22); }
 html[data-menu-theme="light"] .border-slate-700\/40 { border-color: rgba(100,116,139,0.20); }
 html[data-menu-theme="light"] .border-slate-700\/50 { border-color: rgba(100,116,139,0.22); }
 html[data-menu-theme="light"] .border-slate-700\/60 { border-color: rgba(100,116,139,0.24); }
@@ -1351,6 +1353,11 @@ html[data-menu-theme="light"] .border-slate-700    { border-color: rgba(100,116,
 /* Text overrides — extended light */
 html[data-menu-theme="light"] .text-slate-600 { color: #64748b; }
 html[data-menu-theme="light"] .text-slate-700 { color: #475569; }
+
+/* Hover text overrides — light (prevent near-white on hover) */
+html[data-menu-theme="light"] .hover\:text-slate-100:hover { color: #0f172a; }
+html[data-menu-theme="light"] .hover\:text-slate-200:hover { color: #1e293b; }
+html[data-menu-theme="light"] .hover\:text-slate-300:hover { color: #334155; }
 
 /* Component classes with @apply-baked dark backgrounds — light overrides */
 html[data-menu-theme="light"] .ui-hero-ribbon {
@@ -1629,6 +1636,7 @@ html[data-menu-theme="warm"] .bg-slate-900\/70,
 html[data-menu-theme="warm"] .bg-slate-900\/75 { background-color: rgba(253,246,239,0.82); }
 
 /* Bare (no-opacity) surface overrides — warm */
+html[data-menu-theme="warm"] .bg-slate-950   { background-color: #fffbf5; }
 html[data-menu-theme="warm"] .bg-slate-900   { background-color: #fdf6ef; }
 html[data-menu-theme="warm"] .bg-slate-800\/50 { background-color: rgba(255,248,237,0.88); }
 
@@ -1640,6 +1648,7 @@ html[data-menu-theme="warm"] .hover\:bg-slate-800\/60:hover    { background-colo
 
 /* Border overrides — warm */
 html[data-menu-theme="warm"] .border-slate-600    { border-color: rgba(160,100,40,0.30); }
+html[data-menu-theme="warm"] .border-slate-600\/50 { border-color: rgba(160,100,40,0.20); }
 html[data-menu-theme="warm"] .border-slate-700\/40 { border-color: rgba(160,100,40,0.18); }
 html[data-menu-theme="warm"] .border-slate-700\/50 { border-color: rgba(160,100,40,0.20); }
 html[data-menu-theme="warm"] .border-slate-700\/60 { border-color: rgba(160,100,40,0.22); }
@@ -1655,6 +1664,11 @@ html[data-menu-theme="warm"] .border-slate-700    { border-color: rgba(160,100,4
 /* Text overrides — extended warm */
 html[data-menu-theme="warm"] .text-slate-600 { color: #92400e; }
 html[data-menu-theme="warm"] .text-slate-700 { color: #78350f; }
+
+/* Hover text overrides — warm */
+html[data-menu-theme="warm"] .hover\:text-slate-100:hover { color: #1c1009; }
+html[data-menu-theme="warm"] .hover\:text-slate-200:hover { color: #2c1810; }
+html[data-menu-theme="warm"] .hover\:text-slate-300:hover { color: #431407; }
 
 /* Component classes with @apply-baked dark backgrounds — warm overrides */
 html[data-menu-theme="warm"] .ui-hero-ribbon {
