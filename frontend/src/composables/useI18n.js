@@ -36,7 +36,7 @@ export const useI18n = () => {
   const formatCurrency = (value, currency = "USD", options = {}) =>
     new Intl.NumberFormat(currentLocale.value, {
       style: "currency",
-      currency: currency || "USD",
+      currency: currency || "MAD",
       ...options,
     }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
 

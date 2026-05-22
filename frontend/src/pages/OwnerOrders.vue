@@ -541,7 +541,7 @@ const todayStats = computed(() => {
   const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
   const pending = todayOrders.filter((o) => o.status === "pending").length;
   const revenue = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-  const currency = todayOrders.find((o) => o.currency)?.currency || "USD";
+  const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   return { count: todayOrders.length, revenue, pending, currency };
 });
 

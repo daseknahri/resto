@@ -719,7 +719,7 @@ const todayOrderStats = computed(() => {
   const today = new Date().toDateString();
   const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
   const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
-  const currency = todayOrders.find((o) => o.currency)?.currency || "USD";
+  const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   let revenueLabel = "";
   try {
     revenueLabel = new Intl.NumberFormat(undefined, {
@@ -1188,7 +1188,7 @@ const orderStatusLabel = (s) => ({
 }[s] || s);
 
 const formatOrderTotal = (o) => {
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency || "USD" }).format(Number(o.total) || 0); }
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency || "MAD" }).format(Number(o.total) || 0); }
   catch { return `${o.currency} ${Number(o.total).toFixed(2)}`; }
 };
 

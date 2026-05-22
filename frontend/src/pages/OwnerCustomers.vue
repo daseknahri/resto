@@ -245,7 +245,7 @@ const formatMoney = (amount, currency) => {
   try {
     return new Intl.NumberFormat(currentLocale.value, {
       style: "currency",
-      currency: currency || "USD",
+      currency: currency || "MAD",
       maximumFractionDigits: 2,
     }).format(amount);
   } catch {
