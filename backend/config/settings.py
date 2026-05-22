@@ -147,7 +147,8 @@ if _REDIS_URL:
     SESSION_CACHE_ALIAS = "default"
 
 # Keep customers logged in for 90 days unless they explicitly sign out.
-SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 24 * 90))
+# Use `or` so an empty/unset env var falls back to the default safely.
+SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE") or 60 * 60 * 24 * 90)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 AUTH_USER_MODEL = "accounts.User"
