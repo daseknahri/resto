@@ -1327,6 +1327,25 @@ html[data-menu-theme="light"] .border-slate-800    { border-color: rgba(100,116,
 html[data-menu-theme="light"] .border-slate-800\/40 { border-color: rgba(100,116,139,0.14); }
 html[data-menu-theme="light"] .border-slate-800\/50 { border-color: rgba(100,116,139,0.18); }
 html[data-menu-theme="light"] .border-slate-800\/80 { border-color: rgba(100,116,139,0.22); }
+html[data-menu-theme="light"] .border-slate-700    { border-color: rgba(100,116,139,0.28); }
+
+/* Component classes with @apply-baked dark backgrounds — light overrides */
+html[data-menu-theme="light"] .ui-hero-ribbon {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(100, 116, 139, 0.18);
+  box-shadow: 0 4px 20px rgba(100, 116, 139, 0.10), 0 1px 3px rgba(0,0,0,0.04);
+}
+html[data-menu-theme="light"] .ui-reservation-card {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(100, 116, 139, 0.18);
+  box-shadow: 0 4px 20px rgba(100, 116, 139, 0.10);
+}
+html[data-menu-theme="light"] .ui-textarea {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(100, 116, 139, 0.38);
+  color: #0f172a;
+}
+html[data-menu-theme="light"] .ui-textarea::placeholder { color: #94a3b8; }
 
 /* ── Warm theme ── */
 html[data-menu-theme="warm"] {
@@ -1550,6 +1569,25 @@ html[data-menu-theme="warm"] .border-slate-800    { border-color: rgba(160,100,4
 html[data-menu-theme="warm"] .border-slate-800\/40 { border-color: rgba(160,100,40,0.12); }
 html[data-menu-theme="warm"] .border-slate-800\/50 { border-color: rgba(160,100,40,0.16); }
 html[data-menu-theme="warm"] .border-slate-800\/80 { border-color: rgba(160,100,40,0.20); }
+html[data-menu-theme="warm"] .border-slate-700    { border-color: rgba(160,100,40,0.26); }
+
+/* Component classes with @apply-baked dark backgrounds — warm overrides */
+html[data-menu-theme="warm"] .ui-hero-ribbon {
+  background: rgba(255, 248, 237, 0.90);
+  border-color: rgba(160, 100, 40, 0.18);
+  box-shadow: 0 4px 20px rgba(160, 100, 40, 0.10);
+}
+html[data-menu-theme="warm"] .ui-reservation-card {
+  background: rgba(255, 248, 237, 0.90);
+  border-color: rgba(160, 100, 40, 0.18);
+  box-shadow: 0 4px 20px rgba(160, 100, 40, 0.10);
+}
+html[data-menu-theme="warm"] .ui-textarea {
+  background: rgba(255, 250, 242, 0.95);
+  border-color: rgba(160, 100, 40, 0.35);
+  color: #1c1009;
+}
+html[data-menu-theme="warm"] .ui-textarea::placeholder { color: #b45309; }
 
 /* ==========================================================================
    Dish detail page — light theme
