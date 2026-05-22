@@ -21,6 +21,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .throttles import PublicLeadThrottle, UserLeadsThrottle
+
 from menu.models import AnalyticsEvent, Category, Dish, DishOption, Order, OrderItem, TableLink
 from tenancy.models import Domain, FeatureFlag, Plan, Profile, Tenant
 from tenancy.serializers import ProfileSerializer
@@ -557,6 +559,8 @@ def _build_whatsapp_reservation_reminder(*, lead, tenant):
 class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
     queryset = Lead.objects.filter(archived_at__isnull=True).order_by("-created_at")
     serializer_class = LeadSerializer
+    # Throttle only the public lead-creation action — not the admin list/destroy.
+    throttle_classes = [PublicLeadThrottle, UserLeadsThrottle]
 
     def get_permissions(self):
         if self.action == "create":

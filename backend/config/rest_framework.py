@@ -6,10 +6,11 @@
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_THROTTLE_CLASSES": [
-        "sales.throttles.PublicLeadThrottle",
-        "sales.throttles.UserLeadsThrottle",
-    ],
+    # No global default throttle — customer-facing read endpoints (menu browsing,
+    # order status polling, session checks) are called many times per minute on
+    # shared restaurant WiFi and must not be rate-limited by IP.  Security-sensitive
+    # endpoints declare their own throttle_classes explicitly.
+    "DEFAULT_THROTTLE_CLASSES": [],
     "DEFAULT_THROTTLE_RATES": {
         "public_leads": "100/hour",
         "user_leads": "1000/hour",

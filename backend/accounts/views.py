@@ -329,16 +329,9 @@ _OTP_MAX_ATTEMPTS = 5
 
 
 class CustomerSessionView(APIView):
-    """GET: return the current customer session. DELETE: sign out.
-
-    No throttle — this endpoint only reads the caller's own session cookie
-    and is called once per page load by every customer browser.  Inheriting
-    the global PublicLeadThrottle (100/hour per IP) causes 429s on shared
-    restaurant WiFi where many guests share the same IP address.
-    """
+    """GET: return the current customer session. DELETE: sign out."""
 
     permission_classes = [AllowAny]
-    throttle_classes = []  # exempt from global lead throttle
 
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
