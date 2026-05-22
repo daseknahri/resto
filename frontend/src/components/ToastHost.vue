@@ -3,6 +3,7 @@
     <div
       v-if="toast.visible"
       class="fixed bottom-6 right-6 z-30 rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 shadow-2xl shadow-black/40 text-sm text-slate-100 flex items-center gap-3"
+      data-theme-dark
       role="status"
       aria-live="polite"
     >

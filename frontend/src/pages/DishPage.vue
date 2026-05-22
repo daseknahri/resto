@@ -172,14 +172,28 @@
         </div>
 
         <!-- Desktop add-to-cart (sm+) -->
-        <div class="hidden sm:block ui-section-band space-y-2">
+        <div class="hidden sm:block rounded-2xl border border-slate-700/60 bg-slate-900/50 p-4 space-y-3">
+          <!-- Selected options summary -->
+          <div v-if="selectedOptionObjects.length" class="flex flex-wrap gap-1.5">
+            <span
+              v-for="opt in selectedOptionObjects" :key="opt.id"
+              class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/60 px-2.5 py-0.5 text-[11px] text-slate-300"
+            >
+              {{ opt.name }}
+              <span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+            </span>
+          </div>
+          <!-- Price + controls row -->
           <div class="flex items-center gap-3">
             <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
-              <input v-model.number="qty" type="number" min="1" max="99" class="w-12 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
+              <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
             </span>
-            <p class="text-lg font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
+            <div class="min-w-0">
+              <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
+              <p v-if="qty > 1" class="text-[11px] text-slate-500 tabular-nums">{{ qty }} × {{ formatCurrency(unitPriceWithOptions, dish.currency) }}</p>
+            </div>
             <button
               class="ui-btn-primary ml-auto px-6 py-2.5 text-sm font-semibold"
               :disabled="orderingDisabled"
@@ -253,19 +267,45 @@
     <!-- ══ Mobile sticky bottom bar ══ -->
     <div
       v-if="dish"
-      class="ui-dish-bar fixed bottom-[5.15rem] left-3 right-3 z-20 overflow-hidden rounded-2xl px-3.5 py-2.5 backdrop-blur-xl sm:hidden"
+      class="ui-dish-bar fixed bottom-[5.15rem] left-3 right-3 z-20 overflow-hidden rounded-2xl px-3.5 py-3 backdrop-blur-xl sm:hidden"
+      :class="hasRequiredMissing ? 'ring-1 ring-amber-500/40' : ''"
     >
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-px" style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.45), transparent)" />
-      <div class="flex items-center justify-between gap-3">
+      <!-- top shimmer line — amber when options missing, secondary otherwise -->
+      <div
+        class="pointer-events-none absolute inset-x-0 top-0 h-px"
+        :style="hasRequiredMissing
+          ? 'background: linear-gradient(90deg, transparent, rgba(245,158,11,0.6), transparent)'
+          : 'background: linear-gradient(90deg, transparent, rgba(var(--color-secondary-rgb,245,158,11),0.45), transparent)'"
+      />
+
+      <!-- Row 1: dish name + price -->
+      <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-slate-100">{{ dish.name }}</p>
-          <p class="text-xs text-slate-400">
-            {{ hasRequiredMissing ? t('dishPage.selectRequiredOptions') : formatCurrency(totalWithOptions, dish.currency) }}
+          <!-- selected options summary chips -->
+          <div v-if="selectedOptionObjects.length" class="mt-1 flex flex-wrap gap-1">
+            <span
+              v-for="opt in selectedOptionObjects"
+              :key="opt.id"
+              class="inline-flex items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-800/60 px-2 py-0.5 text-[10px] text-slate-300"
+            >
+              {{ opt.name }}<span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">&nbsp;+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+            </span>
+          </div>
+          <!-- required-options warning -->
+          <p v-if="hasRequiredMissing" class="mt-1 text-[11px] font-medium text-amber-400">
+            ⚠ {{ t('dishPage.selectRequiredOptions') }}
           </p>
         </div>
-        <p class="shrink-0 text-base font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
+        <!-- price block -->
+        <div class="shrink-0 text-right">
+          <p class="text-base font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
+          <p v-if="qty > 1" class="text-[11px] tabular-nums text-slate-500">{{ qty }} × {{ formatCurrency(unitPriceWithOptions, dish.currency) }}</p>
+        </div>
       </div>
-      <div class="mt-2 flex items-center gap-2">
+
+      <!-- Row 2: qty stepper + share + add button -->
+      <div class="mt-2.5 flex items-center gap-2">
         <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
           <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
           <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
@@ -279,7 +319,7 @@
           <AppIcon name="share" class="h-4 w-4" />
         </button>
         <button
-          class="ui-btn-primary ml-auto px-5 py-2.5 text-sm font-semibold"
+          class="ui-btn-primary ml-auto flex-1 py-2.5 text-sm font-semibold"
           :disabled="orderingDisabled"
           :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
           @click="addToCart"
