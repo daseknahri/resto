@@ -1,6 +1,8 @@
 <template>
-  <div class="px-3 py-2 pb-24 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
-    <section v-if="showPlatformDemo" class="ui-hero-ribbon ui-reveal mb-3 p-4 text-center">
+  <div class="ui-safe-bottom pb-24 sm:pb-8">
+
+    <!-- ══ Platform demo banner ══ -->
+    <section v-if="showPlatformDemo" class="ui-hero-ribbon ui-reveal mx-3 mt-3 mb-3 p-4 text-center">
       <p class="ui-kicker">{{ t("common.demo") }}</p>
       <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("home.heroTitle") }}</h2>
       <p class="mt-2 text-sm text-slate-300">{{ t("home.heroSubtitle") }}</p>
@@ -11,167 +13,221 @@
         </a>
       </div>
     </section>
-    <section class="ui-hero-stage ui-reveal relative overflow-hidden p-0">
-      <div class="relative min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-[1.35rem] border border-slate-800/70 bg-slate-950/90 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)]">
+
+    <!-- ══ Hero panel ══ -->
+    <section
+      data-theme-dark
+      class="relative overflow-hidden"
+      style="height: calc(100svh - 9.5rem); min-height: 460px; max-height: 840px"
+    >
+      <!-- Background image / fallback -->
+      <div class="absolute inset-0 bg-slate-950">
         <img
           v-if="heroImage"
           :src="heroImage"
-          :alt="`${tenantName} hero`"
-          class="absolute inset-0 h-full w-full object-cover"
+          :alt="tenantName"
+          class="h-full w-full object-cover"
           loading="eager"
           fetchpriority="high"
           decoding="async"
         />
-        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/96 via-slate-950/70 to-slate-950/30"></div>
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.11),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.08),transparent_28%)]"></div>
+      </div>
 
-        <div class="relative flex min-h-[calc(100vh-9.5rem)] flex-col justify-between gap-4 p-4 sm:min-h-[calc(100vh-10.5rem)] md:min-h-[calc(100vh-9rem)] md:p-6">
-          <div class="mx-auto w-full max-w-4xl space-y-5 text-center">
-            <div class="flex flex-col items-center gap-3">
-              <div class="flex min-w-0 items-center justify-center gap-3">
-                <img
-                  v-if="logoImage"
-                  :src="logoImage"
-                  :alt="`${tenantName} logo`"
-                  class="h-14 w-14 rounded-2xl border border-slate-700/70 object-cover shadow-xl shadow-black/35"
-                  loading="eager"
-                  decoding="async"
-                />
-                <div class="min-w-0 space-y-1">
-                  <h1 class="ui-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ tenantName }}</h1>
-                  <p class="text-sm text-slate-300">{{ tenantDescription }}</p>
-                </div>
-              </div>
-              <span class="ui-chip-strong inline-flex shrink-0 items-center gap-1.5">
-                <span v-if="isOpen" class="relative inline-flex h-1.5 w-1.5 shrink-0">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                  <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                </span>
-                {{ statusLabel }}
-              </span>
-            </div>
+      <!-- Dark gradient (bottom heavy so text is always readable) -->
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/97 via-black/50 to-black/18" />
+      <!-- Subtle amber warmth at bottom-left -->
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_100%,rgba(245,158,11,0.09),transparent_42%)]" />
+      <!-- Top vignette for readability near header -->
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/35 to-transparent" />
 
-            <div class="flex flex-wrap justify-center gap-2.5">
-              <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold shadow-lg shadow-[var(--color-secondary)]/20">
-                <AppIcon name="menu" class="h-4 w-4" />
-                <span>{{ t("customerLayout.navMenu") }}</span>
-              </RouterLink>
-              <button type="button" class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2.5 text-sm" @click="openLeadModal">
-                <AppIcon name="chat" class="h-4 w-4" />
-                <span>{{ t("customerLeadPage.contactMe") }}</span>
-              </button>
-              <a
-                v-if="reservationUrl"
-                :href="reservationUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="ui-btn-outline inline-flex items-center gap-2 px-4 py-2.5 text-sm"
-                @click="trackContactClick('reservation_url')"
-              >
-                <AppIcon name="calendar" class="h-4 w-4" />
-                <span>{{ t("customerLeadPage.directBooking") }}</span>
-              </a>
-            </div>
+      <!-- Bottom accent line -->
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[var(--color-secondary)]/40 to-transparent" />
 
-            <div class="mx-auto w-full max-w-4xl rounded-2xl border border-slate-700/80 bg-slate-950/80 p-3.5 text-left shadow-xl shadow-black/35 backdrop-blur-sm sm:p-4">
-              <div class="mb-3 grid gap-2 sm:grid-cols-3">
-                <div class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
-                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
-                    <AppIcon name="info" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                    <span>{{ t("common.status") }}</span>
-                  </p>
-                  <p class="text-sm font-semibold text-slate-100">{{ statusLabel }}</p>
-                </div>
-                <div v-if="locationLine" class="group rounded-xl border border-slate-800/80 bg-slate-950/60 px-3 py-2.5 transition-colors hover:border-slate-700/60">
-                  <p class="ui-kicker mb-1 inline-flex items-center gap-1.5">
-                    <AppIcon name="home" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                    <span>{{ t("common.location") }}</span>
-                  </p>
-                  <p class="text-sm font-semibold text-slate-100">{{ locationLine }}</p>
-                </div>
-                </div>
-              <div class="grid gap-3 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
-                <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
-                  <div class="space-y-1">
-                    <p class="ui-kicker">{{ t("customerLeadPage.contactMe") }}</p>
-                    <p class="text-sm text-slate-200">{{ tenantDescription }}</p>
-                  </div>
-                  <div class="grid gap-2 sm:grid-cols-2">
-                    <button type="button" class="ui-btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm" @click="openLeadModal">
-                      <AppIcon name="chat" class="h-4 w-4" />
-                      <span>{{ t("customerLeadPage.contactMe") }}</span>
-                    </button>
-                    <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm">
-                      <AppIcon name="menu" class="h-4 w-4" />
-                      <span>{{ t("customerLayout.navMenu") }}</span>
-                    </RouterLink>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <a
-                      v-if="whatsappHref"
-                      :href="whatsappHref"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                      @click="trackContactClick('whatsapp_contact')"
-                    >
-                      <AppIcon name="chat" class="h-3.5 w-3.5" />
-                      <span>{{ t("customerLeadPage.whatsappNow") }}</span>
-                    </a>
-                    <a
-                      v-if="phoneHref"
-                      :href="phoneHref"
-                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                      @click="trackContactClick('phone_call')"
-                    >
-                      <AppIcon name="phone" class="h-3.5 w-3.5" />
-                      <span>{{ t("customerLeadPage.callNow") }}</span>
-                    </a>
-                    <a
-                      v-if="googleMapsUrl"
-                      :href="googleMapsUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="ui-btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
-                      @click="trackContactClick('google_reviews')"
-                    >
-                      <AppIcon name="info" class="h-3.5 w-3.5" />
-                      <span>{{ t("customerLeadPage.googleReviews") }}</span>
-                    </a>
-                  </div>
-                </div>
+      <!-- Content — pinned to the bottom -->
+      <div class="relative flex h-full flex-col justify-end px-4 pb-5 sm:px-6 sm:pb-7">
 
-                <div class="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-3.5">
-                  <div v-if="socialLinks.length" class="flex flex-wrap gap-2">
-                    <a
-                      v-for="social in socialLinks"
-                      :key="`social-${social.key}`"
-                      :href="social.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="ui-chip inline-flex items-center gap-2 text-[11px]"
-                      @click="trackContactClick(`social_${social.key}`)"
-                    >
-                      <span aria-hidden="true">
-                        <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>
-                        <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V4.98C16.7 4.94 15.74 4.85 14.62 4.85c-2.34 0-3.94 1.43-3.94 4.06V11H8v3h2.68v8h2.82z" /></svg>
-                        <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M19.59 6.69A4.83 4.83 0 0 1 22 10.4V18a4 4 0 0 1-4 4h-6.2a6 6 0 0 1-6-6V9.5a4 4 0 0 1 4-4h5.9a4.83 4.83 0 0 1 3.89 1.19zM14 10a1 1 0 1 0 1 1 1 1 0 0 0-1-1zm-5 3.2a3 3 0 1 0 3 3 3 3 0 0 0-3-3z" /></svg>
-                      </span>
-                      <span>{{ social.label }}</span>
-                    </a>
-                  </div>
-
-                </div>
-              </div>
-            </div>
+        <!-- Logo + name block -->
+        <div class="flex items-end gap-4 mb-4">
+          <img
+            v-if="logoImage"
+            :src="logoImage"
+            :alt="`${tenantName} logo`"
+            class="h-[4.5rem] w-[4.5rem] shrink-0 rounded-[1.1rem] border-2 border-white/16 object-cover shadow-2xl shadow-black/55"
+            loading="eager"
+            decoding="async"
+          />
+          <div class="min-w-0 pb-0.5">
+            <h1 class="ui-display text-[1.9rem] font-semibold leading-[1.1] text-white sm:text-4xl">{{ tenantName }}</h1>
+            <p v-if="tenantDescription" class="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-300/85">{{ tenantDescription }}</p>
           </div>
         </div>
+
+        <!-- Status + location pills -->
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-black/52 px-3 py-1 text-xs font-medium text-white backdrop-blur-md">
+            <span v-if="isOpen" class="relative flex h-1.5 w-1.5 shrink-0">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
+              <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            <span v-else class="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+            {{ statusLabel }}
+          </span>
+          <span v-if="locationLine" class="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-black/45 px-3 py-1 text-xs text-slate-300 backdrop-blur-md">
+            <AppIcon name="home" class="h-3 w-3 shrink-0" />
+            {{ locationLine }}
+          </span>
+        </div>
+
+        <!-- Primary CTA — Browse Menu -->
+        <RouterLink
+          :to="{ name: 'menu' }"
+          class="ui-btn-primary flex w-full items-center justify-center gap-2.5 rounded-full py-3.5 text-[15px] font-bold shadow-xl shadow-[var(--color-secondary)]/25"
+          @click="trackContactClick('hero_menu_cta')"
+        >
+          <AppIcon name="menu" class="h-5 w-5" />
+          {{ t("customerLayout.navMenu") }}
+        </RouterLink>
+
       </div>
     </section>
 
+    <!-- ══ Quick actions strip ══ -->
+    <div v-if="quickActions.length" class="mx-3 mt-3 sm:mx-4">
+      <div class="ui-panel overflow-hidden p-2.5">
+        <div class="flex gap-2">
+          <template v-for="action in quickActions" :key="action.key">
+            <!-- External link actions -->
+            <a
+              v-if="action.href"
+              :href="action.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 active:scale-95"
+              @click="trackContactClick(action.key)"
+            >
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]">
+                <!-- WhatsApp -->
+                <svg v-if="action.key === 'whatsapp'" viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                <!-- Phone -->
+                <AppIcon v-else-if="action.key === 'phone'" name="phone" class="h-4 w-4" />
+                <!-- Maps -->
+                <svg v-else-if="action.key === 'maps'" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+                </svg>
+                <!-- Reserve -->
+                <AppIcon v-else-if="action.key === 'reserve'" name="calendar" class="h-4 w-4" />
+              </span>
+              <span class="text-[10px] font-medium leading-tight text-slate-400">{{ action.label }}</span>
+            </a>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Info cards ══ -->
+    <div class="mx-3 mt-3 space-y-3 sm:mx-4">
+
+      <!-- About -->
+      <div v-if="hasAboutContent" class="ui-panel ui-reveal p-4 space-y-3">
+        <p class="ui-kicker">{{ t('customerLeadPage.businessHours') === 'Hours' ? 'About' : t('customerLeadPage.about') }}</p>
+        <p class="text-sm leading-relaxed text-slate-300">{{ tenantDescription }}</p>
+        <!-- Social links -->
+        <div v-if="socialLinks.length" class="flex flex-wrap gap-2 pt-1">
+          <a
+            v-for="social in socialLinks"
+            :key="social.key"
+            :href="social.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 transition hover:border-[var(--color-secondary)]/40 hover:text-[var(--color-secondary)]"
+            @click="trackContactClick(`social_${social.key}`)"
+          >
+            <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+            <svg v-else-if="social.key === 'facebook'" viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true"><path d="M13.5 22v-8h2.7l.5-3h-3.2V9.1c0-.87.3-1.46 1.56-1.46H17V5a15 15 0 00-2.38-.18C12.28 4.82 10.68 6.25 10.68 8.88V11H8v3h2.68v8H13.5z"/></svg>
+            <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69A4.83 4.83 0 0122 10.4V18a4 4 0 01-4 4h-6.2a6 6 0 01-6-6V9.5a4 4 0 014-4h5.9a4.83 4.83 0 013.89 1.19zM14 10a1 1 0 101 1 1 1 0 00-1-1zm-5 3.2a3 3 0 103 3 3 3 0 00-3-3z"/></svg>
+            <span>{{ social.label }}</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Business hours -->
+      <div v-if="businessHoursRows.length || businessHoursSummary" class="ui-panel ui-reveal p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-kicker">{{ t('customerLeadPage.businessHours') }}</p>
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-0.5 text-[10px] font-medium"
+            :class="isOpen ? 'text-emerald-400' : 'text-rose-400'">
+            <span class="h-1.5 w-1.5 rounded-full"
+              :class="isOpen ? 'bg-emerald-400' : 'bg-rose-400'" />
+            {{ statusLabel }}
+          </span>
+        </div>
+        <!-- Structured rows (when schedule configured) -->
+        <div v-if="businessHoursRows.length" class="divide-y divide-slate-800/50">
+          <div
+            v-for="row in businessHoursRows"
+            :key="row.day"
+            class="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
+            :class="row.isToday ? 'font-semibold' : ''"
+          >
+            <span :class="row.isToday ? 'text-[var(--color-secondary)]' : 'text-slate-300'">{{ row.day }}</span>
+            <span class="tabular-nums" :class="row.isToday ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
+              {{ row.hours || row.range || '—' }}
+            </span>
+          </div>
+        </div>
+        <!-- Summary fallback -->
+        <p v-else-if="businessHoursSummary" class="text-sm text-slate-300">{{ businessHoursSummary }}</p>
+      </div>
+
+      <!-- Send a message card -->
+      <div class="ui-panel ui-reveal overflow-hidden p-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-slate-100">{{ t('customerLeadPage.helpTitle') }}</p>
+            <p class="mt-0.5 text-xs text-slate-400">{{ t('customerLeadPage.helpText') }}</p>
+          </div>
+          <button
+            type="button"
+            class="ui-btn-primary shrink-0 gap-2 px-4 py-2.5 text-sm"
+            @click="openLeadModal"
+          >
+            <AppIcon name="chat" class="h-4 w-4" />
+            {{ t('customerLeadPage.contactMe') }}
+          </button>
+        </div>
+        <!-- Google reviews link (if available) -->
+        <a
+          v-if="googleMapsUrl"
+          :href="googleMapsUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-3 flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2.5 text-xs text-slate-400 transition hover:border-[var(--color-secondary)]/30 hover:text-slate-300"
+          @click="trackContactClick('google_reviews')"
+        >
+          <!-- Google "G" icon -->
+          <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          <span class="flex-1">{{ t('customerLeadPage.googleReviews') }}</span>
+          <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </a>
+      </div>
+
+    </div>
+
+    <!-- ══ Contact modal ══ -->
     <Teleport to="body">
-      <div v-if="showLeadModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/86 p-3 sm:p-5" @click.self="closeLeadModal">
-        <div class="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:p-5">
+      <div
+        v-if="showLeadModal"
+        class="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/86 sm:items-center sm:p-5"
+        @click.self="closeLeadModal"
+      >
+        <div class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
           <div class="mb-4 flex items-center justify-between gap-3">
             <div>
               <p class="ui-kicker">{{ t("customerLeadPage.message") }}</p>
@@ -185,63 +241,35 @@
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.name") }}
-                <input
-                  v-model.trim="form.name"
-                  class="ui-input"
-                  :class="fieldClass('name')"
-                  autocomplete="name"
-                  @input="clearError('name')"
-                />
+                <input v-model.trim="form.name" class="ui-input" :class="fieldClass('name')" autocomplete="name" @input="clearError('name')" />
                 <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
               </label>
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.phone") }}
-                <input
-                  v-model.trim="form.phone"
-                  class="ui-input"
-                  :class="fieldClass('phone')"
-                  placeholder="+212..."
-                  inputmode="tel"
-                  autocomplete="tel"
-                  @input="clearError('phone')"
-                />
+                <input v-model.trim="form.phone" class="ui-input" :class="fieldClass('phone')" placeholder="+212..." inputmode="tel" autocomplete="tel" @input="clearError('phone')" />
                 <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
               </label>
             </div>
-
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.email") }}
-              <input
-                v-model.trim="form.email"
-                type="email"
-                class="ui-input"
-                :class="fieldClass('email')"
-                inputmode="email"
-                autocomplete="email"
-                @input="clearError('email')"
-              />
+              <input v-model.trim="form.email" type="email" class="ui-input" :class="fieldClass('email')" inputmode="email" autocomplete="email" @input="clearError('email')" />
               <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
             </label>
-
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("customerLeadPage.message") }}
-              <textarea
-                v-model.trim="form.note"
-                rows="3"
-                class="ui-textarea"
-                :placeholder="t('customerLeadPage.messagePlaceholder')"
-              ></textarea>
+              <textarea v-model.trim="form.note" rows="3" class="ui-textarea" :placeholder="t('customerLeadPage.messagePlaceholder')"></textarea>
             </label>
-
             <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
-
             <div class="flex flex-wrap items-center gap-3">
-              <button type="submit" class="ui-btn-primary ui-touch-target w-full justify-center disabled:cursor-not-allowed disabled:opacity-65 sm:w-auto" :disabled="lead.submitting || lead.success">
+              <button
+                type="submit"
+                class="ui-btn-primary ui-touch-target w-full justify-center disabled:cursor-not-allowed disabled:opacity-65 sm:w-auto"
+                :disabled="lead.submitting || lead.success"
+              >
                 {{ lead.submitting ? t("customerLeadPage.sending") : lead.success ? t("customerLeadPage.sent") : t("customerLeadPage.contactMe") }}
               </button>
               <p v-if="lead.error" class="text-sm text-red-300">{{ lead.error }}</p>
             </div>
-
             <div v-if="lead.success" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
               {{ t("customerLeadPage.leadSuccess") }}
             </div>
@@ -249,6 +277,7 @@
         </div>
       </div>
     </Teleport>
+
   </div>
 </template>
 
@@ -272,19 +301,8 @@ const showLeadModal = ref(false);
 const showPlatformDemo = computed(() => isPublicDemoHost());
 const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu");
 
-const form = reactive({
-  name: "",
-  phone: "",
-  email: "",
-  note: "",
-  hp: "",
-});
-
-const errors = reactive({
-  name: "",
-  phone: "",
-  email: "",
-});
+const form = reactive({ name: "", phone: "", email: "", note: "", hp: "" });
+const errors = reactive({ name: "", phone: "", email: "" });
 
 const profile = computed(() => meta.value?.profile || {});
 const tenantName = computed(() => meta.value?.name || t("customerLayout.fallbackTenantName"));
@@ -308,14 +326,11 @@ const statusLabel = computed(() => {
   }
   return t("customerLeadPage.openNow");
 });
-const locationLine = computed(() => {
-  const line = String(profile.value?.address || profile.value?.city || "").trim();
-  return line || "";
-});
+const locationLine = computed(() => String(profile.value?.address || profile.value?.city || "").trim());
 const tenantDescription = computed(() => {
   const tagline = String(profile.value?.tagline || "").trim();
   const desc = String(profile.value?.description || "").trim();
-  if (tagline && desc) return `${tagline} - ${desc}`;
+  if (tagline && desc) return `${tagline} — ${desc}`;
   if (tagline) return tagline;
   if (desc) return desc;
   return t("customerLeadPage.fallbackDescription");
@@ -334,22 +349,16 @@ const businessHoursSummary = computed(() => {
   return String(profile.value?.business_hours || "").trim();
 });
 
-const sanitizePhoneForTel = (value) =>
-  String(value || "")
-    .replace(/[^\d+]/g, "")
-    .replace(/(?!^)\+/g, "");
+const sanitizePhoneForTel = (value) => String(value || "").replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
 const sanitizePhoneForWhatsapp = (value) => String(value || "").replace(/\D/g, "");
 const phoneRaw = computed(() => String(profile.value?.phone || profile.value?.whatsapp || "").trim());
 const whatsappRaw = computed(() => String(profile.value?.whatsapp || profile.value?.phone || "").trim());
-const phoneHref = computed(() => {
-  const normalized = sanitizePhoneForTel(phoneRaw.value);
-  return normalized ? `tel:${normalized}` : "";
-});
+const phoneHref = computed(() => { const n = sanitizePhoneForTel(phoneRaw.value); return n ? `tel:${n}` : ""; });
 const whatsappHref = computed(() => {
-  const normalized = sanitizePhoneForWhatsapp(whatsappRaw.value);
-  if (!normalized) return "";
+  const n = sanitizePhoneForWhatsapp(whatsappRaw.value);
+  if (!n) return "";
   const text = encodeURIComponent(t("customerLeadPage.moreInfoMessage", { tenant: tenantName.value }));
-  return `https://wa.me/${normalized}?text=${text}`;
+  return `https://wa.me/${n}?text=${text}`;
 });
 const socialLinks = computed(() =>
   [
@@ -359,104 +368,63 @@ const socialLinks = computed(() =>
   ].filter((item) => Boolean(item.url))
 );
 
+// Quick action buttons shown below the hero (deduplicated, no repeating CTAs)
+const quickActions = computed(() => {
+  const actions = [];
+  if (whatsappHref.value) actions.push({ key: "whatsapp", href: whatsappHref.value, label: t("customerLeadPage.whatsappNow") });
+  if (phoneHref.value) actions.push({ key: "phone", href: phoneHref.value, label: t("customerLeadPage.callNow") });
+  if (googleMapsUrl.value) actions.push({ key: "maps", href: googleMapsUrl.value, label: t("common.location") });
+  if (reservationUrl.value) actions.push({ key: "reserve", href: reservationUrl.value, label: t("customerLayout.navReserve") });
+  return actions;
+});
+
+const hasAboutContent = computed(() => Boolean(tenantDescription.value || socialLinks.value.length));
+
 const openLeadModal = () => {
   lead.reset();
   Object.assign(form, { name: "", phone: "", email: "", note: "", hp: "" });
   Object.assign(errors, { name: "", phone: "", email: "" });
   showLeadModal.value = true;
 };
-
-const closeLeadModal = () => {
-  showLeadModal.value = false;
-};
-
-const onEscape = (event) => {
-  if (event?.key !== "Escape") return;
-  if (!showLeadModal.value) return;
-  closeLeadModal();
-};
-
+const closeLeadModal = () => { showLeadModal.value = false; };
+const onEscape = (e) => { if (e?.key === "Escape" && showLeadModal.value) closeLeadModal(); };
 const fieldClass = (field) => (errors[field] ? "border-red-400" : "border-slate-700");
-const clearError = (field) => {
-  if (errors[field]) errors[field] = "";
-};
+const clearError = (field) => { if (errors[field]) errors[field] = ""; };
 
 const validate = () => {
-  errors.name = "";
-  errors.phone = "";
-  errors.email = "";
+  errors.name = ""; errors.phone = ""; errors.email = "";
   let valid = true;
-
-  if (!form.name || form.name.length < 2) {
-    errors.name = t("customerLeadPage.nameError");
-    valid = false;
-  }
-  if (!form.phone && !form.email) {
-    errors.phone = t("customerLeadPage.contactRequired");
-    errors.email = t("customerLeadPage.contactRequired");
-    valid = false;
-  }
-  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = t("customerLeadPage.invalidEmail");
-    valid = false;
-  }
-
+  if (!form.name || form.name.length < 2) { errors.name = t("customerLeadPage.nameError"); valid = false; }
+  if (!form.phone && !form.email) { errors.phone = t("customerLeadPage.contactRequired"); errors.email = t("customerLeadPage.contactRequired"); valid = false; }
+  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { errors.email = t("customerLeadPage.invalidEmail"); valid = false; }
   return valid;
 };
 
 const buildNotes = () => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
-  const lines = [
-    t("customerLeadPage.leadNoteIntro"),
-    form.note ? `Message: ${form.note}` : "",
-    pageUrl ? `Page URL: ${pageUrl}` : "",
-  ].filter(Boolean);
-  return lines.join("\n");
+  return [t("customerLeadPage.leadNoteIntro"), form.note ? `Message: ${form.note}` : "", pageUrl ? `Page URL: ${pageUrl}` : ""].filter(Boolean).join("\n");
 };
 
 const submitLead = async () => {
   if (lead.success) return;
   lead.$patch({ error: null });
   if (!validate()) return;
-
-  await lead.submitLead({
-    name: form.name,
-    phone: form.phone,
-    email: form.email,
-    source: "customer_landing",
-    notes: buildNotes(),
-    hp: form.hp,
-  });
-
-  if (lead.success) {
-    trackEvent("customer_info_lead_submit", { source: "customer_landing_form" });
-  }
+  await lead.submitLead({ name: form.name, phone: form.phone, email: form.email, source: "customer_landing", notes: buildNotes(), hp: form.hp });
+  if (lead.success) trackEvent("customer_info_lead_submit", { source: "customer_landing_form" });
 };
 
 const trackContactClick = (target) => {
-  trackEvent("contact_click", {
-    source: "customer_landing",
-    metadata: { target: String(target || "").slice(0, 60) },
-  });
+  trackEvent("contact_click", { source: "customer_landing", metadata: { target: String(target || "").slice(0, 60) } });
 };
 
 onMounted(async () => {
   lead.reset();
   trackEvent("customer_info_view", { source: "customer_landing_info" }, { onceKey: "customer:landing" });
-  // Pre-fill form from verified customer identity
   const c = customerStore.customer;
   if (c?.name && !form.name) form.name = c.name;
   if (c?.phone && !form.phone) form.phone = c.phone;
   if (c?.email && !form.email) form.email = c.email;
-  if (typeof window !== "undefined") {
-    window.addEventListener("keydown", onEscape);
-  }
+  if (typeof window !== "undefined") window.addEventListener("keydown", onEscape);
 });
-
-onBeforeUnmount(() => {
-  if (typeof window !== "undefined") {
-    window.removeEventListener("keydown", onEscape);
-  }
-});
+onBeforeUnmount(() => { if (typeof window !== "undefined") window.removeEventListener("keydown", onEscape); });
 </script>
-
