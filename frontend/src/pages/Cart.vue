@@ -661,6 +661,40 @@
             </p>
           </div>
 
+          <!-- Soft sign-in nudge for table/QR orders (non-blocking) -->
+          <div
+            v-if="isTableContextOrder && !customerStore.isAuthenticated && !tableNudgeDismissed"
+            class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3.5 space-y-2.5"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.tableNudgeTitle') }}</p>
+              <button
+                class="text-slate-500 hover:text-slate-300 transition shrink-0 -mt-0.5"
+                @click="tableNudgeDismissed = true"
+              >
+                <AppIcon name="close" class="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <ul class="space-y-1">
+              <li class="flex items-center gap-1.5 text-xs text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
+                {{ t('cartPage.tableNudgeBenefit1') }}
+              </li>
+              <li class="flex items-center gap-1.5 text-xs text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
+                {{ t('cartPage.tableNudgeBenefit2') }}
+              </li>
+              <li class="flex items-center gap-1.5 text-xs text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
+                {{ t('cartPage.tableNudgeBenefit3') }}
+              </li>
+            </ul>
+            <button class="ui-btn-outline w-full justify-center text-xs py-1.5" @click="showAuthModal = true">
+              <AppIcon name="user" class="h-3.5 w-3.5" />
+              {{ t('cartPage.tableNudgeButton') }}
+            </button>
+          </div>
+
           <!-- Auth gate — required for all pickup and delivery orders -->
           <template v-if="!isTableContextOrder">
             <!-- Not signed in: hard block -->
@@ -866,6 +900,7 @@ const toast = useToastStore();
 const { formatCurrency, itemCountLabel, t } = useI18n();
 
 const showAuthModal = ref(false);
+const tableNudgeDismissed = ref(false);
 const useWallet = ref(false);
 
 // ── Tip ──────────────────────────────────────────────────────────────────────

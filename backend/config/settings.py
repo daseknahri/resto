@@ -139,13 +139,16 @@ else:
     }
 
 # ── Session store ──────────────────────────────────────────────────────────────
-# With Redis, store sessions in the shared cache so every Gunicorn worker reads
-# the same session data (required for OTP verify to see the session written by
-# the OTP request in a different worker).  Without Redis, Django falls back to
-# its default database-backed sessions automatically — no extra config needed.
+# cached_db: writes to Redis (fast) AND the django_session DB table (durable).
+# If Redis restarts, sessions fall back to the DB — customers stay logged in.
+# Without Redis, Django uses its default database-backed sessions automatically.
 if _REDIS_URL:
-    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
     SESSION_CACHE_ALIAS = "default"
+
+# Keep customers logged in for 90 days unless they explicitly sign out.
+SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 24 * 90))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 AUTH_USER_MODEL = "accounts.User"
 
