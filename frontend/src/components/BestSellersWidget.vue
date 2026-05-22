@@ -71,14 +71,14 @@ const props = defineProps({
 const mode = ref('count'); // 'count' | 'revenue'
 const data = ref(null);
 const loading = ref(false);
-const currency = ref('USD');
+const currency = ref('MAD');
 
 const load = async () => {
   loading.value = true;
   try {
     const { data: d } = await api.get('/owner/best-sellers/', { params: { period: props.period } });
     data.value = d;
-    currency.value = d.currency || 'USD';
+    currency.value = d.currency || 'MAD';
   } catch {
     // silent
   } finally {

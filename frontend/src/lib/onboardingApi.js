@@ -118,9 +118,9 @@ const isSlugConflict = (err) =>
   err.response.data.slug.length > 0;
 
 const normalizeCurrency = (value) => {
-  const cleaned = String(value || "USD").trim().toUpperCase();
+  const cleaned = String(value || "MAD").trim().toUpperCase();
   if (/^[A-Z]{3}$/.test(cleaned)) return cleaned;
-  return "USD";
+  return "MAD";
 };
 
 const withSlugRetry = async ({ requestFn, baseSlug, maxLen }) => {

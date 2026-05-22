@@ -186,8 +186,8 @@ let searchTimer = null;
 const categories = computed(() => menu.categories || []);
 const currency = computed(() =>
   (menu.categories || []).length
-    ? (tenant.resolvedMeta?.plan?.currency || 'USD')
-    : 'USD'
+    ? (tenant.resolvedMeta?.plan?.currency || 'MAD')
+    : 'MAD'
 );
 
 const isSearching = computed(() => search.value.trim().length > 0);

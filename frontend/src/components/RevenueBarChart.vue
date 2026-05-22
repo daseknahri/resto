@@ -172,7 +172,7 @@ const props = defineProps({
 const periods = [7, 14, 30];
 const period = ref(props.initialPeriod);
 const days = ref([]);
-const currency = ref('USD');
+const currency = ref('MAD');
 const loading = ref(false);
 const error = ref(false);
 const tooltip = ref(null);
@@ -236,7 +236,7 @@ const load = async () => {
       params: { period: period.value },
     });
     days.value = data.days || [];
-    currency.value = data.currency || 'USD';
+    currency.value = data.currency || 'MAD';
   } catch {
     error.value = true;
   } finally {

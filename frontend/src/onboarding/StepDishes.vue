@@ -1408,7 +1408,7 @@ const normalize = (dish = {}) => ({
   slug: dish.slug || "",
   category: dish.category ? String(dish.category) : "",
   price: Number(dish.price || 0),
-  currency: dish.currency || "USD",
+  currency: dish.currency || "MAD",
   image_url: dish.image_url || "",
   description: dish.description || "",
   description_i18n: dish.description_i18n && typeof dish.description_i18n === "object" ? { ...dish.description_i18n } : {},
@@ -1455,9 +1455,9 @@ const pickI18nMap = (input, allowedLocales = null) => {
 };
 
 const normalizeCurrency = (value) => {
-  const cleaned = String(value || "USD").trim().toUpperCase();
+  const cleaned = String(value || "MAD").trim().toUpperCase();
   if (cleaned.length === 3 && /^[A-Z]{3}$/.test(cleaned)) return cleaned;
-  return "USD";
+  return "MAD";
 };
 
 const optionFieldKey = (option, field) => `option_${option?.local_id || "new"}_${field}`;

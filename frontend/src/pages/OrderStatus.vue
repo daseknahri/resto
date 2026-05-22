@@ -328,6 +328,7 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import { useI18n } from "../composables/useI18n";
+import { useCurrencyStore } from "../stores/currency";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
@@ -343,7 +344,8 @@ const cart = useCartStore();
 const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
 const toast = useToastStore();
-const { t } = useI18n();
+const { t, formatPrice } = useI18n();
+const currencyStore = useCurrencyStore();
 
 const showAuthModal = ref(false);
 
@@ -487,13 +489,7 @@ const fulfillmentLabel = (o) => {
   return "";
 };
 
-const formatCurrency = (amount, currency = "USD") => {
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(Number(amount) || 0);
-  } catch {
-    return `${currency} ${Number(amount).toFixed(2)}`;
-  }
-};
+const formatCurrency = (amount) => formatPrice(amount);
 
 // ── Order-ready alert ──────────────────────────────────────────────────────────
 

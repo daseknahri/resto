@@ -496,7 +496,7 @@ const reorder = (order) => {
       slug: item.dish_slug,
       name: item.dish_name,
       price: parseFloat(item.unit_price) || 0,
-      currency: order.currency || 'USD',
+      currency: order.currency || 'MAD',
       qty: item.qty,
       note: item.note || '',
       option_ids: (item.options || []).map((o) => o.id).filter(Boolean),

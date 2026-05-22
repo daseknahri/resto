@@ -79,7 +79,7 @@ import { ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 
-const { t } = useI18n();
+const { t, formatPrice } = useI18n();
 
 const phone = ref("");
 const loading = ref(false);
@@ -146,13 +146,5 @@ const formatDate = (iso) => {
   }
 };
 
-const formatTotal = (order) => {
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: order.currency || "USD" }).format(
-      parseFloat(order.total)
-    );
-  } catch {
-    return `${order.total} ${order.currency}`;
-  }
-};
+const formatTotal = (order) => formatPrice(parseFloat(order.total) || 0);
 </script>

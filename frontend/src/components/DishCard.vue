@@ -34,7 +34,7 @@
         <span
           class="inline-flex items-center rounded-full px-2 py-[3px] text-[13px] font-bold"
           style="color:var(--color-secondary); background: rgba(245,158,11,0.10)"
-        >{{ formatCurrency(dish.price, currency) }}</span>
+        >{{ formatPrice(dish.price) }}</span>
         <span
           v-for="tag in (dish.tags || []).slice(0, 2)"
           :key="tag"
@@ -155,7 +155,7 @@
       <!-- Price badge — repositioned bottom-left for visual harmony -->
       <div class="absolute left-3 bottom-3">
         <span class="rounded-full px-3 py-1 text-xs font-bold shadow-lg" style="background-color:var(--color-secondary); color: #0f172a">
-          {{ formatCurrency(dish.price, currency) }}
+          {{ formatPrice(dish.price) }}
         </span>
       </div>
       <!-- Tags top-left -->
@@ -231,7 +231,7 @@
         <span v-if="isSoldOut" class="shrink-0 text-[10px] text-red-400">{{ t('menu.soldOut') }}</span>
         <span v-else-if="isScheduleUnavailable" class="shrink-0 text-[10px] text-slate-500">{{ t('menu.notAvailableNow') }}</span>
       </div>
-      <span class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatCurrency(dish.price, currency) }}</span>
+      <span class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.price) }}</span>
     </div>
     <!-- Compact qty controls -->
     <div class="shrink-0" @click.stop>
@@ -270,7 +270,7 @@ const props = defineProps({
   /** 'row' (default) | 'card' | 'compact' */
   layout:       { type: String,  default: 'row' },
   categorySlug: { type: String,  required: true },
-  currency:     { type: String,  default: 'USD' },
+  currency:     { type: String,  default: 'MAD' },
   isBrowseOnly: { type: Boolean, default: false },
   isOpen:       { type: Boolean, default: true },
 })
@@ -278,7 +278,7 @@ const props = defineProps({
 const router = useRouter()
 const cart   = useCartStore()
 const toast  = useToastStore()
-const { t, formatCurrency } = useI18n()
+const { t, formatPrice } = useI18n()
 
 // ── Availability states ─────────────────────────────────────────────────────
 const isSoldOut          = computed(() => props.dish.is_available === false)

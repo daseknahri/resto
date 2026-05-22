@@ -200,7 +200,7 @@
                 </p>
               </div>
               <div class="shrink-0 text-right space-y-0.5">
-                <p class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatCurrency(order.total, order.currency) }}</p>
+                <p class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(order.total) }}</p>
                 <p class="text-[10px] text-slate-500">{{ t('menu.viewStatus') }}</p>
               </div>
             </RouterLink>
@@ -222,7 +222,7 @@
           <p class="text-sm font-semibold text-white">{{ t('common.cart') }}</p>
         </div>
         <div class="flex items-center gap-2">
-          <p class="text-base font-bold" style="color:var(--color-secondary)">{{ formatCurrency(cart.total, cartCurrency) }}</p>
+          <p class="text-base font-bold" style="color:var(--color-secondary)">{{ formatPrice(cart.total) }}</p>
           <AppIcon name="cart" class="h-4 w-4" style="color:var(--color-secondary)" />
         </div>
       </RouterLink>
@@ -251,7 +251,7 @@ const cart   = useCartStore()
 const toast  = useToastStore()
 const router = useRouter()
 const route  = useRoute()
-const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n()
+const { currentLocale, formatCurrency, formatPrice, itemCountLabel, t } = useI18n()
 
 // ── Route props (passed by /m/:menuSlug) ─────────────────────────────────────
 const props = defineProps({
@@ -292,7 +292,7 @@ const tenantDescription = computed(() => String(profile.value?.description || pr
 const heroImage        = computed(() => String(profile.value?.hero_url || '').trim())
 const logoImage        = computed(() => String(profile.value?.logo_url || '').trim())
 const locationLine     = computed(() => String(profile.value?.address || meta.value?.name || '').trim())
-const cartCurrency     = computed(() => cart.items.find(i => i.currency)?.currency || meta.value?.plan?.currency || 'USD')
+const cartCurrency     = computed(() => cart.items.find(i => i.currency)?.currency || meta.value?.plan?.currency || 'MAD')
 
 /** Card layout from profile: 'row' | 'card' | 'compact', defaults to 'row' */
 const cardLayout = computed(() => profile.value?.menu_card_layout || 'row')
