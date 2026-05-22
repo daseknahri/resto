@@ -22,24 +22,85 @@
     </div>
 
     <!-- Not signed in -->
-    <div v-else-if="!customerStore.isAuthenticated" class="ui-panel ui-reveal p-6 space-y-4 text-center">
-      <div class="flex justify-center">
-        <span class="flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60">
-          <AppIcon name="user" class="h-7 w-7 text-slate-400" />
-        </span>
+    <template v-else-if="!customerStore.isAuthenticated">
+      <div class="ui-panel ui-reveal p-6 space-y-4 text-center">
+        <div class="flex justify-center">
+          <span class="flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60">
+            <AppIcon name="user" class="h-7 w-7 text-slate-400" />
+          </span>
+        </div>
+        <div class="space-y-1">
+          <p class="text-base font-semibold text-slate-100">{{ t('customerAccount.notSignedInTitle') }}</p>
+          <p class="text-sm text-slate-400">{{ t('customerAccount.notSignedInBody') }}</p>
+        </div>
+        <button class="ui-btn-primary mx-auto justify-center" @click="showAuthModal = true">
+          <AppIcon name="user" class="h-3.5 w-3.5" />
+          {{ t('customerAccount.signIn') }}
+        </button>
       </div>
-      <div class="space-y-1">
-        <p class="text-base font-semibold text-slate-100">{{ t('customerAccount.notSignedInTitle') }}</p>
-        <p class="text-sm text-slate-400">{{ t('customerAccount.notSignedInBody') }}</p>
-      </div>
-      <button class="ui-btn-primary mx-auto justify-center" @click="showAuthModal = true">
-        <AppIcon name="user" class="h-3.5 w-3.5" />
-        {{ t('customerAccount.signIn') }}
-      </button>
-    </div>
+
+      <!-- Recent orders from this device (anonymous) -->
+      <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
+        <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
+        <ul class="space-y-2">
+          <li
+            v-for="order in cart.recentOrders"
+            :key="order.order_number"
+            class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+          >
+            <RouterLink
+              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+              class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+            >
+              {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
+            </RouterLink>
+            <div class="mt-0.5 flex flex-wrap gap-2 text-slate-400">
+              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </template>
 
     <!-- Signed in: profile + orders -->
     <template v-else>  <!-- customerStore.loaded && isAuthenticated -->
+
+      <!-- ── Active (running) orders ── -->
+      <template v-if="!loadingOrders && activeOrders.length">
+        <section
+          v-for="order in activeOrders"
+          :key="order.order_number"
+          class="ui-reveal relative overflow-hidden rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 p-4"
+        >
+          <!-- pulsing glow ring -->
+          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-[var(--color-secondary)]/20 animate-pulse" />
+          <div class="relative flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15">
+              <span class="block h-2.5 w-2.5 animate-ping rounded-full bg-[var(--color-secondary)]" />
+            </span>
+            <div class="min-w-0 flex-1 space-y-0.5">
+              <p class="text-sm font-semibold text-[var(--color-secondary)]">
+                {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
+              </p>
+              <p class="text-xs text-slate-400">
+                {{ statusLabel(order.status) }}
+                <span v-if="order.fulfillment_type"> · {{
+                  order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
+                  order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
+                  t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
+                }}</span>
+              </p>
+            </div>
+            <RouterLink
+              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+              class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/25 transition-colors"
+            >
+              {{ t('customerAccount.trackOrder') }}
+              <AppIcon name="arrow-right" class="h-3 w-3" />
+            </RouterLink>
+          </div>
+        </section>
+      </template>
 
       <!-- ── Compact profile strip ── -->
       <section class="ui-panel ui-reveal p-4 space-y-3">
@@ -490,6 +551,9 @@ const localeLabelCurrent = computed(() => LOCALE_LABELS[selectedLocale.value] ||
 const loadingOrders = ref(false);
 const ordersError = ref(false);
 const apiOrders = ref([]);
+
+const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+const activeOrders = computed(() => apiOrders.value.filter(o => ACTIVE_STATUSES.has(o.status)));
 const loadingWallet = ref(false);
 const walletTransactions = ref([]);
 const walletBalance = computed(() => {

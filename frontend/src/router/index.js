@@ -46,7 +46,6 @@ const OwnerDeliverySettings = () => import("../pages/OwnerDeliverySettings.vue")
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
-const FindMyOrder = () => import("../pages/FindMyOrder.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
@@ -103,7 +102,7 @@ const routes = [
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },
       { path: "cart", name: "cart", component: Cart, meta: { interface: "customer" } },
       { path: "order/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
-      { path: "find-my-order", name: "find-my-order", component: FindMyOrder, meta: { interface: "customer" } },
+      { path: "find-my-order", redirect: { name: "customer-account" } },
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
       {
         path: "menu/:slug",

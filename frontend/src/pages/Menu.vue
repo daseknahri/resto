@@ -208,15 +208,6 @@
         </ul>
       </section>
 
-      <div class="pb-2 text-center">
-        <RouterLink
-          :to="{ name: 'find-my-order' }"
-          class="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-        >
-          <AppIcon name="search" class="h-3.5 w-3.5" />
-          {{ t('menu.findMyOrder') }}
-        </RouterLink>
-      </div>
     </div>
 
     <!-- ── Sticky cart bar (mobile) ──────────────────────────────────────── -->

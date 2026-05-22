@@ -179,6 +179,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M19 12H5", "M12 5l-7 7 7 7"],
   },
+  arrowRight: {
+    viewBox: "0 0 24 24",
+    paths: ["M5 12h14", "M12 5l7 7-7 7"],
+  },
   tag: {
     viewBox: "0 0 24 24",
     paths: ["M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z", "M7 7h.01"],
