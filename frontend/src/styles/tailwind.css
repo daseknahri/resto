@@ -2023,3 +2023,12 @@ html[data-menu-theme="warm"]  .bg-slate-950\/86 { background-color: rgba(255,248
 html[data-menu-theme="light"] .divide-slate-800\/50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(100,116,139,0.12); }
 html[data-menu-theme="warm"]  .divide-slate-800\/50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(160,100,40,0.12); }
 
+/* ── Dropdown item hover + active bg (LanguageSwitcher, CurrencySelector) ──── */
+html[data-menu-theme="light"] .bg-slate-800\/70  { background-color: rgba(248,250,252,0.88); }
+html[data-menu-theme="light"] .bg-slate-800\/80  { background-color: rgba(248,250,252,0.90); }
+html[data-menu-theme="light"] .hover\:bg-slate-800\/80:hover { background-color: rgba(241,245,249,0.85); }
+
+html[data-menu-theme="warm"]  .bg-slate-800\/70  { background-color: rgba(253,246,239,0.88); }
+html[data-menu-theme="warm"]  .bg-slate-800\/80  { background-color: rgba(253,246,239,0.90); }
+html[data-menu-theme="warm"]  .hover\:bg-slate-800\/80:hover { background-color: rgba(255,248,237,0.85); }
+

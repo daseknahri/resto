@@ -131,7 +131,7 @@
 
       <!-- About -->
       <div v-if="hasAboutContent" class="ui-panel ui-reveal p-4 space-y-3">
-        <p class="ui-kicker">{{ t('customerLeadPage.businessHours') === 'Hours' ? 'About' : t('customerLeadPage.about') }}</p>
+        <p class="ui-kicker">{{ t('customerLeadPage.about') }}</p>
         <p class="text-sm leading-relaxed text-slate-300">{{ tenantDescription }}</p>
         <!-- Social links -->
         <div v-if="socialLinks.length" class="flex flex-wrap gap-2 pt-1">
