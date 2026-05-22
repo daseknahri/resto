@@ -139,11 +139,14 @@ else:
     }
 
 # ── Session store ──────────────────────────────────────────────────────────────
-# cached_db: writes to Redis (fast) AND the django_session DB table (durable).
-# If Redis restarts, sessions fall back to the DB — customers stay logged in.
-# Without Redis, Django uses its default database-backed sessions automatically.
+# cache backend (Redis): session lives only in Redis.
+# NOTE: cached_db is NOT used here because django-tenants switches the DB
+# connection to the tenant schema before session save in middleware unwind,
+# and django_session only exists in the public schema — writing to a tenant
+# schema causes a 500 on every authenticated request.
+# Without Redis, Django falls back to database-backed sessions automatically.
 if _REDIS_URL:
-    SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
     SESSION_CACHE_ALIAS = "default"
 
 # Keep customers logged in for 90 days unless they explicitly sign out.
