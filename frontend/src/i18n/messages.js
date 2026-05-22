@@ -2468,6 +2468,9 @@ export const messages = {
       findMyOrderItems: "{count} item | {count} items",
       receiptMessage: "A message from the restaurant",
       walletPaid: "Credits applied: {amount}",
+      tableSignInNudgeTitle: "Save your orders",
+      tableSignInNudgeBody: "Sign in to track all your orders, earn loyalty points, and speed up future checkouts.",
+      tableSignInNudgeButton: "Sign in / Create account",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -2511,6 +2514,11 @@ export const messages = {
       googleError: "Google sign-in failed. Please try again.",
       resendCode: "Resend code",
       resendIn: "Resend in {seconds}s",
+      nameSetupTitle: "One last thing",
+      nameSetupHint: "Add your name so we can personalize your orders. You can skip this.",
+      nameSetupSave: "Save name",
+      nameSetupSkip: "Skip for now",
+      saving: "Saving…",
     },
     customerAccount: {
       kicker: "Your account",
@@ -4661,6 +4669,11 @@ export const messages = {
       googleError: "La connexion Google a echoue. Veuillez reessayer.",
       resendCode: "Renvoyer le code",
       resendIn: "Renvoyer dans {seconds}s",
+      nameSetupTitle: "Une derniere etape",
+      nameSetupHint: "Ajoutez votre nom pour personnaliser vos commandes. Vous pouvez ignorer.",
+      nameSetupSave: "Enregistrer le nom",
+      nameSetupSkip: "Passer pour l'instant",
+      saving: "Enregistrement…",
     },
     ownerOrders: {
       kicker: "Gestion des commandes",
@@ -5086,6 +5099,9 @@ export const messages = {
       findMyOrderItems: "{count} article | {count} articles",
       receiptMessage: "Un message du restaurant",
       walletPaid: "Credits appliques : {amount}",
+      tableSignInNudgeTitle: "Sauvegardez vos commandes",
+      tableSignInNudgeBody: "Connectez-vous pour suivre toutes vos commandes, gagner des points de fidelite et accelerer vos prochains paiements.",
+      tableSignInNudgeButton: "Se connecter / Creer un compte",
     },
     customerAccount: {
       kicker: "Votre compte",

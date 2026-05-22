@@ -78,18 +78,6 @@
               />
               <p v-if="otpError" class="text-xs text-red-300">{{ otpError }}</p>
             </label>
-            <label v-if="!customerStore.isAuthenticated" class="block space-y-1">
-              <span class="text-xs text-slate-400">{{ t("customerAuth.nameOptional") }}</span>
-              <input
-                v-model.trim="name"
-                type="text"
-                autocomplete="name"
-                maxlength="80"
-                class="ui-input"
-                :placeholder="t('customerAuth.namePlaceholder')"
-                :disabled="verifying"
-              />
-            </label>
             <button
               class="ui-btn-primary w-full justify-center"
               :disabled="verifying || otpCode.length < 4"
@@ -110,6 +98,38 @@
               @click="requestOtp"
             >
               {{ resendSeconds > 0 ? t("customerAuth.resendIn", { seconds: resendSeconds }) : t("customerAuth.resendCode") }}
+            </button>
+          </div>
+
+          <!-- ── Name setup step (first sign-up only) ── -->
+          <div v-else-if="step === 'setup'" class="space-y-3">
+            <div class="space-y-0.5">
+              <p class="text-sm font-semibold text-slate-100">{{ t("customerAuth.nameSetupTitle") }}</p>
+              <p class="text-xs text-slate-400">{{ t("customerAuth.nameSetupHint") }}</p>
+            </div>
+            <input
+              ref="nameInputRef"
+              v-model.trim="setupName"
+              type="text"
+              autocomplete="name"
+              maxlength="80"
+              class="ui-input"
+              :placeholder="t('customerAuth.namePlaceholder')"
+              :disabled="savingName"
+              @keydown.enter.prevent="saveName"
+            />
+            <button
+              class="ui-btn-primary w-full justify-center"
+              :disabled="savingName || !setupName"
+              @click="saveName"
+            >
+              {{ savingName ? t("customerAuth.saving") : t("customerAuth.nameSetupSave") }}
+            </button>
+            <button
+              class="text-xs text-slate-400 hover:text-slate-200 transition w-full text-center"
+              @click="skipName"
+            >
+              {{ t("customerAuth.nameSetupSkip") }}
             </button>
           </div>
 
@@ -138,17 +158,22 @@ const customerStore = useCustomerStore();
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-const step        = ref("phone"); // 'phone' | 'verify'
+const step        = ref("phone"); // 'phone' | 'verify' | 'setup'
 const phone       = ref("");
 const otpCode     = ref("");
-const name        = ref("");
+const setupName   = ref("");
 const requesting  = ref(false);
 const verifying   = ref(false);
+const savingName  = ref(false);
 const phoneError  = ref("");
 const otpError    = ref("");
 const generalError = ref("");
 const resendSeconds = ref(0);
-const otpInputRef = ref(null);
+const otpInputRef  = ref(null);
+const nameInputRef = ref(null);
+
+// Holds the verified customer while waiting for name setup
+let _pendingCustomer = null;
 
 let resendTimer = null;
 
@@ -198,11 +223,19 @@ const verifyOtp = async () => {
     const res = await api.post("/customer/auth/phone/verify/", {
       phone: phone.value,
       code: otpCode.value,
-      name: name.value,
     });
-    customerStore.setCustomer(res.data.customer);
-    emit("authenticated", res.data.customer);
-    emit("close");
+    const customer = res.data.customer;
+    customerStore.setCustomer(customer);
+    // First-time sign-up: no name yet → go to name setup step
+    if (!customer.name) {
+      _pendingCustomer = customer;
+      step.value = "setup";
+      await nextTick();
+      nameInputRef.value?.focus();
+    } else {
+      emit("authenticated", customer);
+      emit("close");
+    }
   } catch (err) {
     const code   = err?.response?.data?.code;
     const detail = err?.response?.data?.detail;
@@ -219,8 +252,30 @@ const verifyOtp = async () => {
   }
 };
 
+const saveName = async () => {
+  if (!setupName.value || savingName.value) return;
+  savingName.value = true;
+  try {
+    const res = await api.patch("/customer/profile/", { name: setupName.value });
+    customerStore.setCustomer(res.data.customer);
+    emit("authenticated", res.data.customer);
+    emit("close");
+  } catch {
+    // Save failed — still close with the original customer
+    emit("authenticated", _pendingCustomer);
+    emit("close");
+  } finally {
+    savingName.value = false;
+  }
+};
+
+const skipName = () => {
+  emit("authenticated", _pendingCustomer);
+  emit("close");
+};
+
 const backToPhone = () => {
-  step.value   = "phone";
+  step.value    = "phone";
   otpCode.value = "";
   otpError.value = "";
 };

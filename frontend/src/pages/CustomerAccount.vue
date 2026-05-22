@@ -40,37 +40,36 @@
 
     <!-- Signed in: profile + orders -->
     <template v-else>  <!-- customerStore.loaded && isAuthenticated -->
-      <!-- Profile card -->
-      <section class="ui-panel ui-reveal p-4 space-y-4">
-        <p class="ui-kicker">{{ t('customerAccount.profileTitle') }}</p>
 
-        <div class="flex flex-wrap items-start gap-3">
+      <!-- ── Compact profile strip ── -->
+      <section class="ui-panel ui-reveal p-4 space-y-3">
+        <div class="flex items-center gap-3">
           <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60">
             <AppIcon name="user" class="h-5 w-5 text-slate-400" />
           </span>
-          <div class="min-w-0 flex-1 space-y-2">
-            <!-- Inline name edit -->
+          <div class="min-w-0 flex-1 space-y-1.5">
+            <!-- Name inline edit -->
             <div class="flex items-center gap-2">
               <input
                 v-model.trim="editableName"
                 type="text"
                 maxlength="80"
-                class="ui-input flex-1"
+                class="ui-input flex-1 text-sm py-1"
                 :placeholder="t('customerAccount.namePlaceholder')"
                 :disabled="savingName"
               />
               <button
                 v-if="editableName !== (customerStore.customer?.name || '')"
-                class="ui-btn-primary shrink-0 px-3 py-1.5 text-xs"
+                class="ui-btn-primary shrink-0 px-3 py-1 text-xs"
                 :disabled="savingName"
                 @click="saveName"
-              >
-                {{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}
-              </button>
+              >{{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}</button>
             </div>
-
-            <!-- Verified badges -->
-            <div class="flex flex-wrap gap-2">
+            <!-- Phone + verified badges -->
+            <div class="flex flex-wrap items-center gap-2">
+              <span v-if="customerStore.customer?.phone" class="text-xs text-slate-400">
+                {{ customerStore.customer.phone }}
+              </span>
               <span
                 v-if="customerStore.customer?.phone_verified"
                 class="ui-chip border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px]"
@@ -85,87 +84,66 @@
                 <AppIcon name="check" class="h-3 w-3" />
                 {{ t('customerAccount.verifiedEmail') }}
               </span>
-              <span
-                v-if="customerStore.customer?.has_google"
-                class="ui-chip border-sky-500/40 bg-sky-500/10 text-sky-300 text-[10px]"
-              >
-                <AppIcon name="info" class="h-3 w-3" />
-                {{ t('customerAccount.googleConnected') }}
-              </span>
-              <span
-                v-if="!customerStore.isVerified"
-                class="ui-chip border-amber-500/40 bg-amber-500/10 text-amber-300 text-[10px]"
-              >
-                {{ t('customerAccount.notVerified') }}
-              </span>
-              <span
-                v-if="walletBalance > 0"
-                class="ui-chip border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-[10px]"
-              >
-                💰 {{ walletBalance }} {{ t('customerAccount.walletTitle') }}
+              <span v-if="walletBalance > 0" class="ui-chip border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] text-[10px]">
+                💰 {{ walletBalance }}
               </span>
             </div>
-
-            <p v-if="customerStore.customer?.phone" class="text-xs text-slate-400">
-              {{ customerStore.customer.phone }}
-            </p>
-
-            <!-- Email row: show/add/edit -->
-            <div class="flex items-center gap-2 flex-wrap">
-              <template v-if="!showEmailInput">
-                <span v-if="customerStore.customer?.email" class="text-xs text-slate-400">
-                  {{ customerStore.customer.email }}
-                  <span v-if="!customerStore.customer?.email_verified" class="ml-1 text-amber-400">·</span>
-                </span>
-                <button
-                  class="inline-flex items-center gap-1 text-[11px] transition-colors"
-                  :class="customerStore.customer?.email
-                    ? 'text-slate-500 hover:text-slate-300'
-                    : 'text-sky-400 hover:text-sky-300'"
-                  @click="openEmailInput"
-                >
-                  <AppIcon name="plus" class="h-3 w-3" />
-                  {{ customerStore.customer?.email ? t('customerAccount.editEmail') : t('customerAccount.addEmail') }}
-                </button>
-              </template>
-              <template v-else>
-                <input
-                  ref="emailInputRef"
-                  v-model.trim="editableEmail"
-                  type="email"
-                  autocomplete="email"
-                  maxlength="254"
-                  class="ui-input flex-1 min-w-0 text-xs py-1"
-                  :placeholder="t('customerAccount.emailPlaceholder')"
-                  :disabled="savingEmail"
-                  @keydown.enter.prevent="saveEmail"
-                  @keydown.escape.prevent="cancelEmailInput"
-                />
-                <button
-                  class="ui-btn-primary shrink-0 px-2.5 py-1 text-xs"
-                  :disabled="savingEmail || !editableEmail"
-                  @click="saveEmail"
-                >{{ savingEmail ? t('customerAccount.saving') : t('common.save') }}</button>
-                <button class="text-xs text-slate-500 hover:text-slate-300 transition" @click="cancelEmailInput">
-                  {{ t('common.cancel') }}
-                </button>
-              </template>
-            </div>
-            <p v-if="emailError" class="text-xs text-red-300">{{ emailError }}</p>
-
-            <!-- Add phone CTA — shown when signed in but no phone yet -->
-            <button
-              v-if="!customerStore.customer?.phone"
-              class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-500/70 transition-colors"
-              @click="showAddPhone = true"
-            >
-              <AppIcon name="plus" class="h-3 w-3" />
-              {{ t('customerAccount.addPhone') }}
-            </button>
           </div>
+          <!-- Sign out -->
+          <button class="shrink-0 text-xs text-slate-500 hover:text-red-300 transition" @click="handleLogout">
+            {{ t('customerAccount.signOut') }}
+          </button>
         </div>
 
-        <!-- Locale preference — full picker on first setup, compact after selection -->
+        <!-- Add phone CTA -->
+        <button
+          v-if="!customerStore.customer?.phone"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-500/70 transition-colors"
+          @click="showAddPhone = true"
+        >
+          <AppIcon name="plus" class="h-3 w-3" />
+          {{ t('customerAccount.addPhone') }}
+        </button>
+
+        <!-- Email row -->
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <template v-if="!showEmailInput">
+              <span v-if="customerStore.customer?.email" class="text-xs text-slate-400">
+                {{ customerStore.customer.email }}
+              </span>
+              <button
+                class="inline-flex items-center gap-1 text-[11px] transition-colors"
+                :class="customerStore.customer?.email ? 'text-slate-500 hover:text-slate-300' : 'text-sky-400 hover:text-sky-300'"
+                @click="openEmailInput"
+              >
+                <AppIcon name="plus" class="h-3 w-3" />
+                {{ customerStore.customer?.email ? t('customerAccount.editEmail') : t('customerAccount.addEmail') }}
+              </button>
+            </template>
+            <template v-else>
+              <input
+                ref="emailInputRef"
+                v-model.trim="editableEmail"
+                type="email"
+                autocomplete="email"
+                maxlength="254"
+                class="ui-input flex-1 min-w-0 text-xs py-1"
+                :placeholder="t('customerAccount.emailPlaceholder')"
+                :disabled="savingEmail"
+                @keydown.enter.prevent="saveEmail"
+                @keydown.escape.prevent="cancelEmailInput"
+              />
+              <button class="ui-btn-primary shrink-0 px-2.5 py-1 text-xs" :disabled="savingEmail || !editableEmail" @click="saveEmail">
+                {{ savingEmail ? t('customerAccount.saving') : t('common.save') }}
+              </button>
+              <button class="text-xs text-slate-500 hover:text-slate-300 transition" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
+            </template>
+          </div>
+          <p v-if="emailError" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
+        </div>
+
+        <!-- Locale -->
         <div v-if="!localeConfigured" class="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
           <p class="text-xs font-semibold text-slate-300">{{ t('customerAccount.localeTitle') }}</p>
           <div class="flex flex-wrap gap-2">
@@ -181,44 +159,34 @@
             >{{ lang.label }}</button>
           </div>
         </div>
-        <div v-else class="flex items-center justify-between gap-2 px-0.5">
-          <p class="text-xs text-slate-500">
-            {{ t('customerAccount.localeTitle') }}: <span class="text-slate-300">{{ localeLabelCurrent }}</span>
-          </p>
-          <button class="text-[11px] text-slate-500 hover:text-slate-300 transition" @click="localeConfigured = false">
-            {{ t('common.change') }}
-          </button>
+        <div v-else class="flex items-center justify-between gap-2">
+          <p class="text-xs text-slate-500">{{ t('customerAccount.localeTitle') }}: <span class="text-slate-300">{{ localeLabelCurrent }}</span></p>
+          <button class="text-[11px] text-slate-500 hover:text-slate-300 transition" @click="localeConfigured = false">{{ t('common.change') }}</button>
         </div>
-
-        <button
-          class="ui-btn-outline w-full justify-center text-sm text-red-300 hover:border-red-400/50"
-          @click="handleLogout"
-        >
-          <AppIcon name="close" class="h-3.5 w-3.5" />
-          {{ t('customerAccount.signOut') }}
-        </button>
       </section>
 
-      <!-- API orders -->
+      <!-- ── Unified order history ── -->
       <section class="ui-panel ui-reveal p-4 space-y-3">
-        <p class="ui-kicker">{{ t('customerAccount.ordersTitle') }}</p>
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-kicker">{{ t('customerAccount.ordersTitle') }}</p>
+          <span v-if="apiOrders.length" class="text-[11px] text-slate-500">{{ apiOrders.length }}</span>
+        </div>
 
-        <div v-if="loadingOrders" class="text-xs text-slate-400">
-          {{ t('customerAccount.loading') }}
+        <div v-if="loadingOrders" class="space-y-2">
+          <div v-for="i in 2" :key="i" class="h-12 animate-pulse rounded-xl bg-slate-800/60" />
         </div>
-        <div v-else-if="ordersError" class="text-xs text-red-300">
-          {{ t('customerAccount.fetchError') }}
-        </div>
-        <div v-else-if="!apiOrders.length" class="text-xs text-slate-500">
+        <div v-else-if="ordersError" class="text-xs text-red-300">{{ t('customerAccount.fetchError') }}</div>
+        <div v-else-if="!apiOrders.length && !cart.recentOrders.length" class="text-xs text-slate-500 py-2">
           {{ t('customerAccount.ordersEmpty') }}
         </div>
-        <ul v-else class="space-y-2">
+
+        <!-- API orders (authenticated) -->
+        <ul v-else-if="apiOrders.length" class="space-y-2">
           <li
             v-for="order in apiOrders"
             :key="order.order_number"
             class="rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs"
           >
-            <!-- Order header row -->
             <div class="flex items-start gap-2 px-3 py-2.5">
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
@@ -234,20 +202,15 @@
                   <span v-if="order.fulfillment_type">{{
                     order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
                     order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
-                    order.fulfillment_type === 'table' ? t('orderStatus.fulfillmentTable', { table: order.table_label || '' }) :
-                    order.fulfillment_type
+                    t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
                   }}</span>
                   <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
                   <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
                 </div>
-                <!-- Rating -->
                 <div v-if="order.has_rating" class="mt-1 flex items-center gap-1">
                   <span class="text-amber-400 tracking-tight text-[11px]">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
-                  <span class="text-slate-500 text-[10px]">{{ t('customerAccount.orderRatingStars', { score: order.rating_score }) }}</span>
                 </div>
               </div>
-
-              <!-- Expand toggle -->
               <button
                 v-if="order.items?.length"
                 class="shrink-0 mt-0.5 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
@@ -256,25 +219,15 @@
                 {{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}
               </button>
             </div>
-
-            <!-- Expanded: item list + reorder button -->
             <Transition name="ui-expand">
               <div v-if="expandedOrders.has(order.order_number) && order.items?.length"
                 class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
               >
                 <ul class="space-y-1">
-                  <li
-                    v-for="(item, idx) in order.items"
-                    :key="idx"
-                    class="flex items-start justify-between gap-2 text-slate-300"
-                  >
+                  <li v-for="(item, idx) in order.items" :key="idx" class="flex items-start justify-between gap-2 text-slate-300">
                     <span class="min-w-0 flex-1">
-                      <span class="text-slate-400">{{ item.qty }}×</span>
-                      {{ item.dish_name }}
-                      <span v-if="item.options?.length" class="ml-1 text-slate-500">
-                        ({{ item.options.map(o => o.name).join(', ') }})
-                      </span>
-                      <span v-if="item.note" class="ml-1 italic text-slate-500">— {{ item.note }}</span>
+                      <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
+                      <span v-if="item.options?.length" class="ml-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
                     </span>
                     <span class="shrink-0 text-slate-400">{{ formatCurrency(item.subtotal, order.currency) }}</span>
                   </li>
@@ -290,6 +243,27 @@
             </Transition>
           </li>
         </ul>
+
+        <!-- Local-only orders (anonymous, not signed in yet) -->
+        <template v-else-if="cart.recentOrders.length">
+          <ul class="space-y-2">
+            <li
+              v-for="order in cart.recentOrders"
+              :key="order.order_number"
+              class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+            >
+              <RouterLink
+                :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+              >
+                {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
+              </RouterLink>
+              <div class="mt-0.5 flex flex-wrap gap-2 text-slate-400">
+                <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+              </div>
+            </li>
+          </ul>
+        </template>
       </section>
 
       <!-- Wallet -->
@@ -402,27 +376,6 @@
         </ul>
       </section>
 
-      <!-- Local (localStorage) recent orders -->
-      <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
-        <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
-        <ul class="space-y-2">
-          <li
-            v-for="order in cart.recentOrders"
-            :key="order.order_number"
-            class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
-          >
-            <RouterLink
-              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
-            >
-              {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
-            </RouterLink>
-            <div class="mt-1 text-slate-400">
-              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
-            </div>
-          </li>
-        </ul>
-      </section>
     </template>
 
     <CustomerAuthModal

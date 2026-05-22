@@ -1436,7 +1436,10 @@ const arabicMessages = {
     "cancelledTitle": "تم إلغاء الطلب",
     "cancelledBody": "تم إلغاء هذا الطلب. يُرجى التواصل مع المطعم إذا كان لديك استفسار.",
     "readyNotifTitle": "الطلب جاهز!",
-    "readyNotifBody": "الطلب رقم #{number} جاهز لاستلامك."
+    "readyNotifBody": "الطلب رقم #{number} جاهز لاستلامك.",
+    "tableSignInNudgeTitle": "احفظ طلباتك",
+    "tableSignInNudgeBody": "سجّل دخولك لتتبع جميع طلباتك وكسب نقاط الولاء وتسريع عمليات الدفع.",
+    "tableSignInNudgeButton": "تسجيل الدخول / إنشاء حساب"
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",
@@ -2228,6 +2231,11 @@ Object.assign(arabicMessages, {
     googleError: "\u0641\u0634\u0644 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644 \u0628\u062c\u0648\u062c\u0644. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u062c\u062f\u062f\u0627\u064b.",
     resendCode: "\u0625\u0639\u0627\u062f\u0629 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0645\u0632",
     resendIn: "\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0625\u0631\u0633\u0627\u0644 \u062e\u0644\u0627\u0644 {seconds}\u062b",
+    nameSetupTitle: "\u062e\u0637\u0648\u0629 \u0623\u062e\u064a\u0631\u0629",
+    nameSetupHint: "\u0623\u0636\u0641 \u0627\u0633\u0645\u0643 \u0644\u062a\u062e\u0635\u064a\u0635 \u0637\u0644\u0628\u0627\u062a\u0643. \u064a\u0645\u0643\u0646\u0643 \u062a\u062e\u0637\u064a \u0647\u0630\u0627.",
+    nameSetupSave: "\u062d\u0641\u0638 \u0627\u0644\u0627\u0633\u0645",
+    nameSetupSkip: "\u062a\u062e\u0637\u064a \u0641\u064a \u0627\u0644\u0648\u0642\u062a \u0627\u0644\u062d\u0627\u0644\u064a",
+    saving: "\u062c\u0627\u0631\u064d \u0627\u0644\u062d\u0641\u0638\u2026",
   },
   customerAccount: {
     kicker: "\u062d\u0633\u0627\u0628\u0643",

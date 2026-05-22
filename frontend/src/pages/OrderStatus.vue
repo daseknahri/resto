@@ -279,6 +279,21 @@
         <p v-if="orderData.rating.comment" class="text-sm text-slate-400 italic">{{ orderData.rating.comment }}</p>
       </div>
 
+      <!-- Sign-in nudge for anonymous table orders -->
+      <div
+        v-if="orderData.fulfillment_type === 'table' && !customerStore.isAuthenticated"
+        class="ui-panel ui-reveal p-4 space-y-3"
+      >
+        <div class="space-y-1">
+          <p class="text-sm font-semibold text-slate-100">{{ t("orderStatus.tableSignInNudgeTitle") }}</p>
+          <p class="text-xs text-slate-400">{{ t("orderStatus.tableSignInNudgeBody") }}</p>
+        </div>
+        <button class="ui-btn-primary inline-flex w-full justify-center py-2 text-sm" @click="showAuthModal = true">
+          <AppIcon name="user" class="h-3.5 w-3.5" />
+          {{ t("orderStatus.tableSignInNudgeButton") }}
+        </button>
+      </div>
+
       <!-- Re-order + navigation -->
       <div class="flex flex-wrap items-center justify-between gap-3">
         <span v-if="isLiveStatus" class="text-xs text-slate-500">
@@ -299,13 +314,22 @@
       </div>
     </template>
   </div>
+
+  <CustomerAuthModal
+    v-if="showAuthModal"
+    @close="showAuthModal = false"
+    @authenticated="showAuthModal = false"
+  />
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import AppIcon from "../components/AppIcon.vue";
+import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCartStore } from "../stores/cart";
+import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
@@ -316,9 +340,12 @@ const props = defineProps({
 
 const router = useRouter();
 const cart = useCartStore();
+const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
 const toast = useToastStore();
 const { t } = useI18n();
+
+const showAuthModal = ref(false);
 
 const POLL_INTERVAL_S = 15;
 const orderData = ref(null);
