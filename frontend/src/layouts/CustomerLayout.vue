@@ -21,6 +21,7 @@
 
             <div class="flex items-center gap-2">
               <LanguageSwitcher compact dropdown />
+              <CurrencySelector />
               <!-- Color scheme toggle -->
               <button
                 class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
@@ -144,15 +145,18 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import AppIcon from "../components/AppIcon.vue";
+import CurrencySelector from "../components/CurrencySelector.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
+import { useCurrencyStore } from "../stores/currency";
 import { useTenantStore } from "../stores/tenant";
 
 const cart = useCartStore();
 const customerStore = useCustomerStore();
+const currencyStore = useCurrencyStore();
 const tenant = useTenantStore();
 const route = useRoute();
 const { currentLocale, t } = useI18n();
@@ -309,6 +313,7 @@ onMounted(() => {
   loadOrderTracking();
   syncTableFromQuery();
   customerStore.fetchCustomer();
+  currencyStore.fetchRates();
   applyColorScheme();
   _mqDark = window.matchMedia('(prefers-color-scheme: dark)')
   _mqDark.addEventListener('change', _onOsThemeChange)

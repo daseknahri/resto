@@ -1,6 +1,7 @@
 ﻿from django.contrib import admin
+from django.contrib import messages
 
-from .models import AnalyticsEvent, Category, ClosureDate, Dish, DishOption, OptionGroup, SuperCategory, TableLink, WaitlistEntry
+from .models import AnalyticsEvent, Category, ClosureDate, CurrencyRate, Dish, DishOption, OptionGroup, SuperCategory, TableLink, WaitlistEntry
 
 
 @admin.register(SuperCategory)
@@ -91,3 +92,24 @@ class WaitlistEntryAdmin(admin.ModelAdmin):
     search_fields = ("name", "phone", "email")
     readonly_fields = ("created_at",)
     ordering = ("booked_for", "created_at")
+
+
+@admin.register(CurrencyRate)
+class CurrencyRateAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "symbol", "mad_per_unit", "is_active", "updated_at")
+    list_editable = ("mad_per_unit", "is_active")
+    readonly_fields = ("updated_at",)
+    ordering = ("code",)
+    actions = ["fetch_latest_rates"]
+
+    @admin.action(description="⟳ Fetch latest rates from Frankfurter API")
+    def fetch_latest_rates(self, request, queryset):
+        """Trigger the fetch_currency_rates management command inline from the admin."""
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        try:
+            call_command("fetch_currency_rates", stdout=out, stderr=out)
+            self.message_user(request, out.getvalue().strip(), messages.SUCCESS)
+        except Exception as exc:
+            self.message_user(request, f"Fetch failed: {exc}", messages.ERROR)

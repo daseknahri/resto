@@ -28,7 +28,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
+from .models import AnalyticsEvent, Category, CurrencyRate, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .serializers import (
     CategorySerializer,
@@ -4752,3 +4752,34 @@ def _make_unique_slug(name: str, model_class, max_length: int = 200) -> str:
         slug = f"{base}-{suffix}"
         suffix += 1
     return slug
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Currency rates — public endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CurrencyRateListView(APIView):
+    """
+    GET /api/currency-rates/
+
+    Returns all active CurrencyRate rows so the frontend can do client-side
+    price conversion from MAD to the customer's preferred display currency.
+    No authentication required.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        rates = CurrencyRate.objects.filter(is_active=True).values(
+            "code", "name", "symbol", "mad_per_unit"
+        )
+        data = [
+            {
+                "code": r["code"],
+                "name": r["name"],
+                "symbol": r["symbol"],
+                "mad_per_unit": float(r["mad_per_unit"]),
+            }
+            for r in rates
+        ]
+        return Response(data)

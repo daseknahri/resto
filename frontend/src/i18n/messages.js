@@ -4,6 +4,7 @@ export const messages = {
   en: {
     common: {
       language: "Language",
+      currency: "Currency",
       landing: "Landing",
       liveDemo: "Live demo",
       getStarted: "Get started",
@@ -2590,6 +2591,7 @@ export const messages = {
   fr: {
     common: {
       language: "Langue",
+      currency: "Devise",
       landing: "Accueil",
       liveDemo: "Demo live",
       getStarted: "Commencer",

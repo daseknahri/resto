@@ -87,7 +87,7 @@
             <!-- Price badge -->
             <div class="absolute right-3 top-3">
               <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold text-slate-950 shadow-lg">
-                {{ formatCurrency(dish.price, dish.currency) }}
+                {{ formatPrice(dish.price) }}
               </span>
             </div>
           </div>
@@ -181,7 +181,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { currentLocale, formatCurrency, itemCountLabel, t } = useI18n();
+const { currentLocale, formatCurrency, formatPrice, itemCountLabel, t } = useI18n();
 const search = ref("");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);

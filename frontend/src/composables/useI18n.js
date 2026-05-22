@@ -2,6 +2,7 @@ import { computed } from "vue";
 import { DEFAULT_LOCALE, LOCALE_OPTIONS, getLocaleDirection, normalizeLocale } from "../i18n/config";
 import { messages } from "../i18n/messages";
 import { useLocaleStore } from "../stores/locale";
+import { useCurrencyStore } from "../stores/currency";
 
 const getByPath = (target, path) =>
   String(path || "")
@@ -22,6 +23,7 @@ const resolveMessage = (locale, key) => {
 
 export const useI18n = () => {
   const locale = useLocaleStore();
+  const currency = useCurrencyStore();
 
   const currentLocale = computed(() => normalizeLocale(locale.current));
   const localeOptions = LOCALE_OPTIONS;
@@ -54,6 +56,12 @@ export const useI18n = () => {
       ? t("common.item_one", { count })
       : t("common.item_other", { count });
 
+  /**
+   * Format a MAD price in the customer's selected display currency.
+   * Replaces direct formatCurrency(price, dish.currency) calls on customer-facing pages.
+   */
+  const formatPrice = (madAmount) => currency.formatPrice(madAmount, currentLocale.value);
+
   return {
     currentLocale,
     localeOptions,
@@ -62,6 +70,7 @@ export const useI18n = () => {
     setLocale: (value) => locale.setLocale(value),
     formatNumber,
     formatCurrency,
+    formatPrice,
     formatDateTime,
     itemCountLabel,
   };

@@ -553,3 +553,38 @@ class LoyaltyConfig(models.Model):
 
     def __str__(self) -> str:
         return f"LoyaltyConfig (enabled={self.enabled}, {self.points_per_unit}pts/unit)"
+
+
+class CurrencyRate(models.Model):
+    """
+    Platform-wide exchange rates anchored to MAD (Moroccan Dirham).
+
+    mad_per_unit: how many MAD equal 1 unit of this currency.
+      e.g.  EUR → 10.90  means 1 EUR = 10.90 MAD
+            MAD →  1.00  (always 1, the base currency)
+
+    To convert a MAD price to display currency:
+        display_price = mad_price / mad_per_unit
+
+    Updated daily via the `fetch_currency_rates` management command,
+    or manually through the Django admin.
+    """
+
+    code = models.CharField(max_length=3, unique=True, help_text="ISO 4217 code, e.g. EUR")
+    name = models.CharField(max_length=60)
+    symbol = models.CharField(max_length=10, help_text="Display symbol, e.g. €")
+    mad_per_unit = models.DecimalField(
+        max_digits=12,
+        decimal_places=6,
+        help_text="How many MAD equal 1 unit of this currency (1 for MAD itself).",
+    )
+    is_active = models.BooleanField(default=True, help_text="Shown to customers when active.")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+        verbose_name = "Currency Rate"
+        verbose_name_plural = "Currency Rates"
+
+    def __str__(self) -> str:
+        return f"{self.code} — 1 {self.code} = {self.mad_per_unit} MAD"

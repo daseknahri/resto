@@ -90,7 +90,7 @@
         <div class="flex items-start gap-3">
           <h1 class="ui-display flex-1 text-2xl font-bold leading-tight text-slate-100 sm:text-3xl">{{ dish.name }}</h1>
           <span class="mt-1 shrink-0 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-sm font-bold tabular-nums text-slate-900 shadow-lg shadow-[var(--color-secondary)]/25">
-            {{ formatCurrency(dish.price, dish.currency) }}
+            {{ formatPrice(dish.price) }}
           </span>
         </div>
 
@@ -134,7 +134,7 @@
                   />
                   <p class="min-w-0 flex-1 font-medium text-slate-100">{{ opt.name }}</p>
                   <span v-if="Number(opt.price_delta) > 0" class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">
-                    +{{ formatCurrency(opt.price_delta, dish.currency) }}
+                    +{{ formatPrice(opt.price_delta) }}
                   </span>
                 </label>
               </li>
@@ -164,7 +164,7 @@
                   <p class="font-medium text-slate-100">{{ opt.name }}</p>
                   <p v-if="opt.is_required" class="text-[10px] text-amber-300">{{ t('dishPage.required') }}</p>
                 </div>
-                <span class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+                <span class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
               </label>
             </li>
           </ul>
@@ -180,7 +180,7 @@
               class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/60 px-2.5 py-0.5 text-[11px] text-slate-300"
             >
               {{ opt.name }}
-              <span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+              <span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
             </span>
           </div>
           <!-- Price + controls row -->
@@ -191,8 +191,8 @@
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
             </span>
             <div class="min-w-0">
-              <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
-              <p v-if="qty > 1" class="text-[11px] text-slate-500 tabular-nums">{{ qty }} × {{ formatCurrency(unitPriceWithOptions, dish.currency) }}</p>
+              <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(totalWithOptions) }}</p>
+              <p v-if="qty > 1" class="text-[11px] text-slate-500 tabular-nums">{{ qty }} × {{ formatPrice(unitPriceWithOptions) }}</p>
             </div>
             <button
               class="ui-btn-primary ml-auto px-6 py-2.5 text-sm font-semibold"
@@ -231,7 +231,7 @@
               </div>
               <div class="space-y-0.5 p-3">
                 <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
-                <p class="text-sm font-bold text-[var(--color-secondary)]">{{ formatCurrency(item.price, item.currency) }}</p>
+                <p class="text-sm font-bold text-[var(--color-secondary)]">{{ formatPrice(item.price) }}</p>
               </div>
             </RouterLink>
           </div>
@@ -289,7 +289,7 @@
               :key="opt.id"
               class="inline-flex items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-800/60 px-2 py-0.5 text-[10px] text-slate-300"
             >
-              {{ opt.name }}<span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">&nbsp;+{{ formatCurrency(opt.price_delta, dish.currency) }}</span>
+              {{ opt.name }}<span v-if="Number(opt.price_delta) > 0" class="text-[var(--color-secondary)]">&nbsp;+{{ formatPrice(opt.price_delta) }}</span>
             </span>
           </div>
           <!-- required-options warning -->
@@ -299,8 +299,8 @@
         </div>
         <!-- price block -->
         <div class="shrink-0 text-right">
-          <p class="text-base font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(totalWithOptions, dish.currency) }}</p>
-          <p v-if="qty > 1" class="text-[11px] tabular-nums text-slate-500">{{ qty }} × {{ formatCurrency(unitPriceWithOptions, dish.currency) }}</p>
+          <p class="text-base font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(totalWithOptions) }}</p>
+          <p v-if="qty > 1" class="text-[11px] tabular-nums text-slate-500">{{ qty }} × {{ formatPrice(unitPriceWithOptions) }}</p>
         </div>
       </div>
 
@@ -353,7 +353,7 @@ const menu   = useMenuStore();
 const cart   = useCartStore();
 const tenant = useTenantStore();
 const toast  = useToastStore();
-const { currentLocale, formatCurrency, t } = useI18n();
+const { currentLocale, formatCurrency, formatPrice, t } = useI18n();
 const similarVis = useVisibility();
 
 const qty               = ref(1);
@@ -420,7 +420,7 @@ const selectedOptionObjects = computed(() => {
 
 const selectedOptionNote = computed(() => {
   if (!selectedOptionObjects.value.length || !dish.value) return '';
-  const bits = selectedOptionObjects.value.map((opt) => `${opt.name} (+${formatCurrency(opt.price_delta, dish.value.currency)})`);
+  const bits = selectedOptionObjects.value.map((opt) => `${opt.name} (+${formatPrice(opt.price_delta)})`);
   return `${t('dishPage.options')}: ${bits.join(', ')}`;
 });
 

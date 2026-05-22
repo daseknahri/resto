@@ -79,7 +79,7 @@
                 <span class="ui-chip">{{ item.qty }}x</span>
               </div>
               <p class="text-xs text-slate-400">
-                {{ formatCurrency(item.price, item.currency) }}
+                {{ formatPrice(item.price) }}
                 {{ t('cartPage.each') }}
               </p>
               <p v-if="item.note" class="text-xs text-slate-400">
@@ -95,7 +95,7 @@
             <p
               class="text-right text-base font-semibold text-[var(--color-secondary)]"
             >
-              {{ formatCurrency(item.price * item.qty, item.currency) }}
+              {{ formatPrice(item.price * item.qty) }}
             </p>
           </div>
 
@@ -180,7 +180,7 @@
               <div>
                 <p class="ui-kicker">{{ t('cartPage.total') }}</p>
                 <p class="text-3xl font-bold text-[var(--color-secondary)]">
-                  {{ formatCurrency(orderGrandTotal, currency) }}
+                  {{ formatPrice(orderGrandTotal) }}
                 </p>
               </div>
               <div class="text-right text-xs text-slate-400">
@@ -192,11 +192,11 @@
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="border-t border-slate-700/50 pt-2 space-y-1">
               <div class="flex items-center justify-between text-xs text-slate-400">
                 <span>{{ t('cartPage.subtotal') }}</span>
-                <span>{{ formatCurrency(cart.total, currency) }}</span>
+                <span>{{ formatPrice(cart.total) }}</span>
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-300">{{ t('cartPage.deliveryFee') }}</span>
-                <span class="text-slate-200 font-medium">{{ formatCurrency(deliveryFeeAmount, currency) }}</span>
+                <span class="text-slate-200 font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
               </div>
             </div>
             <div v-else-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="border-t border-slate-700/50 pt-2">
@@ -335,7 +335,7 @@
                     ? 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300'
                     : 'border-amber-500/40 bg-amber-500/8 text-amber-300'"
                 >
-                  {{ t('cartPage.deliveryMinOrderLabel', { amount: formatCurrency(deliveryMinOrder, currency) }) }}
+                  {{ t('cartPage.deliveryMinOrderLabel', { amount: formatPrice(deliveryMinOrder) }) }}
                 </span>
               </div>
 
@@ -525,7 +525,7 @@
             <div class="flex items-center justify-between">
               <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.tipLabel') }}</p>
               <span v-if="tipAmount > 0" class="text-xs font-semibold text-[var(--color-secondary)]">
-                + {{ formatCurrency(tipAmount, currency) }}
+                + {{ formatPrice(tipAmount) }}
               </span>
             </div>
             <!-- Preset buttons -->
@@ -561,16 +561,16 @@
           <div class="ui-section-band px-4 py-3 space-y-1">
             <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-slate-400">
               <span>{{ t('cartPage.subtotal') }}</span>
-              <span>{{ formatCurrency(orderGrandTotal - tipAmount, currency) }}</span>
+              <span>{{ formatPrice(orderGrandTotal - tipAmount) }}</span>
             </div>
             <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-[var(--color-secondary)]/80">
               <span>{{ t('cartPage.tipLabel') }}</span>
-              <span>+ {{ formatCurrency(tipAmount, currency) }}</span>
+              <span>+ {{ formatPrice(tipAmount) }}</span>
             </div>
             <div class="flex items-center justify-between text-sm text-slate-300">
               <span>{{ t('cartPage.total') }}</span>
               <span class="text-lg font-semibold text-[var(--color-secondary)]">
-                {{ formatCurrency(orderGrandTotal, currency) }}
+                {{ formatPrice(orderGrandTotal) }}
               </span>
             </div>
             <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-xs text-emerald-300">
@@ -896,7 +896,7 @@ const customerStore = useCustomerStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { formatCurrency, itemCountLabel, t } = useI18n();
+const { formatCurrency, formatPrice, itemCountLabel, t } = useI18n();
 
 const showAuthModal = ref(false);
 const tableNudgeDismissed = ref(false);
@@ -1413,7 +1413,7 @@ const validateForm = () => {
   // Delivery minimum order check
   if (fulfillmentType.value === 'delivery' && deliveryMinOrder.value > 0 && Number(cart.total) < deliveryMinOrder.value) {
     toast.show(t('cartPage.deliveryMinOrderNotMet', {
-      amount: formatCurrency(deliveryMinOrder.value, currency.value),
+      amount: formatPrice(deliveryMinOrder.value),
     }), 'error');
     return false;
   }
