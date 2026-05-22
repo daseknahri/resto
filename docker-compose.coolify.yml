@@ -26,6 +26,10 @@ services:
         condition: service_healthy
     expose:
       - "3000"
+    # Mount media volume read-only so nginx can serve uploaded files directly
+    # without proxying through Django (faster and eliminates 404 race conditions).
+    volumes:
+      - media_data:/app/media:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
       interval: 15s
@@ -82,16 +86,8 @@ services:
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.service=ibnbatoutaweb-api"
-      # Media files — route /media/* to the backend where the volume is mounted
-      - "traefik.http.routers.ibnbatoutaweb-media-menu.rule=Host(`menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
-      - "traefik.http.routers.ibnbatoutaweb-media-menu.tls=true"
-      - "traefik.http.routers.ibnbatoutaweb-media-menu.service=ibnbatoutaweb-api"
-      - "traefik.http.routers.ibnbatoutaweb-media-admin.rule=Host(`admin.menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
-      - "traefik.http.routers.ibnbatoutaweb-media-admin.tls=true"
-      - "traefik.http.routers.ibnbatoutaweb-media-admin.service=ibnbatoutaweb-api"
-      - "traefik.http.routers.ibnbatoutaweb-media-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/media`)"
-      - "traefik.http.routers.ibnbatoutaweb-media-tenant.tls=true"
-      - "traefik.http.routers.ibnbatoutaweb-media-tenant.service=ibnbatoutaweb-api"
+      # Media files are now served directly by nginx from the shared volume.
+      # The old /media/* Traefik labels that routed to Django are intentionally removed.
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG}

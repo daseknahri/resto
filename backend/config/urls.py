@@ -1,8 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path, re_path
-from django.views.static import serve as static_serve
+from django.urls import include, path
 from rest_framework import routers
 
 from accounts.views import (
@@ -159,8 +158,8 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
+    # In development, Django serves media directly (no nginx volume mount).
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-else:
-    urlpatterns += [
-        re_path(r"^media/(?P<path>.*)$", static_serve, {"document_root": settings.MEDIA_ROOT}),
-    ]
+# In production, media is served by nginx directly from the shared Docker volume
+# (media_data mounted at /app/media in the frontend container).  Django does not
+# need a /media/ route — nginx handles it before the request reaches gunicorn.
