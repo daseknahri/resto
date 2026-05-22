@@ -249,6 +249,7 @@ def _serialize_customer(customer: Customer) -> dict:
         "has_google": bool(customer.google_sub),
         "wallet_balance": str(customer.wallet_balance),
         "loyalty_points": customer.loyalty_points or 0,
+        "locale": customer.locale or "en",
     }
 
 
@@ -672,7 +673,7 @@ class CustomerEmailVerifyView(APIView):
 
 
 class CustomerProfileUpdateView(APIView):
-    """PATCH /api/customer/profile/ — update name for the current customer session."""
+    """PATCH /api/customer/profile/ — update name, locale, or email for the current customer session."""
 
     permission_classes = [AllowAny]
     throttle_classes = [CustomerProfileUpdateThrottle]
@@ -687,10 +688,36 @@ class CustomerProfileUpdateView(APIView):
             request.session.pop("customer_id", None)
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        update_fields = ["updated_at"]
+
         name = (request.data.get("name") or "").strip()[:80]
         if name:
             customer.name = name
-            customer.save(update_fields=["name", "updated_at"])
+            update_fields.append("name")
+
+        locale = (request.data.get("locale") or "").strip()[:10]
+        if locale in ("en", "fr", "ar"):
+            customer.locale = locale
+            update_fields.append("locale")
+
+        if "email" in request.data:
+            email = (request.data.get("email") or "").strip().lower()[:254]
+            if email and "@" in email and email != customer.email:
+                if Customer.objects.filter(email=email).exclude(pk=customer.pk).exists():
+                    return Response(
+                        {"detail": "This email is already linked to another account.", "code": "email_taken"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                customer.email = email
+                customer.email_verified = False
+                update_fields.extend(["email", "email_verified"])
+            elif email == "" and customer.email:
+                customer.email = ""
+                customer.email_verified = False
+                update_fields.extend(["email", "email_verified"])
+
+        if len(update_fields) > 1:
+            customer.save(update_fields=update_fields)
 
         return Response({"customer": _serialize_customer(customer)})
 

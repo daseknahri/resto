@@ -109,9 +109,49 @@
             <p v-if="customerStore.customer?.phone" class="text-xs text-slate-400">
               {{ customerStore.customer.phone }}
             </p>
-            <p v-if="customerStore.customer?.email" class="text-xs text-slate-400">
-              {{ customerStore.customer.email }}
-            </p>
+
+            <!-- Email row: show/add/edit -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <template v-if="!showEmailInput">
+                <span v-if="customerStore.customer?.email" class="text-xs text-slate-400">
+                  {{ customerStore.customer.email }}
+                  <span v-if="!customerStore.customer?.email_verified" class="ml-1 text-amber-400">·</span>
+                </span>
+                <button
+                  class="inline-flex items-center gap-1 text-[11px] transition-colors"
+                  :class="customerStore.customer?.email
+                    ? 'text-slate-500 hover:text-slate-300'
+                    : 'text-sky-400 hover:text-sky-300'"
+                  @click="openEmailInput"
+                >
+                  <AppIcon name="plus" class="h-3 w-3" />
+                  {{ customerStore.customer?.email ? t('customerAccount.editEmail') : t('customerAccount.addEmail') }}
+                </button>
+              </template>
+              <template v-else>
+                <input
+                  ref="emailInputRef"
+                  v-model.trim="editableEmail"
+                  type="email"
+                  autocomplete="email"
+                  maxlength="254"
+                  class="ui-input flex-1 min-w-0 text-xs py-1"
+                  :placeholder="t('customerAccount.emailPlaceholder')"
+                  :disabled="savingEmail"
+                  @keydown.enter.prevent="saveEmail"
+                  @keydown.escape.prevent="cancelEmailInput"
+                />
+                <button
+                  class="ui-btn-primary shrink-0 px-2.5 py-1 text-xs"
+                  :disabled="savingEmail || !editableEmail"
+                  @click="saveEmail"
+                >{{ savingEmail ? t('customerAccount.saving') : t('common.save') }}</button>
+                <button class="text-xs text-slate-500 hover:text-slate-300 transition" @click="cancelEmailInput">
+                  {{ t('common.cancel') }}
+                </button>
+              </template>
+            </div>
+            <p v-if="emailError" class="text-xs text-red-300">{{ emailError }}</p>
 
             <!-- Add phone CTA — shown when signed in but no phone yet -->
             <button
@@ -125,12 +165,9 @@
           </div>
         </div>
 
-        <!-- Locale preference -->
-        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-          <div class="space-y-0.5">
-            <p class="text-xs font-semibold text-slate-300">{{ t('customerAccount.localeTitle') }}</p>
-            <p class="text-[11px] text-slate-500">{{ t('customerAccount.localeHint') }}</p>
-          </div>
+        <!-- Locale preference — full picker on first setup, compact after selection -->
+        <div v-if="!localeConfigured" class="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+          <p class="text-xs font-semibold text-slate-300">{{ t('customerAccount.localeTitle') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="lang in [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' }]"
@@ -143,6 +180,14 @@
               @click="setLocale(lang.code)"
             >{{ lang.label }}</button>
           </div>
+        </div>
+        <div v-else class="flex items-center justify-between gap-2 px-0.5">
+          <p class="text-xs text-slate-500">
+            {{ t('customerAccount.localeTitle') }}: <span class="text-slate-300">{{ localeLabelCurrent }}</span>
+          </p>
+          <button class="text-[11px] text-slate-500 hover:text-slate-300 transition" @click="localeConfigured = false">
+            {{ t('common.change') }}
+          </button>
         </div>
 
         <button
@@ -397,7 +442,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
@@ -449,8 +494,46 @@ const reorder = (order) => {
 };
 const editableName = ref('');
 const savingName = ref(false);
+
+// ── Email ─────────────────────────────────────────────────────────────────────
+const showEmailInput = ref(false);
+const editableEmail = ref('');
+const savingEmail = ref(false);
+const emailError = ref('');
+const emailInputRef = ref(null);
+
+const openEmailInput = () => {
+  editableEmail.value = customerStore.customer?.email || '';
+  emailError.value = '';
+  showEmailInput.value = true;
+  nextTick(() => emailInputRef.value?.focus());
+};
+const cancelEmailInput = () => {
+  showEmailInput.value = false;
+  emailError.value = '';
+};
+const saveEmail = async () => {
+  emailError.value = '';
+  if (!editableEmail.value) return;
+  savingEmail.value = true;
+  try {
+    const res = await api.patch('/customer/profile/', { email: editableEmail.value });
+    customerStore.setCustomer(res.data.customer);
+    showEmailInput.value = false;
+  } catch (err) {
+    emailError.value = err?.response?.data?.detail || t('customerAccount.emailSaveFailed');
+  } finally {
+    savingEmail.value = false;
+  }
+};
+
+// ── Locale ────────────────────────────────────────────────────────────────────
 const savingLocale = ref(false);
 const selectedLocale = ref('en');
+const localeConfigured = ref(false);
+
+const LOCALE_LABELS = { en: 'English', fr: 'Français', ar: 'العربية' };
+const localeLabelCurrent = computed(() => LOCALE_LABELS[selectedLocale.value] || selectedLocale.value);
 const loadingOrders = ref(false);
 const ordersError = ref(false);
 const apiOrders = ref([]);
@@ -623,6 +706,10 @@ const setLocale = async (code) => {
     const res = await api.patch('/customer/profile/', { locale: code });
     customerStore.setCustomer(res.data.customer);
     selectedLocale.value = code;
+    localeConfigured.value = true;
+    if (customerStore.customer?.id) {
+      localStorage.setItem(`locale_set_${customerStore.customer.id}`, '1');
+    }
     toast.show(t('customerAccount.localeSaved'), 'success');
   } catch {
     toast.show(t('customerAccount.localeSaveFailed'), 'error');
@@ -637,12 +724,16 @@ const handleLogout = async () => {
   walletTransactions.value = [];
   editableName.value = '';
   selectedLocale.value = 'en';
+  localeConfigured.value = false;
+  showEmailInput.value = false;
+  emailError.value = '';
 };
 
 const onAuthenticated = (customer) => {
   customerStore.setCustomer(customer);
   editableName.value = customer?.name || '';
   selectedLocale.value = customer?.locale || 'en';
+  localeConfigured.value = !!(customer?.id && localStorage.getItem(`locale_set_${customer.id}`));
   fetchOrders();
   fetchWallet();
 };
@@ -659,6 +750,9 @@ watch(
   (val) => {
     editableName.value = val?.name || '';
     selectedLocale.value = val?.locale || 'en';
+    if (val?.id) {
+      localeConfigured.value = !!localStorage.getItem(`locale_set_${val.id}`);
+    }
   },
   { immediate: true }
 );

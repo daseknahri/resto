@@ -63,7 +63,8 @@ export const messages = {
       confirm: "Confirm",
       location: "Location",
       more: "More",
-      done: "Done"
+      done: "Done",
+      change: "Change"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2527,6 +2528,10 @@ export const messages = {
       googleConnected: "Google connected",
       notVerified: "Not verified",
       addPhone: "Add phone number",
+      addEmail: "Add email",
+      editEmail: "Edit email",
+      emailPlaceholder: "your@email.com",
+      emailSaveFailed: "Could not save email. Try again.",
       signOut: "Sign out",
       ordersTitle: "Order history",
       ordersEmpty: "No orders yet.",
@@ -2635,7 +2640,8 @@ export const messages = {
       translateErrorGeneric: "Traduction echouee.",
       translateErrorNotConfigured: "Traduction non configuree.",
       more: "Plus",
-      done: "Terminer"
+      done: "Terminer",
+      change: "Modifier"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -5097,6 +5103,10 @@ export const messages = {
       googleConnected: "Google connecte",
       notVerified: "Non verifie",
       addPhone: "Ajouter un numero de telephone",
+      addEmail: "Ajouter un e-mail",
+      editEmail: "Modifier l'e-mail",
+      emailPlaceholder: "votre@email.com",
+      emailSaveFailed: "Impossible d'enregistrer l'e-mail. Reessayez.",
       signOut: "Se deconnecter",
       ordersTitle: "Historique des commandes",
       ordersEmpty: "Aucune commande pour l'instant.",
