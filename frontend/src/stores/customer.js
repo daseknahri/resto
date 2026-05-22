@@ -21,7 +21,10 @@ export const useCustomerStore = defineStore("customer", {
 
   actions: {
     async fetchCustomer(force = false) {
+      // Guard 1: already resolved for this page session
       if (this.loaded && !force) return;
+      // Guard 2: a fetch is already in flight — don't fire a second request
+      if (this.loading) return;
       this.loading = true;
       try {
         const { data } = await api.get("/customer/session/");
