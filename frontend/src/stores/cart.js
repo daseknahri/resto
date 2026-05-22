@@ -25,7 +25,7 @@ const normalizeCartItem = (item) => ({
   slug: String(item?.slug || "").trim(),
   name: String(item?.name || "").trim() || "Item",
   price: Number(item?.price || 0),
-  currency: String(item?.currency || "USD").trim().toUpperCase() || "USD",
+  currency: String(item?.currency || "MAD").trim().toUpperCase() || "MAD",
   qty: clampQty(item?.qty ?? 1),
   note: typeof item?.note === "string" ? item.note.trim() : "",
   option_ids: normalizeOptionIds(item?.option_ids),
@@ -263,7 +263,7 @@ export const useCartStore = defineStore("cart", {
       const entry = {
         order_number: String(order_number || ""),
         total: Number(total || 0),
-        currency: String(currency || "USD"),
+        currency: String(currency || "MAD"),
         created_at: created_at || new Date().toISOString(),
         items: Array.isArray(items)
           ? items.map((item) => ({
@@ -271,7 +271,7 @@ export const useCartStore = defineStore("cart", {
               slug: String(item.slug || ""),
               name: String(item.name || ""),
               price: Number(item.price || 0),
-              currency: String(item.currency || currency || "USD"),
+              currency: String(item.currency || currency || "MAD"),
               qty: Number(item.qty || 1),
               note: String(item.note || ""),
               option_ids: Array.isArray(item.option_ids) ? item.option_ids : [],

@@ -55,7 +55,7 @@
               {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
             </RouterLink>
             <div class="mt-0.5 flex flex-wrap gap-2 text-slate-400">
-              <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+              <span v-if="order.total">{{ formatPrice(order.total) }}</span>
             </div>
           </li>
         </ul>
@@ -265,7 +265,7 @@
                     order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
                     t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
                   }}</span>
-                  <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+                  <span v-if="order.total">{{ formatPrice(order.total) }}</span>
                   <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
                 </div>
                 <div v-if="order.has_rating" class="mt-1 flex items-center gap-1">
@@ -290,7 +290,7 @@
                       <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
                       <span v-if="item.options?.length" class="ml-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
                     </span>
-                    <span class="shrink-0 text-slate-400">{{ formatCurrency(item.subtotal, order.currency) }}</span>
+                    <span class="shrink-0 text-slate-400">{{ formatPrice(item.subtotal) }}</span>
                   </li>
                 </ul>
                 <button
@@ -320,7 +320,7 @@
                 {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
               </RouterLink>
               <div class="mt-0.5 flex flex-wrap gap-2 text-slate-400">
-                <span v-if="order.total">{{ formatCurrency(order.total, order.currency) }}</span>
+                <span v-if="order.total">{{ formatPrice(order.total) }}</span>
               </div>
             </li>
           </ul>
@@ -466,7 +466,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
-const { t, formatCurrency } = useI18n();
+const { t, formatPrice } = useI18n();
 const customerStore = useCustomerStore();
 const cart = useCartStore();
 const toast = useToastStore();

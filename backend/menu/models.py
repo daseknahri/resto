@@ -63,7 +63,7 @@ class Dish(models.Model):
     description = models.TextField(blank=True)
     description_i18n = models.JSONField(default=dict, blank=True)
     price = models.DecimalField(max_digits=8, decimal_places=2)
-    currency = models.CharField(max_length=8, default="USD")
+    currency = models.CharField(max_length=8, default="MAD")
     image_url = models.URLField(blank=True)
     position = models.PositiveIntegerField(default=0)
     tags = models.JSONField(default=list, blank=True)
@@ -205,7 +205,7 @@ class Order(models.Model):
         default=0,
         help_text="Delivery fee snapshot captured at order placement time.",
     )
-    currency = models.CharField(max_length=8, default="USD")
+    currency = models.CharField(max_length=8, default="MAD")
     wallet_amount_paid = models.DecimalField(
         max_digits=10,
         decimal_places=2,

@@ -1053,7 +1053,7 @@ const parseCoordinateValue = (value) => {
 
 const currency = computed(() => {
   const firstItemCurrency = cart.items.find((item) => item.currency)?.currency;
-  return firstItemCurrency || meta.value?.plan?.currency || 'USD';
+  return firstItemCurrency || meta.value?.plan?.currency || 'MAD';
 });
 const planLabel = computed(
   () => meta.value?.plan?.tier_name || meta.value?.plan?.name || 'Basic'
