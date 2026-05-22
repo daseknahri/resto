@@ -2004,3 +2004,22 @@ html[data-menu-theme="warm"]  .text-red-100\/80     { color: rgba(185,28,28,0.85
 /*    data-theme-dark on those elements activates the [data-theme-dark] rules  */
 /*    already present in this file and no extra rules are needed here.         */
 
+/* ==========================================================================
+   Info page (CustomerLeadPage) — light + warm theme fixes
+   bg-slate-950/50  : quick-action buttons + Google reviews link row
+   bg-slate-950/86  : modal backdrop (missing from the /80…/98 block above)
+   divide-slate-800/50 : business-hours row dividers
+   ========================================================================== */
+
+/* ── bg-slate-950/50 ───────────────────────────────────────────────────────── */
+html[data-menu-theme="light"] .bg-slate-950\/50 { background-color: rgba(248,250,252,0.80); }
+html[data-menu-theme="warm"]  .bg-slate-950\/50 { background-color: rgba(253,246,239,0.80); }
+
+/* ── bg-slate-950/86 (modal backdrop) ─────────────────────────────────────── */
+html[data-menu-theme="light"] .bg-slate-950\/86 { background-color: rgba(241,245,249,0.82); }
+html[data-menu-theme="warm"]  .bg-slate-950\/86 { background-color: rgba(255,248,237,0.84); }
+
+/* ── divide-slate-800/50 (hours card row dividers) ─────────────────────────── */
+html[data-menu-theme="light"] .divide-slate-800\/50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(100,116,139,0.12); }
+html[data-menu-theme="warm"]  .divide-slate-800\/50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(160,100,40,0.12); }
+
