@@ -588,9 +588,11 @@ const deleteAddress = async (id) => {
 
 const fetchLoyaltyConfig = async () => {
   try {
-    const res = await api.get('/owner/loyalty/');
-    loyaltyConfig.value = res.data;
-    redeemAmount.value = res.data.redeem_threshold;
+    const res = await api.get('/customer/loyalty/config/');
+    if (res.data?.enabled) {
+      loyaltyConfig.value = res.data;
+      redeemAmount.value = res.data.redeem_threshold;
+    }
   } catch {
     // Silent — loyalty section will show nothing if not configured
   }

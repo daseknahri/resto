@@ -4457,6 +4457,28 @@ class OwnerLoyaltyView(APIView):
         return Response(self._serialize(cfg))
 
 
+class CustomerLoyaltyConfigView(APIView):
+    """GET /api/customer/loyalty/config/ — public loyalty config for the current tenant.
+    Used by the customer account page to display points info and redemption options.
+    No authentication required."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            cfg = LoyaltyConfig.objects.filter(pk=1).first()
+        except Exception:
+            cfg = None
+        if not cfg or not cfg.enabled:
+            return Response({"enabled": False})
+        return Response({
+            "enabled": cfg.enabled,
+            "points_per_unit": cfg.points_per_unit,
+            "redeem_threshold": cfg.redeem_threshold,
+            "points_value": str(cfg.points_value),
+        })
+
+
 class CustomerLoyaltyRedeemView(APIView):
     """POST /api/customer/loyalty/redeem/ — convert loyalty points into wallet credits.
     Requires authenticated customer. Body: { points: int }"""
