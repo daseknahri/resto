@@ -1,5 +1,5 @@
 <template>
-  <div class="relative ui-safe-bottom" :class="dish ? 'pb-44 sm:pb-10' : 'pb-8'">
+  <div class="relative ui-safe-bottom" :class="dish ? 'pb-56 sm:pb-10' : 'pb-8'">
 
     <!-- ── Loading ─────────────────────────────────────────────── -->
     <div v-if="menu.loading" role="status" aria-live="polite">
