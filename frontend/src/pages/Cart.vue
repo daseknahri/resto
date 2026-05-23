@@ -422,7 +422,7 @@
             </div>
             <!-- Custom tip input -->
             <div v-if="tipPercent === 'custom'" class="flex items-center gap-2">
-              <span class="text-xs text-slate-400 shrink-0">MAD</span>
+              <span class="text-xs text-slate-400 shrink-0">{{ currencyStore.selected }}</span>
               <input
                 v-model="customTipInput"
                 type="number"
@@ -719,6 +719,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useOrderStore } from '../stores/order';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
+import { useCurrencyStore } from '../stores/currency';
 import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
 
@@ -729,6 +730,7 @@ const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { formatCurrency, formatPrice, itemCountLabel, t } = useI18n();
+const currencyStore = useCurrencyStore();
 
 const showAuthModal = ref(false);
 const tableNudgeDismissed = ref(false);
@@ -749,7 +751,15 @@ const customTipInput = ref('');
 const tipAmount = computed(() => {
   if (tipPercent.value === 'custom') {
     const v = parseFloat(customTipInput.value);
-    return Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : 0;
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    // If user has a display currency selected, convert their input → MAD
+    const sel = currencyStore.selected;
+    if (sel && sel !== 'MAD') {
+      const rate = currencyStore.rates[sel];
+      const madPerUnit = Number(rate?.mad_per_unit ?? 1);
+      if (madPerUnit > 0) return Math.round(v * madPerUnit * 100) / 100;
+    }
+    return Math.round(v * 100) / 100;
   }
   const pct = Number(tipPercent.value) || 0;
   if (pct === 0) return 0;
@@ -1203,9 +1213,11 @@ const useCurrentLocation = () => {
         return;
       }
       setLocationCoordinates(lat, lng);
-      if (!deliveryLocationUrl.value) {
-        deliveryLocationUrl.value = `https://maps.google.com/?q=${deliveryLat.value},${deliveryLng.value}`;
-      }
+      // Always replace the URL with the fresh GPS coordinates
+      deliveryLocationUrl.value = `https://maps.google.com/?q=${deliveryLat.value},${deliveryLng.value}`;
+      clearFieldError('delivery_location_url');
+      waitingForPaste.value = false;
+      clearTimeout(waitingForPasteTimer);
       trackEvent('contact_click', {
         source: 'cart_delivery_location',
         metadata: { action: 'use_current_location' },
