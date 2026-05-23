@@ -1,31 +1,25 @@
 <template>
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
-    <header class="ui-hero-ribbon ui-reveal p-3 md:p-5">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-1.5">
-          <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
-          <h1
-            class="ui-display text-2xl font-semibold tracking-tight text-white md:text-3xl"
-          >
-            {{ t('common.cart') }}
-          </h1>
-          <p v-if="cart.items.length" class="text-xs text-slate-300">
-            {{ t('cartPage.reviewAdjustSend') }}
-          </p>
-          <div v-if="cart.items.length" class="flex flex-wrap items-center gap-2">
+
+    <!-- ── Header ──────────────────────────────────────────────────────────── -->
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div>
+            <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
+            <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">
+              {{ t('common.cart') }}
+            </h1>
+          </div>
+          <div v-if="cart.items.length" class="flex items-center gap-1.5">
             <span class="ui-chip">{{ itemCountLabel(cart.count) }}</span>
             <span class="ui-chip">{{ planLabel }}</span>
-            <span v-if="tableLabelModel" class="ui-chip">
-              {{ t('cartPage.table', { table: tableLabelModel }) }}
-            </span>
+            <span v-if="tableLabelModel" class="ui-chip">{{ t('cartPage.table', { table: tableLabelModel }) }}</span>
           </div>
-          <p v-else-if="tableLabelModel" class="text-xs text-slate-300">
-            {{ t('cartPage.table', { table: tableLabelModel }) }}
-          </p>
         </div>
         <button
           v-if="cart.items.length"
-          class="ui-btn-outline px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50"
+          class="shrink-0 ui-btn-outline px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/50"
           @click="clearCart"
         >
           <AppIcon name="close" class="h-3.5 w-3.5" />
@@ -34,194 +28,132 @@
       </div>
     </header>
 
+    <!-- ── Browse-only notice ───────────────────────────────────────────────── -->
     <div
       v-if="isBrowseOnlyPlan"
-      class="ui-section-band border-sky-500/40 bg-sky-500/10 p-4 text-sky-100 space-y-2 sm:p-6"
+      class="ui-section-band border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sky-100 space-y-0.5"
     >
-      <p class="text-base font-semibold">
-        {{ t('cartPage.orderingDisabled') }}
-      </p>
-      <p class="text-sm">{{ t('cartPage.browseOnlyBody') }}</p>
+      <p class="text-sm font-semibold">{{ t('cartPage.orderingDisabled') }}</p>
+      <p class="text-xs text-sky-200/75">{{ t('cartPage.browseOnlyBody') }}</p>
     </div>
 
+    <!-- ── Empty state ──────────────────────────────────────────────────────── -->
     <div
       v-else-if="!cart.items.length"
-      class="ui-section-band border-dashed border-slate-700 p-4 text-slate-300 sm:p-6"
+      class="ui-section-band border-dashed border-slate-700 px-5 py-8 text-center space-y-1"
     >
-      <p class="text-base font-semibold text-slate-100">
-        {{ t('cartPage.cartEmpty') }}
-      </p>
-      <p class="mt-1 text-sm text-slate-400">
-        {{ t('cartPage.cartEmptyBody') }}
-      </p>
+      <p class="text-sm font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
+      <p class="text-xs text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
     </div>
 
+    <!-- ── Main ─────────────────────────────────────────────────────────────── -->
     <div
       v-else
       class="grid gap-3 xl:grid-cols-[minmax(0,1.15fr),minmax(21rem,0.85fr)] xl:items-start"
     >
-      <div class="space-y-2.5 sm:space-y-3">
+
+      <!-- ── Left: item list ─────────────────────────────────────────────── -->
+      <div class="space-y-2">
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden p-3.5 sm:p-4"
+          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden pl-4 pr-3.5 py-3"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <!-- left accent -->
-          <div class="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l-xl" style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))" />
-          <div class="space-y-3">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <p class="truncate text-base font-semibold text-slate-100">
-                  {{ item.name }}
-                </p>
-                <span class="ui-chip">{{ item.qty }}x</span>
-              </div>
-              <p class="text-xs text-slate-400">
-                {{ formatPrice(item.price) }}
-                {{ t('cartPage.each') }}
-              </p>
-              <p v-if="item.note" class="text-xs text-slate-400">
-                {{ item.note }}
-              </p>
-              <p
-                v-else-if="item.option_labels?.length"
-                class="text-xs text-slate-400"
-              >
-                {{ t('cartPage.options') }}: {{ item.option_labels.join(', ') }}
-              </p>
+          <!-- left accent bar -->
+          <div
+            class="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l-xl"
+            style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
+          />
+          <div class="flex items-center gap-3">
+            <!-- Name + meta -->
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold leading-snug text-slate-100">{{ item.name }}</p>
+              <p v-if="item.note" class="mt-0.5 text-[11px] text-slate-500 truncate">{{ item.note }}</p>
+              <p v-else-if="item.option_labels?.length" class="mt-0.5 text-[11px] text-slate-500 truncate">{{ item.option_labels.join(' · ') }}</p>
+              <p class="mt-0.5 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
             </div>
-            <p
-              class="text-right text-base font-semibold text-[var(--color-secondary)]"
-            >
-              {{ formatPrice(item.price * item.qty) }}
-            </p>
-          </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div
-              class="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/80 p-1 shadow-inner shadow-black/30"
-            >
+            <!-- Stepper pill -->
+            <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
               <button
-                class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
+                class="h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none"
                 :aria-label="t('cartPage.decreaseQuantity')"
                 @click="cart.decrement(item.key)"
               >
-                -
+                <span class="text-base leading-none">−</span>
               </button>
-              <input
-                :value="item.qty"
-                type="number"
-                min="1"
-                max="99"
-                inputmode="numeric"
-                class="w-14 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none"
-                @change="setLineQty(item, $event)"
-              />
+              <span class="w-6 text-center text-xs font-semibold text-slate-100 select-none tabular-nums">{{ item.qty }}</span>
               <button
-                class="ui-touch-target ui-press h-8 w-8 rounded-full text-sm text-slate-200 hover:bg-slate-800"
+                class="h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none"
                 :aria-label="t('cartPage.increaseQuantity')"
                 @click="cart.increment(item.key)"
               >
-                +
+                <span class="text-base leading-none">+</span>
               </button>
             </div>
-            <button
-              class="text-xs text-red-300 hover:text-red-200"
-              @click="cart.remove(item.key)"
-            >
-              <AppIcon name="close" class="h-3.5 w-3.5" />
-              {{ t('cartPage.remove') }}
-            </button>
-          </div>
+            <!-- Subtotal + remove -->
+            <div class="shrink-0 min-w-[4rem] text-right">
+              <p class="text-sm font-semibold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
+              <button
+                class="mt-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors"
+                @click="cart.remove(item.key)"
+              >{{ t('cartPage.remove') }}</button>
+            </div>
           </div>
         </article>
 
+        <!-- Unavailable items warning -->
         <div
           v-if="unavailableSlugs.length"
-          class="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100"
         >
-          <p>
-            {{
-              t('cartPage.unavailableItemsDetected', {
-                items: unavailableNames.join(', '),
-              })
-            }}
-          </p>
-          <button
-            class="ui-btn-outline px-3 py-1.5 text-xs"
-            @click="removeUnavailable"
-          >
-            <AppIcon name="close" class="h-3.5 w-3.5" />
+          <p class="min-w-0 flex-1">{{ t('cartPage.unavailableItemsDetected', { items: unavailableNames.join(', ') }) }}</p>
+          <button class="shrink-0 ui-btn-outline px-2.5 py-1 text-xs" @click="removeUnavailable">
+            <AppIcon name="close" class="h-3 w-3" />
             {{ t('cartPage.removeUnavailableItems') }}
           </button>
         </div>
       </div>
 
+      <!-- ── Right: order panel ──────────────────────────────────────────── -->
       <aside
         v-if="!isBrowseOnlyPlan"
         class="xl:sticky xl:top-[calc(var(--safe-top)+5.75rem)] xl:self-start"
       >
-        <section class="ui-glass space-y-3 p-4 sm:space-y-4 sm:p-5">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-chip">{{ planLabel }}</span>
-            <span class="ui-chip">
-              {{
-                isBrowseOnlyPlan
-                  ? t('cartPage.orderingDisabledPlan')
-                  : t('cartPage_order.placeOrder')
-              }}
-            </span>
-          </div>
+        <section class="ui-glass p-4 sm:p-5 space-y-4">
 
-          <div class="ui-spotlight-card space-y-3 p-3.5 sm:p-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="ui-kicker">{{ t('cartPage.total') }}</p>
-                <p class="text-3xl font-bold text-[var(--color-secondary)]">
-                  {{ formatPrice(orderGrandTotal) }}
-                </p>
-              </div>
-              <div class="text-right text-xs text-slate-400">
-                <p>{{ itemCountLabel(cart.count) }}</p>
-                <p>{{ t('cartPage.channel') }}</p>
-              </div>
+          <!-- Compact total header -->
+          <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/50 px-4 py-3">
+            <div>
+              <p class="text-[10px] uppercase tracking-widest text-slate-500">{{ t('cartPage.total') }}</p>
+              <p class="text-2xl font-bold tabular-nums leading-tight text-[var(--color-secondary)]">
+                {{ formatPrice(orderGrandTotal) }}
+              </p>
             </div>
-            <!-- Delivery fee breakdown -->
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="border-t border-slate-700/50 pt-2 space-y-1">
-              <div class="flex items-center justify-between text-xs text-slate-400">
-                <span>{{ t('cartPage.subtotal') }}</span>
-                <span>{{ formatPrice(cart.total) }}</span>
-              </div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-300">{{ t('cartPage.deliveryFee') }}</span>
-                <span class="text-slate-200 font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
-              </div>
-            </div>
-            <div v-else-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="border-t border-slate-700/50 pt-2">
-              <div class="flex items-center justify-between text-xs text-emerald-300">
-                <span>{{ t('cartPage.deliveryFee') }}</span>
-                <span class="font-medium">{{ t('cartPage.free') }}</span>
-              </div>
+            <div class="text-right text-[11px] text-slate-500 space-y-0.5">
+              <p>{{ itemCountLabel(cart.count) }}</p>
+              <p v-if="fulfillmentType" class="capitalize text-slate-400">
+                {{ fulfillmentType === 'delivery' ? t('cartPage.delivery') : t('cartPage.pickup') }}
+              </p>
             </div>
           </div>
 
+          <div class="border-t border-slate-800/50" />
+
+          <!-- ── Table QR context ── -->
           <div
             v-if="isTableContextOrder"
-            class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+            class="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 space-y-2"
           >
-            <p class="font-semibold">{{ t('cartPage.tableQrOrder') }}</p>
-            <p class="mt-1 text-emerald-200/80">
-              {{
-                t('cartPage.tableContextDetected', {
-                  table: cart.tableLabel || '-',
-                })
-              }}
-              {{ t('cartPage.optionalNoteOnly') }}
-            </p>
-            <label class="mt-2.5 block space-y-1">
-              <span class="text-xs text-emerald-200/80">{{ t('cartPage.tableCustomerNameOptional') }}</span>
+            <div>
+              <p class="text-sm font-semibold text-emerald-100">{{ t('cartPage.tableQrOrder') }}</p>
+              <p class="text-xs text-emerald-200/75 mt-0.5">
+                {{ t('cartPage.tableContextDetected', { table: cart.tableLabel || '-' }) }}
+                {{ t('cartPage.optionalNoteOnly') }}
+              </p>
+            </div>
+            <label class="block space-y-1">
+              <span class="text-[11px] text-emerald-200/75">{{ t('cartPage.tableCustomerNameOptional') }}</span>
               <input
                 v-model.trim="customerNameModel"
                 maxlength="80"
@@ -233,104 +165,69 @@
             </label>
           </div>
 
+          <!-- ── Fulfillment selector ── -->
           <div v-else class="space-y-3">
-            <div :class="['grid gap-2.5', deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1']">
-              <!-- Pickup tile -->
+            <div :class="['grid gap-2', deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1']">
+              <!-- Pickup pill -->
               <button
-                class="group relative flex flex-col items-center gap-2 rounded-2xl border px-3 py-3.5 transition-all duration-200 focus:outline-none"
+                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
                 :class="fulfillmentType === 'pickup'
-                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10'
-                  : 'border-slate-700/60 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'"
+                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                  : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
                 @click="fulfillmentType = 'pickup'"
               >
-                <span
-                  class="flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors"
-                  :class="fulfillmentType === 'pickup'
-                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
-                    : 'border-slate-700 bg-slate-800/60 text-slate-500'"
-                >
-                  <AppIcon name="menu" class="h-4 w-4" />
-                </span>
-                <span
-                  class="text-xs font-semibold transition-colors"
-                  :class="fulfillmentType === 'pickup' ? 'text-[var(--color-secondary)]' : 'text-slate-300'"
-                >{{ t('cartPage.pickup') }}</span>
-                <span
-                  v-if="fulfillmentType === 'pickup'"
-                  class="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--color-secondary)]"
-                />
+                <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0" />
+                {{ t('cartPage.pickup') }}
+                <span v-if="fulfillmentType === 'pickup'" class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
-              <!-- Delivery tile -->
+              <!-- Delivery pill -->
               <button
                 v-if="deliveryEnabled"
-                class="group relative flex flex-col items-center gap-2 rounded-2xl border px-3 py-3.5 transition-all duration-200 focus:outline-none"
+                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
                 :class="fulfillmentType === 'delivery'
-                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10'
-                  : 'border-slate-700/60 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'"
+                  ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                  : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
                 @click="fulfillmentType = 'delivery'"
               >
-                <span
-                  class="flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors"
-                  :class="fulfillmentType === 'delivery'
-                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
-                    : 'border-slate-700 bg-slate-800/60 text-slate-500'"
-                >
-                  <AppIcon name="table" class="h-4 w-4" />
-                </span>
-                <span
-                  class="text-xs font-semibold transition-colors"
-                  :class="fulfillmentType === 'delivery' ? 'text-[var(--color-secondary)]' : 'text-slate-300'"
-                >{{ t('cartPage.delivery') }}</span>
-                <span
-                  v-if="fulfillmentType === 'delivery'"
-                  class="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[var(--color-secondary)]"
-                />
+                <AppIcon name="table" class="h-3.5 w-3.5 shrink-0" />
+                {{ t('cartPage.delivery') }}
+                <span v-if="fulfillmentType === 'delivery'" class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
             </div>
-            <p class="text-xs text-slate-400">
-              {{ t('cartPage.selectFulfillment') }}
-            </p>
-            <p v-if="fieldErrors.fulfillment_type" class="text-xs text-red-300">
-              {{ fieldErrors.fulfillment_type }}
-            </p>
+            <p v-if="fieldErrors.fulfillment_type" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
-            <div
-              v-if="isDelivery"
-              class="space-y-3 rounded-2xl border border-slate-700/60 bg-slate-950/45 p-3"
-            >
-              <!-- Saved addresses picker (only for authenticated customers) -->
+            <!-- ── Delivery form ── -->
+            <div v-if="isDelivery" class="space-y-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+
+              <!-- Saved addresses -->
               <div v-if="customerStore.isAuthenticated && savedAddresses.length" class="space-y-1.5">
-                <p class="text-xs font-medium text-slate-400">{{ t('cartPage.savedAddresses') }}</p>
+                <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('cartPage.savedAddresses') }}</p>
                 <div class="space-y-1">
                   <div
                     v-for="addr in savedAddresses"
                     :key="addr.id"
                     class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
                   >
-                    <button
-                      class="min-w-0 flex-1 text-left hover:text-indigo-300 transition-colors"
-                      @click="applySavedAddress(addr)"
-                    >
+                    <button class="min-w-0 flex-1 text-left hover:text-indigo-300 transition-colors" @click="applySavedAddress(addr)">
                       <span v-if="addr.label" class="font-medium text-slate-200 mr-1.5">{{ addr.label }}</span>
                       <span class="text-slate-400 truncate">{{ addr.address }}</span>
                     </button>
-                    <button
-                      class="shrink-0 text-slate-600 hover:text-red-400 transition-colors"
-                      @click="deleteSavedAddress(addr.id)"
-                    >
+                    <button class="shrink-0 text-slate-600 hover:text-red-400 transition-colors" @click="deleteSavedAddress(addr.id)">
                       <AppIcon name="close" class="h-3 w-3" />
                     </button>
                   </div>
                 </div>
               </div>
 
-              <!-- Zone description + min order info -->
-              <div v-if="deliveryZoneDesc || deliveryMinOrder > 0" class="flex flex-wrap gap-2">
+              <!-- Zone info chips -->
+              <div v-if="deliveryZoneDesc || deliveryMinOrder > 0" class="flex flex-wrap gap-1.5">
                 <span v-if="deliveryZoneDesc" class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-[11px] text-slate-300">
                   <AppIcon name="info" class="h-3 w-3 shrink-0 text-slate-400" />
                   {{ t('cartPage.deliveryZoneInfo', { desc: deliveryZoneDesc }) }}
                 </span>
-                <span v-if="deliveryMinOrder > 0" class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+                <span
+                  v-if="deliveryMinOrder > 0"
+                  class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
                   :class="Number(cart.total) >= deliveryMinOrder
                     ? 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300'
                     : 'border-amber-500/40 bg-amber-500/8 text-amber-300'"
@@ -339,23 +236,15 @@
                 </span>
               </div>
 
-              <div
-                class="space-y-1 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2"
-              >
-                <p
-                  class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400"
-                >
-                  {{ t('cartPage.deliveryLocation') }}
-                </p>
-                <p class="text-xs text-slate-300">
-                  {{ t('cartPage.deliveryLocationHelp') }}
-                </p>
+              <!-- Delivery fee note -->
+              <div v-if="deliveryFeeAmount === 0" class="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.deliveryFee') }}: {{ t('cartPage.free') }}
               </div>
 
+              <!-- Address textarea -->
               <label class="block space-y-1">
-                <span class="text-xs text-slate-400">{{
-                  t('cartPage.deliveryAddressRequired')
-                }}</span>
+                <span class="text-[11px] text-slate-400">{{ t('cartPage.deliveryAddressRequired') }}</span>
                 <textarea
                   v-model.trim="deliveryAddress"
                   rows="2"
@@ -364,15 +253,10 @@
                   :placeholder="t('cartPage.deliveryAddressPlaceholder')"
                   @input="clearFieldError('delivery_address')"
                 ></textarea>
-                <p
-                  v-if="fieldErrors.delivery_address"
-                  class="text-xs text-red-300"
-                >
-                  {{ fieldErrors.delivery_address }}
-                </p>
+                <p v-if="fieldErrors.delivery_address" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
               </label>
 
-              <!-- Save address for later -->
+              <!-- Save address -->
               <div v-if="customerStore.isAuthenticated && deliveryAddress" class="space-y-1.5">
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" v-model="saveAddressAfterOrder" class="rounded" />
@@ -388,59 +272,51 @@
                 />
               </div>
 
-              <div class="grid gap-2 md:grid-cols-[auto,1fr] md:items-center">
-                <button
-                  class="ui-btn-outline px-3 py-2 text-xs"
-                  :disabled="locating"
-                  @click="useCurrentLocation"
-                >
-                  <AppIcon name="info" class="h-3.5 w-3.5" />
-                  {{
-                    locating
-                      ? t('cartPage.locating')
-                      : t('cartPage.useCurrentLocation')
-                  }}
-                </button>
-                <p class="text-xs text-slate-400">
-                  {{
-                    hasLocationCoords
-                      ? t('cartPage.locationReady', {
-                        lat: formatCoordinate(deliveryLat),
-                        lng: formatCoordinate(deliveryLng),
-                      })
-                      : t('cartPage.noCoordinatesYet')
-                  }}
+              <!-- Location tools: compact chip row -->
+              <div class="space-y-1.5">
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors disabled:opacity-50"
+                    :disabled="locating"
+                    @click="useCurrentLocation"
+                  >
+                    <AppIcon name="info" class="h-3 w-3 shrink-0" />
+                    {{ locating ? t('cartPage.locating') : t('cartPage.useCurrentLocation') }}
+                  </button>
+                  <button
+                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+                    @click="openInAppMapPicker"
+                  >
+                    <AppIcon name="table" class="h-3 w-3 shrink-0" />
+                    {{ t('cartPage.pickPinInApp') }}
+                  </button>
+                  <button
+                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+                    @click="openExternalMap"
+                  >
+                    <AppIcon name="link" class="h-3 w-3 shrink-0" />
+                    {{ t('cartPage.openExternalMap') }}
+                  </button>
+                  <button
+                    v-if="hasLocationCoords || deliveryLocationUrl"
+                    class="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[11px] text-red-300 hover:bg-red-500/15 transition-colors"
+                    @click="clearLocation"
+                  >
+                    <AppIcon name="close" class="h-3 w-3 shrink-0" />
+                    {{ t('cartPage.clearLocation') }}
+                  </button>
+                </div>
+                <p class="text-[11px]" :class="hasLocationCoords ? 'text-emerald-400/80' : 'text-slate-600'">
+                  {{ hasLocationCoords
+                    ? t('cartPage.locationReady', { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
+                    : t('cartPage.noCoordinatesYet') }}
                 </p>
+                <p v-if="locationError" class="text-xs text-red-300">{{ locationError }}</p>
               </div>
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button
-                  class="ui-btn-outline px-3 py-1.5 text-xs"
-                  @click="openInAppMapPicker"
-                >
-                  <AppIcon name="table" class="h-3.5 w-3.5" />
-                  {{ t('cartPage.pickPinInApp') }}
-                </button>
-                <button
-                  class="ui-btn-outline px-3 py-1.5 text-xs"
-                  :disabled="!hasLocationCoords && !deliveryLocationUrl"
-                  @click="clearLocation"
-                >
-                  <AppIcon name="close" class="h-3.5 w-3.5" />
-                  {{ t('cartPage.clearLocation') }}
-                </button>
-                <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="openExternalMap">
-                  <AppIcon name="link" class="h-3.5 w-3.5" />
-                  {{ t('cartPage.openExternalMap') }}
-                </button>
-              </div>
-              <p v-if="locationError" class="text-xs text-red-300">
-                {{ locationError }}
-              </p>
 
+              <!-- Map URL -->
               <label class="block space-y-1">
-                <span class="text-xs text-slate-400">{{
-                  t('cartPage.mapPinUrlOptional')
-                }}</span>
+                <span class="text-[11px] text-slate-400">{{ t('cartPage.mapPinUrlOptional') }}</span>
                 <input
                   v-model.trim="deliveryLocationUrl"
                   maxlength="500"
@@ -449,103 +325,88 @@
                   placeholder="https://maps.google.com/..."
                   @input="clearFieldError('delivery_location_url')"
                 />
-                <p
-                  v-if="fieldErrors.delivery_location_url"
-                  class="text-xs text-red-300"
-                >
-                  {{ fieldErrors.delivery_location_url }}
-                </p>
+                <p v-if="fieldErrors.delivery_location_url" class="text-xs text-red-300">{{ fieldErrors.delivery_location_url }}</p>
               </label>
 
-              <div class="grid gap-3 md:grid-cols-2">
-                <label class="block space-y-1">
-                  <span class="text-xs text-slate-400">{{
-                    t('cartPage.latitudeOptional')
-                  }}</span>
-                  <input
-                    v-model.number="deliveryLat"
-                    type="number"
-                    step="any"
-                    class="ui-input"
-                    inputmode="decimal"
-                    placeholder="33.5731"
-                    @input="clearFieldError('delivery_lat')"
-                  />
-                  <p
-                    v-if="fieldErrors.delivery_lat"
-                    class="text-xs text-red-300"
-                  >
-                    {{ fieldErrors.delivery_lat }}
-                  </p>
-                </label>
-                <label class="block space-y-1">
-                  <span class="text-xs text-slate-400">{{
-                    t('cartPage.longitudeOptional')
-                  }}</span>
-                  <input
-                    v-model.number="deliveryLng"
-                    type="number"
-                    step="any"
-                    class="ui-input"
-                    inputmode="decimal"
-                    placeholder="-7.5898"
-                    @input="clearFieldError('delivery_lng')"
-                  />
-                  <p
-                    v-if="fieldErrors.delivery_lng"
-                    class="text-xs text-red-300"
-                  >
-                    {{ fieldErrors.delivery_lng }}
-                  </p>
-                </label>
+              <!-- Advanced: lat / lng (collapsed) -->
+              <div>
+                <button
+                  type="button"
+                  class="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                  @click="locationAdvancedOpen = !locationAdvancedOpen"
+                >
+                  <span>{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
+                  {{ t('cartPage.latitudeOptional') }} / {{ t('cartPage.longitudeOptional') }}
+                </button>
+                <div v-if="locationAdvancedOpen" class="mt-2 grid grid-cols-2 gap-2">
+                  <label class="block space-y-1">
+                    <span class="text-[11px] text-slate-400">{{ t('cartPage.latitudeOptional') }}</span>
+                    <input
+                      v-model.number="deliveryLat"
+                      type="number"
+                      step="any"
+                      class="ui-input"
+                      inputmode="decimal"
+                      placeholder="33.5731"
+                      @input="clearFieldError('delivery_lat')"
+                    />
+                    <p v-if="fieldErrors.delivery_lat" class="text-xs text-red-300">{{ fieldErrors.delivery_lat }}</p>
+                  </label>
+                  <label class="block space-y-1">
+                    <span class="text-[11px] text-slate-400">{{ t('cartPage.longitudeOptional') }}</span>
+                    <input
+                      v-model.number="deliveryLng"
+                      type="number"
+                      step="any"
+                      class="ui-input"
+                      inputmode="decimal"
+                      placeholder="-7.5898"
+                      @input="clearFieldError('delivery_lng')"
+                    />
+                    <p v-if="fieldErrors.delivery_lng" class="text-xs text-red-300">{{ fieldErrors.delivery_lng }}</p>
+                  </label>
+                </div>
               </div>
-            </div>
-          </div>
 
+            </div><!-- /delivery form -->
+          </div><!-- /fulfillment -->
 
+          <!-- ── Note ── -->
           <label class="block space-y-1">
-            <span class="text-xs text-slate-400">{{
-              t('cartPage.optionalNoteForRestaurant')
-            }}</span>
+            <span class="text-[11px] text-slate-400">{{ t('cartPage.optionalNoteForRestaurant') }}</span>
             <textarea
               v-model.trim="customerNote"
               rows="2"
               maxlength="300"
               class="ui-textarea"
-              :placeholder="
-                isTableContextOrder
-                  ? t('cartPage.tableNotePlaceholder')
-                  : t('cartPage.generalNotePlaceholder')
-              "
+              :placeholder="isTableContextOrder ? t('cartPage.tableNotePlaceholder') : t('cartPage.generalNotePlaceholder')"
             ></textarea>
           </label>
 
-          <!-- Tip selector -->
-          <div class="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-3 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.tipLabel') }}</p>
-              <span v-if="tipAmount > 0" class="text-xs font-semibold text-[var(--color-secondary)]">
-                + {{ formatPrice(tipAmount) }}
-              </span>
+          <!-- ── Tip (compact row) ── -->
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="shrink-0 text-xs text-slate-400">{{ t('cartPage.tipLabel') }}</span>
+              <div class="flex flex-1 gap-1">
+                <button
+                  v-for="opt in TIP_OPTIONS"
+                  :key="opt.value"
+                  type="button"
+                  class="flex-1 rounded-lg border py-1 text-[11px] font-semibold transition-colors"
+                  :class="tipPercent === opt.value
+                    ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                  @click="setTipPercent(opt.value)"
+                >{{ opt.label }}</button>
+              </div>
+              <span
+                v-if="tipAmount > 0"
+                class="shrink-0 text-xs font-semibold tabular-nums text-[var(--color-secondary)]"
+              >+{{ formatPrice(tipAmount) }}</span>
             </div>
-            <!-- Preset buttons -->
-            <div class="flex gap-1.5 flex-wrap">
-              <button
-                v-for="opt in TIP_OPTIONS"
-                :key="opt.value"
-                type="button"
-                class="flex-1 min-w-[3.25rem] rounded-xl border py-1.5 text-xs font-semibold transition-colors"
-                :class="tipPercent === opt.value
-                  ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
-                  : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
-                @click="setTipPercent(opt.value)"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
-            <!-- Custom amount input -->
+            <!-- Custom tip input -->
             <div v-if="tipPercent === 'custom'" class="flex items-center gap-2">
-              <span class="text-xs text-slate-400">{{ currency }}</span>
+              <span class="text-xs text-slate-400 shrink-0">{{ currency }}</span>
               <input
                 v-model="customTipInput"
                 type="number"
@@ -558,32 +419,13 @@
             </div>
           </div>
 
-          <div class="ui-section-band px-4 py-3 space-y-1">
-            <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-slate-400">
-              <span>{{ t('cartPage.subtotal') }}</span>
-              <span>{{ formatPrice(orderGrandTotal - tipAmount) }}</span>
-            </div>
-            <div v-if="tipAmount > 0" class="flex items-center justify-between text-xs text-[var(--color-secondary)]/80">
-              <span>{{ t('cartPage.tipLabel') }}</span>
-              <span>+ {{ formatPrice(tipAmount) }}</span>
-            </div>
-            <div class="flex items-center justify-between text-sm text-slate-300">
-              <span>{{ t('cartPage.total') }}</span>
-              <span class="text-lg font-semibold text-[var(--color-secondary)]">
-                {{ formatPrice(orderGrandTotal) }}
-              </span>
-            </div>
-            <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-xs text-emerald-300">
-              <span>{{ t('cartPage.payWithCredits') }}</span>
-              <span class="font-medium">-{{ walletDeduction }}</span>
-            </div>
-          </div>
-
-          <!-- Promo code input -->
-          <div class="rounded-2xl border border-slate-700/60 bg-slate-900/30 p-3 space-y-2">
-            <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.promoCodeLabel') }}</p>
+          <!-- ── Promo code (collapsible) ── -->
+          <div>
             <!-- Applied state -->
-            <div v-if="promoApplied" class="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/8 px-3 py-2">
+            <div
+              v-if="promoApplied"
+              class="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/8 px-3 py-2"
+            >
               <div class="min-w-0">
                 <p class="text-xs font-semibold text-emerald-300">{{ promoApplied.name }}</p>
                 <p class="text-[10px] text-emerald-400/70">
@@ -598,32 +440,40 @@
                 {{ t('cartPage.promoRemove') }}
               </button>
             </div>
-            <!-- Input state -->
-            <div v-else class="flex gap-2">
-              <input
-                v-model="promoCode"
-                type="text"
-                maxlength="20"
-                class="ui-input flex-1 uppercase text-sm"
-                :placeholder="t('cartPage.promoPlaceholder')"
-                @keyup.enter="applyPromoCode"
-                @input="promoCode = promoCode.toUpperCase(); promoError = ''"
-              />
+            <!-- Collapsed toggle -->
+            <template v-else>
               <button
-                class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
-                :disabled="promoChecking || !promoCode.trim()"
-                @click="applyPromoCode"
+                type="button"
+                class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                @click="promoOpen = !promoOpen"
               >
-                {{ promoChecking ? '…' : t('cartPage.promoApply') }}
+                <span class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
+                {{ t('cartPage.promoCodeLabel') }}
               </button>
-            </div>
-            <p v-if="promoError" class="text-[10px] text-red-300">{{ promoError }}</p>
+              <div v-show="promoOpen" class="mt-2 flex gap-2">
+                <input
+                  v-model="promoCode"
+                  type="text"
+                  maxlength="20"
+                  class="ui-input flex-1 uppercase text-sm"
+                  :placeholder="t('cartPage.promoPlaceholder')"
+                  @keyup.enter="applyPromoCode"
+                  @input="promoCode = promoCode.toUpperCase(); promoError = ''"
+                />
+                <button
+                  class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                  :disabled="promoChecking || !promoCode.trim()"
+                  @click="applyPromoCode"
+                >{{ promoChecking ? '…' : t('cartPage.promoApply') }}</button>
+              </div>
+              <p v-if="promoError" class="mt-1 text-[10px] text-red-300">{{ promoError }}</p>
+            </template>
           </div>
 
-          <!-- Pay with wallet credits -->
+          <!-- ── Wallet credits ── -->
           <div
             v-if="canPayWithCredits"
-            class="rounded-2xl border p-3 space-y-1.5 transition-colors"
+            class="rounded-xl border p-3 transition-colors"
             :class="useWallet
               ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8'
               : 'border-slate-700/60 bg-slate-900/30'"
@@ -633,60 +483,47 @@
                 <p class="text-xs font-semibold" :class="useWallet ? 'text-[var(--color-secondary)]' : 'text-slate-300'">
                   {{ t('cartPage.payWithCredits') }}
                 </p>
-                <p class="text-[11px] text-slate-400">
-                  {{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}
-                </p>
+                <p class="text-[11px] text-slate-400">{{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}</p>
               </div>
-              <!-- Toggle switch -->
               <button
                 type="button"
                 role="switch"
                 :aria-checked="useWallet"
                 class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none"
-                :class="useWallet
-                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30'
-                  : 'border-slate-600 bg-slate-800'"
+                :class="useWallet ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30' : 'border-slate-600 bg-slate-800'"
                 @click="useWallet = !useWallet"
               >
                 <span
                   class="absolute top-0.5 h-4 w-4 rounded-full transition-transform"
-                  :class="useWallet
-                    ? 'translate-x-4 bg-[var(--color-secondary)]'
-                    : 'translate-x-0.5 bg-slate-500'"
+                  :class="useWallet ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
                 />
               </button>
             </label>
-            <p v-if="useWallet" class="text-[11px] text-emerald-300">
+            <p v-if="useWallet" class="mt-1 text-[11px] text-emerald-300">
               {{ t('cartPage.creditsApplied', { amount: walletDeduction }) }}
             </p>
           </div>
 
-          <!-- Soft sign-in nudge for table/QR orders (non-blocking) -->
+          <!-- ── Sign-in nudge (table orders) ── -->
           <div
             v-if="isTableContextOrder && !customerStore.isAuthenticated && !tableNudgeDismissed"
-            class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3.5 space-y-2.5"
+            class="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 space-y-2"
           >
             <div class="flex items-start justify-between gap-2">
               <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.tableNudgeTitle') }}</p>
-              <button
-                class="text-slate-500 hover:text-slate-300 transition shrink-0 -mt-0.5"
-                @click="tableNudgeDismissed = true"
-              >
+              <button class="shrink-0 text-slate-500 hover:text-slate-300 transition" @click="tableNudgeDismissed = true">
                 <AppIcon name="close" class="h-3.5 w-3.5" />
               </button>
             </div>
             <ul class="space-y-1">
-              <li class="flex items-center gap-1.5 text-xs text-slate-400">
-                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
-                {{ t('cartPage.tableNudgeBenefit1') }}
+              <li class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />{{ t('cartPage.tableNudgeBenefit1') }}
               </li>
-              <li class="flex items-center gap-1.5 text-xs text-slate-400">
-                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
-                {{ t('cartPage.tableNudgeBenefit2') }}
+              <li class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />{{ t('cartPage.tableNudgeBenefit2') }}
               </li>
-              <li class="flex items-center gap-1.5 text-xs text-slate-400">
-                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />
-                {{ t('cartPage.tableNudgeBenefit3') }}
+              <li class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0 text-emerald-400" />{{ t('cartPage.tableNudgeBenefit3') }}
               </li>
             </ul>
             <button class="ui-btn-outline w-full justify-center text-xs py-1.5" @click="showAuthModal = true">
@@ -695,40 +532,58 @@
             </button>
           </div>
 
-          <!-- Auth gate — required for all pickup and delivery orders -->
+          <!-- ── Auth gate (non-table orders) ── -->
           <template v-if="!isTableContextOrder">
-            <!-- Not signed in: hard block -->
-            <div v-if="!customerStore.isAuthenticated" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-4 space-y-2.5">
-              <div class="space-y-1">
-                <p class="text-sm font-semibold text-amber-300">{{ t('cartPage.orderAuthRequired') }}</p>
-                <p class="text-xs text-slate-400">{{ t('cartPage.orderAuthBody') }}</p>
-              </div>
+            <div v-if="!customerStore.isAuthenticated" class="rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-2">
+              <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.orderAuthRequired') }}</p>
+              <p class="text-[11px] text-slate-400">{{ t('cartPage.orderAuthBody') }}</p>
               <button class="ui-btn-primary w-full justify-center" @click="showAuthModal = true">
                 <AppIcon name="user" class="h-3.5 w-3.5" />
                 {{ t('cartPage.deliveryAuthButton') }}
               </button>
             </div>
-            <!-- Signed in -->
             <template v-else>
-              <!-- Delivery: needs phone verification -->
-              <div v-if="isDelivery && !customerStore.isVerified" class="rounded-2xl border border-amber-500/40 bg-amber-500/8 p-3 space-y-1.5">
+              <div v-if="isDelivery && !customerStore.isVerified" class="rounded-xl border border-amber-500/40 bg-amber-500/8 px-3 py-2 space-y-1">
                 <p class="text-xs font-semibold text-amber-300">{{ t('cartPage.deliveryNotVerified') }}</p>
-                <button class="text-xs text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
+                <button class="text-[11px] text-slate-400 hover:text-slate-200 underline" @click="showAuthModal = true">{{ t('cartPage.deliveryAuthButton') }}</button>
               </div>
-              <!-- Confirmed: green signed-in badge -->
-              <div v-else class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2">
-                <div class="flex items-center gap-1.5">
-                  <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
-                  {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
-                </div>
+              <div v-else class="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs text-emerald-300">
+                <AppIcon name="check" class="h-3.5 w-3.5 shrink-0" />
+                {{ t('cartPage.signedInAs', { name: customerStore.displayName }) }}
               </div>
             </template>
           </template>
 
-          <div class="ui-section-band space-y-2.5 px-3 py-4">
-            <p class="ui-kicker">{{ t('cartPage.channel') }}</p>
+          <!-- ── Order summary breakdown ── -->
+          <div class="border-t border-slate-800/50 pt-3 space-y-1.5 text-xs">
+            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
+              <span>{{ t('cartPage.subtotal') }}</span>
+              <span class="tabular-nums">{{ formatPrice(cart.total) }}</span>
+            </div>
+            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
+              <span>{{ t('cartPage.deliveryFee') }}</span>
+              <span class="tabular-nums font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
+            </div>
+            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
+              <span>{{ t('cartPage.deliveryFee') }}</span>
+              <span class="font-medium">{{ t('cartPage.free') }}</span>
+            </div>
+            <div v-if="tipAmount > 0" class="flex items-center justify-between text-[var(--color-secondary)]/75">
+              <span>{{ t('cartPage.tipLabel') }}</span>
+              <span class="tabular-nums">+{{ formatPrice(tipAmount) }}</span>
+            </div>
+            <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
+              <span>{{ t('cartPage.payWithCredits') }}</span>
+              <span class="tabular-nums font-medium">-{{ walletDeduction }}</span>
+            </div>
+            <div class="flex items-center justify-between pt-1.5 border-t border-slate-800/40">
+              <span class="text-sm font-semibold text-slate-200">{{ t('cartPage.total') }}</span>
+              <span class="text-lg font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
+            </div>
+          </div>
 
-            <!-- Primary: in-app order tracking (shown when ordering is enabled) -->
+          <!-- ── CTA buttons ── -->
+          <div class="space-y-2">
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-3.5 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
@@ -736,14 +591,8 @@
               @click="placeInAppOrder"
             >
               <AppIcon name="cart" class="h-3.5 w-3.5" />
-              {{
-                placingOrder
-                  ? t('cartPage_order.placing')
-                  : t('cartPage_order.placeOrder')
-              }}
+              {{ placingOrder ? t('cartPage_order.placing') : t('cartPage_order.placeOrder') }}
             </button>
-
-            <!-- Secondary: WhatsApp fallback -->
             <button
               v-if="cart.canWhatsapp"
               class="ui-btn-outline w-full justify-center"
@@ -751,14 +600,8 @@
               @click="openWhatsApp"
             >
               <AppIcon name="chat" class="h-3.5 w-3.5" />
-              {{
-                sendingWhatsapp
-                  ? t('cartPage.preparingWhatsApp')
-                  : t('cartPage.sendViaWhatsApp')
-              }}
+              {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
             </button>
-
-            <!-- Secondary: online checkout -->
             <button
               v-if="cart.canCheckout"
               class="ui-btn-outline w-full justify-center"
@@ -766,40 +609,26 @@
               @click="startCheckout"
             >
               <AppIcon name="cart" class="h-3.5 w-3.5" />
-              {{
-                processingCheckout
-                  ? t('cartPage.preparingCheckout')
-                  : t('cartPage.proceedCheckout')
-              }}
+              {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
             </button>
-
-            <!-- Browse-only fallback -->
             <button
               v-if="isBrowseOnlyPlan"
-              class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50"
+              class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50 opacity-60 cursor-not-allowed"
               disabled
-            >
-              {{ t('cartPage.orderingDisabledPlan') }}
-            </button>
-
-            <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-400">
-              {{ t('cartPage.orderingDisabledCurrentPlan') }}
-            </p>
+            >{{ t('cartPage.orderingDisabledPlan') }}</button>
+            <p v-if="isBrowseOnlyPlan" class="text-[11px] text-slate-500 text-center">{{ t('cartPage.orderingDisabledCurrentPlan') }}</p>
           </div>
 
-          <p v-if="placeOrderError" class="text-xs text-red-300">
-            {{ placeOrderError }}
-          </p>
-          <p v-if="checkoutError" class="text-xs text-red-300">
-            {{ checkoutError }}
-          </p>
-          <p v-if="handoffError" class="text-xs text-red-300">
-            {{ handoffError }}
-          </p>
+          <!-- Errors -->
+          <p v-if="placeOrderError" class="text-xs text-red-300">{{ placeOrderError }}</p>
+          <p v-if="checkoutError" class="text-xs text-red-300">{{ checkoutError }}</p>
+          <p v-if="handoffError" class="text-xs text-red-300">{{ handoffError }}</p>
+
         </section>
       </aside>
     </div>
 
+    <!-- ── Modals ─────────────────────────────────────────────────────────── -->
     <CustomerAuthModal
       v-if="showAuthModal"
       @close="showAuthModal = false"
@@ -811,27 +640,17 @@
         v-if="showMapModal"
         class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 sm:items-center sm:p-5"
       >
-        <div
-          class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50"
-        >
-          <header
-            class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3"
-          >
+        <div class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+          <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
             <div>
               <p class="ui-kicker">{{ t('cartPage.mapPicker') }}</p>
-              <h2 class="text-base font-semibold text-slate-100">
-                {{ t('cartPage.tapMapToChoosePin') }}
-              </h2>
+              <h2 class="text-base font-semibold text-slate-100">{{ t('cartPage.tapMapToChoosePin') }}</h2>
             </div>
-            <button
-              class="ui-btn-outline px-3 py-1.5 text-xs"
-              @click="closeMapModal"
-            >
+            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
               <AppIcon name="close" class="h-3.5 w-3.5" />
               {{ t('common.close') }}
             </button>
           </header>
-
           <div class="space-y-3 p-3">
             <p class="text-xs text-slate-400">
               {{ t('cartPage.selected') }}:
@@ -846,10 +665,7 @@
               class="h-[52vh] min-h-[280px] w-full overflow-hidden rounded-xl border border-slate-700/80"
             ></div>
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button
-                class="ui-btn-outline px-3 py-1.5 text-xs"
-                @click="closeMapModal"
-              >
+              <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
                 <AppIcon name="close" class="h-3.5 w-3.5" />
                 {{ t('cartPage.cancel') }}
               </button>
@@ -939,6 +755,7 @@ const promoCode = ref('');
 const promoChecking = ref(false);
 const promoApplied = ref(null);   // { name, promo_type, discount_value, min_order_amount }
 const promoError = ref('');
+const promoOpen = ref(false);
 
 // Saved addresses
 const savedAddresses = ref([]);
@@ -992,6 +809,7 @@ const deliveryLat = ref(null);
 const deliveryLng = ref(null);
 const locating = ref(false);
 const locationError = ref('');
+const locationAdvancedOpen = ref(false);
 const fieldErrors = ref({});
 const showMapModal = ref(false);
 const mapContainerRef = ref(null);
