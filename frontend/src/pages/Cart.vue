@@ -242,38 +242,9 @@
                 {{ t('cartPage.deliveryFee') }}: {{ t('cartPage.free') }}
               </div>
 
-              <!-- Address textarea -->
-              <label class="block space-y-1">
-                <span class="text-[11px] text-slate-400">{{ t('cartPage.deliveryAddressRequired') }}</span>
-                <textarea
-                  v-model.trim="deliveryAddress"
-                  rows="2"
-                  maxlength="180"
-                  class="ui-textarea"
-                  :placeholder="t('cartPage.deliveryAddressPlaceholder')"
-                  @input="clearFieldError('delivery_address')"
-                ></textarea>
-                <p v-if="fieldErrors.delivery_address" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
-              </label>
-
-              <!-- Save address -->
-              <div v-if="customerStore.isAuthenticated && deliveryAddress" class="space-y-1.5">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" v-model="saveAddressAfterOrder" class="rounded" />
-                  <span class="text-xs text-slate-400">{{ t('cartPage.saveAddress') }}</span>
-                </label>
-                <input
-                  v-if="saveAddressAfterOrder"
-                  v-model.trim="saveAddressLabel"
-                  type="text"
-                  maxlength="60"
-                  class="ui-input text-xs"
-                  :placeholder="t('cartPage.saveAddressLabelPlaceholder')"
-                />
-              </div>
-
-              <!-- Location tools: compact chip row -->
-              <div class="space-y-1.5">
+              <!-- ── Location (FIRST) ── -->
+              <div class="space-y-2">
+                <!-- Action chips -->
                 <div class="flex flex-wrap gap-1.5">
                   <button
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors disabled:opacity-50"
@@ -306,27 +277,72 @@
                     {{ t('cartPage.clearLocation') }}
                   </button>
                 </div>
+                <!-- GPS status -->
                 <p class="text-[11px]" :class="hasLocationCoords ? 'text-emerald-400/80' : 'text-slate-600'">
                   {{ hasLocationCoords
                     ? t('cartPage.locationReady', { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
                     : t('cartPage.noCoordinatesYet') }}
                 </p>
                 <p v-if="locationError" class="text-xs text-red-300">{{ locationError }}</p>
+
+                <!-- Map URL + Paste button inline -->
+                <div class="space-y-1">
+                  <span class="text-[11px] text-slate-400">{{ t('cartPage.mapPinUrlOptional') }}</span>
+                  <div class="flex gap-1.5">
+                    <input
+                      ref="deliveryUrlInputRef"
+                      v-model.trim="deliveryLocationUrl"
+                      maxlength="500"
+                      class="ui-input flex-1 min-w-0"
+                      :class="waitingForPaste ? 'ring-2 ring-[var(--color-secondary)]/40' : ''"
+                      inputmode="url"
+                      placeholder="https://maps.google.com/..."
+                      @input="clearFieldError('delivery_location_url')"
+                    />
+                    <button
+                      type="button"
+                      class="shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                      :class="waitingForPaste
+                        ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                        : 'border-slate-600 bg-slate-800/60 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+                      @click="pasteMapLink"
+                    >{{ t('cartPage.pasteLink') }}</button>
+                  </div>
+                  <p v-if="fieldErrors.delivery_location_url" class="text-xs text-red-300">{{ fieldErrors.delivery_location_url }}</p>
+                </div>
               </div>
 
-              <!-- Map URL -->
+              <!-- Address (SECOND — optional when map link filled) -->
               <label class="block space-y-1">
-                <span class="text-[11px] text-slate-400">{{ t('cartPage.mapPinUrlOptional') }}</span>
-                <input
-                  v-model.trim="deliveryLocationUrl"
-                  maxlength="500"
-                  class="ui-input"
-                  inputmode="url"
-                  placeholder="https://maps.google.com/..."
-                  @input="clearFieldError('delivery_location_url')"
-                />
-                <p v-if="fieldErrors.delivery_location_url" class="text-xs text-red-300">{{ fieldErrors.delivery_location_url }}</p>
+                <span class="text-[11px]" :class="deliveryLocationUrl ? 'text-slate-500' : 'text-slate-400'">
+                  {{ deliveryLocationUrl ? t('cartPage.deliveryAddressOptionalWhenPin') : t('cartPage.deliveryAddressRequired') }}
+                </span>
+                <textarea
+                  v-model.trim="deliveryAddress"
+                  rows="2"
+                  maxlength="180"
+                  class="ui-textarea"
+                  :placeholder="t('cartPage.deliveryAddressPlaceholder')"
+                  @input="clearFieldError('delivery_address')"
+                ></textarea>
+                <p v-if="fieldErrors.delivery_address" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
               </label>
+
+              <!-- Save address -->
+              <div v-if="customerStore.isAuthenticated && deliveryAddress" class="space-y-1.5">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" v-model="saveAddressAfterOrder" class="rounded" />
+                  <span class="text-xs text-slate-400">{{ t('cartPage.saveAddress') }}</span>
+                </label>
+                <input
+                  v-if="saveAddressAfterOrder"
+                  v-model.trim="saveAddressLabel"
+                  type="text"
+                  maxlength="60"
+                  class="ui-input text-xs"
+                  :placeholder="t('cartPage.saveAddressLabelPlaceholder')"
+                />
+              </div>
 
               <!-- Advanced: lat / lng (collapsed) -->
               <div>
@@ -406,7 +422,7 @@
             </div>
             <!-- Custom tip input -->
             <div v-if="tipPercent === 'custom'" class="flex items-center gap-2">
-              <span class="text-xs text-slate-400 shrink-0">{{ currency }}</span>
+              <span class="text-xs text-slate-400 shrink-0">MAD</span>
               <input
                 v-model="customTipInput"
                 type="number"
@@ -721,6 +737,7 @@ const useWallet = ref(false);
 // ── Tip ──────────────────────────────────────────────────────────────────────
 const TIP_OPTIONS = [
   { value: 0,        label: '0%' },
+  { value: 5,        label: '5%' },
   { value: 10,       label: '10%' },
   { value: 15,       label: '15%' },
   { value: 20,       label: '20%' },
@@ -810,6 +827,9 @@ const deliveryLng = ref(null);
 const locating = ref(false);
 const locationError = ref('');
 const locationAdvancedOpen = ref(false);
+const waitingForPaste = ref(false);
+const deliveryUrlInputRef = ref(null);
+let waitingForPasteTimer = null;
 const fieldErrors = ref({});
 const showMapModal = ref(false);
 const mapContainerRef = ref(null);
@@ -1098,6 +1118,10 @@ const clearLocation = () => {
 };
 
 watch(deliveryLocationUrl, (value) => {
+  if (value) {
+    waitingForPaste.value = false;
+    clearTimeout(waitingForPasteTimer);
+  }
   const parsed = parseCoordinatesFromMapUrl(value);
   if (parsed) {
     setLocationCoordinates(parsed.lat, parsed.lng);
@@ -1219,7 +1243,37 @@ const openExternalMap = () => {
     source: 'cart_delivery_location',
     metadata: { action: 'open_external_map' },
   });
-  toast.show(t('cartPage.openMapAndShare'), 'info');
+  // Highlight the paste button for 30 s so user knows what to do next
+  waitingForPaste.value = true;
+  clearTimeout(waitingForPasteTimer);
+  waitingForPasteTimer = setTimeout(() => { waitingForPaste.value = false; }, 30000);
+  toast.show(t('cartPage.openMapsInstruction'), 'info');
+};
+
+const pasteMapLink = async () => {
+  waitingForPaste.value = false;
+  clearTimeout(waitingForPasteTimer);
+  try {
+    if (navigator.clipboard?.readText) {
+      const text = await navigator.clipboard.readText();
+      if (!text?.trim()) {
+        deliveryUrlInputRef.value?.focus();
+        toast.show(t('cartPage.clipboardEmpty'), 'info');
+        return;
+      }
+      deliveryLocationUrl.value = text.trim();
+      clearFieldError('delivery_location_url');
+      toast.show(t('cartPage.mapLinkPasted'), 'success');
+    } else {
+      // Clipboard API unavailable — focus field for manual Ctrl+V
+      deliveryUrlInputRef.value?.focus();
+      toast.show(t('cartPage.pasteMapLinkManually'), 'info');
+    }
+  } catch {
+    // Permission denied — focus field for manual paste
+    deliveryUrlInputRef.value?.focus();
+    toast.show(t('cartPage.pasteMapLinkManually'), 'info');
+  }
 };
 
 const validateForm = () => {
@@ -1257,7 +1311,7 @@ const validateForm = () => {
     errors.fulfillment_type = t('cartPage.selectPickupOrDelivery');
   }
   if (fulfillmentType.value === 'delivery') {
-    if (!deliveryAddress.value) {
+    if (!deliveryAddress.value && !deliveryLocationUrl.value.trim()) {
       errors.delivery_address = t('cartPage.deliveryAddressRequiredError');
     }
     const latValue = parseCoordinateValue(deliveryLat.value);
@@ -1630,6 +1684,7 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleEscapeKey);
   }
+  clearTimeout(waitingForPasteTimer);
   if (leafletMap.value) {
     leafletMap.value.remove();
     leafletMap.value = null;
