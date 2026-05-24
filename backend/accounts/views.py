@@ -549,22 +549,9 @@ class CustomerOrdersView(APIView):
             Order.objects
             .filter(customer=customer)
             .prefetch_related("items")
+            .select_related("rating")   # Rating is a OneToOneField on Order
             .order_by("-created_at")[:20]
         )
-
-        # Fetch CustomerRating rows for this customer at this tenant
-        # (CustomerRating lives in the public schema; we access it directly)
-        order_numbers = [o.order_number for o in orders]
-        rating_map = {}  # order_number → score
-        try:
-            from accounts.models import CustomerRating
-            ratings = CustomerRating.objects.filter(
-                customer_id=customer.id,
-                order_number__in=order_numbers,
-            ).values("order_number", "score")
-            rating_map = {r["order_number"]: r["score"] for r in ratings}
-        except Exception:
-            pass
 
         result = []
         for order in orders:
@@ -580,7 +567,9 @@ class CustomerOrdersView(APIView):
                 }
                 for item in order.items.all()
             ]
-            score = rating_map.get(order.order_number)
+            # Rating is a OneToOneField; accessing it raises RelatedObjectDoesNotExist
+            # when absent, so we use getattr with a None default.
+            rating = getattr(order, "rating", None)
             result.append({
                 "order_number": order.order_number,
                 "status": order.status,
@@ -590,8 +579,13 @@ class CustomerOrdersView(APIView):
                 "currency": order.currency,
                 "created_at": order.created_at,
                 "customer_name": order.customer_name,
-                "has_rating": score is not None,
-                "rating_score": score,
+                "has_rating": rating is not None,
+                "rating_score": rating.score if rating else None,
+                "rating": {
+                    "score": rating.score,
+                    "comment": rating.comment,
+                    "created_at": rating.created_at,
+                } if rating else None,
                 "items": items,
             })
 
