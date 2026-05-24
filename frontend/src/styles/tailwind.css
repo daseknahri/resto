@@ -2343,7 +2343,17 @@ html[data-menu-theme="warm"]  .bg-slate-950\/92 { background-color: rgba(255,248
 html[data-menu-theme="light"] .border-amber-500\/40 { border-color: rgba(217,119,6,0.38); }
 html[data-menu-theme="warm"]  .border-amber-500\/40 { border-color: rgba(217,119,6,0.38); }
 
-/* ══ hover:border-slate-500 (Cart delivery-type button inactive hover) ═══ */
-html[data-menu-theme="light"] .hover\:border-slate-500:hover { border-color: rgba(100,116,139,0.55); }
-html[data-menu-theme="warm"]  .hover\:border-slate-500:hover { border-color: rgba(160,100,40,0.45); }
+/* ══ Status badge backgrounds (OrderStatus / FindMyOrder) ════════════════ */
+html[data-menu-theme="light"] .bg-violet-500\/20 { background-color: rgba(139,92,246,0.12); }
+html[data-menu-theme="warm"]  .bg-violet-500\/20 { background-color: rgba(139,92,246,0.12); }
+html[data-menu-theme="light"] .bg-blue-500\/20   { background-color: rgba(59,130,246,0.12); }
+html[data-menu-theme="warm"]  .bg-blue-500\/20   { background-color: rgba(59,130,246,0.12); }
+
+/* Status badge borders */
+html[data-menu-theme="light"] .border-sky-500\/30    { border-color: rgba(14,165,233,0.32); }
+html[data-menu-theme="light"] .border-violet-500\/30 { border-color: rgba(139,92,246,0.30); }
+html[data-menu-theme="light"] .border-emerald-500\/30 { border-color: rgba(16,185,129,0.32); }
+html[data-menu-theme="warm"]  .border-sky-500\/30    { border-color: rgba(14,165,233,0.32); }
+html[data-menu-theme="warm"]  .border-violet-500\/30 { border-color: rgba(139,92,246,0.30); }
+html[data-menu-theme="warm"]  .border-emerald-500\/30 { border-color: rgba(16,185,129,0.32); }
 
