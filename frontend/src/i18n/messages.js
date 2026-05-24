@@ -2599,6 +2599,15 @@ export const messages = {
       savedAddressesEmpty: "No saved addresses yet. Save one at checkout!",
       savedAddressDeleted: "Address removed.",
       savedAddressDeleteFailed: "Could not remove address.",
+      savedAddressesNote: "Used at checkout across all restaurants.",
+      preferencesTitle: "Preferences",
+      displayCurrency: "Display currency",
+      crossRestaurantNote: "Your account works at every restaurant on this platform.",
+      benefitOrders: "Track orders from any restaurant",
+      benefitAddresses: "Save delivery addresses for faster checkout",
+      benefitLoyalty: "Earn loyalty points and wallet credits",
+      benefitSpeed: "Your info pre-filled at every checkout",
+      atRestaurant: "Orders at {name}",
     }
   },
   fr: {
@@ -5197,6 +5206,15 @@ export const messages = {
       savedAddressesEmpty: "Aucune adresse enregistree. Sauvegardez-en une lors de la commande !",
       savedAddressDeleted: "Adresse supprimee.",
       savedAddressDeleteFailed: "Impossible de supprimer l'adresse.",
+      savedAddressesNote: "Utilisees au paiement dans tous les restaurants.",
+      preferencesTitle: "Preferences",
+      displayCurrency: "Devise d'affichage",
+      crossRestaurantNote: "Votre compte fonctionne dans tous les restaurants de la plateforme.",
+      benefitOrders: "Suivez vos commandes dans n'importe quel restaurant",
+      benefitAddresses: "Sauvegardez vos adresses pour aller plus vite",
+      benefitLoyalty: "Gagnez des points de fidelite et des credits",
+      benefitSpeed: "Vos informations pre-remplies a chaque commande",
+      atRestaurant: "Commandes chez {name}",
     }
   },
   ar: {}
