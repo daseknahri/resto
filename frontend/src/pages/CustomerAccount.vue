@@ -206,6 +206,11 @@
               v-if="tab.id === 'orders' && activeOrders.length && activeTab !== 'orders'"
               class="absolute right-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"
             />
+            <!-- Pending reviews dot on Reviews tab -->
+            <span
+              v-if="tab.id === 'reviews' && pendingReviews.length && activeTab !== 'reviews'"
+              class="absolute right-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
+            />
           </button>
         </nav>
       </div>
@@ -282,6 +287,28 @@
               <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" />
             </button>
           </div>
+
+          <!-- Reviews tile (full-width) -->
+          <button
+            class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-amber-500/30"
+            @click="activeTab = 'reviews'"
+          >
+            <div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/8 transition group-hover:bg-amber-500/15">
+              <AppIcon name="chat" class="h-4 w-4 text-amber-400" />
+              <span v-if="pendingReviews.length" class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">{{ pendingReviews.length }}</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold leading-tight text-slate-200">Reviews</p>
+              <p class="mt-0.5 text-[10px]" :class="pendingReviews.length ? 'text-amber-400' : 'text-slate-500'">
+                <span v-if="loadingOrders">Loading…</span>
+                <template v-else>
+                  <span>{{ submittedReviews.length }} submitted</span>
+                  <span v-if="pendingReviews.length" class="ml-1.5 font-semibold">· {{ pendingReviews.length }} pending</span>
+                </template>
+              </p>
+            </div>
+            <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-400" />
+          </button>
 
           <!-- Most recent order -->
           <div v-if="apiOrders.length" class="ui-panel p-4 space-y-3">
@@ -405,9 +432,16 @@
                         <span v-if="order.total" class="font-medium tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
                         <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
                       </div>
-                      <div v-if="order.has_rating" class="text-[11px] tracking-tight text-amber-400">
-                        {{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}
+                      <div v-if="order.has_rating" class="flex items-center gap-1 text-[11px] text-amber-400">
+                        <span class="tracking-tight">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
+                        <span class="text-slate-600">·</span>
+                        <span class="text-slate-500">Reviewed</span>
                       </div>
+                      <button
+                        v-else-if="order.status === 'completed'"
+                        class="text-[11px] text-slate-500 transition-colors hover:text-amber-400"
+                        @click="activeTab = 'reviews'"
+                      >★ Rate this order →</button>
                     </div>
                     <button
                       v-if="order.items?.length"
@@ -576,6 +610,172 @@
               <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
             </div>
           </div>
+        </template>
+
+
+        <!-- ════════════ REVIEWS TAB ════════════ -->
+        <template v-else-if="activeTab === 'reviews'">
+
+          <!-- Loading -->
+          <div v-if="loadingOrders" class="ui-panel p-4 space-y-2">
+            <div v-for="i in 2" :key="i" class="h-24 animate-pulse rounded-xl bg-slate-800/50" />
+          </div>
+
+          <!-- No completed orders at all -->
+          <div v-else-if="!completedOrders.length" class="ui-panel p-8 text-center space-y-3">
+            <p class="text-4xl leading-none">⭐</p>
+            <p class="text-sm font-semibold text-slate-300">No reviews yet</p>
+            <p class="text-xs text-slate-500">Complete your first order to share your experience</p>
+          </div>
+
+          <template v-else>
+
+            <!-- Average score card -->
+            <div v-if="submittedReviews.length" class="relative overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/8 via-slate-900/95 to-slate-950 p-4">
+              <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,158,11,0.07),transparent_65%)]" />
+              <div class="relative flex items-center gap-4">
+                <div class="text-center">
+                  <p class="text-4xl font-black tabular-nums leading-none text-amber-400">{{ reviewsAvgScore.toFixed(1) }}</p>
+                  <p class="mt-0.5 text-[10px] text-slate-500">out of 5</p>
+                </div>
+                <div class="flex-1 space-y-1">
+                  <div class="flex gap-0.5">
+                    <span
+                      v-for="s in 5"
+                      :key="s"
+                      class="text-xl leading-none"
+                      :class="s <= Math.round(reviewsAvgScore) ? 'text-amber-400' : 'text-slate-700'"
+                    >★</span>
+                  </div>
+                  <p class="text-[11px] text-slate-400">
+                    {{ submittedReviews.length }} review{{ submittedReviews.length !== 1 ? 's' : '' }}
+                    <span v-if="pendingReviews.length" class="ml-1.5 text-amber-400">· {{ pendingReviews.length }} pending</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Pending reviews ── -->
+            <div v-if="pendingReviews.length" class="ui-panel overflow-hidden p-0">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
+                <div>
+                  <p class="ui-kicker">Write a Review</p>
+                  <p class="mt-0.5 text-[10px] text-slate-500">Share your experience with us</p>
+                </div>
+                <span class="rounded-full border border-amber-500/40 bg-amber-500/12 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-400">{{ pendingReviews.length }}</span>
+              </div>
+              <div class="p-4 space-y-4">
+                <div
+                  v-for="order in pendingReviews"
+                  :key="order.order_number"
+                  class="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3.5 space-y-3"
+                >
+                  <!-- Order info -->
+                  <div class="flex items-center gap-2 text-[11px]">
+                    <RouterLink
+                      :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                      class="font-bold text-[var(--color-secondary)] hover:opacity-80"
+                    >#{{ order.order_number }}</RouterLink>
+                    <span class="text-slate-600">·</span>
+                    <span class="text-slate-500">{{ formatDate(order.created_at) }}</span>
+                    <span v-if="order.total" class="ml-auto tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+                  </div>
+
+                  <!-- Interactive star selector -->
+                  <div class="space-y-1">
+                    <p class="text-[11px] text-slate-400">Your rating</p>
+                    <div class="flex items-center gap-0.5">
+                      <button
+                        v-for="s in 5"
+                        :key="s"
+                        type="button"
+                        class="select-none text-[26px] leading-none transition-all active:scale-90"
+                        :class="s <= (reviewHover[order.order_number] || getDraft(order.order_number).score)
+                          ? 'text-amber-400'
+                          : 'text-slate-700 hover:text-slate-500'"
+                        @mouseenter="setHover(order.order_number, s)"
+                        @mouseleave="setHover(order.order_number, 0)"
+                        @click="setDraftScore(order.order_number, s)"
+                      >★</button>
+                      <span
+                        v-if="getDraft(order.order_number).score || reviewHover[order.order_number]"
+                        class="ml-2.5 text-xs font-semibold"
+                        :class="getDraft(order.order_number).score ? 'text-amber-400' : 'text-slate-500'"
+                      >{{ ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent!'][reviewHover[order.order_number] || getDraft(order.order_number).score] }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Optional comment (shown after a score is set) -->
+                  <Transition name="ui-expand">
+                    <div v-if="getDraft(order.order_number).score" class="space-y-1.5">
+                      <p class="text-[11px] text-slate-400">Comment <span class="text-slate-600">(optional)</span></p>
+                      <textarea
+                        :value="getDraft(order.order_number).comment"
+                        rows="2"
+                        maxlength="500"
+                        class="ui-input w-full resize-none text-xs leading-relaxed"
+                        placeholder="Tell us about your experience…"
+                        @input="setDraftComment(order.order_number, $event.target.value)"
+                      />
+                    </div>
+                  </Transition>
+
+                  <!-- Submit button -->
+                  <button
+                    class="ui-btn-primary w-full justify-center py-2 text-xs"
+                    :disabled="!getDraft(order.order_number).score || submittingReview.has(order.order_number)"
+                    @click="submitReview(order)"
+                  >
+                    <AppIcon
+                      v-if="submittingReview.has(order.order_number)"
+                      name="refresh"
+                      class="h-3.5 w-3.5 animate-spin"
+                    />
+                    {{ submittingReview.has(order.order_number) ? 'Submitting…' : 'Submit Review' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Submitted reviews ── -->
+            <div v-if="submittedReviews.length" class="ui-panel overflow-hidden p-0">
+              <div class="border-b border-slate-800/70 px-4 py-3">
+                <p class="ui-kicker">Your Reviews</p>
+              </div>
+              <div class="p-4 space-y-3">
+                <div
+                  v-for="order in submittedReviews"
+                  :key="order.order_number"
+                  class="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3.5 space-y-2"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="space-y-0.5">
+                      <RouterLink
+                        :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                        class="text-xs font-bold text-[var(--color-secondary)] hover:opacity-80"
+                      >#{{ order.order_number }}</RouterLink>
+                      <p class="text-[10px] text-slate-500">{{ formatDate(order.created_at) }}</p>
+                    </div>
+                    <div class="flex flex-col items-end gap-0.5">
+                      <div class="flex gap-0.5">
+                        <span
+                          v-for="s in 5"
+                          :key="s"
+                          class="text-base leading-none"
+                          :class="s <= order.rating_score ? 'text-amber-400' : 'text-slate-700'"
+                        >★</span>
+                      </div>
+                      <p class="text-[10px] text-slate-500">{{ order.rating_score }}/5</p>
+                    </div>
+                  </div>
+                  <p v-if="order.rating?.comment" class="rounded-xl border border-slate-700/50 bg-slate-950/40 px-3 py-2 text-xs italic leading-relaxed text-slate-300">
+                    "{{ order.rating.comment }}"
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </template>
         </template>
 
 
@@ -765,7 +965,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
@@ -790,6 +990,7 @@ const activeTab = ref('overview');
 const TABS = [
   { id: 'overview', icon: 'home',     label: 'Overview' },
   { id: 'orders',   icon: 'calendar', label: 'Orders'   },
+  { id: 'reviews',  icon: 'chat',     label: 'Reviews'  },
   { id: 'wallet',   icon: 'star',     label: 'Wallet'   },
   { id: 'profile',  icon: 'settings', label: 'Profile'  },
 ];
@@ -898,6 +1099,60 @@ const apiOrders = ref([]);
 
 const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
 const activeOrders = computed(() => apiOrders.value.filter(o => ACTIVE_STATUSES.has(o.status)));
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+const reviewDrafts     = reactive({});   // { [orderNumber]: { score: 0, comment: '' } }
+const reviewHover      = reactive({});   // { [orderNumber]: 0–5 }
+const submittingReview = ref(new Set());
+
+const completedOrders  = computed(() => apiOrders.value.filter(o => o.status === 'completed'));
+const pendingReviews   = computed(() => completedOrders.value.filter(o => !o.has_rating));
+const submittedReviews = computed(() => completedOrders.value.filter(o => o.has_rating));
+const reviewsAvgScore  = computed(() => {
+  const rated = submittedReviews.value;
+  if (!rated.length) return 0;
+  return rated.reduce((sum, o) => sum + (o.rating_score || 0), 0) / rated.length;
+});
+
+const getDraft = (num) => reviewDrafts[num] ?? { score: 0, comment: '' };
+
+const setDraftScore = (num, score) => {
+  if (!reviewDrafts[num]) reviewDrafts[num] = { score: 0, comment: '' };
+  reviewDrafts[num].score = score;
+};
+
+const setDraftComment = (num, comment) => {
+  if (!reviewDrafts[num]) reviewDrafts[num] = { score: 0, comment: '' };
+  reviewDrafts[num].comment = comment;
+};
+
+const setHover = (num, score) => { reviewHover[num] = score; };
+
+const submitReview = async (order) => {
+  const draft = reviewDrafts[order.order_number];
+  if (!draft?.score) return;
+  const num = order.order_number;
+  const s = new Set(submittingReview.value); s.add(num); submittingReview.value = s;
+  try {
+    await api.post(`/orders/${num}/rate/`, { score: draft.score, comment: draft.comment || '' });
+    const idx = apiOrders.value.findIndex(o => o.order_number === num);
+    if (idx !== -1) {
+      const updated = [...apiOrders.value];
+      updated[idx] = {
+        ...updated[idx],
+        has_rating: true,
+        rating_score: draft.score,
+        rating: { score: draft.score, comment: draft.comment || '', created_at: new Date().toISOString() },
+      };
+      apiOrders.value = updated;
+    }
+    toast.show('Review submitted! Thank you 🌟', 'success');
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || 'Could not submit review. Please try again.', 'error');
+  } finally {
+    const s2 = new Set(submittingReview.value); s2.delete(num); submittingReview.value = s2;
+  }
+};
 
 const loadingWallet = ref(false);
 const walletTransactions = ref([]);
@@ -1074,6 +1329,8 @@ const setLocale = async (code) => {
 const handleLogout = async () => {
   await customerStore.logout();
   apiOrders.value = [];
+  for (const k in reviewDrafts) delete reviewDrafts[k];
+  for (const k in reviewHover)  delete reviewHover[k];
   walletTransactions.value = [];
   editableName.value = '';
   selectedLocale.value = 'en';

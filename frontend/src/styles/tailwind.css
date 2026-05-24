@@ -2369,3 +2369,13 @@ html[data-menu-theme="warm"]  .divide-slate-800\/70 > :not([hidden]) ~ :not([hid
 html[data-menu-theme="light"] .bg-slate-950\/85 { background-color: rgba(241,245,249,0.82); }
 html[data-menu-theme="warm"]  .bg-slate-950\/85 { background-color: rgba(255,248,237,0.84); }
 
+/* ── Reviews tab — missing amber variants ──────────────────────────────────── */
+html[data-menu-theme="light"] .bg-amber-500\/12 { background-color: rgba(245,158,11,0.16); }
+html[data-menu-theme="warm"]  .bg-amber-500\/12 { background-color: rgba(245,158,11,0.16); }
+html[data-menu-theme="light"] .bg-amber-500\/15 { background-color: rgba(245,158,11,0.20); }
+html[data-menu-theme="warm"]  .bg-amber-500\/15 { background-color: rgba(245,158,11,0.20); }
+html[data-menu-theme="light"] .border-amber-500\/20 { border-color: rgba(217,119,6,0.28); }
+html[data-menu-theme="warm"]  .border-amber-500\/20 { border-color: rgba(217,119,6,0.28); }
+html[data-menu-theme="light"] .border-amber-500\/25 { border-color: rgba(217,119,6,0.32); }
+html[data-menu-theme="warm"]  .border-amber-500\/25 { border-color: rgba(217,119,6,0.32); }
+
