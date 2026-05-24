@@ -1,351 +1,51 @@
 <template>
-  <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
+  <div class="ui-safe-bottom min-h-screen bg-slate-950">
 
-    <!-- ── Header ─────────────────────────────────────────────────────────────── -->
-    <header class="ui-hero-ribbon ui-reveal p-3 md:p-5">
-      <div class="flex items-center gap-3.5">
-        <div
-          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
-          :class="customerStore.isAuthenticated
-            ? 'border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]'
-            : 'border border-slate-700/70 bg-slate-900/60 text-slate-400'"
-        >
-          <span v-if="customerStore.isAuthenticated && initials" class="text-sm font-bold tracking-tight select-none">{{ initials }}</span>
-          <AppIcon v-else name="user" class="h-6 w-6" />
-        </div>
-        <div class="min-w-0 space-y-0.5">
-          <p class="ui-kicker">{{ t('customerAccount.kicker') }}</p>
-          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight truncate">
-            {{ customerStore.isAuthenticated && customerStore.customer?.name
-              ? customerStore.customer.name
-              : t('customerAccount.title') }}
-          </h1>
-          <p v-if="customerStore.isAuthenticated && (customerStore.customer?.phone || customerStore.customer?.email)" class="text-xs text-slate-400 truncate">
-            {{ customerStore.customer?.phone || customerStore.customer?.email }}
-          </p>
-        </div>
+    <!-- ══════════════════════════ LOADING ══════════════════════════ -->
+    <div v-if="!customerStore.loaded" class="flex min-h-[65vh] flex-col items-center justify-center gap-5 px-4">
+      <div class="h-16 w-16 animate-pulse rounded-3xl border border-slate-700/60 bg-slate-900/60" />
+      <div class="space-y-2 text-center">
+        <div class="mx-auto h-4 w-32 animate-pulse rounded-lg bg-slate-800" />
+        <div class="mx-auto h-3 w-48 animate-pulse rounded-lg bg-slate-800/60" />
       </div>
-    </header>
-
-    <!-- ── Loading skeleton ──────────────────────────────────────────────────── -->
-    <div v-if="!customerStore.loaded" class="ui-panel ui-reveal p-6 space-y-4 text-center">
-      <div class="flex justify-center">
-        <span class="flex h-14 w-14 animate-pulse items-center justify-center rounded-full border border-slate-700/70 bg-slate-900/60" />
-      </div>
-      <div class="space-y-2">
-        <div class="mx-auto h-4 w-32 animate-pulse rounded bg-slate-800" />
-        <div class="mx-auto h-3 w-48 animate-pulse rounded bg-slate-800/70" />
-      </div>
-      <div class="mx-auto h-9 w-44 animate-pulse rounded-full bg-slate-800" />
+      <div class="h-9 w-36 animate-pulse rounded-full bg-slate-800" />
     </div>
 
-    <!-- ── Not signed in ─────────────────────────────────────────────────────── -->
+    <!-- ══════════════════════════ NOT SIGNED IN ══════════════════════════ -->
     <template v-else-if="!customerStore.isAuthenticated">
 
-      <div class="ui-panel ui-reveal p-5 space-y-5">
-        <div class="text-center space-y-3">
-          <p class="text-sm font-semibold text-slate-100">{{ t('customerAccount.notSignedInTitle') }}</p>
-          <p class="text-xs text-slate-400 max-w-xs mx-auto">{{ t('customerAccount.crossRestaurantNote') }}</p>
-          <button class="ui-btn-primary mx-auto justify-center" @click="showAuthModal = true">
+      <!-- Sign-in hero -->
+      <div class="relative overflow-hidden bg-slate-950">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_-10%,rgba(245,158,11,0.13),transparent_65%)]" />
+        <div class="relative px-4 pb-8 pt-10 text-center space-y-5">
+          <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-[22px] border border-slate-700/60 bg-gradient-to-br from-slate-800/80 to-slate-900/80 shadow-xl">
+            <AppIcon name="user" class="h-9 w-9 text-slate-400" />
+          </div>
+          <div class="space-y-2">
+            <h1 class="text-xl font-bold text-white">{{ t('customerAccount.title') }}</h1>
+            <p class="mx-auto max-w-xs text-sm leading-relaxed text-slate-400">{{ t('customerAccount.crossRestaurantNote') }}</p>
+          </div>
+          <button class="ui-btn-primary mx-auto gap-2 px-6" @click="showAuthModal = true">
             <AppIcon name="user" class="h-3.5 w-3.5" />
             {{ t('customerAccount.signIn') }}
           </button>
         </div>
-
-        <!-- Benefits grid -->
-        <div class="grid grid-cols-2 gap-2 border-t border-slate-800/60 pt-4">
-          <div v-for="b in benefits" :key="b.key" class="flex items-start gap-2 rounded-xl border border-slate-800/60 bg-slate-900/40 p-2.5">
-            <AppIcon :name="b.icon" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-secondary)]" />
-            <p class="text-[11px] leading-snug text-slate-400">{{ b.label }}</p>
-          </div>
-        </div>
       </div>
 
-      <!-- Local orders from this device -->
-      <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
-        <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
-        <ul class="space-y-2">
-          <li
-            v-for="order in cart.recentOrders"
-            :key="order.order_number"
-            class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
-          >
-            <RouterLink
-              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
-            >
-              {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
-            </RouterLink>
-            <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
-          </li>
-        </ul>
-      </section>
-    </template>
-
-    <!-- ── Signed in ─────────────────────────────────────────────────────────── -->
-    <template v-else>
-
-      <!-- Active (in-flight) orders -->
-      <template v-if="!loadingOrders && activeOrders.length">
-        <section
-          v-for="order in activeOrders"
-          :key="order.order_number"
-          class="ui-reveal relative overflow-hidden rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 p-4"
-        >
-          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-[var(--color-secondary)]/20 animate-pulse" />
-          <div class="relative flex items-center gap-3">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15">
-              <span class="block h-2.5 w-2.5 animate-ping rounded-full bg-[var(--color-secondary)]" />
-            </span>
-            <div class="min-w-0 flex-1 space-y-0.5">
-              <p class="text-sm font-semibold text-[var(--color-secondary)]">
-                {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
-              </p>
-              <p class="text-xs text-slate-400">
-                {{ statusLabel(order.status) }}
-                <span v-if="order.fulfillment_type"> · {{
-                  order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
-                  order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
-                  t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
-                }}</span>
-              </p>
+      <!-- Benefits grid -->
+      <div class="px-3 pb-28 space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div v-for="b in benefits" :key="b.key" class="ui-panel flex items-start gap-2.5 p-3">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/8">
+              <AppIcon :name="b.icon" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
             </div>
-            <RouterLink
-              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/25 transition-colors"
-            >
-              {{ t('customerAccount.trackOrder') }}
-              <AppIcon name="arrowRight" class="h-3 w-3" />
-            </RouterLink>
-          </div>
-        </section>
-      </template>
-
-      <!-- ── Profile card ─────────────────────────────────────────────────────── -->
-      <section class="ui-panel ui-reveal p-4 space-y-3.5">
-
-        <!-- Name + sign out row -->
-        <div class="flex items-center gap-3">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/12">
-            <span class="text-sm font-bold tracking-tight text-[var(--color-secondary)] select-none">{{ initials }}</span>
-          </div>
-          <div class="min-w-0 flex-1 flex items-center gap-2">
-            <input
-              v-model.trim="editableName"
-              type="text"
-              maxlength="80"
-              class="ui-input flex-1 text-sm py-1"
-              :placeholder="t('customerAccount.namePlaceholder')"
-              :disabled="savingName"
-            />
-            <button
-              v-if="editableName !== (customerStore.customer?.name || '')"
-              class="ui-btn-primary shrink-0 px-3 py-1 text-xs"
-              :disabled="savingName"
-              @click="saveName"
-            >{{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}</button>
-          </div>
-          <button class="shrink-0 px-1 text-xs text-slate-500 hover:text-red-300 transition" @click="handleLogout">
-            {{ t('customerAccount.signOut') }}
-          </button>
-        </div>
-
-        <!-- Phone -->
-        <div class="flex flex-wrap items-center gap-2 text-xs">
-          <span v-if="customerStore.customer?.phone" class="text-slate-300">{{ customerStore.customer.phone }}</span>
-          <button
-            v-else
-            class="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 hover:border-amber-500/70 transition-colors"
-            @click="showAddPhone = true"
-          >
-            <AppIcon name="plus" class="h-3 w-3" />
-            {{ t('customerAccount.addPhone') }}
-          </button>
-          <span v-if="customerStore.customer?.phone_verified" class="ui-chip border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px]">
-            <AppIcon name="check" class="h-3 w-3" />{{ t('customerAccount.verifiedPhone') }}
-          </span>
-        </div>
-
-        <!-- Email -->
-        <div>
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <template v-if="!showEmailInput">
-              <span v-if="customerStore.customer?.email" class="text-slate-300">{{ customerStore.customer.email }}</span>
-              <button
-                class="inline-flex items-center gap-1 text-[11px] transition-colors"
-                :class="customerStore.customer?.email ? 'text-slate-500 hover:text-slate-300' : 'text-sky-400 hover:text-sky-300'"
-                @click="openEmailInput"
-              >
-                <AppIcon name="plus" class="h-3 w-3" />
-                {{ customerStore.customer?.email ? t('customerAccount.editEmail') : t('customerAccount.addEmail') }}
-              </button>
-              <span v-if="customerStore.customer?.email_verified" class="ui-chip border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px]">
-                <AppIcon name="check" class="h-3 w-3" />{{ t('customerAccount.verifiedEmail') }}
-              </span>
-            </template>
-            <template v-else>
-              <input
-                ref="emailInputRef"
-                v-model.trim="editableEmail"
-                type="email"
-                autocomplete="email"
-                maxlength="254"
-                class="ui-input flex-1 min-w-0 text-xs py-1"
-                :placeholder="t('customerAccount.emailPlaceholder')"
-                :disabled="savingEmail"
-                @keydown.enter.prevent="saveEmail"
-                @keydown.escape.prevent="cancelEmailInput"
-              />
-              <button class="ui-btn-primary shrink-0 px-2.5 py-1 text-xs" :disabled="savingEmail || !editableEmail" @click="saveEmail">
-                {{ savingEmail ? t('customerAccount.saving') : t('common.save') }}
-              </button>
-              <button class="text-xs text-slate-500 hover:text-slate-300 transition" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
-            </template>
-          </div>
-          <p v-if="emailError" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
-        </div>
-
-        <!-- Wallet inline badge -->
-        <div v-if="walletBalance > 0" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/10 px-2.5 py-1 text-[11px] text-[var(--color-secondary)]">
-          💰 {{ formatPrice(walletBalance) }} {{ t('customerAccount.walletTitle') }}
-        </div>
-      </section>
-
-      <!-- ── Preferences (language + display currency) ──────────────────────── -->
-      <section class="ui-panel ui-reveal p-4 space-y-4">
-        <p class="ui-kicker">{{ t('customerAccount.preferencesTitle') }}</p>
-
-        <!-- Language -->
-        <div class="space-y-1.5">
-          <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{{ t('customerAccount.localeTitle') }}</p>
-          <div v-if="!localeConfigured" class="flex flex-wrap gap-2">
-            <button
-              v-for="lang in [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' }]"
-              :key="lang.code"
-              class="rounded-full border px-3 py-1 text-xs transition-colors"
-              :class="selectedLocale === lang.code
-                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
-                : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
-              :disabled="savingLocale"
-              @click="setLocale(lang.code)"
-            >{{ lang.label }}</button>
-          </div>
-          <div v-else class="flex items-center justify-between gap-2">
-            <span class="text-xs text-slate-300">{{ localeLabelCurrent }}</span>
-            <button class="text-[11px] text-slate-500 hover:text-slate-300 transition" @click="localeConfigured = false">{{ t('common.change') }}</button>
+            <p class="mt-0.5 text-[11px] leading-snug text-slate-400">{{ b.label }}</p>
           </div>
         </div>
 
-        <!-- Display currency -->
-        <div class="space-y-1.5">
-          <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{{ t('customerAccount.displayCurrency') }}</p>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="r in currencyStore.available"
-              :key="r.code"
-              class="rounded-full border px-3 py-1 text-xs transition-colors"
-              :class="currencyStore.selected === r.code
-                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
-                : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
-              @click="currencyStore.setCode(r.code)"
-            >{{ r.code }} <span class="opacity-60">{{ r.symbol }}</span></button>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Order history ──────────────────────────────────────────────────── -->
-      <section class="ui-panel ui-reveal p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <p class="ui-kicker">{{ t('customerAccount.ordersTitle') }}</p>
-            <p v-if="tenantName" class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.atRestaurant', { name: tenantName }) }}</p>
-          </div>
-          <span v-if="apiOrders.length" class="rounded-full border border-slate-700/60 bg-slate-900/50 px-2 py-0.5 text-[11px] tabular-nums text-slate-400">{{ apiOrders.length }}</span>
-        </div>
-
-        <div v-if="loadingOrders" class="space-y-2">
-          <div v-for="i in 2" :key="i" class="h-12 animate-pulse rounded-xl bg-slate-800/60" />
-        </div>
-        <div v-else-if="ordersError" class="text-xs text-red-300">{{ t('customerAccount.fetchError') }}</div>
-        <div v-else-if="!apiOrders.length && !cart.recentOrders.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-6 text-center text-xs text-slate-500">
-          {{ t('customerAccount.ordersEmpty') }}
-        </div>
-
-        <ul v-else-if="apiOrders.length" class="space-y-2">
-          <li
-            v-for="order in apiOrders"
-            :key="order.order_number"
-            class="rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs"
-          >
-            <div class="flex items-start gap-2.5 px-3 py-2.5">
-              <!-- Status dot -->
-              <span
-                class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                :class="{
-                  'bg-amber-400 animate-pulse': ACTIVE_STATUSES.has(order.status),
-                  'bg-emerald-400': order.status === 'completed',
-                  'bg-red-400': order.status === 'cancelled',
-                  'bg-slate-500': !ACTIVE_STATUSES.has(order.status) && order.status !== 'completed' && order.status !== 'cancelled',
-                }"
-              />
-              <div class="min-w-0 flex-1 space-y-1">
-                <div class="flex flex-wrap items-center gap-1.5">
-                  <RouterLink
-                    :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-                    class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
-                  >
-                    {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
-                  </RouterLink>
-                  <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(order.status) }}</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 text-slate-500">
-                  <span v-if="order.fulfillment_type">{{
-                    order.fulfillment_type === 'pickup' ? t('orderStatus.fulfillmentPickup') :
-                    order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
-                    t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
-                  }}</span>
-                  <span v-if="order.total" class="font-medium tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
-                  <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
-                </div>
-                <div v-if="order.has_rating" class="text-[11px] tracking-tight text-amber-400">
-                  {{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}
-                </div>
-              </div>
-              <button
-                v-if="order.items?.length"
-                class="mt-0.5 shrink-0 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
-                @click="toggleOrder(order.order_number)"
-              >
-                {{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}
-              </button>
-            </div>
-            <Transition name="ui-expand">
-              <div v-if="expandedOrders.has(order.order_number) && order.items?.length"
-                class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
-              >
-                <ul class="space-y-1">
-                  <li v-for="(item, idx) in order.items" :key="idx" class="flex items-start justify-between gap-2 text-slate-300">
-                    <span class="min-w-0 flex-1">
-                      <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
-                      <span v-if="item.options?.length" class="ml-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
-                    </span>
-                    <span class="shrink-0 tabular-nums text-slate-400">{{ formatPrice(item.subtotal) }}</span>
-                  </li>
-                </ul>
-                <button
-                  class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20"
-                  @click="reorder(order)"
-                >
-                  <AppIcon name="cart" class="h-3 w-3" />
-                  {{ t('customerAccount.reorder') }}
-                </button>
-              </div>
-            </Transition>
-          </li>
-        </ul>
-
-        <!-- Local-only orders (not yet signed in at time of order) -->
-        <template v-else-if="cart.recentOrders.length">
+        <!-- Local orders this device -->
+        <section v-if="cart.recentOrders?.length" class="ui-panel p-4 space-y-3">
+          <p class="ui-kicker">{{ t('customerAccount.localOrdersTitle') }}</p>
           <ul class="space-y-2">
             <li
               v-for="order in cart.recentOrders"
@@ -359,129 +59,704 @@
               <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
             </li>
           </ul>
-        </template>
-      </section>
+        </section>
+      </div>
+    </template>
 
-      <!-- ── Wallet ─────────────────────────────────────────────────────────── -->
-      <section class="ui-panel ui-reveal p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <p class="ui-kicker">{{ t('customerAccount.walletTitle') }}</p>
-          <p class="text-lg font-bold tabular-nums" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
-            {{ formatPrice(walletBalance) }}
-          </p>
-        </div>
+    <!-- ══════════════════════════ SIGNED IN ══════════════════════════ -->
+    <template v-else>
 
-        <div v-if="loadingWallet" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
-        <div v-else-if="!walletTransactions.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
-          {{ t('customerAccount.walletNoTransactions') }}
-        </div>
-        <ul v-else class="space-y-1.5">
-          <li
-            v-for="tx in walletTransactions"
-            :key="tx.id"
-            class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
-          >
-            <div class="min-w-0 space-y-0.5">
-              <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
-              <p class="text-slate-500">{{ formatDate(tx.created_at) }}</p>
-            </div>
-            <span
-              class="shrink-0 font-semibold tabular-nums"
-              :class="tx.type === 'payment' ? 'text-red-300' : 'text-emerald-300'"
-            >
-              {{ tx.type === 'payment' ? '−' : '+' }}{{ formatPrice(tx.amount) }}
-            </span>
-          </li>
-        </ul>
-      </section>
+      <!-- ──────────────── Account hero header ──────────────── -->
+      <header class="relative overflow-hidden bg-slate-950 pb-4 pt-5">
+        <!-- Ambient glow -->
+        <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--color-secondary)]/7 via-transparent to-transparent" />
+        <div class="pointer-events-none absolute -top-10 -left-10 h-48 w-48 rounded-full bg-[var(--color-secondary)]/5 blur-3xl" />
 
-      <!-- ── Loyalty Points ─────────────────────────────────────────────────── -->
-      <section v-if="loyaltyPoints > 0 || loyaltyConfig" class="ui-panel ui-reveal p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <p class="ui-kicker">{{ t('customerAccount.loyaltyTitle') }}</p>
-          <p class="text-lg font-bold tabular-nums text-indigo-300">
-            {{ loyaltyPoints }} <span class="text-xs font-normal text-slate-400">{{ t('customerAccount.loyaltyPts') }}</span>
-          </p>
-        </div>
-
-        <div v-if="loyaltyConfig && loyaltyConfig.enabled">
-          <!-- Progress bar toward threshold -->
-          <div v-if="loyaltyConfig.redeem_threshold > 0" class="mb-3 space-y-1.5">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-slate-400">{{ t('customerAccount.loyaltyEarnRate', { pts: loyaltyConfig.points_per_unit }) }}</span>
-              <span class="tabular-nums text-slate-500">{{ Math.min(loyaltyPoints, loyaltyConfig.redeem_threshold) }} / {{ loyaltyConfig.redeem_threshold }}</span>
-            </div>
-            <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
+        <div class="relative px-4">
+          <!-- Avatar + name row -->
+          <div class="flex items-start gap-3.5">
+            <!-- Avatar -->
+            <div class="relative shrink-0">
               <div
-                class="h-full rounded-full bg-indigo-400 transition-all duration-500"
-                :style="{ width: Math.min((loyaltyPoints / loyaltyConfig.redeem_threshold) * 100, 100) + '%' }"
+                class="flex h-[58px] w-[58px] items-center justify-center rounded-[18px] border-2 shadow-lg shadow-black/30"
+                style="border-color:rgba(var(--color-secondary-rgb,245,158,11),0.35);background:linear-gradient(135deg,rgba(var(--color-secondary-rgb,245,158,11),0.18),rgba(var(--color-secondary-rgb,245,158,11),0.04))"
+              >
+                <span class="text-lg font-black tracking-tight text-[var(--color-secondary)] select-none">{{ initials }}</span>
+              </div>
+              <!-- Online dot -->
+              <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-400" />
+            </div>
+
+            <!-- Name + contact + badges -->
+            <div class="min-w-0 flex-1 pt-1">
+              <h1 class="truncate text-[17px] font-bold leading-tight text-white">
+                {{ customerStore.customer?.name || t('customerAccount.title') }}
+              </h1>
+              <p class="mt-0.5 truncate text-xs text-slate-400">
+                {{ customerStore.customer?.phone || customerStore.customer?.email || '—' }}
+              </p>
+              <div class="mt-1.5 flex flex-wrap gap-1">
+                <span
+                  v-if="customerStore.customer?.phone_verified"
+                  class="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                >
+                  <AppIcon name="check" class="h-2.5 w-2.5" />{{ t('customerAccount.verifiedPhone') }}
+                </span>
+                <span
+                  v-if="customerStore.customer?.email_verified"
+                  class="inline-flex items-center gap-0.5 rounded-full bg-sky-500/12 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
+                >
+                  <AppIcon name="check" class="h-2.5 w-2.5" />{{ t('customerAccount.verifiedEmail') }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Sign out -->
+            <button
+              class="shrink-0 rounded-xl border border-slate-700/50 bg-slate-900/50 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-red-500/40 hover:bg-red-500/8 hover:text-red-300"
+              @click="handleLogout"
+            >
+              <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" />
+            </button>
+          </div>
+
+          <!-- Stats row — 3 tappable tiles -->
+          <div class="mt-4 grid grid-cols-3 gap-2">
+            <button
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5"
+              @click="activeTab = 'wallet'"
+            >
+              <p class="text-sm font-bold tabular-nums leading-tight" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
+                {{ formatPrice(walletBalance) }}
+              </p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.walletTitle') }}</p>
+            </button>
+
+            <button
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-indigo-500/30 hover:bg-indigo-500/5"
+              @click="activeTab = 'wallet'"
+            >
+              <p class="text-sm font-bold tabular-nums leading-tight" :class="loyaltyPoints > 0 ? 'text-indigo-300' : 'text-slate-500'">
+                {{ loyaltyPoints }}
+              </p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.loyaltyPts') }}</p>
+            </button>
+
+            <button
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-sky-500/30 hover:bg-sky-500/5"
+              @click="activeTab = 'orders'"
+            >
+              <p class="text-sm font-bold tabular-nums leading-tight" :class="apiOrders.length > 0 ? 'text-sky-300' : 'text-slate-500'">
+                {{ loadingOrders ? '…' : apiOrders.length }}
+              </p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.ordersTitle') }}</p>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ──────────────── Live order banner (always visible) ──────────────── -->
+      <div v-if="!loadingOrders && activeOrders.length" class="px-3 pb-2 space-y-2 bg-slate-950">
+        <div
+          v-for="order in activeOrders"
+          :key="order.order_number"
+          class="relative overflow-hidden rounded-2xl border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/7 p-3"
+        >
+          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-[var(--color-secondary)]/12 animate-pulse" />
+          <div class="relative flex items-center gap-3">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/12">
+              <span class="block h-2 w-2 animate-ping rounded-full bg-[var(--color-secondary)]" />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-[var(--color-secondary)]">
+                {{ t('customerAccount.orderNumber', { number: order.order_number }) }}
+              </p>
+              <p class="text-[11px] text-slate-400">{{ statusLabel(order.status) }}</p>
+            </div>
+            <RouterLink
+              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+              class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/20"
+            >
+              {{ t('customerAccount.trackOrder') }}
+              <AppIcon name="arrowRight" class="h-3 w-3" />
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──────────────── Tab navigation bar ──────────────── -->
+      <div class="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/96 backdrop-blur-md">
+        <nav class="flex">
+          <button
+            v-for="tab in TABS"
+            :key="tab.id"
+            class="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 transition-colors"
+            :class="activeTab === tab.id ? 'text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
+            @click="activeTab = tab.id"
+          >
+            <AppIcon :name="tab.icon" class="h-4 w-4" />
+            <span class="text-[10px] font-semibold leading-none tracking-wide">{{ tab.label }}</span>
+            <!-- Active underline -->
+            <span
+              v-if="activeTab === tab.id"
+              class="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-[var(--color-secondary)]"
+            />
+            <!-- Live order dot on Orders tab -->
+            <span
+              v-if="tab.id === 'orders' && activeOrders.length && activeTab !== 'orders'"
+              class="absolute right-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"
+            />
+          </button>
+        </nav>
+      </div>
+
+      <!-- ──────────────── Tab content ──────────────── -->
+      <div class="px-3 py-3 pb-28 space-y-3">
+
+        <!-- ════════════ OVERVIEW TAB ════════════ -->
+        <template v-if="activeTab === 'overview'">
+
+          <!-- Quick-nav tiles 2×2 -->
+          <div class="grid grid-cols-2 gap-2">
+            <!-- Orders tile -->
+            <button
+              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-sky-500/30"
+              @click="activeTab = 'orders'"
+            >
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-sky-500/25 bg-sky-500/8 transition group-hover:bg-sky-500/15">
+                <AppIcon name="calendar" class="h-4 w-4 text-sky-400" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.ordersTitle') }}</p>
+                <p class="mt-0.5 text-[10px] text-slate-500">{{ apiOrders.length }} total</p>
+              </div>
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-sky-400" />
+            </button>
+
+            <!-- Wallet tile -->
+            <button
+              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-[var(--color-secondary)]/30"
+              @click="activeTab = 'wallet'"
+            >
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/8 transition group-hover:bg-[var(--color-secondary)]/15">
+                <AppIcon name="tag" class="h-4 w-4 text-[var(--color-secondary)]" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.walletTitle') }}</p>
+                <p class="mt-0.5 text-[10px] tabular-nums" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
+                  {{ formatPrice(walletBalance) }}
+                </p>
+              </div>
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-[var(--color-secondary)]" />
+            </button>
+
+            <!-- Rewards tile -->
+            <button
+              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-indigo-500/30"
+              @click="activeTab = 'wallet'"
+            >
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/25 bg-indigo-500/8 transition group-hover:bg-indigo-500/15">
+                <AppIcon name="star" class="h-4 w-4 text-indigo-400" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.loyaltyTitle') }}</p>
+                <p class="mt-0.5 text-[10px]" :class="loyaltyPoints > 0 ? 'text-indigo-400' : 'text-slate-500'">
+                  {{ loyaltyPoints }} {{ t('customerAccount.loyaltyPts') }}
+                </p>
+              </div>
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-400" />
+            </button>
+
+            <!-- Profile tile -->
+            <button
+              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-slate-600/60"
+              @click="activeTab = 'profile'"
+            >
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 transition group-hover:bg-slate-700/60">
+                <AppIcon name="settings" class="h-4 w-4 text-slate-400 transition group-hover:text-slate-200" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold leading-tight text-slate-200">Profile</p>
+                <p class="mt-0.5 text-[10px] text-slate-500">Info & Preferences</p>
+              </div>
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" />
+            </button>
+          </div>
+
+          <!-- Most recent order -->
+          <div v-if="apiOrders.length" class="ui-panel p-4 space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="ui-kicker">Last order</p>
+              <button class="text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">
+                View all →
+              </button>
+            </div>
+            <div class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs">
+              <span
+                class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                :class="{
+                  'animate-pulse bg-amber-400': ACTIVE_STATUSES.has(apiOrders[0].status),
+                  'bg-emerald-400': apiOrders[0].status === 'completed',
+                  'bg-red-400': apiOrders[0].status === 'cancelled',
+                  'bg-slate-500': !ACTIVE_STATUSES.has(apiOrders[0].status) && apiOrders[0].status !== 'completed' && apiOrders[0].status !== 'cancelled',
+                }"
               />
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <RouterLink
+                    :to="{ name: 'order-status', params: { orderNumber: apiOrders[0].order_number } }"
+                    class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+                  >{{ t('customerAccount.orderNumber', { number: apiOrders[0].order_number }) }}</RouterLink>
+                  <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(apiOrders[0].status) }}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span v-if="apiOrders[0].total" class="tabular-nums text-slate-400">{{ formatPrice(apiOrders[0].total) }}</span>
+                  <span v-if="apiOrders[0].created_at">{{ formatDate(apiOrders[0].created_at) }}</span>
+                </div>
+              </div>
+              <button
+                v-if="apiOrders[0].items?.length"
+                class="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
+                @click="reorder(apiOrders[0])"
+              >
+                <AppIcon name="refresh" class="h-3 w-3" />
+                {{ t('customerAccount.reorder') }}
+              </button>
             </div>
           </div>
 
-          <p v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="text-xs text-emerald-300">
-            {{ t('customerAccount.loyaltyCanRedeem', { threshold: loyaltyConfig.redeem_threshold, credit: redeemableCredit }) }}
-          </p>
-          <p v-else class="text-xs text-slate-500">
-            {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints }) }}
-          </p>
-
-          <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="mt-3 flex flex-wrap items-center gap-3">
-            <div class="flex items-center gap-2">
-              <label class="text-xs text-slate-400">{{ t('customerAccount.loyaltyRedeemLabel') }}</label>
-              <input
-                v-model.number="redeemAmount"
-                type="number"
-                :min="loyaltyConfig.redeem_threshold"
-                :max="loyaltyPoints"
-                :step="loyaltyConfig.redeem_threshold"
-                class="ui-input w-24 text-sm"
-              />
+          <!-- Profile completeness nudge -->
+          <div
+            v-if="!customerStore.customer?.phone && !customerStore.customer?.email"
+            class="flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/6 px-3.5 py-3"
+          >
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <AppIcon name="info" class="h-4 w-4 text-amber-400" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold text-amber-200">Complete your profile</p>
+              <p class="mt-0.5 text-[11px] text-slate-400">Add phone or email for order updates</p>
             </div>
             <button
-              class="ui-btn-primary px-3 py-1.5 text-xs"
-              :disabled="redeeming || redeemAmount < loyaltyConfig.redeem_threshold"
-              @click="redeemPoints"
-            >
-              {{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}
-            </button>
+              class="shrink-0 rounded-xl bg-amber-500/18 px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/28"
+              @click="activeTab = 'profile'"
+            >Add →</button>
           </div>
-          <p v-if="redeemError" class="mt-1 text-xs text-red-300">{{ redeemError }}</p>
-          <p v-if="redeemSuccess" class="mt-1 text-xs text-emerald-300">{{ redeemSuccess }}</p>
-        </div>
-        <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
-      </section>
+        </template>
 
-      <!-- ── Saved Delivery Addresses ──────────────────────────────────────── -->
-      <section v-if="customerStore.isAuthenticated" class="ui-panel ui-reveal p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <p class="ui-kicker">{{ t('customerAccount.savedAddressesTitle') }}</p>
-            <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesNote') }}</p>
-          </div>
-          <span class="text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesMax') }}</span>
-        </div>
-        <div v-if="loadingAddresses" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
-        <div v-else-if="!savedAddresses.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
-          {{ t('customerAccount.savedAddressesEmpty') }}
-        </div>
-        <ul v-else class="space-y-1.5">
-          <li
-            v-for="addr in savedAddresses"
-            :key="addr.id"
-            class="flex items-start gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
-          >
-            <div class="min-w-0 flex-1 space-y-0.5">
-              <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
-              <p class="text-slate-400">{{ addr.address }}</p>
+
+        <!-- ════════════ ORDERS TAB ════════════ -->
+        <template v-else-if="activeTab === 'orders'">
+          <div class="ui-panel overflow-hidden p-0">
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
+              <div>
+                <p class="ui-kicker">{{ t('customerAccount.ordersTitle') }}</p>
+                <p v-if="tenantName" class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.atRestaurant', { name: tenantName }) }}</p>
+              </div>
+              <span v-if="apiOrders.length" class="rounded-full border border-slate-700/60 bg-slate-900/50 px-2 py-0.5 text-[11px] tabular-nums text-slate-400">{{ apiOrders.length }}</span>
             </div>
-            <button class="mt-0.5 shrink-0 text-slate-500 transition-colors hover:text-red-400" @click="deleteAddress(addr.id)">
-              <AppIcon name="close" class="h-3.5 w-3.5" />
-            </button>
-          </li>
-        </ul>
-      </section>
 
+            <!-- Content -->
+            <div class="p-4 space-y-2">
+              <div v-if="loadingOrders" class="space-y-2">
+                <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-slate-800/50" />
+              </div>
+              <div v-else-if="ordersError" class="py-4 text-center text-xs text-red-300">{{ t('customerAccount.fetchError') }}</div>
+
+              <div
+                v-else-if="!apiOrders.length && !cart.recentOrders.length"
+                class="rounded-xl border border-dashed border-slate-700/50 px-4 py-8 text-center space-y-2"
+              >
+                <AppIcon name="calendar" class="mx-auto h-8 w-8 text-slate-700" />
+                <p class="text-xs text-slate-500">{{ t('customerAccount.ordersEmpty') }}</p>
+              </div>
+
+              <ul v-else-if="apiOrders.length" class="space-y-2">
+                <li
+                  v-for="order in apiOrders"
+                  :key="order.order_number"
+                  class="rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs overflow-hidden"
+                >
+                  <div class="flex items-start gap-2.5 px-3 py-2.5">
+                    <span
+                      class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                      :class="{
+                        'animate-pulse bg-amber-400': ACTIVE_STATUSES.has(order.status),
+                        'bg-emerald-400': order.status === 'completed',
+                        'bg-red-400': order.status === 'cancelled',
+                        'bg-slate-500': !ACTIVE_STATUSES.has(order.status) && order.status !== 'completed' && order.status !== 'cancelled',
+                      }"
+                    />
+                    <div class="min-w-0 flex-1 space-y-1">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <RouterLink
+                          :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                          class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+                        >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
+                        <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ statusLabel(order.status) }}</span>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2 text-slate-500">
+                        <span v-if="order.fulfillment_type">{{
+                          order.fulfillment_type === 'pickup'   ? t('orderStatus.fulfillmentPickup')   :
+                          order.fulfillment_type === 'delivery' ? t('orderStatus.fulfillmentDelivery') :
+                          t('orderStatus.fulfillmentTable', { table: order.table_label || '' })
+                        }}</span>
+                        <span v-if="order.total" class="font-medium tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+                        <span v-if="order.created_at">{{ formatDate(order.created_at) }}</span>
+                      </div>
+                      <div v-if="order.has_rating" class="text-[11px] tracking-tight text-amber-400">
+                        {{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}
+                      </div>
+                    </div>
+                    <button
+                      v-if="order.items?.length"
+                      class="mt-0.5 shrink-0 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                      @click="toggleOrder(order.order_number)"
+                    >{{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}</button>
+                  </div>
+                  <Transition name="ui-expand">
+                    <div
+                      v-if="expandedOrders.has(order.order_number) && order.items?.length"
+                      class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
+                    >
+                      <ul class="space-y-1">
+                        <li v-for="(item, idx) in order.items" :key="idx" class="flex items-start justify-between gap-2 text-slate-300">
+                          <span class="min-w-0 flex-1">
+                            <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
+                            <span v-if="item.options?.length" class="ml-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
+                          </span>
+                          <span class="shrink-0 tabular-nums text-slate-400">{{ formatPrice(item.subtotal) }}</span>
+                        </li>
+                      </ul>
+                      <button
+                        class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
+                        @click="reorder(order)"
+                      >
+                        <AppIcon name="refresh" class="h-3 w-3" />
+                        {{ t('customerAccount.reorder') }}
+                      </button>
+                    </div>
+                  </Transition>
+                </li>
+              </ul>
+
+              <!-- Local-only orders (pre-login) -->
+              <template v-else-if="cart.recentOrders.length">
+                <ul class="space-y-2">
+                  <li
+                    v-for="order in cart.recentOrders"
+                    :key="order.order_number"
+                    class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+                  >
+                    <RouterLink
+                      :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                      class="font-semibold text-[var(--color-secondary)] hover:opacity-80"
+                    >{{ t('customerAccount.orderNumber', { number: order.order_number }) }}</RouterLink>
+                    <span v-if="order.total" class="tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+                  </li>
+                </ul>
+              </template>
+            </div>
+          </div>
+        </template>
+
+
+        <!-- ════════════ WALLET TAB ════════════ -->
+        <template v-else-if="activeTab === 'wallet'">
+
+          <!-- Balance hero card -->
+          <div class="relative overflow-hidden rounded-3xl border border-[var(--color-secondary)]/20 bg-gradient-to-br from-[var(--color-secondary)]/10 via-slate-900/95 to-slate-950 p-5">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,158,11,0.08),transparent_65%)]" />
+            <div class="relative flex items-center justify-between gap-4">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{{ t('customerAccount.walletTitle') }}</p>
+                <p class="mt-1.5 text-3xl font-black tabular-nums leading-none" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
+                  {{ formatPrice(walletBalance) }}
+                </p>
+                <p class="mt-1 text-[11px] text-slate-500">{{ walletBalance > 0 ? 'Available balance' : 'No balance yet' }}</p>
+              </div>
+              <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
+                <AppIcon name="tag" class="h-6 w-6 text-[var(--color-secondary)]/70" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Transactions -->
+          <div class="ui-panel overflow-hidden p-0">
+            <div class="border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">Transactions</p>
+            </div>
+            <div class="p-4 space-y-2">
+              <div v-if="loadingWallet" class="space-y-2">
+                <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-xl bg-slate-800/50" />
+              </div>
+              <div v-else-if="!walletTransactions.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-6 text-center space-y-2">
+                <AppIcon name="tag" class="mx-auto h-7 w-7 text-slate-700" />
+                <p class="text-xs text-slate-500">{{ t('customerAccount.walletNoTransactions') }}</p>
+              </div>
+              <ul v-else class="space-y-1.5">
+                <li
+                  v-for="tx in walletTransactions"
+                  :key="tx.id"
+                  class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+                >
+                  <div class="flex items-center gap-2.5">
+                    <div
+                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                      :class="tx.type === 'payment' ? 'bg-red-500/12 text-red-400' : 'bg-emerald-500/12 text-emerald-400'"
+                    >{{ tx.type === 'payment' ? '−' : '+' }}</div>
+                    <div class="min-w-0 space-y-0.5">
+                      <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
+                      <p class="text-slate-500">{{ formatDate(tx.created_at) }}</p>
+                    </div>
+                  </div>
+                  <span
+                    class="shrink-0 font-semibold tabular-nums"
+                    :class="tx.type === 'payment' ? 'text-red-300' : 'text-emerald-300'"
+                  >{{ formatPrice(tx.amount) }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Loyalty / Rewards -->
+          <div v-if="loyaltyPoints > 0 || loyaltyConfig" class="ui-panel overflow-hidden p-0">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.loyaltyTitle') }}</p>
+              <div class="flex items-center gap-1.5">
+                <AppIcon name="star" class="h-3.5 w-3.5 text-indigo-400" />
+                <p class="text-lg font-bold tabular-nums text-indigo-300">{{ loyaltyPoints }}</p>
+                <span class="text-xs text-slate-500">{{ t('customerAccount.loyaltyPts') }}</span>
+              </div>
+            </div>
+            <div class="p-4 space-y-3">
+              <template v-if="loyaltyConfig?.enabled">
+                <div v-if="loyaltyConfig.redeem_threshold > 0" class="space-y-1.5">
+                  <div class="flex items-center justify-between text-[11px]">
+                    <span class="text-slate-400">{{ t('customerAccount.loyaltyEarnRate', { pts: loyaltyConfig.points_per_unit }) }}</span>
+                    <span class="tabular-nums text-slate-500">{{ Math.min(loyaltyPoints, loyaltyConfig.redeem_threshold) }} / {{ loyaltyConfig.redeem_threshold }}</span>
+                  </div>
+                  <div class="h-1.5 overflow-hidden rounded-full bg-slate-800/80">
+                    <div
+                      class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-400 transition-all duration-700"
+                      :style="{ width: Math.min((loyaltyPoints / loyaltyConfig.redeem_threshold) * 100, 100) + '%' }"
+                    />
+                  </div>
+                </div>
+
+                <p v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="text-xs text-emerald-300">
+                  {{ t('customerAccount.loyaltyCanRedeem', { threshold: loyaltyConfig.redeem_threshold, credit: redeemableCredit }) }}
+                </p>
+                <p v-else class="text-xs text-slate-500">
+                  {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints }) }}
+                </p>
+
+                <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="flex flex-wrap items-center gap-3 pt-1">
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">{{ t('customerAccount.loyaltyRedeemLabel') }}</label>
+                    <input
+                      v-model.number="redeemAmount"
+                      type="number"
+                      :min="loyaltyConfig.redeem_threshold"
+                      :max="loyaltyPoints"
+                      :step="loyaltyConfig.redeem_threshold"
+                      class="ui-input w-24 text-sm"
+                    />
+                  </div>
+                  <button
+                    class="ui-btn-primary px-3 py-1.5 text-xs"
+                    :disabled="redeeming || redeemAmount < loyaltyConfig.redeem_threshold"
+                    @click="redeemPoints"
+                  >{{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}</button>
+                </div>
+                <p v-if="redeemError" class="text-xs text-red-300">{{ redeemError }}</p>
+                <p v-if="redeemSuccess" class="text-xs text-emerald-300">{{ redeemSuccess }}</p>
+              </template>
+              <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
+            </div>
+          </div>
+        </template>
+
+
+        <!-- ════════════ PROFILE TAB ════════════ -->
+        <template v-else-if="activeTab === 'profile'">
+
+          <!-- Personal info panel (grouped rows) -->
+          <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
+            <div class="px-4 py-3">
+              <p class="ui-kicker">Personal Info</p>
+            </div>
+
+            <!-- Name -->
+            <div class="px-4 py-3 space-y-1.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Name</p>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.trim="editableName"
+                  type="text"
+                  maxlength="80"
+                  class="ui-input flex-1 py-1.5 text-sm"
+                  :placeholder="t('customerAccount.namePlaceholder')"
+                  :disabled="savingName"
+                />
+                <button
+                  v-if="editableName !== (customerStore.customer?.name || '')"
+                  class="ui-btn-primary shrink-0 px-3 py-1.5 text-xs"
+                  :disabled="savingName"
+                  @click="saveName"
+                >{{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}</button>
+              </div>
+            </div>
+
+            <!-- Phone -->
+            <div class="px-4 py-3 space-y-1.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Phone</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <span v-if="customerStore.customer?.phone" class="text-sm text-slate-200">{{ customerStore.customer.phone }}</span>
+                <button
+                  v-else
+                  class="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/8 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition hover:border-amber-500/70"
+                  @click="showAddPhone = true"
+                >
+                  <AppIcon name="plus" class="h-3 w-3" />
+                  {{ t('customerAccount.addPhone') }}
+                </button>
+                <span
+                  v-if="customerStore.customer?.phone_verified"
+                  class="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                >
+                  <AppIcon name="check" class="h-2.5 w-2.5" />{{ t('customerAccount.verifiedPhone') }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Email -->
+            <div class="px-4 py-3 space-y-1.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Email</p>
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <template v-if="!showEmailInput">
+                    <span v-if="customerStore.customer?.email" class="text-sm text-slate-200">{{ customerStore.customer.email }}</span>
+                    <button
+                      class="inline-flex items-center gap-1 text-[11px] transition-colors"
+                      :class="customerStore.customer?.email ? 'text-slate-500 hover:text-slate-300' : 'text-sky-400 hover:text-sky-300'"
+                      @click="openEmailInput"
+                    >
+                      <AppIcon name="plus" class="h-3 w-3" />
+                      {{ customerStore.customer?.email ? t('customerAccount.editEmail') : t('customerAccount.addEmail') }}
+                    </button>
+                    <span
+                      v-if="customerStore.customer?.email_verified"
+                      class="inline-flex items-center gap-0.5 rounded-full bg-sky-500/12 px-1.5 py-0.5 text-[10px] font-medium text-sky-400"
+                    >
+                      <AppIcon name="check" class="h-2.5 w-2.5" />{{ t('customerAccount.verifiedEmail') }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    <input
+                      ref="emailInputRef"
+                      v-model.trim="editableEmail"
+                      type="email"
+                      autocomplete="email"
+                      maxlength="254"
+                      class="ui-input min-w-0 flex-1 py-1.5 text-xs"
+                      :placeholder="t('customerAccount.emailPlaceholder')"
+                      :disabled="savingEmail"
+                      @keydown.enter.prevent="saveEmail"
+                      @keydown.escape.prevent="cancelEmailInput"
+                    />
+                    <button class="ui-btn-primary shrink-0 px-2.5 py-1.5 text-xs" :disabled="savingEmail || !editableEmail" @click="saveEmail">
+                      {{ savingEmail ? t('customerAccount.saving') : t('common.save') }}
+                    </button>
+                    <button class="text-xs text-slate-500 transition hover:text-slate-300" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
+                  </template>
+                </div>
+                <p v-if="emailError" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Saved addresses -->
+          <div class="ui-panel overflow-hidden p-0">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
+              <div>
+                <p class="ui-kicker">{{ t('customerAccount.savedAddressesTitle') }}</p>
+                <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesNote') }}</p>
+              </div>
+              <span class="text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesMax') }}</span>
+            </div>
+            <div class="p-4 space-y-2">
+              <div v-if="loadingAddresses" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
+              <div v-else-if="!savedAddresses.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
+                {{ t('customerAccount.savedAddressesEmpty') }}
+              </div>
+              <ul v-else class="space-y-1.5">
+                <li
+                  v-for="addr in savedAddresses"
+                  :key="addr.id"
+                  class="flex items-start gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+                >
+                  <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  <div class="min-w-0 flex-1 space-y-0.5">
+                    <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
+                    <p class="text-slate-400">{{ addr.address }}</p>
+                  </div>
+                  <button class="mt-0.5 shrink-0 text-slate-500 transition hover:text-red-400" @click="deleteAddress(addr.id)">
+                    <AppIcon name="close" class="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Preferences panel -->
+          <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
+            <div class="px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.preferencesTitle') }}</p>
+            </div>
+
+            <!-- Language -->
+            <div class="px-4 py-3 space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.localeTitle') }}</p>
+              <div v-if="!localeConfigured" class="flex flex-wrap gap-2">
+                <button
+                  v-for="lang in [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' }]"
+                  :key="lang.code"
+                  class="rounded-full border px-3 py-1 text-xs transition-colors"
+                  :class="selectedLocale === lang.code
+                    ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                    : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+                  :disabled="savingLocale"
+                  @click="setLocale(lang.code)"
+                >{{ lang.label }}</button>
+              </div>
+              <div v-else class="flex items-center justify-between gap-2">
+                <span class="text-sm text-slate-300">{{ localeLabelCurrent }}</span>
+                <button class="text-[11px] text-slate-500 transition hover:text-slate-300" @click="localeConfigured = false">{{ t('common.change') }}</button>
+              </div>
+            </div>
+
+            <!-- Display currency -->
+            <div class="px-4 py-3 space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.displayCurrency') }}</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="r in currencyStore.available"
+                  :key="r.code"
+                  class="rounded-full border px-3 py-1 text-xs transition-colors"
+                  :class="currencyStore.selected === r.code
+                    ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                    : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+                  @click="currencyStore.setCode(r.code)"
+                >{{ r.code }} <span class="opacity-60">{{ r.symbol }}</span></button>
+              </div>
+            </div>
+          </div>
+
+        </template>
+
+      </div>
     </template>
 
     <CustomerAuthModal v-if="showAuthModal" @close="showAuthModal = false" @authenticated="onAuthenticated" />
@@ -510,6 +785,15 @@ const cart = useCartStore();
 const toast = useToastStore();
 const router = useRouter();
 
+// ── Tab navigation ────────────────────────────────────────────────────────────
+const activeTab = ref('overview');
+const TABS = [
+  { id: 'overview', icon: 'home',     label: 'Overview' },
+  { id: 'orders',   icon: 'calendar', label: 'Orders'   },
+  { id: 'wallet',   icon: 'star',     label: 'Wallet'   },
+  { id: 'profile',  icon: 'settings', label: 'Profile'  },
+];
+
 // ── Cross-restaurant context ──────────────────────────────────────────────────
 const tenantName = computed(() => tenantStore.resolvedMeta?.name || '');
 
@@ -522,11 +806,11 @@ const initials = computed(() => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 });
 
-// ── Sign-in benefit tiles ────────────────────────────────────────────────────
+// ── Sign-in benefit tiles ─────────────────────────────────────────────────────
 const benefits = computed(() => [
-  { key: 'orders',    icon: 'menu',     label: t('customerAccount.benefitOrders') },
-  { key: 'addresses', icon: 'info',     label: t('customerAccount.benefitAddresses') },
-  { key: 'loyalty',   icon: 'calendar', label: t('customerAccount.benefitLoyalty') },
+  { key: 'orders',    icon: 'calendar', label: t('customerAccount.benefitOrders') },
+  { key: 'addresses', icon: 'location', label: t('customerAccount.benefitAddresses') },
+  { key: 'loyalty',   icon: 'star',     label: t('customerAccount.benefitLoyalty') },
   { key: 'speed',     icon: 'check',    label: t('customerAccount.benefitSpeed') },
 ]);
 
@@ -796,6 +1080,7 @@ const handleLogout = async () => {
   localeConfigured.value = false;
   showEmailInput.value = false;
   emailError.value = '';
+  activeTab.value = 'overview';
 };
 
 const onAuthenticated = (customer) => {
