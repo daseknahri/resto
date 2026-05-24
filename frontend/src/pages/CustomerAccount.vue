@@ -120,8 +120,9 @@
             </button>
           </div>
 
-          <!-- Stats row — 3 tappable tiles -->
-          <div class="mt-4 grid grid-cols-3 gap-2">
+          <!-- Stats row — 2×2 tappable tiles -->
+          <div class="mt-4 grid grid-cols-2 gap-2">
+            <!-- Wallet -->
             <button
               class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5"
               @click="activeTab = 'wallet'"
@@ -132,6 +133,7 @@
               <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.walletTitle') }}</p>
             </button>
 
+            <!-- Loyalty -->
             <button
               class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-indigo-500/30 hover:bg-indigo-500/5"
               @click="activeTab = 'wallet'"
@@ -142,6 +144,7 @@
               <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.loyaltyPts') }}</p>
             </button>
 
+            <!-- Orders -->
             <button
               class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-sky-500/30 hover:bg-sky-500/5"
               @click="activeTab = 'orders'"
@@ -150,6 +153,28 @@
                 {{ loadingOrders ? '…' : apiOrders.length }}
               </p>
               <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.ordersTitle') }}</p>
+            </button>
+
+            <!-- Reviews -->
+            <button
+              class="group relative flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-amber-500/30 hover:bg-amber-500/5"
+              @click="activeTab = 'reviews'"
+            >
+              <!-- Pending dot -->
+              <span
+                v-if="!loadingOrders && pendingReviews.length"
+                class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-400"
+              />
+              <p
+                class="text-sm font-bold leading-tight"
+                :class="submittedReviews.length ? 'text-amber-400' : pendingReviews.length ? 'text-amber-400/60' : 'text-slate-500'"
+              >
+                <template v-if="loadingOrders">…</template>
+                <template v-else-if="submittedReviews.length">{{ reviewsAvgScore.toFixed(1) }}<span class="text-xs">★</span></template>
+                <template v-else-if="pendingReviews.length">{{ pendingReviews.length }}</template>
+                <template v-else>—</template>
+              </p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.reviewsTabLabel') }}</p>
             </button>
           </div>
         </div>
