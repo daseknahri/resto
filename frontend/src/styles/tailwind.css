@@ -2077,3 +2077,19 @@ html[data-menu-theme="warm"] .ui-textarea:focus {
 html[data-menu-theme="warm"] .ui-input::placeholder,
 html[data-menu-theme="warm"] .ui-textarea::placeholder { color: #b08050; }
 
+/* ── Hover border overrides ─────────────────────────────────────────────────── */
+html[data-menu-theme="light"] .hover\:border-slate-500:hover  { border-color: rgba(100,116,139,0.50); }
+html[data-menu-theme="light"] .hover\:border-slate-600:hover  { border-color: rgba(100,116,139,0.38); }
+html[data-menu-theme="light"] .hover\:border-slate-700\/60:hover { border-color: rgba(100,116,139,0.30); }
+html[data-menu-theme="light"] .hover\:border-slate-700\/70:hover { border-color: rgba(100,116,139,0.34); }
+html[data-menu-theme="light"] .hover\:border-slate-700\/80:hover { border-color: rgba(100,116,139,0.38); }
+html[data-menu-theme="light"] .border-slate-800\/60            { border-color: rgba(100,116,139,0.16); }
+
+html[data-menu-theme="warm"]  .hover\:border-slate-500:hover  { border-color: rgba(160,100,40,0.42); }
+html[data-menu-theme="warm"]  .hover\:border-slate-600:hover  { border-color: rgba(160,100,40,0.32); }
+html[data-menu-theme="warm"]  .hover\:border-slate-700\/60:hover { border-color: rgba(160,100,40,0.28); }
+html[data-menu-theme="warm"]  .hover\:border-slate-700\/70:hover { border-color: rgba(160,100,40,0.32); }
+html[data-menu-theme="warm"]  .hover\:border-slate-700\/80:hover { border-color: rgba(160,100,40,0.36); }
+html[data-menu-theme="warm"]  .border-slate-800\/60            { border-color: rgba(160,100,40,0.14); }
+
+
