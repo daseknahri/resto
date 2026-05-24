@@ -212,8 +212,8 @@
           v-if="Number(orderData.wallet_amount_paid) > 0"
           class="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2 text-xs"
         >
-          <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: orderData.wallet_amount_paid }) }}</span>
-          <span class="font-semibold text-emerald-200">💰 {{ orderData.wallet_amount_paid }}</span>
+          <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: formatCurrency(orderData.wallet_amount_paid) }) }}</span>
+          <span class="font-semibold text-emerald-200">💰 {{ formatCurrency(orderData.wallet_amount_paid) }}</span>
         </div>
       </div>
 
@@ -255,7 +255,7 @@
           v-model="ratingComment"
           rows="2"
           :placeholder="t('orderStatus.commentPlaceholder')"
-          class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+          class="ui-textarea w-full resize-none"
         />
         <button
           :disabled="ratingScore === 0 || ratingSubmitting"

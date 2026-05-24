@@ -2050,3 +2050,30 @@ html[data-menu-theme="light"] .ui-toast button:hover { color: #334155; }
 html[data-menu-theme="warm"]  .ui-toast button { color: #92633c; }
 html[data-menu-theme="warm"]  .ui-toast button:hover { color: #4a3020; }
 
+/* ── Inputs & textareas ────────────────────────────────────────────────────── */
+html[data-menu-theme="light"] .ui-input,
+html[data-menu-theme="light"] .ui-textarea {
+  background-color: rgba(255,255,255,0.95);
+  border-color: rgba(148,163,184,0.45);
+  color: #1e293b;
+}
+html[data-menu-theme="light"] .ui-input:focus,
+html[data-menu-theme="light"] .ui-textarea:focus {
+  border-color: var(--color-secondary);
+}
+html[data-menu-theme="light"] .ui-input::placeholder,
+html[data-menu-theme="light"] .ui-textarea::placeholder { color: #94a3b8; }
+
+html[data-menu-theme="warm"] .ui-input,
+html[data-menu-theme="warm"] .ui-textarea {
+  background-color: rgba(255,252,245,0.97);
+  border-color: rgba(200,170,130,0.45);
+  color: #2d1f0e;
+}
+html[data-menu-theme="warm"] .ui-input:focus,
+html[data-menu-theme="warm"] .ui-textarea:focus {
+  border-color: var(--color-secondary);
+}
+html[data-menu-theme="warm"] .ui-input::placeholder,
+html[data-menu-theme="warm"] .ui-textarea::placeholder { color: #b08050; }
+

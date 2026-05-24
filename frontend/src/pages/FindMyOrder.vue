@@ -19,7 +19,7 @@
           autocomplete="tel"
           :placeholder="t('orderStatus.findMyOrderPhone')"
           :disabled="loading"
-          class="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:border-[var(--color-secondary)] focus:outline-none disabled:opacity-50"
+          class="ui-input flex-1 disabled:opacity-50"
           @keydown.enter.prevent="search"
         />
         <button
