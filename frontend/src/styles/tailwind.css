@@ -2357,3 +2357,15 @@ html[data-menu-theme="warm"]  .border-sky-500\/30    { border-color: rgba(14,165
 html[data-menu-theme="warm"]  .border-violet-500\/30 { border-color: rgba(139,92,246,0.30); }
 html[data-menu-theme="warm"]  .border-emerald-500\/30 { border-color: rgba(16,185,129,0.32); }
 
+/* ── CustomerAccount tab bar (bg-slate-950/96) ──────────────────────────────── */
+html[data-menu-theme="light"] .bg-slate-950\/96 { background-color: rgba(255,255,255,0.97); }
+html[data-menu-theme="warm"]  .bg-slate-950\/96 { background-color: rgba(255,252,245,0.97); }
+
+/* ── CustomerAccount profile panel row dividers (divide-slate-800/70) ──────── */
+html[data-menu-theme="light"] .divide-slate-800\/70 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(100,116,139,0.14); }
+html[data-menu-theme="warm"]  .divide-slate-800\/70 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(160,100,40,0.13); }
+
+/* ── CustomerAuthModal overlay (bg-slate-950/85) ──────────────────────────── */
+html[data-menu-theme="light"] .bg-slate-950\/85 { background-color: rgba(241,245,249,0.82); }
+html[data-menu-theme="warm"]  .bg-slate-950\/85 { background-color: rgba(255,248,237,0.84); }
+
