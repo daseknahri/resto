@@ -96,9 +96,21 @@
       <div class="ui-panel overflow-hidden p-2.5">
         <div class="flex gap-2">
           <template v-for="action in quickActions" :key="action.key">
+            <!-- Internal route actions -->
+            <RouterLink
+              v-if="action.to"
+              :to="action.to"
+              class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 active:scale-95"
+              @click="trackContactClick(action.key)"
+            >
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]">
+                <AppIcon name="calendar" class="h-4 w-4" />
+              </span>
+              <span class="text-[10px] font-medium leading-tight text-slate-400">{{ action.label }}</span>
+            </RouterLink>
             <!-- External link actions -->
             <a
-              v-if="action.href"
+              v-else-if="action.href"
               :href="action.href"
               target="_blank"
               rel="noopener noreferrer"
@@ -179,6 +191,26 @@
         </div>
         <!-- Summary fallback -->
         <p v-else-if="businessHoursSummary" class="text-sm text-slate-300">{{ businessHoursSummary }}</p>
+      </div>
+
+      <!-- External reservation link (only when restaurant has a direct booking platform) -->
+      <div v-if="reservationUrl" class="ui-panel ui-reveal overflow-hidden p-4">
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-slate-100">{{ t('customerLeadPage.bookOnPlatform') }}</p>
+            <p class="mt-0.5 text-xs text-slate-400">{{ t('customerLeadPage.bookOnPlatformBody') }}</p>
+          </div>
+          <a
+            :href="reservationUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ui-btn-outline shrink-0 gap-2 px-4 py-2.5 text-sm"
+            @click="trackContactClick('reservation_url')"
+          >
+            <AppIcon name="link" class="h-4 w-4" />
+            {{ t('reservationPage.bookDirectly') }}
+          </a>
+        </div>
       </div>
 
       <!-- Send a message card -->
@@ -375,7 +407,8 @@ const quickActions = computed(() => {
   if (whatsappHref.value) actions.push({ key: "whatsapp", href: whatsappHref.value, label: t("customerLeadPage.whatsappNow") });
   if (phoneHref.value) actions.push({ key: "phone", href: phoneHref.value, label: t("customerLeadPage.callNow") });
   if (googleMapsUrl.value) actions.push({ key: "maps", href: googleMapsUrl.value, label: t("common.location") });
-  if (reservationUrl.value) actions.push({ key: "reserve", href: reservationUrl.value, label: t("customerLayout.navReserve") });
+  // Reserve always links to the internal reservation page (external link shown separately below)
+  actions.push({ key: "reserve", to: { name: "reserve" }, label: t("customerLayout.navReserve") });
   return actions;
 });
 

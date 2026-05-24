@@ -205,53 +205,72 @@
       </div>
 
       <aside class="space-y-3 sm:space-y-4">
-        <section class="ui-command-deck ui-reveal p-3 lg:sticky lg:top-24 lg:p-4" style="--ui-delay: 80ms">
+        <section class="ui-command-deck ui-reveal p-3 lg:sticky lg:top-24 lg:p-4 space-y-4" style="--ui-delay: 80ms">
+
+          <!-- Live booking summary -->
           <div class="space-y-1.5">
-            <p class="ui-kicker">{{ t("customerLeadPage.response") }}</p>
-            <h2 class="text-xl font-semibold text-white">{{ t("customerLeadPage.responseValue") }}</h2>
-            <div class="flex flex-wrap gap-2 pt-1">
-              <span v-if="reservationUrl" class="ui-chip">{{ t("reservationPage.directBooking") }}</span>
-              <span v-if="phoneHref" class="ui-chip">{{ t("reservationPage.phoneSupport") }}</span>
-              <span v-if="whatsappHref" class="ui-chip">{{ t("reservationPage.quickConfirm") }}</span>
+            <p class="ui-kicker">{{ t("reservationPage.bookingSummary") }}</p>
+            <div class="mt-2 space-y-1.5 text-sm">
+              <div class="flex items-center gap-2 text-slate-300">
+                <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <span class="truncate">{{ form.name || '—' }}</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-300">
+                <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <span>{{ form.party_size ? t("reservationPage.guestCount", { count: form.party_size }) : '—' }}</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-300">
+                <AppIcon name="calendar" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <span class="tabular-nums">{{ form.date || '—' }}{{ form.time ? ' · ' + form.time : '' }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <a
-              v-if="phoneHref"
-              :href="phoneHref"
-              class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
-              @click="trackContactClick('phone_call')"
-            >
-              <AppIcon name="phone" class="h-4 w-4 text-slate-200" />
-              <p class="ui-kicker">{{ t("reservationPage.phoneSupport") }}</p>
-              <p class="mt-1 text-base font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
-            </a>
-            <a
-              v-if="whatsappHref"
-              :href="whatsappHref"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ui-orbit-card ui-surface-lift p-4 transition hover:border-[var(--color-secondary)]/70"
-              @click="trackContactClick('whatsapp_contact')"
-            >
-              <AppIcon name="chat" class="h-4 w-4 text-slate-200" />
-              <p class="ui-kicker">{{ t("reservationPage.quickConfirm") }}</p>
-              <p class="mt-1 text-base font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
-            </a>
+          <div class="border-t border-slate-800/60" />
+
+          <!-- Contact options -->
+          <div v-if="phoneHref || whatsappHref" class="space-y-2">
+            <p class="ui-kicker">{{ t("reservationPage.contactSupport") }}</p>
+            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <a
+                v-if="phoneHref"
+                :href="phoneHref"
+                class="ui-orbit-card ui-surface-lift p-3 transition hover:border-[var(--color-secondary)]/70"
+                @click="trackContactClick('phone_call')"
+              >
+                <AppIcon name="phone" class="h-4 w-4 text-slate-200" />
+                <p class="ui-kicker mt-1">{{ t("reservationPage.phoneSupport") }}</p>
+                <p class="text-sm font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
+              </a>
+              <a
+                v-if="whatsappHref"
+                :href="whatsappHref"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="ui-orbit-card ui-surface-lift p-3 transition hover:border-[var(--color-secondary)]/70"
+                @click="trackContactClick('whatsapp_contact')"
+              >
+                <AppIcon name="chat" class="h-4 w-4 text-slate-200" />
+                <p class="ui-kicker mt-1">{{ t("reservationPage.quickConfirm") }}</p>
+                <p class="text-sm font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
+              </a>
+            </div>
           </div>
 
-          <a
-            v-if="reservationUrl"
-            :href="reservationUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="ui-btn-outline mt-3 justify-center"
-            @click="trackContactClick('reservation_url')"
-          >
-            <AppIcon name="calendar" class="h-3.5 w-3.5" />
-            {{ t("reservationPage.directBooking") }}
-          </a>
+          <!-- External booking platform (shown once, only when set) -->
+          <div v-if="reservationUrl" class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3 space-y-2">
+            <p class="text-xs text-slate-400">{{ t("reservationPage.directBookingHint") }}</p>
+            <a
+              :href="reservationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-btn-outline w-full justify-center text-sm"
+              @click="trackContactClick('reservation_url')"
+            >
+              <AppIcon name="link" class="h-3.5 w-3.5" />
+              {{ t("reservationPage.bookDirectly") }}
+            </a>
+          </div>
         </section>
       </aside>
     </div>

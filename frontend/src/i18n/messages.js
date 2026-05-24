@@ -1207,6 +1207,8 @@ export const messages = {
       dishes: "Dishes",
       response: "Response",
       responseValue: "Fast confirmation",
+      bookOnPlatform: "Book on their platform",
+      bookOnPlatformBody: "This restaurant accepts direct reservations through an external booking platform.",
       helpTitle: "Need help before ordering?",
       helpText: "Share your contact details and we will reach out with availability and recommendations.",
       leadSuccess: "Thank you. We received your request and will contact you soon.",
@@ -1598,7 +1600,11 @@ export const messages = {
       waitlistSubmitting: "Joining...",
       waitlistSuccess: "You have been added to the waitlist. We will contact you if a spot opens up.",
       waitlistFailed: "Could not join the waitlist. Please try again.",
-      backToForm: "Choose a different time"
+      backToForm: "Choose a different time",
+      bookDirectly: "Book directly",
+      bookingSummary: "Your reservation",
+      contactSupport: "Need help?",
+      directBookingHint: "This restaurant also accepts reservations on an external platform."
     },
     ownerHome: {
       kicker: "Owner dashboard",
@@ -3771,6 +3777,8 @@ export const messages = {
       dishes: "Plats",
       response: "Reponse",
       responseValue: "Confirmation rapide",
+      bookOnPlatform: "Reserver sur leur plateforme",
+      bookOnPlatformBody: "Ce restaurant accepte les reservations directes via une plateforme de reservation externe.",
       helpTitle: "Besoin d'aide avant de commander ?",
       helpText: "Partagez vos coordonnees et nous reviendrons vers vous avec les disponibilites et recommandations.",
       leadSuccess: "Merci. Nous avons bien recu votre demande et nous vous contacterons bientot.",
@@ -4162,7 +4170,11 @@ export const messages = {
       waitlistSubmitting: "Inscription...",
       waitlistSuccess: "Vous avez ete ajoute a la liste d'attente. Nous vous contacterons si une place se libere.",
       waitlistFailed: "Impossible de rejoindre la liste d'attente. Veuillez reessayer.",
-      backToForm: "Choisir un autre horaire"
+      backToForm: "Choisir un autre horaire",
+      bookDirectly: "Reserver directement",
+      bookingSummary: "Votre reservation",
+      contactSupport: "Besoin d'aide ?",
+      directBookingHint: "Ce restaurant accepte aussi les reservations sur une plateforme externe."
     },
     ownerHome: {
       kicker: "Tableau de bord proprietaire",

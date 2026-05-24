@@ -2032,3 +2032,21 @@ html[data-menu-theme="warm"]  .bg-slate-800\/70  { background-color: rgba(253,24
 html[data-menu-theme="warm"]  .bg-slate-800\/80  { background-color: rgba(253,246,239,0.90); }
 html[data-menu-theme="warm"]  .hover\:bg-slate-800\/80:hover { background-color: rgba(255,248,237,0.85); }
 
+/* ── Toast (ToastHost) ─────────────────────────────────────────────────────── */
+html[data-menu-theme="light"] .ui-toast {
+  background-color: rgba(255,255,255,0.97);
+  border-color: rgba(148,163,184,0.30);
+  color: #1e293b;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+html[data-menu-theme="warm"] .ui-toast {
+  background-color: rgba(255,252,245,0.97);
+  border-color: rgba(200,165,120,0.30);
+  color: #2d1f0e;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+html[data-menu-theme="light"] .ui-toast button { color: #64748b; }
+html[data-menu-theme="light"] .ui-toast button:hover { color: #334155; }
+html[data-menu-theme="warm"]  .ui-toast button { color: #92633c; }
+html[data-menu-theme="warm"]  .ui-toast button:hover { color: #4a3020; }
+
