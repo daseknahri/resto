@@ -97,9 +97,14 @@ export const useCurrencyStore = defineStore("currency", () => {
         map[item.code] = item;
       }
       if (Object.keys(map).length) {
-        rates.value = map;
+        // Merge: API rates override fallbacks, but fallbacks fill gaps so all
+        // currencies remain selectable even if the DB only has MAD.
+        rates.value = {
+          ...Object.fromEntries(FALLBACK_RATES.map((r) => [r.code, r])),
+          ...map,
+        };
       }
-      // If the previously stored currency is no longer active, reset to MAD
+      // If (after merge) the stored currency is still unknown, reset to MAD
       if (!rates.value[selected.value]) {
         selected.value = BASE_CODE;
         localStorage.setItem(STORAGE_KEY, BASE_CODE);

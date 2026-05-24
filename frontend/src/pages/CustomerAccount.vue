@@ -207,7 +207,7 @@
 
         <!-- Wallet inline badge -->
         <div v-if="walletBalance > 0" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/10 px-2.5 py-1 text-[11px] text-[var(--color-secondary)]">
-          💰 {{ formatCurrency(walletBalance, 'MAD') }} {{ t('customerAccount.walletTitle') }}
+          💰 {{ formatPrice(walletBalance) }} {{ t('customerAccount.walletTitle') }}
         </div>
       </section>
 
@@ -367,7 +367,7 @@
         <div class="flex items-center justify-between gap-2">
           <p class="ui-kicker">{{ t('customerAccount.walletTitle') }}</p>
           <p class="text-lg font-bold tabular-nums" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
-            {{ formatCurrency(walletBalance, 'MAD') }}
+            {{ formatPrice(walletBalance) }}
           </p>
         </div>
 
@@ -389,7 +389,7 @@
               class="shrink-0 font-semibold tabular-nums"
               :class="tx.type === 'payment' ? 'text-red-300' : 'text-emerald-300'"
             >
-              {{ tx.type === 'payment' ? '−' : '+' }}{{ formatCurrency(tx.amount, 'MAD') }}
+              {{ tx.type === 'payment' ? '−' : '+' }}{{ formatPrice(tx.amount) }}
             </span>
           </li>
         </ul>
