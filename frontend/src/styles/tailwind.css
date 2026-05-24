@@ -1221,6 +1221,23 @@ html[data-menu-theme="light"] .ui-bottom-dock {
   border-color: rgba(100, 116, 139, 0.25);
 }
 
+html[data-menu-theme="light"] .ui-journey-rail {
+  background: rgba(248, 250, 252, 0.88);
+  border-color: rgba(100, 116, 139, 0.22);
+  box-shadow: 0 4px 20px rgba(100, 116, 139, 0.12);
+}
+
+html[data-menu-theme="light"] .ui-journey-step {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(100, 116, 139, 0.48);
+}
+
+html[data-menu-theme="light"] .ui-state-chip {
+  background: rgba(241, 245, 249, 0.90);
+  border-color: rgba(100, 116, 139, 0.42);
+  color: #334155;
+}
+
 html[data-menu-theme="light"] .ui-menu-category-nav {
   background: rgba(240, 244, 248, 0.96);
   border-color: rgba(100, 116, 139, 0.22);
@@ -1533,6 +1550,23 @@ html[data-menu-theme="warm"] .ui-data-strip {
 html[data-menu-theme="warm"] .ui-bottom-dock {
   background: rgba(253, 246, 239, 0.96);
   border-color: rgba(160, 100, 40, 0.22);
+}
+
+html[data-menu-theme="warm"] .ui-journey-rail {
+  background: rgba(255, 248, 237, 0.90);
+  border-color: rgba(160, 100, 40, 0.20);
+  box-shadow: 0 4px 20px rgba(160, 100, 40, 0.10);
+}
+
+html[data-menu-theme="warm"] .ui-journey-step {
+  background: rgba(255, 252, 245, 0.85);
+  border-color: rgba(160, 100, 40, 0.42);
+}
+
+html[data-menu-theme="warm"] .ui-state-chip {
+  background: rgba(253, 246, 239, 0.92);
+  border-color: rgba(160, 100, 40, 0.38);
+  color: #431407;
 }
 
 html[data-menu-theme="warm"] .ui-menu-category-nav {
