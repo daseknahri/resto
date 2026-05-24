@@ -2092,4 +2092,12 @@ html[data-menu-theme="warm"]  .hover\:border-slate-700\/70:hover { border-color:
 html[data-menu-theme="warm"]  .hover\:border-slate-700\/80:hover { border-color: rgba(160,100,40,0.36); }
 html[data-menu-theme="warm"]  .border-slate-800\/60            { border-color: rgba(160,100,40,0.14); }
 
+/* ── Indigo overrides ───────────────────────────────────────────────────────── */
+html[data-menu-theme="light"] .text-indigo-300                        { color: #4338ca; }
+html[data-menu-theme="light"] .hover\:text-indigo-300:hover           { color: #4338ca; }
+html[data-menu-theme="light"] .hover\:border-indigo-500\/60:hover     { border-color: rgba(99,102,241,0.55); }
+
+html[data-menu-theme="warm"]  .text-indigo-300                        { color: #4338ca; }
+html[data-menu-theme="warm"]  .hover\:text-indigo-300:hover           { color: #4338ca; }
+html[data-menu-theme="warm"]  .hover\:border-indigo-500\/60:hover     { border-color: rgba(99,102,241,0.50); }
 
