@@ -2001,6 +2001,7 @@ html[data-menu-theme="light"] .text-amber-400\/60   { color: rgba(217,119,6,0.72
 html[data-menu-theme="light"] .text-slate-300\/80   { color: rgba(51,65,85,0.82); }
 html[data-menu-theme="light"] .text-slate-300\/85   { color: rgba(51,65,85,0.87); }
 html[data-menu-theme="light"] .text-slate-300\/90   { color: rgba(51,65,85,0.92); }
+html[data-menu-theme="light"] .text-slate-400\/90   { color: rgba(71,85,105,0.92); }
 
 html[data-menu-theme="warm"]  .text-emerald-100\/75 { color: rgba(6,95,70,0.85); }
 html[data-menu-theme="warm"]  .text-emerald-200\/75 { color: rgba(4,120,87,0.82); }
@@ -2017,6 +2018,7 @@ html[data-menu-theme="warm"]  .text-amber-400\/60   { color: rgba(217,119,6,0.72
 html[data-menu-theme="warm"]  .text-slate-300\/80   { color: rgba(67,20,7,0.82); }
 html[data-menu-theme="warm"]  .text-slate-300\/85   { color: rgba(67,20,7,0.87); }
 html[data-menu-theme="warm"]  .text-slate-300\/90   { color: rgba(67,20,7,0.92); }
+html[data-menu-theme="warm"]  .text-slate-400\/90   { color: rgba(146,64,14,0.92); }
 
 /* ── Colored border tints — no changes needed (amber/emerald/sky borders      */
 /*    already read fine in light mode at 30–50% opacity).                      */
