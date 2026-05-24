@@ -459,6 +459,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -468,6 +469,7 @@ import { useToastStore } from "../stores/toast";
 const { t, itemCountLabel } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
+const route = useRoute();
 
 const activeStatus = ref("");
 const activeDateFilter = ref("all");
@@ -986,6 +988,9 @@ const onPageVisible = () => {
 };
 
 onMounted(async () => {
+  // Pre-populate search from ?q= query param (e.g. deep-linked from Ratings page)
+  if (route.query.q) searchQuery.value = String(route.query.q);
+
   await requestNotificationPermission();
   const initial = await order.fetchOrders();
   checkForNewOrders(Array.isArray(initial) ? initial : order.orders);

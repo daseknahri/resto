@@ -85,20 +85,42 @@
       <div
         v-for="r in filtered"
         :key="r.id"
-        class="ui-panel p-4 space-y-2"
+        class="ui-panel p-4 space-y-2.5"
       >
-        <div class="flex flex-wrap items-center justify-between gap-2">
+        <!-- Top row: stars + score · customer · order · date -->
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <!-- Stars + score -->
           <div class="flex items-center gap-2">
             <span class="text-lg text-amber-400 leading-none">{{ "★".repeat(r.score) }}<span class="text-slate-700">{{ "★".repeat(5 - r.score) }}</span></span>
-            <span class="text-sm font-semibold text-slate-200">{{ r.score }}/5</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-bold"
+              :class="{
+                'bg-emerald-500/15 text-emerald-300': r.score >= 4,
+                'bg-amber-500/15 text-amber-300': r.score === 3,
+                'bg-red-500/15 text-red-300': r.score <= 2,
+              }"
+            >{{ r.score }}/5</span>
           </div>
-          <div class="text-right space-y-0.5">
-            <p class="text-xs text-slate-400">{{ r.order_number }}</p>
-            <p class="text-xs text-slate-500">{{ formatDate(r.created_at) }}</p>
-          </div>
+          <!-- Date -->
+          <p class="text-xs text-slate-500 tabular-nums">{{ formatDate(r.created_at) }}</p>
         </div>
-        <p v-if="r.comment" class="text-sm text-slate-300 italic border-l-2 border-slate-700 pl-3">{{ r.comment }}</p>
-        <p v-else class="text-xs text-slate-600 italic">{{ t("ownerRatings.noComment") }}</p>
+
+        <!-- Customer + order info row -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span v-if="r.customer_name" class="flex items-center gap-1 font-medium text-slate-200">
+            <AppIcon name="user" class="h-3 w-3 text-slate-500" />
+            {{ r.customer_name }}
+          </span>
+          <span v-if="r.customer_name && r.order_number" class="text-slate-700">·</span>
+          <RouterLink
+            :to="{ name: 'owner-orders', query: { q: r.order_number } }"
+            class="font-mono text-slate-400 transition hover:text-[var(--color-secondary)]"
+          >#{{ r.order_number }}</RouterLink>
+        </div>
+
+        <!-- Comment -->
+        <p v-if="r.comment" class="rounded-lg border-l-2 border-slate-700 bg-slate-900/40 py-2 pl-3 pr-3 text-sm italic leading-relaxed text-slate-300">{{ r.comment }}</p>
+        <p v-else class="text-xs italic text-slate-600">{{ t("ownerRatings.noComment") }}</p>
       </div>
 
       <!-- No matches for current filter -->
@@ -111,6 +133,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
