@@ -1238,6 +1238,12 @@ html[data-menu-theme="light"] .ui-state-chip {
   color: #334155;
 }
 
+html[data-menu-theme="light"] .ui-status-pill {
+  background: rgba(241, 245, 249, 0.90);
+  border-color: rgba(100, 116, 139, 0.38);
+  color: #475569;
+}
+
 html[data-menu-theme="light"] .ui-menu-category-nav {
   background: rgba(240, 244, 248, 0.96);
   border-color: rgba(100, 116, 139, 0.22);
@@ -1567,6 +1573,12 @@ html[data-menu-theme="warm"] .ui-state-chip {
   background: rgba(253, 246, 239, 0.92);
   border-color: rgba(160, 100, 40, 0.38);
   color: #431407;
+}
+
+html[data-menu-theme="warm"] .ui-status-pill {
+  background: rgba(255, 248, 237, 0.92);
+  border-color: rgba(160, 100, 40, 0.34);
+  color: #78350f;
 }
 
 html[data-menu-theme="warm"] .ui-menu-category-nav {
