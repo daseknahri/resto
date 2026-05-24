@@ -713,7 +713,7 @@
                         :value="getDraft(order.order_number).comment"
                         rows="2"
                         maxlength="500"
-                        class="ui-input w-full resize-none text-xs leading-relaxed"
+                        class="ui-textarea w-full resize-none text-xs leading-relaxed"
                         placeholder="Tell us about your experience…"
                         @input="setDraftComment(order.order_number, $event.target.value)"
                       />
