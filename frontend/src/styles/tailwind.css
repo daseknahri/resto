@@ -2308,3 +2308,42 @@ html[data-menu-theme="warm"] .ui-skeleton {
   border-color: rgba(160,100,40,0.15);
 }
 
+/* ══ MenuSelect + CategoryPage — hero text restoration ═══════════════════
+   Both pages wrap their full-bleed hero in <header class="ui-hero-stage">.
+   The image gradient (from-slate-950/96 etc.) is a CSS gradient stop — it
+   stays dark regardless of theme.  Text that lives on that dark gradient
+   must stay light-on-dark, so we restore it here via the ancestor selector.
+   ═════════════════════════════════════════════════════════════════════════ */
+html[data-menu-theme="light"] .ui-hero-stage .text-white     { color: #ffffff; }
+html[data-menu-theme="light"] .ui-hero-stage .text-slate-50,
+html[data-menu-theme="light"] .ui-hero-stage .text-slate-100 { color: rgb(241,245,249); }
+html[data-menu-theme="light"] .ui-hero-stage .text-slate-200 { color: rgb(226,232,240); }
+html[data-menu-theme="light"] .ui-hero-stage .text-slate-300 { color: rgb(203,213,225); }
+html[data-menu-theme="light"] .ui-hero-stage .text-slate-400 { color: rgb(148,163,184); }
+/* Keep the category-count chip background dark so light text stays readable */
+html[data-menu-theme="light"] .ui-hero-stage .bg-slate-950\/75 { background-color: rgba(6,11,18,0.75); }
+
+html[data-menu-theme="warm"] .ui-hero-stage .text-white     { color: #ffffff; }
+html[data-menu-theme="warm"] .ui-hero-stage .text-slate-50,
+html[data-menu-theme="warm"] .ui-hero-stage .text-slate-100 { color: rgb(241,245,249); }
+html[data-menu-theme="warm"] .ui-hero-stage .text-slate-200 { color: rgb(226,232,240); }
+html[data-menu-theme="warm"] .ui-hero-stage .text-slate-300 { color: rgb(203,213,225); }
+html[data-menu-theme="warm"] .ui-hero-stage .text-slate-400 { color: rgb(148,163,184); }
+html[data-menu-theme="warm"] .ui-hero-stage .bg-slate-950\/75 { background-color: rgba(6,11,18,0.75); }
+
+/* ══ bg-slate-800/60 — inline chips, buttons, order qty badges ═══════════ */
+html[data-menu-theme="light"] .bg-slate-800\/60 { background-color: rgba(241,245,249,0.88); }
+html[data-menu-theme="warm"]  .bg-slate-800\/60 { background-color: rgba(255,244,222,0.85); }
+
+/* ══ bg-slate-950/92 — MenuSelect inner hero container ══════════════════ */
+html[data-menu-theme="light"] .bg-slate-950\/92 { background-color: rgba(255,255,255,0.85); }
+html[data-menu-theme="warm"]  .bg-slate-950\/92 { background-color: rgba(255,248,237,0.88); }
+
+/* ══ border-amber-500/40 — disabled menu badge, reservation chip ═════════ */
+html[data-menu-theme="light"] .border-amber-500\/40 { border-color: rgba(217,119,6,0.38); }
+html[data-menu-theme="warm"]  .border-amber-500\/40 { border-color: rgba(217,119,6,0.38); }
+
+/* ══ hover:border-slate-500 (Cart delivery-type button inactive hover) ═══ */
+html[data-menu-theme="light"] .hover\:border-slate-500:hover { border-color: rgba(100,116,139,0.55); }
+html[data-menu-theme="warm"]  .hover\:border-slate-500:hover { border-color: rgba(160,100,40,0.45); }
+
