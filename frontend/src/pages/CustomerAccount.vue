@@ -300,10 +300,10 @@
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold leading-tight text-slate-200">Reviews</p>
               <p class="mt-0.5 text-[10px]" :class="pendingReviews.length ? 'text-amber-400' : 'text-slate-500'">
-                <span v-if="loadingOrders">Loading…</span>
+                <span v-if="loadingOrders">{{ t('customerAccount.loading') }}</span>
                 <template v-else>
-                  <span>{{ submittedReviews.length }} submitted</span>
-                  <span v-if="pendingReviews.length" class="ml-1.5 font-semibold">· {{ pendingReviews.length }} pending</span>
+                  <span>{{ t('customerAccount.reviewsSubmittedCount', { count: submittedReviews.length }) }}</span>
+                  <span v-if="pendingReviews.length" class="ml-1.5 font-semibold">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
                 </template>
               </p>
             </div>
@@ -435,13 +435,13 @@
                       <div v-if="order.has_rating" class="flex items-center gap-1 text-[11px] text-amber-400">
                         <span class="tracking-tight">{{ '★'.repeat(order.rating_score) }}{{ '☆'.repeat(5 - order.rating_score) }}</span>
                         <span class="text-slate-600">·</span>
-                        <span class="text-slate-500">Reviewed</span>
+                        <span class="text-slate-500">{{ t('customerAccount.reviewsReviewed') }}</span>
                       </div>
                       <button
                         v-else-if="order.status === 'completed'"
                         class="text-[11px] text-slate-500 transition-colors hover:text-amber-400"
                         @click="activeTab = 'reviews'"
-                      >★ Rate this order →</button>
+                      >{{ t('customerAccount.reviewsRateNudge') }}</button>
                     </div>
                     <button
                       v-if="order.items?.length"
@@ -624,8 +624,8 @@
           <!-- No completed orders at all -->
           <div v-else-if="!completedOrders.length" class="ui-panel p-8 text-center space-y-3">
             <p class="text-4xl leading-none">⭐</p>
-            <p class="text-sm font-semibold text-slate-300">No reviews yet</p>
-            <p class="text-xs text-slate-500">Complete your first order to share your experience</p>
+            <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.reviewsEmpty') }}</p>
+            <p class="text-xs text-slate-500">{{ t('customerAccount.reviewsEmptyHint') }}</p>
           </div>
 
           <template v-else>
@@ -636,7 +636,7 @@
               <div class="relative flex items-center gap-4">
                 <div class="text-center">
                   <p class="text-4xl font-black tabular-nums leading-none text-amber-400">{{ reviewsAvgScore.toFixed(1) }}</p>
-                  <p class="mt-0.5 text-[10px] text-slate-500">out of 5</p>
+                  <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.reviewsOutOf5') }}</p>
                 </div>
                 <div class="flex-1 space-y-1">
                   <div class="flex gap-0.5">
@@ -648,8 +648,8 @@
                     >★</span>
                   </div>
                   <p class="text-[11px] text-slate-400">
-                    {{ submittedReviews.length }} review{{ submittedReviews.length !== 1 ? 's' : '' }}
-                    <span v-if="pendingReviews.length" class="ml-1.5 text-amber-400">· {{ pendingReviews.length }} pending</span>
+                    {{ t('customerAccount.reviewsSubmittedCount', { count: submittedReviews.length }) }}
+                    <span v-if="pendingReviews.length" class="ml-1.5 text-amber-400">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
                   </p>
                 </div>
               </div>
@@ -659,8 +659,8 @@
             <div v-if="pendingReviews.length" class="ui-panel overflow-hidden p-0">
               <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
                 <div>
-                  <p class="ui-kicker">Write a Review</p>
-                  <p class="mt-0.5 text-[10px] text-slate-500">Share your experience with us</p>
+                  <p class="ui-kicker">{{ t('customerAccount.reviewsWriteSection') }}</p>
+                  <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.reviewsWriteSubtitle') }}</p>
                 </div>
                 <span class="rounded-full border border-amber-500/40 bg-amber-500/12 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-400">{{ pendingReviews.length }}</span>
               </div>
@@ -683,7 +683,7 @@
 
                   <!-- Interactive star selector -->
                   <div class="space-y-1">
-                    <p class="text-[11px] text-slate-400">Your rating</p>
+                    <p class="text-[11px] text-slate-400">{{ t('customerAccount.reviewsYourRating') }}</p>
                     <div class="flex items-center gap-0.5">
                       <button
                         v-for="s in 5"
@@ -701,20 +701,20 @@
                         v-if="getDraft(order.order_number).score || reviewHover[order.order_number]"
                         class="ml-2.5 text-xs font-semibold"
                         :class="getDraft(order.order_number).score ? 'text-amber-400' : 'text-slate-500'"
-                      >{{ ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent!'][reviewHover[order.order_number] || getDraft(order.order_number).score] }}</span>
+                      >{{ reviewScoreLabels[reviewHover[order.order_number] || getDraft(order.order_number).score] }}</span>
                     </div>
                   </div>
 
                   <!-- Optional comment (shown after a score is set) -->
                   <Transition name="ui-expand">
                     <div v-if="getDraft(order.order_number).score" class="space-y-1.5">
-                      <p class="text-[11px] text-slate-400">Comment <span class="text-slate-600">(optional)</span></p>
+                      <p class="text-[11px] text-slate-400">{{ t('customerAccount.reviewsComment') }} <span class="text-slate-600">{{ t('customerAccount.reviewsCommentOptional') }}</span></p>
                       <textarea
                         :value="getDraft(order.order_number).comment"
                         rows="2"
                         maxlength="500"
                         class="ui-textarea w-full resize-none text-xs leading-relaxed"
-                        placeholder="Tell us about your experience…"
+                        :placeholder="t('customerAccount.reviewsCommentPlaceholder')"
                         @input="setDraftComment(order.order_number, $event.target.value)"
                       />
                     </div>
@@ -731,7 +731,7 @@
                       name="refresh"
                       class="h-3.5 w-3.5 animate-spin"
                     />
-                    {{ submittingReview.has(order.order_number) ? 'Submitting…' : 'Submit Review' }}
+                    {{ submittingReview.has(order.order_number) ? t('customerAccount.reviewsSubmitting') : t('customerAccount.reviewsSubmit') }}
                   </button>
                 </div>
               </div>
@@ -740,7 +740,7 @@
             <!-- ── Submitted reviews ── -->
             <div v-if="submittedReviews.length" class="ui-panel overflow-hidden p-0">
               <div class="border-b border-slate-800/70 px-4 py-3">
-                <p class="ui-kicker">Your Reviews</p>
+                <p class="ui-kicker">{{ t('customerAccount.reviewsSubmittedSection') }}</p>
               </div>
               <div class="p-4 space-y-3">
                 <div
@@ -1116,6 +1116,16 @@ const reviewsAvgScore  = computed(() => {
 
 const getDraft = (num) => reviewDrafts[num] ?? { score: 0, comment: '' };
 
+/** Reactive score label array — re-evaluates when locale changes. */
+const reviewScoreLabels = computed(() => [
+  '',
+  t('customerAccount.reviewsScorePoor'),
+  t('customerAccount.reviewsScoreFair'),
+  t('customerAccount.reviewsScoreGood'),
+  t('customerAccount.reviewsScoreGreat'),
+  t('customerAccount.reviewsScoreExcellent'),
+]);
+
 const setDraftScore = (num, score) => {
   if (!reviewDrafts[num]) reviewDrafts[num] = { score: 0, comment: '' };
   reviewDrafts[num].score = score;
@@ -1146,9 +1156,9 @@ const submitReview = async (order) => {
       };
       apiOrders.value = updated;
     }
-    toast.show('Review submitted! Thank you 🌟', 'success');
+    toast.show(t('customerAccount.reviewsSuccess'), 'success');
   } catch (err) {
-    toast.show(err?.response?.data?.detail || 'Could not submit review. Please try again.', 'error');
+    toast.show(err?.response?.data?.detail || t('customerAccount.reviewsError'), 'error');
   } finally {
     const s2 = new Set(submittingReview.value); s2.delete(num); submittingReview.value = s2;
   }
