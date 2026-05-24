@@ -115,7 +115,7 @@
               class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/25 transition-colors"
             >
               {{ t('customerAccount.trackOrder') }}
-              <AppIcon name="arrow-right" class="h-3 w-3" />
+              <AppIcon name="arrowRight" class="h-3 w-3" />
             </RouterLink>
           </div>
         </section>
