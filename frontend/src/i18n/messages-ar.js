@@ -149,8 +149,10 @@ const arabicMessages = {
     "navMenu": "القائمة",
     "navCart": "السلة",
     "navReserve": "الحجز",
+    "navAccount": "الحساب",
     "trackOrderBanner": "الطلب #{number} — تتبع طلبك",
-    "trackOrderDismiss": "إغلاق متتبع الطلب"
+    "trackOrderDismiss": "إغلاق متتبع الطلب",
+    "installApp": "تثبيت التطبيق"
   },
   "customerFlow": {
     "title": "رحلة الضيف",
@@ -162,7 +164,10 @@ const arabicMessages = {
     "cart": "السلة",
     "review": "مراجعة",
     "reserve": "احجز",
-    "book": "احجز"
+    "book": "احجز",
+    "account": "الحساب",
+    "accountSignedIn": "مسجّل الدخول",
+    "accountSignIn": "تسجيل الدخول"
   },
   "signIn": {
     "kicker": "مستخدم عائد",
@@ -175,7 +180,9 @@ const arabicMessages = {
     "activationLink": "استخدم رابط التفعيل",
     "forgotPassword": "نسيت كلمة المرور؟",
     "resetHere": "أعد تعيينها هنا",
-    "failed": "فشل تسجيل الدخول"
+    "failed": "فشل تسجيل الدخول",
+    "identifierRequired": "اسم المستخدم أو البريد مطلوب",
+    "passwordRequired": "كلمة المرور مطلوبة"
   },
   "forgotPassword": {
     "kicker": "استعادة الحساب",
@@ -251,7 +258,23 @@ const arabicMessages = {
     "fallbackTenantName": "مطعمك",
     "checkout": "الدفع",
     "whatsapp": "واتساب",
-    "browseOnly": "تصفح فقط"
+    "browseOnly": "تصفح فقط",
+    "waiterView": "واجهة النادل",
+    "staff": "الموظفون",
+    "ratings": "التقييمات",
+    "promotions": "العروض",
+    "flashSales": "تخفيضات مؤقتة",
+    "delivery": "التوصيل",
+    "kitchen": "شاشة المطبخ",
+    "pushEnable": "تفعيل إشعارات الطلبات",
+    "pushDisable": "تعطيل إشعارات الطلبات",
+    "installApp": "تثبيت التطبيق",
+    "gracePeriodWarning": "الدفع متأخر — {days} يوم متبقٍ قبل تعليق حسابك.",
+    "gracePeriodCritical": "الدفع متأخر — يوم واحد متبقٍ. قد يُعلَّق حسابك غداً.",
+    "graceExpiredWarning": "انتهت فترة السماح. يرجى تسوية اشتراكك لتجنب انقطاع الخدمة. تواصل مع الدعم.",
+    "gracePeriodCta": "عرض الفوترة",
+    "customers": "العملاء",
+    "loyalty": "الولاء"
   },
   "ownerHome": {
     "kicker": "لوحة المالك",
