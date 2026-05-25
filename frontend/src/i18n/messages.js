@@ -644,6 +644,7 @@ export const messages = {
       colLast: "Last order",
       colTrust: "Trust",
       colSegment: "Segment",
+      colReview: "Reviews",
       typeAccount: "Account",
       typeAnonymous: "Guest",
       segTagNew: "New",
@@ -652,6 +653,7 @@ export const messages = {
       noResults: "No customers found.",
       loadError: "Failed to load customers.",
       trustNa: "—",
+      reviewNa: "—",
     },
     ownerStaff: {
       kicker: "Staff",
@@ -1730,6 +1732,9 @@ export const messages = {
       noDishesLoaded: "No dishes loaded — hit Refresh first.",
       planSection: "Your plan",
       pendingUpgradeShort: "Upgrade pending",
+      avgRating: "Avg Rating",
+      viewAllRatings: "View all ratings",
+      noRatingsYet: "No ratings yet",
     },
     revenueChart: {
       title: "Revenue",
@@ -3288,6 +3293,7 @@ export const messages = {
       colLast: "Derniere commande",
       colTrust: "Confiance",
       colSegment: "Segment",
+      colReview: "Avis",
       typeAccount: "Compte",
       typeAnonymous: "Invite",
       segTagNew: "Nouveau",
@@ -3296,6 +3302,7 @@ export const messages = {
       noResults: "Aucun client trouve.",
       loadError: "Impossible de charger les clients.",
       trustNa: "—",
+      reviewNa: "—",
     },
     ownerStaff: {
       kicker: "Personnel",
@@ -4344,6 +4351,9 @@ export const messages = {
       noDishesLoaded: "Aucun plat charge — cliquez sur Actualiser.",
       planSection: "Votre offre",
       pendingUpgradeShort: "Montee en gamme en attente",
+      avgRating: "Note moy.",
+      viewAllRatings: "Voir tous les avis",
+      noRatingsYet: "Aucun avis",
     },
     revenueChart: {
       title: "Chiffre d affaires",

@@ -123,6 +123,15 @@
               </span>
               <span v-else class="text-slate-600">{{ t("ownerCustomers.trustNa") }}</span>
             </td>
+            <!-- Reviews (customer's ratings of the restaurant) -->
+            <td class="px-4 py-3">
+              <span v-if="c.avg_review != null" class="inline-flex items-center gap-1">
+                <span class="text-amber-400 text-xs leading-none">★</span>
+                <span :class="reviewScoreClass(c.avg_review)" class="font-semibold tabular-nums">{{ c.avg_review.toFixed(1) }}</span>
+                <span v-if="c.review_count > 1" class="text-[10px] text-slate-600">({{ c.review_count }})</span>
+              </span>
+              <span v-else class="text-slate-600">{{ t("ownerCustomers.reviewNa") }}</span>
+            </td>
             <!-- Segment -->
             <td class="px-4 py-3">
               <span
@@ -182,6 +191,7 @@ const columns = computed(() => [
   { key: "avg_order_value", label: t("ownerCustomers.colAvg"), sortable: false },
   { key: "last_order",  label: t("ownerCustomers.colLast"),  sortable: true },
   { key: "trust_score", label: t("ownerCustomers.colTrust"), sortable: false },
+  { key: "avg_review",  label: t("ownerCustomers.colReview"), sortable: false },
   { key: "segment",     label: t("ownerCustomers.colSegment"), sortable: false },
 ]);
 
@@ -283,6 +293,12 @@ const trustClass = (score) => {
   if (score >= 4) return "font-semibold text-emerald-400";
   if (score >= 3) return "font-semibold text-amber-400";
   return "font-semibold text-red-400";
+};
+
+const reviewScoreClass = (score) => {
+  if (score >= 4) return "text-emerald-400";
+  if (score >= 3) return "text-amber-400";
+  return "text-red-400";
 };
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

@@ -47,6 +47,24 @@
         </div>
       </div>
 
+      <!-- Ratings summary strip -->
+      <RouterLink
+        v-if="ratingsSummary && ratingsSummary.count > 0"
+        :to="{ name: 'owner-ratings' }"
+        class="flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 transition hover:border-amber-500/35 hover:bg-amber-500/8"
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="text-amber-400 text-lg leading-none">★</span>
+          <span class="text-sm font-bold text-white tabular-nums">{{ ratingsSummary.average !== null ? ratingsSummary.average.toFixed(1) : "—" }}</span>
+          <span class="text-xs text-slate-500">/ 5 &middot; {{ ratingsSummary.count }} {{ t("ownerHome.avgRating").toLowerCase() }}</span>
+        </div>
+        <span class="text-xs font-medium text-amber-400/80 transition hover:text-amber-300">{{ t("ownerHome.viewAllRatings") }} →</span>
+      </RouterLink>
+      <div v-else-if="ratingsSummary && ratingsSummary.count === 0" class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-2.5">
+        <span class="text-sm text-slate-600">★</span>
+        <span class="text-xs text-slate-600">{{ t("ownerHome.noRatingsYet") }}</span>
+      </div>
+
       <!-- Revenue chart + best sellers side-by-side on wider screens -->
       <div class="grid gap-3 xl:grid-cols-2">
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
@@ -593,6 +611,7 @@ const analyticsSummary = ref({
   interaction_rate_pct: 0,
 });
 const revenueSummary = ref(null); // { total_revenue, order_count, avg_order_value, daily: [{date, revenue, orders}] }
+const ratingsSummary = ref(null); // { count, average } or null while loading
 
 // ── Dish availability panel ───────────────────────────────────────────────────
 const dishAvailOpen = ref(false);
@@ -963,6 +982,18 @@ const exportAnalytics = async () => {
     analyticsExporting.value = false;
   }
 };
+const fetchRatingsSummary = async () => {
+  try {
+    const { data } = await api.get("/owner/ratings/", { timeout: 5000 });
+    ratingsSummary.value = {
+      count: data?.count ?? 0,
+      average: data?.average ?? null,
+    };
+  } catch {
+    ratingsSummary.value = { count: 0, average: null };
+  }
+};
+
 const pendingUpgrade = computed(() => upgradeRequests.value.find((request) => request.status === "pending") || null);
 const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgradeMeta.value.has_pending_request === true);
 const readinessItems = computed(() => [
@@ -1019,6 +1050,7 @@ const refresh = async () => {
     ensureUpgradeTargetSelection();
     void order.fetchOrders();
     void hydrateOwnerInsights();
+    void fetchRatingsSummary();
   } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
     toast.show(error.value, "error");

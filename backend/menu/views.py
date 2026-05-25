@@ -4261,6 +4261,29 @@ class OwnerCustomerListView(APIView):
             except Exception:
                 pass
 
+        # ── 3b. Aggregate review scores from Rating (tenant schema) ──────────
+        review_map = {}  # customer_id → {"review_count": int, "avg_review": float|None}
+        if linked_customer_ids:
+            try:
+                review_agg = (
+                    Rating.objects
+                    .filter(customer_id__in=linked_customer_ids)
+                    .values("customer_id")
+                    .annotate(
+                        review_count=Count("id"),
+                        avg_score=Avg("score"),
+                    )
+                )
+                review_map = {
+                    r["customer_id"]: {
+                        "review_count": r["review_count"],
+                        "avg_review": round(float(r["avg_score"]), 1) if r["avg_score"] is not None else None,
+                    }
+                    for r in review_agg
+                }
+            except Exception:
+                pass
+
         # ── 4. Fetch platform account emails for linked customers ─────────────
         email_map = {}
         if linked_customer_ids:
@@ -4276,6 +4299,7 @@ class OwnerCustomerListView(APIView):
 
         for row in linked_qs:
             cid = row["customer_id"]
+            rv = review_map.get(cid, {})
             customers.append({
                 "id": f"acc-{cid}",
                 "type": "account",
@@ -4289,6 +4313,8 @@ class OwnerCustomerListView(APIView):
                 "last_order_at": row["last_order_at"].isoformat() if row["last_order_at"] else None,
                 "currency": row["currency"] or "",
                 "trust_score": rating_map.get(cid),
+                "review_count": rv.get("review_count", 0),
+                "avg_review": rv.get("avg_review"),
             })
 
         for row in anon_qs:
@@ -4306,6 +4332,8 @@ class OwnerCustomerListView(APIView):
                 "last_order_at": row["last_order_at"].isoformat() if row["last_order_at"] else None,
                 "currency": row["currency"] or "",
                 "trust_score": None,
+                "review_count": 0,
+                "avg_review": None,
             })
 
         # ── 6. Segment tagging ────────────────────────────────────────────────
@@ -4367,7 +4395,7 @@ class OwnerCustomerListView(APIView):
             writer.writerow([
                 "Name", "Phone", "Email", "Type", "Segment",
                 "Orders", "Total Spend", "Avg Order", "Currency",
-                "Last Order", "Trust Score",
+                "Last Order", "Trust Score", "Review Count", "Avg Review",
             ])
             for c in customers:
                 writer.writerow([
@@ -4376,6 +4404,8 @@ class OwnerCustomerListView(APIView):
                     f"{c['avg_order_value']:.2f}", c["currency"],
                     (c["last_order_at"] or "")[:10],
                     f"{c['trust_score']:.1f}" if c["trust_score"] is not None else "",
+                    c.get("review_count", 0),
+                    f"{c['avg_review']:.1f}" if c.get("avg_review") is not None else "",
                 ])
             from django.http import HttpResponse
             response = HttpResponse(buf.getvalue(), content_type="text/csv")
