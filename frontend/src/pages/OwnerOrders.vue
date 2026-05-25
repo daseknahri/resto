@@ -466,7 +466,7 @@ import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 
-const { t, itemCountLabel } = useI18n();
+const { t, itemCountLabel, formatNumber } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
 const route = useRoute();
@@ -629,7 +629,7 @@ const fulfillmentLabel = (o) => {
 
 const formatCurrency = (amount, currency = "USD") => {
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(Number(amount) || 0);
+    return formatNumber(Number(amount) || 0, { style: "currency", currency });
   } catch {
     return `${currency} ${Number(amount).toFixed(2)}`;
   }

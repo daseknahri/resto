@@ -741,12 +741,12 @@ const todayOrderStats = computed(() => {
   const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   let revenueLabel = "";
   try {
-    revenueLabel = new Intl.NumberFormat(undefined, {
+    revenueLabel = formatNumber(revenue, {
       style: "currency",
       currency,
       notation: "compact",
       maximumFractionDigits: 0,
-    }).format(revenue);
+    });
   } catch {
     revenueLabel = `${currency} ${Math.floor(revenue)}`;
   }
@@ -807,7 +807,7 @@ const formatRevenue = (amount) => {
   // Use the first order's currency or fallback to a plain number
   const currency = revenueSummary.value?.currency || tenant.meta?.profile?.currency || null;
   try {
-    if (currency) return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
+    if (currency) return formatNumber(n, { style: "currency", currency });
   } catch { /* unsupported currency */ }
   return n.toFixed(2);
 };
@@ -1220,7 +1220,7 @@ const orderStatusLabel = (s) => ({
 }[s] || s);
 
 const formatOrderTotal = (o) => {
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: o.currency || "MAD" }).format(Number(o.total) || 0); }
+  try { return formatNumber(Number(o.total) || 0, { style: "currency", currency: o.currency || "MAD" }); }
   catch { return `${o.currency} ${Number(o.total).toFixed(2)}`; }
 };
 
