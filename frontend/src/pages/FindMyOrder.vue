@@ -58,7 +58,7 @@
             <p class="text-xs text-slate-500">{{ formatDate(order.created_at) }}</p>
             <p class="text-xs text-slate-400">
               {{ fulfillmentLabel(order.fulfillment_type) }}
-              <span v-if="order.items_count"> · {{ order.items_count }} item{{ order.items_count !== 1 ? "s" : "" }}</span>
+              <span v-if="order.items_count"> · {{ t("orderStatus.findMyOrderItems", { count: order.items_count }) }}</span>
             </p>
           </div>
           <div class="flex shrink-0 flex-col items-end gap-1.5">
@@ -79,7 +79,7 @@ import { ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 
-const { t, formatPrice } = useI18n();
+const { t, formatPrice, currentLocale } = useI18n();
 
 const phone = ref("");
 const loading = ref(false);
@@ -140,7 +140,7 @@ const fulfillmentLabel = (type) => {
 
 const formatDate = (iso) => {
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+    return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
   } catch {
     return iso;
   }
