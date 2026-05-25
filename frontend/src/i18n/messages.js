@@ -2633,6 +2633,16 @@ export const messages = {
       reviewsScoreGood: "Good",
       reviewsScoreGreat: "Great",
       reviewsScoreExcellent: "Excellent!",
+      overviewProfileSubtitle: "Info & Preferences",
+      overviewLastOrder: "Last order",
+      overviewViewAll: "View all",
+      walletNoBalance: "No balance yet",
+      walletTransactions: "Transactions",
+      profilePersonalInfo: "Personal Info",
+      tabOverview: "Overview",
+      tabOrders: "Orders",
+      tabWallet: "Wallet",
+      tabProfile: "Profile",
     }
   },
   fr: {
@@ -5265,6 +5275,16 @@ export const messages = {
       reviewsScoreGood: "Bien",
       reviewsScoreGreat: "Super",
       reviewsScoreExcellent: "Excellent !",
+      overviewProfileSubtitle: "Infos & Preferences",
+      overviewLastOrder: "Derniere commande",
+      overviewViewAll: "Voir tout",
+      walletNoBalance: "Aucun solde",
+      walletTransactions: "Transactions",
+      profilePersonalInfo: "Informations personnelles",
+      tabOverview: "Accueil",
+      tabOrders: "Commandes",
+      tabWallet: "Portefeuille",
+      tabProfile: "Profil",
     }
   },
   ar: {}

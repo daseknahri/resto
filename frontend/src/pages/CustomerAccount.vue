@@ -306,8 +306,8 @@
                 <AppIcon name="settings" class="h-4 w-4 text-slate-400 transition group-hover:text-slate-200" />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold leading-tight text-slate-200">Profile</p>
-                <p class="mt-0.5 text-[10px] text-slate-500">Info & Preferences</p>
+                <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.profileTitle') }}</p>
+                <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.overviewProfileSubtitle') }}</p>
               </div>
               <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" />
             </button>
@@ -323,7 +323,7 @@
               <span v-if="pendingReviews.length" class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">{{ pendingReviews.length }}</span>
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-xs font-semibold leading-tight text-slate-200">Reviews</p>
+              <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.reviewsTabLabel') }}</p>
               <p class="mt-0.5 text-[10px]" :class="pendingReviews.length ? 'text-amber-400' : 'text-slate-500'">
                 <span v-if="loadingOrders">{{ t('customerAccount.loading') }}</span>
                 <template v-else>
@@ -338,9 +338,9 @@
           <!-- Most recent order -->
           <div v-if="apiOrders.length" class="ui-panel p-4 space-y-3">
             <div class="flex items-center justify-between gap-2">
-              <p class="ui-kicker">Last order</p>
+              <p class="ui-kicker">{{ t('customerAccount.overviewLastOrder') }}</p>
               <button class="text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">
-                View all →
+                {{ t('customerAccount.overviewViewAll') }} →
               </button>
             </div>
             <div class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs">
@@ -533,7 +533,7 @@
                 <p class="mt-1.5 text-3xl font-black tabular-nums leading-none" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
                   {{ formatPrice(walletBalance) }}
                 </p>
-                <p class="mt-1 text-[11px] text-slate-500">{{ walletBalance > 0 ? 'Available balance' : 'No balance yet' }}</p>
+                <p class="mt-1 text-[11px] text-slate-500">{{ walletBalance > 0 ? t('customerAccount.walletBalance') : t('customerAccount.walletNoBalance') }}</p>
               </div>
               <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
                 <AppIcon name="tag" class="h-6 w-6 text-[var(--color-secondary)]/70" />
@@ -544,7 +544,7 @@
           <!-- Transactions -->
           <div class="ui-panel overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
-              <p class="ui-kicker">Transactions</p>
+              <p class="ui-kicker">{{ t('customerAccount.walletTransactions') }}</p>
             </div>
             <div class="p-4 space-y-2">
               <div v-if="loadingWallet" class="space-y-2">
@@ -810,12 +810,12 @@
           <!-- Personal info panel (grouped rows) -->
           <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
             <div class="px-4 py-3">
-              <p class="ui-kicker">Personal Info</p>
+              <p class="ui-kicker">{{ t('customerAccount.profilePersonalInfo') }}</p>
             </div>
 
             <!-- Name -->
             <div class="px-4 py-3 space-y-1.5">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Name</p>
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('common.name') }}</p>
               <div class="flex items-center gap-2">
                 <input
                   v-model.trim="editableName"
@@ -836,7 +836,7 @@
 
             <!-- Phone -->
             <div class="px-4 py-3 space-y-1.5">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Phone</p>
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('common.phone') }}</p>
               <div class="flex flex-wrap items-center gap-2">
                 <span v-if="customerStore.customer?.phone" class="text-sm text-slate-200">{{ customerStore.customer.phone }}</span>
                 <button
@@ -858,7 +858,7 @@
 
             <!-- Email -->
             <div class="px-4 py-3 space-y-1.5">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Email</p>
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('common.email') }}</p>
               <div>
                 <div class="flex flex-wrap items-center gap-2">
                   <template v-if="!showEmailInput">
@@ -1012,13 +1012,13 @@ const router = useRouter();
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
 const activeTab = ref('overview');
-const TABS = [
-  { id: 'overview', icon: 'home',     label: 'Overview' },
-  { id: 'orders',   icon: 'calendar', label: 'Orders'   },
-  { id: 'reviews',  icon: 'chat',     label: 'Reviews'  },
-  { id: 'wallet',   icon: 'star',     label: 'Wallet'   },
-  { id: 'profile',  icon: 'settings', label: 'Profile'  },
-];
+const TABS = computed(() => [
+  { id: 'overview', icon: 'home',     label: t('customerAccount.tabOverview') },
+  { id: 'orders',   icon: 'calendar', label: t('customerAccount.tabOrders')   },
+  { id: 'reviews',  icon: 'chat',     label: t('customerAccount.reviewsTabLabel') },
+  { id: 'wallet',   icon: 'star',     label: t('customerAccount.tabWallet')   },
+  { id: 'profile',  icon: 'settings', label: t('customerAccount.tabProfile')  },
+]);
 
 // ── Cross-restaurant context ──────────────────────────────────────────────────
 const tenantName = computed(() => tenantStore.resolvedMeta?.name || '');

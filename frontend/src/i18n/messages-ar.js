@@ -1439,7 +1439,9 @@ const arabicMessages = {
     "readyNotifBody": "الطلب رقم #{number} جاهز لاستلامك.",
     "tableSignInNudgeTitle": "احفظ طلباتك",
     "tableSignInNudgeBody": "سجّل دخولك لتتبع جميع طلباتك وكسب نقاط الولاء وتسريع عمليات الدفع.",
-    "tableSignInNudgeButton": "تسجيل الدخول / إنشاء حساب"
+    "tableSignInNudgeButton": "تسجيل الدخول / إنشاء حساب",
+    "tableOrderLabel": "طلب الطاولة",
+    "tableOrderHint": "طلبك في المطبخ. ابقَ في مكانك."
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",
@@ -2336,6 +2338,16 @@ Object.assign(arabicMessages, {
     reviewsScoreGood: "\u062c\u064a\u062f",
     reviewsScoreGreat: "\u0631\u0627\u0626\u0639",
     reviewsScoreExcellent: "\u0645\u0645\u062a\u0627\u0632!",
+    overviewProfileSubtitle: "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0648\u0627\u0644\u062a\u0641\u0636\u064a\u0644\u0627\u062a",
+    overviewLastOrder: "\u0622\u062e\u0631 \u0637\u0644\u0628",
+    overviewViewAll: "\u0639\u0631\u0636 \u0627\u0644\u0643\u0644",
+    walletNoBalance: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0631\u0635\u064a\u062f \u0628\u0639\u062f",
+    walletTransactions: "\u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062a",
+    profilePersonalInfo: "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0634\u062e\u0635\u064a\u0629",
+    tabOverview: "\u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+    tabOrders: "\u0627\u0644\u0637\u0644\u0628\u0627\u062a",
+    tabWallet: "\u0627\u0644\u0645\u062d\u0641\u0638\u0629",
+    tabProfile: "\u0645\u0644\u0641\u064a",
   }
 });
 export default arabicMessages;
