@@ -754,7 +754,12 @@ const arabicMessages = {
     "addTimelineFailed": "تعذر إضافة ملاحظة للخط الزمني",
     "exportReady": "تصدير الحجوزات جاهز",
     "exportFailed": "تعذر تصدير الحجوزات",
-    "byActor": "بواسطة {actor}"
+    "byActor": "بواسطة {actor}",
+    "viewList": "قائمة",
+    "viewCalendar": "تقويم",
+    "rescheduled": "تمت إعادة جدولة الحجز",
+    "bookedFor": "محجوز في",
+    "guests": "ضيوف"
   },
   "customerLeadPage": {
     "openNow": "مفتوح الآن",
