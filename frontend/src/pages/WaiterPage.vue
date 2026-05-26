@@ -266,10 +266,16 @@
             </li>
           </ul>
 
-          <!-- Total -->
-          <div class="px-5 py-3 flex items-center justify-between">
-            <span class="text-sm font-semibold text-slate-600">{{ t('waiterPage.billTotal') }}</span>
-            <span class="text-lg font-bold text-slate-900">{{ fmtOrderPrice(billOrder.total, billOrder.currency) }}</span>
+          <!-- Total + wallet deduction -->
+          <div class="px-5 py-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-semibold text-slate-600">{{ t('waiterPage.billTotal') }}</span>
+              <span class="text-lg font-bold text-slate-900">{{ fmtOrderPrice(billOrder.total, billOrder.currency) }}</span>
+            </div>
+            <div v-if="Number(billOrder.wallet_amount_paid) > 0" class="flex items-center justify-between text-xs">
+              <span class="text-emerald-600">💰 {{ t('waiterPage.billWallet') }}</span>
+              <span class="text-emerald-600 font-semibold">−{{ fmtOrderPrice(billOrder.wallet_amount_paid, billOrder.currency) }}</span>
+            </div>
           </div>
 
           <!-- Actions -->

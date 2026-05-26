@@ -2300,6 +2300,7 @@ class StaffOrderListView(APIView):
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "total": str(order.total),
                 "delivery_fee": str(order.delivery_fee),
+                "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 "currency": order.currency,
                 "items_count": sum(i.qty for i in order.items.all()),
                 "items": [

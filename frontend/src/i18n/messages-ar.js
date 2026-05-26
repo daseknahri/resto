@@ -2319,6 +2319,7 @@ Object.assign(arabicMessages, {
     billTable: "\u0627\u0644\u0637\u0627\u0648\u0644\u0629",
     billCustomer: "\u0627\u0644\u0639\u0645\u064a\u0644",
     billTotal: "\u0627\u0644\u0645\u062c\u0645\u0648\u0639",
+    billWallet: "\u0631\u0635\u064a\u062f \u0627\u0644\u0645\u062d\u0641\u0638\u0629",
     billPrint: "\u0637\u0628\u0627\u0639\u0629",
     billClose: "\u0625\u063a\u0644\u0627\u0642",
   },
