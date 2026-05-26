@@ -89,8 +89,8 @@
 
         <!-- Addresses -->
         <div v-if="delivery.pickup_address || delivery.delivery_address" class="space-y-1 text-xs text-slate-400">
-          <p v-if="delivery.pickup_address"><span class="text-slate-500">From:</span> {{ delivery.pickup_address }}</p>
-          <p v-if="delivery.delivery_address"><span class="text-slate-500">To:</span> {{ delivery.delivery_address }}</p>
+          <p v-if="delivery.pickup_address"><span class="text-slate-500">{{ t('mktOrderStatus.from') }}:</span> {{ delivery.pickup_address }}</p>
+          <p v-if="delivery.delivery_address"><span class="text-slate-500">{{ t('mktOrderStatus.to') }}:</span> {{ delivery.delivery_address }}</p>
         </div>
 
         <!-- Maps link if driver position known -->
@@ -147,22 +147,22 @@
           class="flex justify-between gap-2 text-sm"
         >
           <span class="text-slate-300">{{ item.qty }}× {{ item.dish_name }}</span>
-          <span class="shrink-0 text-slate-400">{{ item.subtotal }} {{ order.currency }}</span>
+          <span class="shrink-0 text-slate-400">{{ fmtPrice(item.subtotal, order.currency) }}</span>
         </div>
 
         <!-- Totals -->
         <div class="border-t border-slate-800 pt-2 space-y-1 text-sm">
           <div v-if="Number(order.delivery_fee) > 0" class="flex justify-between text-slate-500">
             <span>{{ t('mktOrderStatus.deliveryFee') }}</span>
-            <span>{{ order.delivery_fee }} {{ order.currency }}</span>
+            <span>{{ fmtPrice(order.delivery_fee, order.currency) }}</span>
           </div>
           <div v-if="Number(order.wallet_amount_paid) > 0" class="flex justify-between text-emerald-400/80">
             <span>{{ t('mktOrderStatus.walletPaid') }}</span>
-            <span>−{{ order.wallet_amount_paid }} {{ order.currency }}</span>
+            <span>−{{ fmtPrice(order.wallet_amount_paid, order.currency) }}</span>
           </div>
           <div class="flex justify-between font-bold text-white">
             <span>{{ t('mktOrderStatus.total') }}</span>
-            <span>{{ order.total }} {{ order.currency }}</span>
+            <span>{{ fmtPrice(order.total, order.currency) }}</span>
           </div>
         </div>
       </div>
@@ -177,8 +177,21 @@ import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const route = useRoute();
+
+const fmtPrice = (amount, currency) => {
+  if (!currency) return Number(amount || 0).toFixed(2);
+  try {
+    return new Intl.NumberFormat(currentLocale.value, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  } catch {
+    return `${Number(amount || 0).toFixed(2)} ${currency}`;
+  }
+};
 
 const slug = route.params.slug;
 const orderNumber = route.params.orderNumber;

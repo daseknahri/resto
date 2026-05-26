@@ -85,7 +85,7 @@
                   <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2">{{ dish.description }}</p>
                   <div class="mt-1.5 flex items-center justify-between gap-2">
                     <span class="text-sm font-semibold text-[var(--color-secondary,#f59e0b)]">
-                      {{ dish.price }} {{ restaurant.currency }}
+                      {{ fmtPrice(dish.price) }}
                     </span>
                     <button
                       v-if="dish.is_available"
@@ -115,7 +115,7 @@
       >
         <span class="rounded-full bg-slate-950/20 px-2 py-0.5 text-xs">{{ cartTotalQty }}</span>
         <span>{{ t('mktMenu.checkout') }}</span>
-        <span>{{ cartTotal }} {{ restaurant?.currency }}</span>
+        <span>{{ fmtPrice(cartTotal) }}</span>
       </button>
     </div>
 
@@ -141,7 +141,7 @@
             >
               <div class="flex-1 min-w-0">
                 <p class="text-sm text-slate-100 truncate">{{ item.name }}</p>
-                <p class="text-xs text-slate-500">{{ item.price }} × {{ item.qty }}</p>
+                <p class="text-xs text-slate-500">{{ fmtPrice(item.price) }} × {{ item.qty }}</p>
               </div>
               <div class="flex items-center gap-2">
                 <button
@@ -229,15 +229,15 @@
           <div class="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 space-y-1.5 text-sm">
             <div class="flex justify-between text-slate-400">
               <span>{{ t('mktMenu.subtotal') }}</span>
-              <span>{{ cartTotal }} {{ restaurant?.currency }}</span>
+              <span>{{ fmtPrice(cartTotal) }}</span>
             </div>
             <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
               <span>{{ t('mktMenu.deliveryFeeLabel') }}</span>
-              <span>{{ restaurant?.delivery_fee || '0' }} {{ restaurant?.currency }}</span>
+              <span>{{ fmtPrice(restaurant?.delivery_fee || 0) }}</span>
             </div>
             <div class="flex justify-between font-bold text-white border-t border-slate-800 pt-1.5 mt-1.5">
               <span>{{ t('mktMenu.total') }}</span>
-              <span>{{ orderTotal }} {{ restaurant?.currency }}</span>
+              <span>{{ fmtPrice(orderTotal) }}</span>
             </div>
           </div>
 
@@ -266,7 +266,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import api from '../lib/api';
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const customerStore = useCustomerStore();
@@ -328,17 +328,31 @@ const removeFromCart = (dishSlug) => {
 
 const cartTotalQty = computed(() => cart.value.reduce((s, i) => s + i.qty, 0));
 
-const cartTotal = computed(() => {
-  return cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0).toFixed(2);
-});
+const cartTotal = computed(() =>
+  cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0)
+);
 
 const orderTotal = computed(() => {
-  let total = Number(cartTotal.value);
+  let total = cartTotal.value;
   if (form.fulfillment_type === 'delivery' && restaurant.value) {
     total += Number(restaurant.value.delivery_fee || 0);
   }
-  return total.toFixed(2);
+  return total;
 });
+
+const fmtPrice = (amount) => {
+  const cur = restaurant.value?.currency;
+  if (!cur) return Number(amount || 0).toFixed(2);
+  try {
+    return new Intl.NumberFormat(currentLocale.value, {
+      style: 'currency',
+      currency: cur,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  } catch {
+    return `${Number(amount || 0).toFixed(2)} ${cur}`;
+  }
+};
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const fetchMenu = async () => {
@@ -362,7 +376,7 @@ const fetchMenu = async () => {
 const placeOrder = async () => {
   checkoutError.value = '';
   if (!form.customer_name.trim()) {
-    checkoutError.value = t('mktMenu.customerName') + ' is required.';
+    checkoutError.value = t('mktMenu.nameRequired');
     return;
   }
   placing.value = true;

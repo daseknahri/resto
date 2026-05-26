@@ -118,7 +118,7 @@
 
       <!-- Active filter count + clear -->
       <div v-if="activeFilterCount > 0" class="flex items-center gap-2">
-        <span class="text-xs text-slate-500">{{ activeFilterCount }} filter{{ activeFilterCount !== 1 ? 's' : '' }} active</span>
+        <span class="text-xs text-slate-500">{{ t('marketplace.filtersActive', { count: activeFilterCount }) }}</span>
         <button
           class="rounded-full border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400 hover:text-slate-200"
           @click="clearFilters"

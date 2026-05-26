@@ -516,7 +516,7 @@
               </button>
             </label>
             <p v-if="useWallet" class="mt-1 text-[11px] text-emerald-300">
-              {{ t('cartPage.creditsApplied', { amount: walletDeduction }) }}
+              {{ t('cartPage.creditsApplied', { amount: formatPrice(walletDeduction) }) }}
             </p>
           </div>
 
@@ -590,7 +590,7 @@
             </div>
             <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
               <span>{{ t('cartPage.payWithCredits') }}</span>
-              <span class="tabular-nums font-medium">-{{ walletDeduction }}</span>
+              <span class="tabular-nums font-medium">-{{ formatPrice(walletDeduction) }}</span>
             </div>
             <div class="flex items-center justify-between pt-1.5 border-t border-slate-800/40">
               <span class="text-sm font-semibold text-slate-200">{{ t('cartPage.total') }}</span>
