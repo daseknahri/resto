@@ -788,10 +788,10 @@ const printTicket = (o) => {
 
   const meta = [
     fulfillmentLabel(o),
-    o.customer_name ? `Customer: ${o.customer_name}` : "",
-    o.customer_phone ? `Phone: ${o.customer_phone}` : "",
-    o.customer_email ? `Email: ${o.customer_email}` : "",
-    o.delivery_address ? `Address: ${o.delivery_address}` : "",
+    o.customer_name ? `${t("ownerOrders.ticketCustomer")}: ${o.customer_name}` : "",
+    o.customer_phone ? `${t("ownerOrders.ticketPhone")}: ${o.customer_phone}` : "",
+    o.customer_email ? `${t("ownerOrders.ticketEmail")}: ${o.customer_email}` : "",
+    o.delivery_address ? `${t("ownerOrders.ticketAddress")}: ${o.delivery_address}` : "",
     new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(o.created_at)),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
 
