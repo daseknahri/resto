@@ -47,11 +47,11 @@
       <p class="text-xs text-slate-400">{{ t("ownerStaff.credentialsHint") }}</p>
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/60 p-4 space-y-2 font-mono text-sm">
         <div class="flex items-center justify-between gap-3">
-          <span class="text-slate-400">Email:</span>
+          <span class="text-slate-400">{{ t("common.email") }}:</span>
           <span class="text-slate-100 truncate">{{ newCredentials.email }}</span>
         </div>
         <div class="flex items-center justify-between gap-3">
-          <span class="text-slate-400">Password:</span>
+          <span class="text-slate-400">{{ t("ownerStaff.credentialsPasswordLabel") }}:</span>
           <span class="text-emerald-300 font-bold tracking-wider">{{ newCredentials.temp_password }}</span>
         </div>
       </div>
