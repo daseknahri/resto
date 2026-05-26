@@ -36,6 +36,20 @@
       </div>
     </div>
 
+    <!-- Station filter bar -->
+    <div class="kitchen-filter-bar">
+      <button
+        v-for="f in stationFilters"
+        :key="f.value"
+        class="kitchen-filter-btn"
+        :class="stationFilter === f.value ? 'kitchen-filter-btn--active' : ''"
+        @click="stationFilter = f.value"
+      >
+        {{ f.label }}
+        <span v-if="f.count > 0" class="kitchen-filter-count">{{ f.count }}</span>
+      </button>
+    </div>
+
     <!-- Loading -->
     <div v-if="waiter.loading" class="kitchen-empty">
       <p class="text-2xl text-slate-500">{{ t("common.loading") }}</p>
@@ -69,10 +83,18 @@
               #{{ order.order_number }} · {{ timeAgo(order.created_at) }}
             </p>
           </div>
-          <span
-            class="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-            :class="chipClass(order.status)"
-          >{{ t(`kitchen.status_${order.status}`) }}</span>
+          <div class="flex flex-col items-end gap-1.5 shrink-0">
+            <!-- Elapsed timer badge -->
+            <span
+              class="rounded-full border px-2 py-0.5 text-[11px] font-bold tabular-nums"
+              :class="elapsedBadgeClass(elapsedMinutes(order))"
+            >{{ elapsedMinutes(order) }}{{ t('kitchen.elapsedMin') }}</span>
+            <!-- Status chip -->
+            <span
+              class="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+              :class="chipClass(order.status)"
+            >{{ t(`kitchen.status_${order.status}`) }}</span>
+          </div>
         </div>
 
         <!-- Items -->
@@ -126,18 +148,51 @@ const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 
 const isFullscreen = ref(false);
+const stationFilter = ref("all");
 
-// Active orders — exclude completed/cancelled
+// Reactive "now" for elapsed timers — updated every tick with the clock
+const nowMs = ref(Date.now());
+
+// Active orders — exclude completed/cancelled, apply station filter
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "preparing", "ready"]);
-const activeOrders = computed(() =>
+
+const allActiveOrders = computed(() =>
   waiter.orders.filter((o) => ACTIVE_STATUSES.has(o.status))
 );
+
+const activeOrders = computed(() => {
+  if (stationFilter.value === "all") return allActiveOrders.value;
+  return allActiveOrders.value.filter((o) => o.fulfillment_type === stationFilter.value);
+});
+
+// Station filter options with live counts
+const stationFilters = computed(() => {
+  const all = allActiveOrders.value;
+  const count = (type) => all.filter((o) => o.fulfillment_type === type).length;
+  return [
+    { value: "all",      label: t("kitchen.filterAll"),      count: all.length },
+    { value: "table",    label: t("kitchen.filterTables"),   count: count("table") },
+    { value: "pickup",   label: t("kitchen.pickup"),         count: count("pickup") },
+    { value: "delivery", label: t("kitchen.delivery"),       count: count("delivery") },
+  ];
+});
+
+// Elapsed time helpers
+const elapsedMinutes = (order) =>
+  Math.floor((nowMs.value - new Date(order.created_at).getTime()) / 60_000);
+
+const elapsedBadgeClass = (minutes) => {
+  if (minutes >= 20) return "border-red-500/50 bg-red-500/15 text-red-300";
+  if (minutes >= 10) return "border-amber-500/50 bg-amber-500/15 text-amber-300";
+  return "border-slate-600/60 bg-slate-700/40 text-slate-400";
+};
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
 const clockDisplay = ref("");
 let clockTimer = null;
 const updateClock = () => {
   const now = new Date();
+  nowMs.value = now.getTime();
   clockDisplay.value = new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(now);
 };
 
@@ -397,5 +452,59 @@ const actionBtnClass = (s) => ({
   font-weight: 700;
   text-align: center;
   transition: opacity 0.15s;
+}
+
+/* Station filter bar */
+.kitchen-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.kitchen-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  background: rgba(30, 41, 59, 0.5);
+  padding: 0.3rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(148, 163, 184);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.kitchen-filter-btn:hover {
+  border-color: rgba(100, 116, 139, 0.8);
+  color: rgb(203, 213, 225);
+}
+
+.kitchen-filter-btn--active {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+  color: rgb(251, 191, 36);
+}
+
+.kitchen-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 9999px;
+  background: rgba(51, 65, 85, 0.8);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgb(148, 163, 184);
+  padding: 0 0.25rem;
+}
+
+.kitchen-filter-btn--active .kitchen-filter-count {
+  background: rgba(245, 158, 11, 0.25);
+  color: rgb(251, 191, 36);
 }
 </style>

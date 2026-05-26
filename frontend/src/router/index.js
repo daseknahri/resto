@@ -45,6 +45,7 @@ const OwnerFlashSales = () => import("../pages/OwnerFlashSales.vue");
 const OwnerDeliverySettings = () => import("../pages/OwnerDeliverySettings.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
+const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 
@@ -52,6 +53,7 @@ const AdminConsole = () => import("../pages/AdminConsole.vue");
 const AdminDeliveryZones = () => import("../pages/AdminDeliveryZones.vue");
 const AdminDrivers = () => import("../pages/AdminDrivers.vue");
 const AdminPlatformAnalytics = () => import("../pages/AdminPlatformAnalytics.vue");
+const AdminWallet = () => import("../pages/AdminWallet.vue");
 const Activate = () => import("../pages/Activate.vue");
 const ForgotPassword = () => import("../pages/ForgotPassword.vue");
 const ResetPassword = () => import("../pages/ResetPassword.vue");
@@ -218,6 +220,12 @@ const routes = [
         component: OwnerLoyalty,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
+      {
+        path: "wallet",
+        name: "owner-wallet",
+        component: OwnerWallet,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
     ],
   },
   {
@@ -247,6 +255,7 @@ const routes = [
   { path: "/admin-delivery-zones", name: "admin-delivery-zones", component: AdminDeliveryZones, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-drivers", name: "admin-drivers", component: AdminDrivers, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-analytics", name: "admin-analytics", component: AdminPlatformAnalytics, meta: { requiresAuth: true, adminOnly: true } },
+  { path: "/admin-wallets", name: "admin-wallets", component: AdminWallet, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/activate", name: "activate", component: Activate },
   // ── Catch-all 404 ───────────────────────────────────────────────────────────
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFound },

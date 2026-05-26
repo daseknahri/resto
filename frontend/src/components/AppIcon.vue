@@ -191,6 +191,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M1 3h15v13H1z", "M16 8h4l3 3v5h-7V8z", "M5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", "M18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"],
   },
+  wallet: {
+    viewBox: "0 0 24 24",
+    paths: ["M3 7h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z", "M3 7V5a1 1 0 0 1 1-1h14", "M16 13h2"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

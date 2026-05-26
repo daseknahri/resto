@@ -20,7 +20,7 @@
       <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
         <!-- ── Left panel: dish search ───────────────────────────────── -->
         <div class="flex flex-1 flex-col overflow-hidden border-b border-slate-800 md:border-b-0 md:border-r">
-          <!-- Table input + search -->
+          <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
             <div class="flex items-center gap-2">
               <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
@@ -30,6 +30,16 @@
                 maxlength="40"
                 class="ui-input flex-1 text-sm"
                 :placeholder="t('waiterPage.newOrderTablePlaceholder')"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <input
+                v-model.trim="customerName"
+                type="text"
+                maxlength="80"
+                class="ui-input flex-1 text-sm"
+                :placeholder="t('waiterPage.newOrderCustomerNamePlaceholder')"
               />
             </div>
             <div class="relative">
@@ -108,30 +118,40 @@
             <div
               v-for="item in cartItems"
               :key="item.dish_slug"
-              class="flex items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-800/30 px-2.5 py-2"
+              class="rounded-xl border border-slate-700/40 bg-slate-800/30 px-2.5 py-2 space-y-1.5"
             >
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-xs font-medium text-slate-100">{{ item.dish_name }}</p>
-                <p class="text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
-              </div>
-              <!-- Qty controls -->
-              <div class="flex items-center gap-1 shrink-0">
+              <div class="flex items-center gap-2">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-medium text-slate-100">{{ item.dish_name }}</p>
+                  <p class="text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
+                </div>
+                <!-- Qty controls -->
+                <div class="flex items-center gap-1 shrink-0">
+                  <button
+                    class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    @click="decrement(item.dish_slug)"
+                  >−</button>
+                  <span class="w-5 text-center text-xs font-semibold text-slate-100">{{ item.qty }}</span>
+                  <button
+                    class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    @click="increment(item.dish_slug)"
+                  >+</button>
+                </div>
                 <button
-                  class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
-                  @click="decrement(item.dish_slug)"
-                >−</button>
-                <span class="w-5 text-center text-xs font-semibold text-slate-100">{{ item.qty }}</span>
-                <button
-                  class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
-                  @click="increment(item.dish_slug)"
-                >+</button>
+                  class="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400 transition-colors"
+                  @click="removeItem(item.dish_slug)"
+                >
+                  <AppIcon name="close" class="h-3 w-3" />
+                </button>
               </div>
-              <button
-                class="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400 transition-colors"
-                @click="removeItem(item.dish_slug)"
-              >
-                <AppIcon name="close" class="h-3 w-3" />
-              </button>
+              <!-- Per-item note -->
+              <input
+                v-model="item.note"
+                type="text"
+                maxlength="120"
+                class="w-full rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                :placeholder="t('waiterPage.newOrderItemNotePlaceholder')"
+              />
             </div>
           </div>
 
@@ -173,9 +193,10 @@ const toast = useToastStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const tableLabel = ref('');
+const customerName = ref('');
 const search = ref('');
 const activeCat = ref('');
-const cartItems = ref([]);   // [{dish_slug, dish_name, unit_price, qty}]
+const cartItems = ref([]);   // [{dish_slug, dish_name, unit_price, qty, note}]
 const loadingDishes = ref(false);
 const submitting = ref(false);
 const submitError = ref('');
@@ -254,6 +275,7 @@ const addDish = (dish) => {
       dish_name: dish.name,
       unit_price: dish.price || 0,
       qty: 1,
+      note: '',
     });
   }
 };
@@ -305,12 +327,12 @@ const submit = async () => {
       items: cartItems.value.map((i) => ({
         slug: i.dish_slug,
         qty: i.qty,
-        note: '',
+        note: i.note?.trim() || '',
         option_ids: [],
       })),
       fulfillment_type: 'table',
       table_label: tableLabel.value.trim(),
-      customer_name: '',
+      customer_name: customerName.value.trim(),
       customer_note: '',
     };
     await api.post('/place-order/', payload);

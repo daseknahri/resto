@@ -49,9 +49,15 @@
               </router-link>
               <router-link
                 :to="{ name: 'admin-analytics' }"
-                class="ui-btn-outline w-full px-4 py-2 text-sm text-center col-span-2"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
               >
                 📊 {{ t("adminConsole.analytics") }}
+              </router-link>
+              <router-link
+                :to="{ name: 'admin-wallets' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+              >
+                💳 {{ t("adminConsole.wallets") }}
               </router-link>
             </div>
           </article>

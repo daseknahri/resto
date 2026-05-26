@@ -43,7 +43,7 @@ from accounts.views import (
     SessionView,
 )
 from config.api import health_view
-from menu.views import AnalyticsEventIngestView
+from menu.views import AdminWalletListView, AnalyticsEventIngestView
 from sales.views import (
     AdminReservationAlertsView,
     AdminPlanFeatureFlagListView,
@@ -96,6 +96,7 @@ shared_api_urlpatterns = [
     path("api/marketplace/order/", MarketplacePlaceOrderView.as_view(), name="marketplace-order"),
     path("api/marketplace/order/<str:order_number>/", MarketplaceOrderStatusView.as_view(), name="marketplace-order-status"),
     path("api/admin/wallet/bonus/", AdminWalletBonusView.as_view(), name="admin-wallet-bonus"),
+    path("api/admin/wallets/", AdminWalletListView.as_view(), name="admin-wallets"),
     path("api/admin/flash-sales/", AdminFlashSaleListCreateView.as_view(), name="admin-flash-sales"),
     path("api/admin/flash-sales/<int:fs_id>/", AdminFlashSaleDetailView.as_view(), name="admin-flash-sale-detail"),
     path("api/admin/delivery-zones/", AdminDeliveryZoneListCreateView.as_view(), name="admin-delivery-zones"),

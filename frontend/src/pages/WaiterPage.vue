@@ -199,25 +199,124 @@
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <span v-else class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
+          <!-- Bill button -->
+          <button
+            class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+            @click="openBill(order)"
+          >🧾 {{ t('waiterPage.billBtn') }}</button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Bill / receipt modal -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0 scale-95"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="billOrder"
+        class="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/70 no-print"
+        @click.self="billOrder = null"
+      >
+        <div class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
+          <!-- Header -->
+          <div class="bill-header bg-slate-900 px-5 py-4 text-center">
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">{{ tenantName }}</p>
+            <p class="mt-0.5 text-base font-bold text-white">{{ t('waiterPage.billTitle') }}</p>
+          </div>
+
+          <!-- Meta -->
+          <div class="px-5 pt-4 pb-2 border-b border-slate-200 space-y-1">
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-500">{{ t('waiterPage.billOrderNum') }}</span>
+              <span class="font-semibold">#{{ billOrder.order_number }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-500">{{ t('waiterPage.billTable') }}</span>
+              <span class="font-semibold">{{ orderHeadline(billOrder) }}</span>
+            </div>
+            <div v-if="billOrder.customer_name" class="flex justify-between text-sm">
+              <span class="text-slate-500">{{ t('waiterPage.billCustomer') }}</span>
+              <span class="font-semibold">{{ billOrder.customer_name }}</span>
+            </div>
+            <div class="flex justify-between text-xs text-slate-400">
+              <span>{{ billDateTime(billOrder.created_at) }}</span>
+            </div>
+          </div>
+
+          <!-- Items -->
+          <ul class="px-5 py-3 space-y-1.5 border-b border-slate-200">
+            <li
+              v-for="(item, idx) in billOrder.items"
+              :key="idx"
+              class="flex items-baseline justify-between gap-2 text-sm"
+            >
+              <span class="text-slate-700">
+                <span class="font-semibold text-slate-900">{{ item.qty }}×</span>
+                {{ item.dish_name }}
+                <span v-if="item.note" class="text-[11px] italic text-slate-400"> ({{ item.note }})</span>
+              </span>
+            </li>
+          </ul>
+
+          <!-- Total -->
+          <div class="px-5 py-3 flex items-center justify-between">
+            <span class="text-sm font-semibold text-slate-600">{{ t('waiterPage.billTotal') }}</span>
+            <span class="text-lg font-bold text-slate-900">{{ fmtOrderPrice(billOrder.total, billOrder.currency) }}</span>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-2 px-5 pb-5 no-print">
+            <button
+              class="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+              @click="printBill"
+            >🖨 {{ t('waiterPage.billPrint') }}</button>
+            <button
+              class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-600 hover:border-slate-400 transition-colors"
+              @click="billOrder = null"
+            >{{ t('waiterPage.billClose') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
+import { useTenantStore } from "../stores/tenant";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
+const tenant = useTenantStore();
+const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 const showNewOrder = ref(false);
 const onOrderPlaced = () => {
   // Immediately reload the order list so the new order appears
   waiter.fetchOrders({ silent: true });
+};
+
+// ── Bill / receipt ─────────────────────────────────────────────────────────────
+const billOrder = ref(null);
+const openBill = (order) => { billOrder.value = order; };
+const printBill = () => { window.print(); };
+const billDateTime = (iso) => {
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 };
 
 // ── Shift summary ──────────────────────────────────────────────────────────────
@@ -407,3 +506,20 @@ const actionBtnClass = (s) => ({
   ready:     "bg-emerald-500 hover:bg-emerald-400 text-white",
 }[s] ?? "bg-slate-600 hover:bg-slate-500 text-white");
 </script>
+
+<style>
+@media print {
+  /* Hide everything except the bill sheet */
+  body > * { display: none !important; }
+  .bill-sheet {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    z-index: 99999 !important;
+  }
+  .no-print { display: none !important; }
+}
+</style>

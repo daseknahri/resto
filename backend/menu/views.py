@@ -4284,13 +4284,16 @@ class OwnerCustomerListView(APIView):
             except Exception:
                 pass
 
-        # ── 4. Fetch platform account emails for linked customers ─────────────
+        # ── 4. Fetch platform account emails + wallet balance for linked customers
         email_map = {}
+        wallet_map = {}  # customer_id → wallet_balance string
         if linked_customer_ids:
             try:
                 from accounts.models import Customer as PlatformCustomer
-                accounts = PlatformCustomer.objects.filter(id__in=linked_customer_ids).values("id", "email")
-                email_map = {a["id"]: a["email"] for a in accounts}
+                accounts = PlatformCustomer.objects.filter(id__in=linked_customer_ids).values("id", "email", "wallet_balance")
+                for a in accounts:
+                    email_map[a["id"]] = a["email"]
+                    wallet_map[a["id"]] = str(a["wallet_balance"] or "0.00")
             except Exception:
                 pass
 
@@ -4307,6 +4310,7 @@ class OwnerCustomerListView(APIView):
                 "name": (row["last_name"] or "").strip() or "—",
                 "phone": (row["last_phone"] or "").strip(),
                 "email": email_map.get(cid, ""),
+                "wallet_balance": wallet_map.get(cid, "0.00"),
                 "order_count": row["order_count"],
                 "total_spend": float(row["total_spend"]),
                 "avg_order_value": float(row["avg_order_value"]),
@@ -4813,3 +4817,147 @@ class CurrencyRateListView(APIView):
             for r in rates
         ]
         return Response(data)
+
+
+# ── Owner wallet top-up ────────────────────────────────────────────────────────
+
+class OwnerWalletTopupView(APIView):
+    """
+    POST /api/owner/wallet/topup/
+    Body: { "customer_id": 42, "amount": "10.00", "note": "Goodwill credit" }
+
+    Top-up a customer's wallet.  Owner can only credit customers who have placed
+    at least one order at their restaurant.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal as _Dec, InvalidOperation
+        from accounts.models import Customer, WalletTransaction
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer_id = request.data.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "customer_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Security: only allow topping up customers who have ordered at this restaurant
+        has_orders = Order.objects.filter(
+            customer_id=customer_id,
+            tenant=tenant,
+        ).exists()
+        if not has_orders:
+            return Response(
+                {"detail": "Customer has no orders at this restaurant."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_amount = request.data.get("amount")
+        try:
+            amount = _Dec(str(raw_amount)).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount <= _Dec("0"):
+            return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = str(request.data.get("note") or "Owner credit").strip()[:200]
+
+        from django.db import transaction as _dbtx
+        with _dbtx.atomic():
+            try:
+                customer = Customer.objects.select_for_update().get(pk=customer_id)
+            except Customer.DoesNotExist:
+                return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            customer.wallet_balance = customer.wallet_balance + amount
+            customer.save(update_fields=["wallet_balance"])
+            WalletTransaction.objects.create(
+                customer=customer,
+                type=WalletTransaction.Type.TOPUP,
+                amount=amount,
+                note=note,
+                tenant_id=tenant.id,
+            )
+
+        return Response({
+            "customer_id": customer.id,
+            "new_balance": str(customer.wallet_balance),
+            "amount": str(amount),
+            "note": note,
+        })
+
+
+# ── Admin wallet list ──────────────────────────────────────────────────────────
+
+class AdminWalletListView(APIView):
+    """
+    GET /api/admin/wallets/
+
+    Returns customers who have a wallet balance or transaction history.
+    Query params:
+      search      — filter by name, phone, email
+      min_balance — only show customers with balance >= this value (default: 0)
+      page, page_size
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = getattr(request, "user", None)
+        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from accounts.models import Customer
+        from decimal import Decimal as _Dec
+
+        search = (request.query_params.get("search") or "").strip()
+        try:
+            min_balance = _Dec(str(request.query_params.get("min_balance") or "0"))
+        except Exception:
+            min_balance = _Dec("0")
+
+        qs = Customer.objects.filter(wallet_balance__gte=min_balance).order_by("-wallet_balance")
+
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search) |
+                Q(user__email__icontains=search) |
+                Q(phone__icontains=search)
+            )
+
+        try:
+            page = max(1, int(request.query_params.get("page") or 1))
+            page_size = min(100, max(1, int(request.query_params.get("page_size") or 50)))
+        except (ValueError, TypeError):
+            page, page_size = 1, 50
+
+        start = (page - 1) * page_size
+        total = qs.count()
+        customers = qs.select_related("user")[start: start + page_size]
+
+        data = []
+        for c in customers:
+            u = getattr(c, "user", None)
+            name = (f"{u.first_name} {u.last_name}".strip() if u else "") or f"Customer #{c.id}"
+            data.append({
+                "id": c.id,
+                "name": name,
+                "email": u.email if u else "",
+                "phone": c.phone or "",
+                "wallet_balance": str(c.wallet_balance),
+            })
+
+        return Response({
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "results": data,
+        })
