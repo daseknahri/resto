@@ -89,7 +89,7 @@ import api from '../lib/api'
 import { useI18n } from '../composables/useI18n'
 import { useToastStore } from '../stores/toast'
 
-const { t } = useI18n()
+const { t, currentLocale } = useI18n()
 const toast = useToastStore()
 
 const dates = ref([])
@@ -113,12 +113,12 @@ const isToday = (dateStr) => dateStr === todayStr.value
 
 const formatDate = (dateStr) => {
   try {
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString(undefined, {
+    return new Intl.DateTimeFormat(currentLocale.value, {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-    })
+    }).format(new Date(dateStr + 'T12:00:00'))
   } catch {
     return dateStr
   }

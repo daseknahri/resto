@@ -86,7 +86,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 
 const emit = defineEmits(["select", "rescheduled"]);
 
@@ -122,7 +122,7 @@ const weekDays = computed(() => {
 const weekLabel = computed(() => {
   const start = weekDays.value[0];
   const end = weekDays.value[6];
-  const fmtDate = (d) => new Date(d.iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const fmtDate = (d) => new Intl.DateTimeFormat(currentLocale.value, { month: "short", day: "numeric" }).format(new Date(d.iso));
   return `${fmtDate(start)} – ${fmtDate(end)}`;
 });
 
@@ -175,7 +175,7 @@ const undatedCount = computed(() => reservations.value.filter((r) => !r.booked_f
 
 const timeLabel = (iso) => {
   try {
-    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
   } catch {
     return "";
   }

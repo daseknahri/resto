@@ -466,7 +466,7 @@ import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 
-const { t, itemCountLabel, formatNumber } = useI18n();
+const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
 const route = useRoute();
@@ -643,7 +643,7 @@ const formatTime = (iso) => {
   if (diffMin < 1) return t("ownerOrders.justNow");
   if (diffMin < 60) return `${diffMin}m`;
   if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
-  return d.toLocaleDateString();
+  return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short" }).format(d);
 };
 
 // ── Delivery helpers ──────────────────────────────────────────────────────────
@@ -792,7 +792,7 @@ const printTicket = (o) => {
     o.customer_phone ? `Phone: ${o.customer_phone}` : "",
     o.customer_email ? `Email: ${o.customer_email}` : "",
     o.delivery_address ? `Address: ${o.delivery_address}` : "",
-    new Date(o.created_at).toLocaleString(),
+    new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(o.created_at)),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
 
   const noteLabel      = t("ownerOrders.ticketNote");
