@@ -833,7 +833,7 @@ const printTicket = (o) => {
       <tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr>
     </table>
     ${note}
-    <div class="footer">${printedLabel} ${new Date().toLocaleTimeString()}</div>
+    <div class="footer">${printedLabel} ${new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date())}</div>
   </body></html>`;
 
   const win = window.open("", "_blank", "width=420,height=620");
