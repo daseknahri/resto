@@ -265,7 +265,7 @@
                 v-model.number="form.slot_duration_minutes"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
               >
-                <option :value="30">30 min</option>
+                <option :value="30">30 {{ t("stepPublish.minuteUnit") }}</option>
                 <option :value="60">1 {{ t("stepPublish.hour") }}</option>
                 <option :value="90">1.5 {{ t("stepPublish.hours") }}</option>
                 <option :value="120">2 {{ t("stepPublish.hours") }}</option>

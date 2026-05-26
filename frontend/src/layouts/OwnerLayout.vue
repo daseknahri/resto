@@ -336,6 +336,9 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/kitchen")) return t("ownerLayout.kitchen");
   if (path.startsWith("/owner/customers")) return t("ownerLayout.customers");
   if (path.startsWith("/owner/loyalty")) return t("ownerLayout.loyalty");
+  if (path.startsWith("/owner/promotions")) return t("ownerLayout.promotions");
+  if (path.startsWith("/owner/flash-sales")) return t("ownerLayout.flashSales");
+  if (path.startsWith("/owner/delivery")) return t("ownerLayout.delivery");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

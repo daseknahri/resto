@@ -407,7 +407,7 @@ import { useTenantStore } from "../stores/tenant";
 
 const toast = useToastStore();
 const tenant = useTenantStore();
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const loading = ref(false);
 const creating = ref(false);
 const generating = ref(false);
@@ -443,7 +443,9 @@ const tenantName = computed(() => {
   return t("ownerTables.defaultRestaurantName");
 });
 const logoUrl = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
-const generatedAt = computed(() => new Date().toLocaleString());
+const generatedAt = computed(() =>
+  new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "medium", timeStyle: "short" }).format(new Date())
+);
 const activeTablesCount = computed(() => tables.value.filter((table) => table.is_active).length);
 const filteredTables = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();

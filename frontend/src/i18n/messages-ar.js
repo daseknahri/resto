@@ -1152,6 +1152,7 @@ const arabicMessages = {
     "slotDurationHint": "مدة كل فترة حجز.",
     "hour": "ساعة",
     "hours": "ساعات",
+    "minuteUnit": "د",
     "smsNotifications": "إشعارات الرسائل القصيرة عند جاهزية الطلب",
     "smsNotificationsHint": "إرسال رسالة قصيرة للعملاء عندما يكون طلبهم جاهزاً للاستلام. يتطلب بيانات اعتماد Twilio على الخادم."
   },
