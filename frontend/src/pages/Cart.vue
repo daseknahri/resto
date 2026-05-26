@@ -446,9 +446,9 @@
                 <p class="text-xs font-semibold text-emerald-300">{{ promoApplied.name }}</p>
                 <p class="text-[10px] text-emerald-400/70">
                   {{ promoApplied.promo_type === 'percentage'
-                    ? `${promoApplied.discount_value}% off`
+                    ? t('ownerPromotions.labelPercentage', { value: promoApplied.discount_value })
                     : promoApplied.promo_type === 'fixed'
-                      ? `-${promoApplied.discount_value}`
+                      ? t('ownerPromotions.labelFixed', { value: promoApplied.discount_value })
                       : t('ownerPromotions.typeFreeDelivery') }}
                 </p>
               </div>
