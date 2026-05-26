@@ -803,6 +803,7 @@ const printTicket = (o) => {
   const printedLabel   = t("ownerOrders.ticketPrinted");
   const feeLabel       = t("ownerOrders.deliveryFee");
   const subtotalLabel  = t("ownerOrders.ticketSubtotal");
+  const walletLabel    = t("ownerOrders.walletPaid");
 
   const note = o.customer_note
     ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${o.customer_note}</div>`
@@ -834,6 +835,9 @@ const printTicket = (o) => {
       <tr><td style="padding:2px 0;font-size:12px;color:#444">${feeLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.delivery_fee, o.currency)}</td></tr>
       ` : ""}
       <tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr>
+      ${Number(o.wallet_amount_paid) > 0 ? `
+      <tr><td style="padding:2px 0;font-size:12px;color:#16a34a">💰 ${walletLabel}</td><td style="text-align:right;font-size:12px;color:#16a34a">−${formatCurrency(o.wallet_amount_paid, o.currency)}</td></tr>
+      ` : ""}
     </table>
     ${note}
     <div class="footer">${printedLabel} ${new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date())}</div>
