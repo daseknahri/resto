@@ -541,6 +541,34 @@
             </div>
           </div>
 
+          <!-- Voucher redemption -->
+          <div class="ui-panel p-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
+                <AppIcon name="tag" class="h-3.5 w-3.5 text-[var(--color-secondary)]/70" />
+              </div>
+              <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.voucherTitle') }}</p>
+            </div>
+            <div class="flex gap-2">
+              <input
+                v-model="voucherCode"
+                type="text"
+                maxlength="32"
+                class="ui-input flex-1 text-sm uppercase tracking-wider"
+                :placeholder="t('customerAccount.voucherPlaceholder')"
+                :disabled="voucherLoading"
+                @keyup.enter="redeemVoucher"
+              />
+              <button
+                class="shrink-0 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+                :disabled="!voucherCode.trim() || voucherLoading"
+                @click="redeemVoucher"
+              >{{ voucherLoading ? '…' : t('customerAccount.voucherRedeem') }}</button>
+            </div>
+            <p v-if="voucherError" class="text-xs text-red-300">{{ voucherError }}</p>
+            <p v-if="voucherSuccess" class="text-xs text-emerald-300">{{ voucherSuccess }}</p>
+          </div>
+
           <!-- Transactions -->
           <div class="ui-panel overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
@@ -1268,6 +1296,36 @@ const redeemPoints = async () => {
     redeemError.value = err?.response?.data?.detail || t('customerAccount.loyaltyRedeemFailed');
   } finally {
     redeeming.value = false;
+  }
+};
+
+// ── Wallet voucher ────────────────────────────────────────────────────────────
+const voucherCode = ref('');
+const voucherLoading = ref(false);
+const voucherError = ref('');
+const voucherSuccess = ref('');
+
+const redeemVoucher = async () => {
+  const code = voucherCode.value.trim().toUpperCase();
+  if (!code) return;
+  voucherError.value = '';
+  voucherSuccess.value = '';
+  voucherLoading.value = true;
+  try {
+    const res = await api.post('/customer/wallet/redeem-voucher/', { code });
+    voucherCode.value = '';
+    if (customerStore.customer) {
+      customerStore.setCustomer({
+        ...customerStore.customer,
+        wallet_balance: res.data.new_balance,
+      });
+    }
+    await fetchWallet();
+    voucherSuccess.value = t('customerAccount.voucherSuccess', { amount: res.data.amount });
+  } catch (err) {
+    voucherError.value = err?.response?.data?.detail || t('customerAccount.voucherError');
+  } finally {
+    voucherLoading.value = false;
   }
 };
 

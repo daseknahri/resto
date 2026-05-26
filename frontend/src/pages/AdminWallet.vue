@@ -86,6 +86,83 @@
       </div>
     </div>
 
+    <!-- Create Vouchers section -->
+    <div class="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-5 space-y-4">
+      <div>
+        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.voucherSectionTitle') }}</h2>
+        <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.voucherSectionSubtitle') }}</p>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <!-- Quantity -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherQtyLabel') }}</label>
+          <input
+            v-model="voucherQty"
+            type="number"
+            min="1"
+            max="50"
+            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+          />
+        </div>
+        <!-- Amount -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherAmountLabel') }}</label>
+          <input
+            v-model="voucherAmount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            :placeholder="t('adminWallet.voucherAmountPlaceholder')"
+          />
+        </div>
+        <!-- Expiry -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherExpiryLabel') }}</label>
+          <input
+            v-model="voucherExpiry"
+            type="datetime-local"
+            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+          />
+        </div>
+        <!-- Note -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherNoteLabel') }}</label>
+          <input
+            v-model="voucherNote"
+            type="text"
+            maxlength="200"
+            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            :placeholder="t('adminWallet.voucherNotePlaceholder')"
+          />
+        </div>
+      </div>
+      <p v-if="voucherGenError" class="text-xs text-red-400">{{ voucherGenError }}</p>
+      <button
+        class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+        :disabled="voucherGenerating"
+        @click="generateVouchers"
+      >{{ voucherGenerating ? t('adminWallet.voucherGenerating') : t('adminWallet.voucherGenerate') }}</button>
+
+      <!-- Generated codes display -->
+      <div v-if="generatedCodes.length" class="rounded-xl border border-emerald-700/40 bg-emerald-950/20 p-4 space-y-2">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-semibold text-emerald-400">{{ t('adminWallet.voucherCreatedTitle') }} ({{ generatedCodes.length }})</p>
+          <button
+            class="text-xs text-sky-400 hover:text-sky-300"
+            @click="copyAllCodes"
+          >{{ copiedAll ? t('adminWallet.voucherCopied') : t('adminWallet.voucherCopyAll') }}</button>
+        </div>
+        <div class="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+          <span
+            v-for="code in generatedCodes"
+            :key="code"
+            class="rounded-lg border border-emerald-700/40 bg-emerald-900/30 px-2.5 py-1 font-mono text-xs text-emerald-300 select-all cursor-text"
+          >{{ code }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Bonus modal -->
     <Teleport to="body">
       <Transition
@@ -163,6 +240,55 @@ const page = ref(1);
 const pageSize = 50;
 const search = ref('');
 const showZero = ref(false);
+
+// Voucher creation
+const voucherQty = ref(1);
+const voucherAmount = ref('');
+const voucherExpiry = ref('');
+const voucherNote = ref('');
+const voucherGenerating = ref(false);
+const voucherGenError = ref('');
+const generatedCodes = ref([]);
+const copiedAll = ref(false);
+
+const generateVouchers = async () => {
+  voucherGenError.value = '';
+  const amount = parseFloat(voucherAmount.value);
+  if (!amount || amount <= 0) {
+    voucherGenError.value = t('adminWallet.voucherAmountRequired');
+    return;
+  }
+  voucherGenerating.value = true;
+  try {
+    const payload = {
+      count: Math.min(Math.max(parseInt(voucherQty.value, 10) || 1, 1), 50),
+      amount: amount.toFixed(2),
+    };
+    if (voucherNote.value.trim()) payload.note = voucherNote.value.trim();
+    if (voucherExpiry.value) payload.expires_at = new Date(voucherExpiry.value).toISOString();
+    const res = await api.post('/admin/wallet/vouchers/', payload);
+    generatedCodes.value = res.data.codes || [];
+    copiedAll.value = false;
+    toast.show(t('adminWallet.voucherCreated', { count: res.data.created }));
+    voucherAmount.value = '';
+    voucherNote.value = '';
+    voucherExpiry.value = '';
+    voucherQty.value = 1;
+  } catch (err) {
+    const detail = err?.response?.data?.detail || '';
+    voucherGenError.value = detail || t('adminWallet.voucherFailed');
+  } finally {
+    voucherGenerating.value = false;
+  }
+};
+
+const copyAllCodes = async () => {
+  try {
+    await navigator.clipboard.writeText(generatedCodes.value.join('\n'));
+    copiedAll.value = true;
+    setTimeout(() => { copiedAll.value = false; }, 2000);
+  } catch { /* ignore */ }
+};
 
 // Bonus modal
 const bonusTarget = ref(null);

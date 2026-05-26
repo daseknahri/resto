@@ -1018,6 +1018,158 @@ class AdminWalletBonusView(APIView):
         return Response({"issued_to": len(ids), "amount": str(amount), "note": note})
 
 
+# ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
+
+
+class AdminWalletVoucherView(APIView):
+    """
+    GET  /api/admin/wallet/vouchers/          — list recent vouchers (last 100)
+    POST /api/admin/wallet/vouchers/          — create one or more vouchers
+      Body: { "amount": "20.00", "note": "Welcome", "count": 5, "expires_days": 30 }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _check_admin(self, request):
+        user = getattr(request, "user", None)
+        return user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))
+
+    def get(self, request, *args, **kwargs):
+        if not self._check_admin(request):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from .models import WalletVoucher
+        qs = WalletVoucher.objects.select_related("used_by")[:100]
+        data = []
+        for v in qs:
+            data.append({
+                "id": v.id,
+                "code": v.code,
+                "amount": str(v.amount),
+                "note": v.note,
+                "is_used": v.is_used,
+                "used_by_name": str(v.used_by) if v.used_by else None,
+                "used_at": v.used_at.isoformat() if v.used_at else None,
+                "expires_at": v.expires_at.isoformat() if v.expires_at else None,
+                "created_at": v.created_at.isoformat(),
+            })
+        return Response(data)
+
+    def post(self, request, *args, **kwargs):
+        if not self._check_admin(request):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal as _Dec, InvalidOperation
+        from django.utils import timezone as _tz
+        import datetime
+        from .models import WalletVoucher
+
+        raw_amount = request.data.get("amount")
+        try:
+            amount = _Dec(str(raw_amount)).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount <= _Dec("0"):
+            return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = str(request.data.get("note") or "").strip()[:200]
+
+        try:
+            count = max(1, min(50, int(request.data.get("count") or 1)))
+        except (ValueError, TypeError):
+            count = 1
+
+        expires_at = None
+        expires_days = request.data.get("expires_days")
+        if expires_days:
+            try:
+                expires_at = _tz.now() + datetime.timedelta(days=int(expires_days))
+            except (ValueError, TypeError):
+                pass
+
+        vouchers = WalletVoucher.objects.bulk_create([
+            WalletVoucher(
+                code=WalletVoucher.generate_code(),
+                amount=amount,
+                note=note,
+                expires_at=expires_at,
+            )
+            for _ in range(count)
+        ])
+
+        return Response({
+            "created": len(vouchers),
+            "codes": [v.code for v in vouchers],
+            "amount": str(amount),
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        }, status=status.HTTP_201_CREATED)
+
+
+class CustomerWalletRedeemVoucherView(APIView):
+    """
+    POST /api/customer/wallet/redeem-voucher/
+    Body: { "code": "ABCD1234EF" }
+
+    Redeems a single-use voucher code for the authenticated customer.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        from django.utils import timezone as _tz
+        from .models import WalletVoucher, WalletTransaction
+
+        # Resolve customer
+        customer = getattr(request, "customer", None)
+        if customer is None:
+            try:
+                customer = Customer.objects.get(user=request.user)
+            except Customer.DoesNotExist:
+                customer = None
+        if customer is None:
+            return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        code = str(request.data.get("code") or "").strip().upper()
+        if not code:
+            return Response({"detail": "Voucher code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction as _dbtx
+        with _dbtx.atomic():
+            try:
+                voucher = WalletVoucher.objects.select_for_update().get(code=code)
+            except WalletVoucher.DoesNotExist:
+                return Response({"detail": "Invalid voucher code."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if voucher.is_used:
+                return Response({"detail": "This voucher has already been used."}, status=status.HTTP_400_BAD_REQUEST)
+
+            now = _tz.now()
+            if voucher.expires_at and voucher.expires_at < now:
+                return Response({"detail": "This voucher has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+            voucher.is_used = True
+            voucher.used_by = customer
+            voucher.used_at = now
+            voucher.save(update_fields=["is_used", "used_by", "used_at"])
+
+            customer.wallet_balance = customer.wallet_balance + voucher.amount
+            customer.save(update_fields=["wallet_balance", "updated_at"])
+
+            WalletTransaction.objects.create(
+                customer=customer,
+                type=WalletTransaction.Type.TOPUP,
+                amount=voucher.amount,
+                note=voucher.note or f"Voucher {voucher.code}",
+                reference=voucher.code,
+            )
+
+        return Response({
+            "credited": str(voucher.amount),
+            "new_balance": str(customer.wallet_balance),
+            "note": voucher.note,
+        })
+
+
 # ── Restaurant directory & marketplace ────────────────────────────────────────
 
 
