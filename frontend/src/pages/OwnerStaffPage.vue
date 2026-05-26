@@ -60,7 +60,7 @@
           class="rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-500 transition-colors"
           @click="copyCredentials"
         >
-          {{ copied ? "Copied ✓" : t("ownerStaff.credentialsCopy") }}
+          {{ copied ? t("ownerStaff.credentialsCopied") : t("ownerStaff.credentialsCopy") }}
         </button>
         <button
           class="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2 text-xs font-semibold text-slate-400 hover:border-slate-600 transition-colors"

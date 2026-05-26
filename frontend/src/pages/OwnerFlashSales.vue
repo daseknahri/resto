@@ -120,7 +120,7 @@ import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
 const loading = ref(true);
@@ -131,7 +131,7 @@ const toggling = ref(null); // sale.id currently being toggled
 const formatDate = (iso) => {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Intl.DateTimeFormat(currentLocale.value, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
   } catch {
     return iso.slice(0, 10);
   }

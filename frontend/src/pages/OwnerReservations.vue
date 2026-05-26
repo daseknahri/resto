@@ -525,6 +525,74 @@
       </div>
       </template>
     </section>
+
+    <!-- ── Waitlist ─────────────────────────────────────────────────────────── -->
+    <section class="ui-command-deck space-y-3 sm:space-y-4">
+      <!-- Header -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="space-y-0.5">
+          <h2 class="text-base font-bold text-white">{{ t("ownerReservations.waitlistTitle") }}</h2>
+          <p class="text-xs text-slate-400">{{ t("ownerReservations.waitlistSubtitle") }}</p>
+        </div>
+        <input
+          v-model="waitlistDate"
+          type="date"
+          class="ui-input text-sm"
+          @change="fetchWaitlist"
+        />
+      </div>
+
+      <!-- Loading -->
+      <div v-if="waitlistLoading" class="py-6 text-center text-sm text-slate-400">
+        {{ t("ownerReservations.waitlistLoading") }}
+      </div>
+
+      <!-- Error -->
+      <div v-else-if="waitlistError" class="rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3 text-sm text-red-300">
+        {{ t("ownerReservations.waitlistLoadError") }}
+      </div>
+
+      <!-- Empty -->
+      <div v-else-if="!waitlistEntries.length" class="py-8 text-center text-sm text-slate-500">
+        {{ waitlistDate ? t("ownerReservations.waitlistEmpty") : t("ownerReservations.waitlistEmptyAll") }}
+      </div>
+
+      <!-- Table -->
+      <div v-else class="overflow-x-auto rounded-xl border border-slate-700/50">
+        <table class="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr class="border-b border-slate-700/50 bg-slate-900/60 text-xs text-slate-400">
+              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.bookedFor") }}</th>
+              <th class="px-4 py-2.5 text-left font-medium">{{ t("common.name") }}</th>
+              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.guests") }}</th>
+              <th class="px-4 py-2.5 text-left font-medium">{{ t("common.status") }}</th>
+              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.notes") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="entry in waitlistEntries"
+              :key="entry.id"
+              class="border-b border-slate-800/60 transition hover:bg-slate-800/30"
+            >
+              <td class="px-4 py-3 text-slate-200 tabular-nums text-xs">{{ formatDate(entry.booked_for) }}</td>
+              <td class="px-4 py-3">
+                <p class="font-medium text-slate-100">{{ entry.name }}</p>
+                <p v-if="entry.phone" class="text-xs text-slate-500">{{ entry.phone }}</p>
+                <p v-if="entry.email" class="text-xs text-slate-500">{{ entry.email }}</p>
+              </td>
+              <td class="px-4 py-3 text-slate-300">{{ t("ownerReservations.waitlistParty", { n: entry.party_size }) }}</td>
+              <td class="px-4 py-3">
+                <span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold" :class="waitlistStatusClass(entry.status)">
+                  {{ waitlistStatusLabel(entry.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-400 max-w-[12rem] truncate">{{ entry.notes || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -1126,7 +1194,49 @@ const exportCsv = async () => {
   }
 };
 
-onMounted(fetchReservations);
+// ── Waitlist ──────────────────────────────────────────────────────────────────
+const waitlistDate = ref("");
+const waitlistLoading = ref(false);
+const waitlistError = ref(false);
+const waitlistEntries = ref([]);
+
+const fetchWaitlist = async () => {
+  waitlistLoading.value = true;
+  waitlistError.value = false;
+  try {
+    const params = {};
+    if (waitlistDate.value) params.date = waitlistDate.value;
+    const res = await api.get("/owner/waitlist/", { params });
+    waitlistEntries.value = res.data?.results ?? [];
+  } catch {
+    waitlistError.value = true;
+  } finally {
+    waitlistLoading.value = false;
+  }
+};
+
+const waitlistStatusLabel = (status) => {
+  const map = {
+    waiting: t("ownerReservations.waitlistStatusWaiting"),
+    notified: t("ownerReservations.waitlistStatusNotified"),
+    converted: t("ownerReservations.waitlistStatusConverted"),
+    expired: t("ownerReservations.waitlistStatusExpired"),
+  };
+  return map[status] ?? status;
+};
+
+const waitlistStatusClass = (status) => {
+  if (status === "waiting")   return "bg-amber-500/15 border border-amber-500/30 text-amber-300";
+  if (status === "notified")  return "bg-sky-500/15 border border-sky-500/30 text-sky-300";
+  if (status === "converted") return "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300";
+  if (status === "expired")   return "bg-slate-700/50 border border-slate-600 text-slate-400";
+  return "bg-slate-700/50 border border-slate-600 text-slate-400";
+};
+
+onMounted(() => {
+  fetchReservations();
+  fetchWaitlist();
+});
 </script>
 
 <style scoped>

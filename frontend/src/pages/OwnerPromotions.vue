@@ -234,15 +234,9 @@ const { t } = useI18n();
 const toast = useToastStore();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const DAYS = [
-  { key: 'mon', label: 'Mon' },
-  { key: 'tue', label: 'Tue' },
-  { key: 'wed', label: 'Wed' },
-  { key: 'thu', label: 'Thu' },
-  { key: 'fri', label: 'Fri' },
-  { key: 'sat', label: 'Sat' },
-  { key: 'sun', label: 'Sun' },
-];
+// Day keys — labels resolved via i18n (reuses stepDishes.weekday_* keys)
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAYS = computed(() => DAY_KEYS.map((key) => ({ key, label: t(`stepDishes.weekday_${key}`) })));
 
 const promoTypes = computed(() => [
   { value: 'percentage', label: t('ownerPromotions.typePercentage') },
@@ -292,8 +286,8 @@ const resetForm = () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const promoLabel = (promo) => {
-  if (promo.promo_type === 'percentage') return `${promo.discount_value}% off`;
-  if (promo.promo_type === 'fixed') return `${promo.discount_value} off`;
+  if (promo.promo_type === 'percentage') return t('ownerPromotions.labelPercentage', { value: promo.discount_value });
+  if (promo.promo_type === 'fixed') return t('ownerPromotions.labelFixed', { value: promo.discount_value });
   return t('ownerPromotions.typeFreeDelivery');
 };
 
