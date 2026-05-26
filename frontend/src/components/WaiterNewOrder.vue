@@ -22,7 +22,24 @@
         <div class="flex flex-1 flex-col overflow-hidden border-b border-slate-800 md:border-b-0 md:border-r">
           <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
-            <div class="flex items-center gap-2">
+            <!-- Fulfillment type toggle -->
+            <div class="flex rounded-lg border border-slate-700/60 overflow-hidden text-xs font-semibold">
+              <button
+                class="flex-1 py-1.5 transition-colors"
+                :class="fulfillmentType === 'table'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                @click="fulfillmentType = 'table'"
+              >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
+              <button
+                class="flex-1 py-1.5 transition-colors"
+                :class="fulfillmentType === 'pickup'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                @click="fulfillmentType = 'pickup'"
+              >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
+            </div>
+            <div v-if="fulfillmentType === 'table'" class="flex items-center gap-2">
               <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
               <input
                 v-model.trim="tableLabel"
@@ -192,6 +209,7 @@ const tenant = useTenantStore();
 const toast = useToastStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
+const fulfillmentType = ref('table');
 const tableLabel = ref('');
 const customerName = ref('');
 const search = ref('');
@@ -316,7 +334,7 @@ const submit = async () => {
     submitError.value = t('waiterPage.newOrderNoItems');
     return;
   }
-  if (!tableLabel.value.trim()) {
+  if (fulfillmentType.value === 'table' && !tableLabel.value.trim()) {
     submitError.value = t('waiterPage.newOrderNoTable');
     return;
   }
@@ -330,8 +348,8 @@ const submit = async () => {
         note: i.note?.trim() || '',
         option_ids: [],
       })),
-      fulfillment_type: 'table',
-      table_label: tableLabel.value.trim(),
+      fulfillment_type: fulfillmentType.value,
+      table_label: fulfillmentType.value === 'table' ? tableLabel.value.trim() : '',
       customer_name: customerName.value.trim(),
       customer_note: '',
     };
