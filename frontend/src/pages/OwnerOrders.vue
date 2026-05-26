@@ -162,6 +162,9 @@
             <p v-if="o.tip_amount && Number(o.tip_amount) > 0" class="text-[10px] text-sky-400">
               {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}
             </p>
+            <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] text-emerald-300">
+              💰 {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
+            </p>
             <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
         </div>

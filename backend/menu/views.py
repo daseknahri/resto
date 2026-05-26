@@ -2519,6 +2519,8 @@ class OwnerOrderListView(APIView):
                 "customer_id": order.customer_id,
                 "customer_trust": trust_map.get(order.customer_id) if order.customer_id else None,
                 "my_customer_rating": my_rating_map.get(order.order_number),
+                # Wallet payment
+                "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 # Order source, commission & promotion
                 "source": order.source,
                 "commission_amount": str(order.commission_amount),

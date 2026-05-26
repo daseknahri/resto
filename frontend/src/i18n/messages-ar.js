@@ -1734,6 +1734,7 @@ const arabicMessages = {
     "sourceMarketplace": "السوق",
     "promoDiscount": "خصم",
     "tip": "إكرامية",
+    "walletPaid": "محفظة",
     "deliveryJobTitle": "التوصيل",
     "djStatus_searching": "بحث عن سائق",
     "djStatus_assigned": "تم التخصيص",
