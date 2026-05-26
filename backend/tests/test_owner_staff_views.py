@@ -86,6 +86,9 @@ class OwnerStaffListViewTests(SimpleTestCase):
                 "last_name": "Dupont",
                 "username": "jeandupont",
                 "date_joined": None,
+                "perm_manage_orders": True,
+                "perm_view_revenue": False,
+                "perm_edit_menu": False,
             }
         ]
         import accounts.models as _accts

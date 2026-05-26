@@ -365,6 +365,12 @@ class CustomerPhoneRequestView(APIView):
             return Response({"detail": "Phone number is required."}, status=status.HTTP_400_BAD_REQUEST)
         if len(phone) > 30:
             return Response({"detail": "Phone number too long."}, status=status.HTTP_400_BAD_REQUEST)
+        import re as _re
+        if not _re.match(r'^\+\d{6,}$', phone):
+            return Response(
+                {"detail": "Phone number must be in E.164 format (e.g. +212612345678).", "code": "invalid_phone"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         code = f"{random.randint(100000, 999999)}"
         cache_key = _OTP_CACHE_KEY.format(phone=phone)
@@ -476,7 +482,12 @@ class CustomerGoogleAuthView(APIView):
         if not credential:
             return Response({"detail": "Google credential is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return Response(
+                {"detail": "Google sign-in is not configured.", "code": "not_configured"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         payload = _verify_google_token(credential, client_id)
         if payload is None:
             return Response(

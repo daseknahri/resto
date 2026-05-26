@@ -172,15 +172,17 @@ class PlaceOrderRuntimeErrorTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views._generate_order_number")
     @patch("menu.views.Profile.objects")
     @patch("menu.views.Dish.objects")
     def test_runtime_error_returns_503(
-        self, mock_dish_objects, mock_profile_objects, mock_gen_number
+        self, mock_dish_objects, mock_profile_objects, mock_gen_number, mock_promo_objects
     ):
         mock_gen_number.side_effect = RuntimeError(
             "Could not generate unique order number after 10 attempts."
         )
+        mock_promo_objects.filter.return_value = []
 
         # Minimal profile
         profile = MagicMock()
@@ -245,9 +247,12 @@ class OwnerOrderListTotalTests(SimpleTestCase):
     @staticmethod
     def _mock_order():
         """Minimal order mock that survives OwnerOrderListView's dict-builder loop."""
+        from decimal import Decimal
         o = MagicMock()
         o.customer = None          # → customer_email = ""
+        o.customer_id = None       # prevents MagicMock in ORM customer_id__in query
         o.status_updated_at = None  # → status_updated_at = None
+        o.wallet_amount_paid = Decimal("0")
         # items.all() must be iterable (MagicMock supports __iter__ → iter([]))
         return o
 

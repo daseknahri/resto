@@ -78,6 +78,7 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         )
         req.user = MagicMock(is_authenticated=False)
         req.tenant = tenant or _tenant()
+        req.session = {}
         return self.view(req, order_number=order_number)
 
     # ── 404 ───────────────────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ class CustomerOrderRateViewTests(SimpleTestCase):
             order=mock_orders.get.return_value,
             score=4,
             comment="Very good!",
+            customer=None,
         )
 
     @patch("menu.views.Rating.objects")

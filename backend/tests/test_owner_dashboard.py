@@ -65,7 +65,10 @@ def _order_qs_mock():
 
     qs = MagicMock()
     qs.filter.return_value = qs
-    qs.aggregate.return_value = {"total_revenue": None, "order_count": 0}
+    qs.aggregate.return_value = {
+        "total_revenue": None, "order_count": 0,
+        "mkt_count": 0, "mkt_revenue": None, "mkt_commission": None,
+    }
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
     return qs
 

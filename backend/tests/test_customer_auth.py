@@ -40,6 +40,8 @@ def _make_customer(**kwargs):
         email_verified=False,
         google_sub=None,
         wallet_balance=0,
+        loyalty_points=0,
+        locale="en",
     )
     defaults.update(kwargs)
     c = SimpleNamespace(**defaults)
