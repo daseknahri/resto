@@ -536,7 +536,7 @@
                 <p class="mt-1 text-[11px] text-slate-500">{{ walletBalance > 0 ? t('customerAccount.walletBalance') : t('customerAccount.walletNoBalance') }}</p>
               </div>
               <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
-                <AppIcon name="tag" class="h-6 w-6 text-[var(--color-secondary)]/70" />
+                <AppIcon name="wallet" class="h-6 w-6 text-[var(--color-secondary)]/70" />
               </div>
             </div>
           </div>

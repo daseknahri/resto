@@ -60,7 +60,7 @@
 
     <!-- Table -->
     <div v-else-if="customers.length" class="overflow-x-auto rounded-2xl border border-slate-700/50">
-      <table class="w-full min-w-[680px] text-sm">
+      <table class="w-full min-w-[820px] text-sm">
         <thead>
           <tr class="border-b border-slate-700/50 bg-slate-900/60 text-xs text-slate-400">
             <th
@@ -141,6 +141,18 @@
                 {{ segmentLabel(c.segment) }}
               </span>
             </td>
+            <!-- Wallet balance -->
+            <td class="px-4 py-3">
+              <div v-if="c.customer_id && parseFloat(c.wallet_balance) > 0" class="flex items-center gap-2">
+                <span class="font-semibold tabular-nums text-emerald-400 text-xs">{{ formatMoney(parseFloat(c.wallet_balance), c.currency) }}</span>
+                <RouterLink
+                  :to="{ name: 'owner-wallet', query: { q: c.name } }"
+                  class="rounded-full border border-slate-600 px-2 py-0.5 text-[10px] font-semibold text-slate-400 hover:border-[var(--color-secondary)]/60 hover:text-[var(--color-secondary)] transition-colors"
+                >{{ t('ownerCustomers.topUpBtn') }}</RouterLink>
+              </div>
+              <span v-else-if="c.customer_id" class="text-slate-600 text-xs">0</span>
+              <span v-else class="text-slate-700 text-xs">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -155,6 +167,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -193,6 +206,7 @@ const columns = computed(() => [
   { key: "trust_score", label: t("ownerCustomers.colTrust"), sortable: false },
   { key: "avg_review",  label: t("ownerCustomers.colReview"), sortable: false },
   { key: "segment",     label: t("ownerCustomers.colSegment"), sortable: false },
+  { key: "wallet",      label: t("ownerCustomers.colWallet"), sortable: false },
 ]);
 
 // ── API ───────────────────────────────────────────────────────────────────────

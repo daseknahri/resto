@@ -117,7 +117,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useTenantStore } from '../stores/tenant';
@@ -127,6 +128,7 @@ import api from '../lib/api';
 const { t, currentLocale } = useI18n();
 const tenant = useTenantStore();
 const toast = useToastStore();
+const route = useRoute();
 
 const searchQuery = ref('');
 const searchResults = ref([]);
@@ -222,4 +224,12 @@ const doTopup = async () => {
     saving.value = false;
   }
 };
+
+onMounted(() => {
+  const q = (route.query.q || '').toString().trim();
+  if (q.length >= 2) {
+    searchQuery.value = q;
+    runSearch(q);
+  }
+});
 </script>

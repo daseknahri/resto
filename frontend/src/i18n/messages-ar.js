@@ -2194,6 +2194,8 @@ Object.assign(arabicMessages, {
     colTrust: "\u0627\u0644\u062b\u0642\u0629",
     colSegment: "\u0627\u0644\u0634\u0631\u064a\u062d\u0629",
     colReview: "\u0627\u0644\u062a\u0642\u064a\u064a\u0645\u0627\u062a",
+    colWallet: "\u0627\u0644\u0645\u062d\u0641\u0638\u0629",
+    topUpBtn: "\u0634\u062d\u0646",
     typeAccount: "\u062d\u0633\u0627\u0628",
     typeAnonymous: "\u0636\u064a\u0641",
     segTagNew: "\u062c\u062f\u064a\u062f",
