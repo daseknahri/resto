@@ -258,7 +258,7 @@
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.ordersTitle') }}</p>
-                <p class="mt-0.5 text-[10px] text-slate-500">{{ apiOrders.length }} total</p>
+                <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.ordersCount', { count: apiOrders.length }) }}</p>
               </div>
               <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-sky-400" />
             </button>
@@ -386,13 +386,13 @@
               <AppIcon name="info" class="h-4 w-4 text-amber-400" />
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-xs font-semibold text-amber-200">Complete your profile</p>
-              <p class="mt-0.5 text-[11px] text-slate-400">Add phone or email for order updates</p>
+              <p class="text-xs font-semibold text-amber-200">{{ t('customerAccount.completeProfile') }}</p>
+              <p class="mt-0.5 text-[11px] text-slate-400">{{ t('customerAccount.completeProfileHint') }}</p>
             </div>
             <button
               class="shrink-0 rounded-xl bg-amber-500/18 px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/28"
               @click="activeTab = 'profile'"
-            >Add →</button>
+            >{{ t('customerAccount.completeProfileAdd') }}</button>
           </div>
         </template>
 

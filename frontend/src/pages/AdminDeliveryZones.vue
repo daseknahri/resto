@@ -38,7 +38,7 @@
             <td class="px-4 py-3 text-slate-200 font-medium">{{ zone.name }}</td>
             <td class="px-4 py-3 text-slate-400">{{ zone.city }}</td>
             <td class="px-4 py-3 text-right text-slate-400">{{ zone.approx_radius_km }} km</td>
-            <td class="px-4 py-3 text-center text-slate-400 text-xs">{{ zone.polygon.length }} pts</td>
+            <td class="px-4 py-3 text-center text-slate-400 text-xs">{{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}</td>
             <td class="px-4 py-3 text-center">
               <span
                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold"

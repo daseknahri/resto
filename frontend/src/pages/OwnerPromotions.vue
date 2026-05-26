@@ -48,7 +48,7 @@
           <p v-if="promo.description" class="text-xs text-slate-500">{{ promo.description }}</p>
           <div class="flex flex-wrap gap-3 text-[11px] text-slate-500">
             <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
-              Min {{ promo.min_order_amount }}
+              {{ t('ownerPromotions.minOrderShort', { amount: promo.min_order_amount }) }}
             </span>
             <span v-if="promo.days && promo.days.length">{{ promo.days.join(', ') }}</span>
             <span v-if="promo.time_start && promo.time_end">{{ promo.time_start }}–{{ promo.time_end }}</span>
@@ -340,7 +340,7 @@ const fetchPromotions = async () => {
 const submitForm = async () => {
   drawerError.value = '';
   if (!form.name.trim()) {
-    drawerError.value = t('ownerPromotions.nameLabel') + ' is required.';
+    drawerError.value = t('ownerPromotions.nameRequired');
     return;
   }
   submitting.value = true;

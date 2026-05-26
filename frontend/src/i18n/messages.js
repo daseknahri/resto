@@ -2268,6 +2268,8 @@ export const messages = {
       codeHint: "When set, customers must enter this code at checkout. Leave blank for auto-applied promotions.",
       labelPercentage: "{value}% off",
       labelFixed: "{value} off",
+      minOrderShort: "Min {amount}",
+      nameRequired: "Name is required.",
     },
     ownerFlashSales: {
       kicker: "Platform campaigns",
@@ -2359,6 +2361,7 @@ export const messages = {
       fieldFeeTiers: "Fee tiers",
       feeTiersHint: "Leave empty for flat fee. km_up_to: null means catch-all.",
       feeTiersError: "Fee tiers must be a valid JSON array.",
+      polygonPts: "{count} pts",
     },
     adminDrivers: {
       title: "Drivers",
@@ -2683,6 +2686,10 @@ export const messages = {
       tabOrders: "Orders",
       tabWallet: "Wallet",
       tabProfile: "Profile",
+      ordersCount: "{count} total",
+      completeProfile: "Complete your profile",
+      completeProfileHint: "Add phone or email for order updates",
+      completeProfileAdd: "Add →",
     }
   },
   fr: {
@@ -4968,6 +4975,8 @@ export const messages = {
       codeHint: "Quand defini, les clients doivent saisir ce code a la caisse. Laisser vide pour les promotions automatiques.",
       labelPercentage: "{value}% de reduction",
       labelFixed: "{value} de reduction",
+      minOrderShort: "Min {amount}",
+      nameRequired: "Le nom est requis.",
     },
     ownerFlashSales: {
       kicker: "Campagnes plateforme",
@@ -5059,6 +5068,7 @@ export const messages = {
       fieldFeeTiers: "Tranches tarifaires",
       feeTiersHint: "Laissez vide pour un tarif fixe. km_up_to: null = tout le reste.",
       feeTiersError: "Les tranches doivent etre un tableau JSON valide.",
+      polygonPts: "{count} pts",
     },
     adminDrivers: {
       title: "Livreurs",
@@ -5365,6 +5375,10 @@ export const messages = {
       tabOrders: "Commandes",
       tabWallet: "Portefeuille",
       tabProfile: "Profil",
+      ordersCount: "{count} au total",
+      completeProfile: "Complétez votre profil",
+      completeProfileHint: "Ajoutez téléphone ou e-mail pour les mises à jour",
+      completeProfileAdd: "Ajouter →",
     }
   },
   ar: {}
