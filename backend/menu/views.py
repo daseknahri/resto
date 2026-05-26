@@ -3091,7 +3091,8 @@ class OwnerOrderExportView(APIView):
             "order_number", "created_at", "status", "fulfillment_type",
             "table_label", "customer_name", "customer_phone",
             "customer_note", "delivery_address",
-            "items", "subtotal", "delivery_fee", "tip_amount", "total", "currency",
+            "items", "subtotal", "delivery_fee", "tip_amount",
+            "promotion_discount", "wallet_amount_paid", "total", "currency",
         ])
 
         for order in qs[:5000]:
@@ -3119,6 +3120,8 @@ class OwnerOrderExportView(APIView):
                 str(subtotal),
                 str(order.delivery_fee),
                 str(order.tip_amount),
+                str(order.promotion_discount or "0"),
+                str(order.wallet_amount_paid or "0"),
                 str(order.total),
                 order.currency or "",
             ])
