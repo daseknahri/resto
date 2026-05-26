@@ -107,6 +107,8 @@ def _make_order(
         order.status_updated_at = None
 
     order.items = items_qs
+    order.customer_id = None
+    order.wallet_amount_paid = Decimal("0")
     return order
 
 

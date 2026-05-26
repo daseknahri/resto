@@ -236,11 +236,13 @@ class PlaceOrderViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "table_unavailable")
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views.TableLink.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")
-    def test_active_table_slug_enriches_label(self, profile_mock, dish_mock, table_mock):
+    def test_active_table_slug_enriches_label(self, profile_mock, dish_mock, table_mock, promo_mock):
         """A valid table_slug must use the DB label as the authoritative table_label."""
+        promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
         dish_mock.filter.return_value.select_related.return_value = [dish]
@@ -326,10 +328,12 @@ class PlaceOrderViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(resp.data["code"], "phone_required")
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")
-    def test_delivery_with_phone_passes_phone_gate(self, profile_mock, dish_mock):
+    def test_delivery_with_phone_passes_phone_gate(self, profile_mock, dish_mock, promo_mock):
         """Verified customer WITH a phone should not be blocked by the phone gate."""
+        promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
         dish_mock.filter.return_value.select_related.return_value = [dish]
@@ -375,10 +379,12 @@ class PlaceOrderViewTests(SimpleTestCase):
 
     # ── Stock management ──────────────────────────────────────────────────────
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")
-    def test_out_of_stock_returns_items_unavailable(self, profile_mock, dish_mock):
+    def test_out_of_stock_returns_items_unavailable(self, profile_mock, dish_mock, promo_mock):
         """When ordered qty exceeds available stock, return 400 items_unavailable."""
+        promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
 
         # Dish has 1 unit remaining; customer orders 2
@@ -407,10 +413,12 @@ class PlaceOrderViewTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "items_unavailable")
         self.assertIn(dish.slug, resp.data.get("slugs", []))
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")
-    def test_sufficient_stock_allows_order(self, profile_mock, dish_mock):
+    def test_sufficient_stock_allows_order(self, profile_mock, dish_mock, promo_mock):
         """When stock is sufficient, the order proceeds and stock would be decremented."""
+        promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
 
         # Dish has 5 units; customer orders 2 — should succeed
@@ -451,10 +459,12 @@ class PlaceOrderViewTests(SimpleTestCase):
         self.assertNotEqual(resp.data.get("code"), "items_unavailable")
         self.assertNotEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")
-    def test_exact_stock_match_triggers_sold_out(self, profile_mock, dish_mock):
+    def test_exact_stock_match_triggers_sold_out(self, profile_mock, dish_mock, promo_mock):
         """Ordering the last remaining unit returns 400 items_unavailable (race: qty==stock)."""
+        promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
 
         dish = _dish(stock_qty=1)

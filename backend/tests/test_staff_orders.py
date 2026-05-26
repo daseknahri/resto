@@ -49,6 +49,8 @@ def _make_order(
     item = SimpleNamespace(
         dish_name="Burger",
         qty=2,
+        unit_price="12.50",
+        subtotal="25.00",
         options=[],
         note="",
     )
