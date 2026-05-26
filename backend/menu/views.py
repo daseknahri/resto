@@ -2306,6 +2306,8 @@ class StaffOrderListView(APIView):
                     {
                         "dish_name": i.dish_name,
                         "qty": i.qty,
+                        "unit_price": str(i.unit_price),
+                        "subtotal": str(i.subtotal),
                         "options": i.options,
                         "note": i.note,
                     }

@@ -507,7 +507,7 @@
           <div class="flex items-center gap-2 min-w-0">
             <span class="font-mono font-bold text-slate-100">{{ o.order_number }}</span>
             <span class="rounded-full px-2 py-0.5 font-semibold" :class="orderStatusClass(o.status)">{{ orderStatusLabel(o.status) }}</span>
-            <span v-if="o.fulfillment_type" class="hidden sm:inline text-slate-400">{{ o.fulfillment_type }}</span>
+            <span v-if="o.fulfillment_type" class="hidden sm:inline text-slate-400">{{ fulfillmentLabel(o) }}</span>
           </div>
           <div class="flex shrink-0 items-center gap-3">
             <span class="font-semibold text-[var(--color-secondary)]">{{ formatOrderTotal(o) }}</span>
@@ -1199,6 +1199,13 @@ const upgradeStatusLabel = (status) => {
   if (status === "rejected") return t("ownerHome.statusRejected");
   if (status === "canceled") return t("ownerHome.statusCanceled");
   return t("ownerHome.statusPending");
+};
+
+const fulfillmentLabel = (o) => {
+  if (o.fulfillment_type === "table") return t("ownerOrders.fulfillmentTable", { table: o.table_label || "?" });
+  if (o.fulfillment_type === "delivery") return t("ownerOrders.fulfillmentDelivery");
+  if (o.fulfillment_type === "pickup") return t("ownerOrders.fulfillmentPickup");
+  return "";
 };
 
 const orderStatusClass = (s) => ({

@@ -255,10 +255,13 @@
               :key="idx"
               class="flex items-baseline justify-between gap-2 text-sm"
             >
-              <span class="text-slate-700">
+              <span class="min-w-0 text-slate-700">
                 <span class="font-semibold text-slate-900">{{ item.qty }}×</span>
                 {{ item.dish_name }}
                 <span v-if="item.note" class="text-[11px] italic text-slate-400"> ({{ item.note }})</span>
+              </span>
+              <span class="shrink-0 tabular-nums text-slate-600">
+                {{ fmtOrderPrice(item.subtotal ?? (item.unit_price * item.qty), billOrder.currency) }}
               </span>
             </li>
           </ul>
