@@ -85,14 +85,14 @@
           <button
             class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
             style="color:var(--color-secondary)"
-            aria-label="Decrease"
+            :aria-label="t('dishPage.decreaseQuantity')"
             @click.stop="handleDecrement"
           ><AppIcon name="minus" class="h-3 w-3" /></button>
           <span class="min-w-[1.1rem] text-center text-xs font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
           <button
             class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
             style="color:var(--color-secondary)"
-            aria-label="Increase"
+            :aria-label="t('dishPage.increaseQuantity')"
             @click.stop="handleAdd"
           ><AppIcon name="plus" class="h-3 w-3" /></button>
         </div>
@@ -101,7 +101,7 @@
           v-else
           class="flex h-8 w-8 items-center justify-center rounded-full shadow-xl ring-[3px] ring-[var(--color-secondary)]/15 transition hover:brightness-110 hover:ring-[var(--color-secondary)]/28 active:scale-90"
           style="background-color:var(--color-secondary)"
-          aria-label="Add to cart"
+          :aria-label="t('dishPage.addToCart')"
           @click.stop="handleAdd"
         ><AppIcon name="plus" class="h-4 w-4 text-slate-950" /></button>
       </div>

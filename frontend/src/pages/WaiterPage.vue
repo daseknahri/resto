@@ -211,7 +211,7 @@ import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 
 const showNewOrder = ref(false);
@@ -234,7 +234,16 @@ const shiftRevenue = computed(() => {
   const s = waiter.shiftSummary;
   if (!s) return "—";
   const num = parseFloat(s.total_revenue || "0");
-  return `${num.toFixed(2)}${s.currency ? " " + s.currency : ""}`;
+  if (!s.currency) return num.toFixed(2);
+  try {
+    return new Intl.NumberFormat(currentLocale.value, {
+      style: "currency",
+      currency: s.currency,
+      maximumFractionDigits: 2,
+    }).format(num);
+  } catch {
+    return `${num.toFixed(2)} ${s.currency}`;
+  }
 });
 
 const openShiftSummary = () => {

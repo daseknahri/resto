@@ -753,6 +753,8 @@ export const messages = {
       newOrderNoItems: "Add at least one item.",
       newOrderNoTable: "Enter a table or label.",
       noResults: "No matching dishes.",
+      newOrderPriceEach: "each",
+      newOrderTotal: "Total",
     },
     ownerProfileSections: {
       brandContact: "Brand & contact",
@@ -3431,6 +3433,8 @@ export const messages = {
       newOrderNoItems: "Ajoutez au moins un article.",
       newOrderNoTable: "Saisissez une table ou un label.",
       noResults: "Aucun plat correspondant.",
+      newOrderPriceEach: "l'unite",
+      newOrderTotal: "Total",
     },
     ownerProfileSections: {
       brandContact: "Marque et contact",

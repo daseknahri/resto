@@ -112,7 +112,7 @@
             >
               <div class="min-w-0 flex-1">
                 <p class="truncate text-xs font-medium text-slate-100">{{ item.dish_name }}</p>
-                <p class="text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} each</p>
+                <p class="text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
               </div>
               <!-- Qty controls -->
               <div class="flex items-center gap-1 shrink-0">
@@ -138,7 +138,7 @@
           <!-- Total + submit -->
           <div class="border-t border-slate-800 p-3 space-y-2">
             <div v-if="cartItems.length" class="flex items-center justify-between text-sm font-semibold">
-              <span class="text-slate-400">Total</span>
+              <span class="text-slate-400">{{ t('waiterPage.newOrderTotal') }}</span>
               <span class="text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
             </div>
             <p v-if="submitError" class="text-xs text-red-300">{{ submitError }}</p>
