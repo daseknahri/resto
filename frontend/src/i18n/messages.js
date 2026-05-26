@@ -650,6 +650,8 @@ export const messages = {
       saving: "Crediting…",
       topupSuccess: "Wallet credited successfully.",
       topupFailed: "Could not credit wallet. Please try again.",
+      historyTitle: "Transaction history",
+      historyEmpty: "No transactions yet.",
     },
     adminWallet: {
       title: "Wallet Overview",
@@ -3429,6 +3431,8 @@ export const messages = {
       saving: "Credit en cours…",
       topupSuccess: "Portefeuille credite avec succes.",
       topupFailed: "Impossible de crediter le portefeuille. Veuillez reessayer.",
+      historyTitle: "Historique des transactions",
+      historyEmpty: "Aucune transaction pour l'instant.",
     },
     adminWallet: {
       title: "Vue d'ensemble portefeuille",

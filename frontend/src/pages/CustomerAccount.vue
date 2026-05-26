@@ -595,7 +595,9 @@
                     >{{ tx.type === 'payment' ? '−' : '+' }}</div>
                     <div class="min-w-0 space-y-0.5">
                       <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
-                      <p class="text-slate-500">{{ formatDate(tx.created_at) }}</p>
+                      <p class="text-[11px] text-slate-500">
+                        <span v-if="tx.note" class="mr-1 text-slate-400">{{ tx.note }} ·</span>{{ formatDate(tx.created_at) }}
+                      </p>
                     </div>
                   </div>
                   <span

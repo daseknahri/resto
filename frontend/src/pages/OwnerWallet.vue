@@ -111,6 +111,33 @@
         >
           {{ saving ? t('ownerWallet.saving') : t('ownerWallet.topupBtn') }}
         </button>
+
+        <!-- Transaction history -->
+        <div class="border-t border-slate-700/40 pt-4 space-y-2">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ t('ownerWallet.historyTitle') }}</p>
+          <div v-if="loadingHistory" class="space-y-1.5">
+            <div v-for="i in 3" :key="i" class="h-8 animate-pulse rounded-lg bg-slate-800/50" />
+          </div>
+          <p v-else-if="!walletHistory.length" class="text-xs text-slate-600 italic">{{ t('ownerWallet.historyEmpty') }}</p>
+          <ul v-else class="space-y-1">
+            <li
+              v-for="tx in walletHistory"
+              :key="tx.id"
+              class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs"
+            >
+              <div class="min-w-0">
+                <p class="font-medium" :class="tx.type === 'payment' ? 'text-red-300' : 'text-slate-200'">
+                  {{ tx.note || tx.type }}
+                </p>
+                <p class="text-[10px] text-slate-600">{{ fmtDate(tx.created_at) }}</p>
+              </div>
+              <span
+                class="shrink-0 font-semibold tabular-nums"
+                :class="tx.type === 'payment' ? 'text-red-400' : 'text-emerald-400'"
+              >{{ tx.type === 'payment' ? '−' : '+' }}{{ fmtBalance(tx.amount) }}</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </Transition>
   </div>
@@ -139,6 +166,10 @@ const topupNote = ref('');
 const topupError = ref('');
 const saving = ref(false);
 
+// ── Wallet history ────────────────────────────────────────────────────────────
+const walletHistory = ref([]);
+const loadingHistory = ref(false);
+
 let searchTimer = null;
 
 const currency = () => tenant.resolvedMeta?.plan?.currency || 'MAD';
@@ -152,6 +183,17 @@ const fmtBalance = (bal) => {
     }).format(parseFloat(bal || 0));
   } catch {
     return `${parseFloat(bal || 0).toFixed(2)}`;
+  }
+};
+
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 16);
   }
 };
 
@@ -193,6 +235,20 @@ const selectCustomer = (c) => {
   topupAmount.value = '';
   topupNote.value = '';
   topupError.value = '';
+  fetchHistory(c.id);
+};
+
+const fetchHistory = async (customerId) => {
+  walletHistory.value = [];
+  loadingHistory.value = true;
+  try {
+    const res = await api.get(`/owner/wallet/history/${customerId}/`);
+    walletHistory.value = res.data.transactions || [];
+  } catch {
+    walletHistory.value = [];
+  } finally {
+    loadingHistory.value = false;
+  }
 };
 
 const doTopup = async () => {
@@ -217,6 +273,8 @@ const doTopup = async () => {
     topupAmount.value = '';
     topupNote.value = '';
     toast.show(t('ownerWallet.topupSuccess'));
+    // Refresh transaction history
+    fetchHistory(selected.value.id);
   } catch (err) {
     const detail = err?.response?.data?.detail || '';
     topupError.value = detail || t('ownerWallet.topupFailed');

@@ -4895,6 +4895,53 @@ class OwnerWalletTopupView(APIView):
         })
 
 
+class OwnerWalletHistoryView(APIView):
+    """
+    GET /api/owner/wallet/history/<customer_id>/
+
+    Returns the last 20 wallet transactions for a customer, scoped to
+    customers who have placed at least one order at this restaurant.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, customer_id, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Security: only expose history for customers who ordered at this restaurant
+        has_orders = Order.objects.filter(customer_id=customer_id, tenant=tenant).exists()
+        if not has_orders:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from accounts.models import Customer, WalletTransaction
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        txs = WalletTransaction.objects.filter(customer=customer).order_by("-created_at")[:20]
+        return Response({
+            "customer_id": customer.id,
+            "wallet_balance": str(customer.wallet_balance),
+            "transactions": [
+                {
+                    "id": tx.id,
+                    "type": tx.type,
+                    "amount": str(tx.amount),
+                    "note": tx.note,
+                    "reference": tx.reference,
+                    "created_at": tx.created_at.isoformat(),
+                }
+                for tx in txs
+            ],
+        })
+
+
 # ── Admin wallet list ──────────────────────────────────────────────────────────
 
 class AdminWalletListView(APIView):
