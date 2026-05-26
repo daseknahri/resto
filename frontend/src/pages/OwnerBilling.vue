@@ -300,6 +300,43 @@
       </button>
     </section>
 
+    <!-- ── Commission statement ─────────────────────────────────────────── -->
+    <section class="ui-panel space-y-4 p-5">
+      <div class="space-y-0.5">
+        <p class="ui-section-kicker">{{ t('ownerBilling.commissionSection') }}</p>
+        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.commissionTitle') }}</h3>
+        <p class="text-sm text-slate-400">{{ t('ownerBilling.commissionHint') }}</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionYear') }}</label>
+          <select v-model="commissionYear" class="ui-input text-sm">
+            <option v-for="y in commissionYears" :key="y" :value="y">{{ y }}</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionMonth') }}</label>
+          <select v-model="commissionMonth" class="ui-input text-sm">
+            <option v-for="m in 12" :key="m" :value="m">{{ commissionMonthName(m) }}</option>
+          </select>
+        </div>
+        <button
+          class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-50 disabled:opacity-60 flex items-center gap-2"
+          :disabled="commissionDownloading"
+          @click="downloadCommissionPdf"
+        >
+          <svg v-if="!commissionDownloading" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+            <path d="M10 3v10M6 9l4 4 4-4"/>
+            <path d="M4 17h12"/>
+          </svg>
+          <svg v-else viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin">
+            <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
+          </svg>
+          {{ commissionDownloading ? t('ownerBilling.commissionDownloading') : t('ownerBilling.commissionDownload') }}
+        </button>
+      </div>
+    </section>
+
     <!-- ── Close account ────────────────────────────────────────────────── -->
     <section class="ui-panel space-y-4 p-5">
       <div class="space-y-0.5">
@@ -372,6 +409,9 @@ const loading = ref(false)
 const exporting = ref(false)
 const downloadingInvoice = ref(null)
 const requestingDeletion = ref(false)
+const commissionDownloading = ref(false)
+const commissionYear = ref(new Date().getFullYear())
+const commissionMonth = ref(new Date().getMonth() + 1)
 const showDeletionConfirm = ref(false)
 const deletionReason = ref('')
 const targets = ref([])
@@ -599,6 +639,46 @@ const downloadDataExport = async () => {
     toast.show(t('ownerBilling.dataExportFailed'), 'error')
   } finally {
     exporting.value = false
+  }
+}
+
+// ── Commission statement ──────────────────────────────────────────────────────
+
+const currentYear = new Date().getFullYear()
+const commissionYears = computed(() => {
+  const years = []
+  for (let y = currentYear; y >= currentYear - 3; y--) years.push(y)
+  return years
+})
+
+const commissionMonthName = (m) => {
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2000, m - 1, 1))
+  } catch {
+    return String(m)
+  }
+}
+
+const downloadCommissionPdf = async () => {
+  if (commissionDownloading.value) return
+  commissionDownloading.value = true
+  try {
+    const res = await api.get('/owner/commission-statement/', {
+      params: { year: commissionYear.value, month: commissionMonth.value, format: 'pdf' },
+      responseType: 'blob',
+    })
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `commission-${commissionYear.value}-${String(commissionMonth.value).padStart(2, '0')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    toast.show(t('ownerBilling.commissionDownloadFailed'), 'error')
+  } finally {
+    commissionDownloading.value = false
   }
 }
 
