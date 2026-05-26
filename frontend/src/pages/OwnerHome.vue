@@ -501,7 +501,7 @@
         <RouterLink
           v-for="o in recentOrders"
           :key="o.id"
-          :to="{ name: 'owner-orders' }"
+          :to="{ name: 'owner-orders', query: { q: o.order_number } }"
           class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:border-slate-600 hover:bg-slate-900/60"
         >
           <div class="flex items-center gap-2 min-w-0">
