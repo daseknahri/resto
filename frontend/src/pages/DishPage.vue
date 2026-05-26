@@ -49,7 +49,7 @@
         <!-- Back -->
         <button
           class="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65 active:scale-95"
-          aria-label="Go back"
+          :aria-label="t('dishPage.goBack')"
           @click="router.back()"
         >
           <AppIcon name="arrowLeft" class="h-4 w-4" />

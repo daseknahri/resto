@@ -183,7 +183,7 @@
           <span v-if="order.estimated_ready_minutes">
             {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
           </span>
-          <span>{{ order.total }} {{ order.currency }}</span>
+          <span>{{ fmtOrderPrice(order.total, order.currency) }}</span>
         </div>
 
         <!-- Action footer -->
@@ -245,6 +245,19 @@ const shiftRevenue = computed(() => {
     return `${num.toFixed(2)} ${s.currency}`;
   }
 });
+
+const fmtOrderPrice = (amount, currency) => {
+  if (!currency) return Number(amount || 0).toFixed(2);
+  try {
+    return new Intl.NumberFormat(currentLocale.value, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount || 0);
+  } catch {
+    return `${Number(amount || 0).toFixed(2)} ${currency}`;
+  }
+};
 
 const openShiftSummary = () => {
   activeTab.value = "shift";
