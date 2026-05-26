@@ -230,6 +230,10 @@
             <span class="text-slate-500">{{ t("ownerOrders.tip") }}</span>
             <span class="ml-1.5 font-medium text-emerald-300">{{ formatCurrency(o.tip_amount, o.currency) }}</span>
           </div>
+          <div v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="sm:col-span-2">
+            <span class="text-slate-500">💰 {{ t("ownerOrders.walletPaid") }}</span>
+            <span class="ml-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
+          </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
             <span class="ml-1.5 text-slate-200">{{ o.delivery_address }}</span>
