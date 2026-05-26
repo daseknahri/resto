@@ -242,7 +242,7 @@
           <button class="text-xs text-slate-500 hover:text-slate-300" @click="selectedCalendarRes = null">✕</button>
         </div>
         <p v-if="selectedCalendarRes.booked_for" class="text-xs text-slate-300">
-          {{ t("ownerReservations.bookedFor") }}: {{ new Date(selectedCalendarRes.booked_for).toLocaleString() }}
+          {{ t("ownerReservations.bookedFor") }}: {{ formatDateTime(selectedCalendarRes.booked_for) }}
           <span v-if="selectedCalendarRes.party_size"> · {{ selectedCalendarRes.party_size }} {{ t("ownerReservations.guests") }}</span>
         </p>
         <p v-if="selectedCalendarRes.notes" class="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-line">{{ selectedCalendarRes.notes }}</p>

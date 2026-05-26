@@ -288,7 +288,7 @@
                 <span v-if="step.dropPct !== null" class="funnel-drop-badge">
                   −{{ step.dropPct }}%
                 </span>
-                <span class="w-14 text-right tabular-nums font-semibold text-slate-100">{{ step.value.toLocaleString() }}</span>
+                <span class="w-14 text-right tabular-nums font-semibold text-slate-100">{{ formatNumber(step.value) }}</span>
               </div>
             </div>
             <div class="mt-1.5 h-2 w-full rounded-full bg-slate-800">
@@ -583,7 +583,7 @@ const session = useSessionStore();
 const tenant = useTenantStore();
 const order = useOrderStore();
 const toast = useToastStore();
-const { t, formatDateTime, formatNumber } = useI18n();
+const { t, formatDateTime, formatNumber, currentLocale } = useI18n();
 
 const categoriesCount = ref(0);
 const dishesCount = ref(0);
@@ -1230,7 +1230,7 @@ const formatTimeAgo = (iso) => {
   if (diffMin < 1) return t("ownerOrders.justNow");
   if (diffMin < 60) return `${diffMin}m`;
   if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h`;
-  return new Date(iso).toLocaleDateString();
+  return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short' }).format(new Date(iso));
 };
 
 const humanizeSlug = (value) =>

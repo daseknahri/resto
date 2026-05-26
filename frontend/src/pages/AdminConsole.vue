@@ -190,7 +190,7 @@
           </p>
           <p class="text-xs text-slate-500 line-clamp-2">{{ lead.notes }}</p>
           <p v-if="lead.onboarded_at" class="text-xs text-emerald-300">
-            {{ t("adminConsole.onboarded") }}: {{ new Date(lead.onboarded_at).toLocaleString() }}
+            {{ t("adminConsole.onboarded") }}: {{ formatDate(lead.onboarded_at) }}
           </p>
           <div class="ui-admin-subcard text-xs space-y-1">
             <p class="text-slate-400">{{ t("adminConsole.tenantUrlPreview") }}</p>
@@ -581,7 +581,7 @@
           class="ui-admin-card space-y-2"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-xs text-slate-400">{{ new Date(request.requested_at).toLocaleString() }}</p>
+            <p class="text-xs text-slate-400">{{ formatDate(request.requested_at) }}</p>
             <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="upgradeStatusClass(request.status)">
               {{ request.status }}
             </span>
@@ -625,7 +625,7 @@
           </thead>
           <tbody>
             <tr v-for="request in upgradeRequests" :key="request.id" class="border-t border-slate-800">
-              <td class="px-4 py-3 text-slate-300">{{ new Date(request.requested_at).toLocaleString() }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ formatDate(request.requested_at) }}</td>
               <td class="px-4 py-3 text-slate-100">{{ request.tenant_slug }}</td>
               <td class="px-4 py-3 text-slate-300">{{ request.current_plan_name }}</td>
               <td class="px-4 py-3 text-slate-300">
@@ -791,7 +791,7 @@
             <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
           </div>
           <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
-          <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ new Date(job.updated_at).toLocaleString() }}</p>
+          <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
           <p class="rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300 whitespace-pre-wrap break-words">{{ job.log || "-" }}</p>
         </article>
       </div>
@@ -817,7 +817,7 @@
                 <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
               </td>
               <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
-              <td class="px-4 py-3 text-slate-400">{{ new Date(job.updated_at).toLocaleString() }}</td>
+              <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
             </tr>
           </tbody>
         </table>
@@ -887,7 +887,7 @@
         >
           <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-semibold text-slate-100">{{ entry.action }}</p>
-            <p class="text-[11px] text-slate-500">{{ new Date(entry.created_at).toLocaleString() }}</p>
+            <p class="text-[11px] text-slate-500">{{ formatDate(entry.created_at) }}</p>
           </div>
           <p class="text-xs text-slate-400">{{ t("adminConsole.actor") }}: {{ entry.actor_username || t("adminConsole.system") }}</p>
           <p class="text-xs text-slate-400">{{ t("adminConsole.target") }}: {{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</p>
@@ -907,7 +907,7 @@
           </thead>
           <tbody>
             <tr v-for="entry in auditLogs" :key="entry.id" class="border-t border-slate-800">
-              <td class="px-4 py-3 text-slate-300">{{ new Date(entry.created_at).toLocaleString() }}</td>
+              <td class="px-4 py-3 text-slate-300">{{ formatDate(entry.created_at) }}</td>
               <td class="px-4 py-3 text-slate-100">{{ entry.action }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.actor_username || t("adminConsole.system") }}</td>
               <td class="px-4 py-3 text-slate-300">{{ entry.target_repr || entry.tenant_slug || entry.lead_name || "-" }}</td>
@@ -1149,7 +1149,7 @@ const alertThresholds = ref({
   due_soon_minutes: 10,
 });
 const toast = useToastStore();
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const lastProvision = ref(null);
 const auditLogs = ref([]);
 const auditPage = ref(1);
@@ -2032,7 +2032,7 @@ const formatAuditAction = (action) => {
 const formatDate = (value) => {
   if (!value) return "-";
   try {
-    return new Date(value).toLocaleString();
+    return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
   } catch {
     return String(value);
   }

@@ -137,7 +137,7 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 
 const loading = ref(false);
 const fetchError = ref(false);
@@ -146,7 +146,7 @@ const refreshedAt = ref('');
 
 const currency = (val) => {
   if (val == null) return '—';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(val);
+  return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(val);
 };
 
 const refresh = async () => {

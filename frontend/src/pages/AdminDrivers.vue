@@ -95,7 +95,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 
 const loading = ref(true);
 const fetchError = ref(false);
@@ -119,7 +119,7 @@ const fetchDrivers = async () => {
 
 const formatDate = (iso) => {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Intl.DateTimeFormat(currentLocale.value, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(iso));
 };
 
 onMounted(fetchDrivers);
