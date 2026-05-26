@@ -122,7 +122,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 
 const isFullscreen = ref(false);
@@ -138,7 +138,7 @@ const clockDisplay = ref("");
 let clockTimer = null;
 const updateClock = () => {
   const now = new Date();
-  clockDisplay.value = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  clockDisplay.value = new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(now);
 };
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────

@@ -1002,7 +1002,7 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
-const { t, formatPrice, formatCurrency } = useI18n();
+const { t, formatPrice, formatCurrency, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
 const currencyStore = useCurrencyStore();
 const tenantStore = useTenantStore();
@@ -1274,7 +1274,7 @@ const redeemPoints = async () => {
 const formatDate = (iso) => {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Intl.DateTimeFormat(currentLocale.value, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(iso));
   } catch { return iso; }
 };
 

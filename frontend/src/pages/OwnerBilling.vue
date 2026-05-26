@@ -401,7 +401,7 @@ import { useI18n } from '../composables/useI18n'
 import { useTenantStore } from '../stores/tenant'
 import { useToastStore } from '../stores/toast'
 
-const { t, formatDateTime } = useI18n()
+const { t, formatDateTime, currentLocale } = useI18n()
 const tenant = useTenantStore()
 const toast = useToastStore()
 
@@ -653,7 +653,7 @@ const commissionYears = computed(() => {
 
 const commissionMonthName = (m) => {
   try {
-    return new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2000, m - 1, 1))
+    return new Intl.DateTimeFormat(currentLocale.value, { month: 'long' }).format(new Date(2000, m - 1, 1))
   } catch {
     return String(m)
   }
