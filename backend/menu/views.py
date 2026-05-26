@@ -4876,7 +4876,7 @@ class OwnerWalletTopupView(APIView):
                 return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
             customer.wallet_balance = customer.wallet_balance + amount
-            customer.save(update_fields=["wallet_balance"])
+            customer.save(update_fields=["wallet_balance", "updated_at"])
             WalletTransaction.objects.create(
                 customer=customer,
                 type=WalletTransaction.Type.TOPUP,

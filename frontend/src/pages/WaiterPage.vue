@@ -143,7 +143,7 @@
               {{ orderHeadline(order) }}
             </p>
             <p class="mt-0.5 text-xs text-slate-400">
-              #{{ order.order_number }} · {{ timeAgo(order.created_at) }}
+              #{{ order.order_number }} · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span>
             </p>
           </div>
           <!-- Status chip -->

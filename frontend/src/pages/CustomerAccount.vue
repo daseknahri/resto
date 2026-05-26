@@ -1321,7 +1321,7 @@ const redeemVoucher = async () => {
       });
     }
     await fetchWallet();
-    voucherSuccess.value = t('customerAccount.voucherSuccess', { amount: res.data.amount });
+    voucherSuccess.value = t('customerAccount.voucherSuccess', { amount: res.data.credited });
   } catch (err) {
     voucherError.value = err?.response?.data?.detail || t('customerAccount.voucherError');
   } finally {
