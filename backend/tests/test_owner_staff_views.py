@@ -211,3 +211,104 @@ class OwnerStaffDeleteViewTests(SimpleTestCase):
             resp = self._delete(10)
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         staff_user.delete.assert_called_once()
+
+
+# ── OwnerStaffDeleteView — PATCH (permissions) ────────────────────────────────
+
+class OwnerStaffPatchViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = OwnerStaffDeleteView.as_view()
+
+    def _patch(self, staff_id, data, user=None, tenant=None):
+        req = self.factory.patch(f"/api/owner/staff/{staff_id}/", data, format="json")
+        req.user = user or _make_owner()
+        req.tenant = tenant or _make_tenant()
+        return self.view(req, staff_id=staff_id)
+
+    def _staff_user(self):
+        u = MagicMock()
+        u.id = 10
+        u.perm_manage_orders = True
+        u.perm_view_revenue = False
+        u.perm_edit_menu = False
+        return u
+
+    # ── Auth / access ─────────────────────────────────────────────────────────
+
+    def test_returns_403_for_non_owner(self):
+        resp = self._patch(10, {"permissions": {"manage_orders": False}}, user=_non_owner())
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_returns_404_for_unknown_staff_id(self):
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = None
+            resp = self._patch(999, {"permissions": {"manage_orders": False}})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "not_found")
+
+    # ── Validation ────────────────────────────────────────────────────────────
+
+    def test_non_dict_permissions_returns_400(self):
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._patch(10, {"permissions": "not-a-dict"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "invalid")
+
+    # ── Happy path ────────────────────────────────────────────────────────────
+
+    def test_valid_permission_update_returns_200_with_permissions(self):
+        """PATCH with a valid bool flag updates the field and returns the full permissions dict."""
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._patch(10, {"permissions": {"view_revenue": True}})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("permissions", resp.data)
+        self.assertEqual(resp.data["id"], 10)
+        for key in ("manage_orders", "view_revenue", "edit_menu"):
+            self.assertIn(key, resp.data["permissions"])
+
+    def test_save_called_with_correct_update_fields(self):
+        """save() must be called with only the fields that were updated."""
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            self._patch(10, {"permissions": {"edit_menu": True}})
+        staff_user.save.assert_called_once_with(update_fields=["perm_edit_menu"])
+
+    def test_no_valid_fields_skips_save(self):
+        """If no recognised bool fields are in the payload, save() is not called."""
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._patch(10, {"permissions": {}})
+        staff_user.save.assert_not_called()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_non_boolean_values_are_silently_ignored(self):
+        """Non-bool values for valid keys must be ignored; save() is not called."""
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._patch(10, {"permissions": {"manage_orders": 1}})
+        staff_user.save.assert_not_called()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_unknown_permission_keys_are_silently_ignored(self):
+        """Unknown keys in the permissions dict must not cause errors."""
+        staff_user = self._staff_user()
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.first.return_value = staff_user
+            resp = self._patch(10, {"permissions": {"delete_everything": True}})
+        staff_user.save.assert_not_called()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
