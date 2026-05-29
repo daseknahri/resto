@@ -50,9 +50,28 @@
       </button>
     </div>
 
-    <!-- Loading -->
-    <div v-if="waiter.loading" class="kitchen-empty">
-      <p class="text-2xl text-slate-500">{{ t("common.loading") }}</p>
+    <!-- Loading: skeleton cards matching the kitchen-grid layout -->
+    <div v-if="waiter.loading" class="kitchen-grid">
+      <div v-for="i in 3" :key="i" class="kitchen-card animate-pulse border-slate-700/40 bg-slate-800/20">
+        <div class="h-1 w-full bg-slate-700/60" />
+        <div class="flex items-start justify-between gap-2 px-4 pt-4">
+          <div class="flex-1 space-y-2">
+            <div class="h-5 w-24 rounded bg-slate-700/60" />
+            <div class="h-3 w-36 rounded bg-slate-800/60" />
+          </div>
+          <div class="flex flex-col items-end gap-2 shrink-0">
+            <div class="h-5 w-12 rounded-full bg-slate-700/60" />
+            <div class="h-4 w-16 rounded-full bg-slate-800/50" />
+          </div>
+        </div>
+        <div class="mt-4 flex-1 space-y-2 px-4">
+          <div v-for="j in 3" :key="j" class="flex items-center gap-2">
+            <div class="h-4 w-6 rounded bg-slate-700/50" />
+            <div class="h-3 rounded bg-slate-800/50" :style="`width: ${60 + j * 15}px`" />
+          </div>
+        </div>
+        <div class="m-4 mt-auto h-9 rounded-xl bg-slate-700/40" />
+      </div>
     </div>
 
     <!-- All-clear -->

@@ -2,7 +2,12 @@
   <div>
     <!-- Header with toggle -->
     <div class="mb-3 flex items-center justify-between gap-2">
-      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('bestSellers.title') }}</p>
+      <p class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+        {{ t('bestSellers.title') }}
+        <svg v-if="updating" class="h-3 w-3 animate-spin text-slate-600" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+        </svg>
+      </p>
       <div class="flex items-center gap-1">
         <button
           class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
@@ -61,6 +66,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t, currentLocale } = useI18n();
 
@@ -71,18 +77,37 @@ const props = defineProps({
 const mode = ref('count'); // 'count' | 'revenue'
 const data = ref(null);
 const loading = ref(false);
+const updating = ref(false); // silently revalidating stale cache
 const currency = ref('MAD');
 
+const BEST_SELLERS_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+const applyData = (d) => {
+  data.value = d;
+  currency.value = d?.currency || 'MAD';
+};
+
 const load = async () => {
-  loading.value = true;
+  const cacheKey = `owner.best-sellers.${props.period}d`;
+  const cached = readCache(cacheKey);
+
+  if (cached) {
+    applyData(cached);
+    if (isFresh(cacheKey, BEST_SELLERS_TTL_MS)) return; // Still fresh — skip network
+    updating.value = true; // Stale — revalidate silently
+  } else {
+    loading.value = true;
+  }
+
   try {
     const { data: d } = await api.get('/owner/best-sellers/', { params: { period: props.period } });
-    data.value = d;
-    currency.value = d.currency || 'MAD';
+    applyData(d);
+    writeCache(cacheKey, d);
   } catch {
-    // silent
+    // silent — stale data already showing if available
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 

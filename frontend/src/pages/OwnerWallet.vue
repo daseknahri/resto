@@ -23,8 +23,16 @@
         />
       </div>
 
-      <!-- Search results -->
-      <div v-if="searching" class="text-center py-4 text-sm text-slate-400">{{ t('common.loading') }}</div>
+      <!-- Search results loading: skeleton rows -->
+      <div v-if="searching" class="space-y-1.5">
+        <div v-for="i in 3" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-700/40 bg-slate-800/30 px-4 py-3">
+          <div class="space-y-1.5">
+            <div class="h-3.5 w-28 rounded bg-slate-700/60" />
+            <div class="h-2.5 w-20 rounded bg-slate-800/50" />
+          </div>
+          <div class="h-4 w-14 rounded bg-slate-700/50" />
+        </div>
+      </div>
       <div v-else-if="searchResults.length" class="space-y-1.5">
         <button
           v-for="c in searchResults"
