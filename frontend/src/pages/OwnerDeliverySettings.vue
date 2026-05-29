@@ -7,9 +7,31 @@
       <p class="text-sm text-slate-400">{{ t('ownerDelivery.subtitle') }}</p>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 py-10 text-center text-sm text-slate-400">
-      {{ t('ownerDelivery.loading') }}
+    <!-- Loading: skeleton -->
+    <div v-if="loading" class="space-y-4">
+      <!-- Zone card skeleton -->
+      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5 space-y-3">
+        <div class="h-3.5 w-24 rounded bg-slate-700/60" />
+        <div class="flex items-center justify-between">
+          <div class="h-4 w-32 rounded bg-slate-700/60" />
+          <div class="h-5 w-16 rounded-full bg-slate-800/60" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="h-8 rounded-lg bg-slate-800/50" />
+          <div class="h-8 rounded-lg bg-slate-800/50" />
+        </div>
+      </div>
+      <!-- Settings card skeleton -->
+      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5 space-y-4">
+        <div class="h-3.5 w-28 rounded bg-slate-700/60" />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div v-for="i in 4" :key="i" class="space-y-1.5">
+            <div class="h-3 w-20 rounded bg-slate-800/60" />
+            <div class="h-9 rounded-lg bg-slate-800/50" />
+          </div>
+        </div>
+        <div class="h-9 w-32 rounded-xl bg-slate-700/40" />
+      </div>
     </div>
 
     <!-- Error -->
