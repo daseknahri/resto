@@ -25,9 +25,14 @@
           <p class="ui-stat-label">{{ t("common.dishes") }}</p>
           <p class="ui-stat-value text-slate-100">{{ dishesCount }}</p>
         </article>
-        <article class="ui-admin-subcard space-y-1.5">
-          <p class="ui-stat-label">{{ t("common.status") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</p>
+        <article
+          class="ui-admin-subcard space-y-1.5 transition-colors"
+          :class="soldOutCount > 0 ? 'cursor-pointer hover:border-amber-500/40' : ''"
+          :title="soldOutCount > 0 ? t('ownerHome.dishAvailability') : ''"
+          @click="soldOutCount > 0 && (dishAvailOpen = true)"
+        >
+          <p class="ui-stat-label">{{ t("ownerHome.soldOutLabel") }}</p>
+          <p class="ui-stat-value transition-colors" :class="soldOutCount > 0 ? 'text-amber-400' : 'text-emerald-500'">{{ soldOutCount }}</p>
         </article>
       </div>
 
@@ -43,6 +48,9 @@
         <div class="border-x border-slate-800 py-3 text-center">
           <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayOrderStats.revenue }}</p>
           <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayRevenue") }}</p>
+          <p v-if="yesterdayOrderStats.revenue > 0" class="mt-0.5 text-[9px]" :class="todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? 'text-emerald-500' : 'text-slate-600'">
+            {{ todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? '↑' : '↓' }} {{ t("ownerHome.vsYesterday") }}
+          </p>
         </div>
         <div class="py-3 text-center">
           <p class="text-xl font-bold tabular-nums transition-colors" :class="todayOrderStats.pending > 0 ? 'text-amber-400' : 'text-white'">{{ todayOrderStats.pending }}</p>
@@ -833,6 +841,7 @@ const todayOrderStats = computed(() => {
   return {
     count: todayOrders.length,
     revenue: revenueLabel,
+    revenueRaw: revenue,
     pending: todayOrders.filter((o) => o.status === "pending").length,
   };
 });
@@ -845,6 +854,7 @@ const yesterdayOrderStats = computed(() => {
   return {
     count: yOrders.length,
     pending: yOrders.filter((o) => o.status === "pending").length,
+    revenue: yOrders.reduce((s, o) => s + (Number(o.total) || 0), 0),
   };
 });
 
@@ -1057,14 +1067,14 @@ const exportAnalytics = async () => {
   analyticsExporting.value = true;
   try {
     const response = await api.get("/owner/analytics/export/", {
-      params: { days: 30 },
+      params: { days: dashboardPeriod.value },
       responseType: "blob",
       timeout: 15000,
     });
     const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = "analytics_30d.csv";
+    a.download = `analytics_${dashboardPeriod.value}d.csv`;
     a.click();
     URL.revokeObjectURL(url);
   } catch {
@@ -1090,38 +1100,33 @@ const hasPendingRequest = computed(() => Boolean(pendingUpgrade.value) || upgrad
 const readinessItems = computed(() => [
   {
     label: t("ownerHome.brandContactPresent"),
-    note: t("ownerHome.quickActions"),
     ready: hasContact.value,
     to: hasContact.value ? "" : "/owner/profile",
-    actionLabel: t("ownerHome.openMenuBuilder"),
+    actionLabel: t("ownerHome.readinessActionContact"),
   },
   {
     label: t("ownerHome.themeConfigured"),
-    note: t("ownerLayout.publicPreview"),
     ready: hasTheme.value,
     to: hasTheme.value ? "" : "/owner/profile?tab=theme",
-    actionLabel: t("ownerHome.openMenuBuilder"),
+    actionLabel: t("ownerHome.readinessActionTheme"),
   },
   {
     label: t("ownerHome.categoriesAdded"),
-    note: `${categoriesCount.value} ${t("common.categories")}`,
     ready: categoriesCount.value > 0,
     to: categoriesCount.value > 0 ? "" : "/owner/menu-builder?tab=categories",
-    actionLabel: t("ownerLayout.menuBuilder"),
+    actionLabel: t("ownerHome.readinessActionCategories"),
   },
   {
     label: t("ownerHome.dishesAdded"),
-    note: `${dishesCount.value} ${t("common.dishes")}`,
     ready: dishesCount.value > 0,
     to: dishesCount.value > 0 ? "" : "/owner/menu-builder?tab=dishes",
-    actionLabel: t("ownerLayout.menuBuilder"),
+    actionLabel: t("ownerHome.readinessActionDishes"),
   },
   {
     label: t("ownerHome.menuPublished"),
-    note: planModeLabel.value,
     ready: published.value,
     to: published.value ? "/menu" : "/owner/profile?tab=publish",
-    actionLabel: published.value ? t("ownerLayout.publicPreview") : t("common.profile"),
+    actionLabel: published.value ? t("ownerLayout.publicPreview") : t("ownerHome.readinessActionPublish"),
   },
 ]);
 

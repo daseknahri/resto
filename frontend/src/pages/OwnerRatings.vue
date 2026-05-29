@@ -68,9 +68,16 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="ui-panel p-8 text-center text-slate-400 text-sm">
-      {{ t("common.loading") }}
+    <!-- Loading: skeleton cards -->
+    <div v-if="loading" class="space-y-3">
+      <div v-for="i in 4" :key="i" class="ui-panel animate-pulse space-y-2.5 p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div class="h-5 w-28 rounded-full bg-slate-700/60"></div>
+          <div class="h-3.5 w-16 rounded bg-slate-800/50"></div>
+        </div>
+        <div class="h-3 w-24 rounded bg-slate-800/50"></div>
+        <div class="h-10 w-full rounded bg-slate-800/40"></div>
+      </div>
     </div>
 
     <!-- Empty -->

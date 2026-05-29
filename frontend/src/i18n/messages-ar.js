@@ -401,6 +401,12 @@ const arabicMessages = {
     "viewAllRatings": "عرض جميع التقييمات",
     "noRatingsYet": "لا توجد تقييمات بعد",
     "allClear": "كل شيء على ما يرام",
+    "soldOutLabel": "نفاد المخزون",
+    "readinessActionContact": "تعديل الملف الشخصي",
+    "readinessActionTheme": "تخصيص المظهر",
+    "readinessActionCategories": "إضافة تصنيفات",
+    "readinessActionDishes": "إضافة أطباق",
+    "readinessActionPublish": "نشر الآن",
     "exportCsv": "تصدير CSV",
     "exportFailed": "فشل تصدير التحليلات. يرجى المحاولة مجدداً.",
     "funnelTitle": "قمع التحويل",
@@ -1766,7 +1772,9 @@ const arabicMessages = {
     "confirmAllPending": "تأكيد الكل ({n})",
     "confirmingAll": "جارٍ التأكيد…",
     "confirmAllDone": "تم تأكيد {n} طلب/طلبات معلقة.",
-    "confirmAllFailed": "تعذّر تأكيد بعض الطلبات."
+    "confirmAllFailed": "تعذّر تأكيد بعض الطلبات.",
+    "noOrdersYet": "لا توجد طلبات بعد — ستظهر هنا عند بدء العملاء بالطلب.",
+    "clearFilters": "مسح الفلاتر"
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",

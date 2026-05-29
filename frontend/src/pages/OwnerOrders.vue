@@ -101,8 +101,8 @@
         {{ t("ownerOrders.hasMore", { total: order.ordersTotal }) }}
       </p>
 
-      <!-- Batch action: confirm all pending -->
-      <div v-if="pendingOrdersList.length > 1 && !activeStatus && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+      <!-- Batch action: confirm all pending (hidden when search/date filters are narrowing the view) -->
+      <div v-if="pendingOrdersList.length > 1 && !activeStatus && !searchQuery && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
         <span class="h-2 w-2 animate-pulse rounded-full bg-amber-400"></span>
         <span class="flex-1 text-xs text-amber-200">{{ pendingOrdersList.length }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
         <button
@@ -115,9 +115,32 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="order.ordersLoading" class="ui-panel p-8 text-center text-slate-400 text-sm">
-      {{ t("common.loading") }}
+    <!-- Loading: skeleton order cards -->
+    <div v-if="order.ordersLoading && !order.orders.length" class="space-y-3">
+      <div v-for="i in 3" :key="i" class="ui-panel animate-pulse space-y-3 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <div class="h-4 w-20 rounded bg-slate-700/60"></div>
+              <div class="h-5 w-16 rounded-full bg-slate-700/50"></div>
+              <div class="h-4 w-12 rounded bg-slate-800/60"></div>
+            </div>
+            <div class="h-3 w-24 rounded bg-slate-800/50"></div>
+          </div>
+          <div class="space-y-1.5 text-right">
+            <div class="h-5 w-16 rounded bg-slate-700/60"></div>
+            <div class="h-3 w-10 rounded bg-slate-800/50"></div>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <div class="h-8 w-full rounded-xl bg-slate-800/50"></div>
+          <div class="h-8 w-3/4 rounded-xl bg-slate-800/40"></div>
+        </div>
+        <div class="flex gap-2">
+          <div class="h-7 w-20 rounded-full bg-slate-700/50"></div>
+          <div class="h-7 w-16 rounded-full bg-slate-800/50"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Error -->
@@ -125,9 +148,20 @@
       {{ order.ordersError }}
     </div>
 
-    <!-- Empty -->
-    <div v-else-if="!filteredOrders.length" class="ui-panel p-8 text-center text-slate-400 text-sm">
-      {{ t("ownerOrders.noOrders") }}
+    <!-- Empty: filters active but no matches -->
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-panel p-8 text-center space-y-3">
+      <p class="text-sm text-slate-400">{{ t("ownerOrders.noOrders") }}</p>
+      <button
+        class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
+        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'"
+      >
+        ✕ {{ t("ownerOrders.clearFilters") }}
+      </button>
+    </div>
+
+    <!-- Empty: no orders at all -->
+    <div v-else-if="!filteredOrders.length" class="ui-panel p-8 text-center">
+      <p class="text-sm text-slate-400">{{ t("ownerOrders.noOrdersYet") }}</p>
     </div>
 
     <!-- Order list -->
