@@ -209,11 +209,11 @@
         </div>
         <button
           class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:opacity-50 transition-colors"
-          :disabled="loading"
+          :disabled="loading || updating"
           :aria-label="t('common.refresh')"
-          @click="fetchAll"
+          @click="fetchAll(true)"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" :class="loading ? 'animate-spin' : ''">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" :class="(loading || updating) ? 'animate-spin' : ''">
             <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
           </svg>
         </button>
@@ -425,12 +425,17 @@ import api from '../lib/api'
 import { useI18n } from '../composables/useI18n'
 import { useTenantStore } from '../stores/tenant'
 import { useToastStore } from '../stores/toast'
+import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache'
 
 const { t, formatDateTime, currentLocale } = useI18n()
 const tenant = useTenantStore()
 const toast = useToastStore()
 
+const BILLING_CACHE_KEY = 'owner.billing'
+const BILLING_TTL_MS = 5 * 60 * 1000 // 5 min
+
 const loading = ref(false)
+const updating = ref(false)
 const exporting = ref(false)
 const downloadingInvoice = ref(null)
 const requestingDeletion = ref(false)
@@ -536,8 +541,36 @@ const requestStatusLabel = (s) => {
 
 // ── Data fetching ────────────────────────────────────────────────────────────
 
-const fetchAll = async () => {
-  loading.value = true
+const applyBillingData = (d) => {
+  if (d.targets !== undefined) {
+    targets.value = d.targets
+    upgradeMeta.value = {
+      current_tier_code:   d.current_tier_code   || currentTierCode.value,
+      current_tier_name:   d.current_tier_name   || currentTierName.value,
+      has_pending_request: d.has_pending_request === true,
+    }
+  }
+  if (d.requests !== undefined) {
+    requests.value = d.requests
+    upgradeMeta.value = {
+      ...upgradeMeta.value,
+      has_pending_request: d.requests.some((r) => r.status === 'pending'),
+    }
+  }
+  if (d.usageDishes !== undefined) usageDishes.value = d.usageDishes
+  if (d.usageStaff  !== undefined) usageStaff.value  = d.usageStaff
+}
+
+const fetchAll = async (force = false) => {
+  if (force) bustCache(BILLING_CACHE_KEY)
+  const cached = readCache(BILLING_CACHE_KEY)
+  if (cached) {
+    applyBillingData(cached)
+    if (isFresh(BILLING_CACHE_KEY, BILLING_TTL_MS)) return
+    updating.value = true
+  } else {
+    loading.value = true
+  }
   try {
     const [targetsRes, requestsRes, dishesRes, staffRes] = await Promise.allSettled([
       api.get('/tier-upgrade-targets/'),
@@ -545,34 +578,31 @@ const fetchAll = async () => {
       api.get('/dishes/', { params: { page_size: 1 } }),
       api.get('/owner/staff/'),
     ])
+    const snapshot = {}
     if (targetsRes.status === 'fulfilled') {
       const d = targetsRes.value.data
-      targets.value = Array.isArray(d?.targets) ? d.targets : []
-      upgradeMeta.value = {
-        current_tier_code:    d?.current_tier_code    || currentTierCode.value,
-        current_tier_name:    d?.current_tier_name    || currentTierName.value,
-        has_pending_request:  d?.has_pending_request  === true,
-      }
+      snapshot.targets            = Array.isArray(d?.targets) ? d.targets : []
+      snapshot.current_tier_code  = d?.current_tier_code  || ''
+      snapshot.current_tier_name  = d?.current_tier_name  || ''
+      snapshot.has_pending_request = d?.has_pending_request === true
     }
     if (requestsRes.status === 'fulfilled') {
-      requests.value = Array.isArray(requestsRes.value.data) ? requestsRes.value.data : []
-      upgradeMeta.value = {
-        ...upgradeMeta.value,
-        has_pending_request: requests.value.some((r) => r.status === 'pending'),
-      }
+      snapshot.requests = Array.isArray(requestsRes.value.data) ? requestsRes.value.data : []
     }
     if (dishesRes.status === 'fulfilled') {
       const d = dishesRes.value.data
-      // Paginated response has `count`; flat array has `length`
-      usageDishes.value = d?.count ?? (Array.isArray(d) ? d.length : null)
+      snapshot.usageDishes = d?.count ?? (Array.isArray(d) ? d.length : null)
     }
     if (staffRes.status === 'fulfilled') {
-      usageStaff.value = staffRes.value.data?.count ?? null
+      snapshot.usageStaff = staffRes.value.data?.count ?? null
     }
+    applyBillingData(snapshot)
+    if (Object.keys(snapshot).length) writeCache(BILLING_CACHE_KEY, snapshot)
   } catch {
-    toast.show(t('ownerBilling.loadFailed'), 'error')
+    if (!cached) toast.show(t('ownerBilling.loadFailed'), 'error')
   } finally {
     loading.value = false
+    updating.value = false
   }
 }
 
@@ -589,6 +619,7 @@ const submitRequest = async () => {
     })
     requests.value.unshift(data)
     upgradeMeta.value = { ...upgradeMeta.value, has_pending_request: true }
+    bustCache(BILLING_CACHE_KEY) // force fresh load next visit
     selectedCode.value = ''
     note.value = ''
     toast.show(t('ownerBilling.requestSent'), 'success')
@@ -707,7 +738,7 @@ const downloadCommissionPdf = async () => {
   }
 }
 
-onMounted(fetchAll)
+onMounted(() => fetchAll())
 </script>
 
 <style scoped>
