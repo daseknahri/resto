@@ -19,6 +19,22 @@
         </div>
       </div>
 
+      <!-- Summary stats skeleton -->
+      <div v-if="loading && !summary" class="animate-pulse grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
+        <div class="flex flex-col items-center gap-1.5">
+          <div class="h-6 w-10 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+        <div class="flex flex-col items-center gap-1.5 border-x border-slate-800">
+          <div class="h-6 w-10 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+        <div class="flex flex-col items-center gap-1.5">
+          <div class="h-6 w-10 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+      </div>
+
       <!-- Summary stats -->
       <div v-if="summary" class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
         <div class="text-center">

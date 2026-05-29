@@ -65,7 +65,8 @@ export const messages = {
       location: "Location",
       more: "More",
       done: "Done",
-      change: "Change"
+      change: "Change",
+      retry: "Retry"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2878,7 +2879,8 @@ export const messages = {
       translateErrorNotConfigured: "Traduction non configuree.",
       more: "Plus",
       done: "Terminer",
-      change: "Modifier"
+      change: "Modifier",
+      retry: "Reessayer"
     },
     landingLayout: {
       kicker: "Resto Menu",

@@ -27,8 +27,24 @@
         </div>
       </div>
 
+      <!-- Today's stats bar skeleton -->
+      <div v-if="order.ordersLoading && !order.orders.length" class="animate-pulse grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
+        <div class="flex flex-col items-center gap-1.5">
+          <div class="h-6 w-10 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+        <div class="flex flex-col items-center gap-1.5 border-x border-slate-800">
+          <div class="h-6 w-14 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+        <div class="flex flex-col items-center gap-1.5">
+          <div class="h-6 w-8 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        </div>
+      </div>
+
       <!-- Today's stats bar -->
-      <div class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
+      <div v-else class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
         <div class="text-center">
           <p class="text-xl font-bold text-white tabular-nums">{{ todayStats.count }}</p>
           <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayOrders") }}</p>
@@ -144,8 +160,15 @@
     </div>
 
     <!-- Error -->
-    <div v-else-if="order.ordersError" class="ui-panel border-red-500/30 p-5 text-sm text-red-300">
-      {{ order.ordersError }}
+    <div v-else-if="order.ordersError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ order.ordersError }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="refresh"
+      >{{ t('common.retry') }}</button>
     </div>
 
     <!-- Empty: filters active but no matches -->

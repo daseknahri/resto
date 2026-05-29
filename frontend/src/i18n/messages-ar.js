@@ -1860,7 +1860,8 @@ Object.assign(arabicMessages, {
     moveDown: "\u062d\u0631\u0651\u0643 \u0644\u0623\u0633\u0641\u0644",
     save: "\u062d\u0641\u0638",
     open: "\u0645\u0641\u062a\u0648\u062d",
-    closed: "\u0645\u063a\u0644\u0642"
+    closed: "\u0645\u063a\u0644\u0642",
+    retry: "\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629"
   },
   ownerProfileSections: {
     brandContact: "\u0627\u0644\u0647\u0648\u064a\u0629 \u0648\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
