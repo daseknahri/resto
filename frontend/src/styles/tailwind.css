@@ -861,33 +861,36 @@ body[dir="rtl"] .ui-section-kicker {
   }
 
   .ui-route-frame {
-    will-change: opacity, transform, filter;
+    /* No permanent will-change here — promoting the whole page to a GPU layer
+       at all times causes compositor overhead that makes mouse input feel sluggish.
+       will-change is applied only during the active transition (see below). */
   }
 
   .ui-route-enter-active {
+    will-change: opacity, transform;
     transition:
       opacity var(--motion-base) var(--ease-fluid),
-      transform var(--motion-base) var(--ease-fluid),
-      filter var(--motion-base) var(--ease-fluid);
+      transform var(--motion-base) var(--ease-fluid);
   }
 
   .ui-route-leave-active {
+    will-change: opacity, transform;
     transition:
       opacity var(--motion-fast) ease,
-      transform var(--motion-fast) ease,
-      filter var(--motion-fast) ease;
+      transform var(--motion-fast) ease;
   }
 
   .ui-route-enter-from {
     opacity: 0;
     transform: translateY(10px) scale(0.992);
-    filter: blur(8px);
+    /* Removed filter: blur() — blurring the entire page during transitions is
+       the most expensive CSS operation and the primary cause of laggy mouse
+       movement. Opacity + transform gives the same feel at a fraction of the cost. */
   }
 
   .ui-route-leave-to {
     opacity: 0;
     transform: translateY(-6px) scale(0.996);
-    filter: blur(5px);
   }
 
   .ui-reveal {
