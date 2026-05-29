@@ -317,6 +317,7 @@ const arabicMessages = {
     "todayDown": "{n} مقابل أمس",
     "noAnalyticsData": "لم يتم تسجيل تفاعلات عملاء بعد لهذه الفترة.",
     "noAnalyticsDataHint": "شارك رابط قائمتك لبدء جمع البيانات.",
+    "analyticsLoadError": "تعذّر تحميل بيانات التحليلات. تحقق من اتصالك وأعد المحاولة.",
     "menuViews": "مشاهدات القائمة",
     "dishViews": "مشاهدات الأطباق",
     "orderActions": "إجراءات الطلب",

@@ -230,7 +230,18 @@
         </button>
       </div>
 
-      <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
+      <!-- Error banner with retry -->
+      <div v-if="error" class="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-10.5a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 7a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          :disabled="loading"
+          @click="refresh"
+        >{{ t("common.retry") }}</button>
+      </div>
     </article>
 
     <!-- Readiness skeleton -->
@@ -359,9 +370,24 @@
         </template>
       </div>
 
-      <!-- Empty state: no analytics data at all -->
+      <!-- Analytics network error — show retry instead of empty state -->
       <div
-        v-if="!insightsLoading && !funnelSteps.some(s => s.value > 0) && !topCategories.length"
+        v-if="insightsError && !insightsLoading"
+        class="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3"
+      >
+        <svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400/70" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-10.5a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 7a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+        </svg>
+        <p class="flex-1 text-xs text-slate-400">{{ t("ownerHome.analyticsLoadError") }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600"
+          @click="hydrateOwnerInsights(true)"
+        >{{ t("common.retry") }}</button>
+      </div>
+
+      <!-- Empty state: no analytics data at all (new restaurant) -->
+      <div
+        v-else-if="!insightsError && !insightsLoading && !funnelSteps.some(s => s.value > 0) && !topCategories.length"
         class="rounded-xl border border-slate-800/60 bg-slate-900/30 px-4 py-5 text-center space-y-1"
       >
         <AppIcon name="chart" class="mx-auto h-6 w-6 text-slate-600" />
@@ -729,6 +755,7 @@ const revenueSummary = ref(null); // { total_revenue, order_count, avg_order_val
 const ratingsSummary = ref(null); // { count, average } or null while loading
 const insightsLoading = ref(false);
 const insightsUpdating = ref(false); // stale data showing, silently refreshing
+const insightsError = ref(false);    // network error loading analytics data
 const dashboardPeriod = ref(30);
 const PERIOD_OPTIONS = [7, 14, 30, 90];
 const INSIGHTS_TTL_MS = 3 * 60 * 1000; // 3-minute cache TTL per period
@@ -1249,6 +1276,7 @@ const hydrateOwnerInsights = async (force = false) => {
   const ctrl = new AbortController();
   _insightsAbort = ctrl;
 
+  insightsError.value = false;
   const cacheKey = `owner.insights.${dashboardPeriod.value}d`;
   // Force mode (manual refresh button) — discard cache so fresh data is fetched.
   if (force) bustCache(cacheKey);
@@ -1274,11 +1302,14 @@ const hydrateOwnerInsights = async (force = false) => {
   } catch (err) {
     if (err.code === "ERR_CANCELED" || err.name === "AbortError" || ctrl.signal.aborted) return;
     // Dashboard endpoint unavailable — fall back to individual calls.
+    let fallbackOk = false;
     try {
       const analytics = await api.get("/analytics/summary/", { params: { days: dashboardPeriod.value }, timeout: 5000 });
       analyticsSummary.value = analytics?.data || analyticsSummary.value;
+      fallbackOk = true;
     } catch { /* analytics are supplementary */ }
     await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
+    if (!fallbackOk && !cached) insightsError.value = true;
   } finally {
     if (!ctrl.signal.aborted) {
       insightsLoading.value = false;

@@ -1738,6 +1738,7 @@ export const messages = {
       todayDown: "{n} vs yest.",
       noAnalyticsData: "No customer interactions recorded yet for this period.",
       noAnalyticsDataHint: "Share your menu link to start collecting data.",
+      analyticsLoadError: "Could not load analytics data. Check your connection and retry.",
       funnelTitle: "Conversion funnel",
       funnelMenuViews: "Menu views",
       funnelCartViews: "Cart views",
@@ -4610,6 +4611,7 @@ export const messages = {
       readinessActionCategories: "Ajouter des categories",
       readinessActionDishes: "Ajouter des plats",
       readinessActionPublish: "Publier maintenant",
+      analyticsLoadError: "Impossible de charger les donnees analytiques. Verifiez votre connexion et reessayez.",
     },
     revenueChart: {
       title: "Chiffre d affaires",
