@@ -1,9 +1,9 @@
 <template>
   <div class="revenue-chart-wrap">
-    <!-- Period selector -->
+    <!-- Period selector — hidden when parent supplies data -->
     <div class="mb-3 flex items-center justify-between gap-2">
       <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('revenueChart.title') }}</p>
-      <div class="flex items-center gap-1">
+      <div v-if="!externalDays" class="flex items-center gap-1">
         <button
           v-for="p in periods"
           :key="p"
@@ -43,7 +43,7 @@
     </div>
 
     <!-- SVG bar chart -->
-    <div v-if="!loading && days.length" class="relative">
+    <div v-if="!loading && !parentLoading && days.length" class="relative">
       <svg
         :viewBox="`0 0 ${SVG_W} ${SVG_H}`"
         class="w-full overflow-visible"
@@ -146,8 +146,8 @@
       </svg>
     </div>
 
-    <!-- Loading skeleton -->
-    <div v-else-if="loading" class="h-28 animate-pulse rounded-xl bg-slate-800/50" />
+    <!-- Loading skeleton (own fetch or parent still fetching) -->
+    <div v-else-if="loading || parentLoading" class="h-28 animate-pulse rounded-xl bg-slate-800/50" />
 
     <!-- Error / empty -->
     <div v-else class="py-8 text-center text-xs text-slate-500">
@@ -166,6 +166,14 @@ const { t, currentLocale } = useI18n();
 // ── Props ─────────────────────────────────────────────────────────────────────
 const props = defineProps({
   initialPeriod: { type: Number, default: 14 },
+  /** When set by a parent (e.g. OwnerHome), skip the API call and use this data directly. */
+  externalDays: { type: Array, default: null },
+  externalCurrency: { type: String, default: null },
+  /**
+   * When true the parent is still fetching — show skeleton without making our own
+   * API call.  When it turns false without externalDays arriving, fall back to own fetch.
+   */
+  parentLoading: { type: Boolean, default: false },
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -227,8 +235,25 @@ const tooltipBubble = computed(() => {
   return { x, y, w, h };
 });
 
+// ── External data (parent-supplied, no API call needed) ───────────────────────
+watch(
+  () => props.externalDays,
+  (incoming) => {
+    if (!incoming) return;
+    // Normalize field name: parent uses 'orders', chart expects 'order_count'
+    days.value = incoming.map((d) => ({
+      ...d,
+      order_count: d.order_count ?? d.orders ?? 0,
+    }));
+    if (props.externalCurrency) currency.value = props.externalCurrency;
+  },
+  { immediate: true }
+);
+
 // ── API ───────────────────────────────────────────────────────────────────────
 const load = async () => {
+  if (props.externalDays) return;    // parent supplies data — skip network
+  if (props.parentLoading) return;   // parent is still fetching — wait for watcher
   loading.value = true;
   error.value = false;
   try {
@@ -296,6 +321,15 @@ const onBarHover = (day, cx, by) => {
 };
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
-onMounted(load);
-watch(currentLocale, load);
+onMounted(() => { if (!props.externalDays) load(); });
+watch(currentLocale, () => { if (!props.externalDays) load(); });
+
+// When parent finishes loading without supplying external data (e.g. API error on
+// the dashboard endpoint), fall back to our own fetch so the chart isn't blank.
+watch(
+  () => props.parentLoading,
+  (nowLoading) => {
+    if (!nowLoading && !props.externalDays && !days.value.length) load();
+  },
+);
 </script>

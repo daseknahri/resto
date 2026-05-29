@@ -13,49 +13,65 @@
       </div>
 
       <div class="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <article class="ui-admin-subcard space-y-1.5">
-          <p class="ui-stat-label">{{ t("ownerHome.readiness") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ readinessScore }}%</p>
-        </article>
-        <article class="ui-admin-subcard space-y-1.5">
-          <p class="ui-stat-label">{{ t("common.categories") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ categoriesCount }}</p>
-        </article>
-        <article class="ui-admin-subcard space-y-1.5">
-          <p class="ui-stat-label">{{ t("common.dishes") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ dishesCount }}</p>
-        </article>
-        <article
-          class="ui-admin-subcard space-y-1.5 transition-colors"
-          :class="soldOutCount > 0 ? 'cursor-pointer hover:border-amber-500/40' : ''"
-          :title="soldOutCount > 0 ? t('ownerHome.dishAvailability') : ''"
-          @click="soldOutCount > 0 && (dishAvailOpen = true)"
-        >
-          <p class="ui-stat-label">{{ t("ownerHome.soldOutLabel") }}</p>
-          <p class="ui-stat-value transition-colors" :class="soldOutCount > 0 ? 'text-amber-400' : 'text-emerald-500'">{{ soldOutCount }}</p>
-        </article>
+        <template v-if="loading">
+          <div v-for="i in 4" :key="i" class="ui-admin-subcard animate-pulse space-y-1.5">
+            <div class="h-2.5 w-14 rounded bg-slate-700/60" />
+            <div class="mt-1 h-7 w-10 rounded bg-slate-700/40" />
+          </div>
+        </template>
+        <template v-else>
+          <article class="ui-admin-subcard space-y-1.5">
+            <p class="ui-stat-label">{{ t("ownerHome.readiness") }}</p>
+            <p class="ui-stat-value text-[var(--color-secondary)]">{{ readinessScore }}%</p>
+          </article>
+          <article class="ui-admin-subcard space-y-1.5">
+            <p class="ui-stat-label">{{ t("common.categories") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ categoriesCount }}</p>
+          </article>
+          <article class="ui-admin-subcard space-y-1.5">
+            <p class="ui-stat-label">{{ t("common.dishes") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ dishesCount }}</p>
+          </article>
+          <article
+            class="ui-admin-subcard space-y-1.5 transition-colors"
+            :class="soldOutCount > 0 ? 'cursor-pointer hover:border-amber-500/40' : ''"
+            :title="soldOutCount > 0 ? t('ownerHome.dishAvailability') : ''"
+            @click="soldOutCount > 0 && (dishAvailOpen = true)"
+          >
+            <p class="ui-stat-label">{{ t("ownerHome.soldOutLabel") }}</p>
+            <p class="ui-stat-value transition-colors" :class="soldOutCount > 0 ? 'text-amber-400' : 'text-emerald-500'">{{ soldOutCount }}</p>
+          </article>
+        </template>
       </div>
 
       <!-- Today's order quick-stats -->
       <div class="grid grid-cols-3 gap-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50">
-        <div class="py-3 text-center">
-          <p class="text-xl font-bold tabular-nums text-white">{{ todayOrderStats.count }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayOrders") }}</p>
-          <p v-if="yesterdayOrderStats.count > 0" class="mt-0.5 text-[9px] tabular-nums" :class="todayOrderStats.count >= yesterdayOrderStats.count ? 'text-emerald-500' : 'text-slate-600'">
-            {{ todayOrderStats.count >= yesterdayOrderStats.count ? '+' : '' }}{{ todayOrderStats.count - yesterdayOrderStats.count }} {{ t("ownerHome.vsYesterday") }}
-          </p>
-        </div>
-        <div class="border-x border-slate-800 py-3 text-center">
-          <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayOrderStats.revenue }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayRevenue") }}</p>
-          <p v-if="yesterdayOrderStats.revenue > 0" class="mt-0.5 text-[9px]" :class="todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? 'text-emerald-500' : 'text-slate-600'">
-            {{ todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? '↑' : '↓' }} {{ t("ownerHome.vsYesterday") }}
-          </p>
-        </div>
-        <div class="py-3 text-center">
-          <p class="text-xl font-bold tabular-nums transition-colors" :class="todayOrderStats.pending > 0 ? 'text-amber-400' : 'text-white'">{{ todayOrderStats.pending }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
-        </div>
+        <template v-if="loading">
+          <div v-for="i in 3" :key="i" class="animate-pulse py-3 text-center" :class="i === 2 ? 'border-x border-slate-800' : ''">
+            <div class="mx-auto h-6 w-8 rounded bg-slate-700/50" />
+            <div class="mx-auto mt-1.5 h-2 w-16 rounded bg-slate-800/50" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-white">{{ todayOrderStats.count }}</p>
+            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayOrders") }}</p>
+            <p v-if="yesterdayOrderStats.count > 0" class="mt-0.5 text-[9px] tabular-nums" :class="todayOrderStats.count >= yesterdayOrderStats.count ? 'text-emerald-500' : 'text-slate-600'">
+              {{ todayOrderStats.count >= yesterdayOrderStats.count ? '+' : '' }}{{ todayOrderStats.count - yesterdayOrderStats.count }} {{ t("ownerHome.vsYesterday") }}
+            </p>
+          </div>
+          <div class="border-x border-slate-800 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayOrderStats.revenue }}</p>
+            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayRevenue") }}</p>
+            <p v-if="yesterdayOrderStats.revenue > 0" class="mt-0.5 text-[9px]" :class="todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? 'text-emerald-500' : 'text-slate-600'">
+              {{ todayOrderStats.revenueRaw >= yesterdayOrderStats.revenue ? '↑' : '↓' }} {{ t("ownerHome.vsYesterday") }}
+            </p>
+          </div>
+          <div class="py-3 text-center">
+            <p class="text-xl font-bold tabular-nums transition-colors" :class="todayOrderStats.pending > 0 ? 'text-amber-400' : 'text-white'">{{ todayOrderStats.pending }}</p>
+            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
+          </div>
+        </template>
       </div>
 
       <!-- Ratings summary strip -->
@@ -75,11 +91,17 @@
         <span class="text-sm text-slate-600">★</span>
         <span class="text-xs text-slate-600">{{ t("ownerHome.noRatingsYet") }}</span>
       </div>
+      <!-- Skeleton while ratings haven't loaded yet -->
+      <div v-else-if="!ratingsSummary" class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
 
       <!-- Revenue chart + best sellers side-by-side on wider screens -->
       <div class="grid gap-3 xl:grid-cols-2">
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-          <RevenueBarChart :external-days="chartComponentDays" :external-currency="chartComponentCurrency" />
+          <RevenueBarChart
+            :external-days="chartComponentDays"
+            :external-currency="chartComponentCurrency"
+            :parent-loading="insightsLoading"
+          />
         </div>
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
           <BestSellersWidget :period="dashboardPeriod" />
@@ -273,7 +295,7 @@
               :class="dashboardPeriod === d
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                 : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
-              :disabled="insightsLoading || insightsUpdating"
+              :disabled="insightsLoading"
               @click="setDashboardPeriod(d)"
             >{{ d }}d</button>
           </div>
@@ -400,6 +422,9 @@
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
           <AppIcon name="download" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.revenueTitle") }}</span>
+          <svg v-if="insightsUpdating" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+          </svg>
         </h3>
         <p class="text-xs text-slate-400">{{ revenueSummary ? t("ownerHome.revenuePeriod", { days: revenueSummary.days }) : `${dashboardPeriod}d` }}</p>
       </div>
@@ -1161,7 +1186,7 @@ const refresh = async () => {
     dishesCount.value = dishesData.value.length;
     ensureUpgradeTargetSelection();
     void order.fetchOrders();
-    void hydrateOwnerInsights();
+    void hydrateOwnerInsights(true); // force = true: bust cache on manual refresh
     void fetchRatingsSummary();
   } catch {
     error.value = t("ownerHome.dashboardRefreshFailed");
@@ -1202,13 +1227,15 @@ const _applyInsightsData = (data) => {
   ensureUpgradeTargetSelection();
 };
 
-const hydrateOwnerInsights = async () => {
+const hydrateOwnerInsights = async (force = false) => {
   // Cancel any superseded in-flight request (e.g. rapid period switching).
   _insightsAbort?.abort();
   const ctrl = new AbortController();
   _insightsAbort = ctrl;
 
   const cacheKey = `owner.insights.${dashboardPeriod.value}d`;
+  // Force mode (manual refresh button) — discard cache so fresh data is fetched.
+  if (force) bustCache(cacheKey);
   const cached = readCache(cacheKey);
 
   if (cached) {
