@@ -76,7 +76,22 @@
 
     <!-- ── Available upgrades ─────────────────────────────────────────── -->
     <section v-if="loading" class="ui-panel p-5">
-      <div class="py-4 text-center text-sm text-slate-500">{{ t('common.loading') }}</div>
+      <div class="mb-3 space-y-1">
+        <div class="h-2.5 w-20 animate-pulse rounded bg-slate-700/50" />
+        <div class="h-5 w-40 animate-pulse rounded bg-slate-700/60" />
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div v-for="i in 2" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/40 p-5 space-y-3">
+          <div class="h-5 w-24 rounded-full bg-slate-700/60" />
+          <div class="space-y-2">
+            <div v-for="j in 4" :key="j" class="flex items-center gap-2">
+              <div class="h-3.5 w-3.5 rounded-full bg-slate-700/50" />
+              <div class="h-3 rounded bg-slate-800/60" :style="`width: ${80 + j * 20}px`" />
+            </div>
+          </div>
+          <div class="h-9 rounded-xl bg-slate-700/40" />
+        </div>
+      </div>
     </section>
 
     <section v-else-if="targets.length" class="ui-panel space-y-5 p-5">
@@ -204,7 +219,17 @@
         </button>
       </div>
 
-      <div v-if="loading" class="py-4 text-center text-sm text-slate-500">{{ t('common.loading') }}</div>
+      <div v-if="loading" class="space-y-2">
+        <div v-for="i in 2" :key="i" class="animate-pulse rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+          <div class="flex items-center justify-between gap-3">
+            <div class="space-y-1.5">
+              <div class="h-3.5 w-24 rounded bg-slate-700/60" />
+              <div class="h-3 w-16 rounded bg-slate-800/50" />
+            </div>
+            <div class="h-5 w-16 rounded-full bg-slate-800/60" />
+          </div>
+        </div>
+      </div>
 
       <div
         v-else-if="!requests.length"

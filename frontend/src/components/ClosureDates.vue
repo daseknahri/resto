@@ -36,8 +36,14 @@
     </div>
 
     <!-- Existing closure dates list -->
-    <div v-if="loading" class="py-4 text-center text-sm text-slate-500">
-      {{ t('common.loading') }}
+    <div v-if="loading" class="space-y-2">
+      <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+        <div class="space-y-1.5">
+          <div class="h-3.5 w-24 rounded bg-slate-700/60" />
+          <div class="h-3 w-32 rounded bg-slate-800/50" />
+        </div>
+        <div class="h-7 w-16 rounded-lg bg-slate-700/50" />
+      </div>
     </div>
 
     <div v-else-if="dates.length === 0" class="rounded-2xl border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">
