@@ -92,12 +92,26 @@
         </div>
         <div class="flex gap-2 shrink-0">
           <button
+            v-if="confirmDeleteId !== promo.id"
             class="rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-colors"
             @click="openEdit(promo)"
           >{{ t('common.edit') }}</button>
+          <!-- Delete: two-step confirmation -->
+          <template v-if="confirmDeleteId === promo.id">
+            <span class="self-center text-[11px] text-red-300">{{ t('ownerPromotions.deleteConfirm') }}</span>
+            <button
+              class="rounded-lg border border-red-500/50 bg-red-500/15 px-2.5 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/25 transition-colors"
+              @click="deletePromo(promo)"
+            >{{ t('common.confirm') }}</button>
+            <button
+              class="rounded-lg border border-slate-700/50 bg-slate-800/50 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              @click="confirmDeleteId = null"
+            >{{ t('common.cancel') }}</button>
+          </template>
           <button
+            v-else
             class="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:border-red-500/50 hover:text-red-300 transition-colors"
-            @click="deletePromo(promo)"
+            @click="confirmDeleteId = promo.id"
           >{{ t('common.delete') }}</button>
         </div>
       </div>
@@ -289,6 +303,7 @@ const drawerOpen = ref(false);
 const editingPromo = ref(null);
 const submitting = ref(false);
 const drawerError = ref('');
+const confirmDeleteId = ref(null); // id of promo awaiting delete confirmation
 
 const form = reactive({
   name: '',
@@ -431,13 +446,14 @@ const submitForm = async () => {
 };
 
 const deletePromo = async (promo) => {
-  if (!confirm(t('ownerPromotions.deleteConfirm'))) return;
   try {
     await api.delete(`/owner/promotions/${promo.id}/`);
     promotions.value = promotions.value.filter((p) => p.id !== promo.id);
     writeCache(PROMOS_CACHE_KEY, promotions.value);
+    confirmDeleteId.value = null;
     toast.show(t('ownerPromotions.deleted'), 'success');
   } catch {
+    confirmDeleteId.value = null;
     toast.show(t('ownerPromotions.deleteFailed'), 'error');
   }
 };
