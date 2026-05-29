@@ -2,10 +2,15 @@
   <div class="space-y-6 pb-6">
 
     <!-- Header -->
-    <div>
-      <p class="ui-kicker">{{ t('ownerFlashSales.kicker') }}</p>
-      <h1 class="text-2xl font-bold text-white">{{ t('ownerFlashSales.title') }}</h1>
-      <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="ui-kicker">{{ t('ownerFlashSales.kicker') }}</p>
+        <h1 class="text-2xl font-bold text-white">{{ t('ownerFlashSales.title') }}</h1>
+        <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
+      </div>
+      <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+      </svg>
     </div>
 
     <!-- Loading: skeleton cards -->
@@ -138,11 +143,16 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
+import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
-const loading = ref(true);
+const FLASH_CACHE_KEY = 'owner.flash-sales';
+const FLASH_TTL_MS = 10 * 60 * 1000; // 10 min — platform sales change rarely
+
+const loading = ref(false);
+const updating = ref(false);
 const fetchError = ref(false);
 const sales = ref([]);
 const toggling = ref(null); // sale.id currently being toggled
@@ -156,16 +166,26 @@ const formatDate = (iso) => {
   }
 };
 
-const fetchSales = async () => {
-  loading.value = true;
+const fetchSales = async (force = false) => {
+  if (force) bustCache(FLASH_CACHE_KEY);
+  const cached = readCache(FLASH_CACHE_KEY);
+  if (cached) {
+    sales.value = cached;
+    if (isFresh(FLASH_CACHE_KEY, FLASH_TTL_MS)) return;
+    updating.value = true;
+  } else {
+    loading.value = true;
+  }
   fetchError.value = false;
   try {
     const res = await api.get('/owner/flash-sales/');
     sales.value = res.data;
+    writeCache(FLASH_CACHE_KEY, res.data);
   } catch {
-    fetchError.value = true;
+    if (!cached) fetchError.value = true;
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 
@@ -174,6 +194,7 @@ const optIn = async (sale) => {
   try {
     await api.post(`/owner/flash-sales/${sale.id}/opt-in/`);
     sale.opted_in = true;
+    bustCache(FLASH_CACHE_KEY);
     toast.show(t('ownerFlashSales.optInSuccess'));
   } catch {
     toast.show(t('ownerFlashSales.optInError'), 'error');
@@ -187,6 +208,7 @@ const optOut = async (sale) => {
   try {
     await api.delete(`/owner/flash-sales/${sale.id}/opt-in/`);
     sale.opted_in = false;
+    bustCache(FLASH_CACHE_KEY);
     toast.show(t('ownerFlashSales.optOutSuccess'));
   } catch {
     toast.show(t('ownerFlashSales.optOutError'), 'error');
@@ -195,5 +217,5 @@ const optOut = async (sale) => {
   }
 };
 
-onMounted(fetchSales);
+onMounted(() => fetchSales());
 </script>

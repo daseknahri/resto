@@ -12,8 +12,8 @@
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="exporting || !ratings.length" @click="exportCsv">
             ⬇ {{ exporting ? t("ownerRatings.exporting") : t("ownerRatings.exportCsv") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="loading" @click="fetchRatings">
-            <AppIcon name="refresh" class="h-3.5 w-3.5" />
+          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="loading || updating" @click="fetchRatings(true)">
+            <AppIcon name="refresh" class="h-3.5 w-3.5" :class="updating ? 'animate-spin' : ''" />
             {{ t("ownerRatings.refresh") }}
           </button>
         </div>
@@ -161,12 +161,17 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
+import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
+const RATINGS_CACHE_KEY = "owner.ratings";
+const RATINGS_TTL_MS = 5 * 60 * 1000; // 5 min
+
 const ratings = ref([]);
 const loading = ref(false);
+const updating = ref(false); // silently revalidating stale cache
 const exporting = ref(false);
 const activeScore = ref("all");
 
@@ -213,15 +218,26 @@ const formatDate = (iso) => {
   }
 };
 
-const fetchRatings = async () => {
-  loading.value = true;
+const fetchRatings = async (force = false) => {
+  if (force) bustCache(RATINGS_CACHE_KEY);
+  const cached = readCache(RATINGS_CACHE_KEY);
+  if (cached) {
+    ratings.value = cached;
+    if (isFresh(RATINGS_CACHE_KEY, RATINGS_TTL_MS)) return;
+    updating.value = true; // stale — revalidate silently
+  } else {
+    loading.value = true;
+  }
   try {
     const res = await api.get("/owner/ratings/");
-    ratings.value = res.data?.ratings ?? res.data ?? [];
+    const data = res.data?.ratings ?? res.data ?? [];
+    ratings.value = data;
+    writeCache(RATINGS_CACHE_KEY, data);
   } catch {
-    toast.show(t("ownerRatings.fetchError"), "error");
+    if (!cached) toast.show(t("ownerRatings.fetchError"), "error");
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 
@@ -242,5 +258,5 @@ const exportCsv = async () => {
   }
 };
 
-onMounted(fetchRatings);
+onMounted(() => fetchRatings());
 </script>

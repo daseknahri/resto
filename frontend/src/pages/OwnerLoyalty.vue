@@ -1,10 +1,15 @@
 <template>
   <div class="space-y-4 pb-6">
     <!-- Page header -->
-    <div class="space-y-0.5">
-      <p class="ui-kicker">{{ t('ownerLoyalty.kicker') }}</p>
-      <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerLoyalty.title') }}</h1>
-      <p class="text-sm text-slate-400">{{ t('ownerLoyalty.subtitle') }}</p>
+    <div class="flex items-start justify-between gap-3">
+      <div class="space-y-0.5">
+        <p class="ui-kicker">{{ t('ownerLoyalty.kicker') }}</p>
+        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerLoyalty.title') }}</h1>
+        <p class="text-sm text-slate-400">{{ t('ownerLoyalty.subtitle') }}</p>
+      </div>
+      <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+      </svg>
     </div>
 
     <!-- Loading skeleton -->
@@ -152,11 +157,16 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t } = useI18n();
 const toast = useToastStore();
 
-const loading = ref(true);
+const LOYALTY_CACHE_KEY = 'owner.loyalty';
+const LOYALTY_TTL_MS = 10 * 60 * 1000; // 10 min — config rarely changes
+
+const loading = ref(false);
+const updating = ref(false);
 const fetchError = ref(false);
 const saving = ref(false);
 const saveError = ref('');
@@ -180,19 +190,32 @@ const previewRedeem = computed(() => {
   return t('ownerLoyalty.previewRedeem', { threshold, credit });
 });
 
+const applyConfig = (data) => {
+  form.enabled = data.enabled;
+  form.points_per_unit = data.points_per_unit;
+  form.redeem_threshold = data.redeem_threshold;
+  form.points_value = data.points_value;
+};
+
 const fetchConfig = async () => {
-  loading.value = true;
+  const cached = readCache(LOYALTY_CACHE_KEY);
+  if (cached) {
+    applyConfig(cached);
+    if (isFresh(LOYALTY_CACHE_KEY, LOYALTY_TTL_MS)) return;
+    updating.value = true;
+  } else {
+    loading.value = true;
+  }
   fetchError.value = false;
   try {
     const res = await api.get('/owner/loyalty/');
-    form.enabled = res.data.enabled;
-    form.points_per_unit = res.data.points_per_unit;
-    form.redeem_threshold = res.data.redeem_threshold;
-    form.points_value = res.data.points_value;
+    applyConfig(res.data);
+    writeCache(LOYALTY_CACHE_KEY, res.data);
   } catch {
-    fetchError.value = true;
+    if (!cached) fetchError.value = true;
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 
@@ -206,10 +229,8 @@ const save = async () => {
       redeem_threshold: Number(form.redeem_threshold),
       points_value: form.points_value,
     });
-    form.enabled = res.data.enabled;
-    form.points_per_unit = res.data.points_per_unit;
-    form.redeem_threshold = res.data.redeem_threshold;
-    form.points_value = res.data.points_value;
+    applyConfig(res.data);
+    writeCache(LOYALTY_CACHE_KEY, res.data); // update cache with saved values
     toast.show(t('ownerLoyalty.saved'), 'success');
   } catch {
     saveError.value = t('ownerLoyalty.saveFailed');

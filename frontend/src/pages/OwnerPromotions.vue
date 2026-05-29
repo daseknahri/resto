@@ -7,7 +7,12 @@
         <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerPromotions.title') }}</h1>
         <p class="text-sm text-slate-400">{{ t('ownerPromotions.subtitle') }}</p>
       </div>
-      <button class="ui-btn-primary" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
+      <div class="flex items-center gap-2">
+        <svg v-if="updating" class="h-4 w-4 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+        </svg>
+        <button class="ui-btn-primary" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
+      </div>
     </div>
 
     <!-- Loading: skeleton cards -->
@@ -256,6 +261,7 @@ import { onMounted, reactive, ref, computed } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t } = useI18n();
 const toast = useToastStore();
@@ -271,8 +277,12 @@ const promoTypes = computed(() => [
   { value: 'free_delivery', label: t('ownerPromotions.typeFreeDelivery') },
 ]);
 
+const PROMOS_CACHE_KEY = 'owner.promotions';
+const PROMOS_TTL_MS = 5 * 60 * 1000; // 5 min
+
 // ── State ─────────────────────────────────────────────────────────────────────
-const loading = ref(true);
+const loading = ref(false);
+const updating = ref(false);
 const fetchError = ref(false);
 const promotions = ref([]);
 const drawerOpen = ref(false);
@@ -354,15 +364,24 @@ const openEdit = (promo) => {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const fetchPromotions = async () => {
-  loading.value = true;
+  const cached = readCache(PROMOS_CACHE_KEY);
+  if (cached) {
+    promotions.value = cached;
+    if (isFresh(PROMOS_CACHE_KEY, PROMOS_TTL_MS)) return;
+    updating.value = true;
+  } else {
+    loading.value = true;
+  }
   fetchError.value = false;
   try {
     const res = await api.get('/owner/promotions/');
     promotions.value = res.data;
+    writeCache(PROMOS_CACHE_KEY, res.data);
   } catch {
-    fetchError.value = true;
+    if (!cached) fetchError.value = true;
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 
@@ -393,10 +412,12 @@ const submitForm = async () => {
       const res = await api.patch(`/owner/promotions/${editingPromo.value.id}/`, payload);
       const idx = promotions.value.findIndex((p) => p.id === editingPromo.value.id);
       if (idx >= 0) promotions.value[idx] = res.data;
+      writeCache(PROMOS_CACHE_KEY, promotions.value); // keep cache in sync
       toast.show(t('ownerPromotions.save'), 'success');
     } else {
       const res = await api.post('/owner/promotions/', payload);
       promotions.value.unshift(res.data);
+      writeCache(PROMOS_CACHE_KEY, promotions.value);
       toast.show(t('ownerPromotions.create'), 'success');
     }
     drawerOpen.value = false;
@@ -414,6 +435,7 @@ const deletePromo = async (promo) => {
   try {
     await api.delete(`/owner/promotions/${promo.id}/`);
     promotions.value = promotions.value.filter((p) => p.id !== promo.id);
+    writeCache(PROMOS_CACHE_KEY, promotions.value);
     toast.show(t('ownerPromotions.deleted'), 'success');
   } catch {
     toast.show(t('ownerPromotions.deleteFailed'), 'error');
