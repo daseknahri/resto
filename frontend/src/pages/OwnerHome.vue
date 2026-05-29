@@ -206,11 +206,21 @@
     <article class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex items-center justify-between gap-3">
         <p class="text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
-        <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ readinessScore }}%</span>
+        <span class="text-sm font-semibold" :class="readinessScore === 100 ? 'text-emerald-400' : 'text-[var(--color-secondary)]'">
+          {{ readinessScore === 100 ? "✓ " : "" }}{{ readinessScore }}%
+        </span>
       </div>
       <div class="h-2 overflow-hidden rounded-full bg-slate-800">
-        <div class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-300" :style="{ width: `${readinessScore}%` }"></div>
+        <div
+          class="h-full rounded-full transition-all duration-300"
+          :class="readinessScore === 100 ? 'bg-emerald-500' : 'bg-[var(--color-secondary)]'"
+          :style="{ width: `${readinessScore}%` }"
+        ></div>
       </div>
+      <!-- Congratulatory message when 100% ready -->
+      <p v-if="readinessScore === 100" class="text-xs text-emerald-400/80">
+        {{ t("ownerHome.readinessDone") }}
+      </p>
       <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <article
           v-for="item in readinessItems"
@@ -511,8 +521,9 @@
     <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
-          <AppIcon name="menu" class="owner-home-section-icon" />
+          <AppIcon name="cart" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.liveOrders") }}</span>
+          <span v-if="order.ordersLoading" class="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500"></span>
         </h3>
         <RouterLink :to="{ name: 'owner-orders' }" class="ui-btn-outline px-3 py-1.5 text-xs">
           {{ t("ownerHome.viewAllOrders") }}
@@ -533,16 +544,27 @@
           <span class="text-xl font-bold text-slate-300">{{ activeOrders.length }}</span>
           <span class="text-xs font-medium text-slate-500">{{ t("ownerHome.inProgress") }}</span>
         </div>
+        <!-- All-clear badge when no active orders but there are recent ones -->
+        <div
+          v-if="!pendingOrders.length && !activeOrders.length && recentOrders.length"
+          class="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2"
+        >
+          <span class="text-emerald-400">✓</span>
+          <span class="text-xs font-medium text-emerald-300/70">{{ t("ownerHome.allClear") }}</span>
+        </div>
       </div>
 
-      <!-- Recent orders list -->
+      <!-- Recent orders list — sorted with active first -->
       <div v-if="recentOrders.length" class="space-y-1.5">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.recentOrdersList") }}</p>
         <RouterLink
           v-for="o in recentOrders"
           :key="o.id"
           :to="{ name: 'owner-orders', query: { q: o.order_number } }"
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:border-slate-600 hover:bg-slate-900/60"
+          class="flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:bg-slate-900/60"
+          :class="['pending','confirmed','preparing','ready'].includes(o.status)
+            ? 'border-slate-700 hover:border-slate-600'
+            : 'border-slate-800 hover:border-slate-700'"
         >
           <div class="flex items-center gap-2 min-w-0">
             <span class="font-mono font-bold text-slate-100">{{ o.order_number }}</span>
@@ -774,7 +796,17 @@ const resetAllAvailability = async () => {
 
 const pendingOrders = computed(() => order.orders.filter((o) => o.status === "pending"));
 const activeOrders = computed(() => order.orders.filter((o) => ["confirmed", "preparing", "ready"].includes(o.status)));
-const recentOrders = computed(() => [...order.orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5));
+const ORDER_STATUS_PRIORITY = { pending: 0, confirmed: 1, preparing: 2, ready: 3, completed: 4, cancelled: 5 };
+const recentOrders = computed(() =>
+  [...order.orders]
+    .sort((a, b) => {
+      // Active orders first, then by recency
+      const sp = (ORDER_STATUS_PRIORITY[a.status] ?? 9) - (ORDER_STATUS_PRIORITY[b.status] ?? 9);
+      if (sp !== 0) return sp;
+      return new Date(b.created_at) - new Date(a.created_at);
+    })
+    .slice(0, 6)
+);
 
 const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);

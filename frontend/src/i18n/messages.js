@@ -1713,6 +1713,7 @@ export const messages = {
       restaurantOpen: "Restaurant open",
       restaurantClosed: "Restaurant closed",
       launchProgress: "Launch readiness progress",
+      readinessDone: "You're all set! Your menu is live and ready for customers.",
       pushTo100: "Push to 100% before paid campaigns and QR rollout.",
       liveOrders: "Live Orders",
       viewAllOrders: "View all orders",
@@ -1836,6 +1837,7 @@ export const messages = {
       avgRating: "Avg Rating",
       viewAllRatings: "View all ratings",
       noRatingsYet: "No ratings yet",
+      allClear: "All clear",
     },
     revenueChart: {
       title: "Revenue",
