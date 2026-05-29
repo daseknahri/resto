@@ -16,6 +16,14 @@
       </button>
     </div>
 
+    <!-- Summary bar skeleton -->
+    <div v-if="!summary && loading" class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div v-for="i in 4" :key="i" class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 space-y-2">
+        <div class="h-2.5 w-16 rounded bg-slate-700/60" />
+        <div class="h-7 w-10 rounded bg-slate-800/60" />
+      </div>
+    </div>
+
     <!-- Summary bar -->
     <div v-if="summary" class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
       <button

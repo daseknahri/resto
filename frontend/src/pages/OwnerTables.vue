@@ -125,7 +125,23 @@
       </button>
     </article>
 
-    <div class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
+    <!-- Loading skeleton grid -->
+    <div v-if="loading" class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
+      <div v-for="i in 3" :key="i" class="animate-pulse space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4">
+        <div class="rounded-xl border border-slate-800 bg-slate-950/55 p-3 space-y-2">
+          <div class="h-3 w-28 rounded bg-slate-700/50" />
+          <div class="h-5 w-36 rounded bg-slate-800/60" />
+          <div class="h-2.5 w-24 rounded bg-slate-800/40" />
+        </div>
+        <div class="mx-auto h-40 w-40 rounded-xl bg-slate-800/50" />
+        <div class="flex items-center justify-between">
+          <div class="h-3 w-20 rounded bg-slate-800/50" />
+          <div class="h-7 w-16 rounded-lg bg-slate-800/40" />
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
       <article
         v-for="table in filteredTables"
         :key="table.id"
