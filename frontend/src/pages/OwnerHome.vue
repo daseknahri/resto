@@ -79,10 +79,10 @@
       <!-- Revenue chart + best sellers side-by-side on wider screens -->
       <div class="grid gap-3 xl:grid-cols-2">
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-          <RevenueBarChart />
+          <RevenueBarChart :external-days="chartComponentDays" :external-currency="chartComponentCurrency" />
         </div>
         <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-          <BestSellersWidget />
+          <BestSellersWidget :period="dashboardPeriod" />
         </div>
       </div>
 
@@ -258,6 +258,10 @@
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
           <AppIcon name="chart" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.analyticsTitle", { days: dashboardPeriod }) }}</span>
+          <!-- Subtle spinner shown while stale cache is being silently refreshed -->
+          <svg v-if="insightsUpdating" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+          </svg>
         </h3>
         <div class="flex flex-wrap items-center gap-2">
           <!-- Period selector pills -->
@@ -269,7 +273,7 @@
               :class="dashboardPeriod === d
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                 : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
-              :disabled="insightsLoading"
+              :disabled="insightsLoading || insightsUpdating"
               @click="setDashboardPeriod(d)"
             >{{ d }}d</button>
           </div>
@@ -643,7 +647,7 @@ import BestSellersWidget from "../components/BestSellersWidget.vue";
 import RevenueBarChart from "../components/RevenueBarChart.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
-import { bustCache } from "../lib/staleCache";
+import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
@@ -683,8 +687,10 @@ const analyticsSummary = ref({
 const revenueSummary = ref(null); // { total_revenue, order_count, avg_order_value, daily: [{date, revenue, orders}] }
 const ratingsSummary = ref(null); // { count, average } or null while loading
 const insightsLoading = ref(false);
+const insightsUpdating = ref(false); // stale data showing, silently refreshing
 const dashboardPeriod = ref(30);
 const PERIOD_OPTIONS = [7, 14, 30, 90];
+const INSIGHTS_TTL_MS = 3 * 60 * 1000; // 3-minute cache TTL per period
 
 // ── Dish availability panel ───────────────────────────────────────────────────
 const dishAvailOpen = ref(false);
@@ -926,6 +932,15 @@ const revenueChartDays = computed(() => {
   }));
 });
 
+// Data passed to <RevenueBarChart> so it can skip its own /owner/revenue-chart/ API call.
+// The field mapping normalises 'orders' (dashboard) → 'order_count' (chart component).
+const chartComponentDays = computed(() => {
+  const days = revenueSummary.value?.daily;
+  if (!days?.length) return null;
+  return days.map((d) => ({ date: d.date, revenue: d.revenue, order_count: d.orders ?? 0 }));
+});
+const chartComponentCurrency = computed(() => revenueSummary.value?.currency ?? null);
+
 // Peak hours helpers
 const hourBarColor = (hour) => {
   if (hour >= 6 && hour <= 11) return "bg-amber-400/70 hover:bg-amber-400";
@@ -1134,8 +1149,9 @@ const refresh = async () => {
   loading.value = true;
   error.value = "";
   try {
-    await tenant.fetchMeta();
-    const [cats, dishes] = await Promise.all([
+    // Fire all three independent calls in parallel instead of sequentially.
+    const [, cats, dishes] = await Promise.all([
+      tenant.fetchMeta(),
       api.get("/categories/", { timeout: 5000 }),
       api.get("/dishes/", { timeout: 5000 }),
     ]);
@@ -1161,41 +1177,59 @@ const setDashboardPeriod = (days) => {
   void hydrateOwnerInsights();
 };
 
+// ── Insights data helpers ─────────────────────────────────────────────────────
+let _insightsAbort = null;
+
+/** Apply a dashboard API response to the reactive state (shared by cache + network path). */
+const _applyInsightsData = (data) => {
+  if (data?.analytics_summary) analyticsSummary.value = data.analytics_summary;
+  if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
+  if (Array.isArray(data?.upgrade_targets)) upgradeTargets.value = data.upgrade_targets;
+  if (data?.upgrade_meta) {
+    upgradeMeta.value = {
+      current_tier_code: data.upgrade_meta.current_tier_code || tenant.entitlements?.tier_code || "basic",
+      current_tier_name: data.upgrade_meta.current_tier_name || tenant.entitlements?.tier_name || "Basic",
+      has_pending_request: data.upgrade_meta.has_pending_request === true,
+    };
+  }
+  if (Array.isArray(data?.upgrade_requests)) {
+    upgradeRequests.value = data.upgrade_requests;
+    upgradeMeta.value = {
+      ...upgradeMeta.value,
+      has_pending_request: upgradeRequests.value.some((r) => r.status === "pending"),
+    };
+  }
+  ensureUpgradeTargetSelection();
+};
+
 const hydrateOwnerInsights = async () => {
-  // Single-request path: /api/owner/dashboard/ combines analytics + upgrade
-  // data that previously required 3 separate calls.
-  insightsLoading.value = true;
+  // Cancel any superseded in-flight request (e.g. rapid period switching).
+  _insightsAbort?.abort();
+  const ctrl = new AbortController();
+  _insightsAbort = ctrl;
+
+  const cacheKey = `owner.insights.${dashboardPeriod.value}d`;
+  const cached = readCache(cacheKey);
+
+  if (cached) {
+    _applyInsightsData(cached);
+    if (isFresh(cacheKey, INSIGHTS_TTL_MS)) return; // Cache still fresh — skip network
+    insightsUpdating.value = true; // Stale — revalidate silently in the background
+  } else {
+    insightsLoading.value = true; // Cold start — show skeleton
+  }
+
   try {
     const { data } = await api.get("/owner/dashboard/", {
       params: { days: dashboardPeriod.value },
+      signal: ctrl.signal,
       timeout: 8000,
     });
-    if (data?.analytics_summary) {
-      analyticsSummary.value = data.analytics_summary;
-    }
-    if (data?.revenue_summary) {
-      revenueSummary.value = data.revenue_summary;
-    }
-    if (Array.isArray(data?.upgrade_targets)) {
-      upgradeTargets.value = data.upgrade_targets;
-    }
-    if (data?.upgrade_meta) {
-      upgradeMeta.value = {
-        current_tier_code: data.upgrade_meta.current_tier_code || tenant.entitlements?.tier_code || "basic",
-        current_tier_name: data.upgrade_meta.current_tier_name || tenant.entitlements?.tier_name || "Basic",
-        has_pending_request: data.upgrade_meta.has_pending_request === true,
-      };
-    }
-    if (Array.isArray(data?.upgrade_requests)) {
-      upgradeRequests.value = data.upgrade_requests;
-      // Re-derive pending flag from the fresh list
-      upgradeMeta.value = {
-        ...upgradeMeta.value,
-        has_pending_request: upgradeRequests.value.some((r) => r.status === "pending"),
-      };
-    }
-    ensureUpgradeTargetSelection();
-  } catch {
+    if (ctrl.signal.aborted) return;
+    _applyInsightsData(data);
+    writeCache(cacheKey, data);
+  } catch (err) {
+    if (err.code === "ERR_CANCELED" || err.name === "AbortError" || ctrl.signal.aborted) return;
     // Dashboard endpoint unavailable — fall back to individual calls.
     try {
       const analytics = await api.get("/analytics/summary/", { params: { days: dashboardPeriod.value }, timeout: 5000 });
@@ -1203,7 +1237,10 @@ const hydrateOwnerInsights = async () => {
     } catch { /* analytics are supplementary */ }
     await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
   } finally {
-    insightsLoading.value = false;
+    if (!ctrl.signal.aborted) {
+      insightsLoading.value = false;
+      insightsUpdating.value = false;
+    }
   }
 };
 
@@ -1381,6 +1418,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  _insightsAbort?.abort();
   clearInterval(homePollTimer);
   if (copyResetTimer !== null) {
     clearTimeout(copyResetTimer);
