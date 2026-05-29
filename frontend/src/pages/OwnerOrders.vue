@@ -100,6 +100,19 @@
       <p v-if="order.ordersHasMore" class="text-xs text-amber-400/80">
         {{ t("ownerOrders.hasMore", { total: order.ordersTotal }) }}
       </p>
+
+      <!-- Batch action: confirm all pending -->
+      <div v-if="pendingOrdersList.length > 1 && !activeStatus && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+        <span class="h-2 w-2 animate-pulse rounded-full bg-amber-400"></span>
+        <span class="flex-1 text-xs text-amber-200">{{ pendingOrdersList.length }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
+        <button
+          class="rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          :disabled="confirmingAll"
+          @click="confirmAllPending"
+        >
+          {{ confirmingAll ? t("ownerOrders.confirmingAll") : t("ownerOrders.confirmAllPending", { n: pendingOrdersList.length }) }}
+        </button>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -482,6 +495,7 @@ const activeStatus = ref("");
 const activeDateFilter = ref("all");
 const searchQuery = ref("");
 const exporting = ref(false);
+const confirmingAll = ref(false);
 const editingId = ref(null);
 const editNote = ref("");
 const editMinutes = ref(null);
@@ -607,6 +621,31 @@ const filteredOrders = computed(() => {
 
 const setFilter = (val) => { activeStatus.value = val; };
 const refresh = () => order.fetchOrders();
+
+const pendingOrdersList = computed(() =>
+  order.orders.filter((o) => o.status === "pending")
+);
+
+const confirmAllPending = async () => {
+  if (confirmingAll.value) return;
+  const toConfirm = pendingOrdersList.value.slice();
+  if (!toConfirm.length) return;
+  confirmingAll.value = true;
+  let failed = 0;
+  for (const o of toConfirm) {
+    try {
+      await order.updateOrderStatus(o.id, { status: "confirmed" });
+    } catch {
+      failed++;
+    }
+  }
+  confirmingAll.value = false;
+  if (failed === 0) {
+    toast.show(t("ownerOrders.confirmAllDone", { n: toConfirm.length }), "success");
+  } else {
+    toast.show(t("ownerOrders.confirmAllFailed"), "error");
+  }
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const statusClass = (s) => ({

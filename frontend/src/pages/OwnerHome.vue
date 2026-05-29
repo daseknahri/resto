@@ -36,6 +36,9 @@
         <div class="py-3 text-center">
           <p class="text-xl font-bold tabular-nums text-white">{{ todayOrderStats.count }}</p>
           <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayOrders") }}</p>
+          <p v-if="yesterdayOrderStats.count > 0" class="mt-0.5 text-[9px] tabular-nums" :class="todayOrderStats.count >= yesterdayOrderStats.count ? 'text-emerald-500' : 'text-slate-600'">
+            {{ todayOrderStats.count >= yesterdayOrderStats.count ? '+' : '' }}{{ todayOrderStats.count - yesterdayOrderStats.count }} {{ t("ownerHome.vsYesterday") }}
+          </p>
         </div>
         <div class="border-x border-slate-800 py-3 text-center">
           <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayOrderStats.revenue }}</p>
@@ -99,7 +102,7 @@
       </div>
 
       <!-- Dish availability quick toggle -->
-      <details class="group rounded-xl border border-slate-800 bg-slate-950/30" :open="soldOutCount > 0 || dishAvailOpen">
+      <details class="group rounded-xl border border-slate-800 bg-slate-950/30" :open="dishAvailOpen">
         <summary
           class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-200 [&::-webkit-details-marker]:hidden"
           @click.prevent="dishAvailOpen = !dishAvailOpen"
@@ -187,9 +190,9 @@
           <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
-        <button class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto" @click="copyMenuUrl">
-          <AppIcon name="copy" class="owner-home-btn-icon" />
-          {{ t("ownerHome.copyPublicUrl") }}
+        <button class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto transition-colors" :class="copied ? 'border-emerald-500/50 text-emerald-300' : ''" @click="copyMenuUrl">
+          <AppIcon :name="copied ? 'check' : 'copy'" class="owner-home-btn-icon" />
+          {{ copied ? t("ownerHome.menuUrlCopied") : t("ownerHome.copyPublicUrl") }}
         </button>
         <button class="ui-btn-outline col-span-2 w-full px-4 py-2.5 sm:w-auto" :disabled="loading" @click="refresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" />
@@ -198,7 +201,6 @@
       </div>
 
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
-      <p v-if="copied" class="text-xs text-emerald-300">{{ t("ownerHome.menuUrlCopied") }}</p>
     </article>
 
     <article class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
@@ -237,10 +239,22 @@
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
           <AppIcon name="chart" class="owner-home-section-icon" />
-          <span>{{ t("ownerHome.analyticsTitle") }}</span>
+          <span>{{ t("ownerHome.analyticsTitle", { days: dashboardPeriod }) }}</span>
         </h3>
-        <div class="flex items-center gap-2">
-          <p class="text-xs text-slate-400">{{ t("ownerHome.analyticsSubtitle") }}</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Period selector pills -->
+          <div class="flex items-center gap-1">
+            <button
+              v-for="d in PERIOD_OPTIONS"
+              :key="d"
+              class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+              :class="dashboardPeriod === d
+                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+              :disabled="insightsLoading"
+              @click="setDashboardPeriod(d)"
+            >{{ d }}d</button>
+          </div>
           <button
             class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
             :disabled="analyticsExporting"
@@ -257,24 +271,42 @@
         </div>
       </div>
 
-      <!-- KPI tiles -->
+      <!-- KPI tiles — skeleton while loading -->
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ analyticsCounts.dish_view || 0 }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.orderActions") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ orderActionsCount }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.interactionRate") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
-        </div>
+        <template v-if="insightsLoading">
+          <div v-for="i in 4" :key="i" class="ui-stat-tile animate-pulse">
+            <div class="h-3 w-16 rounded bg-slate-700/60" />
+            <div class="mt-2 h-7 w-12 rounded bg-slate-700/40" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ analyticsCounts.menu_view || 0 }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ analyticsCounts.dish_view || 0 }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.orderActions") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ orderActionsCount }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.interactionRate") }}</p>
+            <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
+          </div>
+        </template>
+      </div>
+
+      <!-- Empty state: no analytics data at all -->
+      <div
+        v-if="!insightsLoading && !funnelSteps.some(s => s.value > 0) && !topCategories.length"
+        class="rounded-xl border border-slate-800/60 bg-slate-900/30 px-4 py-5 text-center space-y-1"
+      >
+        <AppIcon name="chart" class="mx-auto h-6 w-6 text-slate-600" />
+        <p class="text-sm font-medium text-slate-400">{{ t("ownerHome.noAnalyticsData") }}</p>
+        <p class="text-xs text-slate-600">{{ t("ownerHome.noAnalyticsDataHint") }}</p>
       </div>
 
       <!-- Order conversion funnel -->
@@ -341,45 +373,53 @@
     </article>
 
     <!-- Revenue analytics (hidden for staff without view_revenue permission) -->
-    <article v-if="revenueSummary && session.canViewRevenue" class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
+    <article v-if="(revenueSummary || insightsLoading) && session.canViewRevenue" class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
-          <AppIcon name="chart" class="owner-home-section-icon" />
+          <AppIcon name="download" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.revenueTitle") }}</span>
         </h3>
-        <p class="text-xs text-slate-400">{{ t("ownerHome.revenuePeriod", { days: revenueSummary.days }) }}</p>
+        <p class="text-xs text-slate-400">{{ revenueSummary ? t("ownerHome.revenuePeriod", { days: revenueSummary.days }) : `${dashboardPeriod}d` }}</p>
       </div>
 
-      <!-- KPI row -->
+      <!-- KPI row — skeleton while loading -->
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ formatRevenue(revenueSummary.total_revenue) }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ revenueSummary.order_count }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ formatRevenue(revenueSummary.avg_order_value) }}</p>
-        </div>
-        <div class="ui-stat-tile">
-          <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
-          <p
-            class="ui-stat-value"
-            :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'"
-          >
-            {{ returnRateLabel }}
-          </p>
-          <p v-if="returnRate !== null && returnData" class="mt-0.5 text-[10px] text-slate-500">
-            {{ t("ownerHome.customerReturnRateHint", { count: returnData.total_customers }) }}
-          </p>
-        </div>
+        <template v-if="insightsLoading">
+          <div v-for="i in 4" :key="i" class="ui-stat-tile animate-pulse">
+            <div class="h-3 w-16 rounded bg-slate-700/60" />
+            <div class="mt-2 h-7 w-14 rounded bg-slate-700/40" />
+          </div>
+        </template>
+        <template v-else-if="revenueSummary">
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
+            <p class="ui-stat-value text-[var(--color-secondary)]">{{ formatRevenue(revenueSummary.total_revenue) }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ revenueSummary.order_count }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
+            <p class="ui-stat-value text-slate-100">{{ formatRevenue(revenueSummary.avg_order_value) }}</p>
+          </div>
+          <div class="ui-stat-tile">
+            <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
+            <p
+              class="ui-stat-value"
+              :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'"
+            >
+              {{ returnRateLabel }}
+            </p>
+            <p v-if="returnRate !== null && returnData" class="mt-0.5 text-[10px] text-slate-500">
+              {{ t("ownerHome.customerReturnRateHint", { count: returnData.total_customers }) }}
+            </p>
+          </div>
+        </template>
       </div>
 
       <!-- Daily revenue bar chart (CSS-only) -->
-      <div v-if="revenueSummary.daily.length > 1" class="space-y-1">
+      <div v-if="revenueSummary && revenueSummary.daily.length > 1" class="space-y-1">
         <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.revenueDailyChart") }}</p>
         <div class="flex items-end gap-0.5 h-20 overflow-x-auto pb-1">
           <div
@@ -401,7 +441,7 @@
       </div>
 
       <!-- Peak hours charts (only when there are orders to show) -->
-      <div v-if="revenueSummary.order_count > 0" class="space-y-3 pt-2 border-t border-slate-800/60">
+      <div v-if="revenueSummary && revenueSummary.order_count > 0 && peakHoursBars.length" class="space-y-3 pt-2 border-t border-slate-800/60">
         <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.peakHoursTitle") }}</p>
         <div class="grid sm:grid-cols-2 gap-4">
           <!-- Orders by hour of day -->
@@ -445,7 +485,7 @@
       </div>
 
       <!-- Popular dishes (only when there are orders) -->
-      <div v-if="popularDishes.length" class="space-y-2 pt-2 border-t border-slate-800/60">
+      <div v-if="revenueSummary && popularDishes.length" class="space-y-2 pt-2 border-t border-slate-800/60">
         <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.popularDishesTitle") }}</p>
         <ol class="space-y-1.5">
           <li
@@ -566,7 +606,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import BestSellersWidget from "../components/BestSellersWidget.vue";
@@ -612,6 +652,9 @@ const analyticsSummary = ref({
 });
 const revenueSummary = ref(null); // { total_revenue, order_count, avg_order_value, daily: [{date, revenue, orders}] }
 const ratingsSummary = ref(null); // { count, average } or null while loading
+const insightsLoading = ref(false);
+const dashboardPeriod = ref(30);
+const PERIOD_OPTIONS = [7, 14, 30, 90];
 
 // ── Dish availability panel ───────────────────────────────────────────────────
 const dishAvailOpen = ref(false);
@@ -623,6 +666,11 @@ const resettingAvailability = ref(false);
 // is_available = daily 86 toggle (sold-out but still visible on menu)
 // is_published = permanent visibility toggle (hide from menu entirely)
 const soldOutCount = computed(() => dishesData.value.filter((d) => d.is_published && !d.is_available).length);
+
+// Auto-open when new sold-out dishes appear (e.g. after data load)
+watch(soldOutCount, (n, o) => {
+  if (n > 0 && o === 0) dishAvailOpen.value = true;
+});
 const filteredDishesAvail = computed(() => {
   const q = dishAvailSearch.value.toLowerCase();
   const list = [...dishesData.value].filter((d) => d.is_published).sort((a, b) => {
@@ -754,6 +802,17 @@ const todayOrderStats = computed(() => {
     count: todayOrders.length,
     revenue: revenueLabel,
     pending: todayOrders.filter((o) => o.status === "pending").length,
+  };
+});
+
+const yesterdayOrderStats = computed(() => {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = yesterday.toDateString();
+  const yOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === yStr);
+  return {
+    count: yOrders.length,
+    pending: yOrders.filter((o) => o.status === "pending").length,
   };
 });
 
@@ -1059,12 +1118,19 @@ const refresh = async () => {
   }
 };
 
+const setDashboardPeriod = (days) => {
+  if (days === dashboardPeriod.value) return;
+  dashboardPeriod.value = days;
+  void hydrateOwnerInsights();
+};
+
 const hydrateOwnerInsights = async () => {
   // Single-request path: /api/owner/dashboard/ combines analytics + upgrade
   // data that previously required 3 separate calls.
+  insightsLoading.value = true;
   try {
     const { data } = await api.get("/owner/dashboard/", {
-      params: { days: 30 },
+      params: { days: dashboardPeriod.value },
       timeout: 8000,
     });
     if (data?.analytics_summary) {
@@ -1095,10 +1161,12 @@ const hydrateOwnerInsights = async () => {
   } catch {
     // Dashboard endpoint unavailable — fall back to individual calls.
     try {
-      const analytics = await api.get("/analytics/summary/", { params: { days: 30 }, timeout: 5000 });
+      const analytics = await api.get("/analytics/summary/", { params: { days: dashboardPeriod.value }, timeout: 5000 });
       analyticsSummary.value = analytics?.data || analyticsSummary.value;
     } catch { /* analytics are supplementary */ }
     await Promise.allSettled([fetchUpgradeTargets(), fetchUpgradeRequests()]);
+  } finally {
+    insightsLoading.value = false;
   }
 };
 
