@@ -8,9 +8,21 @@
       <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="py-16 text-center text-sm text-slate-400">
-      {{ t('ownerFlashSales.loading') }}
+    <!-- Loading: skeleton cards -->
+    <div v-if="loading" class="space-y-4">
+      <div v-for="i in 3" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="flex-1 space-y-2">
+            <div class="flex items-center gap-2">
+              <div class="h-4 w-36 rounded-full bg-slate-700/60" />
+              <div class="h-4 w-14 rounded-full bg-slate-800/60" />
+            </div>
+            <div class="h-3 w-52 rounded bg-slate-800/50" />
+            <div class="h-3 w-40 rounded bg-slate-800/40" />
+          </div>
+          <div class="h-8 w-20 shrink-0 rounded-full bg-slate-800/60" />
+        </div>
+      </div>
     </div>
 
     <!-- Error -->

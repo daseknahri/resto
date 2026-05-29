@@ -7,8 +7,22 @@
       <p class="text-sm text-slate-400">{{ t('ownerLoyalty.subtitle') }}</p>
     </div>
 
-    <div v-if="loading" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 py-10 text-center text-sm text-slate-400">
-      {{ t('common.loading') }}
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5 space-y-5">
+      <div class="flex items-center justify-between gap-4">
+        <div class="space-y-1.5">
+          <div class="h-4 w-32 rounded bg-slate-700/60" />
+          <div class="h-3 w-48 rounded bg-slate-800/50" />
+        </div>
+        <div class="h-6 w-11 rounded-full bg-slate-700/50" />
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div v-for="i in 4" :key="i" class="space-y-1.5">
+          <div class="h-3 w-24 rounded bg-slate-800/60" />
+          <div class="h-9 rounded-lg bg-slate-800/50" />
+        </div>
+      </div>
+      <div class="h-9 rounded-xl bg-slate-700/40" />
     </div>
 
     <template v-else>

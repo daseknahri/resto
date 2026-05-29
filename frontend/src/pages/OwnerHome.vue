@@ -233,7 +233,23 @@
       <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
     </article>
 
-    <article class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
+    <!-- Readiness skeleton -->
+    <article v-if="loading" class="ui-section-band animate-pulse space-y-3 p-3 sm:space-y-4 sm:p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div class="h-3.5 w-28 rounded bg-slate-700/60" />
+        <div class="h-3.5 w-10 rounded bg-slate-700/60" />
+      </div>
+      <div class="h-2 rounded-full bg-slate-800" />
+      <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div v-for="i in 5" :key="i" class="ui-checklist-card flex items-center justify-between gap-3">
+          <div class="h-3 flex-1 rounded bg-slate-700/50" />
+          <div class="h-5 w-14 shrink-0 rounded-full bg-slate-700/40" />
+        </div>
+      </div>
+    </article>
+
+    <!-- Readiness — only show once real data has loaded -->
+    <article v-else class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
       <div class="flex items-center justify-between gap-3">
         <p class="text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
         <span class="text-sm font-semibold" :class="readinessScore === 100 ? 'text-emerald-400' : 'text-[var(--color-secondary)]'">
