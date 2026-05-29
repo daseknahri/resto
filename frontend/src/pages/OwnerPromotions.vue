@@ -30,6 +30,18 @@
       </div>
     </div>
 
+    <!-- Error -->
+    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t('ownerPromotions.fetchError') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="fetchPromotions"
+      >{{ t('ownerPromotions.retry') }}</button>
+    </div>
+
     <!-- Empty -->
     <div v-else-if="!promotions.length" class="rounded-2xl border border-slate-700/40 bg-slate-900/40 py-12 text-center space-y-1.5">
       <p class="text-2xl">🏷️</p>
@@ -261,6 +273,7 @@ const promoTypes = computed(() => [
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);
+const fetchError = ref(false);
 const promotions = ref([]);
 const drawerOpen = ref(false);
 const editingPromo = ref(null);
@@ -342,11 +355,12 @@ const openEdit = (promo) => {
 // ── API ───────────────────────────────────────────────────────────────────────
 const fetchPromotions = async () => {
   loading.value = true;
+  fetchError.value = false;
   try {
     const res = await api.get('/owner/promotions/');
     promotions.value = res.data;
   } catch {
-    // silent
+    fetchError.value = true;
   } finally {
     loading.value = false;
   }

@@ -631,6 +631,8 @@ export const messages = {
       how4: "Wallet credits can then be used to pay for future orders at your restaurant.",
       saved: "Loyalty settings saved.",
       saveFailed: "Could not save loyalty settings.",
+      fetchError: "Could not load loyalty settings.",
+      retry: "Retry",
     },
     ownerWallet: {
       kicker: "Wallet",
@@ -2379,6 +2381,8 @@ export const messages = {
       labelFixed: "{value} off",
       minOrderShort: "Min {amount}",
       nameRequired: "Name is required.",
+      fetchError: "Could not load promotions.",
+      retry: "Retry",
     },
     ownerFlashSales: {
       kicker: "Platform campaigns",
@@ -2386,6 +2390,7 @@ export const messages = {
       subtitle: "Opt in to platform-wide flash sales to attract more customers through the marketplace.",
       loading: "Loading flash sales…",
       fetchError: "Could not load flash sales.",
+      retry: "Retry",
       empty: "No flash sales available",
       emptyHint: "Platform flash sales will appear here when launched. Check back soon.",
       live: "Live now",
@@ -3439,6 +3444,8 @@ export const messages = {
       how4: "Les credits portefeuille peuvent ensuite etre utilises pour payer des futures commandes.",
       saved: "Parametres de fidelite sauvegardes.",
       saveFailed: "Impossible de sauvegarder les parametres de fidelite.",
+      fetchError: "Impossible de charger les parametres de fidelite.",
+      retry: "Reessayer",
     },
     ownerWallet: {
       kicker: "Portefeuille",
@@ -5192,6 +5199,8 @@ export const messages = {
       labelFixed: "{value} de reduction",
       minOrderShort: "Min {amount}",
       nameRequired: "Le nom est requis.",
+      fetchError: "Impossible de charger les promotions.",
+      retry: "Reessayer",
     },
     ownerFlashSales: {
       kicker: "Campagnes plateforme",
@@ -5199,6 +5208,7 @@ export const messages = {
       subtitle: "Participez aux ventes flash de la plateforme pour attirer plus de clients via la marketplace.",
       loading: "Chargement des ventes flash…",
       fetchError: "Impossible de charger les ventes flash.",
+      retry: "Reessayer",
       empty: "Aucune vente flash disponible",
       emptyHint: "Les ventes flash apparaitront ici a leur lancement. Revenez bientot.",
       live: "En cours",

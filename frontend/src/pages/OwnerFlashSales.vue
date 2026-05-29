@@ -26,8 +26,15 @@
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="py-16 text-center text-sm text-red-300">
-      {{ t('ownerFlashSales.fetchError') }}
+    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t('ownerFlashSales.fetchError') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="fetchSales"
+      >{{ t('ownerFlashSales.retry') }}</button>
     </div>
 
     <!-- Empty -->
