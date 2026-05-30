@@ -5,6 +5,7 @@
       class="fixed inset-0 z-[3000] flex flex-col bg-slate-950/98 backdrop-blur"
       role="dialog"
       aria-modal="true"
+      @keydown.esc.window="$emit('close')"
     >
       <!-- Header bar -->
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">

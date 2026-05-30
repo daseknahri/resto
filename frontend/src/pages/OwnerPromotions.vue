@@ -119,7 +119,7 @@
 
     <!-- Create / Edit drawer -->
     <Teleport to="body">
-      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0">
+      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc.window="drawerOpen = false">
         <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
           <div class="flex items-center justify-between">
             <h2 class="text-base font-bold text-white">

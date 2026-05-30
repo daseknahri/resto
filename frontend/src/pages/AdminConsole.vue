@@ -1088,6 +1088,7 @@
         v-if="dryRunReview"
         class="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
         @click.self="cancelDryRun"
+        @keydown.esc.window="cancelDryRun"
       >
         <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
           <div class="border-b border-slate-800 px-5 py-4">
