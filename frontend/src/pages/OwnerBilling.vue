@@ -338,13 +338,13 @@
       <div class="flex flex-wrap items-end gap-3">
         <div class="space-y-1">
           <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionYear') }}</label>
-          <select v-model="commissionYear" class="ui-input text-sm">
+          <select v-model="commissionYear" :aria-label="t('ownerBilling.commissionYear')" class="ui-input text-sm">
             <option v-for="y in commissionYears" :key="y" :value="y">{{ y }}</option>
           </select>
         </div>
         <div class="space-y-1">
           <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionMonth') }}</label>
-          <select v-model="commissionMonth" class="ui-input text-sm">
+          <select v-model="commissionMonth" :aria-label="t('ownerBilling.commissionMonth')" class="ui-input text-sm">
             <option v-for="m in 12" :key="m" :value="m">{{ commissionMonthName(m) }}</option>
           </select>
         </div>

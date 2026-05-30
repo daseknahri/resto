@@ -60,7 +60,7 @@
         </label>
         <div class="hidden text-xs text-slate-400 md:block">
           {{ t("adminConsole.pageSize") }}
-          <select v-model.number="pageSize" class="ui-input mt-1 w-24" @change="onPageSizeChange">
+          <select v-model.number="pageSize" :aria-label="t('adminConsole.pageSize')" class="ui-input mt-1 w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
             <option :value="50">50</option>
@@ -135,7 +135,7 @@
             <span class="ui-data-strip">{{ activeFilterSummary }}</span>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <select v-model="bulkAction" class="ui-input w-[160px] text-xs">
+            <select v-model="bulkAction" :aria-label="t('ownerReservations.bulkActionSelect')" class="ui-input w-[160px] text-xs">
               <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
               <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
               <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
@@ -200,7 +200,7 @@
             <span class="ui-data-strip">{{ activeFilterSummary }}</span>
           </div>
           <div class="grid grid-cols-2 gap-2">
-            <select v-model="bulkAction" class="ui-input col-span-2 text-xs">
+            <select v-model="bulkAction" :aria-label="t('ownerReservations.bulkActionSelect')" class="ui-input col-span-2 text-xs">
               <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
               <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
               <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>

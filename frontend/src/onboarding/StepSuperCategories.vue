@@ -359,7 +359,7 @@
 
               <div class="grid gap-3 sm:grid-cols-2">
                 <input v-model.number="quickRow.position" type="number" min="0" class="ui-input" :placeholder="t('stepSuperCategories.position')" />
-                <select v-model="quickRow.is_published" class="ui-input">
+                <select v-model="quickRow.is_published" :aria-label="t('stepSuperCategories.visibility')" class="ui-input">
                   <option :value="true">{{ t("common.available") }}</option>
                   <option :value="false">{{ t("common.soon") }}</option>
                 </select>

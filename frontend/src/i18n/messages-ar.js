@@ -742,6 +742,7 @@ const arabicMessages = {
     "exporting": "جارٍ التصدير...",
     "exportCsv": "تصدير CSV",
     "selectPage": "تحديد الصفحة",
+    "bulkActionSelect": "إجراء جماعي",
     "selectedCount": "{count} محدد",
     "bulkRetryReminders": "إعادة تذكير جماعية",
     "preparing": "جارٍ التحضير...",

@@ -31,7 +31,7 @@
         <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end">
           <div class="space-y-1">
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
-            <select v-model="activeCategoryId" class="ui-input border-slate-700 bg-slate-950/70">
+            <select v-model="activeCategoryId" :aria-label="t('stepDishes.selectCategory')" class="ui-input border-slate-700 bg-slate-950/70">
               <option v-for="category in sortedCategoryOptions" :key="category.id" :value="String(category.id)">
                 {{ categoryLabel(category) }} ({{ dishCountForCategory(category.id) }})
               </option>
@@ -200,6 +200,7 @@
                 <div class="space-y-1">
                   <select
                     v-model="editingDish.category"
+                    :aria-label="t('stepDishes.selectCategory')"
                     class="ui-input"
                     :class="rowError(editingDish, 'category') ? 'border-red-400' : 'border-slate-700'"
                     @change="clearRowError(editingDish.local_id, 'category')"
@@ -688,7 +689,7 @@
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1">
-                  <select v-model="quickDish.category" class="ui-input" :class="quickDishErrors.category ? 'border-red-400' : ''" @change="quickDishErrors.category = ''">
+                  <select v-model="quickDish.category" :aria-label="t('stepDishes.selectCategory')" class="ui-input" :class="quickDishErrors.category ? 'border-red-400' : ''" @change="quickDishErrors.category = ''">
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
                     <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                   </select>

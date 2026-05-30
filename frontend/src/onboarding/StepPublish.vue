@@ -263,6 +263,7 @@
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.slotDurationHint") }}</p>
               <select
                 v-model.number="form.slot_duration_minutes"
+                :aria-label="t('stepPublish.slotDuration')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
               >
                 <option :value="30">30 {{ t("stepPublish.minuteUnit") }}</option>
