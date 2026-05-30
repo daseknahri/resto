@@ -34,7 +34,7 @@
 
     <!-- Search -->
     <div class="relative">
-      <input v-model.trim="search" class="ui-input pr-10" :placeholder="t('category.searchPlaceholder')" />
+      <input v-model.trim="search" type="search" class="ui-input pr-10" :placeholder="t('category.searchPlaceholder')" />
       <button
         v-if="search"
         class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 p-1 text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"

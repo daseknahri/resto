@@ -156,6 +156,7 @@
               <span class="text-[11px] text-emerald-200/75">{{ t('cartPage.tableCustomerNameOptional') }}</span>
               <input
                 v-model.trim="customerNameModel"
+                type="text"
                 maxlength="80"
                 class="ui-input"
                 autocomplete="name"
@@ -292,6 +293,7 @@
                     <input
                       ref="deliveryUrlInputRef"
                       v-model.trim="deliveryLocationUrl"
+                      type="text"
                       maxlength="500"
                       class="ui-input flex-1 min-w-0"
                       :class="waitingForPaste ? 'ring-2 ring-[var(--color-secondary)]/40' : ''"

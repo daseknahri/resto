@@ -64,7 +64,7 @@
           <span class="sr-only">{{ t("common.search") }}</span>
           <div class="relative">
             <AppIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input v-model.trim="search" class="ui-input pl-10" :placeholder="t('common.search')" />
+            <input v-model.trim="search" type="search" class="ui-input pl-10" :placeholder="t('common.search')" />
           </div>
         </label>
         <div class="ui-scroll-row">

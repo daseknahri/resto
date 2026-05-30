@@ -75,6 +75,7 @@
             {{ t("leadCapture.phoneWhatsapp") }}
             <input
               v-model.trim="form.phone"
+              type="tel"
               class="ui-input"
               :class="errors.phone ? 'border-red-400' : 'border-slate-700'"
               placeholder="+212..."

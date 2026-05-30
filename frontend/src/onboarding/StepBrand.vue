@@ -50,12 +50,12 @@
       </div>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.phone") }}
-          <input v-model="form.phone" :class="inputClass('phone')" @input="clearField('phone')" />
+          <input v-model="form.phone" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('phone')" @input="clearField('phone')" />
           <p v-if="fieldError('phone')" class="text-xs text-red-300">{{ fieldError("phone") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ whatsappLabel }}
-          <input v-model="form.whatsapp" :class="inputClass('whatsapp')" @input="clearField('whatsapp')" />
+          <input v-model="form.whatsapp" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('whatsapp')" @input="clearField('whatsapp')" />
           <p v-if="fieldError('whatsapp')" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
           <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
         </label>
@@ -238,13 +238,15 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.googleMapsUrl") }}
-          <input v-model="form.google_maps_url" :class="inputClass('google_maps_url')" @input="clearField('google_maps_url')" />
+          <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" @input="clearField('google_maps_url')" />
           <p v-if="fieldError('google_maps_url')" class="text-xs text-red-300">{{ fieldError("google_maps_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.reservationUrl") }}
           <input
             v-model="form.reservation_url"
+            type="url"
+            inputmode="url"
             :class="inputClass('reservation_url')"
             placeholder="https://..."
             @input="clearField('reservation_url')"
@@ -253,17 +255,17 @@
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.facebookUrl") }}
-          <input v-model="form.facebook_url" :class="inputClass('facebook_url')" @input="clearField('facebook_url')" />
+          <input v-model="form.facebook_url" type="url" inputmode="url" :class="inputClass('facebook_url')" @input="clearField('facebook_url')" />
           <p v-if="fieldError('facebook_url')" class="text-xs text-red-300">{{ fieldError("facebook_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.instagramUrl") }}
-          <input v-model="form.instagram_url" :class="inputClass('instagram_url')" @input="clearField('instagram_url')" />
+          <input v-model="form.instagram_url" type="url" inputmode="url" :class="inputClass('instagram_url')" @input="clearField('instagram_url')" />
           <p v-if="fieldError('instagram_url')" class="text-xs text-red-300">{{ fieldError("instagram_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.tiktokUrl") }}
-          <input v-model="form.tiktok_url" :class="inputClass('tiktok_url')" @input="clearField('tiktok_url')" />
+          <input v-model="form.tiktok_url" type="url" inputmode="url" :class="inputClass('tiktok_url')" @input="clearField('tiktok_url')" />
           <p v-if="fieldError('tiktok_url')" class="text-xs text-red-300">{{ fieldError("tiktok_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">

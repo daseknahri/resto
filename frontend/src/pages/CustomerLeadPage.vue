@@ -279,7 +279,7 @@
               </label>
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.phone") }}
-                <input v-model.trim="form.phone" class="ui-input" :class="fieldClass('phone')" placeholder="+212..." inputmode="tel" autocomplete="tel" @input="clearError('phone')" />
+                <input v-model.trim="form.phone" type="tel" class="ui-input" :class="fieldClass('phone')" placeholder="+212..." inputmode="tel" autocomplete="tel" @input="clearError('phone')" />
                 <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
               </label>
             </div>

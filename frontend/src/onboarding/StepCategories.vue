@@ -30,7 +30,7 @@
           </label>
           <label class="text-sm text-slate-300">
             <span class="sr-only">{{ t("common.search") }}</span>
-            <input v-model.trim="search" class="ui-input border-slate-700 bg-slate-950/70" :placeholder="t('common.search')" />
+            <input v-model.trim="search" type="search" class="ui-input border-slate-700 bg-slate-950/70" :placeholder="t('common.search')" />
           </label>
           <div class="ui-scroll-row">
             <span class="ui-data-strip">{{ filteredCategories.length }} / {{ activeCategories.length }} {{ t("common.categories") }}</span>

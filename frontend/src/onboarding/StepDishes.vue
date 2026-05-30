@@ -39,7 +39,7 @@
           </div>
           <label class="text-sm text-slate-300">
             <span class="sr-only">{{ t("common.search") }}</span>
-            <input v-model.trim="dishSearch" class="ui-input border-slate-700 bg-slate-950/70" :placeholder="t('common.search')" />
+            <input v-model.trim="dishSearch" type="search" class="ui-input border-slate-700 bg-slate-950/70" :placeholder="t('common.search')" />
           </label>
           <button type="button" class="ui-btn-outline px-3 py-2 text-xs" :disabled="!hasPreviousCategory" @click="goToPreviousCategory">
             {{ t("stepDishes.previousCategory") }}
