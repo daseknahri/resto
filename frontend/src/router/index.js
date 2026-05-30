@@ -29,6 +29,7 @@ const ReservationPage = () => import("../pages/ReservationPage.vue");
 const LeadCapture = () => import("../pages/LeadCapture.vue");
 
 const WaiterPage = () => import("../pages/WaiterPage.vue");
+const FindMyOrder = () => import("../pages/FindMyOrder.vue");
 
 const OwnerHome = () => import("../pages/OwnerHome.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
@@ -107,7 +108,7 @@ const routes = [
       // marketplace route which is defined earlier in the routes array and would
       // otherwise win on a hard refresh of /order/ORD-XXXXXX.
       { path: "orders/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
-      { path: "find-my-order", redirect: { name: "customer-account" } },
+      { path: "find-my-order", name: "find-my-order", component: FindMyOrder, meta: { interface: "customer" } },
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
       {
         path: "menu/:slug",

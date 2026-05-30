@@ -60,6 +60,18 @@
             </li>
           </ul>
         </section>
+
+        <!-- Find order by phone (guest lookup) -->
+        <RouterLink
+          :to="{ name: 'find-my-order' }"
+          class="flex items-center justify-between rounded-2xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300 hover:border-slate-600 hover:text-white transition-colors"
+        >
+          <span class="flex items-center gap-2.5">
+            <AppIcon name="search" class="h-4 w-4 text-slate-400" />
+            {{ t('customerLayout.findMyOrder') }}
+          </span>
+          <AppIcon name="arrowRight" class="h-3.5 w-3.5 text-slate-500" />
+        </RouterLink>
       </div>
     </template>
 

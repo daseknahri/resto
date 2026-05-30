@@ -172,7 +172,7 @@ const activeCustomerSection = computed(() => {
   if (name === "menu" || name === "menu-browse" || name === "table-link" || name === "category" || name === "dish") return "menu";
   if (name === "cart") return "cart";
   if (name === "reserve") return "reserve";
-  if (name === "customer-account") return "account";
+  if (name === "customer-account" || name === "find-my-order") return "account";
   return "info";
 });
 

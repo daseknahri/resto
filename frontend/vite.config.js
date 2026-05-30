@@ -20,6 +20,22 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // Target modern browsers — smaller bundles, no legacy transforms
+    target: 'esnext',
+    // Raise warning threshold slightly; our vendor chunk is intentionally large
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Split vendor code from app code so browser caches them independently.
+        // vue/pinia/vue-router rarely change; axios/sentry less so.
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-http': ['axios'],
+        },
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,

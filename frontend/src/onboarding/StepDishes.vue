@@ -91,7 +91,9 @@
                 :src="dish.image_url"
                 alt=""
                 loading="lazy"
+                decoding="async"
                 class="h-14 w-14 shrink-0 rounded-xl border border-slate-700 object-cover"
+                @error="$event.target.style.display='none'"
               />
             </div>
             <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -260,7 +262,7 @@
                   @drop="dropImage(editingDish, $event)">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="flex min-w-0 items-center gap-3">
-                      <img v-if="editingDish.image_url" :src="editingDish.image_url" alt="" loading="lazy" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" />
+                      <img v-if="editingDish.image_url" :src="editingDish.image_url" alt="" loading="lazy" decoding="async" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" @error="$event.target.style.display='none'" />
                       <div class="min-w-0">
                         <p class="text-xs font-medium text-slate-100">{{ t("stepDishes.uploadImage") }}</p>
                         <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>
@@ -743,7 +745,7 @@
                 >
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="flex min-w-0 items-center gap-3">
-                      <img v-if="quickDish.image_url" :src="quickDish.image_url" alt="" loading="lazy" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" />
+                      <img v-if="quickDish.image_url" :src="quickDish.image_url" alt="" loading="lazy" decoding="async" class="h-12 w-12 rounded-xl border border-slate-700 object-cover" @error="$event.target.style.display='none'" />
                       <div class="min-w-0">
                         <p class="text-xs font-medium text-slate-100">{{ t("stepDishes.uploadImage") }}</p>
                         <p class="text-xs text-slate-500">{{ t("stepDishes.acceptedFormats") }}</p>

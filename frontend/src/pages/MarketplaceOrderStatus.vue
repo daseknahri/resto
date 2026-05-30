@@ -323,10 +323,19 @@ const fetchStatus = async () => {
   }
 };
 
+const onMktStatusVisible = () => {
+  if (document.visibilityState === 'visible' && _pollTimer) {
+    fetchStatus();
+    fetchDelivery();
+  }
+};
+
 onMounted(() => {
   fetchStatus();
   fetchDelivery();
+  document.addEventListener('visibilitychange', onMktStatusVisible);
   _pollTimer = setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
     fetchStatus();
     fetchDelivery();
   }, 10000);
@@ -334,5 +343,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearInterval(_pollTimer);
+  document.removeEventListener('visibilitychange', onMktStatusVisible);
 });
 </script>

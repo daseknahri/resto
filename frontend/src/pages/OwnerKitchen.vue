@@ -268,11 +268,16 @@ const doPoll = async () => {
   if (Array.isArray(results)) checkNewOrders(results);
 };
 
+const onKitchenPageVisible = () => {
+  if (document.visibilityState === "visible") doPoll();
+};
+
 onMounted(async () => {
   waiter.setupConnectivityListeners();
   updateClock();
   clockTimer = setInterval(updateClock, 10_000);
   document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("visibilitychange", onKitchenPageVisible);
 
   const initial = await waiter.fetchOrders();
   if (Array.isArray(initial)) {
@@ -289,6 +294,7 @@ onUnmounted(() => {
   clearInterval(pollTimer);
   clearInterval(clockTimer);
   document.removeEventListener("fullscreenchange", onFullscreenChange);
+  document.removeEventListener("visibilitychange", onKitchenPageVisible);
   waiter.teardownConnectivityListeners();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 });

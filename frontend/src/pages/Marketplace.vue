@@ -187,7 +187,9 @@
             :src="r.logo_url"
             :alt="r.name"
             loading="lazy"
+            decoding="async"
             class="h-full w-full object-cover opacity-80"
+            @error="$event.target.style.display='none'"
           />
           <span v-else class="text-3xl text-slate-600">🍽️</span>
 
