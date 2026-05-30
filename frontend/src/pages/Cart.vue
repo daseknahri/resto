@@ -507,6 +507,7 @@
                 type="button"
                 role="switch"
                 :aria-checked="useWallet"
+                :aria-label="t('cartPage.payWithCredits')"
                 class="relative h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none"
                 :class="useWallet ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/30' : 'border-slate-600 bg-slate-800'"
                 @click="useWallet = !useWallet"

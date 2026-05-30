@@ -55,6 +55,7 @@
             type="button"
             role="switch"
             :aria-checked="form.enabled"
+            :aria-label="t('ownerLoyalty.enableLabel')"
             class="relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             :class="form.enabled
               ? 'border-emerald-500/60 bg-emerald-500/30'
