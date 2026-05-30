@@ -23,13 +23,13 @@
         <table class="w-full text-sm">
           <thead class="bg-slate-800/60 text-xs text-slate-400">
             <tr>
-              <th class="px-4 py-3 text-left">{{ t('adminDrivers.colName') }}</th>
-              <th class="px-4 py-3 text-left">{{ t('adminDrivers.colPhone') }}</th>
-              <th class="px-4 py-3 text-center">{{ t('adminDrivers.colStatus') }}</th>
-              <th class="px-4 py-3 text-right">{{ t('adminDrivers.colJobs') }}</th>
-              <th class="px-4 py-3 text-right">{{ t('adminDrivers.colCompleted') }}</th>
-              <th class="px-4 py-3 text-right">{{ t('adminDrivers.colRating') }}</th>
-              <th class="px-4 py-3 text-right">{{ t('adminDrivers.colSince') }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t('adminDrivers.colName') }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t('adminDrivers.colPhone') }}</th>
+              <th scope="col" class="px-4 py-3 text-center">{{ t('adminDrivers.colStatus') }}</th>
+              <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colJobs') }}</th>
+              <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colCompleted') }}</th>
+              <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colRating') }}</th>
+              <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colSince') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/40">
@@ -82,13 +82,13 @@
       <table class="w-full text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th class="px-4 py-3 text-left">{{ t('adminDrivers.colName') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('adminDrivers.colPhone') }}</th>
-            <th class="px-4 py-3 text-center">{{ t('adminDrivers.colStatus') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminDrivers.colJobs') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminDrivers.colCompleted') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminDrivers.colRating') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminDrivers.colSince') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminDrivers.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminDrivers.colPhone') }}</th>
+            <th scope="col" class="px-4 py-3 text-center">{{ t('adminDrivers.colStatus') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colJobs') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colCompleted') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colRating') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colSince') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">

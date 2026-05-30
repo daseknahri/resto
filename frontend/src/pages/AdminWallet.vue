@@ -35,11 +35,11 @@
       <table class="w-full text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th class="px-4 py-3 text-left">#</th>
-            <th class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">#</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">
@@ -73,11 +73,11 @@
       <table class="w-full text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th class="px-4 py-3 text-left">#</th>
-            <th class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
-            <th class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
-            <th class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">#</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">

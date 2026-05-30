@@ -582,11 +582,11 @@
         <table class="w-full min-w-[560px] text-sm">
           <thead>
             <tr class="border-b border-slate-700/50 bg-slate-900/60 text-xs text-slate-400">
-              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.bookedFor") }}</th>
-              <th class="px-4 py-2.5 text-left font-medium">{{ t("common.name") }}</th>
-              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.guests") }}</th>
-              <th class="px-4 py-2.5 text-left font-medium">{{ t("common.status") }}</th>
-              <th class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.notes") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.bookedFor") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("common.name") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.guests") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.notes") }}</th>
             </tr>
           </thead>
           <tbody>

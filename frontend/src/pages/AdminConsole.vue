@@ -625,13 +625,13 @@
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.from") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.to") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.payment") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("common.status") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.actions") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.from") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.to") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.payment") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.actions") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -812,12 +812,12 @@
         <table class="w-full min-w-[920px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.id") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.lead") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("common.status") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.log") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.updated") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.id") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.lead") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.log") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.updated") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -910,11 +910,11 @@
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.action") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.actor") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.target") }}</th>
-              <th class="px-4 py-3 text-left">{{ t("adminConsole.details") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.action") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.actor") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.target") }}</th>
+              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.details") }}</th>
             </tr>
           </thead>
           <tbody>
