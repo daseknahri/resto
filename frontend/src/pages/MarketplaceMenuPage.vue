@@ -217,36 +217,44 @@
           <!-- Customer info -->
           <div class="space-y-3">
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.customerName') }}</label>
-              <input
-                v-model="form.customer_name"
-                type="text"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
-              />
+              <label class="block text-xs font-medium text-slate-400 mb-1">
+                {{ t('mktMenu.customerName') }}
+                <input
+                  v-model="form.customer_name"
+                  type="text"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                />
+              </label>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.customerPhone') }}</label>
-              <input
-                v-model="form.customer_phone"
-                type="tel"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
-              />
+              <label class="block text-xs font-medium text-slate-400 mb-1">
+                {{ t('mktMenu.customerPhone') }}
+                <input
+                  v-model="form.customer_phone"
+                  type="tel"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                />
+              </label>
             </div>
             <div v-if="form.fulfillment_type === 'delivery'">
-              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.deliveryAddress') }}</label>
-              <textarea
-                v-model="form.delivery_address"
-                rows="2"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none resize-none"
-              />
+              <label class="block text-xs font-medium text-slate-400 mb-1">
+                {{ t('mktMenu.deliveryAddress') }}
+                <textarea
+                  v-model="form.delivery_address"
+                  rows="2"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none resize-none"
+                />
+              </label>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.note') }}</label>
-              <input
-                v-model="form.customer_note"
-                type="text"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
-              />
+              <label class="block text-xs font-medium text-slate-400 mb-1">
+                {{ t('mktMenu.note') }}
+                <input
+                  v-model="form.customer_note"
+                  type="text"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                />
+              </label>
             </div>
           </div>
 

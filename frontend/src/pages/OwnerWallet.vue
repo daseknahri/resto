@@ -85,30 +85,34 @@
 
         <!-- Amount -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('ownerWallet.amountLabel') }}</label>
-          <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">+</span>
-            <input
-              v-model="topupAmount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-7 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-              :placeholder="t('ownerWallet.amountPlaceholder')"
-            />
-          </div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+            {{ t('ownerWallet.amountLabel') }}
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">+</span>
+              <input
+                v-model="topupAmount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-7 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+                :placeholder="t('ownerWallet.amountPlaceholder')"
+              />
+            </div>
+          </label>
         </div>
 
         <!-- Note -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('ownerWallet.noteLabel') }}</label>
-          <input
-            v-model="topupNote"
-            type="text"
-            maxlength="200"
-            class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 px-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-            :placeholder="t('ownerWallet.notePlaceholder')"
-          />
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+            {{ t('ownerWallet.noteLabel') }}
+            <input
+              v-model="topupNote"
+              type="text"
+              maxlength="200"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 px-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              :placeholder="t('ownerWallet.notePlaceholder')"
+            />
+          </label>
         </div>
 
         <p v-if="topupError" class="text-xs text-red-400">{{ topupError }}</p>

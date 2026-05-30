@@ -99,16 +99,18 @@
 
         <div class="flex items-end gap-3">
           <div class="flex-1 max-w-[10rem]">
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5">{{ t('ownerDelivery.radiusLabel') }}</label>
-            <input
-              v-model.number="radiusInput"
-              type="number"
-              step="0.5"
-              min="0.5"
-              :max="zone.approx_radius_km"
-              class="ui-input w-full"
-              placeholder="5"
-            />
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              {{ t('ownerDelivery.radiusLabel') }}
+              <input
+                v-model.number="radiusInput"
+                type="number"
+                step="0.5"
+                min="0.5"
+                :max="zone.approx_radius_km"
+                class="ui-input w-full"
+                placeholder="5"
+              />
+            </label>
           </div>
           <span class="text-sm text-slate-400 mb-2.5">km</span>
         </div>
