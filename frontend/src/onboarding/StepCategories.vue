@@ -161,6 +161,7 @@
                   :value="localizedFieldValue(editingCategory, 'description', fieldLocales.description)"
                   rows="3"
                   class="ui-textarea"
+                  :aria-label="t('common.description')"
                   :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
                   @input="setLocalizedFieldValue(editingCategory, 'description', fieldLocales.description, $event.target.value)"
                 ></textarea>
@@ -262,6 +263,7 @@
                   :value="localizedQuickFieldValue('description', quickFieldLocales.description)"
                   rows="3"
                   class="ui-textarea"
+                  :aria-label="t('common.description')"
                   :placeholder="t('stepCategories.categoryDescriptionPlaceholder')"
                   @input="setLocalizedQuickFieldValue('description', quickFieldLocales.description, $event.target.value)"
                 ></textarea>

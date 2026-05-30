@@ -786,6 +786,7 @@
                         rows="2"
                         maxlength="500"
                         class="ui-textarea w-full resize-none text-xs leading-relaxed"
+                        :aria-label="t('customerAccount.reviewsComment')"
                         :placeholder="t('customerAccount.reviewsCommentPlaceholder')"
                         @input="setDraftComment(order.order_number, $event.target.value)"
                       />

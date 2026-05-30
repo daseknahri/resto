@@ -743,6 +743,7 @@
                 v-model="flag.configText"
                 rows="3"
                 class="ui-input w-full px-2 py-1 text-xs font-mono"
+                :aria-label="t('adminConsole.flagConfigPlaceholder')"
                 :placeholder="t('adminConsole.flagConfigPlaceholder')"
               />
               <div class="flex items-center justify-between gap-2">

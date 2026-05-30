@@ -374,6 +374,7 @@
                 v-model.trim="quickRow.disabled_note"
                 rows="3"
                 class="ui-textarea"
+                :aria-label="t('stepSuperCategories.disabledNote')"
                 :placeholder="t('stepSuperCategories.disabledNotePlaceholder')"
               ></textarea>
             </div>

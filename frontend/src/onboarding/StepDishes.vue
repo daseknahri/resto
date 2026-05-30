@@ -320,6 +320,7 @@
                   rows="3"
                   class="ui-textarea"
                   :class="rowError(editingDish, 'description') ? 'border-red-400' : 'border-slate-700'"
+                  :aria-label="t('common.description')"
                   :placeholder="t('stepDishes.descriptionPlaceholder')"
                   @input="setLocalizedDishFieldValue(editingDish, 'description', dishFieldLocales.description, $event.target.value)"
                 ></textarea>
@@ -797,6 +798,7 @@
                     :value="localizedQuickDishFieldValue('description', quickDishFieldLocales.description)"
                     rows="3"
                     class="ui-textarea"
+                    :aria-label="t('common.description')"
                     :placeholder="t('stepDishes.descriptionPlaceholder')"
                     @input="setLocalizedQuickDishFieldValue('description', quickDishFieldLocales.description, $event.target.value)"
                   ></textarea>

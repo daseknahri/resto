@@ -270,6 +270,7 @@
         <textarea
           v-model="ratingComment"
           rows="2"
+          :aria-label="t('orderStatus.commentPlaceholder')"
           :placeholder="t('orderStatus.commentPlaceholder')"
           class="ui-textarea w-full resize-none"
         />

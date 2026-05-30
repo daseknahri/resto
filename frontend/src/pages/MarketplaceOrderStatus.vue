@@ -153,6 +153,7 @@
           v-model="ratingNote"
           rows="2"
           class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500 resize-none"
+          :aria-label="t('mktOrderStatus.ratingNotePlaceholder')"
           :placeholder="t('mktOrderStatus.ratingNotePlaceholder')"
         />
         <button

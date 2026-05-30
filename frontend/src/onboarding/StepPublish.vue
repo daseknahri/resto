@@ -115,6 +115,7 @@
             rows="2"
             class="w-full rounded-xl border bg-slate-900 px-3 py-2 text-sm"
             :class="errors.menu_disabled_note ? 'border-red-400' : 'border-slate-700'"
+            :aria-label="t('stepPublish.disableMessage')"
             :placeholder="t('stepPublish.disableMessagePlaceholder')"
             @input="clearError('menu_disabled_note')"
           ></textarea>
@@ -132,6 +133,7 @@
             rows="2"
             maxlength="300"
             class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+            :aria-label="t('stepPublish.receiptMessage')"
             :placeholder="t('stepPublish.receiptMessagePlaceholder')"
           ></textarea>
           <p class="text-right text-[11px] text-slate-600">{{ (form.receipt_message || "").length }}/300</p>
