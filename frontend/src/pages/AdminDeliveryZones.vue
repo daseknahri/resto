@@ -126,7 +126,7 @@
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60"
           @click.self="closeForm"
         >
-          <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div role="dialog" aria-modal="true" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 class="text-base font-bold text-white">
               {{ editing ? t('adminZones.editTitle') : t('adminZones.createTitle') }}
             </h2>

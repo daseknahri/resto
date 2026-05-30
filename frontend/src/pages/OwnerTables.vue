@@ -295,7 +295,7 @@
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeSetup"
       >
-        <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
+        <div role="dialog" aria-modal="true" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <p class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">

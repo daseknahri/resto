@@ -4,7 +4,7 @@
       class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 backdrop-blur-sm sm:items-center sm:p-5"
       @click.self="$emit('close')"
     >
-      <div class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+      <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
         <!-- Header -->
         <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
           <div>

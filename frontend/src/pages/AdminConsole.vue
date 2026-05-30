@@ -1089,7 +1089,7 @@
         class="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
         @click.self="cancelDryRun"
       >
-        <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+        <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
           <div class="border-b border-slate-800 px-5 py-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
             <h3 class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>

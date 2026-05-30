@@ -246,6 +246,8 @@
       <Transition name="lightbox">
         <div
           v-if="lightboxOpen && dish"
+          role="dialog"
+          aria-modal="true"
           class="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/96 backdrop-blur-sm"
           @click="lightboxOpen = false"
         >

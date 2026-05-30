@@ -209,7 +209,7 @@
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
           @click.self="bonusTarget = null"
         >
-          <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+          <div role="dialog" aria-modal="true" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
             <h2 class="text-sm font-bold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
             <p class="text-xs text-slate-400">
               {{ bonusTarget.name }}

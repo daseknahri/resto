@@ -221,7 +221,7 @@
         class="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/70 no-print"
         @click.self="billOrder = null"
       >
-        <div class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
+        <div role="dialog" aria-modal="true" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
           <!-- Header -->
           <div class="bill-header bg-slate-900 px-5 py-4 text-center">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">{{ tenantName }}</p>
