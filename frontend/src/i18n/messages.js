@@ -66,7 +66,9 @@ export const messages = {
       more: "More",
       done: "Done",
       change: "Change",
-      retry: "Retry"
+      retry: "Retry",
+      decreaseQty: "Decrease quantity",
+      increaseQty: "Increase quantity"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2885,7 +2887,9 @@ export const messages = {
       more: "Plus",
       done: "Terminer",
       change: "Modifier",
-      retry: "Reessayer"
+      retry: "Reessayer",
+      decreaseQty: "Diminuer la quantite",
+      increaseQty: "Augmenter la quantite"
     },
     landingLayout: {
       kicker: "Resto Menu",

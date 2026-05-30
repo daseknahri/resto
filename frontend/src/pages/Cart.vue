@@ -212,7 +212,7 @@
                       <span v-if="addr.label" class="font-medium text-slate-200 mr-1.5">{{ addr.label }}</span>
                       <span class="text-slate-400 truncate">{{ addr.address }}</span>
                     </button>
-                    <button class="shrink-0 text-slate-600 hover:text-red-400 transition-colors" @click="deleteSavedAddress(addr.id)">
+                    <button class="shrink-0 text-slate-600 hover:text-red-400 transition-colors" :aria-label="t('common.remove')" @click="deleteSavedAddress(addr.id)">
                       <AppIcon name="close" class="h-3 w-3" />
                     </button>
                   </div>

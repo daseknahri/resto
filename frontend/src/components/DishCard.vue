@@ -186,11 +186,11 @@
           style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
-          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" @click.stop="handleDecrement">
+          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
             <AppIcon name="minus" class="h-3.5 w-3.5" />
           </button>
           <span class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
-          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" @click.stop="handleAdd">
+          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
@@ -238,11 +238,13 @@
       <div v-if="canOrder && qtyInCart > 0" class="flex items-center gap-1">
         <button
           class="flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 active:scale-90"
+          :aria-label="t('common.decreaseQty')"
           @click.stop="handleDecrement"
         ><AppIcon name="minus" class="h-3 w-3" /></button>
         <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white">{{ qtyInCart }}</span>
         <button
           class="flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 active:scale-90"
+          :aria-label="t('common.increaseQty')"
           @click.stop="handleAdd"
         ><AppIcon name="plus" class="h-3 w-3" /></button>
       </div>
@@ -250,6 +252,7 @@
         v-else-if="canOrder"
         class="flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition hover:brightness-110 active:scale-90"
         style="background-color:var(--color-secondary)"
+        :aria-label="t('dishPage.add')"
         @click.stop="handleAdd"
       ><AppIcon name="plus" class="h-3.5 w-3.5 text-slate-950" /></button>
     </div>

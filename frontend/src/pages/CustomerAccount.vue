@@ -114,6 +114,7 @@
             <!-- Sign out -->
             <button
               class="shrink-0 rounded-xl border border-slate-700/50 bg-slate-900/50 px-2.5 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-red-500/40 hover:bg-red-500/8 hover:text-red-300"
+              :aria-label="t('common.signOut')"
               @click="handleLogout"
             >
               <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" />

@@ -205,6 +205,7 @@
             </button>
             <button
               class="ui-share-btn shrink-0 rounded-xl border p-2.5 text-slate-400 transition-colors hover:text-slate-200"
+              :aria-label="t('dishPage.shareDish')"
               @click="shareDish"
             >
               <AppIcon name="share" class="h-4 w-4" />
