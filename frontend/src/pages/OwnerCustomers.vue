@@ -49,6 +49,7 @@
         <input
           v-model="search"
           type="text"
+          :aria-label="t('ownerCustomers.searchPlaceholder')"
           :placeholder="t('ownerCustomers.searchPlaceholder')"
           class="ui-input w-full pl-8 text-sm"
           @input="onSearch"

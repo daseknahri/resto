@@ -135,42 +135,52 @@
             <div class="space-y-3">
               <!-- Name -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">{{ t('adminZones.fieldName') }}</label>
-                <input v-model="form.name" type="text" class="admin-input" :placeholder="t('adminZones.namePlaceholder')" />
+                <label class="block text-xs text-slate-400 mb-1">
+                  {{ t('adminZones.fieldName') }}
+                  <input v-model="form.name" type="text" class="admin-input" :placeholder="t('adminZones.namePlaceholder')" />
+                </label>
               </div>
               <!-- City -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">{{ t('adminZones.fieldCity') }}</label>
-                <input v-model="form.city" type="text" class="admin-input" :placeholder="t('adminZones.cityPlaceholder')" />
+                <label class="block text-xs text-slate-400 mb-1">
+                  {{ t('adminZones.fieldCity') }}
+                  <input v-model="form.city" type="text" class="admin-input" :placeholder="t('adminZones.cityPlaceholder')" />
+                </label>
               </div>
               <!-- Centre coordinates -->
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-slate-400 mb-1">{{ t('adminZones.fieldCenterLat') }}</label>
-                  <input v-model.number="form.center_lat" type="number" step="0.0001" class="admin-input" placeholder="48.8566" />
+                  <label class="block text-xs text-slate-400 mb-1">
+                    {{ t('adminZones.fieldCenterLat') }}
+                    <input v-model.number="form.center_lat" type="number" step="0.0001" class="admin-input" placeholder="48.8566" />
+                  </label>
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-400 mb-1">{{ t('adminZones.fieldCenterLng') }}</label>
-                  <input v-model.number="form.center_lng" type="number" step="0.0001" class="admin-input" placeholder="2.3522" />
+                  <label class="block text-xs text-slate-400 mb-1">
+                    {{ t('adminZones.fieldCenterLng') }}
+                    <input v-model.number="form.center_lng" type="number" step="0.0001" class="admin-input" placeholder="2.3522" />
+                  </label>
                 </div>
               </div>
               <!-- Approx radius -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">{{ t('adminZones.fieldRadius') }}</label>
-                <input v-model.number="form.approx_radius_km" type="number" step="0.5" min="0.5" class="admin-input" placeholder="5" />
+                <label class="block text-xs text-slate-400 mb-1">
+                  {{ t('adminZones.fieldRadius') }}
+                  <input v-model.number="form.approx_radius_km" type="number" step="0.5" min="0.5" class="admin-input" placeholder="5" />
+                </label>
               </div>
               <!-- Polygon JSON -->
               <div>
                 <label class="block text-xs text-slate-400 mb-1">
                   {{ t('adminZones.fieldPolygon') }}
                   <span class="text-slate-600"> — JSON array of &#123;lat, lng&#125;</span>
+                  <textarea
+                    v-model="polygonJson"
+                    rows="5"
+                    class="admin-input font-mono text-[11px] resize-y"
+                    :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
+                  />
                 </label>
-                <textarea
-                  v-model="polygonJson"
-                  rows="5"
-                  class="admin-input font-mono text-[11px] resize-y"
-                  :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
-                />
                 <p v-if="polygonError" class="text-xs text-red-400 mt-1">{{ polygonError }}</p>
               </div>
               <!-- Fee tiers JSON -->
@@ -178,13 +188,13 @@
                 <label class="block text-xs text-slate-400 mb-1">
                   {{ t('adminZones.fieldFeeTiers') }}
                   <span class="text-slate-600"> — JSON array of &#123;km_up_to, fee&#125;</span>
+                  <textarea
+                    v-model="feeTiersJson"
+                    rows="3"
+                    class="admin-input font-mono text-[11px] resize-y"
+                    :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
+                  />
                 </label>
-                <textarea
-                  v-model="feeTiersJson"
-                  rows="3"
-                  class="admin-input font-mono text-[11px] resize-y"
-                  :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
-                />
                 <p v-if="feeTiersError" class="text-xs text-red-400 mt-1">{{ feeTiersError }}</p>
                 <p class="text-[10px] text-slate-600 mt-0.5">{{ t('adminZones.feeTiersHint') }}</p>
               </div>

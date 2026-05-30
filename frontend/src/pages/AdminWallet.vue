@@ -128,46 +128,54 @@
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <!-- Quantity -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherQtyLabel') }}</label>
-          <input
-            v-model="voucherQty"
-            type="number"
-            min="1"
-            max="50"
-            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-          />
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.voucherQtyLabel') }}
+            <input
+              v-model="voucherQty"
+              type="number"
+              min="1"
+              max="50"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            />
+          </label>
         </div>
         <!-- Amount -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherAmountLabel') }}</label>
-          <input
-            v-model="voucherAmount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-            :placeholder="t('adminWallet.voucherAmountPlaceholder')"
-          />
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.voucherAmountLabel') }}
+            <input
+              v-model="voucherAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              :placeholder="t('adminWallet.voucherAmountPlaceholder')"
+            />
+          </label>
         </div>
         <!-- Expiry -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherExpiryLabel') }}</label>
-          <input
-            v-model="voucherExpiry"
-            type="datetime-local"
-            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-          />
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.voucherExpiryLabel') }}
+            <input
+              v-model="voucherExpiry"
+              type="datetime-local"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            />
+          </label>
         </div>
         <!-- Note -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.voucherNoteLabel') }}</label>
-          <input
-            v-model="voucherNote"
-            type="text"
-            maxlength="200"
-            class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-            :placeholder="t('adminWallet.voucherNotePlaceholder')"
-          />
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.voucherNoteLabel') }}
+            <input
+              v-model="voucherNote"
+              type="text"
+              maxlength="200"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              :placeholder="t('adminWallet.voucherNotePlaceholder')"
+            />
+          </label>
         </div>
       </div>
       <p v-if="voucherGenError" class="text-xs text-red-400">{{ voucherGenError }}</p>
@@ -217,25 +225,29 @@
               <span class="ml-2 text-slate-500">{{ t('adminWallet.currentBalance') }}: {{ fmtBalance(bonusTarget.wallet_balance) }}</span>
             </p>
             <div>
-              <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.bonusAmount') }}</label>
-              <input
-                v-model="bonusAmount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-                :placeholder="t('adminWallet.bonusAmountPlaceholder')"
-              />
+              <label class="block text-xs text-slate-400 mb-1">
+                {{ t('adminWallet.bonusAmount') }}
+                <input
+                  v-model="bonusAmount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+                  :placeholder="t('adminWallet.bonusAmountPlaceholder')"
+                />
+              </label>
             </div>
             <div>
-              <label class="block text-xs text-slate-400 mb-1">{{ t('adminWallet.bonusNote') }}</label>
-              <input
-                v-model="bonusNote"
-                type="text"
-                maxlength="200"
-                class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-                :placeholder="t('adminWallet.bonusNotePlaceholder')"
-              />
+              <label class="block text-xs text-slate-400 mb-1">
+                {{ t('adminWallet.bonusNote') }}
+                <input
+                  v-model="bonusNote"
+                  type="text"
+                  maxlength="200"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+                  :placeholder="t('adminWallet.bonusNotePlaceholder')"
+                />
+              </label>
             </div>
             <p v-if="bonusError" class="text-xs text-red-400">{{ bonusError }}</p>
             <div class="flex gap-3">
