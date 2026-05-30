@@ -135,7 +135,7 @@
           v-if="delivery.driver?.lat && delivery.driver?.lng"
           :href="`https://www.google.com/maps/search/?api=1&query=${delivery.driver.lat},${delivery.driver.lng}`"
           target="_blank"
-          rel="noopener"
+          rel="noopener noreferrer"
           class="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
         >
           📍 {{ t('mktOrderStatus.viewDriverMap') }}

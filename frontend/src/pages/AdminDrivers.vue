@@ -117,7 +117,7 @@
                 v-if="d.is_online && d.driver_lat && d.driver_lng"
                 :href="`https://www.google.com/maps/search/?api=1&query=${d.driver_lat},${d.driver_lng}`"
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 class="ml-1 text-[10px] text-sky-400 hover:text-sky-300"
               >📍</a>
             </td>
