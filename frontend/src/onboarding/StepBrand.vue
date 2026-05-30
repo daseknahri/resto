@@ -213,6 +213,7 @@
 
             <button
               type="button"
+              :aria-pressed="form.business_hours_schedule[day.key].enabled"
               class="justify-self-start rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors sm:justify-self-end"
               :class="form.business_hours_schedule[day.key].enabled ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
               @click="toggleBusinessHoursDay(day.key)"
