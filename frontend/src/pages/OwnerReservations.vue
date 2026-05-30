@@ -47,6 +47,7 @@
       <div class="ui-toolbar-band grid gap-3 p-3 sm:p-4 md:grid-cols-[minmax(0,1fr)_220px_96px_auto]">
         <input
           v-model.trim="searchQuery"
+          type="search"
           class="ui-input"
           :placeholder="t('ownerReservations.searchPlaceholder')"
           @keyup.enter="applyFilters"

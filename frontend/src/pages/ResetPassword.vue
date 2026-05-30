@@ -34,6 +34,8 @@
             {{ t("resetPassword.token") }}
             <input
               v-model="token"
+              type="text"
+              autocomplete="one-time-code"
               class="ui-input"
               :class="fieldErrors.token ? 'border-red-400' : ''"
               @input="fieldErrors.token = ''"

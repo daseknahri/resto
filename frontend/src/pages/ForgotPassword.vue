@@ -34,6 +34,7 @@
             {{ t("forgotPassword.identifier") }}
             <input
               v-model="identifier"
+              type="text"
               autocomplete="username"
               class="ui-input"
               :class="identifierError ? 'border-red-400' : ''"

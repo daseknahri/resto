@@ -153,6 +153,7 @@
           <div class="mb-2 flex items-center gap-2">
             <input
               v-model.trim="dishAvailSearch"
+              type="search"
               class="ui-input flex-1 text-xs"
               :placeholder="t('common.search')"
             />

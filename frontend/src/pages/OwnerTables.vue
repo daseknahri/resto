@@ -36,6 +36,7 @@
             <span class="sr-only">{{ t("common.search") }}</span>
             <input
               v-model.trim="searchQuery"
+              type="search"
               class="ui-input"
               :placeholder="t('common.search')"
             />
@@ -341,6 +342,7 @@
                     <input
                       ref="labelInputRef"
                       v-model.trim="newTable.label"
+                      type="text"
                       maxlength="40"
                       class="ui-input mt-1"
                       :placeholder="t('ownerTables.tableLabelPlaceholder')"
@@ -380,6 +382,7 @@
                     {{ t("ownerTables.prefix") }}
                     <input
                       v-model.trim="bulk.prefix"
+                      type="text"
                       maxlength="20"
                       class="ui-input mt-1"
                       :placeholder="t('ownerTables.prefixPlaceholder')"

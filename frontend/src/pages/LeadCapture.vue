@@ -50,6 +50,7 @@
             {{ t("leadCapture.ownerName") }}
             <input
               v-model.trim="form.name"
+              type="text"
               class="ui-input"
               :class="errors.name ? 'border-red-400' : 'border-slate-700'"
               required

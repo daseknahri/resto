@@ -132,6 +132,7 @@
                   </div>
                 </div>
                 <input
+                  type="text"
                   :value="localizedFieldValue(editingCategory, 'name', fieldLocales.name)"
                   class="ui-input"
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
@@ -231,6 +232,7 @@
                 </div>
                 <input
                   ref="quickNameInputRef"
+                  type="text"
                   :value="localizedQuickFieldValue('name', quickFieldLocales.name)"
                   class="ui-input"
                   :class="quickAddErrors.name ? 'border-red-400' : ''"

@@ -187,6 +187,7 @@
                     </div>
                   </div>
                   <input
+                    type="text"
                     :value="localizedDishFieldValue(editingDish, 'name', dishFieldLocales.name)"
                     class="ui-input"
                     :class="rowError(editingDish, 'name') ? 'border-red-400' : 'border-slate-700'"
@@ -227,6 +228,7 @@
                   <p class="text-[11px] text-slate-400">{{ t("stepDishes.dishSlug") }}</p>
                   <input
                     v-model.trim="editingDish.slug"
+                    type="text"
                     class="ui-input border-slate-700 font-mono text-sm"
                     :placeholder="t('stepDishes.dishSlug')"
                     @input="clearRowError(editingDish.local_id, 'slug')"
@@ -458,6 +460,7 @@
                       </div>
                     </div>
                     <input
+                      type="text"
                       :value="localizedVariantNameValue(option, dishFieldLocales.variantName)"
                       class="ui-input"
                       :class="rowError(editingDish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
@@ -551,6 +554,7 @@
                           </div>
                         </div>
                         <input
+                          type="text"
                           :value="localizedGroupNameValue(group, dishFieldLocales.groupName)"
                           class="ui-input w-full"
                           :placeholder="t('stepDishes.groupNamePlaceholder')"
@@ -613,6 +617,7 @@
                         </div>
                         <div class="flex items-center gap-2">
                           <input
+                            type="text"
                             :value="localizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName)"
                             class="ui-input flex-1 min-w-0"
                             :placeholder="t('stepDishes.variantNamePlaceholder')"
@@ -716,6 +721,7 @@
                   </div>
                   <input
                     ref="quickDishNameInputRef"
+                    type="text"
                     :value="localizedQuickDishFieldValue('name', quickDishFieldLocales.name)"
                     class="ui-input"
                     :class="quickDishErrors.name ? 'border-red-400' : ''"
@@ -834,6 +840,7 @@
                           </div>
                         </div>
                         <input
+                          type="text"
                           :value="localizedQuickVariantNameValue(option, quickDishFieldLocales.variantName)"
                           class="ui-input"
                           :placeholder="t('stepDishes.variantNamePlaceholder')"
@@ -887,7 +894,7 @@
                 <div v-if="quickDish.option_groups.length" class="space-y-3">
                   <div v-for="(group, groupIdx) in quickDish.option_groups" :key="group.local_id" class="rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 space-y-2">
                     <div class="flex flex-wrap items-center gap-2">
-                      <input v-model="group.name" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.groupNamePlaceholder')" />
+                      <input v-model="group.name" type="text" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.groupNamePlaceholder')" />
                       <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer shrink-0">
                         <input type="checkbox" :checked="group.min_select > 0" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" @change="group.min_select = $event.target.checked ? 1 : 0" />
                         {{ t("stepDishes.groupRequired") }}
@@ -898,7 +905,7 @@
                     </div>
                     <div v-if="group.options?.length" class="space-y-1.5 pl-1">
                       <div v-for="(opt, optIdx) in group.options" :key="opt.local_id" class="flex items-center gap-2">
-                        <input v-model="opt.name" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.variantNamePlaceholder')" />
+                        <input v-model="opt.name" type="text" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.variantNamePlaceholder')" />
                         <input v-model.number="opt.price_delta" type="number" min="0" step="0.01" class="ui-input w-24 shrink-0" :placeholder="t('stepDishes.extraPricePlaceholder')" />
                         <button type="button" class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0" @click="removeQuickGroupOption(group, optIdx)">
                           {{ t("stepDishes.remove") }}

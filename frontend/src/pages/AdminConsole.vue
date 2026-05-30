@@ -20,6 +20,7 @@
             </div>
             <input
               v-model="domainSuffix"
+              type="text"
               class="ui-input w-full px-3 py-2 text-sm"
               :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
             />

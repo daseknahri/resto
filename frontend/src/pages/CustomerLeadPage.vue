@@ -274,7 +274,7 @@
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.name") }}
-                <input v-model.trim="form.name" class="ui-input" :class="fieldClass('name')" autocomplete="name" @input="clearError('name')" />
+                <input v-model.trim="form.name" type="text" class="ui-input" :class="fieldClass('name')" autocomplete="name" @input="clearError('name')" />
                 <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
               </label>
               <label class="space-y-1 text-sm text-slate-200">

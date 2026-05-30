@@ -178,7 +178,10 @@
               :placeholder="t('ownerBilling.notePlaceholder')"
               class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
             />
-            <p v-if="submitError" class="text-xs text-red-300">{{ submitError }}</p>
+            <div v-if="submitError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+              <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
+            </div>
             <div class="flex flex-wrap gap-3">
               <button
                 class="ui-btn-primary px-6 py-2 text-sm disabled:opacity-60"

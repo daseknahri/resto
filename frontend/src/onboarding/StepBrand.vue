@@ -41,6 +41,7 @@
           </div>
         </div>
         <input
+          type="text"
           :value="localizedFieldValue('tagline', fieldLocales.tagline)"
           :class="inputClass('tagline')"
           :aria-label="t('stepBrand.tagline')"
@@ -103,6 +104,7 @@
           </div>
         </div>
         <input
+          type="text"
           :value="localizedFieldValue('address', fieldLocales.address)"
           :class="inputClass('address')"
           :aria-label="t('common.address')"

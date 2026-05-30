@@ -66,6 +66,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <input
           v-model.trim="searchQuery"
+          type="search"
           class="ui-input min-w-0 flex-1 text-sm"
           :placeholder="t('ownerOrders.searchPlaceholder')"
           @input="searchQuery = $event.target.value"
@@ -362,6 +363,7 @@
                 </div>
                 <input
                   v-model="ratingNote"
+                  type="text"
                   class="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 placeholder-slate-500 focus:outline-none text-[11px]"
                   :placeholder="t('ownerOrders.djRatingNotePlaceholder')"
                 />
@@ -411,7 +413,7 @@
         <div v-if="editingId === o.id" class="space-y-2 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.ownerNote") }}
-            <input v-model="editNote" maxlength="300" class="ui-input mt-1 text-sm" />
+            <input v-model="editNote" type="text" maxlength="300" class="ui-input mt-1 text-sm" />
           </label>
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.setEstimate") }}
@@ -517,7 +519,7 @@
           <!-- Note field -->
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.customerRatingNote") }}
-            <input v-model="ratingNote" maxlength="200" class="ui-input mt-1 text-sm" />
+            <input v-model="ratingNote" type="text" maxlength="200" class="ui-input mt-1 text-sm" />
           </label>
 
           <div class="flex gap-2">

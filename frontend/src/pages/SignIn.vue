@@ -49,6 +49,7 @@
             {{ t("signIn.identifier") }}
             <input
               v-model="identifier"
+              type="text"
               autocomplete="username"
               class="ui-input"
               :class="fieldErrors.identifier ? 'border-red-400' : ''"

@@ -31,6 +31,7 @@
               {{ t("common.name") }}
               <input
                 v-model.trim="form.name"
+                type="text"
                 class="ui-input"
                 :class="fieldClass('name')"
                 autocomplete="name"
@@ -159,7 +160,7 @@
             <div v-else class="space-y-3">
               <p class="text-xs font-medium text-amber-100">{{ t("reservationPage.waitlistFormHint") }}</p>
               <div class="grid gap-2 sm:grid-cols-2">
-                <input v-model.trim="waitlistForm.name" :placeholder="t('common.name')" class="ui-input text-sm" />
+                <input v-model.trim="waitlistForm.name" type="text" autocomplete="name" :placeholder="t('common.name')" class="ui-input text-sm" />
                 <input v-model.trim="waitlistForm.phone" type="tel" :placeholder="t('common.phone')" inputmode="tel" class="ui-input text-sm" />
               </div>
               <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" :placeholder="t('common.email')" class="ui-input text-sm" />
