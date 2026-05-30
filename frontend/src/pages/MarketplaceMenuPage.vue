@@ -55,7 +55,7 @@
       <div class="mx-auto max-w-3xl px-4 py-5">
         <div class="flex items-start gap-4">
           <div class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
-            <img v-if="restaurant.logo_url" :src="restaurant.logo_url" :alt="restaurant.name" class="h-full w-full object-cover" />
+            <img v-if="restaurant.logo_url" :src="restaurant.logo_url" :alt="restaurant.name" loading="eager" class="h-full w-full object-cover" />
             <span v-else class="text-2xl">🍽️</span>
           </div>
           <div class="flex-1 min-w-0">
@@ -109,7 +109,7 @@
               >
                 <!-- Image -->
                 <div v-if="dish.image_url" class="h-14 w-14 shrink-0 rounded-lg overflow-hidden">
-                  <img :src="dish.image_url" :alt="dish.name" class="h-full w-full object-cover" />
+                  <img :src="dish.image_url" :alt="dish.name" loading="lazy" class="h-full w-full object-cover" />
                 </div>
                 <!-- Info -->
                 <div class="flex-1 min-w-0">

@@ -162,7 +162,7 @@
                 <input v-model.trim="waitlistForm.name" :placeholder="t('common.name')" class="ui-input text-sm" />
                 <input v-model.trim="waitlistForm.phone" type="tel" :placeholder="t('common.phone')" inputmode="tel" class="ui-input text-sm" />
               </div>
-              <input v-model.trim="waitlistForm.email" type="email" :placeholder="t('common.email')" class="ui-input text-sm" />
+              <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" :placeholder="t('common.email')" class="ui-input text-sm" />
               <div class="flex flex-wrap gap-2">
                 <button
                   class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 disabled:opacity-60 transition-colors hover:bg-amber-500/25"

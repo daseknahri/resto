@@ -90,6 +90,7 @@
                 v-if="form.logo_url"
                 :src="form.logo_url"
                 :alt="t('stepTheme.logoPreviewAlt')"
+                loading="eager"
                 class="h-14 w-14 rounded-2xl border border-white/10 object-cover shadow-lg"
               />
               <div class="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-xs font-medium text-slate-200">
@@ -141,6 +142,7 @@
                 v-if="form.logo_url"
                 :src="form.logo_url"
                 :alt="t('stepTheme.logoPreviewAlt')"
+                loading="eager"
                 class="h-14 w-14 rounded-2xl border border-slate-700 object-cover"
               />
               <div class="space-y-1">
@@ -183,7 +185,7 @@
 
             <div class="space-y-2">
               <div v-if="form.hero_url" class="overflow-hidden rounded-2xl border border-slate-700">
-                <img :src="form.hero_url" :alt="t('stepTheme.previewTitle')" class="h-40 w-full object-cover" />
+                <img :src="form.hero_url" :alt="t('stepTheme.previewTitle')" loading="lazy" class="h-40 w-full object-cover" />
               </div>
               <p class="text-xs text-slate-300">{{ t("stepTheme.heroDropHint") }}</p>
               <p class="text-[11px] text-slate-500">{{ t("stepTheme.acceptedFormats") }}</p>

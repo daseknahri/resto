@@ -28,6 +28,7 @@
           v-model="form.email"
           type="email"
           :placeholder="t('ownerStaff.emailPlaceholder')"
+          autocomplete="email"
           class="ui-input"
           :disabled="creating"
           @keyup.enter="createStaff"

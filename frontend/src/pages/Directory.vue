@@ -94,6 +94,7 @@
             v-if="r.logo_url"
             :src="r.logo_url"
             :alt="r.name"
+            loading="lazy"
             class="h-full w-full object-cover opacity-80"
           />
           <span v-else class="text-3xl text-slate-600">🍽️</span>
