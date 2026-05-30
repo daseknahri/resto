@@ -49,7 +49,7 @@
               <h2 class="text-base font-bold text-white">{{ t("ownerMenuBuilder.importTitle") }}</h2>
               <p class="text-xs text-slate-400 mt-0.5">{{ t("ownerMenuBuilder.importSubtitle") }}</p>
             </div>
-            <button class="text-slate-400 hover:text-white text-xl leading-none" @click="closeImport">✕</button>
+            <button class="text-slate-400 hover:text-white text-xl leading-none" :aria-label="t('common.close')" @click="closeImport">✕</button>
           </div>
 
           <!-- Format guide + template download -->

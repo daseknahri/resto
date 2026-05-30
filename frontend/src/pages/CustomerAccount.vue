@@ -758,6 +758,7 @@
                         :class="s <= (reviewHover[order.order_number] || getDraft(order.order_number).score)
                           ? 'text-amber-400'
                           : 'text-slate-700 hover:text-slate-500'"
+                        :aria-label="t('common.rateNStars', { n: s })"
                         @mouseenter="setHover(order.order_number, s)"
                         @mouseleave="setHover(order.order_number, 0)"
                         @click="setDraftScore(order.order_number, s)"

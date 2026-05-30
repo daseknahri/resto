@@ -508,6 +508,7 @@
               type="button"
               class="text-xl transition-transform hover:scale-110 focus:outline-none"
               :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-600'"
+              :aria-label="t('common.rateNStars', { n: star })"
               @click="ratingScore = star"
             >★</button>
             <span class="ml-2 text-xs text-slate-400">{{ ratingScore }}/5</span>

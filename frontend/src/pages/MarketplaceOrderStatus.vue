@@ -145,6 +145,7 @@
             :key="n"
             class="text-2xl transition-transform hover:scale-110"
             :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+            :aria-label="t('common.rateNStars', { n })"
             @click="ratingScore = n"
           >★</button>
         </div>

@@ -68,7 +68,8 @@ export const messages = {
       change: "Change",
       retry: "Retry",
       decreaseQty: "Decrease quantity",
-      increaseQty: "Increase quantity"
+      increaseQty: "Increase quantity",
+      rateNStars: "Rate {n} out of 5"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2892,7 +2893,8 @@ export const messages = {
       change: "Modifier",
       retry: "Reessayer",
       decreaseQty: "Diminuer la quantite",
-      increaseQty: "Augmenter la quantite"
+      increaseQty: "Augmenter la quantite",
+      rateNStars: "Noter {n} sur 5"
     },
     landingLayout: {
       kicker: "Resto Menu",
