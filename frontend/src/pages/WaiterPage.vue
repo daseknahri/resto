@@ -1,10 +1,12 @@
 <template>
   <div class="space-y-4">
     <!-- Status tabs + New Order button -->
-    <div class="flex gap-1.5 overflow-x-auto pb-1">
+    <div class="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
       <button
         v-for="tab in tabs"
         :key="tab.key"
+        role="tab"
+        :aria-selected="activeTab === tab.key"
         class="shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
         :class="activeTab === tab.key
           ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300'

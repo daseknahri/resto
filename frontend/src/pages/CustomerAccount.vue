@@ -224,10 +224,12 @@
 
       <!-- ──────────────── Tab navigation bar ──────────────── -->
       <div class="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/96 backdrop-blur-md">
-        <nav class="flex">
+        <nav class="flex" role="tablist">
           <button
             v-for="tab in TABS"
             :key="tab.id"
+            role="tab"
+            :aria-selected="activeTab === tab.id"
             class="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 transition-colors"
             :class="activeTab === tab.id ? 'text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
             @click="activeTab = tab.id"

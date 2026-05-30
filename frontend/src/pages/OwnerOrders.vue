@@ -77,6 +77,7 @@
             v-for="d in dateTabs"
             :key="d.value"
             type="button"
+            :aria-pressed="activeDateFilter === d.value"
             class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
             :class="activeDateFilter === d.value
               ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -100,6 +101,7 @@
           v-for="tab in statusTabs"
           :key="tab.value"
           type="button"
+          :aria-pressed="activeStatus === tab.value"
           class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
           :class="activeStatus === tab.value
             ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'

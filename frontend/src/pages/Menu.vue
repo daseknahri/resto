@@ -124,6 +124,7 @@
         <button
           v-for="allergen in availableAllergens"
           :key="allergen"
+          :aria-pressed="selectedAllergenFilter.includes(allergen)"
           class="shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] transition-colors"
           :class="selectedAllergenFilter.includes(allergen)
             ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'

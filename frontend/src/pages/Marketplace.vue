@@ -114,6 +114,7 @@
           v-for="tag in filters.tags"
           :key="tag"
           type="button"
+          :aria-pressed="selectedTags.includes(tag)"
           class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
           :class="selectedTags.includes(tag)
             ? 'border-[var(--color-secondary,#f59e0b)]/60 bg-[var(--color-secondary,#f59e0b)]/10 text-[var(--color-secondary,#f59e0b)]'
