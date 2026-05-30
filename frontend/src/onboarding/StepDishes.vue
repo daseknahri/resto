@@ -498,8 +498,8 @@
                     {{ t("stepDishes.requiredBeforeAddToCart") }}
                   </label>
                   <div class="ml-auto flex items-center gap-1">
-                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionUp(editingDish, optIdx)" @click="moveOption(editingDish, optIdx, -1)">↑</button>
-                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" @click="moveOption(editingDish, optIdx, 1)">↓</button>
+                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionUp(editingDish, optIdx)" :aria-label="t('common.moveUp')" @click="moveOption(editingDish, optIdx, -1)">↑</button>
+                    <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" :aria-label="t('common.moveDown')" @click="moveOption(editingDish, optIdx, 1)">↓</button>
                   </div>
                 </div>
                 <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
@@ -576,8 +576,8 @@
                           />
                         </div>
                         <div class="ml-auto flex items-center gap-1">
-                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupUp(editingDish, groupIdx)" @click="moveGroup(editingDish, groupIdx, -1)">↑</button>
-                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupDown(editingDish, groupIdx)" @click="moveGroup(editingDish, groupIdx, 1)">↓</button>
+                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupUp(editingDish, groupIdx)" :aria-label="t('common.moveUp')" @click="moveGroup(editingDish, groupIdx, -1)">↑</button>
+                          <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupDown(editingDish, groupIdx)" :aria-label="t('common.moveDown')" @click="moveGroup(editingDish, groupIdx, 1)">↓</button>
                         </div>
                         <button
                           type="button"
@@ -625,8 +625,8 @@
                             class="ui-input w-24 shrink-0"
                             :placeholder="t('stepDishes.extraPricePlaceholder')"
                           />
-                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionUp(group, optIdx)" @click="moveGroupOption(group, optIdx, -1)">↑</button>
-                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionDown(group, optIdx)" @click="moveGroupOption(group, optIdx, 1)">↓</button>
+                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionUp(group, optIdx)" :aria-label="t('common.moveUp')" @click="moveGroupOption(group, optIdx, -1)">↑</button>
+                          <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionDown(group, optIdx)" :aria-label="t('common.moveDown')" @click="moveGroupOption(group, optIdx, 1)">↓</button>
                           <button
                             type="button"
                             class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
