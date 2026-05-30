@@ -131,6 +131,7 @@
               class="h-3 w-3 transition-transform duration-200"
               :class="{ 'rotate-180': expandedIds.has(member.id) }"
               viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+              aria-hidden="true"
             >
               <path d="M2 4l4 4 4-4"/>
             </svg>
