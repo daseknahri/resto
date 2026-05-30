@@ -11,6 +11,7 @@
         <h2 class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderTitle') }}</h2>
         <button
           class="rounded-full p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
+          :aria-label="t('common.close')"
           @click="$emit('close')"
         >
           <AppIcon name="close" class="h-4 w-4" />
@@ -156,6 +157,7 @@
                 </div>
                 <button
                   class="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400 transition-colors"
+                  :aria-label="t('common.remove')"
                   @click="removeItem(item.dish_slug)"
                 >
                   <AppIcon name="close" class="h-3 w-3" />

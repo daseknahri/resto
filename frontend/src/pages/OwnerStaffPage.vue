@@ -1,10 +1,15 @@
 <template>
   <div class="space-y-6 max-w-2xl">
     <!-- Header -->
-    <div>
-      <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
-      <h2 class="text-xl font-bold text-white">{{ t("ownerStaff.title") }}</h2>
-      <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
+        <h2 class="text-xl font-bold text-white">{{ t("ownerStaff.title") }}</h2>
+        <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
+      </div>
+      <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+      </svg>
     </div>
 
     <!-- Create form -->
@@ -77,6 +82,20 @@
 
       <div v-if="loadingStaff" class="space-y-2">
         <div v-for="i in 2" :key="i" class="h-14 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
+      </div>
+
+      <div
+        v-else-if="staffError"
+        class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3"
+      >
+        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ t("ownerStaff.fetchError") }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          @click="fetchStaff"
+        >{{ t("common.retry") }}</button>
       </div>
 
       <div
@@ -192,6 +211,7 @@ import { ref, onMounted, reactive } from "vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
+import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t } = useI18n();
 const toast = useToastStore();
@@ -215,9 +235,14 @@ const permDefs = [
   },
 ];
 
+const STAFF_CACHE_KEY = "owner.staff";
+const STAFF_TTL_MS = 5 * 60 * 1000; // 5 min
+
 // ── State ──────────────────────────────────────────────────────────────────────
 const staffList = ref([]);
 const loadingStaff = ref(false);
+const updatingStaff = ref(false);
+const staffError = ref(false);
 const expandedIds = ref(new Set());
 const savingId = ref(null);
 const saveError = reactive({});
@@ -231,18 +256,31 @@ const newCredentials = ref(null);
 const copied = ref(false);
 
 // ── Staff list ─────────────────────────────────────────────────────────────────
+const mapStaff = (s) => ({
+  ...s,
+  permissions: s.permissions ?? { manage_orders: true, view_revenue: false, edit_menu: false },
+});
+
 const fetchStaff = async () => {
-  loadingStaff.value = true;
+  const cached = readCache(STAFF_CACHE_KEY);
+  if (cached) {
+    staffList.value = cached.map(mapStaff);
+    if (isFresh(STAFF_CACHE_KEY, STAFF_TTL_MS)) return;
+    updatingStaff.value = true;
+  } else {
+    loadingStaff.value = true;
+  }
+  staffError.value = false;
   try {
     const { data } = await api.get("/owner/staff/");
-    staffList.value = (data.results ?? []).map((s) => ({
-      ...s,
-      permissions: s.permissions ?? { manage_orders: true, view_revenue: false, edit_menu: false },
-    }));
+    const list = (data.results ?? []).map(mapStaff);
+    staffList.value = list;
+    writeCache(STAFF_CACHE_KEY, data.results ?? []);
   } catch {
-    // silent — user will see empty list
+    if (!cached) staffError.value = true;
   } finally {
     loadingStaff.value = false;
+    updatingStaff.value = false;
   }
 };
 
@@ -268,6 +306,7 @@ const togglePerm = async (member, permKey) => {
     await api.patch(`/owner/staff/${member.id}/`, {
       permissions: { [permKey]: newVal },
     });
+    writeCache(STAFF_CACHE_KEY, staffList.value);
   } catch {
     // Roll back on error
     member.permissions[permKey] = !newVal;
@@ -297,16 +336,15 @@ const createStaff = async () => {
   try {
     const { data } = await api.post("/owner/staff/", { name, email });
     newCredentials.value = data;
-    staffList.value = [
-      ...staffList.value,
-      {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        username: data.username,
-        permissions: { manage_orders: true, view_revenue: false, edit_menu: false },
-      },
-    ];
+    const newMember = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      username: data.username,
+      permissions: { manage_orders: true, view_revenue: false, edit_menu: false },
+    };
+    staffList.value = [...staffList.value, newMember];
+    writeCache(STAFF_CACHE_KEY, staffList.value);
     form.value = { name: "", email: "" };
   } catch (err) {
     const code = err?.response?.data?.code;
@@ -330,6 +368,7 @@ const removeStaff = async (member) => {
   try {
     await api.delete(`/owner/staff/${member.id}/`);
     staffList.value = staffList.value.filter((s) => s.id !== member.id);
+    writeCache(STAFF_CACHE_KEY, staffList.value);
     const next = new Set(expandedIds.value);
     next.delete(member.id);
     expandedIds.value = next;

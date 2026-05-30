@@ -8,14 +8,42 @@
       </router-link>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading && !order" class="py-24 text-center text-sm text-slate-400">
-      {{ t('marketplace.loading') }}
+    <!-- Loading skeleton -->
+    <div v-if="loading && !order" class="mx-auto max-w-md mt-6 space-y-4 animate-pulse">
+      <div class="text-center space-y-2">
+        <div class="mx-auto h-2.5 w-32 rounded bg-slate-700/60" />
+        <div class="mx-auto h-5 w-48 rounded bg-slate-700/50" />
+      </div>
+      <!-- Status stepper skeleton -->
+      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+        <div class="flex items-center justify-between gap-1">
+          <div v-for="i in 4" :key="i" class="flex flex-col items-center gap-1 flex-1">
+            <div class="h-8 w-8 rounded-full bg-slate-700/60" />
+            <div class="h-2 w-10 rounded bg-slate-800/50" />
+          </div>
+        </div>
+      </div>
+      <!-- Summary card skeleton -->
+      <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+        <div v-for="i in 3" :key="i" class="flex justify-between">
+          <div class="h-3 w-24 rounded bg-slate-700/60" />
+          <div class="h-3 w-14 rounded bg-slate-800/50" />
+        </div>
+      </div>
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError && !order" class="py-24 text-center">
-      <p class="text-sm text-red-300">{{ t('mktOrderStatus.loadError') }}</p>
+    <div v-else-if="fetchError && !order" class="mx-auto max-w-sm mt-6">
+      <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ t('mktOrderStatus.loadError') }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          @click="fetchStatus"
+        >{{ t('common.retry') }}</button>
+      </div>
     </div>
 
     <div v-else-if="order" class="mx-auto max-w-md space-y-6 mt-6">

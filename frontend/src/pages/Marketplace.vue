@@ -131,14 +131,33 @@
       <p v-if="locationDenied" class="text-xs text-amber-400/80">{{ t('marketplace.locationDenied') }}</p>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="py-16 text-center text-sm text-slate-400">
-      {{ t('marketplace.loading') }}
-    </div>
+    <!-- Loading: skeleton card grid -->
+    <ul v-if="loading" class="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <li v-for="i in 6" :key="i" class="animate-pulse overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/50">
+        <div class="h-28 bg-slate-800/60" />
+        <div class="p-4 space-y-2">
+          <div class="h-4 w-3/4 rounded bg-slate-700/60" />
+          <div class="h-3 w-1/2 rounded bg-slate-800/50" />
+          <div class="flex gap-2 pt-1">
+            <div class="h-5 w-16 rounded-full bg-slate-800/60" />
+            <div class="h-5 w-12 rounded-full bg-slate-800/50" />
+          </div>
+        </div>
+      </li>
+    </ul>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="py-16 text-center text-sm text-red-300">
-      {{ t('marketplace.fetchError') }}
+    <div v-else-if="fetchError" class="mx-auto max-w-sm">
+      <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ t('marketplace.fetchError') }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          @click="fetchRestaurants"
+        >{{ t('common.retry') }}</button>
+      </div>
     </div>
 
     <!-- Empty -->

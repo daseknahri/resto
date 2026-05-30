@@ -1072,6 +1072,48 @@
       </div>
     </nav>
   </div>
+
+  <!-- Dry-run import review modal -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="dryRunReview"
+        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+        @click.self="cancelDryRun"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+          <div class="border-b border-slate-800 px-5 py-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
+            <h3 class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>
+          </div>
+          <div class="px-5 py-4 space-y-2 text-sm text-slate-300">
+            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.categories') }}</span><span class="font-semibold">{{ dryRunReview.summary.categories || 0 }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">{{ t('common.dishes') }}</span><span class="font-semibold">{{ dryRunReview.summary.dishes || 0 }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.optionsLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.options || 0 }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.tableLinksLabel') }}</span><span class="font-semibold">{{ dryRunReview.summary.table_links || 0 }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">{{ t('adminConsole.profileLabel') }}</span><span class="font-semibold" :class="dryRunReview.summary.profile_updated ? 'text-emerald-400' : 'text-slate-500'">{{ dryRunReview.summary.profile_updated ? t('adminConsole.yes') : t('adminConsole.no') }}</span></div>
+          </div>
+          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
+            <button
+              class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 transition-colors"
+              :disabled="applyingImport"
+              @click="cancelDryRun"
+            >{{ t('common.cancel') }}</button>
+            <button
+              class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              :disabled="applyingImport"
+              @click="applyTenantImport"
+            >{{ applyingImport ? '…' : t('adminConsole.applyImport') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1133,6 +1175,8 @@ const tenantLifecycleLoading = ref({});
 const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
+const dryRunReview = ref(null); // { tenant, summary, replaceBody }
+const applyingImport = ref(false);
 const tenantTools = ref({});
 const tenantTimeline = ref({});
 const activeAdminView = ref("operations");
@@ -1707,29 +1751,35 @@ const handleTenantImportFile = async (tenant, event) => {
       ? { ...parsed, mode: "dry_run" }
       : { mode: "dry_run", payload: parsed };
     const dryRunRes = await adminApi.post(`/admin-tenants/${tenant.id}/settings-import/`, dryRunBody);
-    const drySummary = dryRunRes?.data?.summary || {};
-    const shouldApply = window.confirm(
-      [
-        t("adminConsole.dryRunSuccessful"),
-        t("adminConsole.categoriesCount", { count: drySummary.categories || 0 }),
-        t("adminConsole.dishesCount", { count: drySummary.dishes || 0 }),
-        t("adminConsole.optionsCount", { count: drySummary.options || 0 }),
-        t("adminConsole.tableLinksCount", { count: drySummary.table_links || 0 }),
-        t("adminConsole.profileUpdated", { value: drySummary.profile_updated ? t("adminConsole.yes") : t("adminConsole.no") }),
-        "",
-        t("adminConsole.applyImportNow"),
-      ].join("\n")
-    );
-    if (!shouldApply) {
-      toast.show(t("adminConsole.dryRunCanceled"), "success");
-      return;
-    }
-
+    const summary = dryRunRes?.data?.summary || {};
     const replaceBody = Object.prototype.hasOwnProperty.call(parsed, "payload")
       ? { ...parsed, mode: "replace" }
       : { mode: "replace", payload: parsed };
+    // Show review modal instead of window.confirm
+    dryRunReview.value = { tenant, summary, replaceBody };
+  } catch (err) {
+    const msg = parseApiError(err, err instanceof Error ? err.message : t("adminConsole.importTenantSettingsFailed"));
+    error.value = msg;
+    toast.show(msg, "error");
+  } finally {
+    tenantImportLoading.value = { ...tenantImportLoading.value, [tenant.id]: false };
+    if (input) input.value = "";
+  }
+};
+
+const cancelDryRun = () => {
+  dryRunReview.value = null;
+  toast.show(t("adminConsole.dryRunCanceled"), "success");
+};
+
+const applyTenantImport = async () => {
+  if (!dryRunReview.value || applyingImport.value) return;
+  const { tenant, replaceBody } = dryRunReview.value;
+  applyingImport.value = true;
+  try {
     const res = await adminApi.post(`/admin-tenants/${tenant.id}/settings-import/`, replaceBody);
     const summary = res?.data?.summary || {};
+    dryRunReview.value = null;
     toast.show(
       t("adminConsole.importComplete", {
         categories: summary.categories || 0,
@@ -1744,8 +1794,7 @@ const handleTenantImportFile = async (tenant, event) => {
     error.value = msg;
     toast.show(msg, "error");
   } finally {
-    tenantImportLoading.value = { ...tenantImportLoading.value, [tenant.id]: false };
-    if (input) input.value = "";
+    applyingImport.value = false;
   }
 };
 

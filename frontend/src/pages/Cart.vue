@@ -527,7 +527,7 @@
           >
             <div class="flex items-start justify-between gap-2">
               <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.tableNudgeTitle') }}</p>
-              <button class="shrink-0 text-slate-500 hover:text-slate-300 transition" @click="tableNudgeDismissed = true">
+              <button class="shrink-0 text-slate-500 hover:text-slate-300 transition" :aria-label="t('common.close')" @click="tableNudgeDismissed = true">
                 <AppIcon name="close" class="h-3.5 w-3.5" />
               </button>
             </div>

@@ -30,9 +30,42 @@
       >{{ t('adminWallet.refresh') }}</button>
     </div>
 
-    <!-- Loading / error -->
-    <div v-if="loading" class="py-10 text-center text-sm text-slate-400">{{ t('common.loading') }}</div>
-    <div v-else-if="fetchError" class="py-10 text-center text-sm text-red-300">{{ t('adminWallet.fetchError') }}</div>
+    <!-- Loading: skeleton table -->
+    <div v-if="loading" class="overflow-x-auto rounded-2xl border border-slate-700/60">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800/60 text-xs text-slate-400">
+          <tr>
+            <th class="px-4 py-3 text-left">#</th>
+            <th class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-700/40">
+          <tr v-for="i in 5" :key="i" class="animate-pulse">
+            <td class="px-4 py-3"><div class="h-2.5 w-4 rounded bg-slate-700/60" /></td>
+            <td class="px-4 py-3"><div class="h-3 w-24 rounded bg-slate-700/60" /></td>
+            <td class="px-4 py-3"><div class="h-2.5 w-28 rounded bg-slate-800/60" /></td>
+            <td class="px-4 py-3"><div class="ml-auto h-3 w-14 rounded bg-slate-800/50" /></td>
+            <td class="px-4 py-3"><div class="ml-auto h-3 w-16 rounded bg-slate-800/40" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Error -->
+    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t('adminWallet.fetchError') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="fetch"
+      >{{ t('common.retry') }}</button>
+    </div>
+
     <div v-else-if="!customers.length" class="py-10 text-center text-sm text-slate-400">{{ t('adminWallet.empty') }}</div>
 
     <!-- Table -->

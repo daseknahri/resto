@@ -74,6 +74,7 @@
           </div>
           <button
             class="rounded-full p-1.5 text-slate-500 hover:text-slate-300 transition-colors"
+            :aria-label="t('common.close')"
             @click="selected = null"
           >
             <AppIcon name="close" class="h-4 w-4" />

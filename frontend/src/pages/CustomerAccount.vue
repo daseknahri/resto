@@ -414,7 +414,16 @@
               <div v-if="loadingOrders" class="space-y-2">
                 <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-slate-800/50" />
               </div>
-              <div v-else-if="ordersError" class="py-4 text-center text-xs text-red-300">{{ t('customerAccount.fetchError') }}</div>
+              <div v-else-if="ordersError" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+                <svg viewBox="0 0 20 20" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
+                <p class="flex-1 text-xs text-red-300">{{ t('customerAccount.fetchError') }}</p>
+                <button
+                  class="shrink-0 rounded-lg border border-red-500/40 px-2.5 py-1 text-[10px] font-semibold text-red-300 transition hover:bg-red-500/10"
+                  @click="fetchOrders"
+                >{{ t('common.retry') }}</button>
+              </div>
 
               <div
                 v-else-if="!apiOrders.length && !cart.recentOrders.length"
@@ -942,7 +951,9 @@
               <span class="text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesMax') }}</span>
             </div>
             <div class="p-4 space-y-2">
-              <div v-if="loadingAddresses" class="text-xs text-slate-400">{{ t('customerAccount.loading') }}</div>
+              <div v-if="loadingAddresses" class="space-y-1.5">
+                <div v-for="i in 2" :key="i" class="h-12 animate-pulse rounded-xl border border-slate-700/40 bg-slate-800/30" />
+              </div>
               <div v-else-if="!savedAddresses.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
                 {{ t('customerAccount.savedAddressesEmpty') }}
               </div>
@@ -957,7 +968,7 @@
                     <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
                     <p class="text-slate-400">{{ addr.address }}</p>
                   </div>
-                  <button class="mt-0.5 shrink-0 text-slate-500 transition hover:text-red-400" @click="deleteAddress(addr.id)">
+                  <button class="mt-0.5 shrink-0 text-slate-500 transition hover:text-red-400" :aria-label="t('common.remove')" @click="deleteAddress(addr.id)">
                     <AppIcon name="close" class="h-3.5 w-3.5" />
                   </button>
                 </li>

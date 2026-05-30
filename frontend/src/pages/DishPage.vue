@@ -256,6 +256,7 @@
           />
           <button
             class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white transition-colors hover:bg-black/80"
+            :aria-label="t('common.close')"
             @click="lightboxOpen = false"
           >
             <AppIcon name="close" class="h-5 w-5" />

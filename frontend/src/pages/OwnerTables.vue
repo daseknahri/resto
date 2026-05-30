@@ -2,14 +2,19 @@
   <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
     <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <div class="space-y-1.5">
-          <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
-          <h2 class="ui-display text-[1.55rem] font-semibold text-white md:text-3xl">{{ t("ownerTables.title") }}</h2>
-          <div class="ui-scroll-row">
-            <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
-            <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>
-            <span class="ui-data-strip">{{ t("ownerTables.disabledTables") }}: {{ Math.max(tables.length - activeTablesCount, 0) }}</span>
+        <div class="flex items-start gap-3">
+          <div class="space-y-1.5">
+            <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
+            <h2 class="ui-display text-[1.55rem] font-semibold text-white md:text-3xl">{{ t("ownerTables.title") }}</h2>
+            <div class="ui-scroll-row">
+              <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
+              <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>
+              <span class="ui-data-strip">{{ t("ownerTables.disabledTables") }}: {{ Math.max(tables.length - activeTablesCount, 0) }}</span>
+            </div>
           </div>
+          <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+          </svg>
         </div>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
           <button class="ui-btn-primary w-full sm:w-auto" @click="openSetup('create')">
@@ -420,11 +425,17 @@ import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
+import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t, currentLocale } = useI18n();
+
+const TABLES_CACHE_KEY = "owner.tables";
+const TABLES_TTL_MS = 5 * 60 * 1000; // 5 min
+
 const loading = ref(false);
+const updating = ref(false);
 const creating = ref(false);
 const generating = ref(false);
 const tables = ref([]);
@@ -532,20 +543,34 @@ const generateQrBatch = async () => {
   qrDataUrls.value = nextQrs;
 };
 
+const applyTables = async (list) => {
+  tables.value = list;
+  if (!list.some((table) => table.id === selectedTableId.value)) {
+    selectedTableId.value = list[0]?.id ?? null;
+  }
+  await generateQrBatch();
+};
+
 const fetchTables = async () => {
-  loading.value = true;
+  const cached = readCache(TABLES_CACHE_KEY);
+  if (cached) {
+    await applyTables(cached);
+    if (isFresh(TABLES_CACHE_KEY, TABLES_TTL_MS)) return;
+    updating.value = true;
+  } else {
+    loading.value = true;
+  }
   error.value = "";
   try {
     const { data } = await api.get("/tables/");
-    tables.value = Array.isArray(data) ? data : [];
-    if (!tables.value.some((table) => table.id === selectedTableId.value)) {
-      selectedTableId.value = tables.value[0]?.id ?? null;
-    }
-    await generateQrBatch();
+    const list = Array.isArray(data) ? data : [];
+    await applyTables(list);
+    writeCache(TABLES_CACHE_KEY, list);
   } catch (err) {
-    error.value = parseError(err, t("ownerTables.loadFailed"));
+    if (!cached) error.value = parseError(err, t("ownerTables.loadFailed"));
   } finally {
     loading.value = false;
+    updating.value = false;
   }
 };
 
@@ -568,6 +593,7 @@ const createTable = async () => {
     newTable.position = 0;
     newTable.is_active = true;
     toast.show(t("ownerTables.created"), "success");
+    bustCache(TABLES_CACHE_KEY);
     await fetchTables();
     setupOpen.value = false;
   } catch (err) {
@@ -595,6 +621,7 @@ const generateTables = async () => {
     };
     const { data } = await api.post("/tables/bulk-generate/", payload);
     toast.show(data?.detail || t("ownerTables.generated"), "success");
+    bustCache(TABLES_CACHE_KEY);
     await fetchTables();
     bulk.prefix = t("ownerTables.defaultPrefix");
     bulk.start = 1;
@@ -619,6 +646,7 @@ const toggleTable = async (table) => {
       is_active: !table.is_active,
     });
     table.is_active = !table.is_active;
+    writeCache(TABLES_CACHE_KEY, tables.value);
     toast.show(table.is_active ? t("ownerTables.enabledToast") : t("ownerTables.disabledToast"), "success");
   } catch (err) {
     toast.show(parseError(err, t("ownerTables.updateFailed")), "error");
@@ -635,6 +663,7 @@ const removeTable = async (table) => {
     if (selectedTableId.value === table.id) {
       selectedTableId.value = tables.value[0]?.id ?? null;
     }
+    writeCache(TABLES_CACHE_KEY, tables.value);
     toast.show(t("ownerTables.deleted"), "success");
   } catch (err) {
     toast.show(parseError(err, t("ownerTables.deleteFailed")), "error");

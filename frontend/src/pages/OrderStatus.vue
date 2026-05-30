@@ -1,8 +1,24 @@
 <template>
   <div class="space-y-4 px-3 py-4 pb-24 sm:px-4">
-    <!-- Loading -->
-    <div v-if="loading && !orderData" class="ui-panel p-10 text-center text-slate-400 text-sm">
-      {{ t("common.loading") }}
+    <!-- Loading skeleton -->
+    <div v-if="loading && !orderData" class="space-y-3">
+      <div class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-3">
+        <div class="h-2.5 w-16 rounded bg-slate-700/60" />
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-2">
+            <div class="h-6 w-40 rounded bg-slate-700/60" />
+            <div class="h-5 w-24 rounded-full bg-slate-800/60" />
+          </div>
+          <div class="h-8 w-20 rounded bg-slate-700/50" />
+        </div>
+      </div>
+      <div class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-3">
+        <div class="h-2.5 w-20 rounded bg-slate-700/60" />
+        <div v-for="i in 3" :key="i" class="flex items-center justify-between gap-3">
+          <div class="h-3 w-36 rounded bg-slate-800/60" />
+          <div class="h-3 w-14 rounded bg-slate-800/50" />
+        </div>
+      </div>
     </div>
 
     <!-- Not found -->

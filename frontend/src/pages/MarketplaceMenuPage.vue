@@ -8,14 +8,46 @@
       </router-link>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="py-24 text-center text-sm text-slate-400">
-      {{ t('mktMenu.loading') }}
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="mx-auto max-w-3xl px-4 py-5 space-y-5">
+      <!-- Restaurant header skeleton -->
+      <div class="flex items-start gap-4 animate-pulse">
+        <div class="h-16 w-16 shrink-0 rounded-xl bg-slate-800" />
+        <div class="flex-1 space-y-2">
+          <div class="h-5 w-40 rounded bg-slate-700/60" />
+          <div class="h-3 w-56 rounded bg-slate-800/50" />
+          <div class="flex gap-2">
+            <div class="h-3 w-16 rounded bg-slate-800/40" />
+            <div class="h-3 w-12 rounded bg-slate-800/40" />
+          </div>
+        </div>
+      </div>
+      <!-- Category + dish skeletons -->
+      <div v-for="i in 2" :key="i" class="space-y-3 animate-pulse">
+        <div class="h-4 w-28 rounded bg-slate-700/50" />
+        <div v-for="j in 3" :key="j" class="flex items-center justify-between gap-3 rounded-xl border border-slate-700/40 bg-slate-900/50 p-4">
+          <div class="space-y-1.5">
+            <div class="h-3.5 w-36 rounded bg-slate-700/60" />
+            <div class="h-2.5 w-52 rounded bg-slate-800/50" />
+            <div class="h-4 w-14 rounded bg-slate-700/40" />
+          </div>
+          <div class="h-14 w-14 shrink-0 rounded-lg bg-slate-800/60" />
+        </div>
+      </div>
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="py-24 text-center">
-      <p class="text-sm text-red-300">{{ t('mktMenu.error') }}</p>
+    <div v-else-if="fetchError" class="mx-auto max-w-sm px-4 py-8">
+      <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ t('mktMenu.error') }}</p>
+        <button
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          @click="fetchMenu"
+        >{{ t('common.retry') }}</button>
+      </div>
     </div>
 
     <template v-else-if="restaurant">

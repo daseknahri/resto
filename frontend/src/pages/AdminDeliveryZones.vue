@@ -13,9 +13,46 @@
       </button>
     </div>
 
-    <!-- Loading / Error -->
-    <div v-if="loading" class="py-12 text-center text-sm text-slate-400">{{ t('adminZones.loading') }}</div>
-    <div v-else-if="fetchError" class="py-12 text-center text-sm text-red-300">{{ t('adminZones.fetchError') }}</div>
+    <!-- Loading: skeleton table -->
+    <div v-if="loading" class="overflow-x-auto rounded-2xl border border-slate-700/60">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800/60 text-xs text-slate-400">
+          <tr>
+            <th class="px-4 py-3 text-left">#</th>
+            <th class="px-4 py-3 text-left">{{ t('adminZones.colName') }}</th>
+            <th class="px-4 py-3 text-left">{{ t('adminZones.colCity') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('adminZones.colRadius') }}</th>
+            <th class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
+            <th class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('adminZones.colActions') }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-700/40">
+          <tr v-for="i in 4" :key="i" class="animate-pulse">
+            <td class="px-4 py-3"><div class="h-3 w-4 rounded bg-slate-700/60" /></td>
+            <td class="px-4 py-3"><div class="h-3 w-28 rounded bg-slate-700/60" /></td>
+            <td class="px-4 py-3"><div class="h-3 w-20 rounded bg-slate-800/60" /></td>
+            <td class="px-4 py-3"><div class="ml-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+            <td class="px-4 py-3"><div class="mx-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+            <td class="px-4 py-3"><div class="mx-auto h-4 w-14 rounded-full bg-slate-800/50" /></td>
+            <td class="px-4 py-3"><div class="ml-auto h-3 w-16 rounded bg-slate-800/40" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Error -->
+    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t('adminZones.fetchError') }}</p>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        @click="fetchZones"
+      >{{ t('common.retry') }}</button>
+    </div>
+
     <div v-else-if="!zones.length" class="py-12 text-center text-sm text-slate-400">{{ t('adminZones.empty') }}</div>
 
     <!-- Zones table -->
@@ -50,14 +87,24 @@
               </span>
             </td>
             <td class="px-4 py-3 text-right">
-              <div class="flex justify-end gap-2">
+              <div class="flex justify-end items-center gap-2">
                 <button
                   class="text-xs text-sky-400 hover:text-sky-300"
                   @click="openEdit(zone)"
                 >{{ t('adminZones.edit') }}</button>
+                <template v-if="confirmDeleteId === zone.id">
+                  <span class="text-[11px] text-red-300">{{ zone.name }}?</span>
+                  <button
+                    class="text-[11px] font-semibold text-red-400 hover:text-red-300 disabled:opacity-50"
+                    :disabled="deletingId === zone.id"
+                    @click="deleteZone(zone)"
+                  >{{ deletingId === zone.id ? '…' : t('common.confirm') }}</button>
+                  <button class="text-[11px] text-slate-500 hover:text-slate-300" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
+                </template>
                 <button
+                  v-else
                   class="text-xs text-red-400 hover:text-red-300"
-                  @click="confirmDelete(zone)"
+                  @click="confirmDeleteId = zone.id"
                 >{{ t('adminZones.delete') }}</button>
               </div>
             </td>
@@ -182,6 +229,8 @@ const zones = ref([]);
 const showForm = ref(false);
 const editing = ref(null); // zone being edited, or null for create
 const saving = ref(false);
+const confirmDeleteId = ref(null); // zone id awaiting delete confirmation
+const deletingId = ref(null);
 const polygonJson = ref('[]');
 const polygonError = ref('');
 const feeTiersJson = ref('[]');
@@ -286,14 +335,17 @@ const save = async () => {
   }
 };
 
-const confirmDelete = async (zone) => {
-  if (!confirm(t('adminZones.deleteConfirm', { name: zone.name }))) return;
+const deleteZone = async (zone) => {
+  deletingId.value = zone.id;
   try {
     await api.delete(`/admin/delivery-zones/${zone.id}/`);
     zones.value = zones.value.filter(z => z.id !== zone.id);
+    confirmDeleteId.value = null;
     toast.show(t('adminZones.deleted'));
   } catch {
     toast.show(t('adminZones.deleteFailed'), 'error');
+  } finally {
+    deletingId.value = null;
   }
 };
 
