@@ -914,7 +914,7 @@ const printTicket = (o) => {
     ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${o.customer_note}</div>`
     : "";
 
-  const html = `<!DOCTYPE html><html><head>
+  const html = `<!DOCTYPE html><html lang="${currentLocale.value}" dir="${currentLocale.value === 'ar' ? 'rtl' : 'ltr'}"><head>
     <meta charset="utf-8">
     <title>Order ${o.order_number}</title>
     <style>

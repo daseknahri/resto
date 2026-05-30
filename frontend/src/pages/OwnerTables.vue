@@ -845,7 +845,7 @@ const buildHtmlPack = () => {
     .join("\n");
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${currentLocale.value}" dir="${currentLocale.value === 'ar' ? 'rtl' : 'ltr'}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
