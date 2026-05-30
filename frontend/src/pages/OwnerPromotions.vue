@@ -207,6 +207,7 @@
                 v-for="d in DAYS"
                 :key="d.key"
                 type="button"
+                :aria-pressed="form.days.includes(d.key)"
                 class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
                 :class="form.days.includes(d.key)
                   ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
