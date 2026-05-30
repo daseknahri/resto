@@ -575,7 +575,10 @@
                 @click="redeemVoucher"
               >{{ voucherLoading ? '…' : t('customerAccount.voucherRedeem') }}</button>
             </div>
-            <p v-if="voucherError" class="text-xs text-red-300">{{ voucherError }}</p>
+            <div v-if="voucherError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+              <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ voucherError }}</p>
+            </div>
             <p v-if="voucherSuccess" class="text-xs text-emerald-300">{{ voucherSuccess }}</p>
           </div>
 
@@ -669,7 +672,10 @@
                     @click="redeemPoints"
                   >{{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}</button>
                 </div>
-                <p v-if="redeemError" class="text-xs text-red-300">{{ redeemError }}</p>
+                <div v-if="redeemError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+                  <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+                  <p class="flex-1 text-sm text-red-300">{{ redeemError }}</p>
+                </div>
                 <p v-if="redeemSuccess" class="text-xs text-emerald-300">{{ redeemSuccess }}</p>
               </template>
               <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
