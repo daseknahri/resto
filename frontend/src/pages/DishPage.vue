@@ -258,6 +258,7 @@
             :src="dish.image_url || placeholder"
             :alt="dish.name"
             loading="lazy"
+            decoding="async"
             class="max-h-[95vh] max-w-[95vw] rounded-xl object-contain shadow-2xl shadow-black/60"
             @click.stop
           />

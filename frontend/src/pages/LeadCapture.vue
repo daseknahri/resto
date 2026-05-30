@@ -68,6 +68,7 @@
               :class="errors.email ? 'border-red-400' : 'border-slate-700'"
               autocomplete="email"
               inputmode="email"
+              spellcheck="false"
               @input="clearError('email')"
             />
             <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>

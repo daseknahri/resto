@@ -287,7 +287,7 @@
             </div>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.email") }}
-              <input v-model.trim="form.email" type="email" class="ui-input" :class="fieldClass('email')" inputmode="email" autocomplete="email" @input="clearError('email')" />
+              <input v-model.trim="form.email" type="email" class="ui-input" :class="fieldClass('email')" inputmode="email" autocomplete="email" spellcheck="false" @input="clearError('email')" />
               <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">

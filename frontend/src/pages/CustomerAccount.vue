@@ -945,6 +945,7 @@
                       type="email"
                       autocomplete="email"
                       maxlength="254"
+                      spellcheck="false"
                       class="ui-input min-w-0 flex-1 py-1.5 text-xs"
                       :placeholder="t('customerAccount.emailPlaceholder')"
                       :disabled="savingEmail"

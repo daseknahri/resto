@@ -155,6 +155,7 @@
               v-model.trim="dishAvailSearch"
               type="search"
               class="ui-input flex-1 text-xs"
+              :aria-label="t('common.search')"
               :placeholder="t('common.search')"
             />
             <button

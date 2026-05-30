@@ -49,6 +49,7 @@
           v-model.trim="searchQuery"
           type="search"
           class="ui-input"
+          :aria-label="t('ownerReservations.searchPlaceholder')"
           :placeholder="t('ownerReservations.searchPlaceholder')"
           @keyup.enter="applyFilters"
         />

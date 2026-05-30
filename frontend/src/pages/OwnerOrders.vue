@@ -68,6 +68,7 @@
           v-model.trim="searchQuery"
           type="search"
           class="ui-input min-w-0 flex-1 text-sm"
+          :aria-label="t('ownerOrders.searchPlaceholder')"
           :placeholder="t('ownerOrders.searchPlaceholder')"
           @input="searchQuery = $event.target.value"
         />
