@@ -239,7 +239,7 @@
             <p class="font-semibold text-white">{{ selectedCalendarRes.name }}</p>
             <p class="text-xs text-slate-400">{{ selectedCalendarRes.phone }} · {{ selectedCalendarRes.email }}</p>
           </div>
-          <button class="text-xs text-slate-500 hover:text-slate-300" @click="selectedCalendarRes = null">✕</button>
+          <button class="text-xs text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="selectedCalendarRes = null">✕</button>
         </div>
         <p v-if="selectedCalendarRes.booked_for" class="text-xs text-slate-300">
           {{ t("ownerReservations.bookedFor") }}: {{ formatDateTime(selectedCalendarRes.booked_for) }}

@@ -30,7 +30,7 @@
         <!-- Fullscreen toggle -->
         <button
           class="rounded-xl border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
-          :title="isFullscreen ? t('kitchen.exitFullscreen') : t('kitchen.enterFullscreen')"
+          :aria-label="isFullscreen ? t('kitchen.exitFullscreen') : t('kitchen.enterFullscreen')"
           @click="toggleFullscreen"
         >{{ isFullscreen ? "⤓" : "⤢" }}</button>
       </div>

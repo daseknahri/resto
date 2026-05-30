@@ -12,7 +12,7 @@
           <button
             class="ui-btn-outline px-3 py-1.5 text-sm"
             :class="soundEnabled ? '' : 'opacity-50'"
-            :title="soundEnabled ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
+            :aria-label="soundEnabled ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
             @click="soundEnabled = !soundEnabled"
           >
             {{ soundEnabled ? "🔔" : "🔕" }}
@@ -87,6 +87,7 @@
         <button
           v-if="searchQuery || activeDateFilter !== 'all'"
           class="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+          :aria-label="t('ownerOrders.clearFilters')"
           @click="searchQuery = ''; activeDateFilter = 'all'"
         >✕</button>
       </div>
@@ -355,6 +356,7 @@
                     :key="n"
                     class="text-lg transition-transform hover:scale-110"
                     :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+                    :aria-label="t('ownerOrders.djRateStar', { n })"
                     @click="ratingScore = n"
                   >★</button>
                 </div>

@@ -1771,6 +1771,7 @@ const arabicMessages = {
     "djOnline": "متصل",
     "djSearching": "جارٍ البحث عن سائق…",
     "djRateDriver": "تقييم السائق",
+    "djRateStar": "تقييم {n} نجمة",
     "djRatingNotePlaceholder": "تعليق اختياري…",
     "djSubmitRating": "إرسال",
     "djRatingSubmitted": "تم تقييم السائق. شكراً!",
