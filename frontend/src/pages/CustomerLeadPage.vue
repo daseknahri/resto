@@ -30,6 +30,7 @@
           loading="eager"
           fetchpriority="high"
           decoding="async"
+          @error="$event.target.style.display='none'"
         />
       </div>
 
@@ -55,6 +56,7 @@
             class="h-[4.5rem] w-[4.5rem] shrink-0 rounded-[1.1rem] border-2 border-white/16 object-cover shadow-2xl shadow-black/55"
             loading="eager"
             decoding="async"
+            @error="$event.target.style.display='none'"
           />
           <div class="min-w-0 pb-0.5">
             <h1 class="ui-display text-[1.9rem] font-semibold leading-[1.1] text-white sm:text-4xl">{{ tenantName }}</h1>

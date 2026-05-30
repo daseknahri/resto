@@ -12,6 +12,7 @@
                 class="h-8 w-8 shrink-0 rounded-xl border border-slate-700/70 object-cover md:h-9 md:w-9"
                 loading="eager"
                 decoding="async"
+                @error="$event.target.style.display='none'"
               />
               <div class="min-w-0">
                 <h1 class="ui-display truncate text-base font-semibold text-white sm:text-lg md:text-2xl">{{ tenantName }}</h1>

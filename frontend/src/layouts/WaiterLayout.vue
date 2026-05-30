@@ -12,6 +12,7 @@
             class="h-7 w-7 shrink-0 rounded-lg border border-slate-700/70 object-cover"
             loading="eager"
             decoding="async"
+            @error="$event.target.style.display='none'"
           />
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-100">{{ tenantName }}</p>

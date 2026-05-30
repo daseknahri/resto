@@ -24,6 +24,7 @@
               class="h-16 w-16 shrink-0 rounded-2xl border-2 border-white/20 object-cover shadow-2xl shadow-black/50 sm:h-20 sm:w-20"
               loading="eager"
               decoding="async"
+              @error="$event.target.style.display='none'"
             />
             <div class="min-w-0 space-y-1">
               <p class="ui-kicker">{{ t('menu.kicker') }}</p>
@@ -79,6 +80,7 @@
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
               loading="lazy"
               decoding="async"
+              @error="$event.target.style.display='none'"
             />
             <!-- Gradient placeholder when no image -->
             <div

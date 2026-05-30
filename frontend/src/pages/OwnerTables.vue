@@ -163,6 +163,8 @@
               :alt="t('ownerTables.logoAlt')"
               class="h-7 w-7 rounded-full border border-slate-700 object-cover"
               loading="lazy"
+              decoding="async"
+              @error="$event.target.style.display='none'"
             />
             <p class="truncate text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{{ tenantName }}</p>
           </div>

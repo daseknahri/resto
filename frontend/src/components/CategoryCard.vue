@@ -12,6 +12,7 @@
         :loading="eager ? 'eager' : 'lazy'"
         :fetchpriority="eager ? 'high' : 'auto'"
         decoding="async"
+        @error="$event.target.style.display='none'"
       />
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/0"></div>
       <span class="absolute right-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-100">
