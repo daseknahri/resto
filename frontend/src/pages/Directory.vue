@@ -17,6 +17,7 @@
       <input
         v-model="searchQuery"
         type="search"
+        :aria-label="t('directory.searchPlaceholder')"
         class="flex-1 min-w-44 rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
         :placeholder="t('directory.searchPlaceholder')"
       />
@@ -24,6 +25,7 @@
       <select
         v-if="filters.cities.length"
         v-model="selectedCity"
+        :aria-label="t('directory.filterCity')"
         class="rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 focus:outline-none"
       >
         <option value="">{{ t('directory.filterCity') }}: {{ t('directory.filterAll') }}</option>
@@ -33,6 +35,7 @@
       <select
         v-if="filters.cuisines.length"
         v-model="selectedCuisine"
+        :aria-label="t('directory.filterCuisine')"
         class="rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 focus:outline-none"
       >
         <option value="">{{ t('directory.filterCuisine') }}: {{ t('directory.filterAll') }}</option>

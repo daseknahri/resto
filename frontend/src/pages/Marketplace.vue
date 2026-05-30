@@ -19,11 +19,13 @@
         <input
           v-model="searchQuery"
           type="search"
+          :aria-label="t('marketplace.searchPlaceholder')"
           class="flex-1 min-w-0 rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
           :placeholder="t('marketplace.searchPlaceholder')"
         />
         <button
           class="flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:border-slate-500 disabled:opacity-50"
+          :aria-label="t('marketplace.locationBtn')"
           :disabled="locating"
           @click="requestLocation"
         >
@@ -38,6 +40,7 @@
         <select
           v-if="filters.cities.length"
           v-model="selectedCity"
+          :aria-label="t('marketplace.filterCity')"
           class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none"
         >
           <option value="">{{ t('marketplace.filterCity') }}: {{ t('marketplace.filterAll') }}</option>
@@ -48,6 +51,7 @@
         <select
           v-if="filters.cuisines.length"
           v-model="selectedCuisine"
+          :aria-label="t('marketplace.filterCuisine')"
           class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none"
         >
           <option value="">{{ t('marketplace.filterCuisine') }}: {{ t('marketplace.filterAll') }}</option>
@@ -57,6 +61,7 @@
         <!-- Fulfillment -->
         <select
           v-model="selectedFulfillment"
+          :aria-label="t('marketplace.filterFulfillment')"
           class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none"
         >
           <option value="any">{{ t('marketplace.filterFulfillmentAny') }}</option>
@@ -67,6 +72,7 @@
         <!-- Price tier -->
         <select
           v-model="selectedPriceTier"
+          :aria-label="t('marketplace.filterPriceTier')"
           class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none"
         >
           <option value="">{{ t('marketplace.filterPriceTier') }}: {{ t('marketplace.filterAll') }}</option>
@@ -78,6 +84,7 @@
         <!-- Min rating -->
         <select
           v-model="selectedMinRating"
+          :aria-label="t('marketplace.filterMinRating')"
           class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none"
         >
           <option value="">{{ t('marketplace.filterMinRating') }}: {{ t('marketplace.filterAll') }}</option>
