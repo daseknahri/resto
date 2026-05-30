@@ -15,7 +15,7 @@
         >{{ p }}d</button>
         <button
           class="ml-1 text-slate-500 hover:text-slate-300 transition-colors"
-          :title="t('common.refresh')"
+          :aria-label="t('common.refresh')"
           :disabled="loading"
           @click="load"
         >
