@@ -10,7 +10,7 @@
     </div>
 
     <!-- Search form -->
-    <form class="ui-panel space-y-3 p-4" @submit.prevent="search">
+    <form class="ui-panel space-y-3 p-4" novalidate @submit.prevent="search">
       <div class="flex gap-2">
         <input
           v-model="phone"

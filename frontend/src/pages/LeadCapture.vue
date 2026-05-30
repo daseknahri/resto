@@ -36,7 +36,7 @@
     </header>
 
     <div class="grid gap-6 xl:grid-cols-[1.12fr,0.88fr]">
-      <form class="ui-command-deck space-y-4 p-5 md:p-6" @submit.prevent="submit">
+      <form class="ui-command-deck space-y-4 p-5 md:p-6" novalidate @submit.prevent="submit">
         <div class="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
           <div>
             <p class="font-medium text-white">{{ t("leadCapture.whatHappensNext") }}</p>

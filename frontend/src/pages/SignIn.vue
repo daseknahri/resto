@@ -44,7 +44,7 @@
           <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
         </div>
 
-        <form class="space-y-4" @submit.prevent="submit">
+        <form class="space-y-4" novalidate @submit.prevent="submit">
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("signIn.identifier") }}
             <input

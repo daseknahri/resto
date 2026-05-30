@@ -272,7 +272,7 @@
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeLeadModal">{{ t("common.close") }}</button>
           </div>
 
-          <form class="space-y-3" @submit.prevent="submitLead">
+          <form class="space-y-3" novalidate @submit.prevent="submitLead">
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.name") }}

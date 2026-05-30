@@ -7,7 +7,7 @@
         <p class="text-sm text-slate-300">{{ t("activateAccount.description") }}</p>
       </div>
 
-      <form class="space-y-4" @submit.prevent="submit">
+      <form class="space-y-4" novalidate @submit.prevent="submit">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("activateAccount.token") }}
           <input
