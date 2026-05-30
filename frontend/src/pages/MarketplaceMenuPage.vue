@@ -157,13 +157,14 @@
         v-if="checkoutOpen"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="marketplace-menu-checkout-dialog-title"
         class="fixed inset-0 z-40 flex flex-col bg-slate-950/95 backdrop-blur-sm overflow-y-auto"
         @keydown.esc.window="checkoutOpen = false"
       >
         <div class="mx-auto w-full max-w-md px-4 py-6 space-y-5">
           <!-- Header -->
           <div class="flex items-center justify-between">
-            <h2 class="text-base font-bold text-white">{{ t('mktMenu.yourOrder') }}</h2>
+            <h2 id="marketplace-menu-checkout-dialog-title" class="text-base font-bold text-white">{{ t('mktMenu.yourOrder') }}</h2>
             <button class="text-slate-400 hover:text-white text-xl leading-none" :aria-label="t('common.close')" @click="checkoutOpen = false">✕</button>
           </div>
 

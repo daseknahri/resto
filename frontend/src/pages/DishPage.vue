@@ -248,10 +248,12 @@
           v-if="lightboxOpen && dish"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="dish-lightbox-dialog-title"
           class="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/96 backdrop-blur-sm"
           @click="lightboxOpen = false"
           @keydown.esc.window="lightboxOpen = false"
         >
+          <h2 id="dish-lightbox-dialog-title" class="sr-only">{{ dish.name }}</h2>
           <img
             :src="dish.image_url || placeholder"
             :alt="dish.name"

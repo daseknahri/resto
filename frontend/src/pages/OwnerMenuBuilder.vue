@@ -42,11 +42,11 @@
         @click.self="closeImport"
         @keydown.esc.window="closeImport"
       >
-        <div role="dialog" aria-modal="true" class="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div role="dialog" aria-modal="true" aria-labelledby="owner-menu-builder-import-dialog-title" class="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
           <!-- Header -->
           <div class="flex items-center justify-between">
             <div>
-              <h2 class="text-base font-bold text-white">{{ t("ownerMenuBuilder.importTitle") }}</h2>
+              <h2 id="owner-menu-builder-import-dialog-title" class="text-base font-bold text-white">{{ t("ownerMenuBuilder.importTitle") }}</h2>
               <p class="text-xs text-slate-400 mt-0.5">{{ t("ownerMenuBuilder.importSubtitle") }}</p>
             </div>
             <button class="text-slate-400 hover:text-white text-xl leading-none" :aria-label="t('common.close')" @click="closeImport">✕</button>

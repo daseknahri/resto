@@ -127,8 +127,8 @@
           @click.self="closeForm"
           @keydown.esc.window="closeForm"
         >
-          <div role="dialog" aria-modal="true" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 class="text-base font-bold text-white">
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-delivery-zones-form-dialog-title" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 id="admin-delivery-zones-form-dialog-title" class="text-base font-bold text-white">
               {{ editing ? t('adminZones.editTitle') : t('adminZones.createTitle') }}
             </h2>
 

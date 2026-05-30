@@ -5,11 +5,12 @@
       class="fixed inset-0 z-[3000] flex flex-col bg-slate-950/98 backdrop-blur"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="waiter-new-order-title"
       @keydown.esc.window="$emit('close')"
     >
       <!-- Header bar -->
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
-        <h2 class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderTitle') }}</h2>
+        <h2 id="waiter-new-order-title" class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderTitle') }}</h2>
         <button
           class="rounded-full p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
           :aria-label="t('common.close')"

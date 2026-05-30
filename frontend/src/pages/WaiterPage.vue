@@ -222,11 +222,11 @@
         @click.self="billOrder = null"
         @keydown.esc.window="billOrder = null"
       >
-        <div role="dialog" aria-modal="true" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-labelledby="waiter-bill-dialog-title" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
           <!-- Header -->
           <div class="bill-header bg-slate-900 px-5 py-4 text-center">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">{{ tenantName }}</p>
-            <p class="mt-0.5 text-base font-bold text-white">{{ t('waiterPage.billTitle') }}</p>
+            <h2 id="waiter-bill-dialog-title" class="mt-0.5 text-base font-bold text-white">{{ t('waiterPage.billTitle') }}</h2>
           </div>
 
           <!-- Meta -->

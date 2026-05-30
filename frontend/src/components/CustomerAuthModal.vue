@@ -5,14 +5,14 @@
       @click.self="$emit('close')"
       @keydown.esc.window="$emit('close')"
     >
-      <div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+      <div role="dialog" aria-modal="true" aria-labelledby="customer-auth-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
         <!-- Header -->
         <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
               {{ t("customerAuth.kicker") }}
             </p>
-            <h2 class="text-base font-semibold text-slate-100">{{ t("customerAuth.title") }}</h2>
+            <h2 id="customer-auth-dialog-title" class="text-base font-semibold text-slate-100">{{ t("customerAuth.title") }}</h2>
           </div>
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="$emit('close')">
             <AppIcon name="close" class="h-3.5 w-3.5" />

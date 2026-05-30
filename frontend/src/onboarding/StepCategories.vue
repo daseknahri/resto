@@ -97,11 +97,11 @@
         @click.self="closeEditor"
         @keydown.esc.window="closeEditor"
       >
-        <div role="dialog" aria-modal="true" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
-              <h3 class="text-lg font-semibold text-white">{{ t("common.edit") }}</h3>
+              <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("common.edit") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
@@ -197,11 +197,11 @@
         @click.self="closeQuickModal"
         @keydown.esc.window="closeQuickModal"
       >
-        <div role="dialog" aria-modal="true" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
-              <h3 class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
+              <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickModal">{{ t("common.close") }}</button>
           </div>

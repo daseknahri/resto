@@ -260,11 +260,11 @@
         @click.self="closeLeadModal"
         @keydown.esc.window="closeLeadModal"
       >
-        <div role="dialog" aria-modal="true" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
+        <div role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
           <div class="mb-4 flex items-center justify-between gap-3">
             <div>
               <p class="ui-kicker">{{ t("customerLeadPage.message") }}</p>
-              <h2 class="text-xl font-semibold text-slate-100">{{ t("customerLeadPage.contactMe") }}</h2>
+              <h2 id="customer-lead-contact-dialog-title" class="text-xl font-semibold text-slate-100">{{ t("customerLeadPage.contactMe") }}</h2>
               <p class="mt-1 text-sm text-slate-400">{{ t("customerLeadPage.helpText") }}</p>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeLeadModal">{{ t("common.close") }}</button>

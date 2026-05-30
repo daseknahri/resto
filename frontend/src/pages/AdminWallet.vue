@@ -221,8 +221,8 @@
           @click.self="bonusTarget = null"
           @keydown.esc.window="bonusTarget = null"
         >
-          <div role="dialog" aria-modal="true" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h2 class="text-sm font-bold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="admin-wallet-bonus-dialog-title" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+            <h2 id="admin-wallet-bonus-dialog-title" class="text-sm font-bold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
             <p class="text-xs text-slate-400">
               {{ bonusTarget.name }}
               <span class="ml-2 text-slate-500">{{ t('adminWallet.currentBalance') }}: {{ fmtBalance(bonusTarget.wallet_balance) }}</span>

@@ -145,11 +145,11 @@
         @click.self="closeDishEditor"
         @keydown.esc.window="closeDishEditor"
       >
-        <div role="dialog" aria-modal="true" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
-              <h3 class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+              <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeDishEditor">{{ t("common.close") }}</button>
           </div>
@@ -679,11 +679,11 @@
         @click.self="closeQuickDishModal"
         @keydown.esc.window="closeQuickDishModal"
       >
-        <div role="dialog" aria-modal="true" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
-              <h3 class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+              <h3 id="step-dishes-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeQuickDishModal">{{ t("common.close") }}</button>
           </div>
