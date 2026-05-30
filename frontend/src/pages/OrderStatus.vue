@@ -1,5 +1,14 @@
 <template>
   <div class="space-y-4 px-3 py-4 pb-24 sm:px-4">
+    <!-- Screen-reader live region: announces status changes as they arrive -->
+    <div
+      v-if="orderData"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      class="sr-only"
+    >{{ statusLabel(orderData?.status) }}</div>
+
     <!-- Loading skeleton -->
     <div v-if="loading && !orderData" class="space-y-3">
       <div class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-3">

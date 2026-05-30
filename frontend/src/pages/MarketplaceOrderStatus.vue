@@ -1,6 +1,15 @@
 <template>
   <div class="min-h-screen bg-slate-950 px-4 py-8 pb-16">
 
+    <!-- Screen-reader live region: announces order status changes -->
+    <div
+      v-if="order"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      class="sr-only"
+    >{{ t(`mktOrderStatus.${order.status}`) }}</div>
+
     <!-- Back -->
     <div class="mx-auto max-w-md">
       <router-link to="/order" class="text-xs text-slate-400 hover:text-slate-200">

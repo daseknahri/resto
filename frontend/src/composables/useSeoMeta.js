@@ -89,6 +89,9 @@ const routeTitleLabel = (route, t) => {
   if (name === "menu" || name === "category" || name === "dish" || name === "table-link") return t("customerLayout.navMenu");
   if (name === "cart") return t("customerLayout.navCart");
   if (name === "reserve") return t("customerLayout.navReserve");
+  if (name === "customer-account") return t("customerLayout.navAccount");
+  if (name === "find-my-order") return t("customerLayout.findMyOrder");
+  if (name === "order-status") return t("orderStatus.title");
   if (name.startsWith("owner")) return "Owner workspace";
   if (name === "admin-console") return "Admin console";
   if (name === "signin") return "Sign in";

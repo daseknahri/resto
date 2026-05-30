@@ -893,6 +893,12 @@ body[dir="rtl"] .ui-section-kicker {
     transform: translateY(-6px) scale(0.996);
   }
 
+  /* Simple fade — used by dropdowns and conditional banners */
+  .ui-fade-enter-active { transition: opacity var(--motion-fast) ease; }
+  .ui-fade-leave-active { transition: opacity var(--motion-fast) ease; }
+  .ui-fade-enter-from,
+  .ui-fade-leave-to     { opacity: 0; }
+
   .ui-reveal {
     animation: ui-fade-up var(--motion-base) var(--ease-fluid) both;
     animation-delay: var(--ui-delay, 0ms);
