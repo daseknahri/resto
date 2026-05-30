@@ -93,10 +93,10 @@
                 class="h-14 w-14 rounded-2xl border border-white/10 object-cover shadow-lg"
               />
               <div class="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-xs font-medium text-slate-200">
-                {{ t("stepTheme.primaryColor") }} • {{ form.primary_color }}
+                {{ t("stepTheme.primaryColor") }} ï¿½ {{ form.primary_color }}
               </div>
               <div class="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-xs font-medium text-slate-200">
-                {{ t("stepTheme.secondaryColor") }} • {{ form.secondary_color }}
+                {{ t("stepTheme.secondaryColor") }} ï¿½ {{ form.secondary_color }}
               </div>
             </div>
           </div>
@@ -199,7 +199,10 @@
     </section>
 
     <section :class="sectionPanelClass">
-      <p v-if="errors.non_field_errors" class="text-sm text-red-300">{{ errors.non_field_errors }}</p>
+      <div v-if="errors.non_field_errors" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ errors.non_field_errors }}</p>
+      </div>
 
       <div class="flex flex-wrap items-center gap-3">
         <button class="ui-btn-primary px-4 py-2" :disabled="saving || uploadingHero || uploadingLogo" @click="saveAndNext">
