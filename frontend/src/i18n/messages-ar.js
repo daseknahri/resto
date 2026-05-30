@@ -154,7 +154,9 @@ const arabicMessages = {
     "navAccount": "الحساب",
     "trackOrderBanner": "الطلب #{number} — تتبع طلبك",
     "trackOrderDismiss": "إغلاق متتبع الطلب",
-    "installApp": "تثبيت التطبيق"
+    "installApp": "تثبيت التطبيق",
+    "toggleColorScheme": "تغيير المظهر",
+    "viewCart": "عرض السلة"
   },
   "customerFlow": {
     "title": "رحلة الضيف",

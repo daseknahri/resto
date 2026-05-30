@@ -26,7 +26,7 @@
               <button
                 class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
                 type="button"
-                :title="colorScheme === 'dark' ? 'Dark mode' : 'System mode'"
+                :aria-label="t('customerLayout.toggleColorScheme')"
                 @click="toggleColorScheme"
               >
                 <svg v-if="colorScheme === 'dark'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
@@ -43,9 +43,9 @@
                 type="button"
                 @click="pwaInstall"
               >⬇ {{ t('customerLayout.installApp') }}</button>
-              <RouterLink to="/cart" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
-                <AppIcon name="cart" class="h-4 w-4 sm:hidden" />
-                <span class="hidden sm:inline">{{ t("common.cart") }}</span>
+              <RouterLink to="/cart" :aria-label="t('customerLayout.viewCart')" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
+                <AppIcon name="cart" class="h-4 w-4 sm:hidden" aria-hidden="true" />
+                <span class="hidden sm:inline" aria-hidden="true">{{ t("common.cart") }}</span>
                 <span
                   v-if="cart.count"
                   class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"

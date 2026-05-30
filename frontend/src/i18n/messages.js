@@ -161,7 +161,9 @@ export const messages = {
       navAccount: "Account",
       trackOrderBanner: "Order #{number} — Tap to track",
       trackOrderDismiss: "Dismiss order tracker",
-      installApp: "Install app"
+      installApp: "Install app",
+      toggleColorScheme: "Toggle color scheme",
+      viewCart: "View cart"
     },
     customerFlow: {
       title: "Guest journey",
@@ -2982,7 +2984,9 @@ export const messages = {
       navAccount: "Compte",
       trackOrderBanner: "Commande #{number} — Suivre",
       trackOrderDismiss: "Fermer le suivi",
-      installApp: "Installer l'app"
+      installApp: "Installer l'app",
+      toggleColorScheme: "Changer le theme",
+      viewCart: "Voir le panier"
     },
     customerFlow: {
       title: "Parcours client",

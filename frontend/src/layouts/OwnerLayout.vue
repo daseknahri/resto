@@ -110,7 +110,7 @@
                 :class="pushSubscribed
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
                   : 'border-slate-700/50 bg-slate-800/50 text-slate-400 hover:border-slate-600'"
-                :title="pushSubscribed ? t('ownerLayout.pushDisable') : t('ownerLayout.pushEnable')"
+                :aria-label="pushSubscribed ? t('ownerLayout.pushDisable') : t('ownerLayout.pushEnable')"
                 :disabled="pushLoading"
                 type="button"
                 @click="pushSubscribed ? pushUnsubscribe() : pushSubscribe()"
