@@ -120,59 +120,61 @@
                   {{ pushSubscribed ? '🔔' : '🔕' }}
                 </span>
               </button>
-              <div ref="settingsMenuRef" class="relative">
+              <div ref="settingsMenuRef" class="relative" @keydown.escape.stop="closeSettingsMenuByKey">
                 <button
+                  ref="settingsTriggerRef"
                   class="owner-settings-trigger"
                   type="button"
                   :aria-expanded="settingsOpen ? 'true' : 'false'"
                   :aria-label="t('common.profile')"
+                  aria-haspopup="menu"
                   @click="toggleSettingsMenu"
                 >
                   <AppIcon name="settings" class="owner-settings-icon" />
                 </button>
                 <transition name="ui-fade">
-                  <div v-if="settingsOpen" class="owner-settings-menu">
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-profile' }" @click="closeSettingsMenu">
+                  <div v-if="settingsOpen" class="owner-settings-menu" role="menu" :aria-label="t('common.profile')">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile' }" @click="closeSettingsMenu">
                       <AppIcon name="settings" class="owner-settings-item-icon" />
                       <span>{{ t("common.profile") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">
                       <AppIcon name="user" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.staff") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-ratings' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-ratings' }" @click="closeSettingsMenu">
                       <AppIcon name="star" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.ratings") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-promotions' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-promotions' }" @click="closeSettingsMenu">
                       <AppIcon name="tag" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.promotions") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-flash-sales' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-flash-sales' }" @click="closeSettingsMenu">
                       <AppIcon name="sparkles" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.flashSales") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-delivery' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-delivery' }" @click="closeSettingsMenu">
                       <AppIcon name="truck" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.delivery") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-customers' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-customers' }" @click="closeSettingsMenu">
                       <AppIcon name="user" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.customers") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
                       <AppIcon name="star" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.loyalty") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-wallet' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-wallet' }" @click="closeSettingsMenu">
                       <AppIcon name="wallet" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.wallet") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
                       <AppIcon name="menu" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.kitchen") }}</span>
                     </RouterLink>
-                    <button class="owner-settings-item owner-settings-item-danger" type="button" @click="handleSignOut">
+                    <button class="owner-settings-item owner-settings-item-danger" role="menuitem" type="button" @click="handleSignOut">
                       <AppIcon name="logout" class="owner-settings-item-icon" />
                       <span>{{ t("common.signOut") }}</span>
                     </button>
@@ -349,6 +351,7 @@ const activeWorkspaceLabel = computed(() => {
 });
 const settingsOpen = ref(false);
 const settingsMenuRef = ref(null);
+const settingsTriggerRef = ref(null);
 
 const signOut = async () => {
   await session.signOut();
@@ -357,6 +360,12 @@ const signOut = async () => {
 
 const closeSettingsMenu = () => {
   settingsOpen.value = false;
+};
+
+// Called via Escape key — close and return focus to trigger button
+const closeSettingsMenuByKey = () => {
+  settingsOpen.value = false;
+  settingsTriggerRef.value?.focus();
 };
 
 const toggleSettingsMenu = () => {

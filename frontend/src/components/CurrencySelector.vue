@@ -1,10 +1,12 @@
 <template>
-  <div ref="rootRef" class="relative z-[3000]" :aria-label="t('common.currency')">
+  <div ref="rootRef" class="relative z-[3000]" :aria-label="t('common.currency')" @keydown="onKeydown">
     <button
+      ref="triggerRef"
       type="button"
       class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
       :aria-expanded="open ? 'true' : 'false'"
-      @click.stop="open = !open"
+      aria-haspopup="listbox"
+      @click.stop="toggle"
     >
       <span class="text-[10px] leading-none font-bold">{{ currency.selected }}</span>
       <span class="sr-only">{{ t("common.currency") }}</span>
@@ -12,12 +14,18 @@
 
     <div
       v-if="open"
+      ref="menuRef"
+      role="listbox"
+      :aria-label="t('common.currency')"
       class="absolute right-0 top-full z-[3100] mt-1.5 min-w-[7rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
     >
       <button
-        v-for="rate in currency.available"
+        v-for="(rate, idx) in currency.available"
         :key="rate.code"
+        :ref="el => { if (el) optionRefs[idx] = el }"
         type="button"
+        role="option"
+        :aria-selected="currency.selected === rate.code"
         class="flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[11px] text-slate-200 transition hover:bg-slate-800/80"
         :class="currency.selected === rate.code ? 'bg-slate-800/70 text-[var(--color-secondary)]' : ''"
         @click="select(rate.code)"
@@ -30,7 +38,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useCurrencyStore } from "../stores/currency";
 
@@ -39,10 +47,45 @@ const currency = useCurrencyStore();
 
 const open = ref(false);
 const rootRef = ref(null);
+const triggerRef = ref(null);
+const menuRef = ref(null);
+const optionRefs = ref([]);
 
 const select = (code) => {
   currency.setCode(code);
   open.value = false;
+  nextTick(() => triggerRef.value?.focus());
+};
+
+const toggle = () => {
+  open.value = !open.value;
+  if (open.value) {
+    optionRefs.value = [];
+    nextTick(() => {
+      // Focus the currently selected option, or the first one
+      const selectedIdx = currency.available.findIndex(r => r.code === currency.selected);
+      const focusIdx = selectedIdx >= 0 ? selectedIdx : 0;
+      optionRefs.value[focusIdx]?.focus();
+    });
+  }
+};
+
+const onKeydown = (e) => {
+  if (!open.value) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    open.value = false;
+    nextTick(() => triggerRef.value?.focus());
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const focused = document.activeElement;
+    const opts = optionRefs.value.filter(Boolean);
+    const idx = opts.indexOf(focused);
+    const next = e.key === 'ArrowDown'
+      ? Math.min(idx + 1, opts.length - 1)
+      : Math.max(idx - 1, 0);
+    opts[next]?.focus();
+  }
 };
 
 const onDocClick = (event) => {
