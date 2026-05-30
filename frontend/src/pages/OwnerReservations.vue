@@ -421,6 +421,7 @@
               <button
                 class="owner-action-btn col-span-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
                 :disabled="isTimelineLoading(reservation.id)"
+                :aria-expanded="isTimelineOpen(reservation.id)"
                 @click="toggleTimeline(reservation.id)"
               >
                 <AppIcon name="calendar" class="owner-res-icon" />

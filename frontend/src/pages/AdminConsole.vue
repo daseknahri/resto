@@ -344,6 +344,7 @@
           </div>
           <button
             class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary"
+            :aria-expanded="tenantToolsExpanded(tenant.id)"
             @click="toggleTenantTools(tenant.id)"
           >
             {{ tenantToolsExpanded(tenant.id) ? `${t("adminConsole.hide")} tools` : `${t("adminConsole.show")} tools` }}

@@ -29,6 +29,7 @@
           type="email"
           :placeholder="t('ownerStaff.emailPlaceholder')"
           autocomplete="email"
+          spellcheck="false"
           class="ui-input"
           :disabled="creating"
           @keyup.enter="createStaff"
@@ -122,6 +123,7 @@
           </div>
           <button
             class="shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
+            :aria-expanded="expandedIds.has(member.id)"
             @click="toggleExpanded(member.id)"
           >
             {{ t("ownerStaff.manage") }}

@@ -493,6 +493,7 @@
                     <button
                       v-if="order.items?.length"
                       class="mt-0.5 shrink-0 rounded-lg border border-slate-700/50 bg-slate-800/50 px-2 py-1 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                      :aria-expanded="expandedOrders.has(order.order_number)"
                       @click="toggleOrder(order.order_number)"
                     >{{ expandedOrders.has(order.order_number) ? t('customerAccount.orderHideItems') : t('customerAccount.orderShowItems') }}</button>
                   </div>
