@@ -175,6 +175,7 @@
             <textarea
               v-model="note"
               rows="3"
+              :aria-label="t('ownerBilling.notePlaceholder')"
               :placeholder="t('ownerBilling.notePlaceholder')"
               class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
             />
@@ -388,6 +389,7 @@
               rows="2"
               maxlength="500"
               class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-red-400 focus:outline-none"
+              :aria-label="t('ownerBilling.deletionReasonPlaceholder')"
               :placeholder="t('ownerBilling.deletionReasonPlaceholder')"
             ></textarea>
             <div class="flex flex-wrap gap-2">

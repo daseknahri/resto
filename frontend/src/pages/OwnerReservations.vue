@@ -503,6 +503,7 @@
                   rows="2"
                   class="ui-textarea min-w-[220px] flex-1"
                   :class="timelineNoteError[reservation.id] ? 'border-red-400' : ''"
+                  :aria-label="t('ownerReservations.addFollowUpNote')"
                   :placeholder="t('ownerReservations.addFollowUpNote')"
                   @input="timelineNoteError[reservation.id] = ''"
                 ></textarea>
