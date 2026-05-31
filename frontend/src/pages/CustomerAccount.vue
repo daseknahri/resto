@@ -224,7 +224,7 @@
 
       <!-- ──────────────── Tab navigation bar ──────────────── -->
       <div class="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/96 backdrop-blur-md">
-        <nav class="flex" role="tablist">
+        <nav class="flex" role="tablist" :aria-label="t('customerAccount.tabNav')">
           <button
             v-for="tab in TABS"
             :key="tab.id"

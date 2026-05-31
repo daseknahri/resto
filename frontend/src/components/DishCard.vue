@@ -220,9 +220,11 @@
     v-else
     class="group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none"
     role="button"
+    tabindex="0"
     :aria-label="dish.name"
     :class="{ 'opacity-60': isSoldOut || isScheduleUnavailable }"
     @click="handleOpen"
+    @keydown.enter.space.prevent="handleOpen"
   >
     <!-- Tiny thumb -->
     <div v-if="dish.image_url" class="h-9 w-9 shrink-0 overflow-hidden rounded-lg">

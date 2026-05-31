@@ -727,7 +727,8 @@ const arabicMessages = {
     "overdueMinutes": "متأخر {minutes} د",
     "onTrack": "ضمن المسار",
     "sla": "اتفاقية مستوى الخدمة",
-    "action": "إجراء"
+    "action": "إجراء",
+    "navMobile": "تنقل المسؤول"
   },
   "ownerReservations": {
     "kicker": "صندوق المالك",
@@ -2894,6 +2895,7 @@ Object.assign(arabicMessages, {
     voucherRedeem: "\u0627\u0633\u062a\u0631\u062f\u0627\u062f",
     voucherSuccess: "\u062a\u0645 \u0627\u0633\u062a\u0631\u062f\u0627\u062f \u0627\u0644\u0642\u0633\u064a\u0645\u0629! +{amount} \u0623\u0636\u064a\u0641 \u0625\u0644\u0649 \u0645\u062d\u0641\u0638\u062a\u0643.",
     voucherError: "\u0631\u0645\u0632 \u0642\u0633\u064a\u0645\u0629 \u063a\u064a\u0631 \u0635\u0627\u0644\u062d \u0623\u0648 \u0645\u0646\u062a\u0647\u064a \u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0629.",
+    tabNav: "\u0623\u0642\u0633\u0627\u0645 \u0627\u0644\u062d\u0633\u0627\u0628"
   }
 });
 export default arabicMessages;

@@ -2127,7 +2127,8 @@ export const messages = {
       overdueMinutes: "Overdue {minutes}m",
       onTrack: "On track",
       sla: "SLA",
-      action: "Action"
+      action: "Action",
+      navMobile: "Admin navigation"
     },
     ownerReservations: {
       kicker: "Owner inbox",
@@ -2833,6 +2834,7 @@ export const messages = {
       voucherRedeem: "Redeem",
       voucherSuccess: "Voucher redeemed! +{amount} added to your wallet.",
       voucherError: "Invalid or expired voucher code.",
+      tabNav: "Account sections"
     }
   },
   fr: {
@@ -4918,7 +4920,8 @@ export const messages = {
       overdueMinutes: "En retard de {minutes}m",
       onTrack: "Dans les temps",
       sla: "SLA",
-      action: "Action"
+      action: "Action",
+      navMobile: "Navigation admin"
     },
     ownerReservations: {
       kicker: "Boite proprietaire",
@@ -5654,6 +5657,7 @@ export const messages = {
       voucherRedeem: "Utiliser",
       voucherSuccess: "Bon utilisé ! +{amount} ajouté à votre portefeuille.",
       voucherError: "Code de bon invalide ou expiré.",
+      tabNav: "Sections du compte"
     }
   },
   ar: {}
