@@ -121,6 +121,7 @@
               autocomplete="name"
               maxlength="80"
               class="ui-input"
+              :aria-label="t('customerAuth.nameSetupTitle')"
               :placeholder="t('customerAuth.namePlaceholder')"
               :disabled="savingName"
               @keydown.enter.prevent="saveName"

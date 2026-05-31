@@ -51,6 +51,7 @@
                 type="text"
                 maxlength="40"
                 class="ui-input flex-1 text-sm"
+                :aria-label="t('waiterPage.newOrderTablePlaceholder')"
                 :placeholder="t('waiterPage.newOrderTablePlaceholder')"
               />
             </div>
@@ -180,6 +181,7 @@
                 type="text"
                 maxlength="120"
                 class="w-full rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderItemNotePlaceholder')}`"
                 :placeholder="t('waiterPage.newOrderItemNotePlaceholder')"
               />
             </div>
