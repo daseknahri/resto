@@ -18,10 +18,10 @@
         </RouterLink>
 
         <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex" :aria-label="t('landingLayout.navDesktop')">
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/demo" :data-active="$route.path === '/demo'" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">{{ t("common.getStarted") }}</RouterLink>
-          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/'" :aria-current="$route.path === '/' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/demo" :data-active="$route.path === '/demo'" :aria-current="$route.path === '/demo' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started" :data-active="$route.path === '/get-started'" :aria-current="$route.path === '/get-started' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.getStarted") }}</RouterLink>
+          <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
         </nav>
 
         <div class="flex items-center gap-1.5 sm:gap-2">
@@ -50,19 +50,19 @@
 
     <nav class="ui-bottom-dock lg:hidden" :aria-label="t('landingLayout.navMobile')">
       <div class="ui-bottom-dock-grid grid-cols-4">
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" :aria-current="$route.path === '/' ? 'page' : undefined" active-class="" exact-active-class="">
           <AppIcon name="home" class="h-4 w-4" />
           <span>{{ t("common.landing") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/demo" :data-active="$route.path === '/demo'" active-class="" exact-active-class="">
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/demo" :data-active="$route.path === '/demo'" :aria-current="$route.path === '/demo' ? 'page' : undefined" active-class="" exact-active-class="">
           <AppIcon name="menu" class="h-4 w-4" />
           <span>{{ t("common.demo") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" :aria-current="$route.path === '/get-started' ? 'page' : undefined" active-class="" exact-active-class="">
           <AppIcon name="plus" class="h-4 w-4" />
           <span>{{ t("common.getStarted") }}</span>
         </RouterLink>
-        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" active-class="" exact-active-class="">
+        <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">
           <AppIcon name="chat" class="h-4 w-4" />
           <span>{{ t("common.contact") }}</span>
         </RouterLink>

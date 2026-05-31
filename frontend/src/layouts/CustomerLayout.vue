@@ -66,6 +66,7 @@
               :to="item.to"
               class="ui-segmented-button min-w-[7rem]"
               :data-active="activeCustomerSection === item.key"
+              :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
             >
               <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
               <span>{{ item.label }}</span>
