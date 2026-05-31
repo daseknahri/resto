@@ -38,9 +38,11 @@
               autocomplete="username"
               class="ui-input"
               :class="identifierError ? 'border-red-400' : ''"
+              :aria-invalid="identifierError ? 'true' : undefined"
+              aria-describedby="forgot-identifier-error"
               @input="identifierError = ''"
             />
-            <p v-if="identifierError" class="text-xs text-red-300">{{ identifierError }}</p>
+            <p v-if="identifierError" id="forgot-identifier-error" class="text-xs text-red-300">{{ identifierError }}</p>
           </label>
           <button
             type="submit"

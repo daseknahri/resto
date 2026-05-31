@@ -16,9 +16,11 @@
             autocomplete="one-time-code"
             class="ui-input"
             :class="fieldErrors.token ? 'border-red-400' : ''"
+            :aria-invalid="fieldErrors.token ? 'true' : undefined"
+            aria-describedby="activate-token-error"
             @input="fieldErrors.token = ''"
           />
-          <p v-if="fieldErrors.token" class="text-xs text-red-300">{{ fieldErrors.token }}</p>
+          <p v-if="fieldErrors.token" id="activate-token-error" class="text-xs text-red-300">{{ fieldErrors.token }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("activateAccount.newPassword") }}
@@ -28,9 +30,11 @@
             autocomplete="new-password"
             class="ui-input"
             :class="fieldErrors.password ? 'border-red-400' : ''"
+            :aria-invalid="fieldErrors.password ? 'true' : undefined"
+            aria-describedby="activate-password-error"
             @input="fieldErrors.password = ''"
           />
-          <p v-if="fieldErrors.password" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
+          <p v-if="fieldErrors.password" id="activate-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
         </label>
         <button
           type="submit"

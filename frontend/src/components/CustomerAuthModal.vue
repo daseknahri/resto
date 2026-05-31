@@ -44,9 +44,11 @@
                 class="ui-input"
                 :placeholder="t('customerAuth.phonePlaceholder')"
                 :disabled="requesting"
+                :aria-invalid="phoneError ? 'true' : undefined"
+                aria-describedby="auth-phone-error"
                 @keydown.enter.prevent="requestOtp"
               />
-              <p v-if="phoneError" class="text-xs text-red-300">{{ phoneError }}</p>
+              <p v-if="phoneError" id="auth-phone-error" class="text-xs text-red-300">{{ phoneError }}</p>
             </label>
             <button
               class="ui-btn-primary w-full justify-center"
@@ -75,9 +77,11 @@
                 class="ui-input text-center text-xl font-mono tracking-widest"
                 :placeholder="t('customerAuth.otpPlaceholder')"
                 :disabled="verifying"
+                :aria-invalid="otpError ? 'true' : undefined"
+                aria-describedby="auth-otp-error"
                 @keydown.enter.prevent="verifyOtp"
               />
-              <p v-if="otpError" class="text-xs text-red-300">{{ otpError }}</p>
+              <p v-if="otpError" id="auth-otp-error" class="text-xs text-red-300">{{ otpError }}</p>
             </label>
             <button
               class="ui-btn-primary w-full justify-center"

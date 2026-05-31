@@ -53,9 +53,11 @@
               autocomplete="username"
               class="ui-input"
               :class="fieldErrors.identifier ? 'border-red-400' : ''"
+              :aria-invalid="fieldErrors.identifier ? 'true' : undefined"
+              aria-describedby="signin-identifier-error"
               @input="fieldErrors.identifier = ''"
             />
-            <p v-if="fieldErrors.identifier" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
+            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("signIn.password") }}
@@ -65,9 +67,11 @@
               autocomplete="current-password"
               class="ui-input"
               :class="fieldErrors.password ? 'border-red-400' : ''"
+              :aria-invalid="fieldErrors.password ? 'true' : undefined"
+              aria-describedby="signin-password-error"
               @input="fieldErrors.password = ''"
             />
-            <p v-if="fieldErrors.password" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
+            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
           </label>
           <button
             type="submit"
