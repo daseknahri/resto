@@ -16,6 +16,7 @@
           v-model="search"
           type="text"
           class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+          :aria-label="t('adminWallet.searchPlaceholder')"
           :placeholder="t('adminWallet.searchPlaceholder')"
           @input="onSearch"
         />
