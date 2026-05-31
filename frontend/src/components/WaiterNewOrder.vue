@@ -32,6 +32,7 @@
                 :class="fulfillmentType === 'table'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                :aria-pressed="fulfillmentType === 'table'"
                 @click="fulfillmentType = 'table'"
               >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
               <button
@@ -39,6 +40,7 @@
                 :class="fulfillmentType === 'pickup'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                :aria-pressed="fulfillmentType === 'pickup'"
                 @click="fulfillmentType = 'pickup'"
               >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
             </div>
@@ -90,6 +92,7 @@
               :class="activeCat === cat.slug
                 ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300'
                 : 'border-slate-700/50 bg-slate-800/40 text-slate-400 hover:border-slate-600'"
+              :aria-pressed="activeCat === cat.slug"
               @click="selectCat(cat.slug)"
             >{{ cat.name }}</button>
           </div>
@@ -153,11 +156,13 @@
                 <div class="flex items-center gap-1 shrink-0">
                   <button
                     class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    :aria-label="t('dishPage.decreaseQuantity')"
                     @click="decrement(item.dish_slug)"
                   >−</button>
-                  <span class="w-5 text-center text-xs font-semibold text-slate-100">{{ item.qty }}</span>
+                  <span class="w-5 text-center text-xs font-semibold text-slate-100" aria-hidden="true">{{ item.qty }}</span>
                   <button
                     class="flex h-5 w-5 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    :aria-label="t('dishPage.increaseQuantity')"
                     @click="increment(item.dish_slug)"
                   >+</button>
                 </div>
@@ -187,7 +192,7 @@
               <span class="text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
             </div>
             <div v-if="submitError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
             </div>
             <button

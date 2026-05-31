@@ -11,6 +11,7 @@
           :class="period === p
             ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
             : 'text-slate-500 hover:text-slate-300'"
+          :aria-pressed="period === p"
           @click="setPeriod(p)"
         >{{ p }}d</button>
         <button
@@ -19,7 +20,7 @@
           :disabled="loading"
           @click="load"
         >
-          <svg class="h-3 w-3" :class="loading ? 'animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg aria-hidden="true" class="h-3 w-3" :class="loading ? 'animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
         </button>
