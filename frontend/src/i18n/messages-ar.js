@@ -290,6 +290,8 @@ const arabicMessages = {
     "customers": "العملاء",
     "loyalty": "الولاء",
     "wallet": "المحفظة",
+    "profile": "الملف الشخصي",
+    "billing": "الفوترة",
     "navDesktop": "تنقل المالك",
     "navMobile": "تنقل المالك"
   },

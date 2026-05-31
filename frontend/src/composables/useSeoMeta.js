@@ -85,6 +85,7 @@ const localeToOgLocale = (locale) => {
 
 const routeTitleLabel = (route, t) => {
   const name = String(route?.name || "");
+  // ── Customer routes ────────────────────────────────────────────────────────
   if (name === "customer-home") return t("customerLayout.navInfo");
   if (name === "menu" || name === "category" || name === "dish" || name === "table-link") return t("customerLayout.navMenu");
   if (name === "cart") return t("customerLayout.navCart");
@@ -92,9 +93,36 @@ const routeTitleLabel = (route, t) => {
   if (name === "customer-account") return t("customerLayout.navAccount");
   if (name === "find-my-order") return t("customerLayout.findMyOrder");
   if (name === "order-status") return t("orderStatus.title");
-  if (name.startsWith("owner")) return "Owner workspace";
-  if (name === "admin-console") return "Admin console";
-  if (name === "signin") return "Sign in";
+  // ── Owner routes ───────────────────────────────────────────────────────────
+  if (name === "owner-home" || name === "owner-menu-builder") return t("ownerLayout.dashboard");
+  if (name === "owner-orders") return t("ownerLayout.orders");
+  if (name === "owner-reservations") return t("ownerLayout.reservations");
+  if (name === "owner-tables") return t("ownerLayout.tablesQr");
+  if (name === "owner-kitchen") return t("ownerLayout.kitchen");
+  if (name === "owner-staff") return t("ownerLayout.staff");
+  if (name === "owner-customers") return t("ownerLayout.customers");
+  if (name === "owner-ratings") return t("ownerLayout.ratings");
+  if (name === "owner-promotions") return t("ownerLayout.promotions");
+  if (name === "owner-flash-sales") return t("ownerLayout.flashSales");
+  if (name === "owner-delivery") return t("ownerLayout.delivery");
+  if (name === "owner-loyalty") return t("ownerLayout.loyalty");
+  if (name === "owner-wallet") return t("ownerLayout.wallet");
+  if (name === "owner-profile") return t("ownerLayout.profile");
+  if (name === "owner-billing") return t("ownerLayout.billing");
+  if (name === "owner-launch") return t("ownerLayout.kicker");
+  if (name.startsWith("owner")) return t("ownerLayout.kicker");
+  // ── Waiter routes ──────────────────────────────────────────────────────────
+  if (name === "waiter") return t("waiterLayout.role");
+  // ── Admin routes ───────────────────────────────────────────────────────────
+  if (name === "admin-console") return "Admin Console";
+  if (name === "admin-delivery-zones") return "Delivery Zones";
+  if (name === "admin-drivers") return "Drivers";
+  if (name === "admin-analytics") return "Analytics";
+  if (name === "admin-wallets") return "Wallets";
+  // ── Auth / misc ────────────────────────────────────────────────────────────
+  if (name === "signin") return t("common.signIn");
+  if (name === "forgot-password") return t("forgotPassword.title");
+  if (name === "activate") return t("activateAccount.title");
   return "Menu";
 };
 
