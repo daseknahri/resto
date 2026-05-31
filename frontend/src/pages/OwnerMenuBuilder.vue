@@ -92,11 +92,13 @@
                 type="file"
                 accept=".csv,text/csv"
                 class="sr-only"
+                :aria-invalid="importError ? 'true' : undefined"
+                aria-describedby="owner-menu-builder-import-error"
                 @change="onFileChange"
               />
             </label>
 
-            <p v-if="importError" class="mt-2 text-xs text-red-300">{{ importError }}</p>
+            <p v-if="importError" id="owner-menu-builder-import-error" class="mt-2 text-xs text-red-300">{{ importError }}</p>
 
             <button
               class="ui-btn-primary mt-4 w-full justify-center"

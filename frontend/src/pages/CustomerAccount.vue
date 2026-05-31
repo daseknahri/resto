@@ -952,6 +952,9 @@
                       spellcheck="false"
                       class="ui-input min-w-0 flex-1 py-1.5 text-xs"
                       :placeholder="t('customerAccount.emailPlaceholder')"
+                      :aria-label="t('customerAccount.emailPlaceholder')"
+                      :aria-invalid="emailError ? 'true' : undefined"
+                      aria-describedby="customer-account-email-error"
                       :disabled="savingEmail"
                       @keydown.enter.prevent="saveEmail"
                       @keydown.escape.prevent="cancelEmailInput"
@@ -962,7 +965,7 @@
                     <button class="text-xs text-slate-500 transition hover:text-slate-300" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
                   </template>
                 </div>
-                <p v-if="emailError" role="alert" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
+                <p v-if="emailError" id="customer-account-email-error" role="alert" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
               </div>
             </div>
           </div>
