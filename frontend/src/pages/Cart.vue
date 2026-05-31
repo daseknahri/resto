@@ -345,6 +345,7 @@
                   maxlength="60"
                   class="ui-input text-xs"
                   :placeholder="t('cartPage.saveAddressLabelPlaceholder')"
+                  :aria-label="t('cartPage.saveAddressLabelPlaceholder')"
                 />
               </div>
 
