@@ -25,6 +25,7 @@
               type="button"
               class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
               :class="fieldLocales.tagline === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              :aria-pressed="fieldLocales.tagline === localeCode"
               @click="fieldLocales.tagline = localeCode"
             >
               {{ localeChipLabel(localeCode) }}
@@ -88,6 +89,7 @@
               type="button"
               class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
               :class="fieldLocales.address === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              :aria-pressed="fieldLocales.address === localeCode"
               @click="fieldLocales.address = localeCode"
             >
               {{ localeChipLabel(localeCode) }}
@@ -124,6 +126,7 @@
               type="button"
               class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
               :class="fieldLocales.description === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+              :aria-pressed="fieldLocales.description === localeCode"
               @click="fieldLocales.description = localeCode"
             >
               {{ localeChipLabel(localeCode) }}
@@ -557,3 +560,4 @@ const saveAndNext = async () => {
 
 onMounted(load);
 </script>
+

@@ -70,6 +70,7 @@
                 type="button"
                 class="rounded-full border px-3 py-1.5 text-xs transition-colors"
                 :class="isPresetActive(preset) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                :aria-pressed="isPresetActive(preset)"
                 @click="applyThemePreset(preset)"
               >
                 {{ preset.label }}

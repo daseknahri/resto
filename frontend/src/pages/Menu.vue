@@ -87,6 +87,7 @@
             :data-cat-pill="cat.slug"
             class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
             :data-active="activeCategorySlug === cat.slug"
+            :aria-current="activeCategorySlug === cat.slug ? 'true' : undefined"
             @click="scrollToSection(cat.slug)"
           >{{ cat.name }}</button>
           <template v-if="isOverflowing">
@@ -94,6 +95,8 @@
             <button
               class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-wider"
               :data-active="catSheetOpen"
+              :aria-expanded="catSheetOpen"
+              :aria-label="t('menu.allCategories')"
               @click="catSheetOpen = !catSheetOpen"
             >···</button>
           </template>

@@ -1621,6 +1621,7 @@ export const messages = {
       allergen_sulphites: "Sulphites",
       allergen_lupin: "Lupin",
       allergen_molluscs: "Molluscs",
+      allCategories: "All categories",
     },
     category: {
       kicker: "Category",
@@ -4423,6 +4424,7 @@ export const messages = {
       allergen_sulphites: "Sulfites",
       allergen_lupin: "Lupin",
       allergen_molluscs: "Mollusques",
+      allCategories: "Toutes les categories",
     },
     category: {
       kicker: "Categorie",

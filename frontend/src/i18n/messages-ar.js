@@ -927,7 +927,8 @@ const arabicMessages = {
     "recentOrdersTitle": "طلباتك الأخيرة",
     "ratingChipTitle": "{count} تقييم",
     "searchResultsKicker": "نتائج البحث",
-    "searchResultsTitle": "نتائج البحث"
+    "searchResultsTitle": "نتائج البحث",
+    "allCategories": "جميع التصنيفات"
   },
   "category": {
     "kicker": "التصنيف",
