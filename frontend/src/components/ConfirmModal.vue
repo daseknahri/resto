@@ -9,6 +9,7 @@
         @keydown.esc.window="cancel"
       >
         <div
+          ref="dialogRef"
           role="alertdialog"
           aria-modal="true"
           :aria-labelledby="dialogTitleId"
@@ -53,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from "vue";
+import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 
@@ -64,17 +65,44 @@ const dialogTitleId = "confirm-modal-title";
 const dialogBodyId  = "confirm-modal-body";
 
 const cancelBtnRef = ref(null);
+const dialogRef    = ref(null);
 
-// Focus the cancel button when the modal opens so Esc / Tab work intuitively.
+// ── Focus trap ──────────────────────────────────────────────────────────────
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapFocus = (e) => {
+  if (!dialogRef.value) return;
+  const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.key !== 'Tab') return;
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+// Focus the cancel button when the modal opens; install / remove focus trap.
 watch(
   () => modal.visible.value,
   async (open) => {
     if (open) {
       await nextTick();
       cancelBtnRef.value?.focus();
+      document.addEventListener('keydown', trapFocus);
+    } else {
+      document.removeEventListener('keydown', trapFocus);
     }
   }
 );
+
+onBeforeUnmount(() => document.removeEventListener('keydown', trapFocus));
 
 const ok     = () => modal._settle(true);
 const cancel = () => modal._settle(false);
