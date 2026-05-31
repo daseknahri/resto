@@ -197,7 +197,7 @@
                 <span v-if="fulfillmentType === 'delivery'" class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
             </div>
-            <p v-if="fieldErrors.fulfillment_type" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
+            <p v-if="fieldErrors.fulfillment_type" id="cart-fulfillment-error" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
             <!-- ── Delivery form ── -->
             <div v-if="isDelivery" class="space-y-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
@@ -286,7 +286,7 @@
                     ? t('cartPage.locationReady', { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
                     : t('cartPage.noCoordinatesYet') }}
                 </p>
-                <p v-if="locationError" class="text-xs text-red-300">{{ locationError }}</p>
+                <p v-if="locationError" id="cart-location-error" class="text-xs text-red-300">{{ locationError }}</p>
 
                 <!-- Map URL + Paste button inline -->
                 <div class="space-y-1">

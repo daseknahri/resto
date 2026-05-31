@@ -36,11 +36,13 @@
                   v-model="form.primary_color"
                   type="color"
                   class="h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
+                  :aria-invalid="errors.primary_color ? 'true' : undefined"
+                  aria-describedby="step-theme-primary-error"
                   @input="clearField('primary_color')"
                 />
                 <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{{ form.primary_color }}</span>
               </div>
-              <p v-if="errors.primary_color" class="text-xs text-red-300">{{ errors.primary_color }}</p>
+              <p v-if="errors.primary_color" id="step-theme-primary-error" class="text-xs text-red-300">{{ errors.primary_color }}</p>
             </label>
 
             <label class="space-y-2 text-sm text-slate-200">
@@ -50,11 +52,13 @@
                   v-model="form.secondary_color"
                   type="color"
                   class="h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
+                  :aria-invalid="errors.secondary_color ? 'true' : undefined"
+                  aria-describedby="step-theme-secondary-error"
                   @input="clearField('secondary_color')"
                 />
                 <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{{ form.secondary_color }}</span>
               </div>
-              <p v-if="errors.secondary_color" class="text-xs text-red-300">{{ errors.secondary_color }}</p>
+              <p v-if="errors.secondary_color" id="step-theme-secondary-error" class="text-xs text-red-300">{{ errors.secondary_color }}</p>
             </label>
           </div>
 
@@ -160,7 +164,7 @@
               <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${logoProgress}%` }"></div>
             </div>
           </div>
-          <p v-if="errors.logo_url" class="text-xs text-red-300">{{ errors.logo_url }}</p>
+          <p v-if="errors.logo_url" id="step-theme-logo-error" class="text-xs text-red-300">{{ errors.logo_url }}</p>
         </label>
 
         <label class="space-y-2 text-sm text-slate-200">
@@ -200,7 +204,7 @@
               <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${heroProgress}%` }"></div>
             </div>
           </div>
-          <p v-if="errors.hero_url" class="text-xs text-red-300">{{ errors.hero_url }}</p>
+          <p v-if="errors.hero_url" id="step-theme-hero-error" class="text-xs text-red-300">{{ errors.hero_url }}</p>
         </label>
       </div>
     </section>

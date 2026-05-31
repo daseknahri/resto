@@ -179,9 +179,11 @@
                     rows="5"
                     class="admin-input font-mono text-[11px] resize-y"
                     :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
+                    :aria-invalid="polygonError ? 'true' : undefined"
+                    aria-describedby="admin-zones-polygon-error"
                   />
                 </label>
-                <p v-if="polygonError" class="text-xs text-red-400 mt-1">{{ polygonError }}</p>
+                <p v-if="polygonError" id="admin-zones-polygon-error" class="text-xs text-red-400 mt-1">{{ polygonError }}</p>
               </div>
               <!-- Fee tiers JSON -->
               <div>
@@ -193,9 +195,11 @@
                     rows="3"
                     class="admin-input font-mono text-[11px] resize-y"
                     :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
+                    :aria-invalid="feeTiersError ? 'true' : undefined"
+                    aria-describedby="admin-zones-fee-tiers-error"
                   />
                 </label>
-                <p v-if="feeTiersError" class="text-xs text-red-400 mt-1">{{ feeTiersError }}</p>
+                <p v-if="feeTiersError" id="admin-zones-fee-tiers-error" class="text-xs text-red-400 mt-1">{{ feeTiersError }}</p>
                 <p class="text-[10px] text-slate-600 mt-0.5">{{ t('adminZones.feeTiersHint') }}</p>
               </div>
               <!-- Active -->

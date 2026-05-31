@@ -417,7 +417,14 @@
         <div v-if="editingId === o.id" class="space-y-2 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.ownerNote") }}
-            <input v-model="editNote" type="text" maxlength="300" class="ui-input mt-1 text-sm" />
+            <input
+              v-model="editNote"
+              type="text"
+              maxlength="300"
+              class="ui-input mt-1 text-sm"
+              :aria-invalid="noteError ? 'true' : undefined"
+              aria-describedby="owner-orders-note-error"
+            />
           </label>
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.setEstimate") }}
@@ -429,7 +436,7 @@
             </button>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="editingId = null">{{ t("common.close") }}</button>
           </div>
-          <p v-if="noteError" class="text-xs text-red-400">{{ noteError }}</p>
+          <p v-if="noteError" id="owner-orders-note-error" class="text-xs text-red-400">{{ noteError }}</p>
         </div>
 
         <div v-else class="flex flex-wrap items-center gap-2">
@@ -523,7 +530,14 @@
           <!-- Note field -->
           <label class="block space-y-1 text-xs text-slate-400">
             {{ t("ownerOrders.customerRatingNote") }}
-            <input v-model="ratingNote" type="text" maxlength="200" class="ui-input mt-1 text-sm" />
+            <input
+              v-model="ratingNote"
+              type="text"
+              maxlength="200"
+              class="ui-input mt-1 text-sm"
+              :aria-invalid="ratingError ? 'true' : undefined"
+              aria-describedby="owner-orders-rating-error"
+            />
           </label>
 
           <div class="flex gap-2">
@@ -536,7 +550,7 @@
             </button>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="ratingOrderId = null">{{ t("common.close") }}</button>
           </div>
-          <p v-if="ratingError" class="text-xs text-red-400">{{ ratingError }}</p>
+          <p v-if="ratingError" id="owner-orders-rating-error" class="text-xs text-red-400">{{ ratingError }}</p>
         </div>
       </article>
     </div>

@@ -119,9 +119,11 @@
             class="ui-textarea"
             :class="errors.notes ? 'border-red-400' : 'border-slate-700'"
             :placeholder="t('leadCapture.notesPlaceholder')"
+            :aria-invalid="errors.notes ? 'true' : undefined"
+            aria-describedby="lead-capture-notes-error"
             @input="clearError('notes')"
           ></textarea>
-          <p v-if="errors.notes" class="text-xs text-red-300">{{ errors.notes }}</p>
+          <p v-if="errors.notes" id="lead-capture-notes-error" class="text-xs text-red-300">{{ errors.notes }}</p>
         </label>
 
         <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />

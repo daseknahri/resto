@@ -238,8 +238,8 @@
       <div v-if="!hasStructuredBusinessHours && localizedFieldValue('business_hours', defaultContentLocale)" class="rounded-2xl border border-slate-800 bg-slate-950/45 px-3 py-2 text-xs text-slate-400">
         {{ t("stepBrand.businessHoursLegacyNotice") }}
       </div>
-      <p v-if="fieldError('business_hours')" class="text-xs text-red-300">{{ fieldError("business_hours") }}</p>
-      <p v-if="fieldError('business_hours_schedule')" class="text-xs text-red-300">{{ fieldError("business_hours_schedule") }}</p>
+      <p v-if="fieldError('business_hours')" id="step-brand-business-hours-error" class="text-xs text-red-300">{{ fieldError("business_hours") }}</p>
+      <p v-if="fieldError('business_hours_schedule')" id="step-brand-business-hours-schedule-error" class="text-xs text-red-300">{{ fieldError("business_hours_schedule") }}</p>
       </div>
     </section>
 

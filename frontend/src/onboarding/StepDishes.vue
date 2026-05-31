@@ -195,9 +195,12 @@
                     class="ui-input"
                     :class="rowError(editingDish, 'name') ? 'border-red-400' : 'border-slate-700'"
                     :placeholder="t('stepDishes.dishNamePlaceholder')"
+                    :aria-label="t('stepDishes.dishNamePlaceholder')"
+                    :aria-invalid="rowError(editingDish, 'name') ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-name-error-${editingDish.local_id}`"
                     @input="setLocalizedDishFieldValue(editingDish, 'name', dishFieldLocales.name, $event.target.value)"
                   />
-                  <p v-if="rowError(editingDish, 'name')" class="text-xs text-red-300">{{ rowError(editingDish, "name") }}</p>
+                  <p v-if="rowError(editingDish, 'name')" :id="`step-dishes-name-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "name") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -206,12 +209,14 @@
                     :aria-label="t('stepDishes.selectCategory')"
                     class="ui-input"
                     :class="rowError(editingDish, 'category') ? 'border-red-400' : 'border-slate-700'"
+                    :aria-invalid="rowError(editingDish, 'category') ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-category-error-${editingDish.local_id}`"
                     @change="clearRowError(editingDish.local_id, 'category')"
                   >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
                     <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                   </select>
-                  <p v-if="rowError(editingDish, 'category')" class="text-xs text-red-300">{{ rowError(editingDish, "category") }}</p>
+                  <p v-if="rowError(editingDish, 'category')" :id="`step-dishes-category-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "category") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -223,9 +228,12 @@
                     class="ui-input"
                     :class="rowError(editingDish, 'price') ? 'border-red-400' : 'border-slate-700'"
                     :placeholder="t('stepDishes.pricePlaceholder')"
+                    :aria-label="t('stepDishes.pricePlaceholder')"
+                    :aria-invalid="rowError(editingDish, 'price') ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-price-error-${editingDish.local_id}`"
                     @input="clearRowError(editingDish.local_id, 'price')"
                   />
-                  <p v-if="rowError(editingDish, 'price')" class="text-xs text-red-300">{{ rowError(editingDish, "price") }}</p>
+                  <p v-if="rowError(editingDish, 'price')" :id="`step-dishes-price-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "price") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -235,9 +243,12 @@
                     type="text"
                     class="ui-input border-slate-700 font-mono text-sm"
                     :placeholder="t('stepDishes.dishSlug')"
+                    :aria-label="t('stepDishes.dishSlug')"
+                    :aria-invalid="rowError(editingDish, 'slug') ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-slug-error-${editingDish.local_id}`"
                     @input="clearRowError(editingDish.local_id, 'slug')"
                   />
-                  <p v-if="rowError(editingDish, 'slug')" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
+                  <p v-if="rowError(editingDish, 'slug')" :id="`step-dishes-slug-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
                 </div>
 
                 <!-- Stock qty — null = unlimited; positive integer = tracked inventory -->
@@ -325,11 +336,13 @@
                   class="ui-textarea"
                   :class="rowError(editingDish, 'description') ? 'border-red-400' : 'border-slate-700'"
                   :aria-label="t('common.description')"
+                  :aria-invalid="rowError(editingDish, 'description') ? 'true' : undefined"
+                  :aria-describedby="`step-dishes-description-error-${editingDish.local_id}`"
                   :placeholder="t('stepDishes.descriptionPlaceholder')"
                   @input="setLocalizedDishFieldValue(editingDish, 'description', dishFieldLocales.description, $event.target.value)"
                 ></textarea>
               </div>
-              <p v-if="rowError(editingDish, 'description')" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
+              <p v-if="rowError(editingDish, 'description')" :id="`step-dishes-description-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
 
               <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
                 <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.tagsTitle") }}</p>
@@ -472,6 +485,9 @@
                       class="ui-input"
                       :class="rowError(editingDish, optionFieldKey(option, 'name')) ? 'border-red-400' : 'border-slate-700'"
                       :placeholder="t('stepDishes.variantNamePlaceholder')"
+                      :aria-label="t('stepDishes.variantNamePlaceholder')"
+                      :aria-invalid="rowError(editingDish, optionFieldKey(option, 'name')) ? 'true' : undefined"
+                      :aria-describedby="`step-dishes-opt-name-error-${option.local_id}`"
                       @input="setLocalizedVariantNameValue(editingDish, option, dishFieldLocales.variantName, $event.target.value)"
                     />
                   </div>
@@ -483,6 +499,9 @@
                     class="ui-input"
                     :class="rowError(editingDish, optionFieldKey(option, 'price_delta')) ? 'border-red-400' : 'border-slate-700'"
                     :placeholder="t('stepDishes.extraPricePlaceholder')"
+                    :aria-label="t('stepDishes.extraPricePlaceholder')"
+                    :aria-invalid="rowError(editingDish, optionFieldKey(option, 'price_delta')) ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-opt-price-error-${option.local_id}`"
                     @input="clearRowError(editingDish.local_id, optionFieldKey(option, 'price_delta'))"
                   />
                   <input
@@ -493,6 +512,9 @@
                     class="ui-input"
                     :class="rowError(editingDish, optionFieldKey(option, 'max_select')) ? 'border-red-400' : 'border-slate-700'"
                     :placeholder="t('stepDishes.maxSelectPlaceholder')"
+                    :aria-label="t('stepDishes.maxSelectPlaceholder')"
+                    :aria-invalid="rowError(editingDish, optionFieldKey(option, 'max_select')) ? 'true' : undefined"
+                    :aria-describedby="`step-dishes-opt-maxselect-error-${option.local_id}`"
                     @input="clearRowError(editingDish.local_id, optionFieldKey(option, 'max_select'))"
                   />
                   <button
@@ -513,13 +535,13 @@
                     <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" :aria-label="t('common.moveDown')" @click="moveOption(editingDish, optIdx, 1)">↓</button>
                   </div>
                 </div>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" :id="`step-dishes-opt-name-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" :id="`step-dishes-opt-price-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" :id="`step-dishes-opt-maxselect-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
               </div>
             </div>
             <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
-            <p v-if="rowError(editingDish, 'options')" class="text-xs text-red-300">{{ rowError(editingDish, "options") }}</p>
+            <p v-if="rowError(editingDish, 'options')" :id="`step-dishes-options-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "options") }}</p>
               </div>
 
               <div class="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3 space-y-3">
@@ -665,7 +687,7 @@
                 <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noGroups") }}</p>
               </div>
 
-              <p v-if="rowError(editingDish, 'image_url')" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
+              <p v-if="rowError(editingDish, 'image_url')" :id="`step-dishes-image-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
               <p v-if="rowError(editingDish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingDish, "non_field_errors") }}</p>
             </div>
           </div>
@@ -697,11 +719,19 @@
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1">
-                  <select v-model="quickDish.category" :aria-label="t('stepDishes.selectCategory')" class="ui-input" :class="quickDishErrors.category ? 'border-red-400' : ''" @change="quickDishErrors.category = ''">
+                  <select
+                    v-model="quickDish.category"
+                    :aria-label="t('stepDishes.selectCategory')"
+                    class="ui-input"
+                    :class="quickDishErrors.category ? 'border-red-400' : ''"
+                    :aria-invalid="quickDishErrors.category ? 'true' : undefined"
+                    aria-describedby="step-dishes-quick-category-error"
+                    @change="quickDishErrors.category = ''"
+                  >
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
                     <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                   </select>
-                  <p v-if="quickDishErrors.category" class="text-xs text-red-300">{{ quickDishErrors.category }}</p>
+                  <p v-if="quickDishErrors.category" id="step-dishes-quick-category-error" class="text-xs text-red-300">{{ quickDishErrors.category }}</p>
                 </div>
                 <div class="space-y-1">
                   <div class="flex flex-wrap items-center justify-between gap-2">
@@ -735,9 +765,12 @@
                     class="ui-input"
                     :class="quickDishErrors.name ? 'border-red-400' : ''"
                     :placeholder="t('stepDishes.dishNamePlaceholder')"
+                    :aria-label="t('stepDishes.dishNamePlaceholder')"
+                    :aria-invalid="quickDishErrors.name ? 'true' : undefined"
+                    aria-describedby="step-dishes-quick-name-error"
                     @input="setLocalizedQuickDishFieldValue('name', quickDishFieldLocales.name, $event.target.value); quickDishErrors.name = ''"
                   />
-                  <p v-if="quickDishErrors.name" class="text-xs text-red-300 mt-1">{{ quickDishErrors.name }}</p>
+                  <p v-if="quickDishErrors.name" id="step-dishes-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickDishErrors.name }}</p>
                 </div>
                 <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
                 <div
