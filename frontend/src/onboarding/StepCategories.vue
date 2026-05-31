@@ -280,7 +280,7 @@
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
-                <input v-model.number="quickCategory.position" type="number" min="0" class="ui-input" :placeholder="t('stepCategories.positionMin')" />
+                <input v-model.number="quickCategory.position" type="number" min="0" class="ui-input" :aria-label="t('stepCategories.positionMin')" :placeholder="t('stepCategories.positionMin')" />
                 <select v-model="quickCategory.is_published" :aria-label="t('stepCategories.visibility')" class="ui-input">
                   <option :value="true">{{ t("common.available") }}</option>
                   <option :value="false">{{ t("common.soon") }}</option>

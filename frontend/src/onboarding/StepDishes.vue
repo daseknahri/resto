@@ -260,6 +260,7 @@
                     min="0"
                     step="1"
                     class="ui-input border-slate-700"
+                    :aria-label="t('stepDishes.stockQtyLabel')"
                     :placeholder="t('stepDishes.stockQtyPlaceholder')"
                     @change="editingDish.stock_qty = $event.target.value === '' ? null : Math.max(0, parseInt($event.target.value, 10) || 0)"
                   />
@@ -427,6 +428,7 @@
                         v-model="editingDish.availability_schedule.time_start"
                         type="time"
                         class="ui-input w-32 border-slate-700"
+                        :aria-label="t('stepDishes.availabilityFrom')"
                       />
                     </div>
                     <div class="space-y-1">
@@ -435,6 +437,7 @@
                         v-model="editingDish.availability_schedule.time_end"
                         type="time"
                         class="ui-input w-32 border-slate-700"
+                        :aria-label="t('stepDishes.availabilityTo')"
                       />
                     </div>
                     <p class="pb-1 text-[10px] text-slate-600">{{ t("stepDishes.availabilityTimeHint") }}</p>
@@ -608,6 +611,7 @@
                             type="number"
                             min="1"
                             class="ui-input w-16 border-slate-700 text-xs"
+                            :aria-label="t('stepDishes.groupMaxSelect')"
                           />
                         </div>
                         <div class="ml-auto flex items-center gap-1">
@@ -772,7 +776,7 @@
                   />
                   <p v-if="quickDishErrors.name" id="step-dishes-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickDishErrors.name }}</p>
                 </div>
-                <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :placeholder="t('stepDishes.pricePlaceholder')" />
+                <input v-model.number="quickDish.price" type="number" min="0" step="0.01" class="ui-input" :aria-label="t('stepDishes.pricePlaceholder')" :placeholder="t('stepDishes.pricePlaceholder')" />
                 <div
                   class="rounded-xl border border-dashed p-3 transition-colors"
                   :class="draggingRows[quickDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
@@ -887,6 +891,7 @@
                           type="text"
                           :value="localizedQuickVariantNameValue(option, quickDishFieldLocales.variantName)"
                           class="ui-input"
+                          :aria-label="t('stepDishes.variantNamePlaceholder')"
                           :placeholder="t('stepDishes.variantNamePlaceholder')"
                           @input="setLocalizedQuickVariantNameValue(option, quickDishFieldLocales.variantName, $event.target.value)"
                         />
@@ -897,6 +902,7 @@
                         min="0"
                         step="0.01"
                         class="ui-input"
+                        :aria-label="t('stepDishes.extraPricePlaceholder')"
                         :placeholder="t('stepDishes.extraPricePlaceholder')"
                       />
                       <input
@@ -905,6 +911,7 @@
                         min="1"
                         step="1"
                         class="ui-input"
+                        :aria-label="t('stepDishes.maxSelectPlaceholder')"
                         :placeholder="t('stepDishes.maxSelectPlaceholder')"
                       />
                       <button
@@ -938,7 +945,7 @@
                 <div v-if="quickDish.option_groups.length" class="space-y-3">
                   <div v-for="(group, groupIdx) in quickDish.option_groups" :key="group.local_id" class="rounded-lg border border-slate-700/60 bg-slate-900/60 p-3 space-y-2">
                     <div class="flex flex-wrap items-center gap-2">
-                      <input v-model="group.name" type="text" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.groupNamePlaceholder')" />
+                      <input v-model="group.name" type="text" class="ui-input flex-1 min-w-0" :aria-label="t('stepDishes.groupNamePlaceholder')" :placeholder="t('stepDishes.groupNamePlaceholder')" />
                       <label class="inline-flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer shrink-0">
                         <input type="checkbox" :checked="group.min_select > 0" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" @change="group.min_select = $event.target.checked ? 1 : 0" />
                         {{ t("stepDishes.groupRequired") }}
@@ -949,8 +956,8 @@
                     </div>
                     <div v-if="group.options?.length" class="space-y-1.5 pl-1">
                       <div v-for="(opt, optIdx) in group.options" :key="opt.local_id" class="flex items-center gap-2">
-                        <input v-model="opt.name" type="text" class="ui-input flex-1 min-w-0" :placeholder="t('stepDishes.variantNamePlaceholder')" />
-                        <input v-model.number="opt.price_delta" type="number" min="0" step="0.01" class="ui-input w-24 shrink-0" :placeholder="t('stepDishes.extraPricePlaceholder')" />
+                        <input v-model="opt.name" type="text" class="ui-input flex-1 min-w-0" :aria-label="t('stepDishes.variantNamePlaceholder')" :placeholder="t('stepDishes.variantNamePlaceholder')" />
+                        <input v-model.number="opt.price_delta" type="number" min="0" step="0.01" class="ui-input w-24 shrink-0" :aria-label="t('stepDishes.extraPricePlaceholder')" :placeholder="t('stepDishes.extraPricePlaceholder')" />
                         <button type="button" class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0" @click="removeQuickGroupOption(group, optIdx)">
                           {{ t("stepDishes.remove") }}
                         </button>
