@@ -7,7 +7,7 @@
         <span class="not-found-number">4</span>
         <div class="not-found-plate">
           <!-- Animated plate / dish icon -->
-          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" class="not-found-icon">
+          <svg aria-hidden="true" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" class="not-found-icon">
             <circle cx="40" cy="40" r="34" stroke="currentColor" stroke-width="3" opacity="0.15"/>
             <circle cx="40" cy="40" r="24" stroke="currentColor" stroke-width="2" opacity="0.25"/>
             <path d="M28 40c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
