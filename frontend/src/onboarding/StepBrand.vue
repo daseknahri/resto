@@ -46,19 +46,21 @@
           :value="localizedFieldValue('tagline', fieldLocales.tagline)"
           :class="inputClass('tagline')"
           :aria-label="t('stepBrand.tagline')"
+          :aria-invalid="fieldError('tagline') ? 'true' : undefined"
+          aria-describedby="step-brand-tagline-error"
           @input="onLocalizedFieldInput('tagline', fieldLocales.tagline, $event.target.value)"
         />
-        <p v-if="fieldError('tagline')" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
+        <p v-if="fieldError('tagline')" id="step-brand-tagline-error" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
       </div>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.phone") }}
-          <input v-model="form.phone" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('phone')" @input="clearField('phone')" />
-          <p v-if="fieldError('phone')" class="text-xs text-red-300">{{ fieldError("phone") }}</p>
+          <input v-model="form.phone" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('phone')" :aria-invalid="fieldError('phone') ? 'true' : undefined" aria-describedby="step-brand-phone-error" @input="clearField('phone')" />
+          <p v-if="fieldError('phone')" id="step-brand-phone-error" class="text-xs text-red-300">{{ fieldError("phone") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ whatsappLabel }}
-          <input v-model="form.whatsapp" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('whatsapp')" @input="clearField('whatsapp')" />
-          <p v-if="fieldError('whatsapp')" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
+          <input v-model="form.whatsapp" type="tel" inputmode="tel" autocomplete="tel" :class="inputClass('whatsapp')" :aria-invalid="fieldError('whatsapp') ? 'true' : undefined" aria-describedby="step-brand-whatsapp-error" @input="clearField('whatsapp')" />
+          <p v-if="fieldError('whatsapp')" id="step-brand-whatsapp-error" class="text-xs text-red-300">{{ fieldError("whatsapp") }}</p>
           <p v-if="isBrowseOnlyPlan" class="text-xs text-slate-500">{{ t("stepBrand.whatsappHint") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
@@ -70,6 +72,8 @@
               min="0"
               step="0.01"
               :class="inputClass('delivery_fee') + ' pr-14'"
+              :aria-invalid="fieldError('delivery_fee') ? 'true' : undefined"
+              aria-describedby="step-brand-delivery-fee-error"
               @input="clearField('delivery_fee')"
             />
             <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
@@ -77,7 +81,7 @@
             </span>
           </div>
           <p class="text-xs text-slate-500">{{ t("stepBrand.deliveryFeeHint") }}</p>
-          <p v-if="fieldError('delivery_fee')" class="text-xs text-red-300">{{ fieldError("delivery_fee") }}</p>
+          <p v-if="fieldError('delivery_fee')" id="step-brand-delivery-fee-error" class="text-xs text-red-300">{{ fieldError("delivery_fee") }}</p>
         </label>
         <div class="space-y-1 text-sm text-slate-200">
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -110,9 +114,11 @@
           :value="localizedFieldValue('address', fieldLocales.address)"
           :class="inputClass('address')"
           :aria-label="t('common.address')"
+          :aria-invalid="fieldError('address') ? 'true' : undefined"
+          aria-describedby="step-brand-address-error"
           @input="onLocalizedFieldInput('address', fieldLocales.address, $event.target.value)"
         />
-        <p v-if="fieldError('address')" class="text-xs text-red-300">{{ fieldError("address") }}</p>
+        <p v-if="fieldError('address')" id="step-brand-address-error" class="text-xs text-red-300">{{ fieldError("address") }}</p>
         </div>
       </div>
 
@@ -147,9 +153,11 @@
           rows="3"
           :class="inputClass('description')"
           :aria-label="t('common.description')"
+          :aria-invalid="fieldError('description') ? 'true' : undefined"
+          aria-describedby="step-brand-description-error"
           @input="onLocalizedFieldInput('description', fieldLocales.description, $event.target.value)"
         ></textarea>
-        <p v-if="fieldError('description')" class="text-xs text-red-300">{{ fieldError("description") }}</p>
+        <p v-if="fieldError('description')" id="step-brand-description-error" class="text-xs text-red-300">{{ fieldError("description") }}</p>
       </div>
     </section>
 
@@ -244,8 +252,8 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.googleMapsUrl") }}
-          <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" @input="clearField('google_maps_url')" />
-          <p v-if="fieldError('google_maps_url')" class="text-xs text-red-300">{{ fieldError("google_maps_url") }}</p>
+          <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" :aria-invalid="fieldError('google_maps_url') ? 'true' : undefined" aria-describedby="step-brand-maps-error" @input="clearField('google_maps_url')" />
+          <p v-if="fieldError('google_maps_url')" id="step-brand-maps-error" class="text-xs text-red-300">{{ fieldError("google_maps_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.reservationUrl") }}
@@ -255,34 +263,36 @@
             inputmode="url"
             :class="inputClass('reservation_url')"
             placeholder="https://..."
+            :aria-invalid="fieldError('reservation_url') ? 'true' : undefined"
+            aria-describedby="step-brand-reservation-error"
             @input="clearField('reservation_url')"
           />
-          <p v-if="fieldError('reservation_url')" class="text-xs text-red-300">{{ fieldError("reservation_url") }}</p>
+          <p v-if="fieldError('reservation_url')" id="step-brand-reservation-error" class="text-xs text-red-300">{{ fieldError("reservation_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.facebookUrl") }}
-          <input v-model="form.facebook_url" type="url" inputmode="url" :class="inputClass('facebook_url')" @input="clearField('facebook_url')" />
-          <p v-if="fieldError('facebook_url')" class="text-xs text-red-300">{{ fieldError("facebook_url") }}</p>
+          <input v-model="form.facebook_url" type="url" inputmode="url" :class="inputClass('facebook_url')" :aria-invalid="fieldError('facebook_url') ? 'true' : undefined" aria-describedby="step-brand-facebook-error" @input="clearField('facebook_url')" />
+          <p v-if="fieldError('facebook_url')" id="step-brand-facebook-error" class="text-xs text-red-300">{{ fieldError("facebook_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.instagramUrl") }}
-          <input v-model="form.instagram_url" type="url" inputmode="url" :class="inputClass('instagram_url')" @input="clearField('instagram_url')" />
-          <p v-if="fieldError('instagram_url')" class="text-xs text-red-300">{{ fieldError("instagram_url") }}</p>
+          <input v-model="form.instagram_url" type="url" inputmode="url" :class="inputClass('instagram_url')" :aria-invalid="fieldError('instagram_url') ? 'true' : undefined" aria-describedby="step-brand-instagram-error" @input="clearField('instagram_url')" />
+          <p v-if="fieldError('instagram_url')" id="step-brand-instagram-error" class="text-xs text-red-300">{{ fieldError("instagram_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.tiktokUrl") }}
-          <input v-model="form.tiktok_url" type="url" inputmode="url" :class="inputClass('tiktok_url')" @input="clearField('tiktok_url')" />
-          <p v-if="fieldError('tiktok_url')" class="text-xs text-red-300">{{ fieldError("tiktok_url") }}</p>
+          <input v-model="form.tiktok_url" type="url" inputmode="url" :class="inputClass('tiktok_url')" :aria-invalid="fieldError('tiktok_url') ? 'true' : undefined" aria-describedby="step-brand-tiktok-error" @input="clearField('tiktok_url')" />
+          <p v-if="fieldError('tiktok_url')" id="step-brand-tiktok-error" class="text-xs text-red-300">{{ fieldError("tiktok_url") }}</p>
         </label>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.defaultLanguage") }}
-          <select v-model="form.language" :class="inputClass('language')" @change="clearField('language')">
+          <select v-model="form.language" :class="inputClass('language')" :aria-invalid="fieldError('language') ? 'true' : undefined" aria-describedby="step-brand-language-error" @change="clearField('language')">
             <option v-for="option in localeOptions" :key="option.code" :value="option.code">
               {{ option.label }}
             </option>
           </select>
           <p class="text-xs text-slate-500">{{ t("stepBrand.defaultLanguageHint") }}</p>
-          <p v-if="fieldError('language')" class="text-xs text-red-300">{{ fieldError("language") }}</p>
+          <p v-if="fieldError('language')" id="step-brand-language-error" class="text-xs text-red-300">{{ fieldError("language") }}</p>
         </label>
       </div>
     </section>
