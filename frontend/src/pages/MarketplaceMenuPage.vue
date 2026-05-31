@@ -39,7 +39,7 @@
     <!-- Error -->
     <div v-else-if="fetchError" role="alert" class="mx-auto max-w-sm px-4 py-8">
       <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
-        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
         </svg>
         <p class="flex-1 text-sm text-red-300">{{ t('mktMenu.error') }}</p>
@@ -182,11 +182,13 @@
               <div class="flex items-center gap-2">
                 <button
                   class="h-6 w-6 rounded-full border border-slate-700 text-slate-300 text-xs hover:border-slate-500"
+                  :aria-label="t('dishPage.decreaseQuantity')"
                   @click="removeFromCart(item.slug)"
                 >−</button>
-                <span class="text-sm text-white w-4 text-center">{{ item.qty }}</span>
+                <span class="text-sm text-white w-4 text-center" aria-hidden="true">{{ item.qty }}</span>
                 <button
                   class="h-6 w-6 rounded-full border border-slate-700 text-slate-300 text-xs hover:border-slate-500"
+                  :aria-label="t('dishPage.increaseQuantity')"
                   @click="addToCartBySlug(item.slug)"
                 >+</button>
               </div>
@@ -202,6 +204,7 @@
                 :class="form.fulfillment_type === 'pickup'
                   ? 'border-[var(--color-secondary,#f59e0b)]/60 bg-[var(--color-secondary,#f59e0b)]/10 text-[var(--color-secondary,#f59e0b)]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                :aria-pressed="form.fulfillment_type === 'pickup'"
                 @click="form.fulfillment_type = 'pickup'"
               >{{ t('mktMenu.fulfillmentPickup') }}</button>
               <button
@@ -210,6 +213,7 @@
                 :class="form.fulfillment_type === 'delivery'
                   ? 'border-sky-500/60 bg-sky-500/10 text-sky-300'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                :aria-pressed="form.fulfillment_type === 'delivery'"
                 @click="form.fulfillment_type = 'delivery'"
               >{{ t('mktMenu.fulfillmentDelivery') }}</button>
             </div>
@@ -289,7 +293,7 @@
 
           <!-- Error -->
           <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
             <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
           </div>
 

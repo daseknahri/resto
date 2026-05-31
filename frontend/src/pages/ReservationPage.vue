@@ -90,6 +90,7 @@
                 :key="size"
                 class="ui-pill-nav"
                 :class="Number(form.party_size) === size ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : ''"
+                :aria-pressed="Number(form.party_size) === size"
                 @click="setPartySize(size)"
               >
                 {{ t("reservationPage.guestCount", { count: size }) }}
@@ -120,6 +121,7 @@
                   :key="slot"
                   class="relative flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-xs transition-colors focus:outline-none"
                   :class="slotButtonClass(slot)"
+                  :aria-pressed="form.time === slot"
                   :disabled="isSlotFull(slot)"
                   @click="!isSlotFull(slot) && (form.time = slot)"
                 >
@@ -181,7 +183,7 @@
           </div>
 
           <!-- Waitlist success -->
-          <div v-if="waitlistSubmitted" class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+          <div v-if="waitlistSubmitted" role="status" class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
             {{ t("reservationPage.waitlistSuccess") }}
           </div>
 
@@ -196,13 +198,14 @@
               {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
             </button>
             <div v-if="lead.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-              <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ lead.error }}</p>
             </div>
           </div>
 
           <div
             v-if="submitted"
+            role="status"
             class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
           >
             {{ t("reservationPage.reservationReceived") }}

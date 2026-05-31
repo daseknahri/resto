@@ -36,7 +36,11 @@
             class="ui-admin-subcard space-y-1.5 transition-colors"
             :class="soldOutCount > 0 ? 'cursor-pointer hover:border-amber-500/40' : ''"
             :title="soldOutCount > 0 ? t('ownerHome.dishAvailability') : ''"
+            :role="soldOutCount > 0 ? 'button' : undefined"
+            :tabindex="soldOutCount > 0 ? 0 : undefined"
             @click="soldOutCount > 0 && (dishAvailOpen = true)"
+            @keydown.enter="soldOutCount > 0 && (dishAvailOpen = true)"
+            @keydown.space.prevent="soldOutCount > 0 && (dishAvailOpen = true)"
           >
             <p class="ui-stat-label">{{ t("ownerHome.soldOutLabel") }}</p>
             <p class="ui-stat-value transition-colors" :class="soldOutCount > 0 ? 'text-amber-400' : 'text-emerald-500'">{{ soldOutCount }}</p>
@@ -235,7 +239,7 @@
 
       <!-- Error banner with retry -->
       <div v-if="error" role="alert" class="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
-        <svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-10.5a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 7a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
         </svg>
         <p class="flex-1 text-sm text-red-300">{{ error }}</p>
@@ -270,7 +274,14 @@
           {{ readinessScore === 100 ? "✓ " : "" }}{{ readinessScore }}%
         </span>
       </div>
-      <div class="h-2 overflow-hidden rounded-full bg-slate-800">
+      <div
+        class="h-2 overflow-hidden rounded-full bg-slate-800"
+        role="progressbar"
+        :aria-valuenow="readinessScore"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="t('ownerHome.launchProgress')"
+      >
         <div
           class="h-full rounded-full transition-all duration-300"
           :class="readinessScore === 100 ? 'bg-emerald-500' : 'bg-[var(--color-secondary)]'"
@@ -311,7 +322,7 @@
           <AppIcon name="chart" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.analyticsTitle", { days: dashboardPeriod }) }}</span>
           <!-- Subtle spinner shown while stale cache is being silently refreshed -->
-          <svg v-if="insightsUpdating" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg v-if="insightsUpdating" aria-hidden="true" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
         </h3>
@@ -325,6 +336,7 @@
               :class="dashboardPeriod === d
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                 : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+              :aria-pressed="dashboardPeriod === d"
               :disabled="insightsLoading"
               @click="setDashboardPeriod(d)"
             >{{ d }}d</button>
@@ -334,10 +346,10 @@
             :disabled="analyticsExporting"
             @click="exportAnalytics"
           >
-            <svg v-if="!analyticsExporting" class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-if="!analyticsExporting" aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 2v8M5 7l3 3 3-3"/>
             </svg>
-            <svg v-else class="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg v-else aria-hidden="true" class="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
               <circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="10"/>
             </svg>
             {{ t("ownerHome.exportCsv") }}
@@ -376,9 +388,10 @@
       <!-- Analytics network error — show retry instead of empty state -->
       <div
         v-if="insightsError && !insightsLoading"
+        role="alert"
         class="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3"
       >
-        <svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400/70" fill="currentColor">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400/70" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-10.5a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 7a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
         </svg>
         <p class="flex-1 text-xs text-slate-400">{{ t("ownerHome.analyticsLoadError") }}</p>
@@ -467,7 +480,7 @@
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
           <AppIcon name="download" class="owner-home-section-icon" />
           <span>{{ t("ownerHome.revenueTitle") }}</span>
-          <svg v-if="insightsUpdating" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg v-if="insightsUpdating" aria-hidden="true" class="h-3.5 w-3.5 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
         </h3>
