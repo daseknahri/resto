@@ -101,6 +101,7 @@
               :class="errors.plan_code ? 'border-red-400' : 'border-slate-700'"
               :aria-invalid="errors.plan_code ? 'true' : undefined"
               aria-describedby="lead-capture-plan-error"
+              aria-required="true"
               @change="clearError('plan_code')"
             >
               <option value="basic">{{ t("leadCapture.basicOption") }}</option>

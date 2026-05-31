@@ -276,12 +276,12 @@
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.name") }}
-                <input v-model.trim="form.name" type="text" class="ui-input" :class="fieldClass('name')" autocomplete="name" :aria-invalid="errors.name ? 'true' : undefined" aria-describedby="lead-name-error" @input="clearError('name')" />
+                <input v-model.trim="form.name" type="text" class="ui-input" :class="fieldClass('name')" autocomplete="name" :aria-invalid="errors.name ? 'true' : undefined" aria-describedby="lead-name-error" aria-required="true" @input="clearError('name')" />
                 <p v-if="errors.name" id="lead-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
               </label>
               <label class="space-y-1 text-sm text-slate-200">
                 {{ t("common.phone") }}
-                <input v-model.trim="form.phone" type="tel" class="ui-input" :class="fieldClass('phone')" placeholder="+212..." inputmode="tel" autocomplete="tel" :aria-invalid="errors.phone ? 'true' : undefined" aria-describedby="lead-phone-error" @input="clearError('phone')" />
+                <input v-model.trim="form.phone" type="tel" class="ui-input" :class="fieldClass('phone')" placeholder="+212..." inputmode="tel" autocomplete="tel" :aria-invalid="errors.phone ? 'true' : undefined" aria-describedby="lead-phone-error" aria-required="true" @input="clearError('phone')" />
                 <p v-if="errors.phone" id="lead-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
               </label>
             </div>

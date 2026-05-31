@@ -37,6 +37,7 @@
                 autocomplete="name"
                 :aria-invalid="errors.name ? 'true' : undefined"
                 aria-describedby="res-name-error"
+                aria-required="true"
                 @input="clearError('name')"
               />
               <p v-if="errors.name" id="res-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
@@ -53,6 +54,7 @@
                 autocomplete="tel"
                 :aria-invalid="errors.phone ? 'true' : undefined"
                 aria-describedby="res-phone-error"
+                aria-required="true"
                 @input="clearError('phone')"
               />
               <p v-if="errors.phone" id="res-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
@@ -84,6 +86,7 @@
                 inputmode="numeric"
                 :aria-invalid="errors.party_size ? 'true' : undefined"
                 aria-describedby="res-party-error"
+                aria-required="true"
                 @input="clearError('party_size')"
               />
               <p v-if="errors.party_size" id="res-party-error" class="text-xs text-red-300">{{ errors.party_size }}</p>

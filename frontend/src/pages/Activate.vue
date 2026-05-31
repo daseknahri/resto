@@ -18,6 +18,7 @@
             :class="fieldErrors.token ? 'border-red-400' : ''"
             :aria-invalid="fieldErrors.token ? 'true' : undefined"
             aria-describedby="activate-token-error"
+            aria-required="true"
             @input="fieldErrors.token = ''"
           />
           <p v-if="fieldErrors.token" id="activate-token-error" class="text-xs text-red-300">{{ fieldErrors.token }}</p>
@@ -32,6 +33,7 @@
             :class="fieldErrors.password ? 'border-red-400' : ''"
             :aria-invalid="fieldErrors.password ? 'true' : undefined"
             aria-describedby="activate-password-error"
+            aria-required="true"
             @input="fieldErrors.password = ''"
           />
           <p v-if="fieldErrors.password" id="activate-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>

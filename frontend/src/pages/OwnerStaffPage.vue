@@ -22,6 +22,7 @@
           :placeholder="t('ownerStaff.namePlaceholder')"
           class="ui-input"
           :disabled="creating"
+          aria-required="true"
           @keyup.enter="createStaff"
         />
         <input
@@ -32,6 +33,7 @@
           spellcheck="false"
           class="ui-input"
           :disabled="creating"
+          aria-required="true"
           @keyup.enter="createStaff"
         />
       </div>

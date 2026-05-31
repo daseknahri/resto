@@ -55,6 +55,7 @@
               :class="fieldErrors.identifier ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.identifier ? 'true' : undefined"
               aria-describedby="signin-identifier-error"
+              aria-required="true"
               @input="fieldErrors.identifier = ''"
             />
             <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
@@ -69,6 +70,7 @@
               :class="fieldErrors.password ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.password ? 'true' : undefined"
               aria-describedby="signin-password-error"
+              aria-required="true"
               @input="fieldErrors.password = ''"
             />
             <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>

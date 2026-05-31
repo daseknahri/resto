@@ -40,6 +40,7 @@
               :class="identifierError ? 'border-red-400' : ''"
               :aria-invalid="identifierError ? 'true' : undefined"
               aria-describedby="forgot-identifier-error"
+              aria-required="true"
               @input="identifierError = ''"
             />
             <p v-if="identifierError" id="forgot-identifier-error" class="text-xs text-red-300">{{ identifierError }}</p>
