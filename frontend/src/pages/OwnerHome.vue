@@ -149,7 +149,7 @@
             <span v-if="soldOutCount > 0" class="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 font-semibold text-red-300">
               {{ soldOutCount }} {{ t("ownerHome.soldOut") }}
             </span>
-            <span>{{ dishAvailOpen ? "▲" : "▼" }}</span>
+            <span aria-hidden="true">{{ dishAvailOpen ? "▲" : "▼" }}</span>
           </span>
         </summary>
         <div v-if="dishAvailOpen" class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2">

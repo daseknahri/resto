@@ -86,11 +86,12 @@
               scope="col"
               class="px-4 py-2.5 text-left font-medium"
               :class="col.sortable ? 'cursor-pointer select-none hover:text-slate-200' : ''"
+              :aria-sort="col.sortable && sortKey === col.key ? (sortOrder === 'desc' ? 'descending' : 'ascending') : (col.sortable ? 'none' : undefined)"
               @click="col.sortable && toggleSort(col.key)"
             >
               <span class="inline-flex items-center gap-1">
                 {{ col.label }}
-                <span v-if="col.sortable" class="text-[10px] opacity-50">
+                <span v-if="col.sortable" aria-hidden="true" class="text-[10px] opacity-50">
                   {{ sortKey === col.key ? (sortOrder === 'desc' ? '▼' : '▲') : '⇅' }}
                 </span>
               </span>
