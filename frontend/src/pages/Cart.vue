@@ -487,6 +487,7 @@
                   v-model="promoCode"
                   type="text"
                   maxlength="20"
+                  autocomplete="off"
                   class="ui-input flex-1 uppercase text-sm"
                   :aria-label="t('cartPage.promoCodeLabel')"
                   :placeholder="t('cartPage.promoPlaceholder')"

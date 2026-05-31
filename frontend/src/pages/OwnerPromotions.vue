@@ -147,6 +147,7 @@
               v-model="form.code"
               type="text"
               maxlength="20"
+              autocomplete="off"
               class="ui-input w-full uppercase"
               :placeholder="t('ownerPromotions.codePlaceholder')"
               :aria-label="t('ownerPromotions.codeLabel')"

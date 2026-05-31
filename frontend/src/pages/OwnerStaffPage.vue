@@ -19,6 +19,7 @@
         <input
           v-model="form.name"
           type="text"
+          autocomplete="off"
           :placeholder="t('ownerStaff.namePlaceholder')"
           class="ui-input"
           :disabled="creating"
