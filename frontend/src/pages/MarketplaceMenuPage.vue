@@ -233,6 +233,8 @@
                 <input
                   v-model="form.customer_phone"
                   type="tel"
+                  inputmode="tel"
+                  autocomplete="tel"
                   class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
                 />
               </label>

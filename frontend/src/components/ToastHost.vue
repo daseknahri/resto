@@ -1,19 +1,20 @@
 <template>
-  <transition name="fade-slide">
-    <div
-      v-if="toast.visible"
-      class="ui-toast fixed bottom-6 right-6 z-30 rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 shadow-2xl shadow-black/40 text-sm text-slate-100 flex items-center gap-3"
-      role="status"
-      aria-live="polite"
-    >
-      <span
-        class="h-2 w-2 rounded-full"
-        :class="toast.type === 'success' ? 'bg-emerald-400' : toast.type === 'error' ? 'bg-rose-400' : 'bg-amber-300'"
-      ></span>
-      <span>{{ toast.message }}</span>
-      <button class="text-xs text-slate-400 hover:text-slate-200" @click="toast.hide()">{{ t("common.close") }}</button>
-    </div>
-  </transition>
+  <!-- aria-live region must always be in the DOM; content change triggers announcement -->
+  <div role="status" aria-live="polite" aria-atomic="true" class="pointer-events-none fixed bottom-6 right-6 z-30">
+    <transition name="fade-slide">
+      <div
+        v-if="toast.visible"
+        class="ui-toast pointer-events-auto rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 shadow-2xl shadow-black/40 text-sm text-slate-100 flex items-center gap-3"
+      >
+        <span
+          class="h-2 w-2 rounded-full"
+          :class="toast.type === 'success' ? 'bg-emerald-400' : toast.type === 'error' ? 'bg-rose-400' : 'bg-amber-300'"
+        ></span>
+        <span>{{ toast.message }}</span>
+        <button class="pointer-events-auto text-xs text-slate-400 hover:text-slate-200" @click="toast.hide()">{{ t("common.close") }}</button>
+      </div>
+    </transition>
+  </div>
 </template>
 
 <script setup>

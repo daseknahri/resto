@@ -52,11 +52,14 @@
           <div
             v-for="res in reservationsByDay[day.iso] || []"
             :key="res.id"
+            role="button"
+            tabindex="0"
             class="group cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing"
             :class="statusChipClass(res.status)"
             draggable="true"
             @dragstart="onDragStart(res)"
             @click="$emit('select', res)"
+            @keydown.enter.space.prevent="$emit('select', res)"
           >
             <p class="font-semibold text-slate-100 truncate">{{ res.name }}</p>
             <p v-if="res.booked_for" class="text-slate-400">{{ timeLabel(res.booked_for) }}</p>

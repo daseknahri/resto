@@ -58,6 +58,8 @@
                 v-model.trim="customerName"
                 type="text"
                 maxlength="80"
+                autocomplete="name"
+                :aria-label="t('waiterPage.newOrderCustomerNamePlaceholder')"
                 class="ui-input flex-1 text-sm"
                 :placeholder="t('waiterPage.newOrderCustomerNamePlaceholder')"
               />
@@ -66,7 +68,9 @@
               <AppIcon name="search" class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <input
                 v-model="search"
-                type="text"
+                type="search"
+                enterkeyhint="search"
+                :aria-label="t('waiterPage.newOrderSearch')"
                 class="ui-input w-full pl-8 text-sm"
                 :placeholder="t('waiterPage.newOrderSearch')"
                 @input="onSearch"
