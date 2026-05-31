@@ -83,6 +83,7 @@
               min="1"
               step="1"
               class="ui-input w-32"
+              :aria-label="t('ownerLoyalty.pointsPerUnitLabel')"
             />
             <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsPerUnitSuffix') }}</span>
           </div>
@@ -99,6 +100,7 @@
               min="1"
               step="1"
               class="ui-input w-32"
+              :aria-label="t('ownerLoyalty.redeemThresholdLabel')"
             />
             <span class="text-xs text-slate-400">{{ t('ownerLoyalty.redeemThresholdSuffix') }}</span>
           </div>
@@ -115,6 +117,7 @@
               min="0.0001"
               step="0.001"
               class="ui-input w-32"
+              :aria-label="t('ownerLoyalty.pointsValueLabel')"
             />
             <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsValueSuffix') }}</span>
           </div>
