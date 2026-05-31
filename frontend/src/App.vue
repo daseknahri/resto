@@ -16,6 +16,7 @@
   </Transition>
   <RouterView />
   <ToastHost />
+  <ConfirmModal />
 </template>
 
 <script setup>
@@ -33,6 +34,7 @@ import {
   isPublicDemoHost,
 } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
+import ConfirmModal from "./components/ConfirmModal.vue";
 
 const { t } = useI18n();
 

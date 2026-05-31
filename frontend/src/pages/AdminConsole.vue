@@ -1143,6 +1143,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useToastStore } from "../stores/toast";
 import { getPrimaryPublicHost } from "../lib/runtimeHost";
 
@@ -1223,6 +1224,7 @@ const alertThresholds = ref({
 });
 const toast = useToastStore();
 const { t, currentLocale } = useI18n();
+const { confirm } = useConfirmModal();
 const lastProvision = ref(null);
 const auditLogs = ref([]);
 const auditPage = ref(1);
@@ -2024,6 +2026,12 @@ const loadOnboardingPackage = async (lead, refreshToken = false) => {
 };
 
 const removeLead = async (lead) => {
+  const ok = await confirm({
+    title: t("adminConsole.archiveLeadConfirm", { name: lead.name || lead.email }),
+    body: t("confirmModal.defaultBody"),
+    confirmLabel: t("adminConsole.archive"),
+  });
+  if (!ok) return;
   removeLoading.value = { ...removeLoading.value, [lead.id]: true };
   try {
     await adminApi.delete(`/leads/${lead.id}/`);

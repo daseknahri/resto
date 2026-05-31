@@ -74,6 +74,11 @@ export const messages = {
       offlineBanner: "No internet connection — changes may not save",
       offlineBackOnline: "Back online"
     },
+    confirmModal: {
+      defaultTitle: "Are you sure?",
+      defaultBody: "This action cannot be undone.",
+      confirmBtn: "Delete"
+    },
     landingLayout: {
       kicker: "Resto Menu",
       title: "Restaurant SaaS",
@@ -1994,6 +1999,7 @@ export const messages = {
       loadOnboardingPackageFailed: "Unable to load onboarding package",
       archivedLead: "Archived {lead}",
       archiveLeadFailed: "Unable to archive lead",
+      archiveLeadConfirm: "Archive \"{name}\"?",
       paymentReferenceOptionalPrompt: "Payment reference (optional)",
       internalAdminNoteOptionalPrompt: "Internal admin note (optional)",
       reasonForRejectionOptionalPrompt: "Reason for rejection (optional)",
@@ -2356,6 +2362,8 @@ export const messages = {
       confirmAllFailed: "Some orders could not be confirmed.",
       noOrdersYet: "No orders yet — they'll appear here when customers start ordering.",
       clearFilters: "Clear filters",
+      cancelConfirmTitle: "Cancel this order?",
+      cancelConfirmBody: "The customer will not be automatically notified. Make sure to inform them separately if needed.",
     },
     ownerPromotions: {
       kicker: "Promotions",
@@ -2912,6 +2920,11 @@ export const messages = {
       skipToMain: "Aller au contenu principal",
       offlineBanner: "Pas de connexion — les modifications peuvent ne pas etre enregistrees",
       offlineBackOnline: "Connexion retablie"
+    },
+    confirmModal: {
+      defaultTitle: "Etes-vous sur ?",
+      defaultBody: "Cette action est irreversible.",
+      confirmBtn: "Supprimer"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -4791,6 +4804,7 @@ export const messages = {
       loadOnboardingPackageFailed: "Impossible de charger le package d'onboarding",
       archivedLead: "Lead archive: {lead}",
       archiveLeadFailed: "Impossible d'archiver le lead",
+      archiveLeadConfirm: "Archiver \"{name}\" ?",
       paymentReferenceOptionalPrompt: "Reference de paiement (optionnelle)",
       internalAdminNoteOptionalPrompt: "Note admin interne (optionnelle)",
       reasonForRejectionOptionalPrompt: "Raison du refus (optionnelle)",
@@ -5200,6 +5214,8 @@ export const messages = {
       confirmAllFailed: "Certaines commandes n'ont pas pu etre confirmees.",
       noOrdersYet: "Aucune commande pour l'instant — elles apparaitront ici quand les clients commenceront a commander.",
       clearFilters: "Effacer les filtres",
+      cancelConfirmTitle: "Annuler cette commande ?",
+      cancelConfirmBody: "Le client ne sera pas notifie automatiquement. Pensez a le prevenir si necessaire.",
     },
     ownerPromotions: {
       kicker: "Promotions",

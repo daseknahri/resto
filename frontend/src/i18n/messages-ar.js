@@ -1792,7 +1792,9 @@ const arabicMessages = {
     "confirmAllDone": "تم تأكيد {n} طلب/طلبات معلقة.",
     "confirmAllFailed": "تعذّر تأكيد بعض الطلبات.",
     "noOrdersYet": "لا توجد طلبات بعد — ستظهر هنا عند بدء العملاء بالطلب.",
-    "clearFilters": "مسح الفلاتر"
+    "clearFilters": "مسح الفلاتر",
+    "cancelConfirmTitle": "إلغاء هذا الطلب؟",
+    "cancelConfirmBody": "لن يتم إشعار العميل تلقائياً. تأكد من إبلاغه بشكل منفصل إن لزم الأمر."
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",
@@ -1885,6 +1887,11 @@ Object.assign(arabicMessages, {
     skipToMain: "\u0627\u0646\u062a\u0642\u0644 \u0625\u0644\u0649 \u0627\u0644\u0645\u062d\u062a\u0648\u0649 \u0627\u0644\u0631\u0626\u064a\u0633\u064a",
     offlineBanner: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0627\u062a\u0635\u0627\u0644 \u0628\u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a \u2014 \u0642\u062f \u0644\u0627 \u062a\u064f\u062d\u0641\u0638 \u0627\u0644\u062a\u063a\u064a\u064a\u0631\u0627\u062a",
     offlineBackOnline: "\u0639\u0627\u062f \u0627\u0644\u0627\u062a\u0635\u0627\u0644"
+  },
+  confirmModal: {
+    defaultTitle: "\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f\u061f",
+    defaultBody: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621.",
+    confirmBtn: "\u062d\u0630\u0641"
   },
   ownerProfileSections: {
     brandContact: "\u0627\u0644\u0647\u0648\u064a\u0629 \u0648\u0627\u0644\u062a\u0648\u0627\u0635\u0644",

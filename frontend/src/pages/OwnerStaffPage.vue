@@ -185,23 +185,11 @@
 
             <!-- Remove -->
             <div class="flex items-center justify-end gap-2 border-t border-slate-800/60 pt-3">
-              <template v-if="confirmRemoveId === member.id">
-                <span class="text-[11px] text-red-300 mr-1">{{ t("ownerStaff.confirmRemove") }}?</span>
-                <button
-                  class="rounded-xl border border-red-500/50 bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-50"
-                  :disabled="removingId === member.id"
-                  @click="removeStaff(member)"
-                >{{ removingId === member.id ? t("ownerStaff.removing") : t("common.confirm") }}</button>
-                <button
-                  class="rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                  @click="confirmRemoveId = null"
-                >{{ t("common.cancel") }}</button>
-              </template>
               <button
-                v-else
-                class="rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/60 hover:text-red-300 transition-colors"
-                @click="confirmRemoveId = member.id"
-              >{{ t("ownerStaff.remove") }}</button>
+                class="rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/60 hover:text-red-300 transition-colors disabled:opacity-50"
+                :disabled="removingId === member.id"
+                @click="removeStaff(member)"
+              >{{ removingId === member.id ? t("ownerStaff.removing") : t("ownerStaff.remove") }}</button>
             </div>
           </div>
         </Transition>
@@ -219,6 +207,7 @@
 
 <script setup>
 import { ref, onMounted, reactive } from "vue";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
@@ -258,7 +247,7 @@ const expandedIds = ref(new Set());
 const savingId = ref(null);
 const saveError = reactive({});
 const removingId = ref(null);
-const confirmRemoveId = ref(null); // member.id awaiting remove confirmation
+const { confirm } = useConfirmModal();
 
 const form = ref({ name: "", email: "" });
 const formError = ref("");
@@ -375,6 +364,12 @@ const createStaff = async () => {
 
 // ── Remove staff ───────────────────────────────────────────────────────────────
 const removeStaff = async (member) => {
+  const ok = await confirm({
+    title: t("ownerStaff.confirmRemove"),
+    body: t("confirmModal.defaultBody"),
+    confirmLabel: t("ownerStaff.remove"),
+  });
+  if (!ok) return;
   removingId.value = member.id;
   try {
     await api.delete(`/owner/staff/${member.id}/`);
@@ -383,7 +378,6 @@ const removeStaff = async (member) => {
     const next = new Set(expandedIds.value);
     next.delete(member.id);
     expandedIds.value = next;
-    confirmRemoveId.value = null;
   } catch {
     toast.show(t("ownerStaff.removeFailed"), "error");
   } finally {

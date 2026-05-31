@@ -92,20 +92,11 @@
                   class="text-xs text-sky-400 hover:text-sky-300"
                   @click="openEdit(zone)"
                 >{{ t('adminZones.edit') }}</button>
-                <template v-if="confirmDeleteId === zone.id">
-                  <span class="text-[11px] text-red-300">{{ zone.name }}?</span>
-                  <button
-                    class="text-[11px] font-semibold text-red-400 hover:text-red-300 disabled:opacity-50"
-                    :disabled="deletingId === zone.id"
-                    @click="deleteZone(zone)"
-                  >{{ deletingId === zone.id ? '…' : t('common.confirm') }}</button>
-                  <button class="text-[11px] text-slate-500 hover:text-slate-300" @click="confirmDeleteId = null">{{ t('common.cancel') }}</button>
-                </template>
                 <button
-                  v-else
-                  class="text-xs text-red-400 hover:text-red-300"
-                  @click="confirmDeleteId = zone.id"
-                >{{ t('adminZones.delete') }}</button>
+                  class="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                  :disabled="deletingId === zone.id"
+                  @click="deleteZone(zone)"
+                >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
               </div>
             </td>
           </tr>
@@ -232,6 +223,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
 
@@ -244,7 +236,7 @@ const zones = ref([]);
 const showForm = ref(false);
 const editing = ref(null); // zone being edited, or null for create
 const saving = ref(false);
-const confirmDeleteId = ref(null); // zone id awaiting delete confirmation
+const { confirm } = useConfirmModal();
 const deletingId = ref(null);
 const polygonJson = ref('[]');
 const polygonError = ref('');
@@ -351,11 +343,16 @@ const save = async () => {
 };
 
 const deleteZone = async (zone) => {
+  const ok = await confirm({
+    title: t('adminZones.deleteConfirm', { name: zone.name }),
+    body: t('confirmModal.defaultBody'),
+    confirmLabel: t('adminZones.delete'),
+  });
+  if (!ok) return;
   deletingId.value = zone.id;
   try {
     await api.delete(`/admin/delivery-zones/${zone.id}/`);
     zones.value = zones.value.filter(z => z.id !== zone.id);
-    confirmDeleteId.value = null;
     toast.show(t('adminZones.deleted'));
   } catch {
     toast.show(t('adminZones.deleteFailed'), 'error');

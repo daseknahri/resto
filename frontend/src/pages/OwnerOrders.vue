@@ -563,6 +563,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
@@ -570,6 +571,7 @@ import { useToastStore } from "../stores/toast";
 const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const route = useRoute();
 
 const activeStatus = ref("");
@@ -804,6 +806,14 @@ const orderCardClass = (o) => {
 
 // ── Status actions ────────────────────────────────────────────────────────────
 const updateStatus = async (o, newStatus) => {
+  if (newStatus === "cancelled") {
+    const ok = await confirm({
+      title: t("ownerOrders.cancelConfirmTitle"),
+      body: t("ownerOrders.cancelConfirmBody"),
+      confirmLabel: t("ownerOrders.statusCancelled"),
+    });
+    if (!ok) return;
+  }
   try {
     await order.updateOrderStatus(o.id, { status: newStatus });
     toast.show(t("ownerOrders.updated"), "success");
