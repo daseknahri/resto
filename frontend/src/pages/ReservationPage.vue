@@ -35,9 +35,11 @@
                 class="ui-input"
                 :class="fieldClass('name')"
                 autocomplete="name"
+                :aria-invalid="errors.name ? 'true' : undefined"
+                aria-describedby="res-name-error"
                 @input="clearError('name')"
               />
-              <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
+              <p v-if="errors.name" id="res-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.phone") }}
@@ -49,9 +51,11 @@
                 placeholder="+212..."
                 inputmode="tel"
                 autocomplete="tel"
+                :aria-invalid="errors.phone ? 'true' : undefined"
+                aria-describedby="res-phone-error"
                 @input="clearError('phone')"
               />
-              <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
+              <p v-if="errors.phone" id="res-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.email") }}
@@ -63,9 +67,11 @@
                 inputmode="email"
                 autocomplete="email"
                 spellcheck="false"
+                :aria-invalid="errors.email ? 'true' : undefined"
+                aria-describedby="res-email-error"
                 @input="clearError('email')"
               />
-              <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
+              <p v-if="errors.email" id="res-email-error" class="text-xs text-red-300">{{ errors.email }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("reservationPage.partySize") }}
@@ -76,9 +82,11 @@
                 class="ui-input"
                 :class="fieldClass('party_size')"
                 inputmode="numeric"
+                :aria-invalid="errors.party_size ? 'true' : undefined"
+                aria-describedby="res-party-error"
                 @input="clearError('party_size')"
               />
-              <p v-if="errors.party_size" class="text-xs text-red-300">{{ errors.party_size }}</p>
+              <p v-if="errors.party_size" id="res-party-error" class="text-xs text-red-300">{{ errors.party_size }}</p>
             </label>
           </div>
 
