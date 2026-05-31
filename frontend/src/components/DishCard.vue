@@ -13,8 +13,10 @@
         : 'border-slate-800/70',
     ]"
     role="button"
+    tabindex="0"
     :aria-label="dish.name"
     @click="handleOpen"
+    @keydown.enter.space.prevent="handleOpen"
   >
     <!-- In-cart top accent line -->
     <div
@@ -121,8 +123,10 @@
         : 'border-slate-800/80 shadow-[0_20px_50px_rgba(2,6,23,0.36)] hover:border-slate-700/70 hover:shadow-[0_24px_60px_rgba(2,6,23,0.48)]',
     ]"
     role="button"
+    tabindex="0"
     :aria-label="dish.name"
     @click="handleOpen"
+    @keydown.enter.space.prevent="handleOpen"
   >
     <!-- In-cart top accent -->
     <div

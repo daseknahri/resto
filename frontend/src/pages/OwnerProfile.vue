@@ -13,6 +13,7 @@
             type="button"
             class="owner-profile-nav-item"
             :data-active="activeTab === tab.key"
+            :aria-pressed="activeTab === tab.key"
             @click="setTab(tab.key)"
           >
             <AppIcon :name="tab.icon" class="owner-profile-nav-icon" />

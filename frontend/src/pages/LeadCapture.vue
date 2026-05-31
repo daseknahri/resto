@@ -120,8 +120,8 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
           <span class="text-slate-400">{{ t("leadCapture.responseTarget") }}</span>
-          <span v-if="lead.success" class="text-emerald-400">{{ t("leadCapture.submittedOk") }}</span>
-          <span v-else-if="lead.error" class="text-red-400">{{ lead.error }}</span>
+          <span v-if="lead.success" role="status" class="text-emerald-400">{{ t("leadCapture.submittedOk") }}</span>
+          <span v-else-if="lead.error" role="alert" class="text-red-400">{{ lead.error }}</span>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -140,6 +140,7 @@
               type="button"
               class="rounded-[1.35rem] border p-4 text-left transition"
               :class="form.plan_code === 'basic' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              :aria-pressed="form.plan_code === 'basic'"
               @click="form.plan_code = 'basic'"
             >
               <p class="text-sm font-semibold text-white">Basic</p>
@@ -149,6 +150,7 @@
               type="button"
               class="rounded-[1.35rem] border p-4 text-left transition"
               :class="form.plan_code === 'growth' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              :aria-pressed="form.plan_code === 'growth'"
               @click="form.plan_code = 'growth'"
             >
               <p class="text-sm font-semibold text-white">Growth</p>
@@ -158,6 +160,7 @@
               type="button"
               class="rounded-[1.35rem] border p-4 text-left transition"
               :class="form.plan_code === 'pro' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              :aria-pressed="form.plan_code === 'pro'"
               @click="form.plan_code = 'pro'"
             >
               <p class="text-sm font-semibold text-white">Pro</p>

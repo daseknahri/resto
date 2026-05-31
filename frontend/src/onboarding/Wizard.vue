@@ -19,6 +19,7 @@
               type="button"
               class="group flex min-w-[220px] items-start gap-3 rounded-[1.25rem] border p-3 text-left transition lg:min-w-0"
               :class="current === step.id ? 'border-amber-400/40 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-slate-800/80 bg-slate-950/45 hover:border-slate-700/80'"
+              :aria-pressed="current === step.id"
               @click="current = step.id"
             >
               <div

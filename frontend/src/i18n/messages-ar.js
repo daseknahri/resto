@@ -288,7 +288,9 @@ const arabicMessages = {
     "gracePeriodCta": "عرض الفوترة",
     "customers": "العملاء",
     "loyalty": "الولاء",
-    "wallet": "المحفظة"
+    "wallet": "المحفظة",
+    "navDesktop": "تنقل المالك",
+    "navMobile": "تنقل المالك"
   },
   "ownerHome": {
     "kicker": "لوحة المالك",

@@ -23,11 +23,12 @@
               </div>
             </div>
 
-            <div
+            <nav
               class="owner-main-nav hidden md:grid"
               :style="`--nav-cols: ${2 + (showTables ? 1 : 0) + (showReservations ? 1 : 0) + 1}`"
+              :aria-label="t('ownerLayout.navDesktop')"
             >
-              <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'" active-class="" exact-active-class="">
+              <RouterLink to="/owner" class="owner-main-nav-item" :data-active="$route.path === '/owner'" :aria-current="$route.path === '/owner' ? 'page' : undefined" active-class="" exact-active-class="">
                 <AppIcon name="home" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.dashboard") }}</span>
               </RouterLink>
@@ -37,6 +38,7 @@
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/orders')"
                 :data-urgent="pendingOrdersCount > 0"
+                :aria-current="$route.path.startsWith('/owner/orders') ? 'page' : undefined"
                 active-class=""
                 exact-active-class=""
               >
@@ -45,6 +47,7 @@
                   <span
                     v-if="pendingOrdersCount > 0"
                     class="owner-orders-badge"
+                    :aria-label="t('ownerLayout.orders') + ': ' + pendingOrdersCount"
                   >{{ pendingOrdersCount }}</span>
                 </span>
                 <span>{{ t("ownerLayout.orders") }}</span>
@@ -53,6 +56,7 @@
                 :to="{ name: 'owner-menu-builder' }"
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/menu-builder')"
+                :aria-current="$route.path.startsWith('/owner/menu-builder') ? 'page' : undefined"
                 active-class=""
                 exact-active-class=""
               >
@@ -64,6 +68,7 @@
                 to="/owner/tables"
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/tables')"
+                :aria-current="$route.path.startsWith('/owner/tables') ? 'page' : undefined"
                 active-class=""
                 exact-active-class=""
               >
@@ -75,13 +80,14 @@
                 to="/owner/reservations"
                 class="owner-main-nav-item"
                 :data-active="$route.path.startsWith('/owner/reservations')"
+                :aria-current="$route.path.startsWith('/owner/reservations') ? 'page' : undefined"
                 active-class=""
                 exact-active-class=""
               >
                 <AppIcon name="calendar" class="owner-nav-icon" />
                 <span>{{ t("ownerLayout.reservations") }}</span>
               </RouterLink>
-            </div>
+            </nav>
 
             <!-- Waiter view shortcut (desktop) -->
             <RouterLink
@@ -218,12 +224,13 @@
       </RouterView>
     </main>
 
-    <nav class="ui-bottom-dock owner-bottom-dock md:hidden">
+    <nav class="ui-bottom-dock owner-bottom-dock md:hidden" :aria-label="t('ownerLayout.navMobile')">
       <div class="ui-bottom-dock-grid" :class="`grid-cols-${4 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
         <RouterLink
           to="/owner"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path === '/owner'"
+          :aria-current="$route.path === '/owner' ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >
@@ -236,12 +243,13 @@
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/orders')"
           :data-urgent="pendingOrdersCount > 0"
+          :aria-current="$route.path.startsWith('/owner/orders') ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >
           <span class="relative inline-flex">
             <AppIcon name="menu" class="owner-dock-icon" />
-            <span v-if="pendingOrdersCount > 0" class="owner-orders-badge-dock">{{ pendingOrdersCount }}</span>
+            <span v-if="pendingOrdersCount > 0" class="owner-orders-badge-dock" aria-hidden="true">{{ pendingOrdersCount }}</span>
           </span>
           <span>{{ t("ownerLayout.orders") }}</span>
         </RouterLink>
@@ -249,6 +257,7 @@
           to="/waiter"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/waiter')"
+          :aria-current="$route.path.startsWith('/waiter') ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >
@@ -259,6 +268,7 @@
           :to="{ name: 'owner-menu-builder' }"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/menu-builder')"
+          :aria-current="$route.path.startsWith('/owner/menu-builder') ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >
@@ -270,6 +280,7 @@
           to="/owner/tables"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/tables')"
+          :aria-current="$route.path.startsWith('/owner/tables') ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >
@@ -281,6 +292,7 @@
           to="/owner/reservations"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/owner/reservations')"
+          :aria-current="$route.path.startsWith('/owner/reservations') ? 'page' : undefined"
           active-class=""
           exact-active-class=""
         >

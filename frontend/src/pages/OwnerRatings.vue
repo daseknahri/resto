@@ -77,6 +77,7 @@
           :class="activeScore === f.value
             ? 'border-amber-400 bg-amber-400/10 text-amber-300'
             : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+          :aria-pressed="activeScore === f.value"
           @click="activeScore = f.value"
         >
           {{ f.label }}

@@ -35,6 +35,7 @@
             ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
             : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:border-slate-600'
         "
+        :aria-pressed="activeSegment === seg.key"
         @click="setSegment(seg.key)"
       >
         <p class="text-xs font-medium opacity-70">{{ seg.label }}</p>

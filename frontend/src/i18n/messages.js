@@ -594,6 +594,8 @@ export const messages = {
       customers: "Customers",
       loyalty: "Loyalty",
       wallet: "Wallet",
+      navDesktop: "Owner navigation",
+      navMobile: "Owner navigation",
     },
     ownerMenuBuilder: {
       importCsv: "Import CSV",
@@ -3424,6 +3426,8 @@ export const messages = {
       customers: "Clients",
       loyalty: "Fidelite",
       wallet: "Portefeuille",
+      navDesktop: "Navigation proprietaire",
+      navMobile: "Navigation proprietaire",
     },
     ownerMenuBuilder: {
       importCsv: "Importer CSV",

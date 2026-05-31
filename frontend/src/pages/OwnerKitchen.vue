@@ -43,6 +43,7 @@
         :key="f.value"
         class="kitchen-filter-btn"
         :class="stationFilter === f.value ? 'kitchen-filter-btn--active' : ''"
+        :aria-pressed="stationFilter === f.value"
         @click="stationFilter = f.value"
       >
         {{ f.label }}

@@ -22,6 +22,7 @@
               v-model="domainSuffix"
               type="text"
               class="ui-input w-full px-3 py-2 text-sm"
+              :aria-label="t('adminConsole.suffixOptional')"
               :placeholder="`${t('adminConsole.suffixOptional')} (${inferredDomainSuffix})`"
             />
             <div class="grid grid-cols-2 gap-2">
@@ -82,6 +83,7 @@
         <button
           class="ui-pill-nav text-xs"
           :class="activeAdminView === 'operations' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          :aria-pressed="activeAdminView === 'operations'"
           @click="selectAdminView('operations')"
         >
           {{ t("adminConsole.provisioningOperations") }}
@@ -89,6 +91,7 @@
         <button
           class="ui-pill-nav text-xs"
           :class="activeAdminView === 'tenants' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          :aria-pressed="activeAdminView === 'tenants'"
           @click="selectAdminView('tenants')"
         >
           {{ t("adminConsole.tenantLifecycleControls") }}
@@ -96,6 +99,7 @@
         <button
           class="ui-pill-nav text-xs"
           :class="activeAdminView === 'monitoring' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          :aria-pressed="activeAdminView === 'monitoring'"
           @click="selectAdminView('monitoring')"
         >
           {{ t("adminConsole.reservationFollowUpSla") }}
@@ -103,6 +107,7 @@
         <button
           class="ui-pill-nav text-xs"
           :class="activeAdminView === 'plans' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : ''"
+          :aria-pressed="activeAdminView === 'plans'"
           @click="selectAdminView('plans')"
         >
           {{ t("adminConsole.planFeatureFlags") }}
@@ -114,6 +119,7 @@
       <button
         class="ui-segmented-button"
         :data-active="activeAdminView === 'operations'"
+        :aria-pressed="activeAdminView === 'operations'"
         @click="selectAdminView('operations')"
       >
         {{ t("adminConsole.provisioningOperations") }}
@@ -121,6 +127,7 @@
       <button
         class="ui-segmented-button"
         :data-active="activeAdminView === 'tenants'"
+        :aria-pressed="activeAdminView === 'tenants'"
         @click="selectAdminView('tenants')"
       >
         {{ t("adminConsole.tenantLifecycleControls") }}
@@ -128,6 +135,7 @@
       <button
         class="ui-segmented-button"
         :data-active="activeAdminView === 'monitoring'"
+        :aria-pressed="activeAdminView === 'monitoring'"
         @click="selectAdminView('monitoring')"
       >
         {{ t("adminConsole.reservationFollowUpSla") }}
@@ -135,6 +143,7 @@
       <button
         class="ui-segmented-button"
         :data-active="activeAdminView === 'plans'"
+        :aria-pressed="activeAdminView === 'plans'"
         @click="selectAdminView('plans')"
       >
         {{ t("adminConsole.planFeatureFlags") }}

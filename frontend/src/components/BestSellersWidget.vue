@@ -12,11 +12,13 @@
         <button
           class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
           :class="mode === 'count' ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
+          :aria-pressed="mode === 'count'"
           @click="mode = 'count'"
         >{{ t('bestSellers.byOrders') }}</button>
         <button
           class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
           :class="mode === 'revenue' ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
+          :aria-pressed="mode === 'revenue'"
           @click="mode = 'revenue'"
         >{{ t('bestSellers.byRevenue') }}</button>
       </div>

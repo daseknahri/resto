@@ -49,7 +49,14 @@
                 {{ u.current }} / {{ u.limit }}
               </span>
             </div>
-            <div class="h-1.5 w-full rounded-full bg-slate-800">
+            <div
+              class="h-1.5 w-full rounded-full bg-slate-800"
+              role="progressbar"
+              :aria-valuenow="u.current"
+              :aria-valuemin="0"
+              :aria-valuemax="u.limit"
+              :aria-label="u.label"
+            >
               <div
                 class="h-1.5 rounded-full transition-all duration-500"
                 :class="u.pct >= 100 ? 'bg-red-500' : u.pct >= 80 ? 'bg-amber-400' : 'bg-emerald-500/80'"
@@ -114,6 +121,7 @@
             ? 'border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/6'
             : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-900/80'"
           :disabled="!target.can_request || hasPendingRequest"
+          :aria-pressed="selectedCode === target.code"
           @click="selectedCode === target.code ? (selectedCode = '') : (selectedCode = target.code)"
         >
           <!-- Selected badge -->

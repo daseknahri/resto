@@ -1,6 +1,6 @@
 <template>
   <section class="space-y-8 px-4 py-8 md:space-y-10 md:py-12">
-    <div v-if="leadSuccess" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-100">
+    <div v-if="leadSuccess" role="status" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-100">
       <span>{{ t("home.leadSuccess") }}</span>
       <button class="text-sm underline" @click="dismiss">{{ t("home.dismiss") }}</button>
     </div>
