@@ -24,7 +24,7 @@
           <p class="text-xs text-slate-200">{{ t("categoryCard.openCategory") }}</p>
         </div>
         <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-900 font-semibold transition-transform group-hover:translate-x-0.5">
-          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M5 12h14M13 5l7 7-7 7" />
           </svg>
           <span class="sr-only">{{ t("categoryCard.go") }}</span>

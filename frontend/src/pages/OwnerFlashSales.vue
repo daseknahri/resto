@@ -8,7 +8,7 @@
         <h1 class="text-2xl font-bold text-white">{{ t('ownerFlashSales.title') }}</h1>
         <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
       </div>
-      <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <svg v-if="updating" aria-hidden="true" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
       </svg>
     </div>
@@ -32,7 +32,7 @@
 
     <!-- Error -->
     <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
-      <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
       </svg>
       <p class="flex-1 text-sm text-red-300">{{ t('ownerFlashSales.fetchError') }}</p>
