@@ -594,7 +594,7 @@
               <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ voucherError }}</p>
             </div>
-            <p v-if="voucherSuccess" class="text-xs text-emerald-300">{{ voucherSuccess }}</p>
+            <p v-if="voucherSuccess" role="status" class="text-xs text-emerald-300">{{ voucherSuccess }}</p>
           </div>
 
           <!-- Transactions -->
@@ -691,7 +691,7 @@
                   <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                   <p class="flex-1 text-sm text-red-300">{{ redeemError }}</p>
                 </div>
-                <p v-if="redeemSuccess" class="text-xs text-emerald-300">{{ redeemSuccess }}</p>
+                <p v-if="redeemSuccess" role="status" class="text-xs text-emerald-300">{{ redeemSuccess }}</p>
               </template>
               <p v-else class="text-xs text-slate-500">{{ t('customerAccount.loyaltyNotActive') }}</p>
             </div>
@@ -961,7 +961,7 @@
                     <button class="text-xs text-slate-500 transition hover:text-slate-300" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
                   </template>
                 </div>
-                <p v-if="emailError" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
+                <p v-if="emailError" role="alert" class="mt-1 text-xs text-red-300">{{ emailError }}</p>
               </div>
             </div>
           </div>
@@ -1014,6 +1014,7 @@
                 <button
                   v-for="lang in [{ code: 'en', label: 'English' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' }]"
                   :key="lang.code"
+                  :aria-pressed="selectedLocale === lang.code"
                   class="rounded-full border px-3 py-1 text-xs transition-colors"
                   :class="selectedLocale === lang.code
                     ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
@@ -1035,6 +1036,7 @@
                 <button
                   v-for="r in currencyStore.available"
                   :key="r.code"
+                  :aria-pressed="currencyStore.selected === r.code"
                   class="rounded-full border px-3 py-1 text-xs transition-colors"
                   :class="currencyStore.selected === r.code
                     ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'

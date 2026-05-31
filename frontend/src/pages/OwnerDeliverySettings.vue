@@ -7,7 +7,7 @@
         <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerDelivery.title') }}</h1>
         <p class="text-sm text-slate-400">{{ t('ownerDelivery.subtitle') }}</p>
       </div>
-      <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <svg v-if="updating" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
       </svg>
     </div>

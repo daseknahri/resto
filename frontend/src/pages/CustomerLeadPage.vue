@@ -308,7 +308,7 @@
                 <p class="flex-1 text-sm text-red-300">{{ lead.error }}</p>
               </div>
             </div>
-            <div v-if="lead.success" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            <div v-if="lead.success" role="status" class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
               {{ t("customerLeadPage.leadSuccess") }}
             </div>
           </form>

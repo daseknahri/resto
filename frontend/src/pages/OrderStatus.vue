@@ -159,7 +159,14 @@
           </div>
         </div>
         <!-- Progress bar -->
-        <div class="mt-3 h-1.5 w-full rounded-full bg-slate-800">
+        <div
+          class="mt-3 h-1.5 w-full rounded-full bg-slate-800"
+          role="progressbar"
+          :aria-valuenow="progressPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="statusLabel(orderData?.status)"
+        >
           <div
             class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-500"
             :style="{ width: `${progressPercent}%` }"

@@ -8,7 +8,7 @@
         <p class="text-sm text-slate-400">{{ t('ownerPromotions.subtitle') }}</p>
       </div>
       <div class="flex items-center gap-2">
-        <svg v-if="updating" class="h-4 w-4 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <svg v-if="updating" class="h-4 w-4 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
         </svg>
         <button class="ui-btn-primary" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
@@ -127,9 +127,10 @@
             </h2>
             <button
               class="rounded-lg border border-slate-700/50 bg-slate-800/50 p-1.5 text-slate-400 hover:border-slate-600 hover:text-white transition-colors"
+              :aria-label="t('common.close')"
               @click="drawerOpen = false"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4" aria-hidden="true">
                 <path d="M6 6l12 12M18 6 6 18" />
               </svg>
             </button>
@@ -174,6 +175,7 @@
                 v-for="opt in promoTypes"
                 :key="opt.value"
                 type="button"
+                :aria-pressed="form.promo_type === opt.value"
                 class="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
                 :class="form.promo_type === opt.value
                   ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
