@@ -10,6 +10,7 @@
             v-model="newDate"
             type="date"
             :min="todayStr"
+            :aria-label="t('closureDates.date')"
             class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
           />
         </div>
@@ -20,6 +21,7 @@
             type="text"
             maxlength="100"
             :placeholder="t('closureDates.labelPlaceholder')"
+            :aria-label="t('closureDates.labelOptional')"
             class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
             @keyup.enter="addDate"
           />

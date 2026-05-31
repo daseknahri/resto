@@ -83,6 +83,7 @@
           <input
             v-model="shiftSinceInput"
             type="datetime-local"
+            :aria-label="t('waiterPage.shiftSince')"
             class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-violet-500 focus:outline-none"
           />
         </div>

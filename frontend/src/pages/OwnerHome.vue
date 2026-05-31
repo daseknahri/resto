@@ -197,6 +197,7 @@
                   :value="dish.stock_qty ?? ''"
                   :placeholder="t('ownerHome.stockUnlimited')"
                   :disabled="settingStockId === dish.id"
+                  :aria-label="t('ownerHome.stockLabel')"
                   class="w-14 rounded-lg border border-slate-700 bg-slate-900/80 px-1.5 py-0.5 text-center text-[10px] text-slate-200 placeholder-slate-600 focus:border-slate-500 focus:outline-none disabled:opacity-40"
                   :class="dish.stock_qty === 0 ? 'border-red-500/50 text-red-300' : dish.stock_qty !== null ? 'border-amber-500/30 text-amber-200' : ''"
                   @change="setDishStock(dish, $event.target.value)"

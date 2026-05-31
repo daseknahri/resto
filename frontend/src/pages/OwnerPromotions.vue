@@ -143,6 +143,7 @@
               v-model="form.name"
               type="text"
               :placeholder="t('ownerPromotions.namePlaceholder')"
+              :aria-label="t('ownerPromotions.nameLabel')"
               class="ui-input w-full"
             />
           </div>
@@ -150,7 +151,7 @@
           <!-- Description -->
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
-            <input v-model="form.description" type="text" class="ui-input w-full" />
+            <input v-model="form.description" type="text" class="ui-input w-full" :aria-label="t('ownerPromotions.descriptionLabel')" />
           </div>
 
           <!-- Promo code -->
@@ -162,6 +163,7 @@
               maxlength="20"
               class="ui-input w-full uppercase"
               :placeholder="t('ownerPromotions.codePlaceholder')"
+              :aria-label="t('ownerPromotions.codeLabel')"
               @input="form.code = form.code.toUpperCase()"
             />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.codeHint') }}</p>
@@ -191,14 +193,14 @@
               {{ t('ownerPromotions.discountValueLabel') }}
               <span class="text-slate-500 font-normal ml-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
             </label>
-            <input v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" />
+            <input v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" :aria-label="t('ownerPromotions.discountValueLabel')" />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.discountValueHint') }}</p>
           </div>
 
           <!-- Min order -->
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
-            <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" />
+            <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" :aria-label="t('ownerPromotions.minOrderLabel')" />
           </div>
 
           <!-- Days checkboxes -->
@@ -224,9 +226,9 @@
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</label>
             <div class="flex items-center gap-2">
-              <input v-model="form.time_start" type="time" class="ui-input flex-1" />
+              <input v-model="form.time_start" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeStart')" />
               <span class="text-slate-500">—</span>
-              <input v-model="form.time_end" type="time" class="ui-input flex-1" />
+              <input v-model="form.time_end" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeEnd')" />
             </div>
           </div>
 
@@ -234,16 +236,16 @@
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</label>
             <div class="flex items-center gap-2">
-              <input v-model="form.active_from" type="date" class="ui-input flex-1" />
+              <input v-model="form.active_from" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateFrom')" />
               <span class="text-slate-500">—</span>
-              <input v-model="form.active_until" type="date" class="ui-input flex-1" />
+              <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" />
             </div>
           </div>
 
           <!-- Max uses -->
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
-            <input v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" />
+            <input v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" :aria-label="t('ownerPromotions.maxUsesLabel')" />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.maxUsesHint') }}</p>
           </div>
 

@@ -678,6 +678,7 @@
                       :min="loyaltyConfig.redeem_threshold"
                       :max="loyaltyPoints"
                       :step="loyaltyConfig.redeem_threshold"
+                      :aria-label="t('customerAccount.loyaltyRedeemLabel')"
                       class="ui-input w-24 text-sm"
                     />
                   </div>
