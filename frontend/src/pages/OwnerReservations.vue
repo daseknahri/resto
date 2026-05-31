@@ -556,6 +556,7 @@
           v-model="waitlistDate"
           type="date"
           class="ui-input text-sm"
+          :aria-label="t('ownerReservations.waitlistDate')"
           @change="fetchWaitlist"
         />
       </div>

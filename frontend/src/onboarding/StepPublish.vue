@@ -166,6 +166,7 @@
               type="number"
               min="0"
               max="168"
+              :aria-label="t('stepPublish.autoConfirmMinHours')"
               class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursUnit") }}</span>
@@ -208,6 +209,7 @@
                     type="number"
                     min="0"
                     step="0.01"
+                    :aria-label="t('stepPublish.deliveryFee')"
                     class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
@@ -222,6 +224,7 @@
                     type="number"
                     min="0"
                     step="0.01"
+                    :aria-label="t('stepPublish.deliveryMinimumOrder')"
                     class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
@@ -235,6 +238,7 @@
                 v-model="form.delivery_zone_description"
                 type="text"
                 maxlength="200"
+                :aria-label="t('stepPublish.deliveryZoneDescription')"
                 :placeholder="t('stepPublish.deliveryZoneDescriptionPlaceholder')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
               />
@@ -259,6 +263,7 @@
                 type="number"
                 min="0"
                 step="1"
+                :aria-label="t('stepPublish.maxCoversPerSlot')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
               />
             </div>
@@ -315,6 +320,7 @@
                 v-model="form.cuisine_type"
                 type="text"
                 maxlength="60"
+                :aria-label="t('stepPublish.cuisineType')"
                 :placeholder="t('stepPublish.cuisineTypePlaceholder')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
               />
@@ -325,6 +331,7 @@
                 v-model="form.city"
                 type="text"
                 maxlength="80"
+                :aria-label="t('stepPublish.cityLabel')"
                 :placeholder="t('stepPublish.cityPlaceholder')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
               />
@@ -395,6 +402,7 @@
                   v-model.number="form.lat"
                   type="number"
                   step="0.0001"
+                  :aria-label="t('stepPublish.latLabel')"
                   placeholder="e.g. 48.8566"
                   class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
                 />
@@ -405,6 +413,7 @@
                   v-model.number="form.lng"
                   type="number"
                   step="0.0001"
+                  :aria-label="t('stepPublish.lngLabel')"
                   placeholder="e.g. 2.3522"
                   class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
                 />

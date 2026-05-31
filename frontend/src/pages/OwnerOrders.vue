@@ -369,6 +369,7 @@
                   v-model="ratingNote"
                   type="text"
                   class="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 placeholder-slate-500 focus:outline-none text-[11px]"
+                  :aria-label="t('ownerOrders.djRatingNotePlaceholder')"
                   :placeholder="t('ownerOrders.djRatingNotePlaceholder')"
                 />
                 <div class="flex gap-2">

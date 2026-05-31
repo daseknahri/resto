@@ -255,6 +255,7 @@
                   type="text"
                   :value="localizedFieldValue(editingRow, 'description', fieldLocales.description)"
                   class="ui-input"
+                  :aria-label="t('stepSuperCategories.descriptionLabel')"
                   :placeholder="t('stepSuperCategories.descriptionPlaceholder')"
                   maxlength="280"
                   @input="setLocalizedFieldValue(editingRow, 'description', fieldLocales.description, $event.target.value)"
@@ -269,6 +270,7 @@
                   v-model.trim="editingRow.image_url"
                   class="ui-input"
                   type="url"
+                  :aria-label="t('stepSuperCategories.imageUrlLabel')"
                   :placeholder="t('stepSuperCategories.imageUrlPlaceholder')"
                 />
                 <p class="text-[11px] text-slate-500">{{ t("stepSuperCategories.imageUrlHint") }}</p>
