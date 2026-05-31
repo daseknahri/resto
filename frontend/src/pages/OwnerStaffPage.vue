@@ -7,7 +7,7 @@
         <h2 class="text-xl font-bold text-white">{{ t("ownerStaff.title") }}</h2>
         <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
       </div>
-      <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
       </svg>
     </div>
@@ -51,6 +51,7 @@
     <!-- Created credentials (shown once) -->
     <div
       v-if="newCredentials"
+      role="status"
       class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-5 space-y-3"
     >
       <p class="text-sm font-semibold text-emerald-300">{{ t("ownerStaff.credentialsTitle") }}</p>

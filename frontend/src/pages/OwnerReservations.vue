@@ -18,11 +18,13 @@
           <div class="col-span-2 flex rounded-xl border border-slate-700 overflow-hidden sm:col-span-1">
             <button
               class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              :aria-pressed="viewMode === 'list'"
               :class="viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
               @click="viewMode = 'list'"
             >{{ t("ownerReservations.viewList") }}</button>
             <button
               class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              :aria-pressed="viewMode === 'calendar'"
               :class="viewMode === 'calendar' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
               @click="viewMode = 'calendar'"
             >{{ t("ownerReservations.viewCalendar") }}</button>

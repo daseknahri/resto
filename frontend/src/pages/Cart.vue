@@ -172,6 +172,7 @@
               <!-- Pickup pill -->
               <button
                 class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                :aria-pressed="fulfillmentType === 'pickup'"
                 :class="fulfillmentType === 'pickup'
                   ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
@@ -185,6 +186,7 @@
               <button
                 v-if="deliveryEnabled"
                 class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                :aria-pressed="fulfillmentType === 'delivery'"
                 :class="fulfillmentType === 'delivery'
                   ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
