@@ -1,22 +1,53 @@
 <template>
+  <!-- Global offline banner -->
+  <Transition name="offline-slide">
+    <div
+      v-if="isOffline"
+      role="status"
+      aria-live="assertive"
+      aria-atomic="true"
+      class="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-2 bg-slate-950 px-4 py-2 text-xs font-medium text-amber-300 shadow-lg"
+    >
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-amber-400">
+        <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+      </svg>
+      {{ t('common.offlineBanner') }}
+    </div>
+  </Transition>
   <RouterView />
   <ToastHost />
 </template>
 
 <script setup>
-import { onMounted, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useTenantStore } from "./stores/tenant";
 import { useLocaleStore } from "./stores/locale";
 import { useThemeStore } from "./stores/theme";
 import { useSessionStore } from "./stores/session";
 import { useSeoMeta } from "./composables/useSeoMeta";
+import { useI18n } from "./composables/useI18n";
 import {
   hasPublicDemoTenant,
   isPlatformAdminHost,
   isPublicDemoHost,
 } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
+
+const { t } = useI18n();
+
+// ── Offline detection ────────────────────────────────────────────────────────
+const isOffline = ref(typeof navigator !== "undefined" ? !navigator.onLine : false);
+const handleOnline = () => { isOffline.value = false; };
+const handleOffline = () => { isOffline.value = true; };
+onMounted(() => {
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
+});
+onUnmounted(() => {
+  window.removeEventListener("online", handleOnline);
+  window.removeEventListener("offline", handleOffline);
+});
 
 const tenant = useTenantStore();
 const locale = useLocaleStore();

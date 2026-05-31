@@ -329,6 +329,7 @@
                   rows="2"
                   maxlength="180"
                   class="ui-textarea"
+                  autocomplete="street-address"
                   :placeholder="t('cartPage.deliveryAddressPlaceholder')"
                   :aria-invalid="fieldErrors.delivery_address ? 'true' : undefined"
                   aria-describedby="cart-address-error"

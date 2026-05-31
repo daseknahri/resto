@@ -2388,3 +2388,9 @@ html[data-menu-theme="warm"]  .border-amber-500\/20 { border-color: rgba(217,119
 html[data-menu-theme="light"] .border-amber-500\/25 { border-color: rgba(217,119,6,0.32); }
 html[data-menu-theme="warm"]  .border-amber-500\/25 { border-color: rgba(217,119,6,0.32); }
 
+/* ── Offline banner slide transition ──────────────────────────────────────── */
+.offline-slide-enter-active,
+.offline-slide-leave-active { transition: transform 220ms ease, opacity 220ms ease; }
+.offline-slide-enter-from,
+.offline-slide-leave-to   { transform: translateY(-100%); opacity: 0; }
+

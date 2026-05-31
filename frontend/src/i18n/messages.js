@@ -70,7 +70,9 @@ export const messages = {
       decreaseQty: "Decrease quantity",
       increaseQty: "Increase quantity",
       rateNStars: "Rate {n} out of 5",
-      skipToMain: "Skip to main content"
+      skipToMain: "Skip to main content",
+      offlineBanner: "No internet connection — changes may not save",
+      offlineBackOnline: "Back online"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -2906,7 +2908,9 @@ export const messages = {
       decreaseQty: "Diminuer la quantite",
       increaseQty: "Augmenter la quantite",
       rateNStars: "Noter {n} sur 5",
-      skipToMain: "Aller au contenu principal"
+      skipToMain: "Aller au contenu principal",
+      offlineBanner: "Pas de connexion — les modifications peuvent ne pas etre enregistrees",
+      offlineBackOnline: "Connexion retablie"
     },
     landingLayout: {
       kicker: "Resto Menu",

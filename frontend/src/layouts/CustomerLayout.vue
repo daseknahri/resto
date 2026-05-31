@@ -45,11 +45,20 @@
                 type="button"
                 @click="pwaInstall"
               >⬇ {{ t('customerLayout.installApp') }}</button>
-              <RouterLink to="/cart" :aria-label="t('customerLayout.viewCart')" class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm">
+              <!-- sr-only live region announces cart count changes to screen readers -->
+              <span class="sr-only" aria-live="polite" aria-atomic="true">
+                {{ cart.count ? t('customerLayout.cartItems', { count: cart.count }) : '' }}
+              </span>
+              <RouterLink
+                to="/cart"
+                :aria-label="cart.count ? `${t('customerLayout.viewCart')} (${t('customerLayout.cartItems', { count: cart.count })})` : t('customerLayout.viewCart')"
+                class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm"
+              >
                 <AppIcon name="cart" class="h-4 w-4 sm:hidden" aria-hidden="true" />
                 <span class="hidden sm:inline" aria-hidden="true">{{ t("common.cart") }}</span>
                 <span
-                  v-if="cart.count"
+                  v-show="cart.count"
+                  aria-hidden="true"
                   class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
                 >
                   {{ cart.count }}

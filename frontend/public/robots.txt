@@ -1,0 +1,31 @@
+User-agent: *
+
+# Public customer and discovery pages
+Allow: /$
+Allow: /browse/
+Allow: /m/
+Allow: /reserve
+Allow: /find-my-order
+Allow: /orders/
+Allow: /order/
+Allow: /directory
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+
+# Owner, admin, auth, and personal pages — no indexing
+Disallow: /owner/
+Disallow: /waiter/
+Disallow: /admin-console
+Disallow: /admin-delivery-zones
+Disallow: /admin-drivers
+Disallow: /admin-analytics
+Disallow: /admin-wallets
+Disallow: /signin
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /activate
+Disallow: /unauthorized
+Disallow: /cart
+Disallow: /account
+Disallow: /onboarding
