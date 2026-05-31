@@ -1,5 +1,6 @@
 <template>
   <div class="ui-shell">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <header class="ui-header relative z-[100] static md:sticky md:top-0 md:z-[100]">
       <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
         <div class="ui-workspace-stage overflow-visible px-2.5 py-2 sm:px-3.5 sm:py-2.5">
@@ -108,7 +109,7 @@
       </div>
     </div>
 
-    <main class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
+    <main id="main-content" class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">

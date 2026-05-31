@@ -1,5 +1,6 @@
 <template>
   <div class="ui-shell">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <!-- Sticky top bar -->
     <header class="sticky top-0 z-[2000] border-b border-slate-700/60 bg-slate-900/95 backdrop-blur-sm">
       <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-3 py-2.5">
@@ -58,7 +59,7 @@
     </header>
 
     <!-- Page content -->
-    <main class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
+    <main id="main-content" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
       <RouterView />
     </main>
   </div>

@@ -1,5 +1,6 @@
 <template>
   <div class="ui-shell">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div class="absolute -left-32 -top-20 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl"></div>
       <div class="absolute -right-20 top-10 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl"></div>
@@ -69,7 +70,7 @@
       </div>
     </nav>
 
-    <main class="mx-auto w-full max-w-6xl ui-fade-up">
+    <main id="main-content" class="mx-auto w-full max-w-6xl ui-fade-up">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">
