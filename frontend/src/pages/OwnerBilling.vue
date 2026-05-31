@@ -25,10 +25,10 @@
                 :key="f.label"
                 class="flex items-center gap-2 text-sm"
               >
-                <svg v-if="f.ok" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-if="f.ok" aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M3 8l4 4 6-7"/>
                 </svg>
-                <svg v-else viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M4 12l8-8M12 12L4 4"/>
                 </svg>
                 <span :class="f.ok ? 'text-slate-200' : 'text-slate-500'">{{ f.label }}</span>
@@ -74,7 +74,7 @@
         v-if="hasPendingRequest"
         class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3"
       >
-        <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor">
           <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
         </svg>
         <p class="text-sm text-amber-200">{{ t('ownerBilling.pendingRequestNote') }}</p>
@@ -129,7 +129,7 @@
             v-if="selectedCode === target.code"
             class="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
           >
-            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
+            <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
               <path d="M2 6l3 3 5-5"/>
             </svg>
           </div>
@@ -154,10 +154,10 @@
                 :key="f.label"
                 class="flex items-center gap-2.5 text-xs"
               >
-                <svg v-if="f.ok" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-if="f.ok" aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M3 8l4 4 6-7"/>
                 </svg>
-                <svg v-else viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M4 12l8-8M12 12L4 4"/>
                 </svg>
                 <span :class="f.ok ? 'text-slate-200' : 'text-slate-600'">{{ f.label }}</span>
@@ -188,7 +188,7 @@
               class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
             />
             <div v-if="submitError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
             </div>
             <div class="flex flex-wrap gap-3">
@@ -225,7 +225,7 @@
           :aria-label="t('common.refresh')"
           @click="fetchAll(true)"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" :class="(loading || updating) ? 'animate-spin' : ''">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" :class="(loading || updating) ? 'animate-spin' : ''">
             <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
           </svg>
         </button>
@@ -247,7 +247,7 @@
         v-else-if="!requests.length"
         class="rounded-2xl border border-dashed border-slate-700 py-10 text-center"
       >
-        <svg viewBox="0 0 40 40" class="mx-auto h-10 w-10 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.25">
+        <svg aria-hidden="true" viewBox="0 0 40 40" class="mx-auto h-10 w-10 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.25">
           <rect x="8" y="6" width="24" height="28" rx="3"/>
           <path d="M14 14h12M14 19h12M14 24h8" stroke-linecap="round"/>
         </svg>
@@ -264,7 +264,7 @@
             <div class="space-y-1.5">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-medium text-slate-200">{{ req.current_plan_name }}</span>
-                <svg viewBox="0 0 20 12" class="h-3 w-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <svg aria-hidden="true" viewBox="0 0 20 12" class="h-3 w-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M1 6h18M13 1l5 5-5 5"/>
                 </svg>
                 <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ req.target_plan_name }}</span>
@@ -284,7 +284,7 @@
           </div>
           <!-- Admin note -->
           <div v-if="req.admin_note" class="mt-2 flex items-start gap-2 rounded-lg border border-slate-700/60 bg-slate-950/50 px-3 py-2 text-xs">
-            <svg viewBox="0 0 16 16" class="mt-0.5 h-3 w-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg aria-hidden="true" viewBox="0 0 16 16" class="mt-0.5 h-3 w-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5">
               <rect x="2" y="2" width="12" height="12" rx="2"/>
               <path d="M5 6h6M5 9h4" stroke-linecap="round"/>
             </svg>
@@ -298,11 +298,11 @@
               :disabled="downloadingInvoice === req.id"
               @click="downloadInvoice(req.id)"
             >
-              <svg v-if="downloadingInvoice !== req.id" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+              <svg v-if="downloadingInvoice !== req.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
                 <path d="M8 3v7M5 7l3 3 3-3"/>
                 <path d="M3 13h10"/>
               </svg>
-              <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin">
+              <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin">
                 <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
               </svg>
               {{ downloadingInvoice === req.id ? t('ownerBilling.invoiceDownloading') : t('ownerBilling.invoiceDownload') }}
@@ -326,11 +326,11 @@
         :disabled="exporting"
         @click="downloadDataExport"
       >
-        <svg v-if="!exporting" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+        <svg v-if="!exporting" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
           <path d="M10 3v10M6 9l4 4 4-4"/>
           <path d="M4 17h12"/>
         </svg>
-        <svg v-else viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin">
+        <svg v-else aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin">
           <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
         </svg>
         {{ exporting ? t('ownerBilling.dataExporting') : t('ownerBilling.dataExportButton') }}
@@ -362,11 +362,11 @@
           :disabled="commissionDownloading"
           @click="downloadCommissionPdf"
         >
-          <svg v-if="!commissionDownloading" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+          <svg v-if="!commissionDownloading" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
             <path d="M10 3v10M6 9l4 4 4-4"/>
             <path d="M4 17h12"/>
           </svg>
-          <svg v-else viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin">
+          <svg v-else aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin">
             <path d="M4 10a6 6 0 1 0 1.5-4M4 6v4h4"/>
           </svg>
           {{ commissionDownloading ? t('ownerBilling.commissionDownloading') : t('ownerBilling.commissionDownload') }}
