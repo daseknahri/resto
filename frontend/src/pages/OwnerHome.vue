@@ -702,7 +702,7 @@
           class="ui-btn-outline px-3 py-1.5 text-xs"
         >
           {{ t("ownerBilling.manageBilling") }}
-          <svg viewBox="0 0 16 16" class="ml-1 inline h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" viewBox="0 0 16 16" class="ml-1 inline h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 8h10M9 4l4 4-4 4"/>
           </svg>
         </RouterLink>
