@@ -55,9 +55,11 @@
               :class="errors.name ? 'border-red-400' : 'border-slate-700'"
               required
               autocomplete="name"
+              :aria-invalid="errors.name ? 'true' : undefined"
+              aria-describedby="lead-capture-name-error"
               @input="clearError('name')"
             />
-            <p v-if="errors.name" class="text-xs text-red-300">{{ errors.name }}</p>
+            <p v-if="errors.name" id="lead-capture-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("common.email") }}
@@ -69,9 +71,11 @@
               autocomplete="email"
               inputmode="email"
               spellcheck="false"
+              :aria-invalid="errors.email ? 'true' : undefined"
+              aria-describedby="lead-capture-email-error"
               @input="clearError('email')"
             />
-            <p v-if="errors.email" class="text-xs text-red-300">{{ errors.email }}</p>
+            <p v-if="errors.email" id="lead-capture-email-error" class="text-xs text-red-300">{{ errors.email }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("leadCapture.phoneWhatsapp") }}
@@ -83,9 +87,11 @@
               placeholder="+212..."
               autocomplete="tel"
               inputmode="tel"
+              :aria-invalid="errors.phone ? 'true' : undefined"
+              aria-describedby="lead-capture-phone-error"
               @input="clearError('phone')"
             />
-            <p v-if="errors.phone" class="text-xs text-red-300">{{ errors.phone }}</p>
+            <p v-if="errors.phone" id="lead-capture-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("common.plan") }}
@@ -93,13 +99,15 @@
               v-model="form.plan_code"
               class="ui-input"
               :class="errors.plan_code ? 'border-red-400' : 'border-slate-700'"
+              :aria-invalid="errors.plan_code ? 'true' : undefined"
+              aria-describedby="lead-capture-plan-error"
               @change="clearError('plan_code')"
             >
               <option value="basic">{{ t("leadCapture.basicOption") }}</option>
               <option value="growth">{{ t("leadCapture.growthOption") }}</option>
               <option value="pro">{{ t("leadCapture.proOption") }}</option>
             </select>
-            <p v-if="errors.plan_code" class="text-xs text-red-300">{{ errors.plan_code }}</p>
+            <p v-if="errors.plan_code" id="lead-capture-plan-error" class="text-xs text-red-300">{{ errors.plan_code }}</p>
           </label>
         </div>
 
