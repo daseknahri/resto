@@ -14,7 +14,9 @@
       {{ t('common.offlineBanner') }}
     </div>
   </Transition>
-  <RouterView />
+  <ErrorBoundary>
+    <RouterView />
+  </ErrorBoundary>
   <ToastHost />
   <ConfirmModal />
 </template>
@@ -35,6 +37,7 @@ import {
 } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
+import ErrorBoundary from "./components/ErrorBoundary.vue";
 
 const { t } = useI18n();
 

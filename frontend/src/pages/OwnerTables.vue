@@ -180,6 +180,7 @@
             :alt="t('ownerTables.qrAlt', { label: table.label })"
             class="h-36 w-36 sm:h-40 sm:w-40"
             loading="lazy"
+            decoding="async"
           />
           <div
             v-else

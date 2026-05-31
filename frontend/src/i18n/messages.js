@@ -79,6 +79,12 @@ export const messages = {
       defaultBody: "This action cannot be undone.",
       confirmBtn: "Delete"
     },
+    errorBoundary: {
+      title: "Something went wrong",
+      body: "An unexpected error occurred. Reload the page to continue — your data is safe.",
+      reload: "Reload page",
+      goHome: "Go home"
+    },
     landingLayout: {
       kicker: "Resto Menu",
       title: "Restaurant SaaS",
@@ -1355,6 +1361,7 @@ export const messages = {
       resumedFromStep: "Resumed from your last session at step {current}.",
       startFromStepOne: "Start from step 1",
       footerHint: "Use each step actions to continue. Validation runs before moving to next step.",
+      leaveConfirm: "You have unsaved changes in the setup wizard. Leave anyway?",
       steps: {
         brandContact: {
           title: "Brand & Contact",
@@ -2926,6 +2933,12 @@ export const messages = {
       defaultBody: "Cette action est irreversible.",
       confirmBtn: "Supprimer"
     },
+    errorBoundary: {
+      title: "Une erreur est survenue",
+      body: "Une erreur inattendue s'est produite. Rechargez la page pour continuer — vos donnees sont en securite.",
+      reload: "Recharger la page",
+      goHome: "Accueil"
+    },
     landingLayout: {
       kicker: "Resto Menu",
       title: "SaaS restaurant",
@@ -4172,6 +4185,7 @@ export const messages = {
       resumedFromStep: "Repris depuis votre derniere session a l'etape {current}.",
       startFromStepOne: "Recommencer a l'etape 1",
       footerHint: "Utilisez les actions de chaque etape pour continuer. La validation s'execute avant de passer a l'etape suivante.",
+      leaveConfirm: "Des modifications non enregistrees sont en cours dans le wizard. Quitter quand meme ?",
       steps: {
         brandContact: {
           title: "Marque et contact",

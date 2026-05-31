@@ -53,8 +53,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { steps } from "../onboarding/steps";
 import StepBrand from "./StepBrand.vue";
@@ -122,5 +122,22 @@ watch(current, persistStep);
 watch(stepStorageKey, () => {
   restoreStep();
   persistStep();
+});
+
+// ── Unsaved-changes guard ────────────────────────────────────────────────────
+// Warn before browser tab close / hard navigation.
+const beforeUnloadHandler = (e) => {
+  if (published.value) return; // wizard completed — no need to warn
+  e.preventDefault();
+  e.returnValue = ""; // required for Chrome
+};
+
+onMounted(() => window.addEventListener("beforeunload", beforeUnloadHandler));
+onUnmounted(() => window.removeEventListener("beforeunload", beforeUnloadHandler));
+
+// Warn before in-app (Vue Router) navigation away from the wizard.
+onBeforeRouteLeave(() => {
+  if (published.value) return true;
+  return window.confirm(t("onboardingWizard.leaveConfirm"));
 });
 </script>
