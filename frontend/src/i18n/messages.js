@@ -201,7 +201,8 @@ export const messages = {
       resetHere: "Reset it here",
       failed: "Sign in failed",
       identifierRequired: "Username or email is required",
-      passwordRequired: "Password is required"
+      passwordRequired: "Password is required",
+      sessionExpired: "Your session expired — please sign in again to continue."
     },
     unauthorized: {
       kicker: "Access control",
@@ -3039,7 +3040,8 @@ export const messages = {
       resetHere: "Reinitialiser ici",
       failed: "Connexion impossible",
       identifierRequired: "Nom d'utilisateur ou e-mail requis",
-      passwordRequired: "Mot de passe requis"
+      passwordRequired: "Mot de passe requis",
+      sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer."
     },
     unauthorized: {
       kicker: "Controle d acces",

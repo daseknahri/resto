@@ -156,7 +156,8 @@ api.interceptors.response.use(
       const isAuthEndpoint = authPaths.some((p) => url.includes(p));
       if (!isAuthEndpoint) {
         const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.location.href = `/signin?next=${next}`;
+        // `expired=1` lets SignIn.vue show "session expired" instead of the generic description
+        window.location.href = `/signin?next=${next}&expired=1`;
         // Return a never-resolving promise so callers don't see a spurious rejection
         return new Promise(() => {});
       }

@@ -44,6 +44,16 @@
           <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
         </div>
 
+        <!-- Session-expired notice (shown when redirected from a 401) -->
+        <div
+          v-if="sessionExpired"
+          role="alert"
+          class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V5.75A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+          <p class="flex-1 text-sm text-amber-300">{{ t("signIn.sessionExpired") }}</p>
+        </div>
+
         <form class="space-y-4" novalidate @submit.prevent="submit">
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("signIn.identifier") }}
@@ -115,6 +125,9 @@ const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 const { t } = useI18n();
+
+// Show an amber notice when api.js redirected here after a 401 (session expired)
+const sessionExpired = computed(() => route.query.expired === "1");
 
 const identifier = ref("");
 const password = ref("");

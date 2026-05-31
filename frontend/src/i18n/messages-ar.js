@@ -190,7 +190,8 @@ const arabicMessages = {
     "resetHere": "أعد تعيينها هنا",
     "failed": "فشل تسجيل الدخول",
     "identifierRequired": "اسم المستخدم أو البريد مطلوب",
-    "passwordRequired": "كلمة المرور مطلوبة"
+    "passwordRequired": "كلمة المرور مطلوبة",
+    "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة"
   },
   "forgotPassword": {
     "kicker": "استعادة الحساب",
