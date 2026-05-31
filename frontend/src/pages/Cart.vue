@@ -301,6 +301,8 @@
                       :class="waitingForPaste ? 'ring-2 ring-[var(--color-secondary)]/40' : ''"
                       inputmode="url"
                       placeholder="https://maps.google.com/..."
+                      :aria-invalid="fieldErrors.delivery_location_url ? 'true' : undefined"
+                      aria-describedby="cart-map-url-error"
                       @input="clearFieldError('delivery_location_url')"
                     />
                     <button
@@ -312,7 +314,7 @@
                       @click="pasteMapLink"
                     >{{ t('cartPage.pasteLink') }}</button>
                   </div>
-                  <p v-if="fieldErrors.delivery_location_url" class="text-xs text-red-300">{{ fieldErrors.delivery_location_url }}</p>
+                  <p v-if="fieldErrors.delivery_location_url" id="cart-map-url-error" class="text-xs text-red-300">{{ fieldErrors.delivery_location_url }}</p>
                 </div>
               </div>
 
@@ -327,9 +329,11 @@
                   maxlength="180"
                   class="ui-textarea"
                   :placeholder="t('cartPage.deliveryAddressPlaceholder')"
+                  :aria-invalid="fieldErrors.delivery_address ? 'true' : undefined"
+                  aria-describedby="cart-address-error"
                   @input="clearFieldError('delivery_address')"
                 ></textarea>
-                <p v-if="fieldErrors.delivery_address" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
+                <p v-if="fieldErrors.delivery_address" id="cart-address-error" class="text-xs text-red-300">{{ fieldErrors.delivery_address }}</p>
               </label>
 
               <!-- Save address -->
@@ -369,9 +373,11 @@
                       class="ui-input"
                       inputmode="decimal"
                       placeholder="33.5731"
+                      :aria-invalid="fieldErrors.delivery_lat ? 'true' : undefined"
+                      aria-describedby="cart-lat-error"
                       @input="clearFieldError('delivery_lat')"
                     />
-                    <p v-if="fieldErrors.delivery_lat" class="text-xs text-red-300">{{ fieldErrors.delivery_lat }}</p>
+                    <p v-if="fieldErrors.delivery_lat" id="cart-lat-error" class="text-xs text-red-300">{{ fieldErrors.delivery_lat }}</p>
                   </label>
                   <label class="block space-y-1">
                     <span class="text-[11px] text-slate-400">{{ t('cartPage.longitudeOptional') }}</span>
@@ -382,9 +388,11 @@
                       class="ui-input"
                       inputmode="decimal"
                       placeholder="-7.5898"
+                      :aria-invalid="fieldErrors.delivery_lng ? 'true' : undefined"
+                      aria-describedby="cart-lng-error"
                       @input="clearFieldError('delivery_lng')"
                     />
-                    <p v-if="fieldErrors.delivery_lng" class="text-xs text-red-300">{{ fieldErrors.delivery_lng }}</p>
+                    <p v-if="fieldErrors.delivery_lng" id="cart-lng-error" class="text-xs text-red-300">{{ fieldErrors.delivery_lng }}</p>
                   </label>
                 </div>
               </div>
@@ -478,6 +486,8 @@
                   maxlength="20"
                   class="ui-input flex-1 uppercase text-sm"
                   :placeholder="t('cartPage.promoPlaceholder')"
+                  :aria-invalid="promoError ? 'true' : undefined"
+                  aria-describedby="cart-promo-error"
                   @keyup.enter="applyPromoCode"
                   @input="promoCode = promoCode.toUpperCase(); promoError = ''"
                 />
@@ -487,7 +497,7 @@
                   @click="applyPromoCode"
                 >{{ promoChecking ? '…' : t('cartPage.promoApply') }}</button>
               </div>
-              <p v-if="promoError" class="mt-1 text-[10px] text-red-300">{{ promoError }}</p>
+              <p v-if="promoError" id="cart-promo-error" class="mt-1 text-[10px] text-red-300">{{ promoError }}</p>
             </template>
           </div>
 
