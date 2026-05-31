@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
     <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
       <div class="flex flex-wrap items-end justify-between gap-4">
@@ -49,6 +49,7 @@
           v-model.trim="searchQuery"
           type="search"
           class="ui-input"
+          enterkeyhint="search"
           :aria-label="t('ownerReservations.searchPlaceholder')"
           :placeholder="t('ownerReservations.searchPlaceholder')"
           @keyup.enter="applyFilters"
@@ -561,7 +562,7 @@
       </div>
 
       <!-- Error -->
-      <div v-else-if="waitlistError" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <div v-else-if="waitlistError" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
         <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
         </svg>

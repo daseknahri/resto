@@ -38,6 +38,7 @@
               v-model.trim="searchQuery"
               type="search"
               class="ui-input"
+              enterkeyhint="search"
               :placeholder="t('common.search')"
             />
           </label>

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr),340px]">
       <div class="space-y-3 sm:space-y-4">
@@ -195,7 +195,7 @@
               <AppIcon name="calendar" class="h-4 w-4" />
               {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
             </button>
-            <div v-if="lead.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+            <div v-if="lead.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
               <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ lead.error }}</p>
             </div>

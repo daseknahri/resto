@@ -17,7 +17,7 @@
           </div>
         </RouterLink>
 
-        <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex">
+        <nav class="hidden items-center gap-2 rounded-full border border-slate-800/80 bg-slate-950/65 px-2 py-1.5 shadow-lg shadow-black/20 lg:flex" :aria-label="t('landingLayout.navDesktop')">
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">{{ t("common.landing") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/demo" :data-active="$route.path === '/demo'" active-class="" exact-active-class="">{{ t("common.liveDemo") }}</RouterLink>
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/get-started" :data-active="$route.path === '/get-started'" active-class="" exact-active-class="">{{ t("common.getStarted") }}</RouterLink>
@@ -48,7 +48,7 @@
       <div class="ui-divider"></div>
     </header>
 
-    <nav class="ui-bottom-dock lg:hidden">
+    <nav class="ui-bottom-dock lg:hidden" :aria-label="t('landingLayout.navMobile')">
       <div class="ui-bottom-dock-grid grid-cols-4">
         <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" active-class="" exact-active-class="">
           <AppIcon name="home" class="h-4 w-4" />

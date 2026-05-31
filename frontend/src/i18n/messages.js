@@ -74,7 +74,9 @@ export const messages = {
     landingLayout: {
       kicker: "Resto Menu",
       title: "Restaurant SaaS",
-      footerTitle: "Resto Menu SaaS"
+      footerTitle: "Resto Menu SaaS",
+      navDesktop: "Main navigation",
+      navMobile: "Main navigation"
     },
     home: {
       leadSuccess: "Your request was received. We will contact you shortly.",
@@ -160,6 +162,8 @@ export const messages = {
       navCart: "Cart",
       navReserve: "Reserve",
       navAccount: "Account",
+      navDesktop: "Main navigation",
+      navMobile: "Main navigation",
       trackOrderBanner: "Order #{number} — Tap to track",
       trackOrderDismiss: "Dismiss order tracker",
       installApp: "Install app",
@@ -2900,7 +2904,9 @@ export const messages = {
     landingLayout: {
       kicker: "Resto Menu",
       title: "SaaS restaurant",
-      footerTitle: "Resto Menu SaaS"
+      footerTitle: "Resto Menu SaaS",
+      navDesktop: "Navigation principale",
+      navMobile: "Navigation principale"
     },
     home: {
       leadSuccess: "Votre demande a bien ete recue. Nous vous contacterons bientot.",
@@ -2986,6 +2992,8 @@ export const messages = {
       navCart: "Panier",
       navReserve: "Reserver",
       navAccount: "Compte",
+      navDesktop: "Navigation principale",
+      navMobile: "Navigation principale",
       trackOrderBanner: "Commande #{number} — Suivre",
       trackOrderDismiss: "Fermer le suivi",
       installApp: "Installer l'app",

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ui-safe-bottom min-h-screen bg-slate-950">
 
     <!-- ══════════════════════════ LOADING ══════════════════════════ -->
@@ -429,7 +429,7 @@
               <div v-if="loadingOrders" class="space-y-2">
                 <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-slate-800/50" />
               </div>
-              <div v-else-if="ordersError" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+              <div v-else-if="ordersError" class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
                 <svg viewBox="0 0 20 20" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                 </svg>
@@ -590,7 +590,7 @@
                 @click="redeemVoucher"
               >{{ voucherLoading ? '…' : t('customerAccount.voucherRedeem') }}</button>
             </div>
-            <div v-if="voucherError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+            <div v-if="voucherError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
               <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ voucherError }}</p>
             </div>
@@ -687,7 +687,7 @@
                     @click="redeemPoints"
                   >{{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}</button>
                 </div>
-                <div v-if="redeemError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+                <div v-if="redeemError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
                   <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                   <p class="flex-1 text-sm text-red-300">{{ redeemError }}</p>
                 </div>

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ui-panel space-y-4 p-5">
     <div class="ui-section-band rounded-[24px] p-4 sm:p-5 space-y-4">
       <div class="flex flex-wrap items-end justify-between gap-3">
@@ -39,7 +39,7 @@
           </div>
           <label class="text-sm text-slate-300">
             <span class="sr-only">{{ t("common.search") }}</span>
-            <input v-model.trim="dishSearch" type="search" class="ui-input border-slate-700 bg-slate-950/70" :placeholder="t('common.search')" />
+            <input v-model.trim="dishSearch" type="search" class="ui-input border-slate-700 bg-slate-950/70" enterkeyhint="search" :placeholder="t('common.search')" />
           </label>
           <button type="button" class="ui-btn-outline px-3 py-2 text-xs" :disabled="!hasPreviousCategory" @click="goToPreviousCategory">
             {{ t("stepDishes.previousCategory") }}
@@ -935,7 +935,7 @@
       </div>
     </Teleport>
 
-    <div v-if="globalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
+    <div v-if="globalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
       <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
       <p class="flex-1 text-sm text-red-300">{{ globalError }}</p>
     </div>

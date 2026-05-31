@@ -66,7 +66,9 @@ const arabicMessages = {
   "landingLayout": {
     "kicker": "منصة القوائم",
     "title": "منصة SaaS للمطاعم",
-    "footerTitle": "منصة Resto Menu"
+    "footerTitle": "منصة Resto Menu",
+    "navDesktop": "التنقل الرئيسي",
+    "navMobile": "التنقل الرئيسي"
   },
   "home": {
     "leadSuccess": "تم استلام طلبك. سنتواصل معك قريباً.",
@@ -152,6 +154,8 @@ const arabicMessages = {
     "navCart": "السلة",
     "navReserve": "الحجز",
     "navAccount": "الحساب",
+    "navDesktop": "التنقل الرئيسي",
+    "navMobile": "التنقل الرئيسي",
     "trackOrderBanner": "الطلب #{number} — تتبع طلبك",
     "trackOrderDismiss": "إغلاق متتبع الطلب",
     "installApp": "تثبيت التطبيق",

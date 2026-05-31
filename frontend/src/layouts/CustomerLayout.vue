@@ -59,7 +59,7 @@
           </div>
 
         <div class="mt-2 hidden items-center justify-center gap-4 md:flex">
-          <nav class="ui-segmented max-w-fit">
+          <nav class="ui-segmented max-w-fit" :aria-label="t('customerLayout.navDesktop')">
             <RouterLink
               v-for="item in navItems"
               :key="`desktop-${item.key}`"
@@ -117,7 +117,7 @@
       </RouterView>
     </main>
 
-    <nav class="ui-bottom-dock md:hidden">
+    <nav class="ui-bottom-dock md:hidden" :aria-label="t('customerLayout.navMobile')">
       <div class="ui-bottom-dock-grid grid-cols-5 text-xs">
         <RouterLink
           v-for="item in navItems"

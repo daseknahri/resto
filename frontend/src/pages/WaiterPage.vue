@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="space-y-4">
     <!-- Status tabs + New Order button -->
     <div class="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
@@ -22,6 +22,8 @@
       </button>
       <!-- Shift summary tab -->
       <button
+        role="tab"
+        :aria-selected="activeTab === 'shift'"
         class="shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
         :class="activeTab === 'shift'
           ? 'border-violet-500/60 bg-violet-500/15 text-violet-300'
@@ -56,7 +58,7 @@
     </div>
 
     <!-- Error (orders only) -->
-    <div v-else-if="activeTab !== 'shift' && waiter.error" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+    <div v-else-if="activeTab !== 'shift' && waiter.error" role="alert" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
       <svg viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
       <p class="flex-1 text-sm text-red-300">{{ waiter.error }}</p>
       <button class="shrink-0 text-xs text-slate-400 underline hover:text-slate-300" @click="reload">{{ t('waiterPage.retry') }}</button>
@@ -94,7 +96,7 @@
       </div>
 
       <!-- Error -->
-      <div v-if="waiter.shiftSummaryError" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-4 text-center text-sm text-red-300">
+      <div v-if="waiter.shiftSummaryError" class="rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-4 text-center text-sm text-red-300" role="alert">
         {{ waiter.shiftSummaryError }}
       </div>
 
