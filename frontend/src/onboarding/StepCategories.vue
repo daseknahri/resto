@@ -137,9 +137,12 @@
                   :value="localizedFieldValue(editingCategory, 'name', fieldLocales.name)"
                   class="ui-input"
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                  :aria-invalid="rowError(editingCategory, 'name') ? 'true' : undefined"
+                  :aria-describedby="`step-cat-name-error-${editingCategory.local_id}`"
+                  :aria-label="t('stepCategories.categoryNamePlaceholder')"
                   @input="setLocalizedFieldValue(editingCategory, 'name', fieldLocales.name, $event.target.value)"
                 />
-                <p v-if="rowError(editingCategory, 'name')" class="text-xs text-red-300">{{ rowError(editingCategory, 'name') }}</p>
+                <p v-if="rowError(editingCategory, 'name')" :id="`step-cat-name-error-${editingCategory.local_id}`" class="text-xs text-red-300">{{ rowError(editingCategory, 'name') }}</p>
               </div>
 
               <div class="space-y-1">
@@ -211,10 +214,10 @@
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
               <label class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.selectSuperCategory") }}</span>
-                <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" @change="quickAddErrors.superCategory = ''">
+                <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" :aria-invalid="quickAddErrors.superCategory ? 'true' : undefined" aria-describedby="step-cat-quick-supcat-error" @change="quickAddErrors.superCategory = ''">
                   <option v-for="group in sortedSuperCategoryOptions" :key="group.id" :value="Number(group.id)">{{ superCategoryLabel(group) }}</option>
                 </select>
-                <p v-if="quickAddErrors.superCategory" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
+                <p v-if="quickAddErrors.superCategory" id="step-cat-quick-supcat-error" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
               </label>
 
               <div class="space-y-1">
@@ -241,9 +244,12 @@
                   class="ui-input"
                   :class="quickAddErrors.name ? 'border-red-400' : ''"
                   :placeholder="t('stepCategories.categoryNamePlaceholder')"
+                  :aria-label="t('stepCategories.categoryNamePlaceholder')"
+                  :aria-invalid="quickAddErrors.name ? 'true' : undefined"
+                  aria-describedby="step-cat-quick-name-error"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddErrors.name = ''"
                 />
-                <p v-if="quickAddErrors.name" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
+                <p v-if="quickAddErrors.name" id="step-cat-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
               </div>
 
               <div class="space-y-1">

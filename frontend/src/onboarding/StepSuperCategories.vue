@@ -227,9 +227,12 @@
                   :value="localizedFieldValue(editingRow, 'name', fieldLocales.name)"
                   class="ui-input"
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
+                  :aria-label="t('stepSuperCategories.namePlaceholder')"
+                  :aria-invalid="rowError(editingRow, 'name') ? 'true' : undefined"
+                  :aria-describedby="`step-supcat-name-error-${editingRow.local_id}`"
                   @input="setLocalizedFieldValue(editingRow, 'name', fieldLocales.name, $event.target.value)"
                 />
-                <p v-if="rowError(editingRow, 'name')" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
+                <p v-if="rowError(editingRow, 'name')" :id="`step-supcat-name-error-${editingRow.local_id}`" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
               </div>
 
               <!-- Description (tagline for menu-selector card) -->
@@ -355,9 +358,12 @@
                   class="ui-input"
                   :class="quickAddError ? 'border-red-400' : ''"
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
+                  :aria-label="t('stepSuperCategories.namePlaceholder')"
+                  :aria-invalid="quickAddError ? 'true' : undefined"
+                  aria-describedby="step-supcat-quick-name-error"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddError = ''"
                 />
-                <p v-if="quickAddError" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
+                <p v-if="quickAddError" id="step-supcat-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">

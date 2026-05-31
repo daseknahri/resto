@@ -116,10 +116,12 @@
             class="w-full rounded-xl border bg-slate-900 px-3 py-2 text-sm"
             :class="errors.menu_disabled_note ? 'border-red-400' : 'border-slate-700'"
             :aria-label="t('stepPublish.disableMessage')"
+            :aria-invalid="errors.menu_disabled_note ? 'true' : undefined"
+            aria-describedby="step-publish-disabled-note-error"
             :placeholder="t('stepPublish.disableMessagePlaceholder')"
             @input="clearError('menu_disabled_note')"
           ></textarea>
-          <p v-if="errors.menu_disabled_note" class="text-xs text-red-300">{{ errors.menu_disabled_note }}</p>
+          <p v-if="errors.menu_disabled_note" id="step-publish-disabled-note-error" class="text-xs text-red-300">{{ errors.menu_disabled_note }}</p>
         </div>
 
         <!-- Receipt message -->
