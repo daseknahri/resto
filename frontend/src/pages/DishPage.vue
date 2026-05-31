@@ -187,7 +187,7 @@
           <div class="flex items-center gap-3">
             <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
-              <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
+              <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" :aria-label="t('dishPage.qty')" />
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
             </span>
             <div class="min-w-0">

@@ -17,8 +17,10 @@
           type="tel"
           inputmode="tel"
           autocomplete="tel"
+          :aria-label="t('orderStatus.findMyOrderPhone')"
           :placeholder="t('orderStatus.findMyOrderPhone')"
           :disabled="loading"
+          aria-required="true"
           class="ui-input flex-1 disabled:opacity-50"
           @keydown.enter.prevent="search"
         />

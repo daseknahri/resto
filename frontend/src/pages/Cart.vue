@@ -301,6 +301,7 @@
                       :class="waitingForPaste ? 'ring-2 ring-[var(--color-secondary)]/40' : ''"
                       inputmode="url"
                       placeholder="https://maps.google.com/..."
+                      :aria-label="t('cartPage.mapPinUrlOptional')"
                       :aria-invalid="fieldErrors.delivery_location_url ? 'true' : undefined"
                       aria-describedby="cart-map-url-error"
                       @input="clearFieldError('delivery_location_url')"
@@ -360,7 +361,7 @@
                   class="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
                   @click="locationAdvancedOpen = !locationAdvancedOpen"
                 >
-                  <span>{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
+                  <span aria-hidden="true">{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
                   {{ t('cartPage.latitudeOptional') }} / {{ t('cartPage.longitudeOptional') }}
                 </button>
                 <div v-if="locationAdvancedOpen" class="mt-2 grid grid-cols-2 gap-2">
@@ -442,6 +443,7 @@
                 min="0"
                 step="0.01"
                 class="ui-input flex-1 text-sm"
+                :aria-label="t('cartPage.tipCustomPlaceholder')"
                 :placeholder="t('cartPage.tipCustomPlaceholder')"
                 @blur="clampCustomTip"
               />
@@ -476,7 +478,7 @@
                 class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
                 @click="promoOpen = !promoOpen"
               >
-                <span class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
+                <span aria-hidden="true" class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
                 {{ t('cartPage.promoCodeLabel') }}
               </button>
               <div v-show="promoOpen" class="mt-2 flex gap-2">
@@ -485,6 +487,7 @@
                   type="text"
                   maxlength="20"
                   class="ui-input flex-1 uppercase text-sm"
+                  :aria-label="t('cartPage.promoCodeLabel')"
                   :placeholder="t('cartPage.promoPlaceholder')"
                   :aria-invalid="promoError ? 'true' : undefined"
                   aria-describedby="cart-promo-error"
