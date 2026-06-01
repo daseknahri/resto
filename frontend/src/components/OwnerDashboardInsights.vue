@@ -4,7 +4,7 @@
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
         <AppIcon name="chart" class="owner-insights-icon" />
-        <span>{{ t("ownerHome.analyticsTitle", { days: period }) }}</span>
+        <span>{{ t("ownerHome.analyticsTitle", { days: internalPeriod }) }}</span>
         <svg
           v-if="updating"
           aria-hidden="true"
@@ -26,11 +26,11 @@
             :key="d"
             class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
             :class="
-              period === d
+              internalPeriod === d
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                 : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'
             "
-            :aria-pressed="period === d"
+            :aria-pressed="internalPeriod === d"
             :disabled="loading"
             @click="setPeriod(d)"
           >
@@ -171,7 +171,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -188,6 +188,11 @@ const props = defineProps({
   /** slug → name maps passed in from OwnerDashboardReadiness via the parent */
   categoryNameBySlug: { type: Object, default: () => ({}) },
   dishNameBySlug:     { type: Object, default: () => ({}) },
+  /**
+   * Global period in days, controlled by the parent. When this changes the
+   * component re-fetches automatically. Defaults to 30 if not provided.
+   */
+  period:             { type: Number, default: 30 },
 });
 
 // ── Own loading state ─────────────────────────────────────────────────────────
@@ -195,7 +200,9 @@ const loading = ref(false);
 const updating = ref(false);
 const hasError = ref(false);
 const exporting = ref(false);
-const period = ref(30);
+// Internal period mirrors the prop; kept as a writable ref for backward compat
+// (the period-selector buttons inside this component still work).
+const internalPeriod = ref(props.period);
 
 // ── Analytics data ────────────────────────────────────────────────────────────
 const summary = ref({ counts: {}, top_categories: [], top_dishes: [], interaction_rate_pct: 0 });
@@ -266,7 +273,7 @@ const hydrate = async (force = false) => {
   _abort = ctrl;
 
   hasError.value = false;
-  const cacheKey = `owner.insights.${period.value}d`;
+  const cacheKey = `owner.insights.${internalPeriod.value}d`;
   if (force) bustCache(cacheKey);
   const cached = readCache(cacheKey);
 
@@ -282,7 +289,7 @@ const hydrate = async (force = false) => {
 
   try {
     const { data } = await api.get("/owner/dashboard/", {
-      params: { days: period.value },
+      params: { days: internalPeriod.value },
       signal: ctrl.signal,
       timeout: 8000,
     });
@@ -294,7 +301,7 @@ const hydrate = async (force = false) => {
     if (err.code === "ERR_CANCELED" || err.name === "AbortError" || ctrl.signal.aborted) return;
     // Fallback to analytics-only endpoint
     try {
-      const { data } = await api.get("/analytics/summary/", { params: { days: period.value }, timeout: 5000 });
+      const { data } = await api.get("/analytics/summary/", { params: { days: internalPeriod.value }, timeout: 5000 });
       if (data?.analytics_summary) summary.value = data.analytics_summary;
       else if (data?.counts) summary.value = data;
     } catch {
@@ -315,8 +322,8 @@ const _apply = (data) => {
 };
 
 const setPeriod = (d) => {
-  if (d === period.value) return;
-  period.value = d;
+  if (d === internalPeriod.value) return;
+  internalPeriod.value = d;
   emit("period-change", d);
   void hydrate();
 };
@@ -326,7 +333,7 @@ const exportCsv = async () => {
   exporting.value = true;
   try {
     const response = await api.get("/owner/analytics/export/", {
-      params: { days: period.value },
+      params: { days: internalPeriod.value },
       responseType: "blob",
       timeout: 15000,
     });
@@ -343,8 +350,16 @@ const exportCsv = async () => {
   }
 };
 
+// ── Watch prop changes — when parent changes the global period, sync & refetch ─
+watch(() => props.period, (newPeriod) => {
+  if (newPeriod !== internalPeriod.value) {
+    internalPeriod.value = newPeriod;
+    void hydrate();
+  }
+});
+
 // ── Public API so parent can trigger a force-refresh ─────────────────────────
-defineExpose({ hydrate, period });
+defineExpose({ hydrate, period: internalPeriod });
 
 onMounted(() => void hydrate());
 </script>

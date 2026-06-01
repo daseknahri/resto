@@ -10,9 +10,24 @@
           <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
           <h2 class="ui-page-title ui-display text-[1.42rem] leading-tight sm:text-[2rem]">{{ t("ownerHome.title") }}</h2>
         </div>
-        <div class="ui-scroll-row max-w-full sm:max-w-none">
-          <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-          <span class="ui-chip">{{ planModeLabel }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Global period selector — controls ALL analytics sections -->
+          <div class="flex items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
+            <button
+              v-for="d in PERIOD_OPTIONS"
+              :key="d"
+              class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+              :class="insightsPeriod === d
+                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+              :aria-pressed="insightsPeriod === d"
+              @click="setGlobalPeriod(d)"
+            >{{ d }}d</button>
+          </div>
+          <div class="ui-scroll-row">
+            <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+            <span class="ui-chip">{{ planModeLabel }}</span>
+          </div>
         </div>
       </div>
 
@@ -217,6 +232,7 @@
     <!-- ── ANALYTICS: deferred — loads after first paint ───────────────────── -->
     <OwnerDashboardInsights
       ref="insightsRef"
+      :period="insightsPeriod"
       :category-name-by-slug="categoryNameBySlug"
       :dish-name-by-slug="dishNameBySlug"
       @data="onInsightsData"
@@ -388,7 +404,16 @@ const revenueSummary = ref(null);
 const insightsLoading = ref(true);   // true until first data arrives
 const insightsUpdating = ref(false);
 const insightsPeriod = ref(30);
+const PERIOD_OPTIONS = [7, 14, 30, 90];
 const upgradeRequests = ref([]);
+
+// ── Global period selector ────────────────────────────────────────────────────
+const setGlobalPeriod = (days) => {
+  if (days === insightsPeriod.value) return;
+  insightsPeriod.value = days;
+  // The insights component watches its period prop and auto-refetches.
+  // BestSellersWidget and OwnerDashboardRevenue receive period as a prop too.
+};
 
 const onInsightsData = (data) => {
   insightsLoading.value = false; // data arrived — clear loading even if event order varies
