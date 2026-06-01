@@ -412,6 +412,7 @@ import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
+import { escapeHtml } from "../lib/escape";
 
 const toast = useToastStore();
 const tenant = useTenantStore();
@@ -770,13 +771,6 @@ const downloadFile = (filename, content, mimeType) => {
   URL.revokeObjectURL(url);
 };
 
-const escapeHtml = (value) =>
-  String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 
 const exportCsv = () => {
   if (!tables.value.length) return;

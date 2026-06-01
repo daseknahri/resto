@@ -567,6 +567,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
+import { escapeHtml } from "../lib/escape";
 
 const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
 const order = useOrderStore();
@@ -909,14 +910,6 @@ const submitJobRating = async (o) => {
 };
 
 // ── Print ticket ──────────────────────────────────────────────────────────────
-const escapeHtml = (v) =>
-  String(v ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
 const printTicket = (o) => {
   const itemRows = (o.items || []).map((item) => {
     const opts = item.options?.length
