@@ -64,7 +64,14 @@ SECRET_KEY = _raw_secret
 MEDIA_STORAGE_BACKEND = os.getenv("DJANGO_MEDIA_STORAGE_BACKEND", "local").strip().lower()
 USE_S3_MEDIA_STORAGE = MEDIA_STORAGE_BACKEND in {"s3", "s3boto3", "object"}
 allowed_hosts = set(parse_csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost"))
-allowed_hosts.update({"localhost", "127.0.0.1", ".localhost"})
+# In dev always allow localhost variants; in production the env var should list
+# the real domains and .localhost is stripped out automatically (it must not
+# appear in production ALLOWED_HOSTS to prevent host-header injection from
+# bypassing any per-domain routing logic).
+if DEBUG:
+    allowed_hosts.update({"localhost", "127.0.0.1", ".localhost"})
+else:
+    allowed_hosts.update({"localhost", "127.0.0.1"})
 ALLOWED_HOSTS = sorted(allowed_hosts)
 
 csrf_trusted_origins = set(
