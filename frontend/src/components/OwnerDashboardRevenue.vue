@@ -39,14 +39,17 @@
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
+          <PeriodBadge :pct="data.prev_period?.revenue_change_pct" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
           <p class="ui-stat-value text-slate-100">{{ data.order_count }}</p>
+          <PeriodBadge :pct="data.prev_period?.order_change_pct" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
           <p class="ui-stat-value text-slate-100">{{ fmt(data.avg_order_value) }}</p>
+          <PeriodBadge :pct="data.prev_period?.avg_change_pct" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
@@ -188,6 +191,7 @@
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import FulfillmentBreakdown from "./FulfillmentBreakdown.vue";
+import PeriodBadge from "./PeriodBadge.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 

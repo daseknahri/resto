@@ -2234,6 +2234,33 @@ class OwnerDashboardView(APIView):
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
 
+        # ── Previous-period comparison (same window length, immediately before) ──
+        prev_since = since - timedelta(days=days)
+        prev_qs = Order.objects.filter(
+            created_at__gte=prev_since,
+            created_at__lt=since,
+            status__in=billable_statuses,
+        )
+        prev_agg = prev_qs.aggregate(total_revenue=Sum("total"), order_count=Count("id"))
+        prev_revenue = float(prev_agg["total_revenue"] or 0)
+        prev_order_count = int(prev_agg["order_count"] or 0)
+        prev_avg = round(prev_revenue / prev_order_count, 2) if prev_order_count else 0.0
+
+        def _pct_change(current, previous):
+            """Return signed % change or None when previous is zero (no baseline)."""
+            if previous <= 0:
+                return None
+            return round((current - previous) / previous * 100, 1)
+
+        prev_period = {
+            "total_revenue": prev_revenue,
+            "order_count": prev_order_count,
+            "avg_order_value": prev_avg,
+            "revenue_change_pct": _pct_change(total_revenue, prev_revenue),
+            "order_change_pct": _pct_change(order_count, prev_order_count),
+            "avg_change_pct": _pct_change(avg_order_value, prev_avg),
+        }
+
         # Currency — pick the most recent order currency, fall back to the
         # most common dish currency in the catalogue, then USD.
         _order_currency = (
@@ -2400,6 +2427,7 @@ class OwnerDashboardView(APIView):
                     "total_revenue": total_revenue,
                     "order_count": order_count,
                     "avg_order_value": avg_order_value,
+                    "prev_period": prev_period,
                     "daily": daily_revenue,
                     "peak_hours": {
                         "by_hour": orders_by_hour,
