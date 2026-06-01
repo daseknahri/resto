@@ -31,8 +31,27 @@ def hostname_from_url(value: str) -> str:
     return host
 
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
+_raw_secret = os.getenv("DJANGO_SECRET_KEY", "").strip()
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+if not _raw_secret:
+    if DEBUG:
+        # Dev convenience: auto-generate a temporary key so the server starts
+        # without env configuration.  A warning is printed so it's obvious.
+        import secrets as _secrets
+        _raw_secret = _secrets.token_hex(50)
+        import warnings as _warnings
+        _warnings.warn(
+            "DJANGO_SECRET_KEY is not set — using a temporary random key. "
+            "Sessions will be invalidated on every restart. "
+            "Set DJANGO_SECRET_KEY in production.",
+            stacklevel=2,
+        )
+    else:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY must be set in production (DEBUG=False). "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(50))\""
+        )
+SECRET_KEY = _raw_secret
 MEDIA_STORAGE_BACKEND = os.getenv("DJANGO_MEDIA_STORAGE_BACKEND", "local").strip().lower()
 USE_S3_MEDIA_STORAGE = MEDIA_STORAGE_BACKEND in {"s3", "s3boto3", "object"}
 allowed_hosts = set(parse_csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,.localhost"))
@@ -377,6 +396,27 @@ if TENANT_DOMAIN_SUFFIX:
 USE_X_FORWARDED_HOST = parse_bool_env("DJANGO_USE_X_FORWARDED_HOST", not DEBUG)
 if parse_bool_env("DJANGO_SECURE_PROXY_SSL_HEADER", not DEBUG):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ── HTTPS / SecurityMiddleware hardening ──────────────────────────────────────
+# X-Content-Type-Options: nosniff — prevents MIME-type sniffing attacks.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Redirect plain HTTP → HTTPS in production.  Disabled in dev so the Vite dev
+# server (http://localhost) keeps working.
+SECURE_SSL_REDIRECT = parse_bool_env("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+
+# HSTS: tell browsers to only ever use HTTPS for this domain.
+# Start with 1 hour in staging, bump to 1 year (31536000) once confident.
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 3600))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = parse_bool_env("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = parse_bool_env("DJANGO_SECURE_HSTS_PRELOAD", False)
+
+# X-Frame-Options: DENY prevents clickjacking (XFrameOptionsMiddleware uses this).
+X_FRAME_OPTIONS = os.getenv("DJANGO_X_FRAME_OPTIONS", "DENY")
+
+# Referrer-Policy: send origin only on same-origin requests to avoid leaking
+# URLs with tokens in query strings to third-party analytics.
+SECURE_REFERRER_POLICY = os.getenv("DJANGO_REFERRER_POLICY", "strict-origin-when-cross-origin")
 
 SECURITY_LOG_LEVEL = os.getenv("DJANGO_SECURITY_LOG_LEVEL", "WARNING")
 SECURITY_LOG_FILE = os.getenv("DJANGO_SECURITY_LOG_FILE", "")

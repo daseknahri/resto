@@ -33,6 +33,15 @@ except Exception:  # pragma: no cover - optional dependency
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_SIZE = (1800, 1800)
+
+# Content-types that are image/* but can contain active script content and must
+# be blocked regardless of what the client claims.
+_BLOCKED_IMAGE_CONTENT_TYPES = frozenset({
+    "image/svg+xml",
+    "image/svg",
+    "image/x-icon",   # ICO can embed PE executables
+    "image/vnd.microsoft.icon",
+})
 VARIANT_SPECS = {
     "logo": {"aspect_ratio": 1.0, "max_size": (900, 900)},
     "hero": {"aspect_ratio": 16 / 9, "max_size": (1800, 1012)},
@@ -250,8 +259,11 @@ class ImageUploadView(APIView):
             return Response({"image": ["Image file is required."]}, status=400)
         if upload.size > MAX_UPLOAD_BYTES:
             return Response({"image": ["Image too large. Max size is 8MB."]}, status=400)
-        if not (upload.content_type or "").startswith("image/"):
+        ct = (upload.content_type or "").strip().lower()
+        if not ct.startswith("image/"):
             return Response({"image": ["Only image uploads are allowed."]}, status=400)
+        if ct in _BLOCKED_IMAGE_CONTENT_TYPES:
+            return Response({"image": ["SVG and icon uploads are not permitted."]}, status=400)
 
         variant = (request.data.get("variant") or "").strip().lower()
         if variant and variant not in VARIANT_SPECS:
