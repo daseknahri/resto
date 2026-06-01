@@ -62,6 +62,9 @@ const props = defineProps({
   ratingsSummary: { type: Object, default: null },
 });
 
+// Emits reset-complete so the parent can clear its soldOutCount optimistically
+const emit = defineEmits(["reset-complete"]);
+
 // ── Reset all availability (same logic as dish panel, keeps alerts in sync) ──
 const resetting = ref(false);
 const resetAvailability = async () => {
@@ -70,9 +73,9 @@ const resetAvailability = async () => {
   try {
     await api.post("/owner/dishes/reset-availability/");
     bustCache("menu.categories");
-    // Optimistically clear — the readiness component will re-emit the real count
-    // on next page visit or manual refresh.
     toast.show(t("ownerHome.resetAvailabilityDone", { count: props.soldOutCount }), "success");
+    // Tell the parent to clear its soldOutCount so the alert disappears.
+    emit("reset-complete");
   } catch {
     toast.show(t("ownerHome.resetAvailabilityFailed"), "error");
   } finally {

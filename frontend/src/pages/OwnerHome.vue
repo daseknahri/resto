@@ -94,6 +94,7 @@
       <OwnerDashboardAlerts
         :sold-out-count="soldOutCount"
         :ratings-summary="ratingsSummary"
+        @reset-complete="soldOutCount = 0"
       />
 
       <!-- Ratings strip — skeleton until DeferredRatings mounts -->
@@ -348,7 +349,14 @@ const insightsPeriod = ref(30);
 const upgradeRequests = ref([]);
 
 const onInsightsData = (data) => {
-  if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
+  if (data?.revenue_summary) {
+    // Merge fulfillment_breakdown into revenue_summary so OwnerDashboardRevenue
+    // can display it without needing its own prop.
+    revenueSummary.value = {
+      ...data.revenue_summary,
+      fulfillment_breakdown: data.revenue_summary.fulfillment_breakdown ?? {},
+    };
+  }
   if (Array.isArray(data?.upgrade_requests)) upgradeRequests.value = data.upgrade_requests;
 };
 

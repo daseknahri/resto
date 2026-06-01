@@ -146,12 +146,25 @@
         </li>
       </ol>
     </div>
+
+    <!-- Fulfillment breakdown — pickup / delivery / table split -->
+    <div
+      v-if="loading || (data && data.order_count > 0)"
+      class="pt-2 border-t border-slate-800/60"
+    >
+      <FulfillmentBreakdown
+        :breakdown="data?.fulfillment_breakdown ?? {}"
+        :loading="loading"
+        :currency="data?.currency"
+      />
+    </div>
   </article>
 </template>
 
 <script setup>
 import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
+import FulfillmentBreakdown from "./FulfillmentBreakdown.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 

@@ -2202,6 +2202,7 @@ class OwnerDashboardView(APIView):
                     "upgrade_targets": [],
                     "upgrade_requests": [],
                     "revenue_summary": None,
+                    "fulfillment_breakdown": {},
                 }
             )
 
@@ -2265,6 +2266,27 @@ class OwnerDashboardView(APIView):
             }
             for row in popular_dish_rows
         ]
+
+        # Fulfillment breakdown — pickup / delivery / table split for the period
+        _fulfillment_rows = (
+            revenue_qs
+            .values("fulfillment_type")
+            .annotate(count=Count("id"), revenue=Sum("total"))
+            .order_by()
+        )
+        _ft_total_orders = order_count or 1  # avoid division by zero
+        _ft_total_revenue = total_revenue or 1
+        fulfillment_breakdown = {}
+        for row in _fulfillment_rows:
+            ftype = row["fulfillment_type"] or "pickup"
+            fcount = row["count"] or 0
+            frev = float(row["revenue"] or 0)
+            fulfillment_breakdown[ftype] = {
+                "count": fcount,
+                "revenue": round(frev, 2),
+                "count_pct": round(fcount / _ft_total_orders * 100, 1),
+                "revenue_pct": round(frev / _ft_total_revenue * 100, 1),
+            }
 
         # Marketplace breakdown — orders that came via the platform marketplace
         from menu.models import Order as _OrderM
@@ -2352,6 +2374,7 @@ class OwnerDashboardView(APIView):
                         "return_rate_pct": return_rate_pct,
                     },
                     "marketplace": marketplace_stats,
+                    "fulfillment_breakdown": fulfillment_breakdown,
                 },
             }
         )
