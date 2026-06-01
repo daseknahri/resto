@@ -2234,17 +2234,24 @@ class OwnerDashboardView(APIView):
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
 
-        # Currency — use the most common currency among recent orders, with
-        # profile fallback so the frontend never has to guess.
-        from tenancy.models import Profile as _Prof
-        _prof = _Prof.objects.filter(tenant=tenant).values_list("currency", flat=True).first()
+        # Currency — pick the most recent order currency, fall back to the
+        # most common dish currency in the catalogue, then USD.
         _order_currency = (
             revenue_qs.values_list("currency", flat=True)
             .exclude(currency="")
-            .order_by()
+            .order_by("-created_at")
             .first()
         )
-        dashboard_currency = _order_currency or _prof or "USD"
+        if not _order_currency:
+            from menu.models import Dish as _Dish
+            _order_currency = (
+                _Dish.objects
+                .exclude(currency="")
+                .values_list("currency", flat=True)
+                .order_by()
+                .first()
+            )
+        dashboard_currency = _order_currency or "USD"
 
         daily_rows = (
             revenue_qs.annotate(day=TruncDate("created_at"))
