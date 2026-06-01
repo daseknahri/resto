@@ -43,14 +43,14 @@
         @click.self="closeImport"
         @keydown.esc.window="closeImport"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="owner-menu-builder-import-dialog-title" class="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div ref="importDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-menu-builder-import-dialog-title" class="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
           <!-- Header -->
           <div class="flex items-center justify-between">
             <div>
               <h2 id="owner-menu-builder-import-dialog-title" class="text-base font-bold text-white">{{ t("ownerMenuBuilder.importTitle") }}</h2>
               <p class="text-xs text-slate-400 mt-0.5">{{ t("ownerMenuBuilder.importSubtitle") }}</p>
             </div>
-            <button class="text-slate-400 hover:text-white text-xl leading-none" :aria-label="t('common.close')" @click="closeImport">✕</button>
+            <button ref="importCloseBtnRef" class="text-slate-400 hover:text-white text-xl leading-none" :aria-label="t('common.close')" @click="closeImport">✕</button>
           </div>
 
           <!-- Format guide + template download -->
@@ -147,7 +147,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
@@ -202,6 +202,40 @@ const setTab = (tab) => {
 };
 
 // ── CSV Import ────────────────────────────────────────────────────────────────
+const importDialogRef  = ref(null);
+const importCloseBtnRef = ref(null);
+
+// Focus trap for the import dialog
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapImportFocus = (e) => {
+  if (!importDialogRef.value) return;
+  const focusable = Array.from(importDialogRef.value.querySelectorAll(FOCUSABLE));
+  if (!focusable.length || e.key !== 'Tab') return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(showImport, async (open) => {
+  if (open) {
+    await nextTick();
+    importCloseBtnRef.value?.focus();
+    document.addEventListener('keydown', trapImportFocus);
+  } else {
+    document.removeEventListener('keydown', trapImportFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapImportFocus));
+
 const showImport = ref(false);
 const fileInputRef = ref(null);
 const selectedFile = ref(null);
