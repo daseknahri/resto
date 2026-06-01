@@ -1,4 +1,4 @@
-﻿name: ci
+name: ci
 
 on:
   push:
@@ -9,6 +9,13 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # CI-wide env vars for all backend steps — override per-step if needed.
+    # DJANGO_DEBUG=True: keeps dev-mode defaults (no SSL redirect, no HSTS) so
+    # the plain HTTP test runner works without HTTPS infrastructure.
+    env:
+      DJANGO_SECRET_KEY: ci-test-only-not-a-real-secret-key
+      DJANGO_DEBUG: "True"
+      DATABASE_URL: postgres://resto:resto@localhost:5432/resto
     services:
       postgres:
         image: postgres:16
@@ -31,49 +38,31 @@ jobs:
           . .venv/bin/activate
           pip install -r requirements.txt
       - name: Check migration drift
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
           python manage.py makemigrations --check --dry-run
       - name: Run migrations (shared)
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
           python manage.py migrate_schemas --shared
       - name: Run migrations (tenant)
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
           python manage.py migrate_schemas --tenant
       - name: Seed plans
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
           python manage.py seed_plans
       - name: Backend checks
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
           python manage.py check
       - name: Export OpenAPI schema
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
@@ -84,9 +73,6 @@ jobs:
           name: openapi-schema
           path: backend/openapi.json
       - name: Backend tests
-        env:
-          DJANGO_SECRET_KEY: test
-          DATABASE_URL: postgres://resto:resto@localhost:5432/resto
         run: |
           cd backend
           . .venv/bin/activate
