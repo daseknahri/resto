@@ -275,7 +275,7 @@
         @click.self="closeSetup"
         @keydown.esc.window="closeSetup"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="owner-tables-setup-dialog-title" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
+        <div ref="setupDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-tables-setup-dialog-title" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <p id="owner-tables-setup-dialog-title" class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">
@@ -405,6 +405,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import QRCode from "qrcode";
 import AppIcon from "../components/AppIcon.vue";
 import api from "../lib/api";
@@ -429,6 +430,8 @@ const tables = ref([]);
 const qrDataUrls = ref({});
 const error = ref("");
 const setupOpen = ref(false);
+const setupDialogRef = ref(null);
+useFocusTrap(setupDialogRef, setupOpen);
 const formMode = ref("create");
 const labelInputRef = ref(null);
 const searchQuery = ref("");

@@ -246,6 +246,7 @@
       <Transition name="lightbox">
         <div
           v-if="lightboxOpen && dish"
+          ref="lightboxDialogRef"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dish-lightbox-dialog-title"
@@ -347,6 +348,7 @@ import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useFocusTrap } from '../composables/useFocusTrap';
 import { useMenuStore } from '../stores/menu';
 import { useCartStore } from '../stores/cart';
 import { useToastStore } from '../stores/toast';
@@ -369,6 +371,8 @@ const qty               = ref(1);
 const selectedOptionIds = ref([]);
 const groupSelections   = ref({});
 const lightboxOpen      = ref(false);
+const lightboxDialogRef = ref(null);
+useFocusTrap(lightboxDialogRef, lightboxOpen);
 
 const whatsappPhone = (import.meta.env.VITE_CONTACT_PHONE || '').replace(/[^\d+]/g, '');
 const meta          = computed(() => tenant.resolvedMeta || null);

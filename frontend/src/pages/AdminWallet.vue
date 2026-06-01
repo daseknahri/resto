@@ -222,7 +222,7 @@
           @click.self="bonusTarget = null"
           @keydown.esc.window="bonusTarget = null"
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="admin-wallet-bonus-dialog-title" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+          <div ref="bonusDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-wallet-bonus-dialog-title" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
             <h2 id="admin-wallet-bonus-dialog-title" class="text-sm font-bold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
             <p class="text-xs text-slate-400">
               {{ bonusTarget.name }}
@@ -279,6 +279,7 @@
 import { ref, onMounted } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useFocusTrap } from '../composables/useFocusTrap';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
@@ -345,6 +346,8 @@ const copyAllCodes = async () => {
 
 // Bonus modal
 const bonusTarget = ref(null);
+const bonusDialogRef = ref(null);
+useFocusTrap(bonusDialogRef, bonusTarget);
 const bonusAmount = ref('');
 const bonusNote = ref('');
 const bonusError = ref('');
