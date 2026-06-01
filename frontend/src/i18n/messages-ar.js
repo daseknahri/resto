@@ -592,6 +592,7 @@ const arabicMessages = {
     "resendFailed": "فشلت إعادة الإرسال",
     "packageLoaded": "تم تحميل الحزمة لـ {lead}",
     "loadOnboardingPackageFailed": "تعذر تحميل حزمة التهيئة",
+    "archiveLeadConfirm": "أرشفة \"{name}\"؟",
     "archivedLead": "تمت أرشفة {lead}",
     "archiveLeadFailed": "تعذر أرشفة العميل المحتمل",
     "paymentReferenceOptionalPrompt": "مرجع الدفع (اختياري)",
