@@ -18,15 +18,15 @@
 
       <!-- KPI cards: today stats + 7-day sparklines ───────────────────────── -->
       <!-- Skeleton while the first orders load -->
-      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <div v-for="i in 4" :key="i" class="ui-admin-subcard animate-pulse space-y-2">
+      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <div v-for="i in 5" :key="i" class="ui-admin-subcard animate-pulse space-y-2">
           <div class="h-2.5 w-14 rounded bg-slate-700/60" />
           <div class="h-7 w-16 rounded bg-slate-700/40" />
           <div class="h-7 rounded bg-slate-800/40" />
         </div>
       </div>
 
-      <div v-else class="grid grid-cols-2 gap-2 xl:grid-cols-4">
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <!-- Today's orders -->
         <article class="ui-admin-subcard space-y-1.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
@@ -66,7 +66,7 @@
           <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
-        <!-- Pending / rating -->
+        <!-- Pending orders -->
         <article
           class="ui-admin-subcard space-y-1.5 transition-colors"
           :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
@@ -78,7 +78,6 @@
           >
             {{ todayStats.pending }}
           </p>
-          <!-- Show rating sparkline when no pending orders to fill the space -->
           <SparklineChart
             v-if="ratingsSummary?.average"
             :values="sparklineRating"
@@ -88,6 +87,29 @@
           />
           <div v-else class="h-7" />
         </article>
+
+        <!-- Today's reservations — populated after dashboard endpoint loads -->
+        <RouterLink
+          :to="{ name: 'owner-reservations' }"
+          class="ui-admin-subcard space-y-1.5 transition-colors hover:border-slate-600"
+          :class="todayNewReservations > 0 ? 'border-sky-500/30' : ''"
+        >
+          <p class="ui-stat-label">{{ t("ownerHome.todayReservations") }}</p>
+          <div class="flex items-end justify-between gap-1">
+            <p
+              class="ui-stat-value transition-colors"
+              :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'"
+            >
+              {{ todayReservations === null ? "—" : todayReservations }}
+            </p>
+            <span v-if="todayNewReservations > 0" class="mb-0.5 rounded-full bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-sky-300">
+              {{ todayNewReservations }} {{ t("ownerHome.reservationsNew") }}
+            </span>
+          </div>
+          <div class="h-7 flex items-end">
+            <p class="text-[10px] text-slate-600">{{ t("ownerHome.viewReservations") }} →</p>
+          </div>
+        </RouterLink>
       </div>
 
       <!-- Alerts strip — shown below KPIs, above ratings -->
@@ -339,6 +361,10 @@ const insightsRef = ref(null);
 const soldOutCount = ref(0);
 const onReadinessLoaded = ({ soldOutCount: n }) => { soldOutCount.value = n ?? 0; };
 
+// ── Today's reservations — received from the dashboard endpoint via insights ─
+const todayReservations = ref(null);     // null = not yet loaded
+const todayNewReservations = ref(0);
+
 // ── Insights state (shared between OwnerDashboardInsights + OwnerDashboardRevenue) ──
 // The insights component owns fetching; it bubbles up via @data event so the
 // revenue component (a sibling) gets its data without a second API call.
@@ -349,6 +375,10 @@ const insightsPeriod = ref(30);
 const upgradeRequests = ref([]);
 
 const onInsightsData = (data) => {
+  if (data?.today_reservations !== undefined) {
+    todayReservations.value = data.today_reservations;
+    todayNewReservations.value = data.today_new_reservations ?? 0;
+  }
   if (data?.revenue_summary) {
     // Merge fulfillment_breakdown into revenue_summary so OwnerDashboardRevenue
     // can display it without needing its own prop.

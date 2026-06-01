@@ -2106,6 +2106,22 @@ class OwnerDashboardView(APIView):
         days = max(1, min(90, requested_days))
         since = timezone.now() - timedelta(days=days)
 
+        # Today's reservation count — single COUNT query, runs in the public schema
+        from datetime import date as _date
+        _today = _date.today()
+        with schema_context(get_public_schema_name()):
+            today_reservations = _owner_reservations_queryset(
+                tenant.id,
+                from_date=_today,
+                to_date=_today,
+            ).count()
+            today_new_reservations = _owner_reservations_queryset(
+                tenant.id,
+                from_date=_today,
+                to_date=_today,
+                status_filter="new",
+            ).count()
+
         categories_count = Category.objects.count()
         dishes_count = Dish.objects.count()
 
@@ -2203,6 +2219,8 @@ class OwnerDashboardView(APIView):
                     "upgrade_requests": [],
                     "revenue_summary": None,
                     "fulfillment_breakdown": {},
+                    "today_reservations": today_reservations,
+                    "today_new_reservations": today_new_reservations,
                 }
             )
 
@@ -2376,6 +2394,8 @@ class OwnerDashboardView(APIView):
                     "marketplace": marketplace_stats,
                     "fulfillment_breakdown": fulfillment_breakdown,
                 },
+                "today_reservations": today_reservations,
+                "today_new_reservations": today_new_reservations,
             }
         )
 

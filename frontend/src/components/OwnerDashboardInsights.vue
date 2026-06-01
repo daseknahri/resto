@@ -267,7 +267,7 @@ const hydrate = async (force = false) => {
     if (ctrl.signal.aborted) return;
     _apply(data);
     writeCache(cacheKey, data);
-    emit("data", data); // bubble up upgrade/revenue data to parent
+    emit("data", data); // bubble up upgrade/revenue/reservations data to parent
   } catch (err) {
     if (err.code === "ERR_CANCELED" || err.name === "AbortError" || ctrl.signal.aborted) return;
     // Fallback to analytics-only endpoint
