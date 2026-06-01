@@ -1,0 +1,239 @@
+<template>
+  <!-- Only rendered when the parent passes data or is loading -->
+  <article
+    v-if="loading || data"
+    class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4"
+  >
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+        <AppIcon name="download" class="owner-revenue-icon" />
+        <span>{{ t("ownerHome.revenueTitle") }}</span>
+        <svg
+          v-if="updating"
+          aria-hidden="true"
+          class="h-3.5 w-3.5 animate-spin text-slate-500"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
+        </svg>
+      </h3>
+      <p class="text-xs text-slate-400">
+        {{ data ? t("ownerHome.revenuePeriod", { days: data.days }) : `${period}d` }}
+      </p>
+    </div>
+
+    <!-- KPI row skeleton -->
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <template v-if="loading">
+        <div v-for="i in 4" :key="i" class="ui-stat-tile animate-pulse">
+          <div class="h-3 w-16 rounded bg-slate-700/60" />
+          <div class="mt-2 h-7 w-14 rounded bg-slate-700/40" />
+        </div>
+      </template>
+      <template v-else-if="data">
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ data.order_count }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ fmt(data.avg_order_value) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
+          <p class="ui-stat-value" :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'">
+            {{ returnRateLabel }}
+          </p>
+          <p v-if="returnRate !== null" class="mt-0.5 text-[10px] text-slate-500">
+            {{ t("ownerHome.customerReturnRateHint", { count: data.customer_return?.total_customers }) }}
+          </p>
+        </div>
+      </template>
+    </div>
+
+    <!-- Daily revenue mini-chart -->
+    <div v-if="data && chartDays.length > 1" class="space-y-1">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.revenueDailyChart") }}</p>
+      <div class="flex items-end gap-0.5 h-20 overflow-x-auto pb-1">
+        <div
+          v-for="day in chartDays"
+          :key="day.date"
+          class="flex flex-1 min-w-[0.5rem] flex-col items-center gap-0.5"
+          :title="`${day.date}: ${fmt(day.revenue)} (${day.orders} orders)`"
+        >
+          <div
+            class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+            :style="{ height: `${day.heightPct}%`, minHeight: day.revenue > 0 ? '2px' : '0' }"
+          />
+        </div>
+      </div>
+      <div class="flex justify-between text-[10px] text-slate-600">
+        <span>{{ chartDays[0]?.shortDate }}</span>
+        <span>{{ chartDays[chartDays.length - 1]?.shortDate }}</span>
+      </div>
+    </div>
+
+    <!-- Peak hours -->
+    <div
+      v-if="data && data.order_count > 0 && peakHoursBars.length"
+      class="space-y-3 pt-2 border-t border-slate-800/60"
+    >
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.peakHoursTitle") }}</p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <!-- By hour of day -->
+        <div class="space-y-1.5">
+          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByHour") }}</p>
+          <div class="flex items-end gap-px h-16 overflow-hidden">
+            <div
+              v-for="bar in peakHoursBars"
+              :key="bar.hour"
+              class="flex-1 rounded-sm transition-colors"
+              :class="hourBarColor(bar.hour)"
+              :style="{ height: `${bar.heightPct}%`, minHeight: bar.count > 0 ? '2px' : '0' }"
+              :title="`${bar.hour}:00 — ${bar.count}`"
+            />
+          </div>
+          <div class="flex justify-between text-[9px] text-slate-600">
+            <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+          </div>
+        </div>
+        <!-- By day of week -->
+        <div class="space-y-1.5">
+          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByDay") }}</p>
+          <div class="flex items-end gap-1 h-16">
+            <div
+              v-for="bar in peakWeekdayBars"
+              :key="bar.label"
+              class="flex flex-1 flex-col items-center gap-0.5"
+              :title="`${bar.label} — ${bar.count}`"
+            >
+              <div
+                class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+                :style="{ height: `${bar.heightPct}%`, minHeight: bar.count > 0 ? '2px' : '0' }"
+              />
+            </div>
+          </div>
+          <div class="flex justify-between text-[9px] text-slate-600">
+            <span v-for="bar in peakWeekdayBars" :key="bar.label">{{ bar.label }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popular dishes -->
+    <div v-if="data && popularDishes.length" class="space-y-2 pt-2 border-t border-slate-800/60">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.popularDishesTitle") }}</p>
+      <ol class="space-y-1.5">
+        <li v-for="(dish, idx) in popularDishes" :key="dish.dish_slug" class="flex items-center gap-2 text-sm">
+          <span class="w-4 shrink-0 text-right text-xs font-bold text-slate-600">{{ idx + 1 }}</span>
+          <div class="relative flex-1 overflow-hidden rounded-sm bg-slate-800/50 h-6">
+            <div
+              class="absolute inset-y-0 left-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
+              :style="{ width: dish.barPct + '%' }"
+            />
+            <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
+          </div>
+          <span class="shrink-0 text-xs text-slate-400 tabular-nums">×{{ dish.order_count }}</span>
+        </li>
+      </ol>
+    </div>
+  </article>
+</template>
+
+<script setup>
+import { computed } from "vue";
+import AppIcon from "./AppIcon.vue";
+import { useI18n } from "../composables/useI18n";
+import { useTenantStore } from "../stores/tenant";
+
+const { t, formatNumber } = useI18n();
+const tenant = useTenantStore();
+
+const props = defineProps({
+  /** Revenue summary object from /owner/dashboard/ */
+  data: { type: Object, default: null },
+  /** true while insights are being fetched for the first time */
+  loading: { type: Boolean, default: false },
+  /** true while stale data is being silently revalidated */
+  updating: { type: Boolean, default: false },
+  /** Current analytics period in days */
+  period: { type: Number, default: 30 },
+});
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const fmt = (amount) => {
+  const n = Number(amount) || 0;
+  if (n === 0) return "—";
+  const currency = props.data?.currency || tenant.meta?.profile?.currency || null;
+  try {
+    if (currency) return formatNumber(n, { style: "currency", currency });
+  } catch { /* unsupported */ }
+  return n.toFixed(2);
+};
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const chartDays = computed(() => {
+  const days = props.data?.daily || [];
+  if (!days.length) return [];
+  const maxRev = Math.max(...days.map((d) => d.revenue), 1);
+  return days.map((d) => ({
+    date: d.date,
+    revenue: d.revenue,
+    orders: d.orders,
+    heightPct: Math.round((d.revenue / maxRev) * 100),
+    shortDate: d.date.slice(5),
+  }));
+});
+
+const hourBarColor = (hour) => {
+  if (hour >= 6 && hour <= 11) return "bg-amber-400/70 hover:bg-amber-400";
+  if (hour >= 12 && hour <= 14) return "bg-emerald-400/70 hover:bg-emerald-400";
+  if (hour >= 18 && hour <= 22) return "bg-violet-400/70 hover:bg-violet-400";
+  return "bg-slate-500/50 hover:bg-slate-400/60";
+};
+
+const peakHoursBars = computed(() => {
+  const hours = props.data?.peak_hours?.by_hour || [];
+  const max = Math.max(...hours, 1);
+  return hours.map((count, hour) => ({ hour, count, heightPct: Math.round((count / max) * 100) }));
+});
+
+const peakWeekdayBars = computed(() => {
+  const days = props.data?.peak_hours?.by_weekday || [];
+  const max = Math.max(...days, 1);
+  const labels = Array.from({ length: 7 }, (_, i) => {
+    try { return new Intl.DateTimeFormat("en", { weekday: "short" }).format(new Date(2023, 0, 1 + i)); }
+    catch { return ["Su","Mo","Tu","We","Th","Fr","Sa"][i]; }
+  });
+  return days.map((count, idx) => ({ label: labels[idx] || String(idx), count, heightPct: Math.round((count / max) * 100) }));
+});
+
+const popularDishes = computed(() => {
+  const dishes = props.data?.popular_dishes || [];
+  const maxCount = Math.max(...dishes.map((d) => d.order_count), 1);
+  return dishes.map((d) => ({ ...d, barPct: Math.round((d.order_count / maxCount) * 100) }));
+});
+
+// ── Return rate ───────────────────────────────────────────────────────────────
+const returnRate = computed(() => {
+  const d = props.data?.customer_return;
+  if (!d || d.return_rate_pct === null || d.return_rate_pct === undefined) return null;
+  return d.return_rate_pct;
+});
+const returnRateLabel = computed(() =>
+  returnRate.value !== null ? `${returnRate.value.toFixed(1)}%` : t("ownerHome.customerReturnRateNA")
+);
+</script>
+
+<style scoped>
+.owner-revenue-icon { width: 1rem; height: 1rem; color: var(--color-secondary); }
+</style>
