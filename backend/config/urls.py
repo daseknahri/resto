@@ -159,9 +159,12 @@ urlpatterns = [
     path("api/customer/loyalty/redeem/", CustomerLoyaltyRedeemView.as_view(), name="customer-loyalty-redeem"),
     path("api/currency-rates/", CurrencyRateListView.as_view(), name="currency-rates"),
     path("api/", include(tenant_router.urls)),
-    path("api-auth/", include("rest_framework.urls")),
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]
+
+if settings.DEBUG:
+    # The DRF browsable API login/logout is only needed during development.
+    urlpatterns += [path("api-auth/", include("rest_framework.urls"))]
 
 if settings.DEBUG:
     # In development, Django serves media directly (no nginx volume mount).

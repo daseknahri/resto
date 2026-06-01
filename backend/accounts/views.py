@@ -2478,6 +2478,12 @@ class DriverPositionUpdateView(APIView):
         except (KeyError, ValueError, TypeError):
             return Response({"detail": "lat and lng are required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        import math as _math
+        if not (_math.isfinite(lat) and -90 <= lat <= 90):
+            return Response({"detail": "lat must be a finite number between -90 and 90."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (_math.isfinite(lng) and -180 <= lng <= 180):
+            return Response({"detail": "lng must be a finite number between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
+
         now = _tz.now()
         customer.driver_lat = lat
         customer.driver_lng = lng

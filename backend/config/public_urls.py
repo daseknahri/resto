@@ -8,7 +8,7 @@ from config.shared_api_urls import shared_api_urlpatterns
 
 urlpatterns = [
     *shared_api_urlpatterns,
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_URL_PREFIX, admin.site.urls),
 ]
 
 if settings.DEBUG:

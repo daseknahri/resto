@@ -1,8 +1,23 @@
-﻿REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
-    ],
+﻿import os as _os
+
+_DEBUG = _os.getenv("DJANGO_DEBUG", "False") == "True"
+
+# In production:
+#   • Only SessionAuthentication — no BasicAuth (avoids credential exposure over
+#     plain HTTP and prevents API brute-forcing with static credentials).
+#   • Only JSONRenderer — no browsable HTML API (reduces attack surface and
+#     prevents CSRF-via-browsable-form in multi-tenant contexts).
+_auth_classes = ["rest_framework.authentication.SessionAuthentication"]
+if _DEBUG:
+    _auth_classes.append("rest_framework.authentication.BasicAuthentication")
+
+_renderer_classes = ["rest_framework.renderers.JSONRenderer"]
+if _DEBUG:
+    _renderer_classes.append("rest_framework.renderers.BrowsableAPIRenderer")
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": _auth_classes,
+    "DEFAULT_RENDERER_CLASSES": _renderer_classes,
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],

@@ -418,6 +418,12 @@ X_FRAME_OPTIONS = os.getenv("DJANGO_X_FRAME_OPTIONS", "DENY")
 # URLs with tokens in query strings to third-party analytics.
 SECURE_REFERRER_POLICY = os.getenv("DJANGO_REFERRER_POLICY", "strict-origin-when-cross-origin")
 
+# ── Django admin URL ──────────────────────────────────────────────────────────
+# Change DJANGO_ADMIN_URL in production to an unguessable path (no trailing slash
+# needed — Django's path() adds it). Example: "internal-management-abc123/"
+# Keep it ending in "/" so Django resolves it correctly.
+ADMIN_URL_PREFIX = os.getenv("DJANGO_ADMIN_URL", "admin/")
+
 SECURITY_LOG_LEVEL = os.getenv("DJANGO_SECURITY_LOG_LEVEL", "WARNING")
 SECURITY_LOG_FILE = os.getenv("DJANGO_SECURITY_LOG_FILE", "")
 LOG_FORMAT = os.getenv("DJANGO_LOG_FORMAT", "text").strip().lower()
