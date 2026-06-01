@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import random
 import time
 import urllib.error
@@ -39,6 +40,18 @@ from .serializers import (
 )
 
 logger = logging.getLogger("app.customer")
+
+
+def _parse_coord(value, lo: float, hi: float) -> float | None:
+    """Parse a latitude or longitude value, returning None for out-of-range or
+    non-finite inputs (inf, NaN) to prevent corrupt coordinates reaching the DB."""
+    if value is None:
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if (math.isfinite(f) and lo <= f <= hi) else None
 
 
 def serialize_user_session(user):
@@ -1705,11 +1718,8 @@ class MarketplacePlaceOrderView(APIView):
         delivery_location_url = (request.data.get("delivery_location_url") or "").strip()[:500]
         use_wallet = bool(request.data.get("use_wallet")) and _linked_customer is not None
 
-        try:
-            delivery_lat = float(request.data["delivery_lat"]) if request.data.get("delivery_lat") is not None else None
-            delivery_lng = float(request.data["delivery_lng"]) if request.data.get("delivery_lng") is not None else None
-        except (ValueError, TypeError):
-            delivery_lat = delivery_lng = None
+        delivery_lat = _parse_coord(request.data.get("delivery_lat"), -90, 90)
+        delivery_lng = _parse_coord(request.data.get("delivery_lng"), -180, 180)
 
         if fulfillment_type == "delivery" and _linked_customer is None:
             return Response(
@@ -2472,16 +2482,13 @@ class DriverPositionUpdateView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            lat = float(request.data["lat"])
-            lng = float(request.data["lng"])
-        except (KeyError, ValueError, TypeError):
+        if request.data.get("lat") is None or request.data.get("lng") is None:
             return Response({"detail": "lat and lng are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        import math as _math
-        if not (_math.isfinite(lat) and -90 <= lat <= 90):
+        lat = _parse_coord(request.data.get("lat"), -90, 90)
+        lng = _parse_coord(request.data.get("lng"), -180, 180)
+        if lat is None:
             return Response({"detail": "lat must be a finite number between -90 and 90."}, status=status.HTTP_400_BAD_REQUEST)
-        if not (_math.isfinite(lng) and -180 <= lng <= 180):
+        if lng is None:
             return Response({"detail": "lng must be a finite number between -180 and 180."}, status=status.HTTP_400_BAD_REQUEST)
 
         now = _tz.now()
@@ -2876,11 +2883,8 @@ class CustomerSavedAddressListCreateView(APIView):
             return Response({"detail": "address is required.", "code": "missing_address"}, status=status.HTTP_400_BAD_REQUEST)
         label = str(request.data.get("label") or "").strip()[:60]
         location_url = str(request.data.get("location_url") or "").strip()[:500]
-        try:
-            lat = float(request.data["lat"]) if request.data.get("lat") is not None else None
-            lng = float(request.data["lng"]) if request.data.get("lng") is not None else None
-        except (TypeError, ValueError):
-            lat = lng = None
+        lat = _parse_coord(request.data.get("lat"), -90, 90)
+        lng = _parse_coord(request.data.get("lng"), -180, 180)
         addr = SavedAddress.objects.create(
             customer=customer,
             label=label,
