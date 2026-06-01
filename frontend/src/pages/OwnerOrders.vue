@@ -427,10 +427,30 @@
               aria-describedby="owner-orders-note-error"
             />
           </label>
-          <label class="block space-y-1 text-xs text-slate-400">
-            {{ t("ownerOrders.setEstimate") }}
-            <input v-model.number="editMinutes" type="number" min="0" max="180" class="ui-input mt-1 w-32 text-sm" :placeholder="t('ownerOrders.minutesPlaceholder')" />
-          </label>
+          <!-- ETA: quick-pick presets + free-entry input -->
+          <div class="space-y-1">
+            <p class="text-xs text-slate-400">{{ t("ownerOrders.setEstimate") }}</p>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                v-for="preset in [10, 15, 20, 25, 30, 45]"
+                :key="preset"
+                type="button"
+                class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+                :class="editMinutes === preset
+                  ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+                  : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+                @click="editMinutes = preset"
+              >{{ preset }}m</button>
+              <input
+                v-model.number="editMinutes"
+                type="number"
+                min="1"
+                max="180"
+                class="ui-input w-20 text-sm"
+                :placeholder="t('ownerOrders.minutesPlaceholder')"
+              />
+            </div>
+          </div>
           <div class="flex gap-2">
             <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="saveNote(o)">
               {{ order.updatingOrderId === o.id ? t("common.saving") : t("ownerOrders.saveNote") }}
