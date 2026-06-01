@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from rest_framework import serializers
 
@@ -7,6 +9,14 @@ from sales.models import ActivationToken
 from .models import PasswordResetToken
 
 User = get_user_model()
+
+
+def _check_password_strength(password: str, user=None) -> None:
+    """Run AUTH_PASSWORD_VALIDATORS and convert Django ValidationError to DRF."""
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError({"password": list(exc.messages)})
 
 
 class ActivationSerializer(serializers.Serializer):
@@ -22,6 +32,9 @@ class ActivationSerializer(serializers.Serializer):
         if not activation.is_valid():
             raise serializers.ValidationError("Token expired or used")
         attrs["activation"] = activation
+        # Run AUTH_PASSWORD_VALIDATORS now that we have the user object for
+        # UserAttributeSimilarityValidator (checks against username/email).
+        _check_password_strength(attrs["password"], user=activation.user)
         return attrs
 
     def save(self, **kwargs):
@@ -98,6 +111,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         if not reset.is_valid():
             raise serializers.ValidationError("Token expired or used")
         attrs["reset"] = reset
+        # Run AUTH_PASSWORD_VALIDATORS with the user so similarity checks work.
+        _check_password_strength(attrs["password"], user=reset.user)
         return attrs
 
     def save(self, **kwargs):
