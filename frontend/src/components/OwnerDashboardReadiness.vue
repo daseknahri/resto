@@ -164,18 +164,30 @@ onMounted(async () => {
       api.get("/categories/", { timeout: 5000 }),
       api.get("/dishes/", { timeout: 5000 }),
     ]);
+    const catList = Array.isArray(cats.data) ? cats.data : [];
     const dishList = Array.isArray(dishes.data) ? dishes.data : [];
-    categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
+    categoriesCount.value = catList.length;
     dishesCount.value = dishList.length;
     const soldOutCount = dishList.filter((d) => d.is_published && !d.is_available).length;
+
+    // Build slug → name maps so siblings can resolve analytics slugs to labels
+    const categoryNameBySlug = Object.fromEntries(
+      catList.map((c) => [c.slug, c.name]).filter(([s]) => s)
+    );
+    const dishNameBySlug = Object.fromEntries(
+      dishList.map((d) => [d.slug, d.name]).filter(([s]) => s)
+    );
+
     emit("loaded", {
       categoriesCount: categoriesCount.value,
       dishesCount: dishesCount.value,
       soldOutCount,
+      categoryNameBySlug,
+      dishNameBySlug,
     });
   } catch {
     // Readiness degrades gracefully — missing counts just show "missing"
-    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0 });
+    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0, categoryNameBySlug: {}, dishNameBySlug: {} });
   } finally {
     loading.value = false;
   }

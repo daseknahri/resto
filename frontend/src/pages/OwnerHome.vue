@@ -211,6 +211,8 @@
     <!-- ── ANALYTICS: deferred — loads after first paint ───────────────────── -->
     <OwnerDashboardInsights
       ref="insightsRef"
+      :category-name-by-slug="categoryNameBySlug"
+      :dish-name-by-slug="dishNameBySlug"
       @data="onInsightsData"
       @period-change="insightsPeriod = $event"
     />
@@ -357,9 +359,15 @@ const { t, formatNumber, currentLocale } = useI18n();
 // ── Refs to deferred child components ────────────────────────────────────────
 const insightsRef = ref(null);
 
-// ── Sold-out count — received from OwnerDashboardReadiness after it fetches ──
+// ── Sold-out count + name maps from OwnerDashboardReadiness ──────────────────
 const soldOutCount = ref(0);
-const onReadinessLoaded = ({ soldOutCount: n }) => { soldOutCount.value = n ?? 0; };
+const categoryNameBySlug = ref({});
+const dishNameBySlug = ref({});
+const onReadinessLoaded = ({ soldOutCount: n, categoryNameBySlug: cats, dishNameBySlug: dishes }) => {
+  soldOutCount.value = n ?? 0;
+  if (cats) categoryNameBySlug.value = cats;
+  if (dishes) dishNameBySlug.value = dishes;
+};
 
 // ── Today's reservations — received from the dashboard endpoint via insights ─
 const todayReservations = ref(null);     // null = not yet loaded

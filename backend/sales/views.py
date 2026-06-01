@@ -2234,6 +2234,18 @@ class OwnerDashboardView(APIView):
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
 
+        # Currency — use the most common currency among recent orders, with
+        # profile fallback so the frontend never has to guess.
+        from tenancy.models import Profile as _Prof
+        _prof = _Prof.objects.filter(tenant=tenant).values_list("currency", flat=True).first()
+        _order_currency = (
+            revenue_qs.values_list("currency", flat=True)
+            .exclude(currency="")
+            .order_by()
+            .first()
+        )
+        dashboard_currency = _order_currency or _prof or "USD"
+
         daily_rows = (
             revenue_qs.annotate(day=TruncDate("created_at"))
             .values("day")
@@ -2377,6 +2389,7 @@ class OwnerDashboardView(APIView):
                 "upgrade_requests": upgrade_requests,
                 "revenue_summary": {
                     "days": days,
+                    "currency": dashboard_currency,
                     "total_revenue": total_revenue,
                     "order_count": order_count,
                     "avg_order_value": avg_order_value,

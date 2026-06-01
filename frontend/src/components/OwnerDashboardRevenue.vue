@@ -147,6 +147,29 @@
       </ol>
     </div>
 
+    <!-- Marketplace commission summary — only when restaurant has marketplace orders -->
+    <div
+      v-if="data && marketplaceStats.order_count > 0"
+      class="space-y-2 pt-2 border-t border-slate-800/60"
+    >
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.marketplaceTitle") }}</p>
+      <div class="grid grid-cols-3 gap-2">
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.marketplaceOrders") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ marketplaceStats.order_count }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.marketplaceRevenue") }}</p>
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ fmt(marketplaceStats.revenue) }}</p>
+        </div>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.marketplaceCommission") }}</p>
+          <p class="ui-stat-value text-rose-400">{{ fmt(marketplaceStats.commission_total) }}</p>
+          <p class="mt-0.5 text-[10px] text-slate-600">10% platform fee</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Fulfillment breakdown — pickup / delivery / table split -->
     <div
       v-if="loading || (data && data.order_count > 0)"
@@ -235,6 +258,13 @@ const popularDishes = computed(() => {
   const maxCount = Math.max(...dishes.map((d) => d.order_count), 1);
   return dishes.map((d) => ({ ...d, barPct: Math.round((d.order_count / maxCount) * 100) }));
 });
+
+// ── Marketplace stats ─────────────────────────────────────────────────────────
+const marketplaceStats = computed(() => ({
+  order_count: props.data?.marketplace?.order_count || 0,
+  revenue: props.data?.marketplace?.revenue || 0,
+  commission_total: props.data?.marketplace?.commission_total || 0,
+}));
 
 // ── Return rate ───────────────────────────────────────────────────────────────
 const returnRate = computed(() => {

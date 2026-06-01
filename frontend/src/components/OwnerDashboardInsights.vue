@@ -144,8 +144,8 @@
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
         <ul v-if="topCategories.length" class="mt-3 space-y-2 text-sm text-slate-200">
           <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between gap-3">
-            <span>{{ item.category_slug }}</span>
-            <span class="text-slate-400">{{ item.count }}</span>
+            <span class="truncate">{{ resolveCategory(item.category_slug) }}</span>
+            <span class="shrink-0 text-slate-400">{{ item.count }}</span>
           </li>
         </ul>
         <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
@@ -157,8 +157,8 @@
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
         <ul v-if="topDishes.length" class="mt-3 space-y-2 text-sm text-slate-200">
           <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between gap-3">
-            <span>{{ item.dish_slug }}</span>
-            <span class="text-slate-400">{{ item.count }}</span>
+            <span class="truncate">{{ resolveDish(item.dish_slug) }}</span>
+            <span class="shrink-0 text-slate-400">{{ item.count }}</span>
           </li>
         </ul>
         <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
@@ -184,6 +184,12 @@ const toast = useToastStore();
 const PERIOD_OPTIONS = [7, 14, 30, 90];
 const INSIGHTS_TTL_MS = 3 * 60 * 1000;
 
+const props = defineProps({
+  /** slug → name maps passed in from OwnerDashboardReadiness via the parent */
+  categoryNameBySlug: { type: Object, default: () => ({}) },
+  dishNameBySlug:     { type: Object, default: () => ({}) },
+});
+
 // ── Own loading state ─────────────────────────────────────────────────────────
 const loading = ref(false);
 const updating = ref(false);
@@ -196,6 +202,20 @@ const summary = ref({ counts: {}, top_categories: [], top_dishes: [], interactio
 
 // ── Emits — lets parent/siblings react to period changes or loaded data ────────
 const emit = defineEmits(["data", "period-change"]);
+
+// ── Slug → human-readable label ───────────────────────────────────────────────
+// Uses the name map when available; falls back to title-casing the slug.
+const humanizeSlug = (slug) =>
+  String(slug || "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+const resolveCategory = (slug) => props.categoryNameBySlug[slug] || humanizeSlug(slug);
+const resolveDish     = (slug) => props.dishNameBySlug[slug]     || humanizeSlug(slug);
 
 // ── Derived ───────────────────────────────────────────────────────────────────
 const counts = computed(() => summary.value?.counts || {});
