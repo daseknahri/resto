@@ -2142,6 +2142,21 @@ class OwnerDashboardView(APIView):
         cart_views = counts.get("cart_view", 0)
         order_actions = counts.get("order_handoff_click", 0) + counts.get("checkout_click", 0)
         interaction_rate = round((order_actions / menu_views) * 100, 2) if menu_views else 0.0
+
+        # Previous-period analytics counts (same window, shifted back)
+        _prev_analytics_since = since - timedelta(days=days)
+        _prev_analytics_qs = AnalyticsEvent.objects.filter(
+            created_at__gte=_prev_analytics_since,
+            created_at__lt=since,
+        )
+        _prev_raw = {
+            row["event_type"]: row["count"]
+            for row in _prev_analytics_qs.values("event_type").annotate(count=Count("id"))
+        }
+        _prev_counts = {ev: int(_prev_raw.get(ev, 0)) for ev in tracked_events}
+        _prev_menu_views = _prev_counts.get("menu_view", 0)
+        _prev_order_actions = _prev_counts.get("order_handoff_click", 0) + _prev_counts.get("checkout_click", 0)
+        _prev_interaction_rate = round((_prev_order_actions / _prev_menu_views) * 100, 2) if _prev_menu_views else 0.0
         top_categories = list(
             analytics_qs.exclude(category_slug="")
             .values("category_slug")
@@ -2203,6 +2218,8 @@ class OwnerDashboardView(APIView):
                         "top_categories": top_categories,
                         "top_dishes": top_dishes,
                         "interaction_rate_pct": interaction_rate,
+                        "prev_counts": _prev_counts,
+                        "prev_interaction_rate_pct": _prev_interaction_rate,
                         "funnel": {
                             "menu_views": menu_views,
                             "cart_views": cart_views,
@@ -2400,6 +2417,8 @@ class OwnerDashboardView(APIView):
                     "top_categories": top_categories,
                     "top_dishes": top_dishes,
                     "interaction_rate_pct": interaction_rate,
+                    "prev_counts": _prev_counts,
+                    "prev_interaction_rate_pct": _prev_interaction_rate,
                     "funnel": {
                         "menu_views": menu_views,
                         "cart_views": cart_views,

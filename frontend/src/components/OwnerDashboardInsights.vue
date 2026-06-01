@@ -65,18 +65,22 @@
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
           <p class="ui-stat-value text-slate-100">{{ counts.menu_view || 0 }}</p>
+          <PeriodBadge :pct="menuViewsChange" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
           <p class="ui-stat-value text-slate-100">{{ counts.dish_view || 0 }}</p>
+          <PeriodBadge :pct="dishViewsChange" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.orderActions") }}</p>
           <p class="ui-stat-value text-slate-100">{{ orderActionsCount }}</p>
+          <PeriodBadge :pct="orderActionsChange" />
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.interactionRate") }}</p>
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
+          <PeriodBadge :pct="interactionRateChange" />
         </div>
       </template>
     </div>
@@ -173,6 +177,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
+import PeriodBadge from "./PeriodBadge.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
@@ -226,17 +231,43 @@ const resolveDish     = (slug) => props.dishNameBySlug[slug]     || humanizeSlug
 
 // ── Derived ───────────────────────────────────────────────────────────────────
 const counts = computed(() => summary.value?.counts || {});
+const prevCounts = computed(() => summary.value?.prev_counts || {});
 const topCategories = computed(() => (summary.value?.top_categories || []).slice(0, 6));
 const topDishes = computed(() => (summary.value?.top_dishes || []).slice(0, 6));
 
 const orderActionsCount = computed(
   () => Number(counts.value?.order_handoff_click || 0) + Number(counts.value?.checkout_click || 0)
 );
+const prevOrderActionsCount = computed(
+  () => Number(prevCounts.value?.order_handoff_click || 0) + Number(prevCounts.value?.checkout_click || 0)
+);
+
 const interactionRateLabel = computed(
   () => `${formatNumber(summary.value?.interaction_rate_pct || 0, {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })}%`
+);
+
+// ── Period-over-period % change helpers ───────────────────────────────────────
+const pctChange = (current, previous) => {
+  if (!previous || previous <= 0) return null;
+  return Math.round(((current - previous) / previous) * 100 * 10) / 10;
+};
+const menuViewsChange = computed(() =>
+  pctChange(counts.value?.menu_view || 0, prevCounts.value?.menu_view || 0)
+);
+const dishViewsChange = computed(() =>
+  pctChange(counts.value?.dish_view || 0, prevCounts.value?.dish_view || 0)
+);
+const orderActionsChange = computed(() =>
+  pctChange(orderActionsCount.value, prevOrderActionsCount.value)
+);
+const interactionRateChange = computed(() =>
+  pctChange(
+    summary.value?.interaction_rate_pct || 0,
+    summary.value?.prev_interaction_rate_pct || 0
+  )
 );
 
 const funnelData = computed(() => summary.value?.funnel || null);
