@@ -628,6 +628,7 @@ import AppIcon from "../components/AppIcon.vue";
 import ReservationCalendar from "../components/ReservationCalendar.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
+import { safeExternalUrl } from "../lib/escape";
 import { useToastStore } from "../stores/toast";
 
 const toast = useToastStore();
@@ -881,7 +882,7 @@ const sendReminder = async (reservation) => {
   try {
     const res = await api.post(`/owner/reservations/${id}/reminder/`, {});
     const fallback = whatsappHref(reservation);
-    const link = String(res?.data?.whatsapp_link || fallback || "");
+    const link = safeExternalUrl(res?.data?.whatsapp_link || fallback || "");
     const reminderId = Number(res?.data?.id || 0);
     let popup = null;
     if (link) {
@@ -934,7 +935,7 @@ const bulkRetryReminders = async () => {
     const skippedUnavailable = Array.isArray(payload.skipped_unavailable_ids) ? payload.skipped_unavailable_ids.length : 0;
     const skippedNotFailed = Array.isArray(payload.skipped_not_failed_ids) ? payload.skipped_not_failed_ids.length : 0;
     const results = Array.isArray(payload.results) ? payload.results : [];
-    const links = results.map((item) => String(item?.whatsapp_link || "").trim()).filter(Boolean);
+    const links = results.map((item) => safeExternalUrl(item?.whatsapp_link || "")).filter(Boolean);
     pendingReminderReconciliation.value = results;
 
     let firstPopup = null;
