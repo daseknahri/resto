@@ -16,48 +16,85 @@
         </div>
       </div>
 
-      <!-- Today's quick stats — driven by order store, no extra fetch needed -->
-      <div class="grid grid-cols-3 gap-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50">
-        <template v-if="order.ordersLoading && !order.orders.length">
-          <div v-for="i in 3" :key="i" class="animate-pulse py-3 text-center" :class="i === 2 ? 'border-x border-slate-800' : ''">
-            <div class="mx-auto h-6 w-8 rounded bg-slate-700/50" />
-            <div class="mx-auto mt-1.5 h-2 w-16 rounded bg-slate-800/50" />
-          </div>
-        </template>
-        <template v-else>
-          <div class="py-3 text-center">
-            <p class="text-xl font-bold tabular-nums text-white">{{ todayStats.count }}</p>
-            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayOrders") }}</p>
-            <p
-              v-if="yesterdayStats.count > 0"
-              class="mt-0.5 text-[9px] tabular-nums"
-              :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-600'"
-            >
-              {{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }} {{ t("ownerHome.vsYesterday") }}
-            </p>
-          </div>
-          <div class="border-x border-slate-800 py-3 text-center">
-            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
-            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerHome.todayRevenue") }}</p>
-            <p
-              v-if="yesterdayStats.revenue > 0"
-              class="mt-0.5 text-[9px]"
-              :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-600'"
-            >
-              {{ todayStats.revenueRaw >= yesterdayStats.revenue ? '↑' : '↓' }} {{ t("ownerHome.vsYesterday") }}
-            </p>
-          </div>
-          <div class="py-3 text-center">
-            <p
-              class="text-xl font-bold tabular-nums transition-colors"
-              :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-white'"
-            >
-              {{ todayStats.pending }}
-            </p>
-            <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
-          </div>
-        </template>
+      <!-- KPI cards: today stats + 7-day sparklines ───────────────────────── -->
+      <!-- Skeleton while the first orders load -->
+      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <div v-for="i in 4" :key="i" class="ui-admin-subcard animate-pulse space-y-2">
+          <div class="h-2.5 w-14 rounded bg-slate-700/60" />
+          <div class="h-7 w-16 rounded bg-slate-700/40" />
+          <div class="h-7 rounded bg-slate-800/40" />
+        </div>
       </div>
+
+      <div v-else class="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        <!-- Today's orders -->
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
+          <div class="flex items-end justify-between gap-1">
+            <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
+            <span
+              v-if="yesterdayStats.count > 0"
+              class="mb-0.5 text-[10px] tabular-nums"
+              :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
+            >
+              {{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}
+            </span>
+          </div>
+          <SparklineChart :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
+        </article>
+
+        <!-- Today's revenue -->
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
+          <div class="flex items-end justify-between gap-1">
+            <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
+            <span
+              v-if="yesterdayStats.revenue > 0"
+              class="mb-0.5 text-[10px]"
+              :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
+            >
+              {{ todayStats.revenueRaw >= yesterdayStats.revenue ? '↑' : '↓' }}
+            </span>
+          </div>
+          <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" />
+        </article>
+
+        <!-- Avg ticket (7-day sparkline) -->
+        <article class="ui-admin-subcard space-y-1.5">
+          <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
+          <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
+          <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
+        </article>
+
+        <!-- Pending / rating -->
+        <article
+          class="ui-admin-subcard space-y-1.5 transition-colors"
+          :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
+        >
+          <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
+          <p
+            class="ui-stat-value transition-colors"
+            :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'"
+          >
+            {{ todayStats.pending }}
+          </p>
+          <!-- Show rating sparkline when no pending orders to fill the space -->
+          <SparklineChart
+            v-if="ratingsSummary?.average"
+            :values="sparklineRating"
+            color="amber"
+            :height="28"
+            :filled="false"
+          />
+          <div v-else class="h-7" />
+        </article>
+      </div>
+
+      <!-- Alerts strip — shown below KPIs, above ratings -->
+      <OwnerDashboardAlerts
+        :sold-out-count="soldOutCount"
+        :ratings-summary="ratingsSummary"
+      />
 
       <!-- Ratings strip — skeleton until DeferredRatings mounts -->
       <template v-if="ratingsSummary">
@@ -118,7 +155,7 @@
       </div>
 
       <!-- Dish availability — lazy: fetches dishes only when panel is opened -->
-      <OwnerDashboardDishPanel :initial-sold-out-count="0" />
+      <OwnerDashboardDishPanel :initial-sold-out-count="soldOutCount" />
 
       <!-- Action buttons -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
@@ -146,7 +183,7 @@
     </article>
 
     <!-- ── READINESS: independent fetch for categories + dishes ─────────────── -->
-    <OwnerDashboardReadiness />
+    <OwnerDashboardReadiness @loaded="onReadinessLoaded" />
 
     <!-- ── ANALYTICS: deferred — loads after first paint ───────────────────── -->
     <OwnerDashboardInsights
@@ -274,10 +311,12 @@ import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import BestSellersWidget from "../components/BestSellersWidget.vue";
 import RevenueBarChart from "../components/RevenueBarChart.vue";
+import OwnerDashboardAlerts from "../components/OwnerDashboardAlerts.vue";
 import OwnerDashboardReadiness from "../components/OwnerDashboardReadiness.vue";
 import OwnerDashboardDishPanel from "../components/OwnerDashboardDishPanel.vue";
 import OwnerDashboardInsights from "../components/OwnerDashboardInsights.vue";
 import OwnerDashboardRevenue from "../components/OwnerDashboardRevenue.vue";
+import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
@@ -295,6 +334,10 @@ const { t, formatNumber, currentLocale } = useI18n();
 // ── Refs to deferred child components ────────────────────────────────────────
 const insightsRef = ref(null);
 
+// ── Sold-out count — received from OwnerDashboardReadiness after it fetches ──
+const soldOutCount = ref(0);
+const onReadinessLoaded = ({ soldOutCount: n }) => { soldOutCount.value = n ?? 0; };
+
 // ── Insights state (shared between OwnerDashboardInsights + OwnerDashboardRevenue) ──
 // The insights component owns fetching; it bubbles up via @data event so the
 // revenue component (a sibling) gets its data without a second API call.
@@ -307,6 +350,43 @@ const upgradeRequests = ref([]);
 const onInsightsData = (data) => {
   if (data?.revenue_summary) revenueSummary.value = data.revenue_summary;
   if (Array.isArray(data?.upgrade_requests)) upgradeRequests.value = data.upgrade_requests;
+};
+
+// ── KPI Sparklines — last N days from revenue summary daily breakdown ─────────
+// Slice the most recent 7 days for the sparkline regardless of the selected
+// analytics period (the full period chart stays in the revenue section).
+const sparklineRevenue = computed(() => {
+  const days = revenueSummary.value?.daily || [];
+  return days.slice(-7).map((d) => Number(d.revenue) || 0);
+});
+const sparklineOrders = computed(() => {
+  const days = revenueSummary.value?.daily || [];
+  return days.slice(-7).map((d) => Number(d.orders) || 0);
+});
+const sparklineAvgTicket = computed(() => {
+  const days = revenueSummary.value?.daily || [];
+  return days.slice(-7).map((d) => {
+    const rev = Number(d.revenue) || 0;
+    const orders = Number(d.orders) || 0;
+    return orders > 0 ? rev / orders : 0;
+  });
+});
+const sparklineRating = computed(() => {
+  // Ratings don't have daily breakdown — show a flat line at current average
+  // as a placeholder until a per-day endpoint is added.
+  const avg = ratingsSummary.value?.average;
+  if (!avg) return [];
+  return Array(7).fill(avg);
+});
+
+// Trend arrows: compare the last value to the first in the sparkline window
+const trend = (values) => {
+  if (values.length < 2) return "neutral";
+  const first = values[0];
+  const last = values[values.length - 1];
+  if (last > first * 1.02) return "up";
+  if (last < first * 0.98) return "down";
+  return "neutral";
 };
 
 // Data for <RevenueBarChart> — mapped from revenue summary
@@ -382,6 +462,16 @@ const todayStats = computed(() => {
     revenueRaw: revenue,
     pending: todayOrders.filter((o) => o.status === "pending").length,
   };
+});
+
+// Average ticket for today
+const avgTicketLabel = computed(() => {
+  const { count, revenueRaw } = todayStats.value;
+  if (!count) return "—";
+  const avg = revenueRaw / count;
+  const currency = order.orders.find((o) => o.currency)?.currency || "MAD";
+  try { return formatNumber(avg, { style: "currency", currency, maximumFractionDigits: 0 }); }
+  catch { return `${currency} ${Math.round(avg)}`; }
 });
 
 const yesterdayStats = computed(() => {

@@ -158,16 +158,24 @@ const readinessItems = computed(() => [
 // ── Fetch categories + dishes counts independently ────────────────────────────
 onMounted(async () => {
   try {
+    // Fetch enough dish fields to compute sold-out count — needed by the
+    // alerts strip in the parent without triggering a second dishes fetch.
     const [cats, dishes] = await Promise.all([
       api.get("/categories/", { timeout: 5000 }),
-      api.get("/dishes/", { params: { fields: "id" }, timeout: 5000 }),
+      api.get("/dishes/", { timeout: 5000 }),
     ]);
+    const dishList = Array.isArray(dishes.data) ? dishes.data : [];
     categoriesCount.value = Array.isArray(cats.data) ? cats.data.length : 0;
-    dishesCount.value = Array.isArray(dishes.data) ? dishes.data.length : 0;
-    // Notify parent so the dish panel can be refreshed without refetching
-    emit("loaded", { categoriesCount: categoriesCount.value, dishesCount: dishesCount.value });
+    dishesCount.value = dishList.length;
+    const soldOutCount = dishList.filter((d) => d.is_published && !d.is_available).length;
+    emit("loaded", {
+      categoriesCount: categoriesCount.value,
+      dishesCount: dishesCount.value,
+      soldOutCount,
+    });
   } catch {
     // Readiness degrades gracefully — missing counts just show "missing"
+    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0 });
   } finally {
     loading.value = false;
   }

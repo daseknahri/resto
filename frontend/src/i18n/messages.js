@@ -1874,6 +1874,20 @@ export const messages = {
       noRatingsYet: "No ratings yet",
       allClear: "All clear",
       soldOutLabel: "Sold out",
+      alertsRegion: "Dashboard alerts",
+      alertPaymentOverdue: "Payment overdue — your account may be suspended soon.",
+      alertPaymentAction: "Manage billing",
+      alertStalePending: "{count} order(s) pending for over {minutes} min.",
+      alertViewOrders: "View orders",
+      alertSoldOut: "{count} dish(es) are sold out right now.",
+      alertResetAll: "Reset all",
+      alertLowRating: "Average rating is {avg}/5 across {count} reviews.",
+      alertViewRatings: "View reviews",
+      kpiRevenue: "Revenue",
+      kpiOrders: "Orders",
+      kpiAvgTicket: "Avg ticket",
+      kpiRating: "Rating",
+      last7days: "7 days",
       readinessActionContact: "Edit profile",
       readinessActionTheme: "Configure theme",
       readinessActionCategories: "Add categories",
@@ -4688,6 +4702,20 @@ export const messages = {
       noRatingsYet: "Aucun avis",
       allClear: "Rien a signaler",
       soldOutLabel: "Rupture de stock",
+      alertsRegion: "Alertes tableau de bord",
+      alertPaymentOverdue: "Paiement en retard — votre compte risque d'etre suspendu.",
+      alertPaymentAction: "Gerer la facturation",
+      alertStalePending: "{count} commande(s) en attente depuis plus de {minutes} min.",
+      alertViewOrders: "Voir les commandes",
+      alertSoldOut: "{count} plat(s) sont actuellement epuises.",
+      alertResetAll: "Tout reinitialiser",
+      alertLowRating: "Note moyenne de {avg}/5 sur {count} avis.",
+      alertViewRatings: "Voir les avis",
+      kpiRevenue: "Revenu",
+      kpiOrders: "Commandes",
+      kpiAvgTicket: "Ticket moyen",
+      kpiRating: "Note",
+      last7days: "7 jours",
       readinessActionContact: "Modifier le profil",
       readinessActionTheme: "Configurer le theme",
       readinessActionCategories: "Ajouter des categories",
@@ -5700,7 +5728,7 @@ export const messages = {
       tabNav: "Sections du compte"
     }
   },
-  ar: {}
+  ar: arabicMessages
 };
 
 const isPlainObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
