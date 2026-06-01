@@ -777,8 +777,10 @@ const formatTime = (iso) => {
 };
 
 // ── Delivery helpers ──────────────────────────────────────────────────────────
+// Return a safe map URL — only http/https are allowed to prevent javascript: injection.
 const orderMapUrl = (o) => {
-  if (o.delivery_location_url) return o.delivery_location_url;
+  const loc = o.delivery_location_url;
+  if (loc && (loc.startsWith('http://') || loc.startsWith('https://'))) return loc;
   const lat = o.delivery_lat;
   const lng = o.delivery_lng;
   if (lat != null && lng != null) return `https://maps.google.com/?q=${lat},${lng}`;

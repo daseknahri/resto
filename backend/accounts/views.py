@@ -1715,7 +1715,13 @@ class MarketplacePlaceOrderView(APIView):
         customer_phone = (request.data.get("customer_phone") or "").strip()[:30]
         customer_note = (request.data.get("customer_note") or "").strip()[:300]
         delivery_address = (request.data.get("delivery_address") or "").strip()[:180]
-        delivery_location_url = (request.data.get("delivery_location_url") or "").strip()[:500]
+        _raw_loc_url = (request.data.get("delivery_location_url") or "").strip()[:500]
+        # Only allow http/https schemes — reject javascript:, data:, etc.
+        delivery_location_url = (
+            _raw_loc_url
+            if _raw_loc_url.startswith(("http://", "https://"))
+            else ""
+        )
         use_wallet = bool(request.data.get("use_wallet")) and _linked_customer is not None
 
         delivery_lat = _parse_coord(request.data.get("delivery_lat"), -90, 90)

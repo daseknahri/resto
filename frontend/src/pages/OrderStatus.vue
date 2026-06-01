@@ -118,7 +118,9 @@
         </p>
         <p class="mt-1.5 text-sm text-slate-200">{{ orderData.delivery_address }}</p>
         <a
-          v-if="orderData.delivery_location_url"
+          v-if="orderData.delivery_location_url &&
+                (orderData.delivery_location_url.startsWith('http://') ||
+                 orderData.delivery_location_url.startsWith('https://'))"
           :href="orderData.delivery_location_url"
           target="_blank"
           rel="noopener noreferrer"
