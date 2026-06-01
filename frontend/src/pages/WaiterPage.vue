@@ -227,7 +227,7 @@
         @click.self="billOrder = null"
         @keydown.esc.window="billOrder = null"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="waiter-bill-dialog-title" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
+        <div ref="billDialogRef" role="dialog" aria-modal="true" aria-labelledby="waiter-bill-dialog-title" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
           <!-- Header -->
           <div class="bill-header bg-slate-900 px-5 py-4 text-center">
             <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">{{ tenantName }}</p>
@@ -301,7 +301,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useTenantStore } from "../stores/tenant";
@@ -320,7 +320,38 @@ const onOrderPlaced = () => {
 
 // ── Bill / receipt ─────────────────────────────────────────────────────────────
 const billOrder = ref(null);
+const billDialogRef = ref(null);
 const openBill = (order) => { billOrder.value = order; };
+
+const FOCUSABLE_BILL = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapBillFocus = (e) => {
+  if (!billDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(billDialogRef.value.querySelectorAll(FOCUSABLE_BILL));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(billOrder, async (val) => {
+  if (val) {
+    await nextTick();
+    billDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
+    document.addEventListener('keydown', trapBillFocus);
+  } else {
+    document.removeEventListener('keydown', trapBillFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapBillFocus));
 const printBill = () => { window.print(); };
 const billDateTime = (iso) => {
   try {

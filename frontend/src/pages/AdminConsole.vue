@@ -1109,7 +1109,7 @@
         @click.self="cancelDryRun"
         @keydown.esc.window="cancelDryRun"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="admin-console-dry-run-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+        <div ref="dryRunDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-console-dry-run-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
           <div class="border-b border-slate-800 px-5 py-4">
             <p class="text-xs font-semibold uppercase tracking-wider text-amber-400">{{ t('adminConsole.dryRunSuccessful') }}</p>
             <h3 id="admin-console-dry-run-dialog-title" class="mt-1 text-base font-semibold text-white">{{ t('adminConsole.applyImportNow') }}</h3>
@@ -1140,7 +1140,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import adminApi from "../lib/adminApi";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
@@ -1200,6 +1200,37 @@ const tenantExportLoading = ref({});
 const tenantImportLoading = ref({});
 const tenantImportInputs = new Map();
 const dryRunReview = ref(null); // { tenant, summary, replaceBody }
+const dryRunDialogRef = ref(null);
+
+const FOCUSABLE_DR = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapDryRunFocus = (e) => {
+  if (!dryRunDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(dryRunDialogRef.value.querySelectorAll(FOCUSABLE_DR));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(dryRunReview, async (val) => {
+  if (val) {
+    await nextTick();
+    dryRunDialogRef.value?.querySelector(FOCUSABLE_DR)?.focus();
+    document.addEventListener('keydown', trapDryRunFocus);
+  } else {
+    document.removeEventListener('keydown', trapDryRunFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapDryRunFocus));
 const applyingImport = ref(false);
 const tenantTools = ref({});
 const tenantTimeline = ref({});

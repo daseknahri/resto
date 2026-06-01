@@ -262,7 +262,7 @@
         @click.self="closeLeadModal"
         @keydown.esc.window="closeLeadModal"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
+        <div ref="leadDialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
           <div class="mb-4 flex items-center justify-between gap-3">
             <div>
               <p class="ui-kicker">{{ t("customerLeadPage.message") }}</p>
@@ -320,7 +320,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { formatBusinessHoursRows, formatBusinessHoursSummary, getCurrentDayKey, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
@@ -336,6 +336,36 @@ const customerStore = useCustomerStore();
 const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
+const leadDialogRef = ref(null);
+
+const FOCUSABLE_LEAD = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapLeadFocus = (e) => {
+  if (!leadDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(leadDialogRef.value.querySelectorAll(FOCUSABLE_LEAD));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(showLeadModal, async (open) => {
+  if (open) {
+    await nextTick();
+    leadDialogRef.value?.querySelector(FOCUSABLE_LEAD)?.focus();
+    document.addEventListener('keydown', trapLeadFocus);
+  } else {
+    document.removeEventListener('keydown', trapLeadFocus);
+  }
+});
 const showPlatformDemo = computed(() => isPublicDemoHost());
 const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu");
 
@@ -466,5 +496,8 @@ onMounted(async () => {
   if (c?.email && !form.email) form.email = c.email;
   if (typeof window !== "undefined") window.addEventListener("keydown", onEscape);
 });
-onBeforeUnmount(() => { if (typeof window !== "undefined") window.removeEventListener("keydown", onEscape); });
+onBeforeUnmount(() => {
+  if (typeof window !== "undefined") window.removeEventListener("keydown", onEscape);
+  document.removeEventListener('keydown', trapLeadFocus);
+});
 </script>

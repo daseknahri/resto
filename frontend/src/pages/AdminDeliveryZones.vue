@@ -118,7 +118,7 @@
           @click.self="closeForm"
           @keydown.esc.window="closeForm"
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="admin-delivery-zones-form-dialog-title" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div ref="formDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-delivery-zones-form-dialog-title" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 id="admin-delivery-zones-form-dialog-title" class="text-base font-bold text-white">
               {{ editing ? t('adminZones.editTitle') : t('adminZones.createTitle') }}
             </h2>
@@ -221,7 +221,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import api from '../lib/api';
@@ -234,6 +234,37 @@ const loading = ref(true);
 const fetchError = ref(false);
 const zones = ref([]);
 const showForm = ref(false);
+const formDialogRef = ref(null);
+
+const FOCUSABLE_DZ = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapFormFocus = (e) => {
+  if (!formDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(formDialogRef.value.querySelectorAll(FOCUSABLE_DZ));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(showForm, async (open) => {
+  if (open) {
+    await nextTick();
+    formDialogRef.value?.querySelector(FOCUSABLE_DZ)?.focus();
+    document.addEventListener('keydown', trapFormFocus);
+  } else {
+    document.removeEventListener('keydown', trapFormFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapFormFocus));
 const editing = ref(null); // zone being edited, or null for create
 const saving = ref(false);
 const { confirm } = useConfirmModal();

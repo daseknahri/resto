@@ -5,7 +5,7 @@
       @click.self="$emit('close')"
       @keydown.esc.window="$emit('close')"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="customer-auth-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+      <div ref="dialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-auth-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
         <!-- Header -->
         <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
           <div>
@@ -153,6 +153,12 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
+
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 import AppIcon from "./AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCustomerStore } from "../stores/customer";
@@ -182,6 +188,20 @@ const generalError = ref("");
 const resendSeconds = ref(0);
 const otpInputRef  = ref(null);
 const nameInputRef = ref(null);
+const dialogRef    = ref(null);
+
+const trapFocus = (e) => {
+  if (!dialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
 
 // Holds the verified customer while waiting for name setup
 let _pendingCustomer = null;
@@ -327,6 +347,11 @@ const initGoogleOneTap = () => {
 };
 
 onMounted(async () => {
+  document.addEventListener('keydown', trapFocus);
+  await nextTick();
+  // Move focus into the dialog — first focusable element (phone input or close button)
+  dialogRef.value?.querySelector(FOCUSABLE)?.focus();
+
   if (!googleClientId) return;
   if (!window.google?.accounts?.id) {
     await new Promise((resolve) => {
@@ -344,6 +369,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener('keydown', trapFocus);
   clearInterval(resendTimer);
   try { window.google?.accounts?.id?.cancel(); } catch {}
 });

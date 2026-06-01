@@ -688,7 +688,7 @@
         @click.self="closeMapModal"
         @keydown.esc.window="closeMapModal"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="cart-map-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+        <div ref="mapDialogRef" role="dialog" aria-modal="true" aria-labelledby="cart-map-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
           <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
             <div>
               <p class="ui-kicker">{{ t('cartPage.mapPicker') }}</p>
@@ -875,6 +875,26 @@ let waitingForPasteTimer = null;
 const fieldErrors = ref({});
 const showMapModal = ref(false);
 const mapContainerRef = ref(null);
+const mapDialogRef = ref(null);
+
+const FOCUSABLE_MAP = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapMapFocus = (e) => {
+  if (!mapDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(mapDialogRef.value.querySelectorAll(FOCUSABLE_MAP));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
 const leafletMap = ref(null);
 const leafletMarker = ref(null);
 const leafletModuleRef = ref(null);
@@ -1217,9 +1237,12 @@ watch(showMapModal, async (value) => {
       leafletMap.value = null;
       leafletMarker.value = null;
     }
+    document.removeEventListener('keydown', trapMapFocus);
     return;
   }
   await nextTick();
+  mapDialogRef.value?.querySelector(FOCUSABLE_MAP)?.focus();
+  document.addEventListener('keydown', trapMapFocus);
   try {
     await initLeafletMap();
   } catch {
@@ -1728,6 +1751,7 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('keydown', handleEscapeKey);
   }
+  document.removeEventListener('keydown', trapMapFocus);
   clearTimeout(waitingForPasteTimer);
   if (leafletMap.value) {
     leafletMap.value.remove();

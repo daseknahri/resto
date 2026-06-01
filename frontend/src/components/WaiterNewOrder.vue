@@ -2,6 +2,7 @@
   <!-- Full-screen modal overlay -->
   <Teleport to="body">
     <div
+      ref="dialogRef"
       class="fixed inset-0 z-[3000] flex flex-col bg-slate-950/98 backdrop-blur"
       role="dialog"
       aria-modal="true"
@@ -212,7 +213,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useMenuStore } from '../stores/menu';
@@ -383,8 +384,33 @@ const submit = async () => {
   }
 };
 
+// ── Focus trap ────────────────────────────────────────────────────────────────
+const dialogRef = ref(null);
+const FOCUSABLE_SEL = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapFocus = (e) => {
+  if (!dialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE_SEL));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+onUnmounted(() => document.removeEventListener('keydown', trapFocus));
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  document.addEventListener('keydown', trapFocus);
+  dialogRef.value?.querySelector(FOCUSABLE_SEL)?.focus();
   if (!categories.value.length) {
     loadingDishes.value = true;
     await menu.fetchCategories();

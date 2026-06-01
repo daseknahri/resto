@@ -155,6 +155,7 @@
     <Transition name="slide-up">
       <div
         v-if="checkoutOpen"
+        ref="checkoutDialogRef"
         role="dialog"
         aria-modal="true"
         aria-labelledby="marketplace-menu-checkout-dialog-title"
@@ -315,7 +316,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
@@ -333,6 +334,37 @@ const loading = ref(true);
 const fetchError = ref(false);
 const restaurant = ref(null);
 const checkoutOpen = ref(false);
+const checkoutDialogRef = ref(null);
+
+const FOCUSABLE_CO = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapCheckoutFocus = (e) => {
+  if (!checkoutDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(checkoutDialogRef.value.querySelectorAll(FOCUSABLE_CO));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(checkoutOpen, async (open) => {
+  if (open) {
+    await nextTick();
+    checkoutDialogRef.value?.querySelector(FOCUSABLE_CO)?.focus();
+    document.addEventListener('keydown', trapCheckoutFocus);
+  } else {
+    document.removeEventListener('keydown', trapCheckoutFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapCheckoutFocus));
 const placing = ref(false);
 const checkoutError = ref('');
 

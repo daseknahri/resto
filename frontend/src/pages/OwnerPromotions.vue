@@ -106,7 +106,7 @@
     <!-- Create / Edit drawer -->
     <Teleport to="body">
       <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc.window="drawerOpen = false">
-        <div role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div ref="drawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-900 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
           <div class="flex items-center justify-between">
             <h2 id="owner-promotions-form-dialog-title" class="text-base font-bold text-white">
               {{ editingPromo ? t('common.edit') : t('ownerPromotions.newPromotion') }}
@@ -266,7 +266,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, computed } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed, watch } from 'vue';
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
@@ -296,7 +296,38 @@ const updating = ref(false);
 const fetchError = ref(false);
 const promotions = ref([]);
 const drawerOpen = ref(false);
+const drawerDialogRef = ref(null);
 const editingPromo = ref(null);
+
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapDrawerFocus = (e) => {
+  if (!drawerDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(drawerDialogRef.value.querySelectorAll(FOCUSABLE));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(drawerOpen, async (open) => {
+  if (open) {
+    await nextTick();
+    drawerDialogRef.value?.querySelector(FOCUSABLE)?.focus();
+    document.addEventListener('keydown', trapDrawerFocus);
+  } else {
+    document.removeEventListener('keydown', trapDrawerFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapDrawerFocus));
 const submitting = ref(false);
 const drawerError = ref('');
 const { confirm } = useConfirmModal();

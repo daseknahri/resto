@@ -145,7 +145,7 @@
         @click.self="closeDishEditor"
         @keydown.esc.window="closeDishEditor"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
@@ -710,7 +710,7 @@
         @click.self="closeQuickDishModal"
         @keydown.esc.window="closeQuickDishModal"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="quickDishDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
@@ -1001,6 +1001,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useTranslate } from "../composables/useTranslate";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
@@ -1037,6 +1038,7 @@ const props = defineProps({
 });
 const activeCategoryId = ref("");
 const dishEditorModalOpen = ref(false);
+const dishEditorDialogRef = ref(null);
 const dishEditorLocalId = ref("");
 const dishFieldLocales = reactive({
   name: "en",
@@ -1046,7 +1048,11 @@ const dishFieldLocales = reactive({
   groupOptionName: "en",
 });
 const quickDishModalOpen = ref(false);
+const quickDishDialogRef = ref(null);
 const quickDishNameInputRef = ref(null);
+
+useFocusTrap(dishEditorDialogRef, dishEditorModalOpen);
+useFocusTrap(quickDishDialogRef, quickDishModalOpen);
 const quickDishErrors = reactive({ category: "", name: "" });
 const quickDish = reactive({
   local_id: "quick-dish",

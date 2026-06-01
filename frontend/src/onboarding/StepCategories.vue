@@ -97,7 +97,7 @@
         @click.self="closeEditor"
         @keydown.esc.window="closeEditor"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
@@ -202,7 +202,7 @@
         @click.self="closeQuickModal"
         @keydown.esc.window="closeQuickModal"
       >
-        <div role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
@@ -316,6 +316,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
@@ -335,12 +336,17 @@ const status = ref("");
 const search = ref("");
 const superCategoryOptions = ref([]);
 const activeSuperCategoryId = ref("");
+const editorDialogRef = ref(null);
+const quickDialogRef  = ref(null);
 const editorOpen = ref(false);
 const editorLocalId = ref("");
 const fieldLocales = reactive({ name: "en", description: "en" });
 const quickFieldLocales = reactive({ name: "en", description: "en" });
 const quickModalOpen = ref(false);
 const quickNameInputRef = ref(null);
+
+useFocusTrap(editorDialogRef, editorOpen);
+useFocusTrap(quickDialogRef, quickModalOpen);
 const quickAddErrors = reactive({ name: "", superCategory: "" });
 const quickCategory = reactive({
   local_id: "quick-category",
