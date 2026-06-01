@@ -53,3 +53,13 @@ class CustomerGoogleAuthThrottle(_IPThrottle):
 
 class CustomerProfileUpdateThrottle(_IPThrottle):
     scope = "customer_profile_update"
+
+
+class MarketplaceOrderThrottle(_IPThrottle):
+    """Rate-limit marketplace order placement — prevents order flooding and inventory races."""
+    scope = "marketplace_order"
+
+
+class MarketplaceOrderStatusThrottle(_IPThrottle):
+    """Rate-limit order-status polling — clients poll every 5–10 s while waiting."""
+    scope = "marketplace_order_status"

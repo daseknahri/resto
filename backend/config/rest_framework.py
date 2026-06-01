@@ -46,6 +46,8 @@ REST_FRAMEWORK = {
         "customer_google_auth": "20/hour",
         "customer_profile_update": "30/hour",
         "staff_order_list": "300/min",
+        "marketplace_order": "60/hour",
+        "marketplace_order_status": "300/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

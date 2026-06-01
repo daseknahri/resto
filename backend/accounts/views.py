@@ -29,6 +29,8 @@ from .throttles import (
     CustomerProfileUpdateThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
+    MarketplaceOrderStatusThrottle,
+    MarketplaceOrderThrottle,
     PasswordResetConfirmThrottle,
     PasswordResetRequestThrottle,
 )
@@ -1679,6 +1681,7 @@ class MarketplacePlaceOrderView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [MarketplaceOrderThrottle]
 
     def post(self, request, *args, **kwargs):
         from decimal import Decimal
@@ -2000,6 +2003,7 @@ class MarketplaceOrderStatusView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MarketplaceOrderStatusThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
         from tenancy.models import Tenant
