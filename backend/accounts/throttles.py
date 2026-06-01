@@ -63,3 +63,17 @@ class MarketplaceOrderThrottle(_IPThrottle):
 class MarketplaceOrderStatusThrottle(_IPThrottle):
     """Rate-limit order-status polling — clients poll every 5–10 s while waiting."""
     scope = "marketplace_order_status"
+
+
+class TranslateThrottle(SimpleRateThrottle):
+    """Rate-limit the AI translate endpoint by authenticated user to prevent
+    runaway credit consumption against the OpenRouter API."""
+    scope = "translate"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated:
+            ident = str(user.pk)
+        else:
+            ident = self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

@@ -21,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import User
+from accounts.throttles import TranslateThrottle
 from tenancy.models import Profile
 from tenancy.serializers import ProfileSerializer, TenantMetaSerializer
 
@@ -295,6 +296,7 @@ class TranslateView(APIView):
     """
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [TranslateThrottle]  # 30 calls/hour per user — prevents credit drain
     MAX_TEXT_LEN = 2000
 
     def _call_openrouter(self, text: str, target_lang: str, source_lang: str) -> str:
