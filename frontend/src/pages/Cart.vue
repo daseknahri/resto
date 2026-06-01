@@ -754,6 +754,7 @@ import { useToastStore } from '../stores/toast';
 import { useCurrencyStore } from '../stores/currency';
 import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
+import { safeExternalUrl } from '../lib/escape';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -1602,8 +1603,8 @@ const startCheckout = async () => {
     });
     const res = await api.post('/checkout-intent/', buildPayload());
     const data = res?.data || {};
-    if (data.checkout_url) {
-      window.open(data.checkout_url, '_blank', 'noopener,noreferrer');
+    if (safeExternalUrl(data.checkout_url)) {
+      window.open(safeExternalUrl(data.checkout_url), '_blank', 'noopener,noreferrer');
       toast.show(t('cartPage.openingCheckout'), 'success');
       return;
     }
@@ -1642,7 +1643,7 @@ const openWhatsApp = async () => {
       },
     });
     const res = await api.post('/order-handoff/', buildPayload());
-    const url = res?.data?.url;
+    const url = safeExternalUrl(res?.data?.url);
     if (!url) throw new Error(t('cartPage.missingWhatsappHandoffUrl'));
     window.open(url, '_blank', 'noopener,noreferrer');
     toast.show(t('cartPage.openingWhatsApp'), 'success');

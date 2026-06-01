@@ -325,6 +325,7 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { formatBusinessHoursRows, formatBusinessHoursSummary, getCurrentDayKey, getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule, normalizeBusinessHoursSchedule } from "../lib/businessHours";
 import { trackEvent } from "../lib/analytics";
+import { safeExternalUrl } from "../lib/escape";
 import { useLeadStore } from "../stores/lead";
 import { useCustomerStore } from "../stores/customer";
 import { isPublicDemoHost } from "../lib/runtimeHost";
@@ -405,8 +406,8 @@ const tenantDescription = computed(() => {
 });
 const heroImage = computed(() => String(profile.value?.hero_url || "").trim());
 const logoImage = computed(() => String(profile.value?.logo_url || "").trim());
-const googleMapsUrl = computed(() => String(profile.value?.google_maps_url || "").trim());
-const reservationUrl = computed(() => String(profile.value?.reservation_url || "").trim());
+const googleMapsUrl = computed(() => safeExternalUrl(profile.value?.google_maps_url));
+const reservationUrl = computed(() => safeExternalUrl(profile.value?.reservation_url));
 const businessHoursSchedule = computed(() => normalizeBusinessHoursSchedule(profile.value?.business_hours_schedule));
 const todayKey = getCurrentDayKey();
 const businessHoursRows = computed(() =>
@@ -431,9 +432,9 @@ const whatsappHref = computed(() => {
 });
 const socialLinks = computed(() =>
   [
-    { key: "instagram", label: "Instagram", url: String(profile.value?.instagram_url || "").trim() },
-    { key: "facebook", label: "Facebook", url: String(profile.value?.facebook_url || "").trim() },
-    { key: "tiktok", label: "TikTok", url: String(profile.value?.tiktok_url || "").trim() },
+    { key: "instagram", label: "Instagram", url: safeExternalUrl(profile.value?.instagram_url) },
+    { key: "facebook", label: "Facebook", url: safeExternalUrl(profile.value?.facebook_url) },
+    { key: "tiktok", label: "TikTok", url: safeExternalUrl(profile.value?.tiktok_url) },
   ].filter((item) => Boolean(item.url))
 );
 
