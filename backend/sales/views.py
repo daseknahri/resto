@@ -1963,6 +1963,7 @@ class OwnerReservationExportView(APIView):
             response = HttpResponse(content_type="text/csv; charset=utf-8")
             filename = f"{getattr(tenant, 'slug', 'tenant')}-reservations-{timezone.now():%Y%m%d}.csv"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            response.write("﻿")  # UTF-8 BOM for Excel on Windows
 
             writer = csv.writer(response)
             writer.writerow(["id", "created_at", "status", "name", "phone", "email", "source", "notes"])

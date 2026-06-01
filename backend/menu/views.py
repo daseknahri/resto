@@ -3107,6 +3107,10 @@ class OwnerOrderExportView(APIView):
 
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        # Prepend the UTF-8 BOM (\xef\xbb\xbf) so Excel on Windows opens the
+        # file as UTF-8 rather than defaulting to the system code page (Latin-1).
+        # This prevents garbled display of Arabic / French characters in names.
+        response.write("﻿")  # UTF-8 BOM: signals to Excel this is a UTF-8 file
 
         writer = csv.writer(response)
         writer.writerow([
