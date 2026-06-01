@@ -909,13 +909,25 @@ const submitJobRating = async (o) => {
 };
 
 // ── Print ticket ──────────────────────────────────────────────────────────────
+const escapeHtml = (v) =>
+  String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
 const printTicket = (o) => {
   const itemRows = (o.items || []).map((item) => {
-    const opts = item.options?.length ? `<div style="font-size:11px;color:#555">${item.options.map((x) => x.name).join(", ")}</div>` : "";
-    const note = item.note ? `<div style="font-size:11px;color:#555;font-style:italic">${item.note}</div>` : "";
+    const opts = item.options?.length
+      ? `<div style="font-size:11px;color:#555">${item.options.map((x) => escapeHtml(x.name)).join(", ")}</div>`
+      : "";
+    const note = item.note
+      ? `<div style="font-size:11px;color:#555;font-style:italic">${escapeHtml(item.note)}</div>`
+      : "";
     return `<tr>
       <td style="padding:3px 0;vertical-align:top">
-        <strong>${item.qty}×</strong> ${item.dish_name}${opts}${note}
+        <strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${opts}${note}
       </td>
       <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top">
         ${formatCurrency(item.subtotal, o.currency)}
@@ -925,10 +937,10 @@ const printTicket = (o) => {
 
   const meta = [
     fulfillmentLabel(o),
-    o.customer_name ? `${t("ownerOrders.ticketCustomer")}: ${o.customer_name}` : "",
-    o.customer_phone ? `${t("ownerOrders.ticketPhone")}: ${o.customer_phone}` : "",
-    o.customer_email ? `${t("ownerOrders.ticketEmail")}: ${o.customer_email}` : "",
-    o.delivery_address ? `${t("ownerOrders.ticketAddress")}: ${o.delivery_address}` : "",
+    o.customer_name ? `${t("ownerOrders.ticketCustomer")}: ${escapeHtml(o.customer_name)}` : "",
+    o.customer_phone ? `${t("ownerOrders.ticketPhone")}: ${escapeHtml(o.customer_phone)}` : "",
+    o.customer_email ? `${t("ownerOrders.ticketEmail")}: ${escapeHtml(o.customer_email)}` : "",
+    o.delivery_address ? `${t("ownerOrders.ticketAddress")}: ${escapeHtml(o.delivery_address)}` : "",
     new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(o.created_at)),
   ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
 
@@ -940,7 +952,7 @@ const printTicket = (o) => {
   const walletLabel    = t("ownerOrders.walletPaid");
 
   const note = o.customer_note
-    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${o.customer_note}</div>`
+    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${escapeHtml(o.customer_note)}</div>`
     : "";
 
   const html = `<!DOCTYPE html><html lang="${currentLocale.value}" dir="${currentLocale.value === 'ar' ? 'rtl' : 'ltr'}"><head>
