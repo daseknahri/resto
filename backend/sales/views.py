@@ -1,6 +1,9 @@
 import csv
 import logging
 import re
+
+# Import shared CSV-injection sanitiser (see menu/views.py for the rationale).
+from menu.views import _csv_safe
 from datetime import date, timedelta
 from math import ceil
 from urllib.parse import quote_plus
@@ -1966,16 +1969,16 @@ class OwnerReservationExportView(APIView):
             for lead in rows:
                 writer.writerow(
                     [
-                        getattr(lead, "id", ""),
+                        getattr(lead, "id", ""),            # system id — safe
                         timezone.localtime(getattr(lead, "created_at", timezone.now())).isoformat()
                         if getattr(lead, "created_at", None)
                         else "",
-                        getattr(lead, "status", ""),
-                        getattr(lead, "name", ""),
-                        getattr(lead, "phone", ""),
-                        getattr(lead, "email", ""),
-                        getattr(lead, "source", ""),
-                        getattr(lead, "notes", ""),
+                        getattr(lead, "status", ""),        # enum — safe
+                        _csv_safe(getattr(lead, "name", "") or ""),   # customer-provided
+                        _csv_safe(getattr(lead, "phone", "") or ""),  # customer-provided
+                        _csv_safe(getattr(lead, "email", "") or ""),  # customer-provided
+                        getattr(lead, "source", ""),        # enum / system — safe
+                        _csv_safe(getattr(lead, "notes", "") or ""),  # customer-provided
                     ]
                 )
 

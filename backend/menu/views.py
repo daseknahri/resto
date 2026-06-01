@@ -8,6 +8,28 @@ import threading
 from urllib.parse import quote_plus
 import zipfile
 
+
+# ── CSV injection protection ──────────────────────────────────────────────────
+# Formula-injection (CSV injection): a value starting with =, +, -, @, tab, or
+# carriage-return is interpreted as a spreadsheet formula by Excel / Google
+# Sheets when the CSV is opened.  Prefix such values with a single-quote so
+# the spreadsheet treats them as plain text.  The single-quote is transparent
+# in most viewers and does not alter the raw CSV bytes meaningfully.
+_CSV_FORMULA_TRIGGERS = frozenset({"=", "+", "-", "@", "\t", "\r"})
+
+
+def _csv_safe(value) -> str:
+    """Return *value* as a string safe for use in a CSV cell.
+
+    Prefixes potentially dangerous formula-injection values with a tab
+    character — widely recognised by spreadsheet applications as a way to
+    force a text interpretation without cluttering the visible cell content.
+    """
+    s = str(value) if value is not None else ""
+    if s and s[0] in _CSV_FORMULA_TRIGGERS:
+        return "\t" + s
+    return s
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
@@ -577,7 +599,7 @@ class TableLinkViewSet(viewsets.ModelViewSet):
             for table in rows:
                 short_url = self._table_short_url(table, base_url)
                 full_url = self._table_full_url(table, base_url)
-                csv_writer.writerow([table.label, table.slug, short_url, full_url, "true" if table.is_active else "false"])
+                csv_writer.writerow([_csv_safe(table.label), table.slug, short_url, full_url, "true" if table.is_active else "false"])
                 qr_name = f"qr/{self._safe_filename_token(table.slug, fallback='table')}.png"
                 archive.writestr(qr_name, self._qr_png_bytes(short_url))
 
@@ -3107,16 +3129,16 @@ class OwnerOrderExportView(APIView):
             )
             subtotal = order.total - order.delivery_fee
             writer.writerow([
-                order.order_number,
+                order.order_number,                          # system-generated — safe
                 timezone.localtime(order.created_at).isoformat(),
                 order.status,
                 order.fulfillment_type or "",
-                order.table_label or "",
-                order.customer_name or "",
-                order.customer_phone or "",
-                order.customer_note or "",
-                order.delivery_address or "",
-                items_text,
+                _csv_safe(order.table_label or ""),          # owner-set label
+                _csv_safe(order.customer_name or ""),        # customer-provided
+                _csv_safe(order.customer_phone or ""),       # customer-provided
+                _csv_safe(order.customer_note or ""),        # customer-provided
+                _csv_safe(order.delivery_address or ""),     # customer-provided
+                _csv_safe(items_text),                       # dish names (owner-set)
                 str(subtotal),
                 str(order.delivery_fee),
                 str(order.tip_amount),
@@ -3321,10 +3343,10 @@ class OwnerRatingListView(APIView):
         for r in qs:
             writer.writerow([
                 r.created_at.strftime("%Y-%m-%d %H:%M"),
-                r.order.order_number,
-                r.order.customer_name,
-                r.score,
-                r.comment,
+                r.order.order_number,            # system-generated — safe
+                _csv_safe(r.order.customer_name or ""),  # customer-provided
+                r.score,                         # integer — safe
+                _csv_safe(r.comment or ""),      # customer-provided review text
             ])
         response = HttpResponse(output.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="ratings.csv"'
