@@ -33,7 +33,14 @@ def hostname_from_url(value: str) -> str:
 
 _raw_secret = os.getenv("DJANGO_SECRET_KEY", "").strip()
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
-if not _raw_secret:
+
+# Known placeholder / template values that must never be used in production.
+_INSECURE_SECRET_KEYS = frozenset({
+    "", "change-me", "changeme", "secret", "django-insecure",
+    "your-secret-key", "your_secret_key", "example",
+})
+
+if not _raw_secret or _raw_secret in _INSECURE_SECRET_KEYS:
     if DEBUG:
         # Dev convenience: auto-generate a temporary key so the server starts
         # without env configuration.  A warning is printed so it's obvious.
@@ -41,15 +48,17 @@ if not _raw_secret:
         _raw_secret = _secrets.token_hex(50)
         import warnings as _warnings
         _warnings.warn(
-            "DJANGO_SECRET_KEY is not set — using a temporary random key. "
-            "Sessions will be invalidated on every restart. "
-            "Set DJANGO_SECRET_KEY in production.",
+            "DJANGO_SECRET_KEY is not set (or is a placeholder) — using a "
+            "temporary random key.  Sessions will be invalidated on every "
+            "restart.  Set DJANGO_SECRET_KEY in production.",
             stacklevel=2,
         )
     else:
         raise RuntimeError(
-            "DJANGO_SECRET_KEY must be set in production (DEBUG=False). "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(50))\""
+            "DJANGO_SECRET_KEY must be set to a strong random value in "
+            "production (DEBUG=False).  The current value is missing or is a "
+            "known placeholder.  Generate one with:\n"
+            "  python -c \"import secrets; print(secrets.token_hex(50))\""
         )
 SECRET_KEY = _raw_secret
 MEDIA_STORAGE_BACKEND = os.getenv("DJANGO_MEDIA_STORAGE_BACKEND", "local").strip().lower()
