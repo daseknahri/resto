@@ -38,7 +38,9 @@ def _rating(
 
 
 def _parse_csv(response):
-    content = response.content.decode("utf-8")
+    # Decode with utf-8-sig so the UTF-8 BOM (if present) is stripped
+    # automatically before the CSV is parsed.
+    content = response.content.decode("utf-8-sig")
     reader = csv.reader(io.StringIO(content))
     return list(reader)
 

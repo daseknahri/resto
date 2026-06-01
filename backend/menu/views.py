@@ -3342,6 +3342,7 @@ class OwnerRatingListView(APIView):
 
     def _csv_response(self, qs):
         output = StringIO()
+        output.write("﻿")  # UTF-8 BOM for Excel on Windows
         writer = csv.writer(output)
         writer.writerow(["Date", "Order Number", "Customer", "Score", "Comment"])
         for r in qs:
@@ -4429,6 +4430,7 @@ class OwnerCustomerListView(APIView):
         # ── 10. CSV export ────────────────────────────────────────────────────
         if (request.query_params.get("format") or "").strip().lower() == "csv":
             buf = StringIO()
+            buf.write("﻿")  # UTF-8 BOM for Excel on Windows
             writer = csv.writer(buf)
             writer.writerow([
                 "Name", "Phone", "Email", "Type", "Segment",
@@ -4437,7 +4439,8 @@ class OwnerCustomerListView(APIView):
             ])
             for c in customers:
                 writer.writerow([
-                    c["name"], c["phone"], c["email"], c["type"], c["segment"],
+                    _csv_safe(c["name"]), _csv_safe(c["phone"]), _csv_safe(c["email"]),
+                    c["type"], c["segment"],
                     c["order_count"], f"{c['total_spend']:.2f}",
                     f"{c['avg_order_value']:.2f}", c["currency"],
                     (c["last_order_at"] or "")[:10],
