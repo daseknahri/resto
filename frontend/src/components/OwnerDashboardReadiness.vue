@@ -184,10 +184,13 @@ onMounted(async () => {
       soldOutCount,
       categoryNameBySlug,
       dishNameBySlug,
+      // Pass the raw dish list so the dish panel can use it as initial data
+      // without triggering a second /dishes/ fetch when the user opens the panel.
+      dishesData: dishList,
     });
   } catch {
     // Readiness degrades gracefully — missing counts just show "missing"
-    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0, categoryNameBySlug: {}, dishNameBySlug: {} });
+    emit("loaded", { categoriesCount: 0, dishesCount: 0, soldOutCount: 0, categoryNameBySlug: {}, dishNameBySlug: {}, dishesData: [] });
   } finally {
     loading.value = false;
   }

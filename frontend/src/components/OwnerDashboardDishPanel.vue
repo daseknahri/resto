@@ -139,6 +139,11 @@ const toast = useToastStore();
 const props = defineProps({
   /** Pre-computed sold-out count from the parent (shown in summary before panel opens) */
   initialSoldOutCount: { type: Number, default: 0 },
+  /**
+   * Dishes already fetched by OwnerDashboardReadiness — if provided, the panel
+   * uses this data immediately when opened and skips the /dishes/ network call.
+   */
+  preloadedDishes: { type: Array, default: null },
 });
 
 // ── Panel state ───────────────────────────────────────────────────────────────
@@ -182,9 +187,18 @@ const filtered = computed(() => {
   );
 });
 
-// ── Lazy fetch — only runs the first time the panel is opened ─────────────────
+// ── Lazy fetch — skipped when the parent provides pre-loaded data ─────────────
 const fetchDishes = async () => {
   if (fetched.value || fetching.value) return;
+
+  // Use pre-loaded data from the readiness component if available — avoids
+  // a second /dishes/ call on the same page load.
+  if (props.preloadedDishes && props.preloadedDishes.length > 0) {
+    dishes.value = props.preloadedDishes;
+    fetched.value = true;
+    return;
+  }
+
   fetching.value = true;
   try {
     const { data } = await api.get("/dishes/", { timeout: 6000 });

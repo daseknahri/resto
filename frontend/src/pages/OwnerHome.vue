@@ -198,8 +198,11 @@
         </button>
       </div>
 
-      <!-- Dish availability — lazy: fetches dishes only when panel is opened -->
-      <OwnerDashboardDishPanel :initial-sold-out-count="soldOutCount" />
+      <!-- Dish availability — pre-seeded with data from readiness to skip double-fetch -->
+      <OwnerDashboardDishPanel
+        :initial-sold-out-count="soldOutCount"
+        :preloaded-dishes="preloadedDishesData"
+      />
 
       <!-- Action buttons -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
@@ -383,14 +386,17 @@ const { t, formatNumber, currentLocale } = useI18n();
 // ── Refs to deferred child components ────────────────────────────────────────
 const insightsRef = ref(null);
 
-// ── Sold-out count + name maps from OwnerDashboardReadiness ──────────────────
+// ── Data from OwnerDashboardReadiness (emitted after its dishes/categories fetch) ─
 const soldOutCount = ref(0);
 const categoryNameBySlug = ref({});
 const dishNameBySlug = ref({});
-const onReadinessLoaded = ({ soldOutCount: n, categoryNameBySlug: cats, dishNameBySlug: dishes }) => {
+const preloadedDishesData = ref([]); // passed to dish panel to skip a second fetch
+
+const onReadinessLoaded = ({ soldOutCount: n, categoryNameBySlug: cats, dishNameBySlug: dishes, dishesData }) => {
   soldOutCount.value = n ?? 0;
   if (cats) categoryNameBySlug.value = cats;
   if (dishes) dishNameBySlug.value = dishes;
+  if (dishesData) preloadedDishesData.value = dishesData;
 };
 
 // ── Today's reservations — received from the dashboard endpoint via insights ─
