@@ -33,14 +33,15 @@
           <div class="flex items-end justify-between gap-1">
             <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
             <span
-              v-if="yesterdayStats.count > 0"
+              v-if="!insightsLoading && yesterdayStats.count > 0"
               class="mb-0.5 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
             >
               {{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}
             </span>
           </div>
-          <SparklineChart :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
+          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
+          <SparklineChart v-else :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
         <!-- Today's revenue -->
@@ -49,21 +50,26 @@
           <div class="flex items-end justify-between gap-1">
             <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
             <span
-              v-if="yesterdayStats.revenue > 0"
+              v-if="!insightsLoading && yesterdayStats.revenue > 0"
               class="mb-0.5 text-[10px]"
               :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
             >
               {{ todayStats.revenueRaw >= yesterdayStats.revenue ? '↑' : '↓' }}
             </span>
           </div>
-          <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" />
+          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
+          <SparklineChart v-else :values="sparklineRevenue" color="secondary" :height="28" />
         </article>
 
-        <!-- Avg ticket (7-day sparkline) -->
+        <!-- Avg ticket (7-day sparkline from revenue data) -->
         <article class="ui-admin-subcard space-y-1.5">
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
-          <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
+          <!-- Value shows — until insights load -->
+          <p class="ui-stat-value" :class="insightsLoading ? 'text-slate-600' : 'text-slate-100'">
+            {{ insightsLoading ? "—" : avgTicketLabel }}
+          </p>
+          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
+          <SparklineChart v-else :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
         <!-- Pending orders -->
@@ -215,6 +221,8 @@
       :dish-name-by-slug="dishNameBySlug"
       @data="onInsightsData"
       @period-change="insightsPeriod = $event"
+      @loading-change="insightsLoading = $event"
+      @updating-change="insightsUpdating = $event"
     />
 
     <!-- ── REVENUE: deferred, permission-gated ─────────────────────────────── -->
@@ -374,15 +382,16 @@ const todayReservations = ref(null);     // null = not yet loaded
 const todayNewReservations = ref(0);
 
 // ── Insights state (shared between OwnerDashboardInsights + OwnerDashboardRevenue) ──
-// The insights component owns fetching; it bubbles up via @data event so the
-// revenue component (a sibling) gets its data without a second API call.
+// The insights component owns fetching; it bubbles loading state up via events
+// so OwnerDashboardRevenue can show skeletons while data is in flight.
 const revenueSummary = ref(null);
-const insightsLoading = ref(false);
+const insightsLoading = ref(true);   // true until first data arrives
 const insightsUpdating = ref(false);
 const insightsPeriod = ref(30);
 const upgradeRequests = ref([]);
 
 const onInsightsData = (data) => {
+  insightsLoading.value = false; // data arrived — clear loading even if event order varies
   if (data?.today_reservations !== undefined) {
     todayReservations.value = data.today_reservations;
     todayNewReservations.value = data.today_new_reservations ?? 0;

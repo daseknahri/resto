@@ -201,7 +201,7 @@ const period = ref(30);
 const summary = ref({ counts: {}, top_categories: [], top_dishes: [], interaction_rate_pct: 0 });
 
 // ── Emits — lets parent/siblings react to period changes or loaded data ────────
-const emit = defineEmits(["data", "period-change"]);
+const emit = defineEmits(["data", "period-change", "loading-change", "updating-change"]);
 
 // ── Slug → human-readable label ───────────────────────────────────────────────
 // Uses the name map when available; falls back to title-casing the slug.
@@ -274,8 +274,10 @@ const hydrate = async (force = false) => {
     _apply(cached);
     if (isFresh(cacheKey, INSIGHTS_TTL_MS)) return;
     updating.value = true;
+    emit("updating-change", true);
   } else {
     loading.value = true;
+    emit("loading-change", true);
   }
 
   try {
@@ -302,6 +304,8 @@ const hydrate = async (force = false) => {
     if (!ctrl.signal.aborted) {
       loading.value = false;
       updating.value = false;
+      emit("loading-change", false);
+      emit("updating-change", false);
     }
   }
 };
