@@ -57,12 +57,13 @@ channel layer. HTTP can keep running under gunicorn until you cut over.
      broadcast from one worker won't reach sockets on another).
    - You likely already run Redis for the cache; the same instance is fine
      (the channel layer uses its own `resto:ws` key prefix).
-3. **Serve under ASGI.** Change the backend run/start command from gunicorn (WSGI)
-   to uvicorn (ASGI):
-   ```
-   uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers
-   ```
-   (or `daphne -b 0.0.0.0 -p 8000 config.asgi:application`).
+3. **Serve under ASGI.** `backend/docker/entrypoint.sh` now serves with uvicorn
+   (ASGI) by default — no command change needed; it picks up on the next deploy.
+   It reuses your existing `GUNICORN_WORKERS` for the worker count and sets
+   `--proxy-headers --forwarded-allow-ips='*'` for Traefik.
+   - **Instant rollback:** set `USE_ASGI=0` in the backend env and redeploy to
+     return to the previous gunicorn/WSGI server. HTTP works under both; only
+     WebSockets need ASGI.
 4. **Proxy must allow WS upgrade.** Coolify's Traefik proxies `Upgrade`/`Connection`
    headers by default for the service; just confirm `/ws/` reaches the backend
    (same host/path as the API). The client connects to `wss://<tenant-host>/ws/owner/`.
