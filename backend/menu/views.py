@@ -5065,7 +5065,14 @@ class OwnerWalletHistoryView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        txs = WalletTransaction.objects.filter(customer=customer).order_by("-created_at")[:20]
+        # Privacy: the wallet is shared across all restaurants on the platform, but an
+        # owner must only see activity at THEIR restaurant — never a customer's spend or
+        # top-ups elsewhere. Scope the history to this tenant (the balance is the total).
+        txs = (
+            WalletTransaction.objects
+            .filter(customer=customer, tenant_id=tenant.id)
+            .order_by("-created_at")[:20]
+        )
         return Response({
             "customer_id": customer.id,
             "wallet_balance": str(customer.wallet_balance),
