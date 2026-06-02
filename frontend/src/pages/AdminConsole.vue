@@ -708,8 +708,13 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.planFlags = !adminPanels.planFlags">
             {{ adminPanels.planFlags ? t("adminConsole.hide") : t("adminConsole.show") }}
           </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="planFlagsLoading || !adminPanels.planFlags" @click="fetchPlanFeatureFlags">
-            {{ t("common.refresh") }}
+          <button
+            class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50"
+            :disabled="planFlagsLoading || !adminPanels.planFlags"
+            :title="planFlagDirtyKeys.size > 0 ? t('adminConsole.unsavedFlagChanges') : undefined"
+            @click="planFlagDirtyKeys.size > 0 ? (error.value = t('adminConsole.unsavedFlagChanges')) : fetchPlanFeatureFlags()"
+          >
+            {{ t("common.refresh") }}{{ planFlagDirtyKeys.size > 0 ? ' *' : '' }}
           </button>
         </div>
       </div>
@@ -761,18 +766,26 @@
                   <p class="text-[11px] text-slate-400">{{ flag.description || "-" }}</p>
                 </div>
                 <label class="inline-flex items-center gap-2 text-xs text-slate-300">
-                  <input v-model="flag.enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900" />
+                  <input
+                    :checked="flag.enabled"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                    @change="flag.enabled = $event.target.checked; planFlagDirtyKeys = new Set([...planFlagDirtyKeys, `${plan.plan_code}:${flag.key}`])"
+                  />
                 </label>
               </div>
               <textarea
-                v-model="flag.configText"
+                :value="flag.configText"
                 rows="3"
                 class="ui-input w-full px-2 py-1 text-xs font-mono"
                 :aria-label="t('adminConsole.flagConfigPlaceholder')"
                 :placeholder="t('adminConsole.flagConfigPlaceholder')"
+                @input="flag.configText = $event.target.value; planFlagDirtyKeys = new Set([...planFlagDirtyKeys, `${plan.plan_code}:${flag.key}`])"
               />
               <div class="flex items-center justify-between gap-2">
-                <span class="text-[11px] text-slate-500">{{ flag.key }}</span>
+                <span class="text-[11px]" :class="planFlagDirtyKeys.has(`${plan.plan_code}:${flag.key}`) ? 'text-amber-400' : 'text-slate-500'">
+                  {{ flag.key }}{{ planFlagDirtyKeys.has(`${plan.plan_code}:${flag.key}`) ? ' •' : '' }}
+                </span>
                 <button
                   class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-100 hover:border-brand-primary disabled:opacity-50"
                   :disabled="!!planFlagSaving[planFlagStateKey(plan.plan_code, flag.key)]"
@@ -1192,6 +1205,7 @@ const upgradeLoading = ref(false);
 const decisionLoading = ref({});
 const planFeatureRows = ref([]);
 const planFlagsLoading = ref(false);
+const planFlagDirtyKeys = ref(new Set()); // tracks "planCode:flagKey" pairs with unsaved changes
 const planFlagSaving = ref({});
 const adminPanels = ref({
   alerts: false,
@@ -1345,8 +1359,8 @@ const activeAdminMetrics = computed(() => {
     const pausedCount = tenants.value.filter((tenant) => tenant.lifecycle_status === "suspended").length;
     return [
       { label: t("adminConsole.tenantLifecycleControls"), value: tenantTotal.value, note: t("adminConsole.pageSummary", { page: tenantPage.value, pages: tenantTotalPages.value, total: tenantTotal.value }), valueClass: "" },
-      { label: t("common.available"), value: activeCount, note: t("adminConsole.tenantLifecycleControls"), valueClass: "text-emerald-300" },
-      { label: t("adminConsole.suspend"), value: pausedCount, note: t("adminConsole.suspendReactivateCancel"), valueClass: "text-amber-300" },
+      { label: t("common.available"), value: activeCount, note: t("adminConsole.onThisPage"), valueClass: "text-emerald-300" },
+      { label: t("adminConsole.suspend"), value: pausedCount, note: t("adminConsole.onThisPage"), valueClass: "text-amber-300" },
       { label: t("common.status"), value: activeAdminViewLoading.value ? t("common.loading") : t("common.available"), note: currentDomainSuffixLabel.value, valueClass: "text-base md:text-2xl" },
     ];
   }
@@ -1424,6 +1438,7 @@ const fetchPlanFeatureFlags = async () => {
     const res = await adminApi.get("/admin-plan-feature-flags/");
     const rows = Array.isArray(res?.data?.plans) ? res.data.plans : [];
     planFeatureRows.value = rows.map((row) => normalizePlanFeatureRow(row));
+    planFlagDirtyKeys.value = new Set(); // clear any unsaved state — we just loaded fresh data
     loadedAdminViews.value = { ...loadedAdminViews.value, plans: true };
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.loadPlanFeatureFlagsFailed"));
@@ -1468,6 +1483,10 @@ const savePlanFeatureFlag = async (plan, flag) => {
     } else {
       flag.configText = toConfigText(config);
     }
+    // Mark this flag as clean now that it's saved
+    const dk = new Set(planFlagDirtyKeys.value);
+    dk.delete(`${planCode}:${key}`);
+    planFlagDirtyKeys.value = dk;
     toast.show(t("adminConsole.planFeatureFlagSaved", { plan: planCode.toUpperCase(), key }), "success");
   } catch (err) {
     const msg = parseApiError(err, t("adminConsole.savePlanFeatureFlagFailed"));

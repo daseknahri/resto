@@ -63,6 +63,7 @@
           <StatCard :value="data.deliveries.total_jobs" :label="t('adminAnalytics.totalJobs')" color="sky" icon="📦" />
           <StatCard :value="data.deliveries.delivered" :label="t('adminAnalytics.deliveredJobs')" color="emerald" icon="✔" />
           <StatCard :value="data.deliveries.active" :label="t('adminAnalytics.activeJobs')" color="amber" icon="🔄" />
+          <StatCard :value="data.deliveries.searching" :label="t('adminAnalytics.searchingJobs')" color="sky" icon="🔍" />
           <StatCard :value="data.deliveries.failed" :label="t('adminAnalytics.failedJobs')" color="red" icon="✗" />
           <StatCard
             :value="data.deliveries.avg_driver_rating != null ? data.deliveries.avg_driver_rating + ' ★' : '—'"
