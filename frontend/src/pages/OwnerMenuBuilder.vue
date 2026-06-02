@@ -225,6 +225,16 @@ const trapImportFocus = (e) => {
   }
 };
 
+const showImport = ref(false);
+const fileInputRef = ref(null);
+const selectedFile = ref(null);
+const importing = ref(false);
+const importError = ref('');
+const importResult = ref(null);
+
+// showImport must be declared above this watch: referencing it earlier hits the
+// temporal dead zone ("Cannot access 'showImport' before initialization") and
+// crashes setup() the moment the page loads.
 watch(showImport, async (open) => {
   if (open) {
     await nextTick();
@@ -235,13 +245,6 @@ watch(showImport, async (open) => {
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapImportFocus));
-
-const showImport = ref(false);
-const fileInputRef = ref(null);
-const selectedFile = ref(null);
-const importing = ref(false);
-const importError = ref('');
-const importResult = ref(null);
 
 const templateUrl = computed(() => {
   // api.defaults.baseURL is already "/api" — don't prefix with it again.
