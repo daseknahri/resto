@@ -17,7 +17,7 @@
 
     <!-- Loading: skeleton cards -->
     <div v-if="loading" class="space-y-3">
-      <div v-for="i in 3" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-4">
+      <div v-for="i in 3" :key="i" class="ui-panel animate-pulse p-4">
         <div class="flex items-start justify-between gap-4">
           <div class="flex-1 space-y-2">
             <div class="flex items-center gap-2">
@@ -59,7 +59,7 @@
       <div
         v-for="promo in promotions"
         :key="promo.id"
-        class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 flex items-start justify-between gap-4 transition-colors hover:border-slate-600"
+        class="ui-panel p-4 flex items-start justify-between gap-4 transition-colors hover:border-slate-600"
       >
         <div class="flex-1 min-w-0 space-y-1.5">
           <div class="flex items-center gap-2 flex-wrap">

@@ -1,11 +1,11 @@
 ﻿<template>
-  <div class="space-y-5 pb-6">
+  <div class="space-y-4 pb-6">
 
     <!-- Header -->
     <div class="flex items-start justify-between gap-3">
       <div>
         <p class="ui-kicker">{{ t('ownerFlashSales.kicker') }}</p>
-        <h1 class="text-2xl font-bold text-white">{{ t('ownerFlashSales.title') }}</h1>
+        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerFlashSales.title') }}</h1>
         <p class="mt-1 text-sm text-slate-400">{{ t('ownerFlashSales.subtitle') }}</p>
       </div>
       <svg v-if="updating" aria-hidden="true" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -54,7 +54,7 @@
       <li
         v-for="sale in sales"
         :key="sale.id"
-        class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 transition-colors hover:border-slate-600"
+        class="ui-panel p-4 transition-colors hover:border-slate-600"
       >
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <!-- Info -->
@@ -105,7 +105,7 @@
           <div class="shrink-0">
             <button
               v-if="!sale.opted_in"
-              class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-4 py-2 text-xs font-semibold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50"
+              class="ui-btn-primary px-4 py-2 text-xs disabled:opacity-50"
               :disabled="toggling === sale.id"
               @click="optIn(sale)"
             >
@@ -113,7 +113,7 @@
             </button>
             <button
               v-else
-              class="rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-red-500/50 hover:text-red-300 disabled:opacity-50"
+              class="ui-btn-outline px-4 py-2 text-xs hover:border-red-500/50 hover:text-red-300 disabled:opacity-50"
               :disabled="toggling === sale.id"
               @click="optOut(sale)"
             >
@@ -125,7 +125,7 @@
     </ul>
 
     <!-- How it works info box -->
-    <div class="rounded-2xl border border-slate-700/40 bg-slate-900/30 p-4">
+    <div class="ui-panel p-4">
       <h3 class="mb-2 text-sm font-semibold text-slate-200">{{ t('ownerFlashSales.howItWorksTitle') }}</h3>
       <ul class="space-y-1.5 text-xs text-slate-400">
         <li>⚡ {{ t('ownerFlashSales.howItWorks1') }}</li>

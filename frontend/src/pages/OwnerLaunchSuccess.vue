@@ -1,10 +1,10 @@
 <template>
-  <section class="space-y-5 ui-safe-bottom">
+  <section class="space-y-4 ui-safe-bottom">
     <header
       class="ui-workspace-stage overflow-hidden"
       :class="isPublished ? 'border-emerald-500/30' : 'border-amber-500/30'"
     >
-      <div class="relative ui-workspace-grid gap-5">
+      <div class="relative ui-workspace-grid gap-4">
         <div class="space-y-4">
           <span class="ui-chip-strong w-fit">{{ t("ownerLaunchSuccess.launch") }}</span>
           <div class="space-y-2">

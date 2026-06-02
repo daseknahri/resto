@@ -44,7 +44,7 @@
 
     <template v-else>
       <!-- Settings card -->
-      <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
+      <div class="ui-panel p-4 space-y-4">
         <!-- Enable / disable toggle -->
         <div class="flex items-center justify-between gap-4">
           <div>
@@ -146,7 +146,7 @@
       </div>
 
       <!-- How it works info box -->
-      <div class="rounded-2xl border border-slate-700/40 bg-slate-900/40 p-4 space-y-3">
+      <div class="ui-panel p-4 space-y-3">
         <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider">{{ t('ownerLoyalty.howItWorksTitle') }}</p>
         <ul class="space-y-2 text-xs text-slate-400">
           <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how1') }}</li>

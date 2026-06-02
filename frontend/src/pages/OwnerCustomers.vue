@@ -1,13 +1,13 @@
 <template>
-  <div class="px-4 py-6 sm:px-6">
+  <div class="space-y-4 pb-6">
     <!-- Header -->
-    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="text-xl font-bold text-slate-100">{{ t("ownerCustomers.title") }}</h1>
+        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerCustomers.title") }}</h1>
         <p class="mt-0.5 text-sm text-slate-400">{{ t("ownerCustomers.subtitle") }}</p>
       </div>
       <button
-        class="ui-btn-secondary flex items-center gap-1.5 text-xs"
+        class="ui-btn-outline flex items-center gap-1.5 px-4 py-2 text-xs"
         :disabled="loading"
         @click="exportCsv"
       >
@@ -17,7 +17,7 @@
     </div>
 
     <!-- Summary bar skeleton -->
-    <div v-if="!summary && loading" class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div v-if="!summary && loading" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <div v-for="i in 4" :key="i" class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 space-y-2">
         <div class="h-2.5 w-16 rounded bg-slate-700/60" />
         <div class="h-7 w-10 rounded bg-slate-800/60" />
@@ -25,7 +25,7 @@
     </div>
 
     <!-- Summary bar -->
-    <div v-if="summary" class="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div v-if="summary" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <button
         v-for="seg in segments"
         :key="seg.key"
@@ -44,7 +44,7 @@
     </div>
 
     <!-- Search -->
-    <div class="mb-4 flex items-center gap-2">
+    <div class="flex items-center gap-2">
       <div class="relative flex-1">
         <AppIcon name="search" class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
         <input
@@ -59,7 +59,7 @@
     </div>
 
     <!-- Error -->
-    <div v-if="error" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+    <div v-if="error" role="alert" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
       <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
       </svg>

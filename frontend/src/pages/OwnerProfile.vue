@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4">
-    <section class="ui-panel overflow-hidden p-4 sm:p-4">
+    <section class="ui-panel overflow-hidden p-4">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-2">
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>

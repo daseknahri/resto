@@ -1,11 +1,11 @@
 <template>
   <div class="space-y-4">
     <!-- Header -->
-    <div class="ui-panel space-y-3 p-4 sm:p-4">
+    <div class="ui-panel space-y-3 p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-section-kicker">{{ t("ownerRatings.kicker") }}</p>
-          <h1 class="text-2xl font-semibold text-white">{{ t("ownerRatings.title") }}</h1>
+          <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerRatings.title") }}</h1>
           <p class="text-sm text-slate-400">{{ t("ownerRatings.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

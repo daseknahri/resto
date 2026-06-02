@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-5 pb-6">
+  <div class="space-y-4 pb-6">
     <!-- Page header -->
     <div class="space-y-0.5">
       <p class="ui-kicker">{{ t('ownerWallet.kicker') }}</p>
@@ -8,7 +8,7 @@
     </div>
 
     <!-- Customer search card -->
-    <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
+    <div class="ui-panel p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.searchTitle') }}</p>
 
       <!-- Search input -->
@@ -18,7 +18,7 @@
           v-model="searchQuery"
           type="text"
           :aria-label="t('ownerWallet.searchTitle')"
-          class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+          class="ui-input w-full pl-10 pr-4 text-sm"
           :placeholder="t('ownerWallet.searchPlaceholder')"
           @input="onSearchInput"
         />
@@ -63,7 +63,7 @@
       leave-active-class="transition-all duration-150"
       leave-to-class="opacity-0 translate-y-2"
     >
-      <div v-if="selected" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
+      <div v-if="selected" class="ui-panel p-4 space-y-4">
         <!-- Selected customer summary -->
         <div class="flex items-center justify-between gap-3">
           <div>
@@ -95,7 +95,7 @@
                 type="number"
                 step="0.01"
                 min="0.01"
-                class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-7 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+                class="ui-input w-full pl-7 pr-4 text-sm"
                 :placeholder="t('ownerWallet.amountPlaceholder')"
               />
             </div>
@@ -110,7 +110,7 @@
               v-model="topupNote"
               type="text"
               maxlength="200"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 px-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              class="ui-input w-full px-4 text-sm"
               :placeholder="t('ownerWallet.notePlaceholder')"
             />
           </label>

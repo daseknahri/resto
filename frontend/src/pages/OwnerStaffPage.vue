@@ -1,10 +1,10 @@
 ﻿<template>
-  <div class="space-y-5 max-w-2xl">
+  <div class="space-y-4 pb-6 max-w-2xl">
     <!-- Header -->
     <div class="flex items-start justify-between gap-3">
       <div>
         <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
-        <h2 class="text-xl font-bold text-white">{{ t("ownerStaff.title") }}</h2>
+        <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerStaff.title") }}</h2>
         <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
       </div>
       <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -13,7 +13,7 @@
     </div>
 
     <!-- Create form -->
-    <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-4">
+    <div class="ui-panel p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t("ownerStaff.inviteSection") }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <input
@@ -71,13 +71,13 @@
       </div>
       <div class="flex gap-2">
         <button
-          class="rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-500 transition-colors"
+          class="ui-btn-outline px-4 py-2 text-xs font-semibold"
           @click="copyCredentials"
         >
           {{ copied ? t("ownerStaff.credentialsCopied") : t("ownerStaff.credentialsCopy") }}
         </button>
         <button
-          class="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2 text-xs font-semibold text-slate-400 hover:border-slate-600 transition-colors"
+          class="ui-btn-outline px-4 py-2 text-xs font-semibold"
           @click="newCredentials = null; copied = false"
         >
           {{ t("ownerStaff.credentialsDone") }}
