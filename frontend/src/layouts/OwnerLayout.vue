@@ -101,6 +101,21 @@
 
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <LanguageSwitcher compact dropdown />
+              <!-- Dark / light mode toggle -->
+              <button
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+                type="button"
+                :aria-label="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
+                :title="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
+                @click="toggleTheme"
+              >
+                <svg v-if="ownerTheme === 'dark'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
+                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
+                </svg>
+                <svg v-else aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                </svg>
+              </button>
               <!-- PWA install button -->
               <button
                 v-if="canInstall"
@@ -311,6 +326,7 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
+import { useOwnerTheme } from "../composables/useOwnerTheme";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
@@ -322,6 +338,9 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
+
+// ── Owner color scheme (dark / light) ─────────────────────────────────────────
+const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();
 
 // ── PWA install prompt ────────────────────────────────────────────────────────
 const { canInstall, install: pwaInstall } = useInstallPrompt();
@@ -474,6 +493,7 @@ const onLayoutPageVisible = () => {
 };
 
 onMounted(async () => {
+  activateTheme(); // paint the saved dark/light choice onto <html>
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }
@@ -503,6 +523,7 @@ onBeforeUnmount(() => {
     document.removeEventListener("visibilitychange", onLayoutPageVisible);
   }
   clearInterval(orderPollTimer);
+  deactivateTheme(); // strip data-owner-theme so customer/admin pages stay un-themed
 });
 
 watch(
@@ -730,4 +751,8 @@ watch(
     font-size: 0.8rem;
   }
 }
+
+/* Light-mode overrides for these scoped classes live in styles/tailwind.css —
+   Vue's scoped compiler mishandles `:global(ancestor) .scoped-child`, so the
+   owner light theme is centralised there as plain global rules. */
 </style>

@@ -3,6 +3,7 @@ import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
 import { useLocaleStore } from "./stores/locale";
+import { primeOwnerTheme } from "./composables/useOwnerTheme";
 import { initSentry } from "./lib/sentry";
 import "./styles/tailwind.css";
 
@@ -22,6 +23,12 @@ const normalizeDevHost = () => {
 };
 
 normalizeDevHost();
+
+// Pre-paint the owner color scheme before mount to avoid a flash of the wrong
+// theme on hard reloads of owner pages (no-op on non-owner routes).
+if (typeof window !== "undefined") {
+  primeOwnerTheme(window.location.pathname);
+}
 
 const pinia = createPinia();
 const app = createApp(App);

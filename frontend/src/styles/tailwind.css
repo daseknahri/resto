@@ -2394,3 +2394,282 @@ html[data-menu-theme="warm"]  .border-amber-500\/25 { border-color: rgba(217,119
 .offline-slide-enter-from,
 .offline-slide-leave-to   { transform: translateY(-100%); opacity: 0; }
 
+/* ==========================================================================
+   Owner workspace — light mode
+   Applied via html[data-owner-theme="light"], set by OwnerLayout on mount and
+   removed on unmount (see composables/useOwnerTheme.js). Fully scoped to the
+   owner area: the attribute is never present on customer/admin routes, so these
+   rules can safely re-map the shared ui-* primitives and slate utilities. Values
+   mirror the menu light theme so contrast stays consistent across the app.
+   ========================================================================== */
+
+html[data-owner-theme="light"] {
+  color-scheme: light;
+  --color-surface: #ffffff;
+  --color-elevated: #f8fafc;
+  --color-border: rgba(100, 116, 139, 0.2);
+  --color-text: #0f172a;
+}
+
+html[data-owner-theme="light"] body {
+  background-color: #eef2f7;
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(15, 118, 110, 0.06), transparent 42%),
+    radial-gradient(circle at 88% 4%, rgba(245, 158, 11, 0.05), transparent 40%);
+  color: #0f172a;
+}
+
+/* The <body> element ships with `bg-slate-950 text-slate-50`. The slate utility
+   overrides below would otherwise win over the rule above (class beats element),
+   painting the whole page white and leaving white cards with no contrast. These
+   higher-specificity rules keep the page a soft grey so white cards lift off it. */
+html[data-owner-theme="light"] body.bg-slate-950 {
+  background-color: #eef2f7;
+}
+html[data-owner-theme="light"] body.text-slate-50 {
+  color: #0f172a;
+}
+
+/* ── Shell + card primitives ── */
+html[data-owner-theme="light"] .ui-header {
+  background: rgba(248, 250, 252, 0.85);
+  border-color: rgba(100, 116, 139, 0.16);
+}
+
+html[data-owner-theme="light"] .ui-workspace-stage,
+html[data-owner-theme="light"] .owner-workspace-stage {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(100, 116, 139, 0.16);
+  box-shadow: 0 20px 60px rgba(100, 116, 139, 0.12);
+}
+
+html[data-owner-theme="light"] .ui-command-deck {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(100, 116, 139, 0.16);
+  box-shadow: 0 16px 40px rgba(100, 116, 139, 0.1);
+}
+
+html[data-owner-theme="light"] .ui-section-band {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(100, 116, 139, 0.15);
+  box-shadow: 0 10px 28px rgba(100, 116, 139, 0.09);
+}
+
+html[data-owner-theme="light"] .ui-panel,
+html[data-owner-theme="light"] .ui-panel-soft,
+html[data-owner-theme="light"] .ui-glass {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(100, 116, 139, 0.16);
+  box-shadow: 0 8px 24px rgba(100, 116, 139, 0.1);
+}
+
+html[data-owner-theme="light"] .ui-metric-card,
+html[data-owner-theme="light"] .ui-spotlight-card,
+html[data-owner-theme="light"] .ui-orbit-card,
+html[data-owner-theme="light"] .ui-hero-ribbon,
+html[data-owner-theme="light"] .ui-hero-stage,
+html[data-owner-theme="light"] .ui-stat-tile {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.15);
+  box-shadow: 0 6px 20px rgba(100, 116, 139, 0.1);
+  color: #0f172a;
+}
+
+/* Decorative amber/teal glows read far stronger on a light surface — calm them. */
+html[data-owner-theme="light"] .ui-workspace-stage::before,
+html[data-owner-theme="light"] .ui-command-deck::before,
+html[data-owner-theme="light"] .ui-command-deck::after,
+html[data-owner-theme="light"] .ui-section-band::before,
+html[data-owner-theme="light"] .ui-spotlight-card::before,
+html[data-owner-theme="light"] .ui-hero-stage::before {
+  opacity: 0.5;
+}
+
+html[data-owner-theme="light"] .ui-data-strip {
+  background: rgba(241, 245, 249, 0.9);
+  border-color: rgba(100, 116, 139, 0.18);
+  color: #475569;
+}
+
+html[data-owner-theme="light"] .ui-input {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.32);
+  color: #0f172a;
+}
+
+html[data-owner-theme="light"] .ui-btn-outline {
+  border-color: rgba(100, 116, 139, 0.3);
+  background: rgba(255, 255, 255, 0.6);
+  color: #1e293b;
+}
+
+html[data-owner-theme="light"] .ui-bottom-dock {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(100, 116, 139, 0.16);
+}
+
+/* Primitives that bake their text colour in via @apply need explicit overrides. */
+html[data-owner-theme="light"] .ui-kicker,
+html[data-owner-theme="light"] .ui-section-kicker {
+  color: #64748b;
+}
+
+html[data-owner-theme="light"] .ui-stat-value {
+  color: #0f172a;
+}
+
+/* ── Inline slate text utilities → dark-on-light ── */
+html[data-owner-theme="light"] .text-white { color: #0f172a; }
+html[data-owner-theme="light"] .text-slate-50 { color: #0f172a; }
+html[data-owner-theme="light"] .text-slate-100 { color: #1e293b; }
+html[data-owner-theme="light"] .text-slate-200 { color: #334155; }
+html[data-owner-theme="light"] .text-slate-300 { color: #475569; }
+html[data-owner-theme="light"] .text-slate-400,
+html[data-owner-theme="light"] .text-slate-400\/70 { color: #64748b; }
+html[data-owner-theme="light"] .text-slate-500 { color: #64748b; }
+html[data-owner-theme="light"] .text-slate-600 { color: #64748b; }
+/* text-slate-700/900/950 are already dark — correct on a light surface, left as-is. */
+
+/* ── Inline slate background utilities → light surfaces ── */
+/* Darkest panel/page surfaces (900/950, any opacity) → white card. */
+html[data-owner-theme="light"] .bg-slate-950,
+html[data-owner-theme="light"] .bg-slate-950\/80,
+html[data-owner-theme="light"] .bg-slate-950\/70,
+html[data-owner-theme="light"] .bg-slate-950\/55,
+html[data-owner-theme="light"] .bg-slate-950\/50,
+html[data-owner-theme="light"] .bg-slate-950\/45,
+html[data-owner-theme="light"] .bg-slate-950\/40,
+html[data-owner-theme="light"] .bg-slate-950\/35,
+html[data-owner-theme="light"] .bg-slate-950\/30,
+html[data-owner-theme="light"] .bg-slate-900,
+html[data-owner-theme="light"] .bg-slate-900\/80,
+html[data-owner-theme="light"] .bg-slate-900\/70,
+html[data-owner-theme="light"] .bg-slate-900\/60,
+html[data-owner-theme="light"] .bg-slate-900\/50,
+html[data-owner-theme="light"] .bg-slate-900\/40,
+html[data-owner-theme="light"] .bg-slate-900\/30 {
+  background-color: #ffffff;
+}
+
+/* Subtle fills (slate-800) → slate-100. */
+html[data-owner-theme="light"] .bg-slate-800,
+html[data-owner-theme="light"] .bg-slate-800\/60,
+html[data-owner-theme="light"] .bg-slate-800\/50,
+html[data-owner-theme="light"] .bg-slate-800\/40,
+html[data-owner-theme="light"] .bg-slate-800\/30,
+html[data-owner-theme="light"] .bg-slate-800\/20 {
+  background-color: #f1f5f9;
+}
+
+/* Skeleton bars / track fills (slate-700) → slate-200. */
+html[data-owner-theme="light"] .bg-slate-700,
+html[data-owner-theme="light"] .bg-slate-700\/60,
+html[data-owner-theme="light"] .bg-slate-700\/50,
+html[data-owner-theme="light"] .bg-slate-700\/40 {
+  background-color: #e2e8f0;
+}
+
+/* Knobs / dots / muted dots. */
+html[data-owner-theme="light"] .bg-slate-600 { background-color: #cbd5e1; }
+html[data-owner-theme="light"] .bg-slate-500,
+html[data-owner-theme="light"] .bg-slate-500\/50 { background-color: #94a3b8; }
+html[data-owner-theme="light"] .bg-slate-400\/70,
+html[data-owner-theme="light"] .bg-slate-400\/60 { background-color: rgba(148, 163, 184, 0.5); }
+
+/* ── Inline slate border utilities → light hairlines ── */
+html[data-owner-theme="light"] .border-slate-500,
+html[data-owner-theme="light"] .border-slate-600,
+html[data-owner-theme="light"] .border-slate-600\/60,
+html[data-owner-theme="light"] .border-slate-700,
+html[data-owner-theme="light"] .border-slate-700\/80,
+html[data-owner-theme="light"] .border-slate-700\/70,
+html[data-owner-theme="light"] .border-slate-700\/60,
+html[data-owner-theme="light"] .border-slate-700\/50,
+html[data-owner-theme="light"] .border-slate-700\/40,
+html[data-owner-theme="light"] .border-slate-700\/30,
+html[data-owner-theme="light"] .border-slate-800,
+html[data-owner-theme="light"] .border-slate-800\/80,
+html[data-owner-theme="light"] .border-slate-800\/70,
+html[data-owner-theme="light"] .border-slate-800\/60 {
+  border-color: rgba(100, 116, 139, 0.2);
+}
+
+html[data-owner-theme="light"] .placeholder-slate-600::placeholder,
+html[data-owner-theme="light"] .placeholder-slate-500::placeholder {
+  color: #94a3b8;
+}
+
+/* ── Accent text: lift the light-300/400 shades to readable tones on white ── */
+html[data-owner-theme="light"] .text-emerald-300,
+html[data-owner-theme="light"] .text-emerald-400 { color: #047857; }
+html[data-owner-theme="light"] .text-red-300,
+html[data-owner-theme="light"] .text-red-400 { color: #dc2626; }
+html[data-owner-theme="light"] .text-amber-300,
+html[data-owner-theme="light"] .text-amber-400 { color: #b45309; }
+html[data-owner-theme="light"] .text-indigo-300,
+html[data-owner-theme="light"] .text-indigo-400 { color: #4f46e5; }
+html[data-owner-theme="light"] .text-teal-300,
+html[data-owner-theme="light"] .text-teal-400 { color: #0f766e; }
+html[data-owner-theme="light"] .text-sky-300,
+html[data-owner-theme="light"] .text-sky-400 { color: #0369a1; }
+html[data-owner-theme="light"] .text-rose-300,
+html[data-owner-theme="light"] .text-rose-400 { color: #e11d48; }
+
+/* ── Component-scoped classes (nav pills, toggles, badges) ──
+   These are defined in component <style scoped> blocks. Vue's scoped compiler
+   mangles `:global(ancestor) .scoped-child`, so their light overrides live here
+   as plain global rules — the class names are unique and these win on specificity
+   over the scoped base rules (0,2,1 vs 0,2,0). */
+
+/* Header nav + settings menu (OwnerLayout.vue) */
+html[data-owner-theme="light"] .owner-settings-trigger {
+  border-color: rgba(100, 116, 139, 0.32);
+  background: rgba(255, 255, 255, 0.85);
+  color: #334155;
+}
+html[data-owner-theme="light"] .owner-settings-menu {
+  border-color: rgba(100, 116, 139, 0.22);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 20px 45px rgba(100, 116, 139, 0.22);
+}
+html[data-owner-theme="light"] .owner-settings-item { color: #334155; }
+html[data-owner-theme="light"] .owner-settings-item:hover {
+  background: rgba(241, 245, 249, 0.95);
+}
+
+/* Pill navs (OwnerLayout main nav, OwnerProfile, OwnerMenuBuilder) */
+html[data-owner-theme="light"] .owner-main-nav,
+html[data-owner-theme="light"] .owner-profile-nav,
+html[data-owner-theme="light"] .owner-menu-builder-nav {
+  border-color: rgba(100, 116, 139, 0.22);
+  background: linear-gradient(135deg, rgba(241, 245, 249, 0.95), rgba(226, 232, 240, 0.85));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+html[data-owner-theme="light"] .owner-main-nav-item,
+html[data-owner-theme="light"] .owner-profile-nav-item,
+html[data-owner-theme="light"] .owner-menu-builder-nav-item {
+  border-color: rgba(100, 116, 139, 0.2);
+  color: #475569;
+}
+html[data-owner-theme="light"] .owner-main-nav-item:hover,
+html[data-owner-theme="light"] .owner-profile-nav-item:hover,
+html[data-owner-theme="light"] .owner-menu-builder-nav-item:hover {
+  background: rgba(255, 255, 255, 0.75);
+  color: #b45309;
+}
+html[data-owner-theme="light"] .owner-main-nav-item[data-active="true"],
+html[data-owner-theme="light"] .owner-profile-nav-item[data-active="true"],
+html[data-owner-theme="light"] .owner-menu-builder-nav-item[data-active="true"] {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.06));
+  color: #b45309;
+}
+
+/* Staff toggle off-state + thumb (OwnerStaffPage.vue) */
+html[data-owner-theme="light"] .staff-toggle-off { background: #cbd5e1; }
+html[data-owner-theme="light"] .staff-toggle-thumb {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+}
+
+/* Funnel drop badge (OwnerDashboardInsights.vue) */
+html[data-owner-theme="light"] .funnel-drop-badge { color: #dc2626; }
+
