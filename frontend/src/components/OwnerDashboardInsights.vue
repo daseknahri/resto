@@ -371,7 +371,7 @@ const exportCsv = async () => {
     const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `analytics_${period.value}d.csv`;
+    a.download = `analytics_${internalPeriod.value}d.csv`;
     a.click();
     URL.revokeObjectURL(url);
   } catch {
