@@ -139,7 +139,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onActivated, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
@@ -218,4 +218,11 @@ const optOut = async (sale) => {
 };
 
 onMounted(() => fetchSales());
+
+// Kept alive — silently revalidate on revisit (cached view shows instantly).
+let _activatedOnce = false;
+onActivated(() => {
+  if (!_activatedOnce) { _activatedOnce = true; return; }
+  fetchSales();
+});
 </script>

@@ -207,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from "vue";
+import { ref, onActivated, onMounted, reactive } from "vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
@@ -286,6 +286,13 @@ const fetchStaff = async () => {
 };
 
 onMounted(fetchStaff);
+
+// Kept alive — silently revalidate on revisit (cached view shows instantly).
+let _activatedOnce = false;
+onActivated(() => {
+  if (!_activatedOnce) { _activatedOnce = true; return; }
+  fetchStaff();
+});
 
 // ── Expand / collapse ──────────────────────────────────────────────────────────
 const toggleExpanded = (id) => {

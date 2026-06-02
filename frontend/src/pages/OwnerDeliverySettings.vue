@@ -128,7 +128,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onActivated, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
@@ -189,4 +189,12 @@ const saveRadius = async () => {
 };
 
 onMounted(fetchData);
+
+// Kept alive (see OwnerLayout) — onMounted won't re-run on revisit, so silently
+// revalidate on return (SWR shows the cached view instantly, no spinner).
+let _activatedOnce = false;
+onActivated(() => {
+  if (!_activatedOnce) { _activatedOnce = true; return; }
+  fetchData();
+});
 </script>

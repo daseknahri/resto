@@ -160,7 +160,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onMounted, reactive, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
@@ -247,4 +247,11 @@ const save = async () => {
 };
 
 onMounted(fetchConfig);
+
+// Kept alive — silently revalidate on revisit (cached view shows instantly).
+let _activatedOnce = false;
+onActivated(() => {
+  if (!_activatedOnce) { _activatedOnce = true; return; }
+  fetchConfig();
+});
 </script>

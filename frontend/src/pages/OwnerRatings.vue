@@ -156,7 +156,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onActivated, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
@@ -260,4 +260,11 @@ const exportCsv = async () => {
 };
 
 onMounted(() => fetchRatings());
+
+// Kept alive — silently revalidate on revisit (cached view shows instantly).
+let _activatedOnce = false;
+onActivated(() => {
+  if (!_activatedOnce) { _activatedOnce = true; return; }
+  fetchRatings();
+});
 </script>
