@@ -232,15 +232,25 @@
             <span>{{ t("orderStatus.deliveryFee") }}</span>
             <span>{{ formatCurrency(orderData.delivery_fee, orderData.currency) }}</span>
           </div>
+          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between text-sm text-slate-400">
+            <span>{{ t("orderStatus.vatIncluded", { label: orderData.vat_label, rate: Number(orderData.vat_rate) }) }}</span>
+            <span>{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
+          </div>
           <div class="flex justify-between border-t border-slate-700 pt-2">
             <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
             <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
           </div>
         </template>
-        <div v-else class="flex justify-between border-t border-slate-800 pt-3">
-          <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
-          <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
-        </div>
+        <template v-else>
+          <div v-if="Number(orderData.vat_amount) > 0" class="flex justify-between border-t border-slate-800 pt-3 text-sm text-slate-400">
+            <span>{{ t("orderStatus.vatIncluded", { label: orderData.vat_label, rate: Number(orderData.vat_rate) }) }}</span>
+            <span>{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
+          </div>
+          <div class="flex justify-between border-slate-800 pt-3" :class="{ 'border-t': !(Number(orderData.vat_amount) > 0) }">
+            <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
+            <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
+          </div>
+        </template>
         <!-- Wallet credits applied -->
         <div
           v-if="Number(orderData.wallet_amount_paid) > 0"

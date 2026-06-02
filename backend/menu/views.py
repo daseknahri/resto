@@ -52,6 +52,7 @@ from tenancy.models import Profile
 
 from .models import AnalyticsEvent, Category, CurrencyRate, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
+from .tax import order_vat_fields
 from .serializers import (
     CategorySerializer,
     DishOptionSerializer,
@@ -2070,10 +2071,15 @@ class CustomerOrderStatusView(APIView):
                 "comment": existing_rating.comment,
             }
 
-        # Pull the receipt message from the tenant profile (safe fallback to "").
+        # Pull the receipt message + VAT settings from the tenant profile (safe fallbacks).
         receipt_message = ""
+        vat_fields = {}
         try:
-            receipt_message = getattr(request.tenant.profile, "receipt_message", "") or ""
+            _profile = request.tenant.profile
+            receipt_message = getattr(_profile, "receipt_message", "") or ""
+            vat_fields = order_vat_fields(
+                order, getattr(_profile, "vat_rate", 0), getattr(_profile, "vat_label", "") or ""
+            )
         except Exception:
             pass
 
@@ -2102,6 +2108,8 @@ class CustomerOrderStatusView(APIView):
             "rating": rating_data,
             # Thank-you message written by the restaurant owner (shown for confirmed/ready/completed).
             "receipt_message": receipt_message,
+            # VAT breakdown (empty/zero unless the owner set a VAT rate; prices are VAT-inclusive).
+            **vat_fields,
         })
 
 
@@ -2501,6 +2509,15 @@ class OwnerOrderListView(APIView):
                         "restaurant_driver_note": _dj.restaurant_driver_note,
                     }
 
+        # VAT settings (read once) — prices are VAT-inclusive; we only break out
+        # the tax portion per order for display/reporting.
+        try:
+            _vat_profile = request.tenant.profile
+            _vat_rate = getattr(_vat_profile, "vat_rate", 0)
+            _vat_label = getattr(_vat_profile, "vat_label", "") or ""
+        except Exception:
+            _vat_rate, _vat_label = 0, ""
+
         orders = []
         for order in all_orders:
             orders.append({
@@ -2520,6 +2537,7 @@ class OwnerOrderListView(APIView):
                 "total": str(order.total),
                 "delivery_fee": str(order.delivery_fee),
                 "tip_amount": str(order.tip_amount),
+                **order_vat_fields(order, _vat_rate, _vat_label),
                 "currency": order.currency,
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,

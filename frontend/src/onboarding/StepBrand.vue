@@ -83,6 +83,34 @@
           <p class="text-xs text-slate-500">{{ t("stepBrand.deliveryFeeHint") }}</p>
           <p v-if="fieldError('delivery_fee')" id="step-brand-delivery-fee-error" class="text-xs text-red-300">{{ fieldError("delivery_fee") }}</p>
         </label>
+        <div class="grid grid-cols-[1fr_auto] gap-3">
+          <label class="space-y-1 text-sm text-slate-200">
+            {{ t("stepBrand.vatRate") }}
+            <div class="relative">
+              <input
+                v-model="form.vat_rate"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                :class="inputClass('vat_rate') + ' pr-10'"
+                @input="clearField('vat_rate')"
+              />
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
+            </div>
+            <p class="text-xs text-slate-500">{{ t("stepBrand.vatRateHint") }}</p>
+          </label>
+          <label class="space-y-1 text-sm text-slate-200">
+            {{ t("stepBrand.vatLabel") }}
+            <input
+              v-model="form.vat_label"
+              type="text"
+              maxlength="20"
+              :placeholder="t('stepBrand.vatLabelPlaceholder')"
+              :class="inputClass('vat_label') + ' w-24'"
+            />
+          </label>
+        </div>
         <div class="space-y-1 text-sm text-slate-200">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <span>{{ t("common.address") }}</span>
@@ -348,6 +376,8 @@ const form = reactive({
   phone: "",
   whatsapp: "",
   delivery_fee: "0",
+  vat_rate: "0",
+  vat_label: "",
   address: "",
   address_i18n: {},
   google_maps_url: "",

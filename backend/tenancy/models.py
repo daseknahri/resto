@@ -138,6 +138,23 @@ class Profile(models.Model):
         blank=True,
         help_text="Optional thank-you note shown to the customer on their order confirmation page.",
     )
+    vat_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "VAT/TVA rate as a percentage (e.g. 20.00 = 20%). Menu prices are treated "
+            "as VAT-inclusive: the charged total is unchanged, and this rate is used "
+            "only to break the VAT amount out on orders, receipts and invoices. "
+            "0 = no VAT line shown."
+        ),
+    )
+    vat_label = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Label for the tax line on receipts (e.g. 'VAT', 'TVA'). Defaults to 'VAT' when blank.",
+    )
     MENU_THEME_CHOICES = [
         ("dark", "Dark (default)"),
         ("light", "Light"),

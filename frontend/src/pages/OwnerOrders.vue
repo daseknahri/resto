@@ -999,6 +999,9 @@ const printTicket = (o) => {
       <tr><td style="padding:2px 0;font-size:12px;color:#444">${subtotalLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(Number(o.total) - Number(o.delivery_fee), o.currency)}</td></tr>
       <tr><td style="padding:2px 0;font-size:12px;color:#444">${feeLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.delivery_fee, o.currency)}</td></tr>
       ` : ""}
+      ${Number(o.vat_amount) > 0 ? `
+      <tr><td style="padding:2px 0;font-size:12px;color:#444">${escapeHtml(t("orderStatus.vatIncluded", { label: o.vat_label, rate: Number(o.vat_rate) }))}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.vat_amount, o.currency)}</td></tr>
+      ` : ""}
       <tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr>
       ${Number(o.wallet_amount_paid) > 0 ? `
       <tr><td style="padding:2px 0;font-size:12px;color:#16a34a">💰 ${walletLabel}</td><td style="text-align:right;font-size:12px;color:#16a34a">−${formatCurrency(o.wallet_amount_paid, o.currency)}</td></tr>

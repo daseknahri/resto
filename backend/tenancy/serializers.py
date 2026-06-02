@@ -220,6 +220,8 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "delivery_minimum_order",
             "delivery_zone_description",
             "receipt_message",
+            "vat_rate",
+            "vat_label",
             "menu_theme",
             "sms_notifications_enabled",
             "auto_confirm_reservations",
