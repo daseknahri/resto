@@ -21,7 +21,11 @@ export const useSessionStore = defineStore("session", {
   }),
   getters: {
     isAuthenticated: (state) => !!state.user,
-    isPlatformAdmin: (state) => state.user?.can_access_admin_console === true,
+    // Must match the backend admin endpoints, which require the PLATFORM_SUPERADMIN
+    // role (is_platform_admin) — not merely Django is_staff/is_superuser. Using the
+    // looser can_access_admin_console here let staff/superusers load admin pages that
+    // then 403 on every data call.
+    isPlatformAdmin: (state) => state.user?.is_platform_admin === true,
     canEditTenantMenu: (state) => state.user?.can_edit_tenant_menu === true,
     isTenantStaff: (state) => state.user?.role === "tenant_staff",
     isTenantOwner: (state) => state.user?.role === "tenant_owner",

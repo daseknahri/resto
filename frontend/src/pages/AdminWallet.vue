@@ -321,7 +321,7 @@
             <div class="flex gap-3">
               <button
                 class="flex-1 rounded-full bg-[var(--color-secondary,#f59e0b)] py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
-                :disabled="bonusSaving"
+                :disabled="bonusSaving || !bonusAmount"
                 @click="issueBonus"
               >{{ bonusSaving ? '…' : t('adminWallet.bonusIssue') }}</button>
               <button
@@ -469,6 +469,7 @@ const bonusAmount = ref('');
 const bonusNote = ref('');
 const bonusError = ref('');
 const bonusSaving = ref(false);
+let bonusKey = null; // idempotency key, stable across retries of the same bonus
 
 let searchTimer = null;
 
@@ -495,8 +496,8 @@ const fetch = async () => {
     };
     if (search.value.trim()) params.search = search.value.trim();
     const res = await api.get('/admin/wallets/', { params });
-    customers.value = res.data.results;
-    total.value = res.data.total;
+    customers.value = res.data?.results || [];
+    total.value = res.data?.total || 0;
   } catch {
     fetchError.value = true;
   } finally {
@@ -522,6 +523,7 @@ const openBonus = (c) => {
   bonusAmount.value = '';
   bonusNote.value = '';
   bonusError.value = '';
+  bonusKey = null; // fresh idempotency key per bonus
 };
 
 const issueBonus = async () => {
@@ -532,12 +534,15 @@ const issueBonus = async () => {
     return;
   }
   bonusSaving.value = true;
+  if (!bonusKey) bonusKey = newIdempotencyKey();
   try {
     await api.post('/admin/wallet/bonus/', {
       customer_ids: [bonusTarget.value.id],
       amount: amount.toFixed(2),
       note: bonusNote.value.trim() || t('adminWallet.defaultNote'),
+      idempotency_key: bonusKey,
     });
+    bonusKey = null; // confirmed — next bonus gets a fresh key
     toast.show(t('adminWallet.bonusSuccess'));
     bonusTarget.value = null;
     fetch();

@@ -2085,11 +2085,18 @@ const decideUpgradeRequest = async (requestItem, decision) => {
   try {
     let adminNote = "";
     let paymentReference = requestItem.payment_reference || "";
+    // A cancelled prompt (null) must abort the decision, not proceed with the default.
     if (decision === "approve") {
-      paymentReference = window.prompt(t("adminConsole.paymentReferenceOptionalPrompt"), paymentReference) ?? paymentReference;
-      adminNote = window.prompt(t("adminConsole.internalAdminNoteOptionalPrompt"), "") ?? "";
+      const ref = window.prompt(t("adminConsole.paymentReferenceOptionalPrompt"), paymentReference);
+      if (ref === null) return;
+      paymentReference = ref;
+      const note = window.prompt(t("adminConsole.internalAdminNoteOptionalPrompt"), "");
+      if (note === null) return;
+      adminNote = note;
     } else {
-      adminNote = window.prompt(t("adminConsole.reasonForRejectionOptionalPrompt"), "") ?? "";
+      const note = window.prompt(t("adminConsole.reasonForRejectionOptionalPrompt"), "");
+      if (note === null) return;
+      adminNote = note;
     }
     const res = await adminApi.put(`/admin-tier-upgrade-requests/${requestItem.id}/decision/`, {
       decision,
@@ -2229,6 +2236,7 @@ const refreshCurrentView = async () => {
 
 const selectAdminView = async (view) => {
   activeAdminView.value = view;
+  error.value = null; // don't carry a stale error from another view into this one
   if (loadedAdminViews.value[view]) return;
   if (view === "operations") {
     await Promise.all([fetchLeads(), fetchUpgradeRequests()]);
@@ -2240,6 +2248,13 @@ const selectAdminView = async (view) => {
   }
   if (view === "plans") {
     await fetchPlanFeatureFlags();
+    return;
+  }
+  if (view === "monitoring") {
+    // Open + load the alerts panel and prefetch jobs/audit so the tab is never
+    // an empty dead view; the jobs/audit panels then show data when expanded.
+    adminPanels.value.alerts = true;
+    await Promise.all([fetchReservationAlerts(), fetchJobs(), fetchAuditLogs()]);
   }
 };
 
@@ -2251,6 +2266,16 @@ watch(domainSuffix, () => {
   previews.value = {};
   previewLoading.value = {};
 });
+
+// Lazy-load monitoring panels the first time they are expanded (the Show buttons
+// only toggle visibility), so a manually opened panel never shows a false-empty state.
+watch(() => adminPanels.value.jobs, (open) => { if (open && !jobs.value.length) fetchJobs(); });
+watch(() => adminPanels.value.audit, (open) => { if (open && !auditLogs.value.length) fetchAuditLogs(auditPage.value); });
+watch(() => adminPanels.value.alerts, (open) => { if (open && !reservationAlerts.value.length) fetchReservationAlerts(); });
+
+// Re-query immediately when a page-size dropdown changes (reset to page 1).
+watch(tenantPageSize, () => fetchTenants(1));
+watch(auditPageSize, () => fetchAuditLogs(1));
 
 </script>
 

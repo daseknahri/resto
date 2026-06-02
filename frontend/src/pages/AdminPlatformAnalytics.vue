@@ -162,7 +162,7 @@ const refresh = async () => {
   try {
     const res = await api.get('/admin/platform-analytics/');
     data.value = res.data;
-    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date());
+    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
   } catch {
     fetchError.value = true;
   } finally {

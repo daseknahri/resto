@@ -366,8 +366,8 @@ const save = async () => {
       toast.show(t('adminZones.created'));
     }
     closeForm();
-  } catch {
-    toast.show(t('adminZones.saveFailed'), 'error');
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminZones.saveFailed'), 'error');
   } finally {
     saving.value = false;
   }
@@ -385,8 +385,8 @@ const deleteZone = async (zone) => {
     await api.delete(`/admin/delivery-zones/${zone.id}/`);
     zones.value = zones.value.filter(z => z.id !== zone.id);
     toast.show(t('adminZones.deleted'));
-  } catch {
-    toast.show(t('adminZones.deleteFailed'), 'error');
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminZones.deleteFailed'), 'error');
   } finally {
     deletingId.value = null;
   }

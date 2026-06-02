@@ -51,12 +51,14 @@ describe("useSessionStore — role getters", () => {
     expect(store.isTenantOwner).toBe(false);
   });
 
-  it("isPlatformAdmin requires can_access_admin_console === true", () => {
+  it("isPlatformAdmin requires is_platform_admin === true (matches backend admin gating)", () => {
     const store = useSessionStore();
-    store.user = { can_access_admin_console: true };
+    store.user = { is_platform_admin: true };
     expect(store.isPlatformAdmin).toBe(true);
 
-    store.user = { can_access_admin_console: false };
+    // A Django staff/superuser without the PLATFORM_SUPERADMIN role must NOT pass —
+    // the backend admin endpoints reject them, so the guard must too.
+    store.user = { can_access_admin_console: true, is_platform_admin: false };
     expect(store.isPlatformAdmin).toBe(false);
   });
 
