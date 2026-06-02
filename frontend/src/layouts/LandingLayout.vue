@@ -40,6 +40,14 @@
             <AppIcon name="settings" class="mr-1.5 h-3.5 w-3.5" />
             {{ t("common.workspace") }}
           </RouterLink>
+          <RouterLink
+            v-if="customerStore.isAuthenticated"
+            :to="{ name: 'customer-account' }"
+            class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-4 sm:text-sm"
+          >
+            <AppIcon name="user" class="mr-1.5 h-3.5 w-3.5" />
+            {{ t("common.myAccount") }}
+          </RouterLink>
           <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm">{{ t("common.signIn") }}</RouterLink>
           <button v-else class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm" @click="signOut">
             {{ t("common.signOut") }}
@@ -140,15 +148,17 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
+import { useCustomerStore } from "../stores/customer";
 
 const router = useRouter();
 const session = useSessionStore();
+const customerStore = useCustomerStore();
 const { t } = useI18n();
 const year = new Date().getFullYear();
 const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com";
@@ -161,4 +171,7 @@ const signOut = async () => {
   await session.signOut();
   router.push({ name: "home" });
 };
+
+// Resolve the customer session so the header can show "My account" on the marketplace.
+onMounted(() => { customerStore.fetchCustomer(); });
 </script>

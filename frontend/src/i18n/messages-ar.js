@@ -8,6 +8,7 @@ const arabicMessages = {
     "demo": "تجريبي",
     "admin": "الإدارة",
     "workspace": "لوحة العمل",
+    "myAccount": "حسابي",
     "signIn": "تسجيل الدخول",
     "signOut": "تسجيل الخروج",
     "privacy": "الخصوصية",
