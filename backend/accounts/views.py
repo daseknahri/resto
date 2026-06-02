@@ -3755,7 +3755,16 @@ class AdminDeliveryJobListView(APIView):
             qs = qs.filter(tenant_id=tenant_filter)
 
         jobs = list(qs[:100])
-        return Response([_serialize_delivery_job(j, include_driver_position=True) for j in jobs])
+        data = [_serialize_delivery_job(j, include_driver_position=True) for j in jobs]
+        # Enrich with the restaurant name so the admin console can show it (the shared
+        # job serializer only carries tenant_id).
+        tenant_ids = {d["tenant_id"] for d in data if d.get("tenant_id")}
+        if tenant_ids:
+            from tenancy.models import Tenant
+            names = dict(Tenant.objects.filter(id__in=tenant_ids).values_list("id", "name"))
+            for d in data:
+                d["tenant_name"] = names.get(d["tenant_id"], "")
+        return Response(data)
 
 
 class AdminCreateDeliveryJobView(APIView):

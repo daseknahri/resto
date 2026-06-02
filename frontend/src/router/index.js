@@ -52,6 +52,7 @@ const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 const DriverPage = () => import("../pages/DriverPage.vue");
 const AdminCustomers = () => import("../pages/AdminCustomers.vue");
+const AdminDeliveryJobs = () => import("../pages/AdminDeliveryJobs.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
 const AdminDeliveryZones = () => import("../pages/AdminDeliveryZones.vue");
@@ -268,6 +269,7 @@ const routes = [
   { path: "/admin-analytics", name: "admin-analytics", component: AdminPlatformAnalytics, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-wallets", name: "admin-wallets", component: AdminWallet, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-customers", name: "admin-customers", component: AdminCustomers, meta: { requiresAuth: true, adminOnly: true } },
+  { path: "/admin-delivery-jobs", name: "admin-delivery-jobs", component: AdminDeliveryJobs, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/activate", name: "activate", component: Activate },
   // ── Catch-all 404 ───────────────────────────────────────────────────────────
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFound },
