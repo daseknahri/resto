@@ -107,7 +107,7 @@
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
 
-          <div class="space-y-4 p-4 sm:p-5">
+          <div class="space-y-4 px-4 pt-4 pb-28 sm:px-5 sm:pt-5">
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
               <label class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.selectSuperCategory") }}</span>

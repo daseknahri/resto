@@ -2754,6 +2754,16 @@ html[data-owner-theme="light"] .ui-skeleton {
   background: #e2e8f0;
 }
 
+/* Sky-tinted accent bands (e.g. the dish editor's Option Groups section) — keep a
+   faint sky tint on white instead of the dark sky shades. */
+html[data-owner-theme="light"] .bg-sky-950\/20,
+html[data-owner-theme="light"] .bg-sky-900\/30 {
+  background-color: rgba(2, 132, 199, 0.07);
+}
+html[data-owner-theme="light"] .border-sky-900\/40 {
+  border-color: rgba(2, 132, 199, 0.25);
+}
+
 /* ==========================================================================
    Route transition — PLAIN CSS (must stay out of @layer components, which
    Tailwind purges; these classes are applied dynamically by Vue's

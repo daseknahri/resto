@@ -155,7 +155,7 @@
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeDishEditor">{{ t("common.close") }}</button>
           </div>
 
-          <div class="space-y-4 p-4 sm:p-5">
+          <div class="space-y-4 px-4 pt-4 pb-28 sm:px-5 sm:pt-5">
             <div class="ui-scroll-row">
               <span class="ui-data-strip">{{ activeCategoryRecord?.name || t("stepDishes.selectCategory") }}</span>
               <span class="ui-data-strip">{{ t("stepDishes.pricePlaceholder") }}: {{ Number(editingDish.price || 0).toFixed(2) }}</span>

@@ -198,7 +198,7 @@
             <button type="button" class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" @click="closeEditor"><AppIcon name="close" class="h-3.5 w-3.5" />{{ t("common.close") }}</button>
           </div>
 
-          <div class="space-y-4 p-4 sm:p-5">
+          <div class="space-y-4 px-4 pt-4 pb-28 sm:px-5 sm:pt-5">
             <div class="ui-scroll-row">
               <span class="ui-data-strip">{{ t("stepSuperCategories.position") }}: {{ Number(editingRow.position || 0) }}</span>
               <span class="ui-data-strip">{{ t("common.categories") }}: {{ Number(editingRow.category_count || 0) }}</span>
