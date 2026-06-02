@@ -202,6 +202,31 @@ class WaiterCall(models.Model):
         return f"WaiterCall({self.table_label or self.table_slug}, {self.status})"
 
 
+class StaffMessage(models.Model):
+    """A message on the restaurant's shared internal staff channel (owner + staff).
+
+    Tenant-scoped, persisted for history, and broadcast in real time to the
+    owner/staff WebSocket group so every device sees it instantly.
+    """
+
+    author = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    author_name = models.CharField(max_length=80, blank=True)
+    body = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"StaffMessage({self.author_name}: {self.body[:30]})"
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

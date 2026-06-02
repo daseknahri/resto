@@ -14,6 +14,7 @@ from accounts.views import (
     RepairTenantLinkView,
 )
 from config.shared_api_urls import shared_api_urlpatterns
+from menu.chat_views import StaffChatView
 from menu.waiter_views import (
     OwnerWaiterCallAcknowledgeView,
     OwnerWaiterCallListView,
@@ -109,6 +110,7 @@ urlpatterns = [
     path("api/waiter-call/", WaiterCallCreateView.as_view(), name="waiter-call"),
     path("api/owner/waiter-calls/", OwnerWaiterCallListView.as_view(), name="owner-waiter-calls"),
     path("api/owner/waiter-calls/<int:call_id>/acknowledge/", OwnerWaiterCallAcknowledgeView.as_view(), name="owner-waiter-call-ack"),
+    path("api/owner/chat/", StaffChatView.as_view(), name="owner-staff-chat"),
     path("api/orders/<str:order_number>/rate/", CustomerOrderRateView.as_view(), name="order-rate"),
     path("api/owner/ratings/", OwnerRatingListView.as_view(), name="owner-ratings"),
     path("api/owner/closure-dates/", OwnerClosureDateListCreateView.as_view(), name="owner-closure-dates"),

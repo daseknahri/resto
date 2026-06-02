@@ -579,6 +579,14 @@ export const messages = {
       scanHintPlain: "Scan to open menu",
       statusFilter: "Status filter"
     },
+    staffChat: {
+      title: "Staff chat",
+      empty: "No messages yet. Say hello 👋",
+      placeholder: "Message the team…",
+      send: "Send",
+      sendFailed: "Couldn't send. Try again.",
+      someone: "Staff",
+    },
     ownerLayout: {
       kicker: "Owner workspace",
       dashboard: "Dashboard",
@@ -3478,6 +3486,14 @@ export const messages = {
       qrUnavailable: "QR indisponible",
       scanHintPlain: "Scannez pour ouvrir le menu",
       statusFilter: "Filtre par statut"
+    },
+    staffChat: {
+      title: "Messagerie équipe",
+      empty: "Aucun message. Dites bonjour 👋",
+      placeholder: "Écrire à l'équipe…",
+      send: "Envoyer",
+      sendFailed: "Échec de l'envoi. Réessayez.",
+      someone: "Équipe",
     },
     ownerLayout: {
       kicker: "Espace proprietaire",

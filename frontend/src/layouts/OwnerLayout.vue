@@ -349,6 +349,9 @@
         </RouterLink>
       </div>
     </nav>
+
+    <!-- Internal staff chat (floating, real-time) -->
+    <OwnerStaffChat />
   </div>
 </template>
 
@@ -357,10 +360,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
+import OwnerStaffChat from "../components/OwnerStaffChat.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOwnerTheme } from "../composables/useOwnerTheme";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { useWaiterCalls } from "../composables/useWaiterCalls";
+import { useStaffChat } from "../composables/useStaffChat";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
@@ -545,12 +550,16 @@ const layoutNotifyWaiterCall = (payload) => {
   }
 };
 
+const { handleRealtime: handleChatRealtime } = useStaffChat();
+
 const ownerRealtime = useOwnerRealtime((event, payload) => {
   if (typeof event !== "string") return;
   if (event.startsWith("order.")) {
     layoutDoSilentPoll();
   } else if (event.startsWith("waiter.")) {
     if (handleWaiterRealtime(event, payload)) layoutNotifyWaiterCall(payload);
+  } else if (event === "chat.message") {
+    handleChatRealtime(event, payload);
   }
 });
 

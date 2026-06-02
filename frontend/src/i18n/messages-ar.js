@@ -260,6 +260,14 @@ const arabicMessages = {
   "apiClient": {
     "rateLimitRetry": "تم بلوغ حد الطلبات. أعد المحاولة بعد قليل."
   },
+  "staffChat": {
+    "title": "دردشة الفريق",
+    "empty": "لا توجد رسائل بعد. ابدأ المحادثة 👋",
+    "placeholder": "راسل الفريق…",
+    "send": "إرسال",
+    "sendFailed": "تعذّر الإرسال. حاول مرة أخرى.",
+    "someone": "الموظفون"
+  },
   "ownerLayout": {
     "kicker": "مساحة المالك",
     "dashboard": "لوحة التحكم",
