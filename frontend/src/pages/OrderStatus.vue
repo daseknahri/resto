@@ -373,6 +373,7 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import { useI18n } from "../composables/useI18n";
+import { useOrderRealtime } from "../composables/useOrderRealtime";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
@@ -639,12 +640,22 @@ const onStatusPageVisible = () => {
   }
 };
 
+// Live status push (guest per-order channel). On a "status" ping, refresh
+// immediately; the poll below stays as the fallback when WS is unavailable.
+const orderRealtime = useOrderRealtime(
+  () => props.orderNumber,
+  (event) => {
+    if (event === "status") fetchStatus();
+  }
+);
+
 onMounted(() => {
   // Request notification permission proactively (non-blocking)
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
     Notification.requestPermission().catch(() => {});
   }
   fetchStatus();
+  orderRealtime.connect();
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onStatusPageVisible);
   }
@@ -655,6 +666,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   clearInterval(pollTimer);
+  orderRealtime.disconnect();
   stopCountdown();
   orderStore.clearPlacedOrder();
   if (typeof document !== "undefined") {

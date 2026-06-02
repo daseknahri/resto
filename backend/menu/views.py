@@ -3056,9 +3056,16 @@ class OwnerOrderStatusUpdateView(APIView):
         try:
             from django.db import connection as _ws_conn
             from realtime.broadcast import broadcast as _ws_broadcast
+            _schema = _ws_conn.tenant.schema_name
+            # Owner/kitchen screens.
             _ws_broadcast(
-                _ws_conn.tenant.schema_name, "owner", "order.updated",
+                _schema, "owner", "order.updated",
                 {"order_number": order.order_number, "status": order.status},
+            )
+            # The customer tracking that specific order (guest, per-order channel).
+            _ws_broadcast(
+                _schema, f"order.{order.order_number}", "status",
+                {"status": order.status, "estimated_ready_minutes": order.estimated_ready_minutes},
             )
         except Exception:
             pass

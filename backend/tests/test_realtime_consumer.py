@@ -18,7 +18,8 @@ try:
     from channels.layers import get_channel_layer
     from channels.testing import WebsocketCommunicator
 
-    from realtime.consumers import OwnerConsumer
+    from realtime import consumers as rt_consumers
+    from realtime.consumers import CustomerOrderConsumer, OwnerConsumer
     from realtime.groups import tenant_group
 
     HAS_CHANNELS = True
@@ -103,6 +104,80 @@ class OwnerConsumerTests(SimpleTestCase):
 
     async def _rejected(self, extra):
         comm = WebsocketCommunicator(_scoped_app(extra), "/ws/owner/")
+        connected, _ = await comm.connect()
+        self.assertFalse(connected)
+        await comm.disconnect()
+
+
+def _order_app(extra):
+    app = CustomerOrderConsumer.as_asgi()
+
+    async def application(scope, receive, send):
+        scope = dict(scope)
+        scope.update(extra)
+        return await app(scope, receive, send)
+
+    return application
+
+
+@unittest.skipUnless(HAS_CHANNELS, "channels not installed")
+class CustomerOrderConsumerTests(SimpleTestCase):
+    """The DB existence check is patched (no DB in this sandbox); we verify the
+    connect/group/broadcast behavior around it."""
+
+    def setUp(self):
+        self._orig = rt_consumers._order_exists
+
+        async def _exists_true(tenant, order_number):
+            return True
+
+        rt_consumers._order_exists = _exists_true
+
+    def tearDown(self):
+        rt_consumers._order_exists = self._orig
+
+    def test_connects_and_receives_status_for_its_order(self):
+        asyncio.run(self._ok())
+
+    async def _ok(self):
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}}
+        comm = WebsocketCommunicator(_order_app(extra), "/ws/order/ORD-1/")
+        connected, _ = await comm.connect()
+        self.assertTrue(connected)
+        await get_channel_layer().group_send(
+            tenant_group("resto_a", "order.ORD-1"),
+            {"type": "broadcast.message", "event": "status", "payload": {"status": "ready"}},
+        )
+        msg = await comm.receive_json_from(timeout=2)
+        self.assertEqual(msg["event"], "status")
+        self.assertEqual(msg["payload"]["status"], "ready")
+        await comm.disconnect()
+
+    def test_other_order_status_not_received(self):
+        asyncio.run(self._isolation())
+
+    async def _isolation(self):
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "ORD-1"}}}
+        comm = WebsocketCommunicator(_order_app(extra), "/ws/order/ORD-1/")
+        connected, _ = await comm.connect()
+        self.assertTrue(connected)
+        await get_channel_layer().group_send(
+            tenant_group("resto_a", "order.ORD-2"),
+            {"type": "broadcast.message", "event": "status", "payload": {"status": "ready"}},
+        )
+        self.assertTrue(await comm.receive_nothing(timeout=1))
+        await comm.disconnect()
+
+    def test_rejected_when_order_missing(self):
+        async def _exists_false(tenant, order_number):
+            return False
+
+        rt_consumers._order_exists = _exists_false
+        asyncio.run(self._rejected_missing())
+
+    async def _rejected_missing(self):
+        extra = {"tenant": _TENANT, "url_route": {"kwargs": {"order_number": "NOPE"}}}
+        comm = WebsocketCommunicator(_order_app(extra), "/ws/order/NOPE/")
         connected, _ = await comm.connect()
         self.assertFalse(connected)
         await comm.disconnect()
