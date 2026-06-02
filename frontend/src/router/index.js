@@ -50,6 +50,7 @@ const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
+const DriverPage = () => import("../pages/DriverPage.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
 const AdminDeliveryZones = () => import("../pages/AdminDeliveryZones.vue");
@@ -84,6 +85,7 @@ const routes = [
       { path: "terms", name: "terms", component: TermsOfService, meta: { interface: "landing" } },
       { path: "contact", name: "contact", component: ContactPage, meta: { interface: "landing" } },
       { path: "directory", name: "directory", component: Directory, meta: { interface: "landing" } },
+      { path: "driver", name: "driver", component: DriverPage, meta: { interface: "landing" } },
       { path: "order", name: "marketplace", component: Marketplace, meta: { interface: "landing" } },
       { path: "order/:slug", name: "marketplace-menu", component: MarketplaceMenuPage, props: true, meta: { interface: "landing" } },
       { path: "order/:slug/status/:orderNumber", name: "marketplace-order-status", component: MarketplaceOrderStatus, props: true, meta: { interface: "landing" } },

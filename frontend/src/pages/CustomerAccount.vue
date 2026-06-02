@@ -931,6 +931,25 @@
         <!-- ════════════ PROFILE TAB ════════════ -->
         <template v-else-if="activeTab === 'profile'">
 
+          <!-- Driver mode entry -->
+          <RouterLink
+            :to="{ name: 'driver' }"
+            class="ui-panel flex items-center justify-between gap-3 p-4 transition-colors hover:border-emerald-500/40"
+          >
+            <div class="flex items-center gap-3">
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+                <AppIcon name="truck" class="h-4 w-4 text-emerald-300" />
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-100">{{ t('customerAccount.driverMode') }}</p>
+                <p class="text-xs text-slate-500">
+                  {{ customerStore.customer?.is_driver ? t('customerAccount.driverModeOpen') : t('customerAccount.driverModeJoin') }}
+                </p>
+              </div>
+            </div>
+            <AppIcon name="chevronRight" class="h-4 w-4 text-slate-600" />
+          </RouterLink>
+
           <!-- Personal info panel (grouped rows) -->
           <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
             <div class="px-4 py-3">

@@ -1,0 +1,369 @@
+<template>
+  <div class="mx-auto w-full max-w-md px-4 py-5 space-y-4">
+    <!-- Header -->
+    <div class="space-y-0.5">
+      <p class="ui-kicker">{{ t('driver.kicker') }}</p>
+      <h1 class="ui-display text-2xl font-semibold text-white">{{ t('driver.title') }}</h1>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="!customerStore.loaded" class="ui-panel p-6">
+      <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400" />
+    </div>
+
+    <!-- Not signed in -->
+    <div v-else-if="!customerStore.isAuthenticated" class="ui-panel p-5 space-y-3 text-center">
+      <p class="text-sm text-slate-300">{{ t('driver.signInPrompt') }}</p>
+      <RouterLink :to="{ name: 'customer-account' }" class="ui-btn-primary inline-flex px-5 py-2 text-sm">
+        {{ t('driver.signInCta') }}
+      </RouterLink>
+    </div>
+
+    <!-- Signed in but not yet a driver -->
+    <div v-else-if="!isDriver" class="ui-panel p-5 space-y-3">
+      <div class="flex items-center gap-2.5">
+        <div class="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+          <AppIcon name="truck" class="h-4.5 w-4.5 text-emerald-300" />
+        </div>
+        <p class="text-base font-semibold text-slate-100">{{ t('driver.becomeTitle') }}</p>
+      </div>
+      <p class="text-sm text-slate-400">{{ t('driver.becomeDesc') }}</p>
+      <p v-if="errorMsg" class="text-xs text-red-300">{{ errorMsg }}</p>
+      <button class="ui-btn-primary w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
+        {{ busy ? '…' : t('driver.becomeCta') }}
+      </button>
+    </div>
+
+    <!-- Driver dashboard -->
+    <template v-else>
+      <!-- Online toggle -->
+      <div class="ui-panel flex items-center justify-between gap-3 p-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="h-2.5 w-2.5 rounded-full" :class="online ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'" />
+            <p class="text-sm font-semibold" :class="online ? 'text-emerald-300' : 'text-slate-400'">
+              {{ online ? t('driver.online') : t('driver.offline') }}
+            </p>
+          </div>
+          <p class="mt-0.5 text-xs text-slate-500">{{ online ? t('driver.onlineHint') : t('driver.offlineHint') }}</p>
+          <p v-if="geoError" class="mt-1 text-xs text-amber-300">{{ geoError }}</p>
+        </div>
+        <button
+          class="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+          :class="online ? 'border border-slate-600 text-slate-300 hover:border-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-500'"
+          :disabled="busy"
+          @click="toggleOnline"
+        >
+          {{ online ? t('driver.goOffline') : t('driver.goOnline') }}
+        </button>
+      </div>
+
+      <p v-if="errorMsg" class="rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2 text-sm text-red-300" role="alert">
+        {{ errorMsg }}
+      </p>
+
+      <!-- Active job -->
+      <div v-if="activeJob" class="ui-panel p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-slate-200">{{ t('driver.activeTitle') }}</p>
+          <span class="rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+            {{ statusLabel(activeJob.status) }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500">{{ t('driver.order') }} #{{ activeJob.order_number }}</p>
+
+        <div class="space-y-2">
+          <a
+            v-if="activeJob.pickup_address || activeJob.pickup_lat"
+            :href="mapsLink(activeJob.pickup_lat, activeJob.pickup_lng, activeJob.pickup_address)"
+            target="_blank" rel="noopener"
+            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
+          >
+            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <div class="min-w-0 flex-1">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.pickup') }}</p>
+              <p class="truncate text-sm text-slate-200">{{ activeJob.pickup_address || t('driver.openMaps') }}</p>
+            </div>
+            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600" />
+          </a>
+          <a
+            v-if="activeJob.delivery_address || activeJob.delivery_lat"
+            :href="mapsLink(activeJob.delivery_lat, activeJob.delivery_lng, activeJob.delivery_address)"
+            target="_blank" rel="noopener"
+            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
+          >
+            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+            <div class="min-w-0 flex-1">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.dropoff') }}</p>
+              <p class="truncate text-sm text-slate-200">{{ activeJob.delivery_address || t('driver.openMaps') }}</p>
+            </div>
+            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600" />
+          </a>
+        </div>
+
+        <div class="flex items-center justify-between rounded-xl bg-slate-800/40 px-3 py-2">
+          <span class="text-xs text-slate-400">{{ t('driver.payout') }}</span>
+          <span class="text-sm font-semibold tabular-nums text-emerald-300">{{ fmtMoney(activeJob.driver_payout) }}</span>
+        </div>
+
+        <!-- Advance status -->
+        <button
+          v-if="nextAction"
+          class="ui-btn-primary w-full px-5 py-2.5 text-sm"
+          :disabled="busy"
+          @click="advance(nextAction.to)"
+        >
+          {{ busy ? '…' : nextAction.label }}
+        </button>
+        <button
+          class="w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50"
+          :disabled="busy"
+          @click="markFailed"
+        >
+          {{ t('driver.actionFailed') }}
+        </button>
+      </div>
+
+      <!-- Pending jobs (only when online and free) -->
+      <div v-else-if="online" class="ui-panel p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-slate-200">{{ t('driver.pendingTitle') }}</p>
+          <button class="text-xs text-slate-400 hover:text-slate-200" :disabled="loadingJobs" @click="fetchJobs">
+            {{ t('driver.refresh') }}
+          </button>
+        </div>
+        <div v-if="loadingJobs && !pendingJobs.length" class="space-y-2">
+          <div v-for="i in 2" :key="i" class="h-20 animate-pulse rounded-xl bg-slate-800/50" />
+        </div>
+        <p v-else-if="!pendingJobs.length" class="py-6 text-center text-sm text-slate-500">{{ t('driver.noPending') }}</p>
+        <ul v-else class="space-y-2">
+          <li v-for="job in pendingJobs" :key="job.id" class="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-slate-500">{{ t('driver.order') }} #{{ job.order_number }}</p>
+              <span class="text-sm font-semibold tabular-nums text-emerald-300">{{ fmtMoney(job.driver_payout) }}</span>
+            </div>
+            <p v-if="job.delivery_address" class="truncate text-sm text-slate-300">
+              <AppIcon name="location" class="mr-1 inline h-3.5 w-3.5 text-emerald-300" />{{ job.delivery_address }}
+            </p>
+            <button class="ui-btn-primary w-full px-4 py-2 text-sm" :disabled="busy" @click="accept(job.id)">
+              {{ t('driver.accept') }}
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Offline + no job -->
+      <div v-else class="ui-panel p-6 text-center">
+        <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-700" />
+        <p class="mt-2 text-sm text-slate-500">{{ t('driver.offlineEmpty') }}</p>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import AppIcon from '../components/AppIcon.vue';
+import { useI18n } from '../composables/useI18n';
+import { useCustomerStore } from '../stores/customer';
+import { useToastStore } from '../stores/toast';
+import api from '../lib/api';
+
+const { t, currentLocale } = useI18n();
+const customerStore = useCustomerStore();
+const toast = useToastStore();
+
+const isDriver = ref(false);
+const online = ref(false);
+const activeJob = ref(null);
+const pendingJobs = ref([]);
+const busy = ref(false);
+const loadingJobs = ref(false);
+const errorMsg = ref('');
+const geoError = ref('');
+
+let pollTimer = null;
+let geoWatchId = null;
+let lastPositionSent = 0;
+
+const fmtMoney = (v) => {
+  try {
+    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 })
+      .format(parseFloat(v || 0));
+  } catch {
+    return `${parseFloat(v || 0).toFixed(2)}`;
+  }
+};
+
+const STATUS_LABELS = {
+  assigned: 'driver.statusAssigned',
+  at_restaurant: 'driver.statusAtRestaurant',
+  picked_up: 'driver.statusPickedUp',
+  delivered: 'driver.statusDelivered',
+  failed: 'driver.statusFailed',
+};
+const statusLabel = (s) => t(STATUS_LABELS[s] || 'driver.statusAssigned');
+
+// Next forward transition for the active job's current status.
+const NEXT = {
+  assigned: { to: 'at_restaurant', label: 'driver.actionAtRestaurant' },
+  at_restaurant: { to: 'picked_up', label: 'driver.actionPickedUp' },
+  picked_up: { to: 'delivered', label: 'driver.actionDelivered' },
+};
+const nextAction = computed(() => {
+  const n = activeJob.value && NEXT[activeJob.value.status];
+  return n ? { to: n.to, label: t(n.label) } : null;
+});
+
+const mapsLink = (lat, lng, address) => {
+  if (lat != null && lng != null) return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || '')}`;
+};
+
+const fetchStatus = async () => {
+  try {
+    const { data } = await api.get('/driver/status/');
+    isDriver.value = Boolean(data.is_driver);
+    online.value = Boolean(data.is_driver_online);
+  } catch {
+    isDriver.value = Boolean(customerStore.customer?.is_driver);
+  }
+};
+
+const fetchJobs = async () => {
+  if (!isDriver.value) return;
+  loadingJobs.value = true;
+  try {
+    const { data } = await api.get('/driver/jobs/');
+    activeJob.value = (data.active && data.active[0]) || null;
+    pendingJobs.value = data.pending || [];
+  } catch {
+    /* keep last */
+  } finally {
+    loadingJobs.value = false;
+  }
+};
+
+const becomeDriver = async () => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.post('/driver/register/', {});
+    isDriver.value = Boolean(data.is_driver);
+    online.value = Boolean(data.is_driver_online);
+    if (customerStore.customer) customerStore.setCustomer({ ...customerStore.customer, is_driver: true });
+    toast.show(t('driver.registered'), 'success');
+    await fetchJobs();
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+const toggleOnline = async () => {
+  errorMsg.value = '';
+  busy.value = true;
+  const next = !online.value;
+  try {
+    const { data } = await api.patch('/driver/status/', { online: next });
+    online.value = Boolean(data.is_driver_online);
+    if (online.value) {
+      startGeo();
+      await fetchJobs();
+    } else {
+      stopGeo();
+    }
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+const accept = async (jobId) => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.post(`/driver/jobs/${jobId}/accept/`, {});
+    activeJob.value = data;
+    pendingJobs.value = [];
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    await fetchJobs(); // someone else may have taken it
+  } finally {
+    busy.value = false;
+  }
+};
+
+const advance = async (toStatus) => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.patch(`/driver/jobs/${activeJob.value.id}/status/`, { status: toStatus });
+    if (data.is_terminal) {
+      activeJob.value = null;
+      online.value = false; // backend takes the driver offline after delivery
+      stopGeo();
+      toast.show(t('driver.deliveredToast'), 'success');
+      await fetchJobs();
+    } else {
+      activeJob.value = data;
+    }
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+const markFailed = async () => {
+  if (!window.confirm(t('driver.failConfirm'))) return;
+  await advance('failed');
+};
+
+// ── Geolocation ───────────────────────────────────────────────────────────────
+const sendPosition = (lat, lng) => {
+  const nowMs = Date.now();
+  if (nowMs - lastPositionSent < 10000) return; // throttle to ~10s
+  lastPositionSent = nowMs;
+  api.post('/driver/position/', { lat, lng }).catch(() => {});
+};
+
+const startGeo = () => {
+  geoError.value = '';
+  if (!('geolocation' in navigator)) {
+    geoError.value = t('driver.geoUnavailable');
+    return;
+  }
+  if (geoWatchId !== null) return;
+  geoWatchId = navigator.geolocation.watchPosition(
+    (pos) => { geoError.value = ''; sendPosition(pos.coords.latitude, pos.coords.longitude); },
+    () => { geoError.value = t('driver.locationDenied'); },
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
+  );
+};
+
+const stopGeo = () => {
+  if (geoWatchId !== null) {
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+};
+
+onMounted(async () => {
+  await customerStore.fetchCustomer();
+  if (!customerStore.isAuthenticated) return;
+  await fetchStatus();
+  if (isDriver.value) {
+    await fetchJobs();
+    if (online.value) startGeo();
+    pollTimer = setInterval(fetchJobs, 15000); // keep jobs fresh
+  }
+});
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer);
+  stopGeo();
+});
+</script>

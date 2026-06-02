@@ -265,6 +265,8 @@ def _serialize_customer(customer: Customer) -> dict:
         "wallet_balance": str(customer.wallet_balance),
         "loyalty_points": customer.loyalty_points or 0,
         "locale": customer.locale or "en",
+        "is_driver": bool(customer.is_driver),
+        "is_driver_online": bool(customer.is_driver_online),
     }
 
 
@@ -2597,13 +2599,25 @@ class DriverRegisterView(APIView):
 
 
 class DriverStatusView(APIView):
-    """PATCH /api/driver/status/ — toggle driver online/offline.
-
-    Body: { "online": true|false }
+    """GET   /api/driver/status/ — current driver state (is_driver, online).
+       PATCH /api/driver/status/ — toggle driver online/offline. Body: { "online": bool }
     """
 
     permission_classes = [AllowAny]
     authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "is_driver": bool(customer.is_driver),
+            "is_driver_online": bool(customer.is_driver_online),
+        })
 
     def patch(self, request, *args, **kwargs):
         customer_id = request.session.get("customer_id")
