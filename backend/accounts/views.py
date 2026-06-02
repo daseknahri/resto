@@ -816,6 +816,22 @@ class OwnerStaffListCreateView(APIView):
         if User.objects.filter(email=email).exists():
             return Response({"detail": "A user with this email already exists.", "code": "email_taken"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Enforce the per-plan staff-account limit (mirrors the dish limit). 0 = unlimited.
+        max_staff = int(getattr(getattr(tenant, "plan", None), "max_staff_accounts", 0) or 0)
+        if max_staff > 0:
+            current_staff = User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF).count()
+            if current_staff >= max_staff:
+                return Response(
+                    {
+                        "detail": f"Your plan allows a maximum of {max_staff} staff accounts. "
+                                  f"You have {current_staff}. Upgrade to add more.",
+                        "code": "staff_limit_reached",
+                        "limit": max_staff,
+                        "current": current_staff,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Derive username from email local-part; deduplicate
         base_username = _re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:28] or "staff"
         username = base_username

@@ -362,6 +362,8 @@ const createStaff = async () => {
       formError.value = t("ownerStaff.errorEmail");
     } else if (code === "name_required") {
       formError.value = t("ownerStaff.errorName");
+    } else if (code === "staff_limit_reached") {
+      formError.value = t("ownerStaff.errorStaffLimit", { limit: err?.response?.data?.limit ?? "" });
     } else {
       formError.value = t("ownerStaff.errorGeneric");
     }

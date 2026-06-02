@@ -154,6 +154,21 @@ class OwnerStaffCreateViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "email_taken")
 
+    def test_rejects_when_plan_staff_limit_reached(self):
+        """When the plan's max_staff_accounts is hit, creation is blocked with a clear code."""
+        tenant = _make_tenant()
+        tenant.plan = SimpleNamespace(max_staff_accounts=2)
+        req = self._post({"name": "Jean Dupont", "email": "jean@demo.com"}, tenant=tenant)
+        import accounts.models as _accts
+        with patch.object(_accts.User, "objects") as obj_mock:
+            obj_mock.filter.return_value.exists.return_value = False  # email not taken
+            obj_mock.filter.return_value.count.return_value = 2       # already at the limit
+            resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "staff_limit_reached")
+        self.assertEqual(resp.data["limit"], 2)
+        self.assertEqual(resp.data["current"], 2)
+
     def test_creates_staff_and_returns_credentials(self):
         """Successful creation returns id, email, name, username, temp_password."""
         req = self._post({"name": "Jean Dupont", "email": "jean@demo.com"})
