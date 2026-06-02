@@ -206,6 +206,27 @@
           >{{ code }}</span>
         </div>
       </div>
+
+      <!-- Recent vouchers (audit created / redeemed) -->
+      <div class="border-t border-slate-700/60 pt-4 space-y-2">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminWallet.voucherListTitle') }}</p>
+        <div v-if="loadingVouchers" class="space-y-1.5">
+          <div v-for="i in 3" :key="i" class="h-9 animate-pulse rounded-lg bg-slate-800/50" />
+        </div>
+        <p v-else-if="!vouchers.length" class="py-3 text-center text-xs text-slate-600 italic">{{ t('adminWallet.voucherListEmpty') }}</p>
+        <ul v-else class="divide-y divide-slate-800/70 overflow-hidden rounded-xl border border-slate-700/60">
+          <li v-for="v in vouchers" :key="v.code" class="flex items-center justify-between gap-3 bg-slate-900/40 px-3 py-2 text-xs">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="font-mono text-slate-200">{{ v.code }}</span>
+              <span class="tabular-nums text-emerald-300">{{ fmtBalance(v.amount) }}</span>
+            </div>
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="v.is_used ? 'bg-slate-700/60 text-slate-400' : 'bg-emerald-500/12 text-emerald-300'"
+            >{{ v.is_used ? t('adminWallet.voucherUsed', { who: v.used_by_name || '' }) : t('adminWallet.voucherActive') }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <!-- Fund a restaurant float -->
@@ -367,6 +388,20 @@ const voucherGenerating = ref(false);
 const voucherGenError = ref('');
 const generatedCodes = ref([]);
 const copiedAll = ref(false);
+const vouchers = ref([]);
+const loadingVouchers = ref(false);
+
+const fetchVouchers = async () => {
+  loadingVouchers.value = true;
+  try {
+    const res = await api.get('/admin/wallet/vouchers/');
+    vouchers.value = res.data?.vouchers || res.data?.results || (Array.isArray(res.data) ? res.data : []);
+  } catch {
+    vouchers.value = [];
+  } finally {
+    loadingVouchers.value = false;
+  }
+};
 
 const generateVouchers = async () => {
   voucherGenError.value = '';
@@ -391,6 +426,7 @@ const generateVouchers = async () => {
     voucherNote.value = '';
     voucherExpiry.value = '';
     voucherQty.value = 1;
+    fetchVouchers(); // refresh the audit list with the new codes
   } catch (err) {
     const detail = err?.response?.data?.detail || '';
     voucherGenError.value = detail || t('adminWallet.voucherFailed');
@@ -557,5 +593,6 @@ const issueBonus = async () => {
 onMounted(() => {
   fetch();
   fetchTenants();
+  fetchVouchers();
 });
 </script>

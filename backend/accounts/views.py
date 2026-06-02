@@ -1272,13 +1272,16 @@ class AdminWalletVoucherView(APIView):
         expires_at_raw = request.data.get("expires_at")
         expires_days = request.data.get("expires_days")
         if expires_at_raw:
-            try:
-                from django.utils.dateparse import parse_datetime
-                expires_at = parse_datetime(str(expires_at_raw))
-                if expires_at and _tz.is_naive(expires_at):
-                    expires_at = _tz.make_aware(expires_at)
-            except (ValueError, TypeError):
-                pass
+            from django.utils.dateparse import parse_datetime
+            expires_at = parse_datetime(str(expires_at_raw))
+            # An expiry was requested but couldn't be parsed — fail loudly rather than
+            # silently create a never-expiring voucher the admin didn't intend.
+            if expires_at is None:
+                return Response(
+                    {"detail": "expires_at is not a valid datetime."}, status=status.HTTP_400_BAD_REQUEST
+                )
+            if _tz.is_naive(expires_at):
+                expires_at = _tz.make_aware(expires_at)
         elif expires_days:
             try:
                 expires_at = _tz.now() + datetime.timedelta(days=int(expires_days))

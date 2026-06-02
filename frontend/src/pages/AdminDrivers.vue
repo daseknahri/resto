@@ -6,9 +6,10 @@
         <p class="text-sm text-slate-400 mt-0.5">{{ t('adminDrivers.subtitle') }}</p>
       </div>
       <button
-        class="rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-400"
+        class="rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-400 disabled:opacity-50"
+        :disabled="loading"
         @click="fetchDrivers"
-      >{{ t('adminDrivers.refresh') }}</button>
+      >{{ loading ? '…' : t('adminDrivers.refresh') }}</button>
     </div>
 
     <!-- Loading: skeleton stats + table -->
