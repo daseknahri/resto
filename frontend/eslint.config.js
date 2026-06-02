@@ -1,5 +1,11 @@
 import js from "@eslint/js";
 import pluginVue from "eslint-plugin-vue";
+// Disables all formatting-domain rules that Prettier owns. Required because
+// this project formats with Prettier (see the `format` npm script). The legacy
+// .eslintrc.cjs used @vue/eslint-config-prettier for this; when the config was
+// migrated to flat config that integration was dropped, which re-enabled ~900
+// formatting warnings and (with --max-warnings=0) broke the CI lint step.
+import prettierConfig from "eslint-config-prettier";
 
 export default [
   {
@@ -18,4 +24,6 @@ export default [
       "vue/html-closing-bracket-newline": "off",
     },
   },
+  // Must come last so it can turn off any stylistic rules enabled above.
+  prettierConfig,
 ];
