@@ -1109,8 +1109,11 @@ class AdminWalletBonusView(APIView):
             return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
         if amount <= _Dec("0"):
             return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount > _Dec("100000"):
+            return Response({"detail": "Amount exceeds the maximum allowed per bonus (100000)."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Bonus credits").strip()[:200]
+        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:100] or None
         customer_ids = request.data.get("customer_ids")
         all_customers = bool(request.data.get("all_customers"))
 
@@ -1130,6 +1133,12 @@ class AdminWalletBonusView(APIView):
             ids = list(qs.values_list("id", flat=True))
             if not ids:
                 return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
+            # Idempotency: a repeated submit with the same key (double-click, retry) must
+            # not credit real money twice. Per-customer keys are derived from the batch key.
+            if idempotency_key and WalletTransaction.objects.filter(
+                idempotency_key__startswith=f"{idempotency_key}:"
+            ).exists():
+                return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
             Customer.objects.filter(pk__in=ids).update(
                 wallet_balance=F("wallet_balance") + amount
             )
@@ -1139,6 +1148,7 @@ class AdminWalletBonusView(APIView):
                     type=WalletTransaction.Type.BONUS,
                     amount=amount,
                     note=note,
+                    idempotency_key=(f"{idempotency_key}:{cid}" if idempotency_key else None),
                 )
                 for cid in ids
             ])
@@ -1247,6 +1257,8 @@ class AdminWalletVoucherView(APIView):
             return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
         if amount <= _Dec("0"):
             return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount > _Dec("100000"):
+            return Response({"detail": "Amount exceeds the maximum allowed per voucher (100000)."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "").strip()[:200]
 
@@ -2554,6 +2566,21 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
     return data
 
 
+def _valid_polygon(polygon) -> bool:
+    """Each polygon point must be a {lat, lng} dict with numeric coordinates."""
+    if not isinstance(polygon, list) or len(polygon) < 3:
+        return False
+    for pt in polygon:
+        if not isinstance(pt, dict):
+            return False
+        try:
+            float(pt.get("lat"))
+            float(pt.get("lng"))
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
 def _serialize_zone(zone) -> dict:
     return {
         "id": zone.id,
@@ -3319,12 +3346,20 @@ class AdminDeliveryZoneListCreateView(APIView):
 
         if not name or not city:
             return Response({"detail": "name and city are required."}, status=400)
-        if not isinstance(polygon, list) or len(polygon) < 3:
+        if not _valid_polygon(polygon):
             return Response({"detail": "polygon must be a list of ≥ 3 {lat, lng} points."}, status=400)
 
         center_lat = data.get("center_lat")
         center_lng = data.get("center_lng")
-        approx_radius_km = float(data.get("approx_radius_km", 5.0))
+        try:
+            approx_radius_km = float(data.get("approx_radius_km", 5.0))
+            center_lat = float(center_lat) if center_lat is not None else None
+            center_lng = float(center_lng) if center_lng is not None else None
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "center_lat, center_lng and approx_radius_km must be numbers."},
+                status=400,
+            )
 
         fee_tiers = data.get("fee_tiers") or []
         if not isinstance(fee_tiers, list):
@@ -3335,8 +3370,8 @@ class AdminDeliveryZoneListCreateView(APIView):
                 name=name,
                 city=city,
                 polygon=polygon,
-                center_lat=float(center_lat) if center_lat is not None else None,
-                center_lng=float(center_lng) if center_lng is not None else None,
+                center_lat=center_lat,
+                center_lng=center_lng,
                 approx_radius_km=approx_radius_km,
                 is_active=bool(data.get("is_active", True)),
                 fee_tiers=fee_tiers,
@@ -3394,18 +3429,27 @@ class AdminDeliveryZoneDetailView(APIView):
                     setattr(zone, field, str(data[field]).strip())
                     update_fields.append(field)
             if "polygon" in data:
-                if isinstance(data["polygon"], list) and len(data["polygon"]) >= 3:
-                    zone.polygon = data["polygon"]
-                    update_fields.append("polygon")
-            if "center_lat" in data:
-                zone.center_lat = float(data["center_lat"]) if data["center_lat"] is not None else None
-                update_fields.append("center_lat")
-            if "center_lng" in data:
-                zone.center_lng = float(data["center_lng"]) if data["center_lng"] is not None else None
-                update_fields.append("center_lng")
-            if "approx_radius_km" in data:
-                zone.approx_radius_km = float(data["approx_radius_km"])
-                update_fields.append("approx_radius_km")
+                if not _valid_polygon(data["polygon"]):
+                    return Response(
+                        {"detail": "polygon must be a list of ≥ 3 {lat, lng} points."}, status=400
+                    )
+                zone.polygon = data["polygon"]
+                update_fields.append("polygon")
+            try:
+                if "center_lat" in data:
+                    zone.center_lat = float(data["center_lat"]) if data["center_lat"] is not None else None
+                    update_fields.append("center_lat")
+                if "center_lng" in data:
+                    zone.center_lng = float(data["center_lng"]) if data["center_lng"] is not None else None
+                    update_fields.append("center_lng")
+                if "approx_radius_km" in data:
+                    zone.approx_radius_km = float(data["approx_radius_km"])
+                    update_fields.append("approx_radius_km")
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "center_lat, center_lng and approx_radius_km must be numbers."},
+                    status=400,
+                )
             if "is_active" in data:
                 zone.is_active = bool(data["is_active"])
                 update_fields.append("is_active")

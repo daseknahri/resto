@@ -579,6 +579,12 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
         source = (self.request.query_params.get("source") or "").strip()
         if source:
             queryset = queryset.filter(source=source)
+        else:
+            # The provisioning/operations list must show genuine sales leads only.
+            # Reservation/table bookings also create Lead rows but must never appear in
+            # the "Awaiting provisioning" grid with a Provision button.
+            from .sla import RESERVATION_SOURCES
+            queryset = queryset.exclude(source__in=RESERVATION_SOURCES)
         tenant_slug = (self.request.query_params.get("tenant") or "").strip().lower()
         if tenant_slug:
             queryset = queryset.filter(tenant__slug=tenant_slug)
@@ -930,6 +936,7 @@ class AdminTenantListView(APIView):
                     "plan_code_value",
                     "plan_name_value",
                     "primary_domain_value",
+                    "float_balance",
                 )
             )
             data = [
@@ -947,6 +954,7 @@ class AdminTenantListView(APIView):
                     "plan_code": external_plan_code(row["plan_code_value"] or ""),
                     "plan_name": plan_display_name(row["plan_code_value"] or "", fallback=row["plan_name_value"] or ""),
                     "primary_domain": row["primary_domain_value"] or "",
+                    "float_balance": str(row["float_balance"]),
                 }
                 for row in rows
             ]

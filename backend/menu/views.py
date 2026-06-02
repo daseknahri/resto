@@ -5169,10 +5169,10 @@ class AdminWalletListView(APIView):
 
         if search:
             from django.db.models import Q
+            # Customer holds its own name/email/phone (there is no linked User relation).
             qs = qs.filter(
-                Q(user__first_name__icontains=search) |
-                Q(user__last_name__icontains=search) |
-                Q(user__email__icontains=search) |
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
                 Q(phone__icontains=search)
             )
 
@@ -5184,16 +5184,14 @@ class AdminWalletListView(APIView):
 
         start = (page - 1) * page_size
         total = qs.count()
-        customers = qs.select_related("user")[start: start + page_size]
+        customers = qs[start: start + page_size]
 
         data = []
         for c in customers:
-            u = getattr(c, "user", None)
-            name = (f"{u.first_name} {u.last_name}".strip() if u else "") or f"Customer #{c.id}"
             data.append({
                 "id": c.id,
-                "name": name,
-                "email": u.email if u else "",
+                "name": c.name or f"Customer #{c.id}",
+                "email": c.email or "",
                 "phone": c.phone or "",
                 "wallet_balance": str(c.wallet_balance),
             })

@@ -174,31 +174,30 @@ class AdminWalletListViewTests(SimpleTestCase):
     def test_returns_wallet_list_structure(self):
         customer = MagicMock()
         customer.id = 1
+        customer.name = "Ali Hassan"
+        customer.email = "ali@example.com"
         customer.phone = "0612345678"
         customer.wallet_balance = "50.00"
-        user_obj = MagicMock()
-        user_obj.first_name = "Ali"
-        user_obj.last_name = "Hassan"
-        user_obj.email = "ali@example.com"
-        customer.user = user_obj
 
         with patch("accounts.models.Customer") as mock_cust:
-            mock_cust.objects.filter.return_value.order_by.return_value.count.return_value = 1
-            mock_cust.objects.filter.return_value.order_by.return_value.select_related.return_value.__getitem__ = \
-                lambda s, k: [customer]
+            qs = mock_cust.objects.filter.return_value.order_by.return_value
+            qs.count.return_value = 1
+            qs.__getitem__ = lambda s, k: [customer]
             resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("total", resp.data)
         self.assertIn("results", resp.data)
         self.assertIn("page", resp.data)
+        self.assertEqual(resp.data["results"][0]["name"], "Ali Hassan")
+        self.assertEqual(resp.data["results"][0]["email"], "ali@example.com")
 
     def test_empty_results(self):
         with patch("accounts.models.Customer") as mock_cust:
             qs = MagicMock()
             mock_cust.objects.filter.return_value.order_by.return_value = qs
             qs.count.return_value = 0
-            qs.select_related.return_value.__getitem__ = lambda s, k: []
+            qs.__getitem__ = lambda s, k: []
             resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -210,7 +209,7 @@ class AdminWalletListViewTests(SimpleTestCase):
             qs = MagicMock()
             mock_cust.objects.filter.return_value.order_by.return_value = qs
             qs.count.return_value = 0
-            qs.select_related.return_value.__getitem__ = lambda s, k: []
+            qs.__getitem__ = lambda s, k: []
             resp = self._get(params={"page": 2, "page_size": 10})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -222,7 +221,7 @@ class AdminWalletListViewTests(SimpleTestCase):
             qs = MagicMock()
             mock_cust.objects.filter.return_value.order_by.return_value = qs
             qs.count.return_value = 0
-            qs.select_related.return_value.__getitem__ = lambda s, k: []
+            qs.__getitem__ = lambda s, k: []
             resp = self._get(params={"min_balance": "10.00"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
