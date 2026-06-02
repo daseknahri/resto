@@ -312,6 +312,13 @@
       </div>
     </Transition>
 
+    <!-- Inline sign-in modal — triggered when a delivery order requires auth -->
+    <CustomerAuthModal
+      v-if="showAuthModal"
+      @close="showAuthModal = false"
+      @authenticated="onAuthenticated"
+    />
+
   </div>
 </template>
 
@@ -320,6 +327,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
+import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import api from '../lib/api';
 
 const { t, currentLocale } = useI18n();
@@ -367,6 +375,15 @@ watch(checkoutOpen, async (open) => {
 onBeforeUnmount(() => document.removeEventListener('keydown', trapCheckoutFocus));
 const placing = ref(false);
 const checkoutError = ref('');
+const showAuthModal = ref(false); // opens when delivery order requires sign-in
+
+// After the customer signs in mid-checkout, retry placing the order automatically.
+const onAuthenticated = async () => {
+  showAuthModal.value = false;
+  checkoutError.value = '';
+  await customerStore.fetchCustomer(true);
+  placeOrder(); // retry with the newly established session
+};
 
 // Cart: [{slug, name, price, qty}]
 const cart = ref([]);
@@ -485,7 +502,9 @@ const placeOrder = async () => {
   } catch (err) {
     const code = err?.response?.data?.code;
     if (code === 'auth_required') {
-      checkoutError.value = t('mktMenu.authRequired');
+      // Don't leave the customer stuck with an error — open the sign-in modal so
+      // they can sign in inline and retry without losing their cart.
+      showAuthModal.value = true;
     } else if (code === 'restaurant_closed') {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {
