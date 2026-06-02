@@ -61,6 +61,14 @@ class WalletTransaction(models.Model):
     # tenant_id: which restaurant this payment was for (null for top-ups and bonuses)
     tenant_id = models.IntegerField(null=True, blank=True, db_index=True)
     note = models.CharField(max_length=200, blank=True)
+    # Ledger-integrity fields. `amount` is always a positive magnitude; `type`
+    # indicates direction (payment = out; topup/refund/bonus/loyalty = in).
+    # idempotency_key makes money ops safe to retry (e.g. a re-delivered Stripe
+    # webhook): a repeat with the same key reuses the original row instead of
+    # double-crediting. balance_after snapshots the running balance for audit.
+    idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=8, default="MAD")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
