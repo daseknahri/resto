@@ -103,6 +103,7 @@
         :key="row.local_id"
         class="ui-selection-card p-4 sm:p-5"
         :data-warning="row.is_temporarily_disabled"
+        style="content-visibility: auto; contain-intrinsic-size: auto 200px;"
       >
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0 flex-1 space-y-3">

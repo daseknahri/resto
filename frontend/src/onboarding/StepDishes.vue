@@ -66,6 +66,7 @@
             v-for="(dish, idx) in activeCategoryDishesFiltered"
             :key="dish.local_id"
             class="rounded-2xl border border-slate-800 bg-slate-950/75 p-4 shadow-[0_12px_28px_rgba(2,8,23,0.18)]"
+            style="content-visibility: auto; contain-intrinsic-size: auto 160px;"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 flex-1">
