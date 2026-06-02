@@ -29,7 +29,10 @@ const props = defineProps({
   threshold: { type: Number, default: 1 },  // changes < 1% shown as neutral
 });
 
-const sign = computed(() => (props.pct > 0 ? "+" : ""));
+// "+" for gains, "−" (U+2212 minus) for losses, "" for exactly zero.
+// Without the minus, a -5% change would render as "5%" — direction conveyed
+// only by color, which fails for colorblind users and at-a-glance reading.
+const sign = computed(() => (props.pct > 0 ? "+" : props.pct < 0 ? "−" : ""));
 
 const colorClass = computed(() => {
   if (props.pct === null || props.pct === undefined) return "";
