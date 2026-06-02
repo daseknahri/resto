@@ -621,6 +621,46 @@ class CustomerOrdersView(APIView):
         return Response({"orders": result, "count": len(result)})
 
 
+class CustomerMarketplaceOrdersView(APIView):
+    """GET /api/customer/orders/all/ — the customer's orders across ALL restaurants.
+
+    Reads the public-schema order index (CustomerOrderRef), so it works from any domain
+    (the marketplace or a single restaurant) and returns the full cross-restaurant
+    history — unlike CustomerOrdersView which only sees the active tenant's orders.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"orders": [], "count": 0})
+
+        from .models import CustomerOrderRef
+        refs = list(
+            CustomerOrderRef.objects
+            .filter(customer_id=customer_id)
+            .order_by("-order_created_at")[:50]
+        )
+        return Response({
+            "orders": [
+                {
+                    "order_number": r.order_number,
+                    "restaurant_name": r.restaurant_name,
+                    "restaurant_slug": r.restaurant_slug,
+                    "status": r.status,
+                    "fulfillment_type": r.fulfillment_type,
+                    "total": str(r.total),
+                    "currency": r.currency,
+                    "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+                }
+                for r in refs
+            ],
+            "count": len(refs),
+        })
+
+
 # ── Customer email OTP ────────────────────────────────────────────────────────
 
 

@@ -414,6 +414,31 @@
 
         <!-- ════════════ ORDERS TAB ════════════ -->
         <template v-else-if="activeTab === 'orders'">
+          <!-- Order history across all restaurants (marketplace index) -->
+          <div v-if="marketplaceOrders.length" class="ui-panel overflow-hidden p-0">
+            <div class="border-b border-slate-800/70 px-4 py-3">
+              <p class="ui-kicker">{{ t('customerAccount.allOrdersTitle') }}</p>
+              <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.allOrdersHint') }}</p>
+            </div>
+            <ul class="divide-y divide-slate-800/60">
+              <li v-for="o in marketplaceOrders" :key="o.restaurant_slug + o.order_number">
+                <component
+                  :is="o.restaurant_slug ? 'RouterLink' : 'div'"
+                  :to="o.restaurant_slug ? { name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } } : undefined"
+                  class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-800/30"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-slate-200">{{ o.restaurant_name || o.restaurant_slug }}</p>
+                    <p class="text-[11px] text-slate-500">
+                      <span class="font-mono">#{{ o.order_number }}</span> · {{ mktOrderStatus(o.status) }} · {{ formatDate(o.created_at) }}
+                    </p>
+                  </div>
+                  <span class="shrink-0 text-sm font-semibold tabular-nums text-slate-300">{{ formatPrice(o.total) }}</span>
+                </component>
+              </li>
+            </ul>
+          </div>
+
           <div class="ui-panel overflow-hidden p-0">
             <!-- Header -->
             <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
@@ -1560,6 +1585,28 @@ const fetchOrders = async () => {
   }
 };
 
+// Cross-restaurant order history (public marketplace index — works on any domain).
+const marketplaceOrders = ref([]);
+const MKT_ORDER_STATUS = {
+  pending: 'orderStatus.statusPending',
+  confirmed: 'orderStatus.statusConfirmed',
+  preparing: 'orderStatus.statusPreparing',
+  ready: 'orderStatus.statusReady',
+  completed: 'orderStatus.statusCompleted',
+  cancelled: 'orderStatus.statusCancelled',
+};
+const mktOrderStatus = (s) => t(MKT_ORDER_STATUS[s] || 'orderStatus.statusPending');
+
+const fetchMarketplaceOrders = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/customer/orders/all/');
+    marketplaceOrders.value = res.data.orders || [];
+  } catch {
+    marketplaceOrders.value = [];
+  }
+};
+
 const saveName = async () => {
   const trimmed = editableName.value.trim();
   if (!trimmed) return;
@@ -1613,6 +1660,7 @@ const onAuthenticated = (customer) => {
   selectedLocale.value = customer?.locale || 'en';
   localeConfigured.value = !!(customer?.id && localStorage.getItem(`locale_set_${customer.id}`));
   fetchOrders();
+  fetchMarketplaceOrders();
   fetchWallet();
 };
 
@@ -1637,6 +1685,7 @@ onMounted(async () => {
   await customerStore.fetchCustomer();
   if (customerStore.isAuthenticated) {
     fetchOrders();
+    fetchMarketplaceOrders();
     fetchWallet();
     fetchLoyaltyConfig();
     fetchAddresses();

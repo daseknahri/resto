@@ -81,6 +81,44 @@ class WalletTransaction(models.Model):
         return f"{self.get_type_display()} {self.amount} — {self.customer}"
 
 
+class CustomerOrderRef(models.Model):
+    """Public-schema mirror of a customer's order, for cross-restaurant history.
+
+    Orders live in each tenant's own schema, so there is no single place to list a
+    customer's marketplace activity. This lightweight index is kept in sync by a signal
+    on Order save (menu app), letting the customer's account and the admin show orders
+    across ALL restaurants without scanning every tenant schema per request.
+    """
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="order_refs",
+    )
+    tenant_id = models.IntegerField(db_index=True)
+    restaurant_name = models.CharField(max_length=200, blank=True)
+    restaurant_slug = models.CharField(max_length=200, blank=True)
+    order_number = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, blank=True)
+    fulfillment_type = models.CharField(max_length=20, blank=True)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=8, default="MAD")
+    order_created_at = models.DateTimeField(db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-order_created_at",)
+        constraints = [
+            models.UniqueConstraint(fields=("tenant_id", "order_number"), name="uniq_order_ref_per_tenant_order"),
+        ]
+        indexes = [
+            models.Index(fields=["customer", "-order_created_at"], name="order_ref_customer_recent_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"OrderRef {self.order_number} @ {self.restaurant_name} ({self.status})"
+
+
 class TenantFloatTransaction(models.Model):
     """Append-only ledger for a restaurant's distributable wallet float.
 
