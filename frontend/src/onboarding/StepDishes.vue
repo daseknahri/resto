@@ -147,7 +147,7 @@
         @keydown.esc="closeDishEditor"
       >
         <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
               <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
@@ -698,7 +698,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
             </div>
           </div>
 
-          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeDishEditor">{{ t("common.done") }}</button>
           </div>
         </div>
@@ -713,7 +713,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
         @keydown.esc="closeQuickDishModal"
       >
         <div ref="quickDishDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
               <h3 id="step-dishes-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
@@ -975,7 +975,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
             </div>
           </div>
 
-          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickDishModal">{{ t("common.close") }}</button>
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAddDish">{{ t("stepDishes.addDishToCategory") }}</button>
           </div>

@@ -99,7 +99,7 @@
         @keydown.esc="closeEditor"
       >
         <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("common.edit") }}</h3>
@@ -189,7 +189,7 @@
             </div>
           </div>
 
-          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeEditor">{{ t("common.done") }}</button>
           </div>
         </div>
@@ -204,7 +204,7 @@
         @keydown.esc="closeQuickModal"
       >
         <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
@@ -289,7 +289,7 @@
               </div>
             </div>
           </div>
-          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">
+          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
             <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeQuickModal">{{ t("common.close") }}</button>
             <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="quickAdd">{{ t("stepCategories.addCategory") }}</button>
           </div>

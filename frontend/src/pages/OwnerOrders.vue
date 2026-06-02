@@ -200,6 +200,7 @@
         :key="o.id"
         class="ui-panel space-y-4 p-4 sm:p-4 transition-colors"
         :class="orderCardClass(o)"
+        style="content-visibility: auto; contain-intrinsic-size: auto 220px;"
       >
         <!-- Order header -->
         <div class="flex flex-wrap items-start justify-between gap-3">

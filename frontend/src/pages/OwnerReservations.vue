@@ -294,6 +294,7 @@
           :key="reservation.id"
           class="ui-reservation-card ui-surface-lift space-y-3 sm:space-y-3.5"
           :class="reservationCardClass(reservation)"
+          style="content-visibility: auto; contain-intrinsic-size: auto 240px;"
         >
           <div class="flex items-start justify-between gap-3">
             <label class="inline-flex items-center gap-2">
