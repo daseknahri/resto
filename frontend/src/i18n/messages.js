@@ -4636,6 +4636,17 @@ export const messages = {
       directBookingHint: "Ce restaurant accepte aussi les reservations sur une plateforme externe."
     },
     ownerHome: {
+      readinessDone: "Tout est prêt ! Votre menu est en ligne et prêt pour vos clients.",
+      analyticsPeriod7: "7j",
+      analyticsPeriod14: "14j",
+      analyticsPeriod30: "30j",
+      analyticsPeriod90: "90j",
+      analyticsPeriodLoading: "Chargement...",
+      vsYesterday: "vs hier",
+      todayUp: "+{n} vs hier",
+      todayDown: "{n} vs hier",
+      noAnalyticsData: "Aucune interaction client enregistrée pour cette période.",
+      noAnalyticsDataHint: "Partagez le lien de votre menu pour commencer à collecter des données.",
       kicker: "Tableau de bord proprietaire",
       title: "Lancez et gerez votre menu",
       description: "Suivez l etat de preparation, terminez la configuration et publiez une experience client stable.",
@@ -4880,6 +4891,8 @@ export const messages = {
       invoiceNotReady: "Facture non disponible — contactez le support pour finaliser votre facture.",
     },
     adminConsole: {
+      loadPlanFeatureFlagsFailed: "Impossible de charger les indicateurs de fonctionnalités du forfait",
+      savePlanFeatureFlagFailed: "Impossible d'enregistrer l'indicateur de fonctionnalité du forfait",
       loadJobsFailed: "Impossible de charger les jobs (connectez-vous en admin)",
       loadUpgradeRequestsFailed: "Impossible de charger les demandes d'upgrade",
       loadAuditLogsFailed: "Impossible de charger les journaux d'audit",

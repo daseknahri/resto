@@ -28,7 +28,7 @@
         </button>
       </div>
 
-      <div ref="listEl" class="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+      <div ref="listEl" role="log" aria-live="polite" class="flex-1 space-y-2 overflow-y-auto px-3 py-3">
         <p v-if="!messages.length" class="py-8 text-center text-xs text-slate-500">{{ t("staffChat.empty") }}</p>
         <div v-for="m in messages" :key="m.id" class="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2">
           <div class="flex items-baseline justify-between gap-2">
@@ -45,6 +45,7 @@
           type="text"
           maxlength="1000"
           :placeholder="t('staffChat.placeholder')"
+          :aria-label="t('staffChat.title')"
           :disabled="sending"
           class="ui-input flex-1 py-2 text-sm"
         />

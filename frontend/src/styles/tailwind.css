@@ -860,38 +860,11 @@ body[dir="rtl"] .ui-section-kicker {
     animation: ui-fade-up 280ms ease-out both;
   }
 
-  .ui-route-frame {
-    /* No permanent will-change here — promoting the whole page to a GPU layer
-       at all times causes compositor overhead that makes mouse input feel sluggish.
-       will-change is applied only during the active transition (see below). */
-  }
-
-  .ui-route-enter-active {
-    will-change: opacity, transform;
-    transition:
-      opacity var(--motion-base) var(--ease-fluid),
-      transform var(--motion-base) var(--ease-fluid);
-  }
-
-  .ui-route-leave-active {
-    will-change: opacity, transform;
-    transition:
-      opacity var(--motion-fast) ease,
-      transform var(--motion-fast) ease;
-  }
-
-  .ui-route-enter-from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.992);
-    /* Removed filter: blur() — blurring the entire page during transitions is
-       the most expensive CSS operation and the primary cause of laggy mouse
-       movement. Opacity + transform gives the same feel at a fraction of the cost. */
-  }
-
-  .ui-route-leave-to {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.996);
-  }
+  /* Route-transition classes (.ui-route-*) live as PLAIN CSS at the end of this
+     file. Tailwind purges unused @layer-components classes, and these are applied
+     dynamically by Vue's <Transition name="ui-route">, so the scanner never sees
+     them as literals — inside @layer they'd be stripped from the build (which is
+     exactly why the route transition was silently a no-op before). */
 
   /* Simple fade — used by dropdowns and conditional banners */
   .ui-fade-enter-active { transition: opacity var(--motion-fast) ease; }
@@ -2709,4 +2682,27 @@ html[data-owner-theme="light"] .staff-toggle-thumb {
 
 /* Funnel drop badge (OwnerDashboardInsights.vue) */
 html[data-owner-theme="light"] .funnel-drop-badge { color: #dc2626; }
+
+/* ==========================================================================
+   Route transition — PLAIN CSS (must stay out of @layer components, which
+   Tailwind purges; these classes are applied dynamically by Vue's
+   <Transition name="ui-route">, so the scanner never sees them as literals).
+   Fast + opacity-led so navigation stays snappy. Disabled under
+   prefers-reduced-motion by the media block above.
+   ========================================================================== */
+.ui-route-enter-active {
+  will-change: opacity, transform;
+  transition: opacity 140ms var(--ease-fluid), transform 140ms var(--ease-fluid);
+}
+.ui-route-leave-active {
+  will-change: opacity;
+  transition: opacity 90ms ease;
+}
+.ui-route-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.ui-route-leave-to {
+  opacity: 0;
+}
 
