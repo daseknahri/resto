@@ -1393,6 +1393,64 @@ class AdminCustomerCreditView(APIView):
         return Response({"new_balance": str(tx.balance_after), "amount": str(tx.amount)})
 
 
+class AdminCustomerOrdersView(APIView):
+    """GET /api/admin/customers/<id>/orders/ — the customer's orders across ALL restaurants.
+
+    Orders live in each tenant's own schema, so this scans active tenant schemas and
+    merges the most recent orders into one marketplace-wide history. On-demand (lazy-
+    loaded in the admin) because it touches many schemas; a broken/migrating schema is
+    skipped rather than failing the whole view.
+    """
+
+    permission_classes = [IsAuthenticated]
+    MAX_TENANTS = 500
+    PER_TENANT = 20
+    RESULT_LIMIT = 50
+
+    def get(self, request, customer_id, *args, **kwargs):
+        u = getattr(request, "user", None)
+        if not (u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False))):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        if not Customer.objects.filter(pk=customer_id).exists():
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from django_tenants.utils import schema_context
+        from tenancy.models import Tenant
+        from menu.models import Order
+
+        tenants = list(
+            Tenant.objects.filter(lifecycle_status="active")
+            .values_list("schema_name", "name")[: self.MAX_TENANTS]
+        )
+        orders = []
+        for schema_name, tenant_name in tenants:
+            try:
+                with schema_context(schema_name):
+                    rows = list(
+                        Order.objects.filter(customer_id=customer_id)
+                        .order_by("-created_at")[: self.PER_TENANT]
+                    )
+            except Exception:
+                continue  # never let one broken schema break the merged history
+            for o in rows:
+                orders.append({
+                    "order_number": o.order_number,
+                    "restaurant": tenant_name,
+                    "status": o.status,
+                    "fulfillment_type": o.fulfillment_type or "",
+                    "total": str(o.total),
+                    "currency": o.currency,
+                    "created_at": o.created_at.isoformat(),
+                })
+
+        orders.sort(key=lambda x: x["created_at"], reverse=True)
+        return Response({
+            "results": orders[: self.RESULT_LIMIT],
+            "count": len(orders),
+            "scanned_restaurants": len(tenants),
+        })
+
+
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
 
 

@@ -9,6 +9,7 @@ from accounts.views import (
     AdminCustomerCreditView,
     AdminCustomerDetailView,
     AdminCustomerListView,
+    AdminCustomerOrdersView,
 )
 
 
@@ -105,3 +106,23 @@ class AdminCustomerCreditTests(SimpleTestCase):
 
     def test_zero_amount_400(self):
         self.assertEqual(self._post({"amount": "0"}).status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AdminCustomerOrdersTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminCustomerOrdersView.as_view()
+
+    def _get(self, user=None):
+        req = self.factory.get("/api/admin/customers/1/orders/")
+        req.user = user or _admin()
+        return self.view(req, customer_id=1)
+
+    def test_non_admin_403(self):
+        self.assertEqual(self._get(user=_non_admin()).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_missing_customer_404(self):
+        with patch("accounts.views.Customer") as mock_cust:
+            mock_cust.objects.filter.return_value.exists.return_value = False
+            resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

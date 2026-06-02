@@ -171,6 +171,24 @@
                   <p v-if="creditError" class="text-xs text-red-300">{{ creditError }}</p>
                 </div>
 
+                <!-- Orders across all restaurants -->
+                <div class="space-y-2">
+                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminCustomers.ordersTitle') }}</p>
+                  <div v-if="loadingOrders" class="space-y-1.5">
+                    <div v-for="i in 3" :key="i" class="h-9 animate-pulse rounded-lg bg-slate-800/50" />
+                  </div>
+                  <p v-else-if="!orders.length" class="py-3 text-center text-xs text-slate-600 italic">{{ t('adminCustomers.ordersEmpty') }}</p>
+                  <ul v-else class="space-y-1.5">
+                    <li v-for="o in orders" :key="o.restaurant + o.order_number" class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
+                      <div class="min-w-0">
+                        <p class="font-medium text-slate-200">{{ o.restaurant }} <span class="font-mono text-slate-500">#{{ o.order_number }}</span></p>
+                        <p class="text-[10px] text-slate-600">{{ orderStatusLabel(o.status) }} · {{ fmtDate(o.created_at) }}</p>
+                      </div>
+                      <span class="shrink-0 font-semibold tabular-nums text-slate-300">{{ fmtMoney(o.total) }}</span>
+                    </li>
+                  </ul>
+                </div>
+
                 <!-- Cross-restaurant ledger -->
                 <div class="space-y-2">
                   <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminCustomers.ledgerTitle') }}</p>
@@ -279,6 +297,33 @@ const crediting = ref(false);
 const creditError = ref('');
 let creditKey = null;
 const togglingDriver = ref(false);
+const orders = ref([]);
+const loadingOrders = ref(false);
+const ordersScanned = ref(0);
+
+const ORDER_STATUS_KEY = {
+  pending: 'orderStatus.statusPending',
+  confirmed: 'orderStatus.statusConfirmed',
+  preparing: 'orderStatus.statusPreparing',
+  ready: 'orderStatus.statusReady',
+  completed: 'orderStatus.statusCompleted',
+  cancelled: 'orderStatus.statusCancelled',
+};
+const orderStatusLabel = (s) => t(ORDER_STATUS_KEY[s] || 'orderStatus.statusPending');
+
+const fetchOrders = async (id) => {
+  orders.value = [];
+  loadingOrders.value = true;
+  try {
+    const res = await api.get(`/admin/customers/${id}/orders/`);
+    orders.value = res.data?.results || [];
+    ordersScanned.value = res.data?.scanned_restaurants || 0;
+  } catch {
+    orders.value = [];
+  } finally {
+    loadingOrders.value = false;
+  }
+};
 
 const TX_KEY = {
   topup: 'customerAccount.walletTxTopup',
@@ -309,6 +354,7 @@ const openDetail = async (c) => {
   } finally {
     loadingDetail.value = false;
   }
+  fetchOrders(c.id); // marketplace-wide order history (scans tenant schemas, on-demand)
 };
 
 const syncRow = (patch) => {

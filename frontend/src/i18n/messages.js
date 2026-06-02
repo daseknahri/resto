@@ -796,6 +796,8 @@ export const messages = {
       creditFailed: "Could not credit the wallet.",
       ledgerTitle: "Wallet activity (all restaurants)",
       ledgerEmpty: "No wallet activity yet.",
+      ordersTitle: "Orders (all restaurants)",
+      ordersEmpty: "No orders found.",
       txAdjustment: "Adjustment",
     },
     adminWallet: {
@@ -3851,6 +3853,8 @@ export const messages = {
       creditFailed: "Impossible de crediter le portefeuille.",
       ledgerTitle: "Activite portefeuille (tous restaurants)",
       ledgerEmpty: "Aucune activite pour le moment.",
+      ordersTitle: "Commandes (tous restaurants)",
+      ordersEmpty: "Aucune commande.",
       txAdjustment: "Ajustement",
     },
     adminWallet: {
