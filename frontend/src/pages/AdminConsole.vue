@@ -61,6 +61,12 @@
               >
                 💳 {{ t("adminConsole.wallets") }}
               </router-link>
+              <router-link
+                :to="{ name: 'admin-customers' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+              >
+                👥 {{ t("adminConsole.customers") }}
+              </router-link>
             </div>
           </article>
           <article class="ui-orbit-card space-y-2">

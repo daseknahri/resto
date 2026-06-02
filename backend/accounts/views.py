@@ -1204,6 +1204,63 @@ class AdminFundTenantView(APIView):
         })
 
 
+class AdminCustomerListView(APIView):
+    """GET /api/admin/customers/ — the platform customer directory (marketplace clients).
+
+    Customers are platform-level identities (public schema), NOT owned by any restaurant —
+    the platform sits between restaurants and clients. This is the admin's view of every
+    customer: identity, verification, wallet, loyalty, driver status. Paginated +
+    searchable by name / phone / email, with optional driver/verified filters.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = getattr(request, "user", None)
+        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.db.models import Q
+
+        qs = Customer.objects.all().order_by("-created_at")
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search) | Q(email__icontains=search) | Q(phone__icontains=search)
+            )
+        if str(request.query_params.get("drivers_only") or "").lower() in ("1", "true"):
+            qs = qs.filter(is_driver=True)
+        if str(request.query_params.get("verified_only") or "").lower() in ("1", "true"):
+            qs = qs.filter(phone_verified=True)
+
+        try:
+            page = max(1, int(request.query_params.get("page") or 1))
+            page_size = min(100, max(1, int(request.query_params.get("page_size") or 25)))
+        except (ValueError, TypeError):
+            page, page_size = 1, 25
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        rows = qs[start: start + page_size]
+        results = [
+            {
+                "id": c.id,
+                "name": c.name or "",
+                "phone": c.phone or "",
+                "phone_verified": c.phone_verified,
+                "email": c.email or "",
+                "email_verified": c.email_verified,
+                "has_google": bool(c.google_sub),
+                "wallet_balance": str(c.wallet_balance),
+                "loyalty_points": c.loyalty_points or 0,
+                "is_driver": c.is_driver,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in rows
+        ]
+        return Response({"total": total, "page": page, "page_size": page_size, "results": results})
+
+
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
 
 
