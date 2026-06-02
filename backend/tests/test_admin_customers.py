@@ -5,7 +5,11 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
-from accounts.views import AdminCustomerListView
+from accounts.views import (
+    AdminCustomerCreditView,
+    AdminCustomerDetailView,
+    AdminCustomerListView,
+)
 
 
 def _admin():
@@ -67,3 +71,37 @@ class AdminCustomerListViewTests(SimpleTestCase):
         self.assertTrue(row["phone_verified"])
         self.assertEqual(row["wallet_balance"], "50.00")
         self.assertEqual(row["loyalty_points"], 10)
+
+
+class AdminCustomerDetailAuthTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminCustomerDetailView.as_view()
+
+    def test_detail_non_admin_403(self):
+        req = self.factory.get("/api/admin/customers/1/")
+        req.user = _non_admin()
+        self.assertEqual(self.view(req, customer_id=1).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class AdminCustomerCreditTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminCustomerCreditView.as_view()
+
+    def _post(self, data, user=None):
+        req = self.factory.post("/api/admin/customers/1/credit/", data, format="json")
+        req.user = user or _admin()
+        return self.view(req, customer_id=1)
+
+    def test_non_admin_403(self):
+        self.assertEqual(self._post({"amount": "10"}, user=_non_admin()).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_amount_400(self):
+        self.assertEqual(self._post({"amount": "abc"}).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_amount_too_large_400(self):
+        self.assertEqual(self._post({"amount": "999999"}).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_zero_amount_400(self):
+        self.assertEqual(self._post({"amount": "0"}).status_code, status.HTTP_400_BAD_REQUEST)

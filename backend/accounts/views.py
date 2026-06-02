@@ -1261,6 +1261,138 @@ class AdminCustomerListView(APIView):
         return Response({"total": total, "page": page, "page_size": page_size, "results": results})
 
 
+class AdminCustomerDetailView(APIView):
+    """GET/PATCH /api/admin/customers/<id>/ — a single platform customer.
+
+    GET returns the full profile + cross-restaurant wallet ledger (each payment shows
+    which restaurant it was at), trust score, loyalty and driver status. PATCH toggles
+    is_driver (admin can register/unregister a delivery driver).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _check(self, request):
+        u = getattr(request, "user", None)
+        return bool(u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False)))
+
+    def get(self, request, customer_id, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            c = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.db.models import Avg, Count
+        from .models import CustomerRating, DeliveryJob, WalletTransaction
+
+        txs = list(WalletTransaction.objects.filter(customer=c).order_by("-created_at")[:50])
+        tenant_ids = {t.tenant_id for t in txs if t.tenant_id}
+        tenant_names = {}
+        if tenant_ids:
+            from tenancy.models import Tenant
+            tenant_names = dict(Tenant.objects.filter(id__in=tenant_ids).values_list("id", "name"))
+
+        ratings = CustomerRating.objects.filter(customer=c).aggregate(avg=Avg("score"), count=Count("id"))
+        delivery_jobs = DeliveryJob.objects.filter(driver=c).count() if c.is_driver else 0
+
+        return Response({
+            "id": c.id,
+            "name": c.name or "",
+            "phone": c.phone or "",
+            "phone_verified": c.phone_verified,
+            "email": c.email or "",
+            "email_verified": c.email_verified,
+            "has_google": bool(c.google_sub),
+            "wallet_balance": str(c.wallet_balance),
+            "loyalty_points": c.loyalty_points or 0,
+            "is_driver": c.is_driver,
+            "is_driver_online": c.is_driver_online,
+            "created_at": c.created_at.isoformat(),
+            "trust": {
+                "avg_score": round(float(ratings["avg"]), 2) if ratings["avg"] is not None else None,
+                "count": ratings["count"] or 0,
+            },
+            "delivery_jobs": delivery_jobs,
+            "transactions": [
+                {
+                    "id": t.id,
+                    "type": t.type,
+                    "amount": str(t.amount),
+                    "balance_after": (str(t.balance_after) if t.balance_after is not None else None),
+                    "tenant_id": t.tenant_id,
+                    "tenant_name": tenant_names.get(t.tenant_id, ""),
+                    "reference": t.reference,
+                    "note": t.note,
+                    "created_at": t.created_at.isoformat(),
+                }
+                for t in txs
+            ],
+        })
+
+    def patch(self, request, customer_id, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            c = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        if "is_driver" in request.data:
+            c.is_driver = bool(request.data["is_driver"])
+            fields = ["is_driver", "updated_at"]
+            if not c.is_driver and c.is_driver_online:
+                c.is_driver_online = False
+                fields.append("is_driver_online")
+            c.save(update_fields=fields)
+        return Response({"id": c.id, "is_driver": c.is_driver, "is_driver_online": c.is_driver_online})
+
+
+class AdminCustomerCreditView(APIView):
+    """POST /api/admin/customers/<id>/credit/ — admin tops up / adjusts a customer wallet.
+
+    Goes through the central credit_wallet service: atomic, idempotent, and subject to
+    the platform rule (a verified phone is required to hold wallet funds).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, customer_id, *args, **kwargs):
+        from decimal import Decimal as _Dec, InvalidOperation
+
+        u = getattr(request, "user", None)
+        if not (u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False))):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from accounts.wallet_service import credit_wallet, WalletError, UnverifiedWallet
+        from accounts.models import WalletTransaction
+
+        try:
+            amount = _Dec(str(request.data.get("amount"))).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount <= _Dec("0") or amount > _Dec("100000"):
+            return Response({"detail": "Amount must be between 0 and 100000."}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = str(request.data.get("note") or "Admin adjustment").strip()[:200]
+        idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        try:
+            tx = credit_wallet(
+                customer_id, amount,
+                tx_type=WalletTransaction.Type.ADJUSTMENT, note=note, idempotency_key=idem,
+            )
+        except UnverifiedWallet:
+            return Response(
+                {"detail": "Customer must verify their phone before holding wallet funds.", "code": "unverified"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"new_balance": str(tx.balance_after), "amount": str(tx.amount)})
+
+
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
 
 
