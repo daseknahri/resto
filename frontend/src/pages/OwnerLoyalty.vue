@@ -164,7 +164,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
-import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache';
+import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t } = useI18n();
 const toast = useToastStore();

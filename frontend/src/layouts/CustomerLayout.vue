@@ -244,7 +244,7 @@ const applyColorScheme = () => {
 
 const toggleColorScheme = () => {
   colorScheme.value = colorScheme.value === 'dark' ? 'system' : 'dark'
-  try { localStorage.setItem('ui-color-scheme', colorScheme.value) } catch {}
+  try { localStorage.setItem('ui-color-scheme', colorScheme.value) } catch { /* best-effort: ignore failures */ }
   applyColorScheme()
 }
 
@@ -277,7 +277,7 @@ const dismissTrackBanner = () => {
   try {
     localStorage.removeItem('lastOrderNumber');
     localStorage.removeItem('lastOrderAt');
-  } catch {}
+  } catch { /* best-effort: ignore failures */ }
   trackedOrderNumber.value = null;
 };
 // ─────────────────────────────────────────────────────────────────────────────

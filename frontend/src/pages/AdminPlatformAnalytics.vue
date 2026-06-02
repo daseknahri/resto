@@ -174,6 +174,10 @@ onMounted(refresh);
 </script>
 
 <script>
+/* eslint-disable vue/one-component-per-file --
+   StatCard is a tiny presentational render-function helper used only on this
+   page and is intentionally co-located with its colorMap. It is not a second
+   page-level component. */
 // Inline StatCard component — no separate file needed for this single-page use
 import { defineComponent, h } from 'vue';
 

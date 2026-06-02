@@ -271,7 +271,7 @@
           <!-- Wallet toggle -->
           <div v-if="customer && Number(customer.wallet_balance) > 0">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="form.use_wallet" class="rounded" />
+              <input v-model="form.use_wallet" type="checkbox" class="rounded" />
               <span class="text-sm text-slate-300">
                 {{ t('mktMenu.walletApply', { balance: `${customer.wallet_balance} ${restaurant?.currency}` }) }}
               </span>

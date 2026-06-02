@@ -341,7 +341,7 @@
               <!-- Save address -->
               <div v-if="customerStore.isAuthenticated && deliveryAddress" class="space-y-1.5">
                 <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" v-model="saveAddressAfterOrder" class="rounded" />
+                  <input v-model="saveAddressAfterOrder" type="checkbox" class="rounded" />
                   <span class="text-xs text-slate-400">{{ t('cartPage.saveAddress') }}</span>
                 </label>
                 <input
@@ -762,7 +762,7 @@ const customerStore = useCustomerStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { formatCurrency, formatPrice, itemCountLabel, t } = useI18n();
+const { formatPrice, itemCountLabel, t } = useI18n();
 const currencyStore = useCurrencyStore();
 
 const showAuthModal = ref(false);
@@ -982,10 +982,6 @@ const customerNameModel = computed({
   get: () => cart.customerName || '',
   set: (value) => cart.setCustomerName(value),
 });
-const customerPhoneModel = computed({
-  get: () => cart.customerPhone || '',
-  set: (value) => cart.setCustomerPhone(value),
-});
 
 const formatCoordinate = (value) => {
   const number = Number(value);
@@ -998,11 +994,6 @@ const clearFieldError = (field) => {
   const next = { ...fieldErrors.value };
   delete next[field];
   fieldErrors.value = next;
-};
-
-const setLineQty = (item, event) => {
-  const next = Number(event?.target?.value || item.qty);
-  cart.setQty(item.key, next);
 };
 
 const clearCart = () => {
@@ -1696,7 +1687,7 @@ const placeInAppOrder = async () => {
     try {
       localStorage.setItem('lastOrderNumber', result.order_number);
       localStorage.setItem('lastOrderAt', String(Date.now()));
-    } catch {}
+    } catch { /* best-effort: ignore failures */ }
     // Optionally save the delivery address for future use
     if (isDelivery.value && saveAddressAfterOrder.value && deliveryAddress.value) {
       try {

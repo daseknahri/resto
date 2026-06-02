@@ -1076,7 +1076,7 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
-const { t, formatPrice, formatCurrency, currentLocale } = useI18n();
+const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
 const currencyStore = useCurrencyStore();
 const tenantStore = useTenantStore();

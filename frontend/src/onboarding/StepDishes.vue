@@ -267,7 +267,8 @@
                   <p class="text-[10px] text-slate-600">{{ t("stepDishes.stockQtyHint") }}</p>
                 </div>
 
-                <div class="rounded-xl border border-dashed p-3 transition-colors"
+                <div
+class="rounded-xl border border-dashed p-3 transition-colors"
                   :class="draggingRows[editingDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
                   @dragenter="setDragState(editingDish.local_id, true)"
                   @dragleave="setDragState(editingDish.local_id, false)"

@@ -141,8 +141,8 @@
     <div class="px-3 sm:px-4 mt-3 space-y-4 sm:space-y-5">
       <section
         v-for="cat in visibleCategories"
-        :key="cat.slug"
         :id="`section-${cat.slug}`"
+        :key="cat.slug"
         :ref="el => registerSection(el, cat.slug)"
         :data-slug="cat.slug"
         class="scroll-mt-24 space-y-3 md:scroll-mt-32"
@@ -240,7 +240,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import AppIcon   from '../components/AppIcon.vue'
 import DishCard  from '../components/DishCard.vue'
 import { useI18n } from '../composables/useI18n'
@@ -257,9 +257,8 @@ const menu   = useMenuStore()
 const tenant = useTenantStore()
 const cart   = useCartStore()
 const toast  = useToastStore()
-const router = useRouter()
 const route  = useRoute()
-const { currentLocale, formatCurrency, formatPrice, itemCountLabel, t } = useI18n()
+const { currentLocale, formatPrice, t } = useI18n()
 
 // ── Route props (passed by /m/:menuSlug) ─────────────────────────────────────
 const props = defineProps({

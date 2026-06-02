@@ -238,7 +238,7 @@
 
           <!-- Active toggle -->
           <label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2.5">
-            <input type="checkbox" v-model="form.is_active" class="rounded" />
+            <input v-model="form.is_active" type="checkbox" class="rounded" />
             <span class="text-sm text-slate-300">{{ t('ownerPromotions.isActiveLabel') }}</span>
           </label>
 
@@ -271,7 +271,7 @@ import { useConfirmModal } from '../composables/useConfirmModal';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
-import { bustCache, isFresh, readCache, writeCache } from '../lib/staleCache';
+import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
 const { t } = useI18n();
 const toast = useToastStore();

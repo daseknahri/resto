@@ -185,7 +185,7 @@ const menu = useMenuStore();
 const cart = useCartStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
-const { currentLocale, formatCurrency, formatPrice, itemCountLabel, t } = useI18n();
+const { currentLocale, formatPrice, itemCountLabel, t } = useI18n();
 const search = ref("");
 
 const dishes = computed(() => menu.dishes[props.slug] || []);

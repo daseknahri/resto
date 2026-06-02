@@ -48,7 +48,8 @@ export const useTenantStore = defineStore("tenant", {
      * For now always returns true so all owner features are accessible for testing.
      */
     hasFlag() {
-      return (_key) => true;
+      // All feature flags are enabled by default; the key is intentionally ignored.
+      return () => true;
     },
     /** True when payment is overdue but still within the grace period window. */
     isInGracePeriod(state) {

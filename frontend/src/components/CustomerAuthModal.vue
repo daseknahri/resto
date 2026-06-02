@@ -371,6 +371,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('keydown', trapFocus);
   clearInterval(resendTimer);
-  try { window.google?.accounts?.id?.cancel(); } catch {}
+  try { window.google?.accounts?.id?.cancel(); } catch { /* best-effort: ignore failures */ }
 });
 </script>

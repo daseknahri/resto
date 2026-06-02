@@ -37,7 +37,8 @@
         class="flex items-center gap-2.5"
       >
         <!-- Rank -->
-        <span class="w-4 shrink-0 text-center text-[10px] font-bold"
+        <span
+class="w-4 shrink-0 text-center text-[10px] font-bold"
           :class="idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'"
         >{{ idx + 1 }}</span>
 

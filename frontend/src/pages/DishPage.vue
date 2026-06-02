@@ -364,7 +364,7 @@ const menu   = useMenuStore();
 const cart   = useCartStore();
 const tenant = useTenantStore();
 const toast  = useToastStore();
-const { currentLocale, formatCurrency, formatPrice, t } = useI18n();
+const { currentLocale, formatPrice, t } = useI18n();
 const similarVis = useVisibility();
 
 const qty               = ref(1);
@@ -374,7 +374,6 @@ const lightboxOpen      = ref(false);
 const lightboxDialogRef = ref(null);
 useFocusTrap(lightboxDialogRef, lightboxOpen);
 
-const whatsappPhone = (import.meta.env.VITE_CONTACT_PHONE || '').replace(/[^\d+]/g, '');
 const meta          = computed(() => tenant.resolvedMeta || null);
 const dishes        = computed(() => menu.dishes[props.category] || []);
 const dish          = computed(() => dishes.value.find((d) => d.slug === props.dish));
@@ -494,7 +493,7 @@ const shareDish = async () => {
   const title = dish.value.name || '';
   const text = dish.value.description ? dish.value.description.slice(0, 100) : title;
   if (typeof navigator.share === 'function') {
-    try { await navigator.share({ title, text, url }); return; } catch {}
+    try { await navigator.share({ title, text, url }); return; } catch { /* best-effort: ignore failures */ }
   }
   try { await navigator.clipboard.writeText(url); toast.show(t('dishPage.shareDishCopied'), 'success'); }
   catch { toast.show(t('dishPage.shareDishFailed'), 'error'); }

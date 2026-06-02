@@ -363,7 +363,6 @@ import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
 import { useI18n } from "../composables/useI18n";
-import { useCurrencyStore } from "../stores/currency";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
 import { useOrderStore } from "../stores/order";
@@ -380,7 +379,6 @@ const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
 const toast = useToastStore();
 const { t, formatPrice, currentLocale } = useI18n();
-const currencyStore = useCurrencyStore();
 
 const showAuthModal = ref(false);
 

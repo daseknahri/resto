@@ -84,6 +84,8 @@ export const useOrderStore = defineStore("order", {
     // -------------------------------------------------------
     async updateOrderStatus(orderId, payload) {
       this.updatingOrderId = orderId;
+      // try/finally (no catch): let the error propagate to the caller while
+      // still clearing the updating flag. The previous catch only re-threw.
       try {
         const res = await api.patch(`/owner/orders/${orderId}/status/`, payload);
         const updated = res.data;
@@ -92,8 +94,6 @@ export const useOrderStore = defineStore("order", {
           this.orders[idx] = { ...this.orders[idx], ...updated };
         }
         return updated;
-      } catch (err) {
-        throw err;
       } finally {
         this.updatingOrderId = null;
       }

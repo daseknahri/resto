@@ -170,9 +170,11 @@
       <div v-if="businessHoursRows.length || businessHoursSummary" class="ui-panel ui-reveal p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <p class="ui-kicker">{{ t('customerLeadPage.businessHours') }}</p>
-          <span class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-0.5 text-[10px] font-medium"
+          <span
+class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-0.5 text-[10px] font-medium"
             :class="isOpen ? 'text-emerald-400' : 'text-rose-400'">
-            <span class="h-1.5 w-1.5 rounded-full"
+            <span
+class="h-1.5 w-1.5 rounded-full"
               :class="isOpen ? 'bg-emerald-400' : 'bg-rose-400'" />
             {{ statusLabel }}
           </span>
