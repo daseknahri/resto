@@ -141,7 +141,26 @@ TENANT_APPS = [
     "menu",
 ]
 
+# ── Real-time (Django Channels) — optional, activates only when installed ──────
+# Keeping it conditional means the HTTP app and the existing polling keep working
+# whether or not channels/daphne are present (e.g. before the WS infra is deployed).
+try:
+    import channels  # noqa: F401
+    HAS_CHANNELS = True
+except Exception:  # pragma: no cover
+    HAS_CHANNELS = False
+
+if HAS_CHANNELS:
+    # daphne must precede staticfiles (its runserver command); django_tenants stays first.
+    if "channels" not in SHARED_APPS:
+        SHARED_APPS.insert(1, "channels")
+    if "daphne" not in SHARED_APPS:
+        SHARED_APPS.insert(1, "daphne")
+
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
+
+if HAS_CHANNELS:
+    ASGI_APPLICATION = "config.asgi.application"
 
 MIDDLEWARE = [
     "config.middleware.TenantAwareMainMiddleware",
@@ -200,6 +219,23 @@ else:
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         }
     }
+
+# ── Channel layer (real-time) ──────────────────────────────────────────────────
+# Redis layer when REDIS_URL is set (required for multi-process/multi-worker prod
+# so a broadcast from a web worker reaches every connected socket). Without Redis
+# we fall back to an in-memory layer (single-process dev only).
+if HAS_CHANNELS:
+    if _REDIS_URL:
+        CHANNEL_LAYERS = {
+            "default": {
+                "BACKEND": "channels_redis.core.RedisChannelLayer",
+                "CONFIG": {"hosts": [_REDIS_URL], "prefix": "resto:ws"},
+            }
+        }
+    else:
+        CHANNEL_LAYERS = {
+            "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+        }
 
 # ── Session store ──────────────────────────────────────────────────────────────
 # cache backend (Redis): session lives only in Redis.

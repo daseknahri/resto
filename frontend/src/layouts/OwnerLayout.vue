@@ -327,6 +327,7 @@ import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOwnerTheme } from "../composables/useOwnerTheme";
+import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
@@ -486,6 +487,13 @@ const layoutDoSilentPoll = async () => {
   layoutCheckNewOrders(Array.isArray(fresh) ? fresh : order.orders);
 };
 
+// Real-time: when a socket "order.new" ping arrives, refresh immediately (same
+// path as the poll, incl. the new-order alert). Polling stays as the fallback, so
+// this is purely a latency win when the WS infra is connected.
+const ownerRealtime = useOwnerRealtime((event) => {
+  if (typeof event === "string" && event.startsWith("order.")) layoutDoSilentPoll();
+});
+
 const onLayoutPageVisible = () => {
   if (typeof document !== "undefined" && document.visibilityState === "visible") {
     layoutDoSilentPoll();
@@ -525,6 +533,7 @@ const prefetchOwnerChunks = () => {
 onMounted(async () => {
   activateTheme(); // paint the saved dark/light choice onto <html>
   prefetchOwnerChunks();
+  ownerRealtime.connect(); // instant order updates when WS is available (else polling)
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }
@@ -554,6 +563,7 @@ onBeforeUnmount(() => {
     document.removeEventListener("visibilitychange", onLayoutPageVisible);
   }
   clearInterval(orderPollTimer);
+  ownerRealtime.disconnect();
   deactivateTheme(); // strip data-owner-theme so customer/admin pages stay un-themed
 });
 

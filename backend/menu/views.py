@@ -2017,6 +2017,19 @@ class PlaceOrderView(APIView):
         except Exception:
             pass  # Never fail the order response due to push errors
 
+        # Real-time ping to connected owner/staff sockets (no-op if WS not configured).
+        # Low-sensitivity signal only — clients refetch order details over the
+        # authenticated HTTP API.
+        try:
+            from django.db import connection as _ws_conn
+            from realtime.broadcast import broadcast as _ws_broadcast
+            _ws_broadcast(
+                _ws_conn.tenant.schema_name, "owner", "order.new",
+                {"order_number": order.order_number},
+            )
+        except Exception:
+            pass
+
         order.refresh_from_db(fields=["points_earned"])
         return Response({
             "order_number": order.order_number,
@@ -3037,6 +3050,18 @@ class OwnerOrderStatusUpdateView(APIView):
                 order.estimated_ready_minutes = None
 
         order.save(update_fields=["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"])
+
+        # Real-time ping so other connected owner/kitchen screens refresh immediately
+        # (no-op if WS not configured). Low-sensitivity signal only.
+        try:
+            from django.db import connection as _ws_conn
+            from realtime.broadcast import broadcast as _ws_broadcast
+            _ws_broadcast(
+                _ws_conn.tenant.schema_name, "owner", "order.updated",
+                {"order_number": order.order_number, "status": order.status},
+            )
+        except Exception:
+            pass
 
         # Auto-refund wallet credits when an order is cancelled
         if new_status == Order.Status.CANCELLED:
