@@ -1991,6 +1991,27 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        # Platform delivery: spawn a searching driver job (opt-in per restaurant).
+        # Best-effort and post-commit — a hiccup here must never affect the placed order.
+        if fulfillment_type == Order.FulfillmentType.DELIVERY and getattr(profile, "platform_delivery_enabled", False):
+            try:
+                from accounts.models import DeliveryJob as _DJob
+                _DJob.objects.create(
+                    tenant_id=tenant.id,
+                    order_number=order.order_number,
+                    status=_DJob.Status.SEARCHING,
+                    pickup_address=(getattr(profile, "address", "") or "")[:200],
+                    pickup_lat=getattr(profile, "lat", None),
+                    pickup_lng=getattr(profile, "lng", None),
+                    delivery_address=(order.delivery_address or "")[:200],
+                    delivery_lat=order.delivery_lat,
+                    delivery_lng=order.delivery_lng,
+                    delivery_fee=_delivery_fee,
+                    driver_payout=_delivery_fee,  # 100% of the delivery fee goes to the driver
+                )
+            except Exception:
+                pass  # never fail the order response if job creation hiccups
+
         # Send WhatsApp notification to the restaurant (truly non-blocking daemon thread).
         # The order is already committed — a slow/failed Twilio call must never delay
         # the customer-facing 201 response.

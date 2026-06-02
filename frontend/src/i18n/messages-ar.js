@@ -1194,6 +1194,8 @@ const arabicMessages = {
     "deliverySettingsHint": "اضبط خيار التوصيل المعروض للعملاء عند إتمام الشراء.",
     "deliveryEnabled": "التوصيل متاح",
     "deliveryEnabledHint": "عرض خيار التوصيل عند الدفع. قم بإلغاء التحديد لإخفائه تماماً.",
+    "platformDelivery": "استخدام شبكة سائقي المنصة",
+    "platformDeliveryHint": "يُعرض كل طلب توصيل على سائقي المنصة تلقائياً. اتركه معطّلاً إذا كنت توصّل الطلبات بنفسك.",
     "deliveryFee": "رسوم التوصيل",
     "deliveryFeeHint": "رسوم ثابتة تضاف إلى إجمالي طلبات التوصيل. 0 = توصيل مجاني.",
     "deliveryMinimumOrder": "الحد الأدنى للطلب",

@@ -141,6 +141,13 @@ class Profile(models.Model):
         blank=True,
         help_text="Short description of the delivery area shown to customers (e.g. '5 km radius — city centre only').",
     )
+    platform_delivery_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "When enabled, each delivery order automatically creates a job for the "
+            "platform driver network. Leave off if the restaurant handles its own delivery."
+        ),
+    )
     receipt_message = models.CharField(
         max_length=300,
         blank=True,

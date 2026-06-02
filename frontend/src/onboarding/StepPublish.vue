@@ -244,6 +244,14 @@
               />
               <p class="text-right text-[11px] text-slate-600">{{ (form.delivery_zone_description || "").length }}/200</p>
             </div>
+
+            <label class="flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
+              <div class="space-y-0.5">
+                <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.platformDelivery") }}</span>
+                <p class="text-xs text-slate-500">{{ t("stepPublish.platformDeliveryHint") }}</p>
+              </div>
+              <input v-model="form.platform_delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+            </label>
           </template>
         </div>
 
@@ -666,6 +674,7 @@ const form = reactive({
   delivery_fee: 0,
   delivery_minimum_order: 0,
   delivery_zone_description: "",
+  platform_delivery_enabled: false,
   max_covers_per_slot: 0,
   slot_duration_minutes: 60,
   directory_opt_in: false,
@@ -742,6 +751,7 @@ const load = async () => {
     form.delivery_fee = Number(data?.delivery_fee ?? 0);
     form.delivery_minimum_order = Number(data?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = data?.delivery_zone_description || "";
+    form.platform_delivery_enabled = Boolean(data?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(data?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(data?.slot_duration_minutes ?? 60) || 60;
     form.directory_opt_in = Boolean(data?.directory_opt_in);
@@ -792,6 +802,7 @@ const saveProfile = async (publishFlag = null) => {
     delivery_fee: Number(form.delivery_fee) || 0,
     delivery_minimum_order: Number(form.delivery_minimum_order) || 0,
     delivery_zone_description: form.delivery_zone_description || "",
+    platform_delivery_enabled: Boolean(form.platform_delivery_enabled),
     max_covers_per_slot: Number(form.max_covers_per_slot) || 0,
     slot_duration_minutes: Number(form.slot_duration_minutes) || 60,
   };
@@ -819,6 +830,7 @@ const saveStatus = async () => {
     form.delivery_fee = Number(saved?.delivery_fee ?? 0);
     form.delivery_minimum_order = Number(saved?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = saved?.delivery_zone_description || "";
+    form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(saved?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(saved?.slot_duration_minutes ?? 60) || 60;
     await tenant.fetchMeta();
@@ -933,6 +945,7 @@ const publish = async () => {
     form.delivery_fee = Number(saved?.delivery_fee ?? 0);
     form.delivery_minimum_order = Number(saved?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = saved?.delivery_zone_description || "";
+    form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(saved?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(saved?.slot_duration_minutes ?? 60) || 60;
     await tenant.fetchMeta();

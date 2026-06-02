@@ -219,6 +219,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "delivery_fee",
             "delivery_minimum_order",
             "delivery_zone_description",
+            "platform_delivery_enabled",
             "receipt_message",
             "vat_rate",
             "vat_label",
