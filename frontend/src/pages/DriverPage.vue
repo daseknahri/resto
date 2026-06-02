@@ -244,6 +244,11 @@ const fetchJobs = async () => {
   }
 };
 
+// Keep the job list fresh while the page is open (idempotent — never double-starts).
+const ensurePoll = () => {
+  if (!pollTimer) pollTimer = setInterval(fetchJobs, 15000);
+};
+
 const becomeDriver = async () => {
   errorMsg.value = '';
   busy.value = true;
@@ -254,6 +259,7 @@ const becomeDriver = async () => {
     if (customerStore.customer) customerStore.setCustomer({ ...customerStore.customer, is_driver: true });
     toast.show(t('driver.registered'), 'success');
     await fetchJobs();
+    ensurePoll();
   } catch (err) {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {
@@ -358,7 +364,7 @@ onMounted(async () => {
   if (isDriver.value) {
     await fetchJobs();
     if (online.value) startGeo();
-    pollTimer = setInterval(fetchJobs, 15000); // keep jobs fresh
+    ensurePoll();
   }
 });
 
