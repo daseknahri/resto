@@ -156,7 +156,8 @@ const readinessItems = computed(() => [
 ]);
 
 // ── Fetch categories + dishes counts independently ────────────────────────────
-onMounted(async () => {
+const load = async () => {
+  loading.value = true;
   try {
     // Fetch enough dish fields to compute sold-out count — needed by the
     // alerts strip in the parent without triggering a second dishes fetch.
@@ -194,5 +195,11 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+};
+
+onMounted(load);
+
+// Expose load() so the parent's manual-refresh button can re-fetch readiness
+// data (counts, sold-out count, name maps) along with everything else.
+defineExpose({ load });
 </script>

@@ -230,7 +230,7 @@
     </article>
 
     <!-- ── READINESS: independent fetch for categories + dishes ─────────────── -->
-    <OwnerDashboardReadiness @loaded="onReadinessLoaded" />
+    <OwnerDashboardReadiness ref="readinessRef" @loaded="onReadinessLoaded" />
 
     <!-- ── ANALYTICS: deferred — loads after first paint ───────────────────── -->
     <OwnerDashboardInsights
@@ -385,6 +385,7 @@ const { t, formatNumber, currentLocale } = useI18n();
 
 // ── Refs to deferred child components ────────────────────────────────────────
 const insightsRef = ref(null);
+const readinessRef = ref(null);
 
 // ── Data from OwnerDashboardReadiness (emitted after its dishes/categories fetch) ─
 const soldOutCount = ref(0);
@@ -647,6 +648,9 @@ const manualRefresh = () => {
   void tenant.fetchMeta();
   void fetchRatings();
   insightsRef.value?.hydrate(true);
+  // Re-fetch readiness data (counts, sold-out count, name maps) so the
+  // readiness card and the alerts that depend on it stay in sync.
+  readinessRef.value?.load();
 };
 
 // ── Background order poll ─────────────────────────────────────────────────────
