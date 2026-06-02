@@ -32,6 +32,17 @@ class CustomerWalletTransferGateTests(SimpleTestCase):
         resp = self._post({"recipient_phone": "+212600000000", "amount": "10.00"}, session={})
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    @override_settings(WALLET_P2P_ENABLED=True)
+    def test_rate_limited_after_burst(self):
+        """Per-customer transfer throttle (20/hour) returns 429 once exceeded."""
+        from django.core.cache import cache
+        cache.clear()  # isolate from other tests' throttle counters
+        last = None
+        for _ in range(21):  # 20 allowed, 21st over the limit
+            last = self._post({"recipient_phone": ""}, session={"customer_id": 999})
+        self.assertEqual(last.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        cache.clear()
+
     @override_settings(WALLET_P2P_ENABLED=True, WALLET_DEFAULT_DIAL_CODE="")
     def test_unnormalizable_phone_returns_400_before_db(self):
         # Authenticated, but a local number with no default dial code can't be resolved

@@ -50,6 +50,7 @@ REST_FRAMEWORK = {
         "marketplace_order_status": "300/hour",
         "translate": "30/hour",
         "waiter_call": "10/min",
+        "wallet_transfer": "20/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

@@ -65,6 +65,25 @@ class MarketplaceOrderStatusThrottle(_IPThrottle):
     scope = "marketplace_order_status"
 
 
+class WalletTransferThrottle(SimpleRateThrottle):
+    """Rate-limit peer-to-peer wallet transfers, per customer (fallback: IP).
+
+    Money movement is abuse-sensitive: cap how fast one account can fire transfers,
+    independent of the feature flag, so a compromised/abused session can't drain a
+    wallet in a burst.
+    """
+    scope = "wallet_transfer"
+
+    def get_cache_key(self, request, view):
+        cid = None
+        try:
+            cid = request.session.get("customer_id")
+        except Exception:
+            cid = None
+        ident = f"c{cid}" if cid else self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
 class TranslateThrottle(SimpleRateThrottle):
     """Rate-limit the AI translate endpoint by authenticated user to prevent
     runaway credit consumption against the OpenRouter API."""

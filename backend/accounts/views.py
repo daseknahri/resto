@@ -33,6 +33,7 @@ from .throttles import (
     MarketplaceOrderThrottle,
     PasswordResetConfirmThrottle,
     PasswordResetRequestThrottle,
+    WalletTransferThrottle,
 )
 from .serializers import (
     ActivationSerializer,
@@ -1008,10 +1009,12 @@ class CustomerWalletTransferView(APIView):
     In-app gifting only (funds never leave the platform). GATED behind
     settings.WALLET_P2P_ENABLED — returns 403 while disabled. This is regulated money
     transmission; do not enable without a license and KYC/AML controls in place.
+    Rate-limited per customer (WalletTransferThrottle) so a burst can't drain a wallet.
     """
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [WalletTransferThrottle]
 
     def post(self, request, *args, **kwargs):
         from django.conf import settings
