@@ -421,6 +421,14 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # server (http://localhost) keeps working.
 SECURE_SSL_REDIRECT = parse_bool_env("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 
+# Never redirect the container health-check endpoint.  The Docker/Coolify
+# health check hits http://127.0.0.1:8000/api/health/ directly (plain HTTP,
+# no X-Forwarded-Proto header), so with SECURE_SSL_REDIRECT=True it would be
+# 301'd to https:// — which has no listener on that internal port — making the
+# check fail and the container report "unhealthy".  SecurityMiddleware strips
+# the leading slash before matching, so the pattern has none.
+SECURE_REDIRECT_EXEMPT = [r"^api/health/?$"]
+
 # HSTS: tell browsers to only ever use HTTPS for this domain.
 # Start with 1 hour in staging, bump to 1 year (31536000) once confident.
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 3600))
