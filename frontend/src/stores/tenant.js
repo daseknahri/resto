@@ -22,9 +22,10 @@ export const useTenantStore = defineStore("tenant", {
       if (e && typeof e === "object") return e;
       const plan = this.resolvedMeta?.plan || {};
       const canCheckout = plan.can_checkout === true;
-      // whatsapp + in_app_order default to true (open by default — gate later during tier work)
-      const canWhatsapp = plan.can_whatsapp_order !== false;
-      const canInAppOrder = plan.can_in_app_order !== false;
+      // Truthful per-plan gating: an ordering channel is available only when its plan
+      // flag is set. In-app cart ordering needs at least one submission channel.
+      const canWhatsapp = plan.can_whatsapp_order === true;
+      const canInAppOrder = canCheckout || canWhatsapp;
       return {
         tier_code: plan.tier_code || plan.code || "",
         tier_name: plan.tier_name || plan.name || "",

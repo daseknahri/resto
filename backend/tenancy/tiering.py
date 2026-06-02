@@ -107,15 +107,18 @@ def plan_feature_flag_catalog() -> list[dict]:
 
 
 def plan_entitlements(plan) -> dict:
+    # Per-plan ordering-channel gating (the real plan flags drive what a tenant can do).
+    # The backend already enforces these at the order/checkout endpoints; this makes the
+    # entitlements the UI reads honest too. There is no dedicated in-app-order plan flag —
+    # in-app cart ordering is available whenever there's at least one submission channel.
     can_checkout = bool(getattr(plan, "can_checkout", False))
-    # TODO: restore per-plan gating once tier work is complete.
-    # For now all ordering channels are open so every tenant can use and test the full feature set.
-    can_whatsapp_order = True
-    can_in_app_order = True
+    can_whatsapp_order = bool(getattr(plan, "can_whatsapp_order", False))
+    can_in_app_order = can_checkout or can_whatsapp_order
+    can_order = can_checkout or can_whatsapp_order
 
     if can_checkout:
         ordering_mode = "checkout"
-    elif can_in_app_order or can_whatsapp_order:
+    elif can_whatsapp_order:
         ordering_mode = "in_app"
     else:
         ordering_mode = "menu_only"
@@ -125,7 +128,7 @@ def plan_entitlements(plan) -> dict:
         "tier_code": external_plan_code(canonical),
         "tier_name": plan_display_name(canonical, fallback=getattr(plan, "name", "")),
         "ordering_mode": ordering_mode,
-        "can_order": True,
+        "can_order": can_order,
         "can_checkout": can_checkout,
         "can_whatsapp_order": can_whatsapp_order,
         "can_in_app_order": can_in_app_order,

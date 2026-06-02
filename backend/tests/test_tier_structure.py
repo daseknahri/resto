@@ -38,11 +38,35 @@ class TieringUtilsTests(SimpleTestCase):
         self.assertEqual(plan_display_name("starter"), "Basic")
         entitlements = plan_entitlements(growth)
         self.assertEqual(entitlements["tier_code"], "growth")
-        # TODO gating forces can_in_app_order=True, so mode is always "in_app"
-        # for now; update this assertion once per-plan gating is restored.
+        # Per-plan gating: this plan has WhatsApp ordering (but not checkout) → in_app mode.
         self.assertEqual(entitlements["ordering_mode"], "in_app")
         self.assertTrue(entitlements["can_order"])
+        self.assertTrue(entitlements["can_whatsapp_order"])
         self.assertFalse(entitlements["is_active"])
+
+    def test_entitlements_gate_browse_only_plan(self):
+        """A plan with no ordering channels is browse/menu-only (gating turned on)."""
+        basic = SimpleNamespace(
+            code="starter", name="Basic", can_checkout=False,
+            can_whatsapp_order=False, max_languages=1, is_active=True,
+        )
+        ents = plan_entitlements(basic)
+        self.assertEqual(ents["ordering_mode"], "menu_only")
+        self.assertFalse(ents["can_order"])
+        self.assertFalse(ents["can_whatsapp_order"])
+        self.assertFalse(ents["can_in_app_order"])
+
+    def test_entitlements_checkout_plan(self):
+        """Checkout-capable plan reports checkout mode and all channels open."""
+        pro = SimpleNamespace(
+            code="pro", name="Pro", can_checkout=True,
+            can_whatsapp_order=True, max_languages=3, is_active=True,
+        )
+        ents = plan_entitlements(pro)
+        self.assertEqual(ents["ordering_mode"], "checkout")
+        self.assertTrue(ents["can_order"])
+        self.assertTrue(ents["can_checkout"])
+        self.assertTrue(ents["can_in_app_order"])
 
     def test_tier_order_upgrade_logic(self):
         self.assertEqual(plan_tier_order("basic"), 1)
