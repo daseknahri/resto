@@ -38,6 +38,10 @@ class FeatureFlag(models.Model):
 
 
 class Tenant(TenantMixin):
+    # Days a tenant keeps working after a subscription payment lapses, before the
+    # account is suspended. Single source of truth for the grace window.
+    GRACE_PERIOD_DAYS = 7
+
     class LifecycleStatus(models.TextChoices):
         ACTIVE = "active", "Active"
         SUSPENDED = "suspended", "Suspended"

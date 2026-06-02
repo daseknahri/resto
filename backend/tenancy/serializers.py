@@ -501,7 +501,7 @@ class TenantMetaSerializer(serializers.Serializer):
                 "feature_flags": plan_flags,
                 "rating_summary": TenantMetaSerializer._rating_summary(),
                 "payment_overdue_since": getattr(tenant, "payment_overdue_since", None),
-                "grace_period_days": 7,
+                "grace_period_days": Tenant.GRACE_PERIOD_DAYS,
                 "deletion_requested_at": getattr(tenant, "deletion_requested_at", None),
             },
             context={"request": request},

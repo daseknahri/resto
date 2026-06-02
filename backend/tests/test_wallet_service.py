@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.test import SimpleTestCase, TransactionTestCase
 
 from accounts.wallet_service import (
+    InactiveTenant,
     InsufficientFunds,
     UnverifiedWallet,
     WalletError,
@@ -153,6 +154,17 @@ class TenantFloatTransferTests(TransactionTestCase):
             transfer_to_customer(self.tenant.id, self.customer.id, "10")
         # Nothing moved on either side.
         self.assertEqual(self._float(), Decimal("5.00"))
+        self.assertEqual(self._wallet(), Decimal("0.00"))
+
+    def test_suspended_tenant_cannot_fund_or_distribute(self):
+        from tenancy.models import Tenant
+        credit_tenant_float(self.tenant.id, "100")  # fund while active
+        Tenant.objects.filter(pk=self.tenant.pk).update(lifecycle_status="suspended")
+        with self.assertRaises(InactiveTenant):
+            credit_tenant_float(self.tenant.id, "50")
+        with self.assertRaises(InactiveTenant):
+            transfer_to_customer(self.tenant.id, self.customer.id, "10")
+        self.assertEqual(self._float(), Decimal("100.00"))  # unchanged
         self.assertEqual(self._wallet(), Decimal("0.00"))
 
     def test_transfer_is_idempotent(self):

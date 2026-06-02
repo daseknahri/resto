@@ -38,6 +38,14 @@ class UnverifiedWallet(WalletError):
     """
 
 
+class InactiveTenant(WalletError):
+    """Raised when float is funded into / distributed from a non-active restaurant.
+
+    A restaurant's identity is its tenant + owner account; the analog of a customer's
+    verified phone is an *active* tenant. Suspended/canceled restaurants can't move float.
+    """
+
+
 def _money(value) -> Decimal:
     try:
         return Decimal(str(value if value is not None else 0)).quantize(_CENT)
@@ -61,6 +69,13 @@ def _require_verified(customer):
     """Enforce the 'no verified phone → no wallet' rule before crediting a wallet."""
     if not getattr(customer, "phone_verified", False):
         raise UnverifiedWallet("a verified phone number is required to use a wallet")
+
+
+def _require_active_tenant(tenant):
+    """A restaurant must be active to fund or distribute float (lifecycle is its 'verified')."""
+    status_value = getattr(tenant, "lifecycle_status", "active")
+    if status_value != "active" or not getattr(tenant, "is_active", True):
+        raise InactiveTenant("restaurant is not active")
 
 
 @transaction.atomic
@@ -164,6 +179,7 @@ def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_ke
         return existing
 
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
+    _require_active_tenant(tenant)
     new_balance = (_money(tenant.float_balance) + amount).quantize(_CENT)
     tenant.float_balance = new_balance
     tenant.save(update_fields=["float_balance"])
@@ -208,6 +224,7 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
     # Lock both rows in a stable order (tenant, then customer) to avoid deadlocks.
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
     cust = Customer.objects.select_for_update().get(pk=customer_id)
+    _require_active_tenant(tenant)
     _require_verified(cust)
 
     float_balance = _money(tenant.float_balance)

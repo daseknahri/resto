@@ -1,7 +1,6 @@
 ﻿from django.contrib import admin
 from django.contrib.auth import get_user_model
 
-from tenancy.models import Plan, Tenant, Domain
 from .models import (
     ActivationToken,
     AdminAuditLog,
@@ -13,7 +12,9 @@ from .models import (
     Subscription,
     TierUpgradeRequest,
 )
-from .services import issue_activation
+from django.contrib import messages
+
+from .services import issue_activation, provision_lead
 
 
 @admin.register(Lead)
@@ -24,38 +25,24 @@ class LeadAdmin(admin.ModelAdmin):
     actions = ["confirm_sale", "resend_activation"]
 
     def confirm_sale(self, request, queryset):
-        User = get_user_model()
-        default_plan = Plan.objects.filter(code="starter").first()
+        """Provision each selected lead through the canonical provisioning service.
+
+        Delegates to sales.services.provision_lead so the admin action behaves exactly
+        like the platform-console flow (slug/domain resolution, plan validation, owner
+        account, subscription, activation token + audit log) instead of duplicating it.
+        """
+        provisioned = 0
         for lead in queryset:
-            plan = lead.plan or default_plan
-            slug = lead.email.split("@")[0] if lead.email else f"tenant-{lead.id}"
-            tenant, _ = Tenant.objects.get_or_create(
-                slug=slug,
-                defaults={
-                    "schema_name": slug,
-                    "name": lead.name or slug,
-                    "plan": plan,
-                },
-            )
-            Domain.objects.get_or_create(domain=f"{slug}.localhost", defaults={"tenant": tenant, "is_primary": True})
-            owner_email = lead.email or f"{slug}@example.com"
-            user, created = User.objects.get_or_create(
-                username=owner_email,
-                defaults={
-                    "email": owner_email,
-                    "role": User.Roles.TENANT_OWNER,
-                },
-            )
-            if created:
-                user.set_password(User.objects.make_random_password())
-            user.tenant = tenant
-            user.save()
-            Subscription.objects.get_or_create(tenant=tenant, plan=plan)
-            job = ProvisioningJob.objects.create(lead=lead, tenant=tenant, status=ProvisioningJob.Status.SUCCESS)
-            job.append_log("Provisioning completed")
-            lead.status = Lead.Status.LIVE
-            lead.save(update_fields=["status"])
-        self.message_user(request, "Sale confirmed and tenant provisioned (dev placeholder)")
+            try:
+                provision_lead(lead)
+                provisioned += 1
+            except ValueError as exc:
+                # Expected, actionable failures (no plan, already provisioned, slug taken).
+                self.message_user(request, f"{lead.name}: {exc}", level=messages.WARNING)
+            except Exception as exc:  # noqa: BLE001 — surface unexpected errors to the admin
+                self.message_user(request, f"{lead.name}: provisioning failed — {exc}", level=messages.ERROR)
+        if provisioned:
+            self.message_user(request, f"Provisioned {provisioned} tenant(s) and issued activation links.")
 
     confirm_sale.short_description = "Confirm sale and provision tenant"
 
