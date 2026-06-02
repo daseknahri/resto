@@ -2523,6 +2523,9 @@ html[data-owner-theme="light"] .bg-slate-900\/40,
 html[data-owner-theme="light"] .bg-slate-900\/30,
 html[data-owner-theme="light"] .bg-slate-900\/45,
 html[data-owner-theme="light"] .bg-slate-900\/75,
+html[data-owner-theme="light"] .bg-slate-900\/90,
+html[data-owner-theme="light"] .bg-slate-900\/95,
+html[data-owner-theme="light"] .bg-slate-950\/60,
 html[data-owner-theme="light"] .bg-slate-950\/75,
 html[data-owner-theme="light"] .bg-slate-950\/95 {
   background-color: #ffffff;
@@ -2576,6 +2579,7 @@ html[data-owner-theme="light"] .border-slate-700\/50,
 html[data-owner-theme="light"] .border-slate-700\/40,
 html[data-owner-theme="light"] .border-slate-700\/30,
 html[data-owner-theme="light"] .border-slate-800,
+html[data-owner-theme="light"] .border-slate-800\/90,
 html[data-owner-theme="light"] .border-slate-800\/80,
 html[data-owner-theme="light"] .border-slate-800\/70,
 html[data-owner-theme="light"] .border-slate-800\/60 {
@@ -2682,6 +2686,73 @@ html[data-owner-theme="light"] .staff-toggle-thumb {
 
 /* Funnel drop badge (OwnerDashboardInsights.vue) */
 html[data-owner-theme="light"] .funnel-drop-badge { color: #dc2626; }
+
+/* ── More ui-* primitives that bake in dark backgrounds via @apply ──
+   These weren't in the first light-mode pass. Grouped by role: card surfaces →
+   white, recessed subcards → slate-50, inputs → white, chips/pills → slate-100
+   with dark text, skeleton → slate-200. Scoped to owner routes, so customer-only
+   primitives in the list are simply inert there. */
+html[data-owner-theme="light"] .ui-action-tile,
+html[data-owner-theme="light"] .ui-admin-card,
+html[data-owner-theme="light"] .ui-auth-card,
+html[data-owner-theme="light"] .ui-auth-spotlight,
+html[data-owner-theme="light"] .ui-checklist-card,
+html[data-owner-theme="light"] .ui-context-band,
+html[data-owner-theme="light"] .ui-empty-state,
+html[data-owner-theme="light"] .ui-focus-card,
+html[data-owner-theme="light"] .ui-reservation-card,
+html[data-owner-theme="light"] .ui-state-strip,
+html[data-owner-theme="light"] .ui-story-card,
+html[data-owner-theme="light"] .ui-toolbar-band,
+html[data-owner-theme="light"] .ui-table-wrap,
+html[data-owner-theme="light"] .ui-selection-card,
+html[data-owner-theme="light"] .ui-journey-progress {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.16);
+  color: #0f172a;
+}
+
+html[data-owner-theme="light"] .ui-admin-subcard,
+html[data-owner-theme="light"] .ui-context-stat {
+  background: #f8fafc;
+  border-color: rgba(100, 116, 139, 0.14);
+  color: #0f172a;
+}
+
+html[data-owner-theme="light"] .ui-textarea,
+html[data-owner-theme="light"] .ui-qty-control {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.32);
+  color: #0f172a;
+}
+
+html[data-owner-theme="light"] .ui-chip,
+html[data-owner-theme="light"] .ui-route-badge,
+html[data-owner-theme="light"] .ui-status-pill,
+html[data-owner-theme="light"] .ui-share-btn {
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(100, 116, 139, 0.18);
+  color: #334155;
+}
+
+/* Keep the amber accent border; just light the fill + darken the text. */
+html[data-owner-theme="light"] .ui-chip-strong {
+  background: rgba(255, 247, 237, 0.95);
+  color: #92400e;
+}
+
+html[data-owner-theme="light"] .ui-pill-nav,
+html[data-owner-theme="light"] .ui-segmented,
+html[data-owner-theme="light"] .ui-nav-item-inactive,
+html[data-owner-theme="light"] .ui-menu-category-nav {
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(100, 116, 139, 0.18);
+  color: #475569;
+}
+
+html[data-owner-theme="light"] .ui-skeleton {
+  background: #e2e8f0;
+}
 
 /* ==========================================================================
    Route transition — PLAIN CSS (must stay out of @layer components, which
