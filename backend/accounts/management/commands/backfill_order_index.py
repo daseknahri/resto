@@ -35,15 +35,18 @@ class Command(BaseCommand):
                     from menu.models import Order
                     rows = list(
                         Order.objects.filter(customer_id__isnull=False)
+                        .prefetch_related("items")
                         .order_by("-created_at")[:per_tenant]
-                        .values("customer_id", "order_number", "status",
-                                "fulfillment_type", "total", "currency", "created_at")
                     )
             except Exception:
                 continue  # skip broken/migrating schemas
             scanned += 1
-            for r in rows:
-                collected.append((tenant.id, tenant.name, tenant.slug, r))
+            for o in rows:
+                items_snap = [
+                    {"slug": i.dish_slug, "name": i.dish_name, "qty": i.qty, "price": float(i.unit_price)}
+                    for i in o.items.all()
+                ]
+                collected.append((tenant.id, tenant.name, tenant.slug, o, items_snap))
 
         if not apply:
             self.stdout.write(
@@ -54,19 +57,20 @@ class Command(BaseCommand):
 
         # Phase 2: write the index in the public schema.
         written = 0
-        for tenant_id, name, slug, r in collected:
+        for tenant_id, name, slug, o, items_snap in collected:
             CustomerOrderRef.objects.update_or_create(
                 tenant_id=tenant_id,
-                order_number=r["order_number"],
+                order_number=o.order_number,
                 defaults={
-                    "customer_id": r["customer_id"],
+                    "customer_id": o.customer_id,
                     "restaurant_name": name or "",
                     "restaurant_slug": slug or "",
-                    "status": r["status"] or "",
-                    "fulfillment_type": r["fulfillment_type"] or "",
-                    "total": r["total"] or 0,
-                    "currency": r["currency"] or "MAD",
-                    "order_created_at": r["created_at"],
+                    "status": o.status or "",
+                    "fulfillment_type": o.fulfillment_type or "",
+                    "total": o.total or 0,
+                    "currency": o.currency or "MAD",
+                    "order_created_at": o.created_at,
+                    "items_snapshot": items_snap,
                 },
             )
             written += 1

@@ -422,19 +422,30 @@
             </div>
             <ul class="divide-y divide-slate-800/60">
               <li v-for="o in marketplaceOrders" :key="o.restaurant_slug + o.order_number">
-                <component
-                  :is="o.restaurant_slug ? 'RouterLink' : 'div'"
-                  :to="o.restaurant_slug ? { name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } } : undefined"
-                  class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-slate-800/30"
-                >
-                  <div class="min-w-0">
+                <div class="flex items-center justify-between gap-3 px-4 py-3">
+                  <RouterLink
+                    v-if="o.restaurant_slug"
+                    :to="{ name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } }"
+                    class="min-w-0 flex-1"
+                  >
                     <p class="truncate text-sm font-medium text-slate-200">{{ o.restaurant_name || o.restaurant_slug }}</p>
                     <p class="text-[11px] text-slate-500">
                       <span class="font-mono">#{{ o.order_number }}</span> · {{ mktOrderStatus(o.status) }} · {{ formatDate(o.created_at) }}
                     </p>
+                  </RouterLink>
+                  <div v-else class="min-w-0 flex-1">
+                    <p class="truncate text-sm font-medium text-slate-200">{{ o.restaurant_name }}</p>
+                    <p class="text-[11px] text-slate-500"><span class="font-mono">#{{ o.order_number }}</span> · {{ formatDate(o.created_at) }}</p>
                   </div>
-                  <span class="shrink-0 text-sm font-semibold tabular-nums text-slate-300">{{ formatPrice(o.total) }}</span>
-                </component>
+                  <div class="flex shrink-0 items-center gap-2">
+                    <span class="text-sm font-semibold tabular-nums text-slate-300">{{ formatPrice(o.total) }}</span>
+                    <button
+                      v-if="o.restaurant_slug && o.items_snapshot?.length"
+                      class="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-[var(--color-secondary,#f59e0b)] hover:text-[var(--color-secondary,#f59e0b)] transition-colors"
+                      @click="reorderMarketplace(o)"
+                    >{{ t('customerAccount.reorder') }}</button>
+                  </div>
+                </div>
               </li>
             </ul>
           </div>
@@ -1605,6 +1616,16 @@ const fetchMarketplaceOrders = async () => {
   } catch {
     marketplaceOrders.value = [];
   }
+};
+
+// Re-order a marketplace order: pre-fill the restaurant's menu cart and navigate there.
+// (Distinct from reorder() above, which uses the hostname-scoped cart for tenant orders.)
+const reorderMarketplace = (order) => {
+  router.push({
+    name: 'marketplace-menu',
+    params: { slug: order.restaurant_slug },
+    state: { reorderItems: order.items_snapshot || [] },
+  });
 };
 
 const saveName = async () => {

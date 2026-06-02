@@ -517,8 +517,25 @@ const placeOrder = async () => {
   }
 };
 
+// Pre-fill the cart from a re-order navigation (items_snapshot from CustomerOrderRef).
+const applyReorderItems = () => {
+  const items = history.state?.reorderItems;
+  if (!Array.isArray(items) || !items.length) return;
+  cart.value = [];
+  for (const item of items) {
+    if (!item.slug) continue;
+    cart.value.push({
+      slug: item.slug,
+      name: item.name || item.slug,
+      price: Number(item.price) || 0,
+      qty: Math.max(1, Math.floor(Number(item.qty) || 1)),
+    });
+  }
+};
+
 onMounted(async () => {
   await customerStore.fetchCustomer();
+  applyReorderItems(); // pre-fill cart before menu loads so the badge is ready
   fetchMenu();
 });
 </script>

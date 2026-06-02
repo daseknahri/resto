@@ -654,6 +654,7 @@ class CustomerMarketplaceOrdersView(APIView):
                     "total": str(r.total),
                     "currency": r.currency,
                     "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+                    "items_snapshot": r.items_snapshot or [],
                 }
                 for r in refs
             ],
@@ -2491,6 +2492,7 @@ class MarketplaceOrderStatusView(APIView):
 
                 items = [
                     {
+                        "dish_slug": item.dish_slug,
                         "dish_name": item.dish_name,
                         "qty": item.qty,
                         "unit_price": str(item.unit_price),

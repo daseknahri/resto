@@ -105,6 +105,8 @@ class CustomerOrderRef(models.Model):
     currency = models.CharField(max_length=8, default="MAD")
     order_created_at = models.DateTimeField(db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Compact items snapshot for re-order: [{slug, name, qty, unit_price}]
+    items_snapshot = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ("-order_created_at",)

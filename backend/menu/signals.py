@@ -27,6 +27,21 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
 
     try:
         from accounts.models import CustomerOrderRef
+
+        # Build a compact items snapshot for re-order (slugs + prices).
+        try:
+            items_snap = [
+                {
+                    "slug": item.dish_slug,
+                    "name": item.dish_name,
+                    "qty": item.qty,
+                    "price": float(item.unit_price),
+                }
+                for item in instance.items.all()
+            ]
+        except Exception:
+            items_snap = []
+
         CustomerOrderRef.objects.update_or_create(
             tenant_id=tenant_id,
             order_number=instance.order_number,
@@ -39,6 +54,7 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
                 "total": instance.total or 0,
                 "currency": instance.currency or "MAD",
                 "order_created_at": instance.created_at,
+                "items_snapshot": items_snap,
             },
         )
     except Exception:

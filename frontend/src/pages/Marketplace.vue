@@ -107,6 +107,19 @@
         >
           🟢 {{ t('marketplace.filterOpenNow') }}
         </button>
+
+        <!-- Favourites toggle -->
+        <button
+          type="button"
+          :aria-pressed="showFavouritesOnly"
+          class="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+          :class="showFavouritesOnly
+            ? 'border-red-500/40 bg-red-500/10 text-red-300'
+            : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+          @click="showFavouritesOnly = !showFavouritesOnly"
+        >
+          ❤️ {{ t('marketplace.filterFavourites') }}
+        </button>
       </div>
 
       <!-- Tag pills -->
@@ -170,8 +183,14 @@
       </div>
     </div>
 
+    <!-- Empty: favourites filter on but none saved -->
+    <div v-else-if="showFavouritesOnly && !displayedRestaurants.length" class="py-16 text-center space-y-2">
+      <p class="text-base font-semibold text-slate-300">{{ t('marketplace.noFavourites') }}</p>
+      <p class="text-sm text-slate-500">{{ t('marketplace.noFavouritesHint') }}</p>
+    </div>
+
     <!-- Empty -->
-    <div v-else-if="!restaurants.length" class="py-16 text-center space-y-2">
+    <div v-else-if="!displayedRestaurants.length" class="py-16 text-center space-y-2">
       <p class="text-base font-semibold text-slate-300">{{ t('marketplace.noResults') }}</p>
       <p class="text-sm text-slate-500">{{ t('marketplace.noResultsHint') }}</p>
     </div>
@@ -179,7 +198,7 @@
     <!-- Grid -->
     <ul v-else class="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <li
-        v-for="r in restaurants"
+        v-for="r in displayedRestaurants"
         :key="r.slug"
         class="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/50 transition-colors hover:border-slate-500"
       >
@@ -196,9 +215,22 @@
           />
           <span v-else class="text-3xl text-slate-600">🍽️</span>
 
+          <!-- Favourite toggle -->
+          <button
+            class="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-colors"
+            :class="isFavourite(r.slug) ? 'bg-red-500/20 text-red-400' : 'bg-slate-900/60 text-slate-500 hover:text-red-400'"
+            :aria-label="isFavourite(r.slug) ? t('marketplace.unfavourite') : t('marketplace.favourite')"
+            :aria-pressed="isFavourite(r.slug)"
+            @click.prevent="toggleFavourite(r.slug)"
+          >
+            <svg viewBox="0 0 20 20" class="h-4 w-4" :fill="isFavourite(r.slug) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/>
+            </svg>
+          </button>
+
           <!-- Open/closed badge -->
           <span
-            class="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm"
+            class="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm"
             :class="r.is_open
               ? 'bg-emerald-900/80 text-emerald-300'
               : 'bg-slate-800/80 text-slate-400'"
@@ -298,6 +330,14 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
+const FAVOURITES_KEY = 'marketplace:favourites';
+const loadFavourites = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(FAVOURITES_KEY) || '[]')); } catch { return new Set(); }
+};
+const saveFavourites = (set) => {
+  try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify([...set])); } catch { /* storage unavailable */ }
+};
+
 const { t } = useI18n();
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -323,6 +363,18 @@ const userLat = ref(null);
 const userLng = ref(null);
 
 // ── Active filter count ───────────────────────────────────────────────────────
+// ── Favourites ────────────────────────────────────────────────────────────────
+const favourites = ref(loadFavourites());
+const showFavouritesOnly = ref(false);
+const isFavourite = (slug) => favourites.value.has(slug);
+const toggleFavourite = (slug) => {
+  const next = new Set(favourites.value);
+  if (next.has(slug)) next.delete(slug);
+  else next.add(slug);
+  favourites.value = next;
+  saveFavourites(next);
+};
+
 const activeFilterCount = computed(() => {
   let n = 0;
   if (searchQuery.value) n++;
@@ -332,6 +384,7 @@ const activeFilterCount = computed(() => {
   if (selectedPriceTier.value) n++;
   if (selectedMinRating.value) n++;
   if (openOnly.value) n++;
+  if (showFavouritesOnly.value) n++;
   n += selectedTags.value.length;
   return n;
 });
@@ -345,7 +398,15 @@ const clearFilters = () => {
   selectedMinRating.value = '';
   openOnly.value = false;
   selectedTags.value = [];
+  showFavouritesOnly.value = false;
 };
+
+// Favourites filtering is client-side (the saved set lives in localStorage).
+const displayedRestaurants = computed(() =>
+  showFavouritesOnly.value
+    ? restaurants.value.filter((r) => favourites.value.has(r.slug))
+    : restaurants.value
+);
 
 const toggleTag = (tag) => {
   const idx = selectedTags.value.indexOf(tag);
