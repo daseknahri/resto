@@ -86,6 +86,18 @@ services:
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.tls=true"
       - "traefik.http.routers.ibnbatoutaweb-api-tenant.service=ibnbatoutaweb-api"
+      # WebSocket routes (/ws) → backend (ASGI). Mirror the /api routers; Traefik
+      # proxies the WS upgrade natively. Without these, /ws falls through to the
+      # frontend nginx and the handshake fails.
+      - "traefik.http.routers.ibnbatoutaweb-api-menu-ws.rule=Host(`menu.ibnbatoutaweb.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-menu-ws.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-menu-ws.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin-ws.rule=Host(`admin.menu.ibnbatoutaweb.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin-ws.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-admin-ws.service=ibnbatoutaweb-api"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.rule=HostRegexp(`{tenant:[a-z0-9-]+}.menu.ibnbatoutaweb.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.tls=true"
+      - "traefik.http.routers.ibnbatoutaweb-api-tenant-ws.service=ibnbatoutaweb-api"
       # Media files are now served directly by nginx from the shared volume.
       # The old /media/* Traefik labels that routed to Django are intentionally removed.
     environment:
