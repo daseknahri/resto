@@ -65,11 +65,15 @@ def _order_qs_mock():
 
     qs = MagicMock()
     qs.filter.return_value = qs
+    qs.exclude.return_value = qs
     qs.aggregate.return_value = {
         "total_revenue": None, "order_count": 0,
         "mkt_count": 0, "mkt_revenue": None, "mkt_commission": None,
     }
+    # daily / hourly / weekday chain: annotate().values().annotate().order_by()
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
+    # currency lookup: values_list(...).exclude(...).order_by(...).first()
+    qs.values_list.return_value.exclude.return_value.order_by.return_value.first.return_value = "USD"
     return qs
 
 
@@ -80,6 +84,20 @@ def _orderitem_qs_mock():
     qs.exclude.return_value = qs
     # .values().annotate().order_by()[:10] must be iterable → return empty list
     qs.values.return_value.annotate.return_value.order_by.return_value.__getitem__ = MagicMock(return_value=[])
+    return qs
+
+
+def _lead_qs_mock():
+    """Lead queryset mock for the today's-reservations count queries.
+
+    The view does:
+        base = Lead.objects.filter(...)
+        base.count()                       → today_reservations
+        base.filter(status=NEW).count()    → today_new_reservations
+    """
+    qs = MagicMock()
+    qs.count.return_value = 0
+    qs.filter.return_value.count.return_value = 0
     return qs
 
 
@@ -133,6 +151,7 @@ def _apply_common_mocks(
     mock_dish,
     mock_cat,
     mock_schema,
+    mock_lead,
     mock_orderitem=None,
 ):
     """Wire up the minimum mocks needed for OwnerDashboardView to return 200."""
@@ -143,6 +162,7 @@ def _apply_common_mocks(
     mock_dish.count.return_value = 8
     mock_analytics.filter.return_value = _analytics_qs_mock()
     mock_order.filter.return_value = _order_qs_mock()
+    mock_lead.filter.return_value = _lead_qs_mock()
     if mock_orderitem is not None:
         mock_orderitem.filter.return_value = _orderitem_qs_mock()
 
@@ -173,6 +193,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         req.tenant = _tenant()
         return req
 
+    @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
     @patch("sales.views.TierUpgradeRequest.objects")
@@ -185,20 +206,28 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     @patch("sales.views.schema_context")
     def test_response_includes_required_keys(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
-        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem,
+        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
     ):
         """200 response must contain analytics_summary, upgrade_meta, upgrade_targets, and revenue_summary."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
-            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_orderitem,
+            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
         )
         resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        for key in ("analytics_summary", "upgrade_meta", "upgrade_targets", "upgrade_requests", "revenue_summary"):
+        for key in (
+            "analytics_summary", "upgrade_meta", "upgrade_targets",
+            "upgrade_requests", "revenue_summary",
+            "today_reservations", "today_new_reservations",
+        ):
             self.assertIn(key, resp.data, f"Missing top-level key: {key}")
         self.assertIn("interaction_rate_pct", resp.data["analytics_summary"])
+        # Period-over-period analytics comparison fields
+        self.assertIn("prev_counts", resp.data["analytics_summary"])
+        self.assertIn("prev_interaction_rate_pct", resp.data["analytics_summary"])
 
+    @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
     @patch("sales.views.TierUpgradeRequest.objects")
@@ -211,18 +240,19 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     @patch("sales.views.schema_context")
     def test_days_param_clamped_to_90(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
-        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem,
+        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
     ):
         """?days=999 must be clamped to 90 in the response."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
-            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_orderitem,
+            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
         )
         resp = self.view(self._get({"days": 999}))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["analytics_summary"]["days"], 90)
 
+    @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
     @patch("sales.views.TierUpgradeRequest.objects")
@@ -235,18 +265,19 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     @patch("sales.views.schema_context")
     def test_days_param_defaults_to_30(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
-        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem,
+        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
     ):
         """Omitting ?days defaults to 30."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
-            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_orderitem,
+            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
         )
         resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["analytics_summary"]["days"], 30)
 
+    @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
     @patch("sales.views.TierUpgradeRequest.objects")
@@ -259,18 +290,22 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     @patch("sales.views.schema_context")
     def test_revenue_summary_shape(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
-        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem,
+        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
     ):
-        """revenue_summary must contain total_revenue, order_count, avg_order_value, daily list, peak_hours, and popular_dishes."""
+        """revenue_summary must contain total_revenue, order_count, avg_order_value, daily list, peak_hours, popular_dishes, prev_period, and fulfillment_breakdown."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
-            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_orderitem,
+            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
         )
         resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         rs = resp.data["revenue_summary"]
-        for key in ("total_revenue", "order_count", "avg_order_value", "daily", "days", "peak_hours", "popular_dishes"):
+        for key in (
+            "total_revenue", "order_count", "avg_order_value", "daily", "days",
+            "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
+            "currency",
+        ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
         self.assertEqual(rs["total_revenue"], 0.0)
         self.assertEqual(rs["order_count"], 0)
@@ -280,7 +315,14 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         self.assertIn("by_weekday", rs["peak_hours"])
         self.assertEqual(len(rs["peak_hours"]["by_hour"]), 24)
         self.assertEqual(len(rs["peak_hours"]["by_weekday"]), 7)
+        # Previous-period comparison keys
+        for key in ("total_revenue", "order_count", "avg_order_value",
+                    "revenue_change_pct", "order_change_pct", "avg_change_pct"):
+            self.assertIn(key, rs["prev_period"], f"Missing prev_period key: {key}")
+        # No previous-period baseline (zero revenue) → change pct is None
+        self.assertIsNone(rs["prev_period"]["revenue_change_pct"])
 
+    @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
     @patch("sales.views.TierUpgradeRequest.objects")
@@ -293,12 +335,12 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     @patch("sales.views.schema_context")
     def test_revenue_avg_zero_when_no_orders(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
-        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem,
+        mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
     ):
         """avg_order_value must be 0.0 when there are no orders (no division-by-zero)."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
-            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_orderitem,
+            mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
         )
         resp = self.view(self._get())
 

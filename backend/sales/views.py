@@ -2106,21 +2106,21 @@ class OwnerDashboardView(APIView):
         days = max(1, min(90, requested_days))
         since = timezone.now() - timedelta(days=days)
 
-        # Today's reservation count — single COUNT query, runs in the public schema
+        # Today's reservation count — two plain COUNT queries, run in the public
+        # schema where Lead lives.  Query Lead directly (not the metric-annotated
+        # _owner_reservations_queryset) since we only need counts, not the
+        # per-row reminder subqueries.
         from datetime import date as _date
         _today = _date.today()
         with schema_context(get_public_schema_name()):
-            today_reservations = _owner_reservations_queryset(
-                tenant.id,
-                from_date=_today,
-                to_date=_today,
-            ).count()
-            today_new_reservations = _owner_reservations_queryset(
-                tenant.id,
-                from_date=_today,
-                to_date=_today,
-                status_filter="new",
-            ).count()
+            _today_base = Lead.objects.filter(
+                tenant_id=tenant.id,
+                source__in=RESERVATION_SOURCES,
+                archived_at__isnull=True,
+                created_at__date=_today,
+            )
+            today_reservations = _today_base.count()
+            today_new_reservations = _today_base.filter(status=Lead.Status.NEW).count()
 
         categories_count = Category.objects.count()
         dishes_count = Dish.objects.count()
