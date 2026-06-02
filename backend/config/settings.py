@@ -9,15 +9,43 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _env_or_none(var_name: str):
+    """Return the env var's value, or None if it is absent OR empty/whitespace.
+
+    Coolify (and docker-compose `${VAR}` interpolation generally) passes unset
+    variables as an empty string rather than omitting them, so
+    `os.getenv(name, default)` returns "" instead of the default. Treating an
+    empty value as absent restores the intended default-fallback behavior and
+    avoids crashes like int("").
+    """
+    value = os.getenv(var_name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
 def parse_csv_env(var_name: str, default: str) -> list[str]:
-    return [item.strip() for item in os.getenv(var_name, default).split(",") if item.strip()]
+    raw = _env_or_none(var_name)
+    source = raw if raw is not None else default
+    return [item.strip() for item in source.split(",") if item.strip()]
 
 
 def parse_bool_env(var_name: str, default: bool = False) -> bool:
-    value = os.getenv(var_name)
+    value = _env_or_none(var_name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def parse_int_env(var_name: str, default: int) -> int:
+    value = _env_or_none(var_name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def hostname_from_url(value: str) -> str:
@@ -186,7 +214,7 @@ if _REDIS_URL:
 
 # Keep customers logged in for 90 days unless they explicitly sign out.
 # Use `or` so an empty/unset env var falls back to the default safely.
-SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE") or 60 * 60 * 24 * 90)
+SESSION_COOKIE_AGE = parse_int_env("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 24 * 90)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 AUTH_USER_MODEL = "accounts.User"
@@ -253,10 +281,10 @@ for inferred_host in (
     if inferred_host:
         public_schema_hosts.add(inferred_host)
 PUBLIC_SCHEMA_HOSTS = sorted(public_schema_hosts)
-RESERVATION_SLA_NEW_MINUTES = int(os.getenv("RESERVATION_SLA_NEW_MINUTES", "30"))
+RESERVATION_SLA_NEW_MINUTES = parse_int_env("RESERVATION_SLA_NEW_MINUTES", 30)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-3-12b-it:free").strip()
-RESERVATION_SLA_DUE_SOON_MINUTES = int(os.getenv("RESERVATION_SLA_DUE_SOON_MINUTES", "10"))
+RESERVATION_SLA_DUE_SOON_MINUTES = parse_int_env("RESERVATION_SLA_DUE_SOON_MINUTES", 10)
 # Google OAuth client ID for customer Google One-Tap auth.
 # Set GOOGLE_OAUTH_CLIENT_ID in your .env to enable Google sign-in.
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
@@ -288,7 +316,7 @@ if USE_S3_MEDIA_STORAGE:
     AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "").strip()
     AWS_S3_ADDRESSING_STYLE = os.getenv("AWS_S3_ADDRESSING_STYLE", "auto").strip().lower() or "auto"
     AWS_QUERYSTRING_AUTH = parse_bool_env("AWS_QUERYSTRING_AUTH", False)
-    AWS_QUERYSTRING_EXPIRE = int(os.getenv("AWS_QUERYSTRING_EXPIRE", "900"))
+    AWS_QUERYSTRING_EXPIRE = parse_int_env("AWS_QUERYSTRING_EXPIRE", 900)
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
     AWS_S3_SIGNATURE_VERSION = os.getenv("AWS_S3_SIGNATURE_VERSION", "").strip() or None
@@ -371,12 +399,12 @@ EMAIL_BACKEND = os.getenv(
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "noreply@restomenu.local")
 SERVER_EMAIL = os.getenv("DJANGO_SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 EMAIL_HOST = os.getenv("DJANGO_EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.getenv("DJANGO_EMAIL_PORT", "25"))
+EMAIL_PORT = parse_int_env("DJANGO_EMAIL_PORT", 25)
 EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = parse_bool_env("DJANGO_EMAIL_USE_TLS", False)
 EMAIL_USE_SSL = parse_bool_env("DJANGO_EMAIL_USE_SSL", False)
-EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "10"))
+EMAIL_TIMEOUT = parse_int_env("DJANGO_EMAIL_TIMEOUT", 10)
 EMAIL_FAIL_SILENTLY = parse_bool_env("DJANGO_EMAIL_FAIL_SILENTLY", DEBUG)
 
 # ── Twilio — OTP SMS delivery ──────────────────────────────────────────────────
@@ -431,7 +459,7 @@ SECURE_REDIRECT_EXEMPT = [r"^api/health/?$"]
 
 # HSTS: tell browsers to only ever use HTTPS for this domain.
 # Start with 1 hour in staging, bump to 1 year (31536000) once confident.
-SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 3600))
+SECURE_HSTS_SECONDS = parse_int_env("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 3600)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = parse_bool_env("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
 SECURE_HSTS_PRELOAD = parse_bool_env("DJANGO_SECURE_HSTS_PRELOAD", False)
 
