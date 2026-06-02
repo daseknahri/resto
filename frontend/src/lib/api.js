@@ -4,6 +4,7 @@ import {
   isPlatformPublicHost,
 } from "./runtimeHost";
 import { translate } from "../i18n/translate";
+import { shouldRetry, retryBackoffMs } from "./retry";
 
 const runtimeApiBase = () => {
   if (typeof window === "undefined") return "http://localhost:8000/api";
@@ -139,6 +140,14 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error?.config || {};
+    // Retry transient network/5xx failures on idempotent requests (flaky WiFi).
+    original.__retryCount = original.__retryCount || 0;
+    if (shouldRetry(error, original.__retryCount)) {
+      original.__retryCount += 1;
+      const jitter = Math.random() * 150;
+      await new Promise((resolve) => setTimeout(resolve, retryBackoffMs(original.__retryCount - 1, jitter)));
+      return api.request(original);
+    }
     if (isCsrfMismatchError(error) && isUnsafeMethod(original.method) && !original.__csrfRetried) {
       original.__csrfRetried = true;
       original.headers = { ...(original.headers || {}) };
