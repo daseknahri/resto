@@ -2547,8 +2547,23 @@ html[data-owner-theme="light"] .bg-slate-900\/70,
 html[data-owner-theme="light"] .bg-slate-900\/60,
 html[data-owner-theme="light"] .bg-slate-900\/50,
 html[data-owner-theme="light"] .bg-slate-900\/40,
-html[data-owner-theme="light"] .bg-slate-900\/30 {
+html[data-owner-theme="light"] .bg-slate-900\/30,
+html[data-owner-theme="light"] .bg-slate-900\/45,
+html[data-owner-theme="light"] .bg-slate-900\/75,
+html[data-owner-theme="light"] .bg-slate-950\/75,
+html[data-owner-theme="light"] .bg-slate-950\/95 {
   background-color: #ffffff;
+}
+
+/* Modal backdrops reuse those same slate utilities on a `fixed inset-0` element.
+   The rule above would paint them solid white (an opaque sheet); these higher-
+   specificity rules keep them a translucent scrim so the white dialog still
+   reads as floating over a dimmed page. */
+html[data-owner-theme="light"] .fixed.inset-0.bg-slate-950\/80,
+html[data-owner-theme="light"] .fixed.inset-0.bg-slate-950\/75,
+html[data-owner-theme="light"] .fixed.inset-0.bg-slate-950\/70,
+html[data-owner-theme="light"] .fixed.inset-0.bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.4);
 }
 
 /* Subtle fills (slate-800) → slate-100. */
@@ -2614,6 +2629,28 @@ html[data-owner-theme="light"] .text-sky-300,
 html[data-owner-theme="light"] .text-sky-400 { color: #0369a1; }
 html[data-owner-theme="light"] .text-rose-300,
 html[data-owner-theme="light"] .text-rose-400 { color: #e11d48; }
+
+/* Light accent shades (100/200) used on translucent tints or bordered chips in
+   the menu-builder forms wash out on white — darken them like the 300/400 set. */
+html[data-owner-theme="light"] .text-amber-100,
+html[data-owner-theme="light"] .text-amber-200,
+html[data-owner-theme="light"] .text-amber-200\/70 { color: #b45309; }
+html[data-owner-theme="light"] .text-emerald-100,
+html[data-owner-theme="light"] .text-emerald-200 { color: #047857; }
+html[data-owner-theme="light"] .text-red-100,
+html[data-owner-theme="light"] .text-red-200 { color: #dc2626; }
+html[data-owner-theme="light"] .text-indigo-100,
+html[data-owner-theme="light"] .text-indigo-200 { color: #4f46e5; }
+html[data-owner-theme="light"] .text-teal-100,
+html[data-owner-theme="light"] .text-teal-200 { color: #0f766e; }
+html[data-owner-theme="light"] .text-sky-100,
+html[data-owner-theme="light"] .text-sky-200 { color: #0369a1; }
+html[data-owner-theme="light"] .text-rose-100,
+html[data-owner-theme="light"] .text-rose-200 { color: #e11d48; }
+/* Hover variants land on lighter shades — keep them readable (slightly darker). */
+html[data-owner-theme="light"] .hover\:text-sky-200:hover { color: #075985; }
+html[data-owner-theme="light"] .hover\:text-indigo-200:hover { color: #4338ca; }
+html[data-owner-theme="light"] .hover\:text-amber-200:hover { color: #92400e; }
 
 /* ── Component-scoped classes (nav pills, toggles, badges) ──
    These are defined in component <style scoped> blocks. Vue's scoped compiler
