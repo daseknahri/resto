@@ -961,10 +961,13 @@ class CustomerWalletView(APIView):
             request.session.pop("customer_id", None)
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        from django.conf import settings
         from .models import WalletTransaction
         txs = WalletTransaction.objects.filter(customer=customer).order_by("-created_at")[:50]
         return Response({
             "balance": str(customer.wallet_balance),
+            "phone_verified": bool(customer.phone_verified),
+            "p2p_enabled": bool(getattr(settings, "WALLET_P2P_ENABLED", False)),
             "transactions": [
                 {
                     "id": tx.id,
@@ -976,6 +979,83 @@ class CustomerWalletView(APIView):
                 }
                 for tx in txs
             ],
+        })
+
+
+class CustomerWalletTransferView(APIView):
+    """POST /api/customer/wallet/transfer/ — send wallet credit to another customer.
+
+    Body: { "recipient_phone": "+212...", "amount": "10.00", "note": "Thanks!" }
+
+    In-app gifting only (funds never leave the platform). GATED behind
+    settings.WALLET_P2P_ENABLED — returns 403 while disabled. This is regulated money
+    transmission; do not enable without a license and KYC/AML controls in place.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings
+        if not getattr(settings, "WALLET_P2P_ENABLED", False):
+            return Response(
+                {"detail": "Peer transfers are not enabled."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from accounts.wallet_service import (
+            transfer_between_customers,
+            InsufficientFunds,
+            WalletError,
+        )
+
+        from accounts.phone import normalize_e164
+
+        recipient_phone = str(request.data.get("recipient_phone") or "").strip()
+        if not recipient_phone:
+            return Response({"detail": "recipient_phone is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized = normalize_e164(recipient_phone, getattr(settings, "WALLET_DEFAULT_DIAL_CODE", ""))
+        if not normalized:
+            return Response(
+                {"detail": "Enter the recipient's phone in international format (e.g. +212612345678).",
+                 "code": "invalid_phone"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Only verified phones can receive — never credit an unverified/typo'd number.
+            recipient = Customer.objects.get(phone=normalized, phone_verified=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "No verified wallet found for that number."}, status=status.HTTP_404_NOT_FOUND)
+        except Customer.MultipleObjectsReturned:
+            return Response({"detail": "Ambiguous recipient."}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = str(request.data.get("note") or "").strip()[:200]
+        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+
+        try:
+            out_tx, _in_tx = transfer_between_customers(
+                customer_id,
+                recipient.id,
+                request.data.get("amount"),
+                note=note,
+                idempotency_key=idempotency_key,
+            )
+        except InsufficientFunds:
+            return Response({"detail": "Insufficient wallet balance."}, status=status.HTTP_402_PAYMENT_REQUIRED)
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "amount": str(out_tx.amount),
+            "new_balance": str(out_tx.balance_after),
+            "recipient_phone": normalized,
+            "note": note,
         })
 
 
@@ -1013,10 +1093,11 @@ class AdminWalletBonusView(APIView):
         customer_ids = request.data.get("customer_ids")
         all_customers = bool(request.data.get("all_customers"))
 
+        # No verified phone → no wallet: bonus credits only ever land in verified wallets.
         if customer_ids:
-            qs = Customer.objects.filter(pk__in=customer_ids)
+            qs = Customer.objects.filter(pk__in=customer_ids, phone_verified=True)
         elif all_customers:
-            qs = Customer.objects.all()
+            qs = Customer.objects.filter(phone_verified=True)
         else:
             return Response(
                 {"detail": "Provide customer_ids or set all_customers=true."},
@@ -1042,6 +1123,54 @@ class AdminWalletBonusView(APIView):
             ])
 
         return Response({"issued_to": len(ids), "amount": str(amount), "note": note})
+
+
+class AdminFundTenantView(APIView):
+    """POST /api/admin/wallet/fund-tenant/ — platform funds a restaurant's float.
+
+    Body: { "tenant_id": 3, "amount": "500.00", "note": "Cash collected 2026-06-01" }
+    The float is what the owner can hand out to customers; cash is reconciled offline.
+    Requires platform_superadmin (or staff/superuser).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = getattr(request, "user", None)
+        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        from accounts.wallet_service import credit_tenant_float, WalletError
+        from tenancy.models import Tenant
+
+        tenant_id = request.data.get("tenant_id")
+        if not tenant_id:
+            return Response({"detail": "tenant_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = str(request.data.get("note") or "Platform funding").strip()[:200]
+        reference = str(request.data.get("reference") or "").strip()[:120]
+        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+
+        try:
+            tx = credit_tenant_float(
+                tenant_id,
+                request.data.get("amount"),
+                actor_user_id=getattr(user, "id", None),
+                note=note,
+                reference=reference,
+                idempotency_key=idempotency_key,
+            )
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found."}, status=status.HTTP_404_NOT_FOUND)
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "tenant_id": int(tenant_id),
+            "amount": str(tx.amount),
+            "float_balance": str(tx.balance_after),
+            "note": note,
+        })
 
 
 # ── Wallet vouchers (admin create, customer redeem) ───────────────────────────
@@ -1164,6 +1293,11 @@ class CustomerWalletRedeemVoucherView(APIView):
                 customer = None
         if customer is None:
             return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not customer.phone_verified:
+            return Response(
+                {"detail": "Verify your phone number to use your wallet.", "code": "phone_unverified"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         code = str(request.data.get("code") or "").strip().upper()
         if not code:

@@ -7,6 +7,19 @@
       <p class="text-sm text-slate-400">{{ t('ownerWallet.subtitle') }}</p>
     </div>
 
+    <!-- Restaurant float card — how much the owner can still hand out -->
+    <div class="ui-panel flex items-center justify-between gap-3 p-4">
+      <div class="min-w-0">
+        <p class="ui-kicker">{{ t('ownerWallet.floatTitle') }}</p>
+        <p class="mt-0.5 text-2xl font-semibold tabular-nums text-emerald-400">
+          <span v-if="loadingFloat" class="inline-block h-7 w-24 animate-pulse rounded bg-slate-700/60 align-middle" />
+          <span v-else>{{ fmtBalance(floatBalance) }}</span>
+        </p>
+        <p class="mt-0.5 text-xs text-slate-500">{{ t('ownerWallet.floatSubtitle') }}</p>
+      </div>
+      <AppIcon name="wallet" class="h-8 w-8 shrink-0 text-emerald-500/70" />
+    </div>
+
     <!-- Customer search card -->
     <div class="ui-panel p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.searchTitle') }}</p>
@@ -168,6 +181,7 @@ import { useI18n } from '../composables/useI18n';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
 const tenant = useTenantStore();
@@ -182,6 +196,24 @@ const topupAmount = ref('');
 const topupNote = ref('');
 const topupError = ref('');
 const saving = ref(false);
+// Stable across retries of the same top-up; cleared on success so the next one is fresh.
+let topupKey = null;
+
+// ── Restaurant float ────────────────────────────────────────────────────────────
+const floatBalance = ref('0.00');
+const loadingFloat = ref(true);
+
+const fetchFloat = async () => {
+  loadingFloat.value = true;
+  try {
+    const res = await api.get('/owner/wallet/float/');
+    floatBalance.value = res.data?.float_balance ?? '0.00';
+  } catch {
+    /* leave previous value */
+  } finally {
+    loadingFloat.value = false;
+  }
+};
 
 // ── Wallet history ────────────────────────────────────────────────────────────
 const walletHistory = ref([]);
@@ -276,31 +308,39 @@ const doTopup = async () => {
     return;
   }
   saving.value = true;
+  if (!topupKey) topupKey = newIdempotencyKey();
   try {
     const res = await api.post('/owner/wallet/topup/', {
       customer_id: selected.value.id,
       amount: amount.toFixed(2),
       note: topupNote.value.trim() || t('ownerWallet.defaultNote'),
+      idempotency_key: topupKey,
     });
     // Update the displayed balance
     selected.value = { ...selected.value, wallet_balance: res.data.new_balance };
     // Also update in search results
     const idx = searchResults.value.findIndex((c) => c.id === selected.value.id);
     if (idx >= 0) searchResults.value[idx] = { ...searchResults.value[idx], wallet_balance: res.data.new_balance };
+    // Reflect the float we just spent down (server returns the new float balance).
+    if (res.data.float_balance != null) floatBalance.value = res.data.float_balance;
+    topupKey = null; // confirmed — next top-up gets a fresh key
     topupAmount.value = '';
     topupNote.value = '';
     toast.show(t('ownerWallet.topupSuccess'));
     // Refresh transaction history
     fetchHistory(selected.value.id);
   } catch (err) {
-    const detail = err?.response?.data?.detail || '';
-    topupError.value = detail || t('ownerWallet.topupFailed');
+    const data = err?.response?.data || {};
+    // Insufficient float (402) returns the current float — sync the display to it.
+    if (data.float_balance != null) floatBalance.value = data.float_balance;
+    topupError.value = data.detail || t('ownerWallet.topupFailed');
   } finally {
     saving.value = false;
   }
 };
 
 onMounted(() => {
+  fetchFloat();
   const q = (route.query.q || '').toString().trim();
   if (q.length >= 2) {
     searchQuery.value = q;

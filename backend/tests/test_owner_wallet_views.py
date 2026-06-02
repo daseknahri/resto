@@ -115,25 +115,46 @@ class OwnerWalletTopupViewTests(SimpleTestCase):
         resp = self._post({"customer_id": 42, "amount": "-5.00"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("accounts.models.WalletTransaction.objects")
-    @patch("accounts.models.Customer.objects")
+    @patch("accounts.wallet_service.transfer_to_customer")
     @patch("menu.views.Order.objects")
-    def test_successful_topup_returns_200(self, mock_order_objs, mock_customer_objs, mock_tx_objs):
-        """Happy-path: customer exists, has orders at this restaurant, amount is valid."""
+    def test_successful_topup_returns_200(self, mock_order_objs, mock_transfer):
+        """Happy-path: the float covers the amount → balances move, 200 with both balances."""
         mock_order_objs.filter.return_value.exists.return_value = True
 
-        customer = _make_customer(customer_id=42, wallet_balance=Decimal("20.00"))
-        mock_customer_objs.select_for_update.return_value.get.return_value = customer
-        mock_tx_objs.create = MagicMock()
+        float_tx = MagicMock()
+        float_tx.balance_after = Decimal("490.00")
+        wallet_tx = MagicMock()
+        wallet_tx.balance_after = Decimal("30.00")
+        mock_transfer.return_value = (float_tx, wallet_tx)
 
-        with patch("django.db.transaction.atomic"):
-            resp = self._post({"customer_id": 42, "amount": "10.00", "note": "Birthday gift"})
+        resp = self._post({"customer_id": 42, "amount": "10.00", "note": "Birthday gift"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("customer_id", resp.data)
-        self.assertIn("new_balance", resp.data)
-        self.assertIn("amount", resp.data)
         self.assertEqual(resp.data["amount"], "10.00")
+        self.assertEqual(resp.data["new_balance"], "30.00")     # customer wallet
+        self.assertEqual(resp.data["float_balance"], "490.00")  # remaining restaurant float
+        # The owner is recorded as the actor on the transfer.
+        _, kwargs = mock_transfer.call_args
+        self.assertIn("actor_user_id", kwargs)
+
+    @patch("accounts.wallet_service.transfer_to_customer")
+    @patch("menu.views.Order.objects")
+    def test_insufficient_float_returns_402(self, mock_order_objs, mock_transfer):
+        """When the restaurant float can't cover the top-up, nothing moves and we get 402."""
+        from accounts.wallet_service import InsufficientFunds
+        mock_order_objs.filter.return_value.exists.return_value = True
+        mock_transfer.side_effect = InsufficientFunds("restaurant float is insufficient")
+
+        tnt = MagicMock()
+        tnt.id = 1
+        tnt.float_balance = Decimal("2.00")
+        tnt.refresh_from_db = MagicMock()
+
+        resp = self._post({"customer_id": 42, "amount": "10.00"}, tenant=tnt)
+
+        self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(resp.data["float_balance"], "2.00")
+        self.assertEqual(resp.data["requested"], "10.00")
 
 
 # ── OwnerWalletHistoryView ────────────────────────────────────────────────────

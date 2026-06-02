@@ -301,6 +301,16 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Peer-to-peer wallet gifting (one customer sends wallet credit to another, on-platform
+# only — no cash-out). OFF by default: this is regulated money transmission in most
+# markets and must not go live without a license + KYC/AML controls. The transfer
+# engine and endpoint exist but stay inert until this flag is explicitly enabled.
+WALLET_P2P_ENABLED = parse_bool_env("WALLET_P2P_ENABLED", False)
+# Default dial code (digits only, e.g. "212" for Morocco) used to normalize local
+# recipient numbers like "0612…" into E.164 "+212612…" for P2P transfers. Empty means
+# strict mode: senders must type the full international "+…" number (no guessing).
+WALLET_DEFAULT_DIAL_CODE = os.getenv("WALLET_DEFAULT_DIAL_CODE", "").strip()
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
 TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", "")) or hostname_from_url(PUBLIC_MENU_BASE_URL)
 if TENANT_DOMAIN_SUFFIX:

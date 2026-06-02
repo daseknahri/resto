@@ -4616,6 +4616,12 @@ class CustomerLoyaltyRedeemView(APIView):
             _customer = _CustM.objects.get(pk=request.user.customer_id)
         except (AttributeError, _CustM.DoesNotExist):
             return Response({"detail": "Customer account not found."}, status=status.HTTP_404_NOT_FOUND)
+        # No verified phone → no wallet: can't redeem points into wallet credit.
+        if not _customer.phone_verified:
+            return Response(
+                {"detail": "Verify your phone number to use your wallet.", "code": "phone_unverified"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Get loyalty config
         try:
@@ -4913,8 +4919,9 @@ class OwnerWalletTopupView(APIView):
     POST /api/owner/wallet/topup/
     Body: { "customer_id": 42, "amount": "10.00", "note": "Goodwill credit" }
 
-    Top-up a customer's wallet.  Owner can only credit customers who have placed
-    at least one order at their restaurant.
+    Top-up a customer's wallet from the restaurant's prepaid float.  Owner can only
+    credit customers who have placed at least one order at their restaurant, and only
+    up to the funded float — the transfer is blocked (402) if the float is too low.
     """
 
     permission_classes = [IsAuthenticated]
@@ -4924,7 +4931,13 @@ class OwnerWalletTopupView(APIView):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         from decimal import Decimal as _Dec, InvalidOperation
-        from accounts.models import Customer, WalletTransaction
+        from accounts.models import Customer
+        from accounts.wallet_service import (
+            transfer_to_customer,
+            InsufficientFunds,
+            UnverifiedWallet,
+            WalletError,
+        )
 
         tenant = getattr(request, "tenant", None)
         if tenant is None:
@@ -4954,29 +4967,51 @@ class OwnerWalletTopupView(APIView):
             return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Owner credit").strip()[:200]
+        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
 
-        from django.db import transaction as _dbtx
-        with _dbtx.atomic():
-            try:
-                customer = Customer.objects.select_for_update().get(pk=customer_id)
-            except Customer.DoesNotExist:
-                return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            customer.wallet_balance = customer.wallet_balance + amount
-            customer.save(update_fields=["wallet_balance", "updated_at"])
-            WalletTransaction.objects.create(
-                customer=customer,
-                type=WalletTransaction.Type.TOPUP,
-                amount=amount,
+        try:
+            float_tx, wallet_tx = transfer_to_customer(
+                tenant.id,
+                customer_id,
+                amount,
+                actor_user_id=getattr(request.user, "id", None),
                 note=note,
-                tenant_id=tenant.id,
+                idempotency_key=idempotency_key,
             )
+        except InsufficientFunds:
+            tenant.refresh_from_db(fields=["float_balance"])
+            return Response(
+                {
+                    "detail": "Insufficient restaurant float. Ask the platform to top up your float first.",
+                    "float_balance": str(tenant.float_balance),
+                    "requested": str(amount),
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        except UnverifiedWallet:
+            return Response(
+                {"detail": "This customer hasn't verified their phone number yet, so they can't receive wallet credit.",
+                 "code": "recipient_unverified"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # On an idempotent replay the customer-side leg is looked up by key; fall back to
+        # the customer's current balance if it isn't returned.
+        if wallet_tx is not None:
+            new_balance = str(wallet_tx.balance_after)
+        else:
+            new_balance = str(Customer.objects.get(pk=customer_id).wallet_balance)
 
         return Response({
-            "customer_id": customer.id,
-            "new_balance": str(customer.wallet_balance),
+            "customer_id": int(customer_id),
+            "new_balance": new_balance,
             "amount": str(amount),
             "note": note,
+            "float_balance": str(float_tx.balance_after),
         })
 
 
@@ -5018,6 +5053,52 @@ class OwnerWalletHistoryView(APIView):
                     "id": tx.id,
                     "type": tx.type,
                     "amount": str(tx.amount),
+                    "note": tx.note,
+                    "reference": tx.reference,
+                    "created_at": tx.created_at.isoformat(),
+                }
+                for tx in txs
+            ],
+        })
+
+
+class OwnerWalletFloatView(APIView):
+    """
+    GET /api/owner/wallet/float/
+
+    Returns the restaurant's current distributable float balance plus the last 30
+    float movements (platform fundings + client distributions). Lets the owner see
+    how much they can still hand out and where it went.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from accounts.models import TenantFloatTransaction
+
+        txs = (
+            TenantFloatTransaction.objects
+            .filter(tenant_id=tenant.id)
+            .select_related("customer")
+            .order_by("-created_at")[:30]
+        )
+        return Response({
+            "float_balance": str(tenant.float_balance),
+            "transactions": [
+                {
+                    "id": tx.id,
+                    "type": tx.type,
+                    "amount": str(tx.amount),
+                    "balance_after": (str(tx.balance_after) if tx.balance_after is not None else None),
+                    "customer_id": tx.customer_id,
+                    "customer_name": (tx.customer.name if tx.customer_id else ""),
                     "note": tx.note,
                     "reference": tx.reference,
                     "created_at": tx.created_at.isoformat(),

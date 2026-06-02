@@ -54,6 +54,10 @@ class Tenant(TenantMixin):
         related_name="owned_tenants",
     )
     is_active = models.BooleanField(default=True)
+    # Distributable wallet float. The platform funds this; the owner spends it down
+    # by topping up customer wallets (prepaid, closed-loop). Cash is reconciled
+    # offline. Movements are recorded in accounts.TenantFloatTransaction.
+    float_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     lifecycle_status = models.CharField(
         max_length=16,
         choices=LifecycleStatus.choices,

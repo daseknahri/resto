@@ -208,6 +208,67 @@
       </div>
     </div>
 
+    <!-- Fund a restaurant float -->
+    <div class="rounded-2xl border border-emerald-700/40 bg-emerald-950/15 p-5 space-y-4">
+      <div>
+        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.fundTitle') }}</h2>
+        <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.fundSubtitle') }}</p>
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <!-- Restaurant -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.fundRestaurantLabel') }}
+            <select
+              v-model="fundTenantId"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
+            >
+              <option value="">{{ t('adminWallet.fundSelectPlaceholder') }}</option>
+              <option v-for="ten in fundTenants" :key="ten.id" :value="ten.id">
+                {{ ten.name }} — {{ fmtBalance(ten.float_balance) }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <!-- Amount -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.fundAmountLabel') }}
+            <input
+              v-model="fundAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              :placeholder="t('adminWallet.fundAmountPlaceholder')"
+            />
+          </label>
+        </div>
+        <!-- Note -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">
+            {{ t('adminWallet.fundNoteLabel') }}
+            <input
+              v-model="fundNote"
+              type="text"
+              maxlength="200"
+              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+              :placeholder="t('adminWallet.fundNotePlaceholder')"
+            />
+          </label>
+        </div>
+      </div>
+      <div v-if="fundError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ fundError }}</p>
+      </div>
+      <button
+        class="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+        :disabled="fundSaving || !fundTenantId || !fundAmount"
+        @click="fundFloat"
+      >{{ fundSaving ? t('adminWallet.fundSaving') : t('adminWallet.fundBtn') }}</button>
+    </div>
+
     <!-- Bonus modal -->
     <Teleport to="body">
       <Transition
@@ -282,6 +343,8 @@ import { useI18n } from '../composables/useI18n';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import adminApi from '../lib/adminApi';
+import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
@@ -342,6 +405,60 @@ const copyAllCodes = async () => {
     copiedAll.value = true;
     setTimeout(() => { copiedAll.value = false; }, 2000);
   } catch { /* ignore */ }
+};
+
+// Fund a restaurant float
+const fundTenants = ref([]);
+const fundTenantId = ref('');
+const fundAmount = ref('');
+const fundNote = ref('');
+const fundError = ref('');
+const fundSaving = ref(false);
+let fundKey = null; // stable across retries of the same funding; cleared on success
+
+const fetchTenants = async () => {
+  try {
+    const res = await adminApi.get('/admin-tenants/', { params: { page: 1, page_size: 200 } });
+    const payload = res?.data;
+    fundTenants.value = Array.isArray(payload) ? payload : (payload?.results || []);
+  } catch {
+    fundTenants.value = [];
+  }
+};
+
+const fundFloat = async () => {
+  fundError.value = '';
+  const amount = parseFloat(fundAmount.value);
+  if (!fundTenantId.value) {
+    fundError.value = t('adminWallet.fundSelectRequired');
+    return;
+  }
+  if (!amount || amount <= 0) {
+    fundError.value = t('adminWallet.fundAmountRequired');
+    return;
+  }
+  fundSaving.value = true;
+  if (!fundKey) fundKey = newIdempotencyKey();
+  try {
+    const res = await adminApi.post('/admin/wallet/fund-tenant/', {
+      tenant_id: fundTenantId.value,
+      amount: amount.toFixed(2),
+      note: fundNote.value.trim() || t('adminWallet.fundDefaultNote'),
+      idempotency_key: fundKey,
+    });
+    // Reflect the new float on the selected tenant in the dropdown.
+    const idx = fundTenants.value.findIndex((tn) => tn.id === fundTenantId.value);
+    if (idx >= 0) fundTenants.value[idx] = { ...fundTenants.value[idx], float_balance: res.data.float_balance };
+    fundKey = null; // confirmed — next funding gets a fresh key
+    toast.show(t('adminWallet.fundSuccess'));
+    fundAmount.value = '';
+    fundNote.value = '';
+  } catch (err) {
+    const detail = err?.response?.data?.detail || '';
+    fundError.value = detail || t('adminWallet.fundFailed');
+  } finally {
+    fundSaving.value = false;
+  }
 };
 
 // Bonus modal
@@ -432,5 +549,8 @@ const issueBonus = async () => {
   }
 };
 
-onMounted(fetch);
+onMounted(() => {
+  fetch();
+  fetchTenants();
+});
 </script>

@@ -549,6 +549,17 @@
         <!-- ════════════ WALLET TAB ════════════ -->
         <template v-else-if="activeTab === 'wallet'">
 
+          <!-- Verify-phone gate: no verified phone → no usable wallet -->
+          <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4">
+            <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10">
+              <AppIcon name="wallet" class="h-4 w-4 text-amber-300" />
+            </div>
+            <div class="min-w-0 space-y-0.5">
+              <p class="text-sm font-semibold text-amber-200">{{ t('customerAccount.walletVerifyTitle') }}</p>
+              <p class="text-xs text-amber-200/70">{{ t('customerAccount.walletVerifySubtitle') }}</p>
+            </div>
+          </div>
+
           <!-- Balance hero card -->
           <div class="relative overflow-hidden rounded-3xl border border-[var(--color-secondary)]/20 bg-gradient-to-br from-[var(--color-secondary)]/10 via-slate-900/95 to-slate-950 p-5">
             <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,158,11,0.08),transparent_65%)]" />
@@ -567,7 +578,7 @@
           </div>
 
           <!-- Voucher redemption -->
-          <div class="ui-panel p-4 space-y-3">
+          <div v-if="walletVerified" class="ui-panel p-4 space-y-3">
             <div class="flex items-center gap-2">
               <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
                 <AppIcon name="tag" class="h-3.5 w-3.5 text-[var(--color-secondary)]/70" />
@@ -598,6 +609,54 @@
             <p v-if="voucherSuccess" role="status" class="text-xs text-emerald-300">{{ voucherSuccess }}</p>
           </div>
 
+          <!-- Send credit (P2P gifting) — only when enabled AND the sender is verified -->
+          <div v-if="p2pEnabled && walletVerified" class="ui-panel p-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
+                <AppIcon name="wallet" class="h-3.5 w-3.5 text-[var(--color-secondary)]/70" />
+              </div>
+              <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.sendTitle') }}</p>
+            </div>
+            <p class="text-[11px] text-slate-500">{{ t('customerAccount.sendSubtitle') }}</p>
+            <input
+              v-model="sendPhone"
+              type="tel"
+              autocomplete="off"
+              class="ui-input w-full text-sm"
+              :placeholder="t('customerAccount.sendPhonePlaceholder')"
+              :disabled="sending"
+            />
+            <div class="flex gap-2">
+              <input
+                v-model="sendAmount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                class="ui-input flex-1 text-sm"
+                :placeholder="t('customerAccount.sendAmountPlaceholder')"
+                :disabled="sending"
+              />
+              <button
+                class="shrink-0 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+                :disabled="!sendPhone.trim() || !sendAmount || sending"
+                @click="sendCredit"
+              >{{ sending ? '…' : t('customerAccount.sendBtn') }}</button>
+            </div>
+            <input
+              v-model="sendNote"
+              type="text"
+              maxlength="200"
+              class="ui-input w-full text-sm"
+              :placeholder="t('customerAccount.sendNotePlaceholder')"
+              :disabled="sending"
+            />
+            <div v-if="sendError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ sendError }}</p>
+            </div>
+            <p v-if="sendSuccess" role="status" class="text-xs text-emerald-300">{{ sendSuccess }}</p>
+          </div>
+
           <!-- Transactions -->
           <div class="ui-panel overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
@@ -620,8 +679,8 @@
                   <div class="flex items-center gap-2.5">
                     <div
                       class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                      :class="tx.type === 'payment' ? 'bg-red-500/12 text-red-400' : 'bg-emerald-500/12 text-emerald-400'"
-                    >{{ tx.type === 'payment' ? '−' : '+' }}</div>
+                      :class="isOutflow(tx) ? 'bg-red-500/12 text-red-400' : 'bg-emerald-500/12 text-emerald-400'"
+                    >{{ isOutflow(tx) ? '−' : '+' }}</div>
                     <div class="min-w-0 space-y-0.5">
                       <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
                       <p class="text-[11px] text-slate-500">
@@ -631,7 +690,7 @@
                   </div>
                   <span
                     class="shrink-0 font-semibold tabular-nums"
-                    :class="tx.type === 'payment' ? 'text-red-300' : 'text-emerald-300'"
+                    :class="isOutflow(tx) ? 'text-red-300' : 'text-emerald-300'"
                   >{{ formatPrice(tx.amount) }}</span>
                 </li>
               </ul>
@@ -670,7 +729,7 @@
                   {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints }) }}
                 </p>
 
-                <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold" class="flex flex-wrap items-center gap-3 pt-1">
+                <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold && walletVerified" class="flex flex-wrap items-center gap-3 pt-1">
                   <div class="flex items-center gap-2">
                     <label class="text-xs text-slate-400">{{ t('customerAccount.loyaltyRedeemLabel') }}</label>
                     <input
@@ -1075,6 +1134,7 @@ import { useCurrencyStore } from '../stores/currency';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -1398,10 +1458,58 @@ const TX_LABEL_MAP = {
   refund:  'customerAccount.walletTxRefund',
   bonus:   'customerAccount.walletTxBonus',
   loyalty: 'customerAccount.walletTxLoyalty',
+  transfer_out: 'customerAccount.walletTxTransferOut',
+  transfer_in:  'customerAccount.walletTxTransferIn',
 };
+const OUTFLOW_TYPES = new Set(['payment', 'transfer_out']);
+const isOutflow = (tx) => OUTFLOW_TYPES.has(tx.type);
 const txLabel = (tx) => {
   const base = t(TX_LABEL_MAP[tx.type] || 'customerAccount.walletTxFallback');
   return tx.reference ? `${base} ${tx.reference}` : base;
+};
+
+// No verified phone → no usable wallet. Gates the credit actions in the wallet tab.
+const walletVerified = computed(() => !!customerStore.customer?.phone_verified);
+
+// ── P2P gifting (only active when the platform enables it) ─────────────────────
+const p2pEnabled = ref(false);
+const sendPhone = ref('');
+const sendAmount = ref('');
+const sendNote = ref('');
+const sending = ref(false);
+const sendError = ref('');
+const sendSuccess = ref('');
+let sendKey = null; // stable across retries of the same transfer; cleared on success
+
+const sendCredit = async () => {
+  sendError.value = '';
+  sendSuccess.value = '';
+  const amount = parseFloat(sendAmount.value);
+  if (!sendPhone.value.trim()) { sendError.value = t('customerAccount.sendPhoneRequired'); return; }
+  if (!amount || amount <= 0) { sendError.value = t('customerAccount.sendAmountRequired'); return; }
+  sending.value = true;
+  if (!sendKey) sendKey = newIdempotencyKey();
+  try {
+    const res = await api.post('/customer/wallet/transfer/', {
+      recipient_phone: sendPhone.value.trim(),
+      amount: amount.toFixed(2),
+      note: sendNote.value.trim(),
+      idempotency_key: sendKey,
+    });
+    if (res.data.new_balance !== undefined && customerStore.customer) {
+      customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.new_balance });
+    }
+    sendKey = null; // confirmed — next transfer gets a fresh key
+    sendSuccess.value = t('customerAccount.sendSuccess', { amount: res.data.amount });
+    sendPhone.value = '';
+    sendAmount.value = '';
+    sendNote.value = '';
+    await fetchWallet();
+  } catch (err) {
+    sendError.value = err?.response?.data?.detail || t('customerAccount.sendFailed');
+  } finally {
+    sending.value = false;
+  }
 };
 
 const fetchWallet = async () => {
@@ -1410,6 +1518,7 @@ const fetchWallet = async () => {
   try {
     const res = await api.get('/customer/wallet/');
     walletTransactions.value = res.data.transactions || [];
+    p2pEnabled.value = Boolean(res.data.p2p_enabled);
     if (res.data.balance !== undefined && customerStore.customer) {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }

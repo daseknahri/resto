@@ -17,7 +17,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
-from .models import Customer, WalletTransaction
+from .models import Customer, TenantFloatTransaction, WalletTransaction
 
 _CENT = Decimal("0.01")
 
@@ -28,6 +28,14 @@ class WalletError(Exception):
 
 class InsufficientFunds(WalletError):
     """Raised when a debit exceeds the available balance (and partial not allowed)."""
+
+
+class UnverifiedWallet(WalletError):
+    """Raised when a customer without a verified phone tries to receive wallet funds.
+
+    Platform rule: no verified phone → no wallet. Funds may only land in a wallet whose
+    owner has a verified phone number.
+    """
 
 
 def _money(value) -> Decimal:
@@ -43,6 +51,18 @@ def _find_idempotent(idempotency_key):
     return WalletTransaction.objects.filter(idempotency_key=idempotency_key).first()
 
 
+def _find_idempotent_float(idempotency_key):
+    if not idempotency_key:
+        return None
+    return TenantFloatTransaction.objects.filter(idempotency_key=idempotency_key).first()
+
+
+def _require_verified(customer):
+    """Enforce the 'no verified phone → no wallet' rule before crediting a wallet."""
+    if not getattr(customer, "phone_verified", False):
+        raise UnverifiedWallet("a verified phone number is required to use a wallet")
+
+
 @transaction.atomic
 def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
                   idempotency_key=None, reference="", tenant_id=None, note="", currency="MAD"):
@@ -56,6 +76,7 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
         return existing
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
+    _require_verified(cust)
     new_balance = (_money(cust.wallet_balance) + amount).quantize(_CENT)
     cust.wallet_balance = new_balance
     cust.save(update_fields=["wallet_balance", "updated_at"])
@@ -116,3 +137,191 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
         note=note or "",
         currency=currency,
     )
+
+
+# ── Restaurant float (closed-loop money distribution) ───────────────────────────
+#
+# Two-tier model: the platform funds a restaurant's float, then the owner spends
+# that float down by topping up customers. Cash is reconciled offline (collected
+# daily). Owners can never distribute more than they hold — the float is a hard cap.
+
+
+@transaction.atomic
+def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_key=None,
+                        reference="", note="", currency="MAD"):
+    """Platform funds a restaurant's distributable float. Returns the TenantFloatTransaction.
+
+    Idempotent on idempotency_key (a retried request reuses the original row).
+    """
+    from tenancy.models import Tenant
+
+    amount = _money(amount)
+    if amount <= 0:
+        raise WalletError("funding amount must be positive")
+
+    existing = _find_idempotent_float(idempotency_key)
+    if existing is not None:
+        return existing
+
+    tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
+    new_balance = (_money(tenant.float_balance) + amount).quantize(_CENT)
+    tenant.float_balance = new_balance
+    tenant.save(update_fields=["float_balance"])
+
+    return TenantFloatTransaction.objects.create(
+        tenant_id=tenant_id,
+        type=TenantFloatTransaction.Type.FUND,
+        amount=amount,
+        balance_after=new_balance,
+        actor_user_id=actor_user_id,
+        idempotency_key=idempotency_key or None,
+        reference=reference or "",
+        note=note or "",
+        currency=currency,
+    )
+
+
+@transaction.atomic
+def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
+                         idempotency_key=None, reference="", note="", currency="MAD"):
+    """Move funds from a restaurant's float into a customer's wallet (prepaid distribution).
+
+    Atomic double-entry posting: debits the restaurant float and credits the customer
+    wallet in one transaction. Raises InsufficientFunds if the float can't cover the
+    amount (nothing moves). Returns (float_tx, wallet_tx). Idempotent on idempotency_key.
+    """
+    from tenancy.models import Tenant
+
+    amount = _money(amount)
+    if amount <= 0:
+        raise WalletError("transfer amount must be positive")
+
+    existing = _find_idempotent_float(idempotency_key)
+    if existing is not None:
+        wallet_tx = None
+        if idempotency_key:
+            wallet_tx = WalletTransaction.objects.filter(
+                idempotency_key=f"{idempotency_key}:w"
+            ).first()
+        return existing, wallet_tx
+
+    # Lock both rows in a stable order (tenant, then customer) to avoid deadlocks.
+    tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
+    cust = Customer.objects.select_for_update().get(pk=customer_id)
+    _require_verified(cust)
+
+    float_balance = _money(tenant.float_balance)
+    if amount > float_balance:
+        raise InsufficientFunds("restaurant float is insufficient")
+
+    new_float = (float_balance - amount).quantize(_CENT)
+    new_wallet = (_money(cust.wallet_balance) + amount).quantize(_CENT)
+
+    tenant.float_balance = new_float
+    tenant.save(update_fields=["float_balance"])
+    cust.wallet_balance = new_wallet
+    cust.save(update_fields=["wallet_balance", "updated_at"])
+
+    float_tx = TenantFloatTransaction.objects.create(
+        tenant_id=tenant_id,
+        type=TenantFloatTransaction.Type.DISTRIBUTION,
+        amount=amount,
+        balance_after=new_float,
+        customer=cust,
+        actor_user_id=actor_user_id,
+        idempotency_key=idempotency_key or None,
+        reference=reference or "",
+        note=note or "",
+        currency=currency,
+    )
+    wallet_tx = WalletTransaction.objects.create(
+        customer=cust,
+        type=WalletTransaction.Type.TOPUP,
+        amount=amount,
+        balance_after=new_wallet,
+        idempotency_key=(f"{idempotency_key}:w" if idempotency_key else None),
+        reference=reference or "",
+        tenant_id=tenant_id,
+        note=note or "",
+        currency=currency,
+    )
+    return float_tx, wallet_tx
+
+
+# ── Peer-to-peer gifting (on-platform, no cash-out) ─────────────────────────────
+#
+# Regulated money transmission in most markets — gated behind settings.WALLET_P2P_ENABLED
+# at the view layer. The service itself just moves the money atomically; it does NOT
+# check the feature flag (callers must) so it stays unit-testable.
+
+
+@transaction.atomic
+def transfer_between_customers(sender_id, recipient_id, amount, *, idempotency_key=None,
+                              note="", currency="MAD"):
+    """Move wallet credit from one customer to another (a gift). Atomic + idempotent.
+
+    Debits the sender and credits the recipient in one transaction. Raises
+    InsufficientFunds if the sender can't cover it (nothing moves), or WalletError on
+    bad input (non-positive amount, or sending to yourself). Returns (out_tx, in_tx).
+    """
+    amount = _money(amount)
+    if amount <= 0:
+        raise WalletError("transfer amount must be positive")
+    if str(sender_id) == str(recipient_id):
+        raise WalletError("cannot transfer to yourself")
+
+    existing = _find_idempotent(idempotency_key)
+    if existing is not None:
+        in_tx = None
+        if idempotency_key:
+            in_tx = WalletTransaction.objects.filter(
+                idempotency_key=f"{idempotency_key}:in"
+            ).first()
+        return existing, in_tx
+
+    # Lock both rows in a stable order (lowest id first) to avoid deadlocks.
+    first_id, second_id = sorted([int(sender_id), int(recipient_id)])
+    locked = {
+        c.id: c
+        for c in Customer.objects.select_for_update().filter(pk__in=[first_id, second_id])
+    }
+    sender = locked.get(int(sender_id))
+    recipient = locked.get(int(recipient_id))
+    if sender is None or recipient is None:
+        raise WalletError("sender or recipient not found")
+    _require_verified(sender)
+    _require_verified(recipient)
+
+    sender_balance = _money(sender.wallet_balance)
+    if amount > sender_balance:
+        raise InsufficientFunds("wallet balance is insufficient")
+
+    new_sender = (sender_balance - amount).quantize(_CENT)
+    new_recipient = (_money(recipient.wallet_balance) + amount).quantize(_CENT)
+
+    sender.wallet_balance = new_sender
+    sender.save(update_fields=["wallet_balance", "updated_at"])
+    recipient.wallet_balance = new_recipient
+    recipient.save(update_fields=["wallet_balance", "updated_at"])
+
+    out_tx = WalletTransaction.objects.create(
+        customer=sender,
+        type=WalletTransaction.Type.TRANSFER_OUT,
+        amount=amount,
+        balance_after=new_sender,
+        idempotency_key=idempotency_key or None,
+        reference=f"to:{recipient_id}",
+        note=note or "",
+        currency=currency,
+    )
+    in_tx = WalletTransaction.objects.create(
+        customer=recipient,
+        type=WalletTransaction.Type.TRANSFER_IN,
+        amount=amount,
+        balance_after=new_recipient,
+        idempotency_key=(f"{idempotency_key}:in" if idempotency_key else None),
+        reference=f"from:{sender_id}",
+        note=note or "",
+        currency=currency,
+    )
+    return out_tx, in_tx

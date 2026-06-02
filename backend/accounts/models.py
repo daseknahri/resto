@@ -48,6 +48,9 @@ class WalletTransaction(models.Model):
         REFUND = "refund", "Refund"
         BONUS = "bonus", "Bonus"
         LOYALTY = "loyalty", "Loyalty redemption"
+        TRANSFER_OUT = "transfer_out", "Transfer sent"      # P2P gift sent (out)
+        TRANSFER_IN = "transfer_in", "Transfer received"    # P2P gift received (in)
+        ADJUSTMENT = "adjustment", "Adjustment"             # admin/policy correction
 
     customer = models.ForeignKey(
         Customer,
@@ -76,6 +79,47 @@ class WalletTransaction(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_type_display()} {self.amount} — {self.customer}"
+
+
+class TenantFloatTransaction(models.Model):
+    """Append-only ledger for a restaurant's distributable wallet float.
+
+    The platform funds a restaurant (FUND, +); the owner spends that float down by
+    topping up customer wallets (DISTRIBUTION, -). Each distribution is paired with a
+    Customer-side WalletTransaction so the two ledgers reconcile. `amount` is always a
+    positive magnitude; `type` records direction. Lives in the public schema.
+    """
+
+    class Type(models.TextChoices):
+        FUND = "fund", "Platform funding"          # platform -> restaurant float (in)
+        DISTRIBUTION = "distribution", "Client top-up"  # restaurant float -> client (out)
+        REVERSAL = "reversal", "Reversal"          # undo a distribution (in)
+
+    tenant_id = models.IntegerField(db_index=True)
+    type = models.CharField(max_length=20, choices=Type.choices)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # For DISTRIBUTION/REVERSAL: the customer who received/returned the funds.
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_float",
+    )
+    # Who initiated the movement (platform admin for FUND, owner/staff for DISTRIBUTION).
+    actor_user_id = models.IntegerField(null=True, blank=True)
+    idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    reference = models.CharField(max_length=120, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    currency = models.CharField(max_length=8, default="MAD")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.get_type_display()} {self.amount} — tenant {self.tenant_id}"
 
 
 class WalletVoucher(models.Model):

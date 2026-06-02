@@ -339,6 +339,7 @@ class AdminTenantSerializer(serializers.ModelSerializer):
             "plan_code",
             "plan_name",
             "primary_domain",
+            "float_balance",
         ]
 
     def get_plan_code(self, obj):
