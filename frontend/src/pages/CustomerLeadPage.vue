@@ -260,7 +260,7 @@
         v-if="showLeadModal"
         class="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/85 sm:items-center sm:p-5"
         @click.self="closeLeadModal"
-        @keydown.esc.window="closeLeadModal"
+        @keydown.esc="closeLeadModal"
       >
         <div ref="leadDialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
           <div class="mb-4 flex items-center justify-between gap-3">

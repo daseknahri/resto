@@ -6,7 +6,7 @@
         class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         role="presentation"
         @click.self="cancel"
-        @keydown.esc.window="cancel"
+        @keydown.esc="cancel"
       >
         <div
           ref="dialogRef"

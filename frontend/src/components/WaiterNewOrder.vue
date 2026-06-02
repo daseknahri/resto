@@ -7,7 +7,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="waiter-new-order-title"
-      @keydown.esc.window="$emit('close')"
+      @keydown.esc="$emit('close')"
     >
       <!-- Header bar -->
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">

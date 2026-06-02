@@ -686,7 +686,7 @@
         v-if="showMapModal"
         class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 sm:items-center sm:p-5"
         @click.self="closeMapModal"
-        @keydown.esc.window="closeMapModal"
+        @keydown.esc="closeMapModal"
       >
         <div ref="mapDialogRef" role="dialog" aria-modal="true" aria-labelledby="cart-map-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
           <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">

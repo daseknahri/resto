@@ -273,7 +273,7 @@
         v-if="setupOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeSetup"
-        @keydown.esc.window="closeSetup"
+        @keydown.esc="closeSetup"
       >
         <div ref="setupDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-tables-setup-dialog-title" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">

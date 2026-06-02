@@ -95,7 +95,7 @@
         v-if="editorOpen && editingCategory"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeEditor"
-        @keydown.esc.window="closeEditor"
+        @keydown.esc="closeEditor"
       >
         <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-5">
@@ -200,7 +200,7 @@
         v-if="quickModalOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickModal"
-        @keydown.esc.window="closeQuickModal"
+        @keydown.esc="closeQuickModal"
       >
         <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur">

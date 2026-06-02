@@ -252,7 +252,7 @@
           aria-labelledby="dish-lightbox-dialog-title"
           class="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/96 backdrop-blur-sm"
           @click="lightboxOpen = false"
-          @keydown.esc.window="lightboxOpen = false"
+          @keydown.esc="lightboxOpen = false"
         >
           <h2 id="dish-lightbox-dialog-title" class="sr-only">{{ dish.name }}</h2>
           <img

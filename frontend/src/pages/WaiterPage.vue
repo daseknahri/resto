@@ -225,7 +225,7 @@
         v-if="billOrder"
         class="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/70 no-print"
         @click.self="billOrder = null"
-        @keydown.esc.window="billOrder = null"
+        @keydown.esc="billOrder = null"
       >
         <div ref="billDialogRef" role="dialog" aria-modal="true" aria-labelledby="waiter-bill-dialog-title" class="bill-sheet w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl overflow-hidden">
           <!-- Header -->

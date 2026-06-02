@@ -160,7 +160,7 @@
         aria-modal="true"
         aria-labelledby="marketplace-menu-checkout-dialog-title"
         class="fixed inset-0 z-40 flex flex-col bg-slate-950/95 backdrop-blur-sm overflow-y-auto"
-        @keydown.esc.window="checkoutOpen = false"
+        @keydown.esc="checkoutOpen = false"
       >
         <div class="mx-auto w-full max-w-md px-4 py-6 space-y-5">
           <!-- Header -->

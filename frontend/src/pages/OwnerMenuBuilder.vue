@@ -41,7 +41,7 @@
         v-if="showImport"
         class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0"
         @click.self="closeImport"
-        @keydown.esc.window="closeImport"
+        @keydown.esc="closeImport"
       >
         <div ref="importDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-menu-builder-import-dialog-title" class="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
           <!-- Header -->

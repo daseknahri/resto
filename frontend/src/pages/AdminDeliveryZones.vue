@@ -116,7 +116,7 @@
           v-if="showForm"
           class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60"
           @click.self="closeForm"
-          @keydown.esc.window="closeForm"
+          @keydown.esc="closeForm"
         >
           <div ref="formDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-delivery-zones-form-dialog-title" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 id="admin-delivery-zones-form-dialog-title" class="text-base font-bold text-white">
