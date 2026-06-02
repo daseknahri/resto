@@ -163,6 +163,45 @@ class TableLink(models.Model):
         return self.label
 
 
+class WaiterCall(models.Model):
+    """A dine-in customer's request for staff attention, raised from a table QR.
+
+    Lives in the tenant schema (one restaurant's calls never mix with another's).
+    Broadcast in real time to the owner/staff WebSocket group on create, and again
+    on acknowledge so every staff device clears it together.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+
+    table_label = models.CharField(max_length=40, blank=True)
+    table_slug = models.SlugField(max_length=55, blank=True)
+    note = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Optional reason chosen by the customer (e.g. 'Bill', 'Water').",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"WaiterCall({self.table_label or self.table_slug}, {self.status})"
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

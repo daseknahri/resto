@@ -70,8 +70,16 @@
     </header>
 
     <!-- ══ Table context banner ══ -->
-    <div v-if="tableContextBanner" class="mx-3 mt-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-      ✓ {{ tableContextBanner }}
+    <div v-if="tableContextBanner" class="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+      <span class="min-w-0 truncate">✓ {{ tableContextBanner }}</span>
+      <button
+        type="button"
+        class="shrink-0 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50"
+        :disabled="callingWaiter"
+        @click="callWaiter"
+      >
+        🔔 {{ callingWaiter ? t('menu.callingWaiter') : t('menu.callWaiter') }}
+      </button>
     </div>
 
     <!-- ══ Sticky categories bar ══ -->
@@ -267,6 +275,23 @@ const props = defineProps({
 
 // ── Table QR context ─────────────────────────────────────────────────────────
 const tableContextBanner = ref('')
+// ── Call waiter (dine-in, table context only) ────────────────────────────────
+const callingWaiter = ref(false)
+const callWaiter = async () => {
+  const slug = cart.tableSlug
+  if (!slug || callingWaiter.value) return
+  callingWaiter.value = true
+  try {
+    await api.post('/waiter-call/', { table: slug })
+    toast.show(t('menu.waiterCalled'), 'success')
+  } catch (e) {
+    const status = e?.response?.status
+    toast.show(status === 429 ? t('menu.waiterCallThrottled') : t('menu.waiterCallFailed'), 'error')
+  } finally {
+    callingWaiter.value = false
+  }
+}
+
 const resolveTableContext = async () => {
   const tableSlug = route.params?.tableSlug
   if (!tableSlug) return

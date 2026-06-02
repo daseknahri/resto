@@ -27,3 +27,7 @@ class PlaceOrderThrottle(_IPThrottle):
 
 class StaffOrderListThrottle(_IPThrottle):
     scope = "staff_order_list"
+
+
+class WaiterCallThrottle(_IPThrottle):
+    scope = "waiter_call"

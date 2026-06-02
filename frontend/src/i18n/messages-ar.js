@@ -285,6 +285,11 @@ const arabicMessages = {
     "installApp": "تثبيت التطبيق",
     "themeLight": "التبديل إلى الوضع الفاتح",
     "themeDark": "التبديل إلى الوضع الداكن",
+    "waiterCallBannerTitle": "طلب خدمة ({count})",
+    "waiterCallNotifTitle": "طلب خدمة الطاولة",
+    "waiterCallNotifBody": "الطاولة {table} تطلب الخدمة.",
+    "waiterCallTableUnknown": "طاولة",
+    "waiterCallAcknowledge": "تم",
     "gracePeriodWarning": "الدفع متأخر — {days} يوم متبقٍ قبل تعليق حسابك.",
     "gracePeriodCritical": "الدفع متأخر — يوم واحد متبقٍ. قد يُعلَّق حسابك غداً.",
     "graceExpiredWarning": "انتهت فترة السماح. يرجى تسوية اشتراكك لتجنب انقطاع الخدمة. تواصل مع الدعم.",
@@ -935,7 +940,12 @@ const arabicMessages = {
     "ratingChipTitle": "{count} تقييم",
     "searchResultsKicker": "نتائج البحث",
     "searchResultsTitle": "نتائج البحث",
-    "allCategories": "جميع التصنيفات"
+    "allCategories": "جميع التصنيفات",
+    "callWaiter": "نادِ النادل",
+    "callingWaiter": "جارٍ الاتصال…",
+    "waiterCalled": "النادل في الطريق إليك 🛎️",
+    "waiterCallThrottled": "يرجى الانتظار قليلاً قبل إعادة النداء.",
+    "waiterCallFailed": "تعذّر نداء النادل. حاول مرة أخرى."
   },
   "category": {
     "kicker": "التصنيف",

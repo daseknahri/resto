@@ -49,6 +49,7 @@ REST_FRAMEWORK = {
         "marketplace_order": "60/hour",
         "marketplace_order_status": "300/hour",
         "translate": "30/hour",
+        "waiter_call": "10/min",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

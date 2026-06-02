@@ -230,6 +230,38 @@
       </div>
     </Transition>
 
+    <!-- Waiter-call alerts — live via WebSocket, persistent until acknowledged -->
+    <div v-if="waiterCallsPending.length" class="mx-auto w-full max-w-7xl px-3 pt-2 sm:px-4">
+      <div class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+        <div class="flex items-center gap-2 text-sm font-semibold text-amber-300">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+          </span>
+          {{ t("ownerLayout.waiterCallBannerTitle", { count: waiterCallsPending.length }) }}
+        </div>
+        <ul class="space-y-1.5">
+          <li
+            v-for="call in waiterCallsPending"
+            :key="call.id"
+            class="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-slate-900/40 px-3 py-2"
+          >
+            <div class="min-w-0 text-sm">
+              <span class="font-semibold text-white">{{ call.table_label || t("ownerLayout.waiterCallTableUnknown") }}</span>
+              <span v-if="call.note" class="text-slate-300"> — {{ call.note }}</span>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15"
+              @click="acknowledgeWaiterCall(call.id)"
+            >
+              {{ t("ownerLayout.waiterCallAcknowledge") }}
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
     <main id="main-content" class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
       <RouterView v-slot="{ Component }">
         <Transition name="ui-route" mode="out-in">
@@ -328,6 +360,7 @@ import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOwnerTheme } from "../composables/useOwnerTheme";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
+import { useWaiterCalls } from "../composables/useWaiterCalls";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
@@ -490,8 +523,35 @@ const layoutDoSilentPoll = async () => {
 // Real-time: when a socket "order.new" ping arrives, refresh immediately (same
 // path as the poll, incl. the new-order alert). Polling stays as the fallback, so
 // this is purely a latency win when the WS infra is connected.
-const ownerRealtime = useOwnerRealtime((event) => {
-  if (typeof event === "string" && event.startsWith("order.")) layoutDoSilentPoll();
+const {
+  pending: waiterCallsPending,
+  load: loadWaiterCalls,
+  acknowledge: acknowledgeWaiterCall,
+  handleRealtime: handleWaiterRealtime,
+} = useWaiterCalls();
+
+const layoutNotifyWaiterCall = (payload) => {
+  layoutPlayAlertSound();
+  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    const label = payload && payload.table_label ? payload.table_label : "";
+    new Notification(t("ownerLayout.waiterCallNotifTitle"), {
+      body: label
+        ? t("ownerLayout.waiterCallNotifBody", { table: label })
+        : t("ownerLayout.waiterCallNotifTitle"),
+      icon: "/favicon.ico",
+      tag: "waiter-call",
+      renotify: true,
+    });
+  }
+};
+
+const ownerRealtime = useOwnerRealtime((event, payload) => {
+  if (typeof event !== "string") return;
+  if (event.startsWith("order.")) {
+    layoutDoSilentPoll();
+  } else if (event.startsWith("waiter.")) {
+    if (handleWaiterRealtime(event, payload)) layoutNotifyWaiterCall(payload);
+  }
 });
 
 const onLayoutPageVisible = () => {
@@ -534,6 +594,7 @@ onMounted(async () => {
   activateTheme(); // paint the saved dark/light choice onto <html>
   prefetchOwnerChunks();
   ownerRealtime.connect(); // instant order updates when WS is available (else polling)
+  loadWaiterCalls(); // seed any pending waiter calls (real-time keeps it live)
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }
