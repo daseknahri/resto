@@ -147,6 +147,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M6 9l6 6 6-6"],
   },
+  chevronRight: {
+    viewBox: "0 0 24 24",
+    paths: ["M9 6l6 6-6 6"],
+  },
   location: {
     viewBox: "0 0 24 24",
     paths: ["M12 21C12 21 5 13.5 5 8.5a7 7 0 0 1 14 0c0 5-7 12.5-7 12.5z", "M12 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"],
