@@ -10,28 +10,13 @@
           <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
           <h2 class="ui-page-title ui-display text-[1.42rem] leading-tight sm:text-[2rem]">{{ t("ownerHome.title") }}</h2>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- Global period selector — controls ALL analytics sections -->
-          <div class="flex items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
-            <button
-              v-for="d in PERIOD_OPTIONS"
-              :key="d"
-              class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
-              :class="insightsPeriod === d
-                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
-              :aria-pressed="insightsPeriod === d"
-              @click="setGlobalPeriod(d)"
-            >{{ d }}d</button>
-          </div>
-          <div class="ui-scroll-row">
-            <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
-            <span class="ui-chip">{{ planModeLabel }}</span>
-          </div>
+        <div class="ui-scroll-row">
+          <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
+          <span class="ui-chip">{{ planModeLabel }}</span>
         </div>
       </div>
 
-      <!-- KPI cards: today stats + 7-day sparklines ───────────────────────── -->
+      <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
       <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <div v-for="i in 5" :key="i" class="ui-admin-subcard animate-pulse space-y-2">
@@ -41,96 +26,37 @@
         </div>
       </div>
 
-      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <!-- Today's orders -->
-        <article class="ui-admin-subcard space-y-1.5">
+        <article class="ui-admin-subcard space-y-1">
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
           <div class="flex items-end justify-between gap-1">
             <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
             <span
-              v-if="!insightsLoading && yesterdayStats.count > 0"
+              v-if="yesterdayStats.count > 0"
               class="mb-0.5 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
-            >
-              {{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}
-            </span>
+            >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
           </div>
-          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
-          <SparklineChart v-else :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
         <!-- Today's revenue -->
-        <article class="ui-admin-subcard space-y-1.5">
+        <article class="ui-admin-subcard space-y-1">
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
-          <div class="flex items-end justify-between gap-1">
-            <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
-            <span
-              v-if="!insightsLoading && yesterdayStats.revenue > 0"
-              class="mb-0.5 text-[10px]"
-              :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
-            >
-              {{ todayStats.revenueRaw >= yesterdayStats.revenue ? '↑' : '↓' }}
-            </span>
-          </div>
-          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
-          <SparklineChart v-else :values="sparklineRevenue" color="secondary" :height="28" />
+          <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
         </article>
 
-        <!-- Avg ticket (7-day sparkline from revenue data) -->
-        <article class="ui-admin-subcard space-y-1.5">
+        <!-- Avg ticket today -->
+        <article class="ui-admin-subcard space-y-1">
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
-          <!-- Value shows — until insights load -->
-          <p class="ui-stat-value" :class="insightsLoading ? 'text-slate-600' : 'text-slate-100'">
-            {{ insightsLoading ? "—" : avgTicketLabel }}
-          </p>
-          <div v-if="insightsLoading" class="h-7 animate-pulse rounded bg-slate-800/40" />
-          <SparklineChart v-else :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
+          <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
         </article>
 
         <!-- Pending orders -->
-        <article
-          class="ui-admin-subcard space-y-1.5 transition-colors"
-          :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
-        >
+        <article class="ui-admin-subcard space-y-1 transition-colors" :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
-          <p
-            class="ui-stat-value transition-colors"
-            :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'"
-          >
-            {{ todayStats.pending }}
-          </p>
-          <SparklineChart
-            v-if="ratingsSummary?.average"
-            :values="sparklineRating"
-            color="amber"
-            :height="28"
-            :filled="false"
-          />
-          <div v-else class="h-7" />
+          <p class="ui-stat-value" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
         </article>
-
-        <!-- Today's reservations — populated after dashboard endpoint loads -->
-        <RouterLink
-          :to="{ name: 'owner-reservations' }"
-          class="ui-admin-subcard space-y-1.5 transition-colors hover:border-slate-600"
-          :class="todayNewReservations > 0 ? 'border-sky-500/30' : ''"
-        >
-          <p class="ui-stat-label">{{ t("ownerHome.todayReservations") }}</p>
-          <div class="flex items-end justify-between gap-1">
-            <p
-              class="ui-stat-value transition-colors"
-              :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'"
-            >
-              {{ todayReservations === null ? "—" : todayReservations }}
-            </p>
-            <span v-if="todayNewReservations > 0" class="mb-0.5 rounded-full bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-sky-300">
-              {{ todayNewReservations }} {{ t("ownerHome.reservationsNew") }}
-            </span>
-          </div>
-          <div class="h-7 flex items-end">
-            <p class="text-[10px] text-slate-600">{{ t("ownerHome.viewReservations") }} →</p>
-          </div>
-        </RouterLink>
       </div>
 
       <!-- Alerts strip — shown below KPIs, above ratings -->
@@ -160,20 +86,6 @@
         </div>
       </template>
       <div v-else class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
-
-      <!-- Revenue chart + best sellers — receives data from insights component via props -->
-      <div class="grid gap-3 xl:grid-cols-2">
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-          <RevenueBarChart
-            :external-days="chartDays"
-            :external-currency="chartCurrency"
-            :parent-loading="insightsLoading"
-          />
-        </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
-          <BestSellersWidget :period="insightsPeriod" />
-        </div>
-      </div>
 
       <!-- Open / Closed toggle — from tenant store, no fetch -->
       <div
@@ -210,6 +122,10 @@
           <AppIcon name="menu" class="owner-home-btn-icon" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
+        <RouterLink :to="{ name: 'owner-analytics' }" class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto">
+          <AppIcon name="chart" class="owner-home-btn-icon" />
+          {{ t("ownerAnalytics.title") }}
+        </RouterLink>
         <RouterLink to="/menu" class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto">
           <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
@@ -231,27 +147,6 @@
 
     <!-- ── READINESS: independent fetch for categories + dishes ─────────────── -->
     <OwnerDashboardReadiness ref="readinessRef" @loaded="onReadinessLoaded" />
-
-    <!-- ── ANALYTICS: deferred — loads after first paint ───────────────────── -->
-    <OwnerDashboardInsights
-      ref="insightsRef"
-      :period="insightsPeriod"
-      :category-name-by-slug="categoryNameBySlug"
-      :dish-name-by-slug="dishNameBySlug"
-      @data="onInsightsData"
-      @period-change="insightsPeriod = $event"
-      @loading-change="insightsLoading = $event"
-      @updating-change="insightsUpdating = $event"
-    />
-
-    <!-- ── REVENUE: deferred, permission-gated ─────────────────────────────── -->
-    <OwnerDashboardRevenue
-      v-if="session.canViewRevenue"
-      :data="revenueSummary"
-      :loading="insightsLoading"
-      :updating="insightsUpdating"
-      :period="insightsPeriod"
-    />
 
     <!-- ── LIVE ORDERS: from order store ───────────────────────────────────── -->
     <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
@@ -329,12 +224,6 @@
             <span class="rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
               {{ tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }}
             </span>
-            <span
-              v-if="hasPendingUpgrade"
-              class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300"
-            >
-              {{ t("ownerHome.pendingUpgradeShort") }}
-            </span>
           </div>
         </div>
         <RouterLink :to="{ name: 'owner-profile', query: { tab: 'billing' } }" class="ui-btn-outline px-3 py-1.5 text-xs">
@@ -344,14 +233,6 @@
           </svg>
         </RouterLink>
       </div>
-      <p
-        v-if="hasPendingUpgrade"
-        class="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-200"
-      >
-        {{ pendingUpgrade
-          ? t("ownerHome.pendingUpgrade", { plan: pendingUpgrade.target_plan_name })
-          : t("ownerHome.pendingUpgradeFallback") }}
-      </p>
     </article>
 
   </section>
@@ -361,19 +242,13 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import BestSellersWidget from "../components/BestSellersWidget.vue";
-import RevenueBarChart from "../components/RevenueBarChart.vue";
 import OwnerDashboardAlerts from "../components/OwnerDashboardAlerts.vue";
 import OwnerDashboardReadiness from "../components/OwnerDashboardReadiness.vue";
 import OwnerDashboardDishPanel from "../components/OwnerDashboardDishPanel.vue";
-import OwnerDashboardInsights from "../components/OwnerDashboardInsights.vue";
-import OwnerDashboardRevenue from "../components/OwnerDashboardRevenue.vue";
-import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { bustCache } from "../lib/staleCache";
 import { useOrderStore } from "../stores/order";
-import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
@@ -381,112 +256,22 @@ import { useToastStore } from "../stores/toast";
 // (it polls / has lifecycle cleanup and must mount & unmount normally).
 defineOptions({ name: "OwnerHome" });
 
-const session = useSessionStore();
 const tenant = useTenantStore();
 const order = useOrderStore();
 const toast = useToastStore();
 const { t, formatNumber, currentLocale } = useI18n();
 
-// ── Refs to deferred child components ────────────────────────────────────────
-const insightsRef = ref(null);
+// ── Ref to the deferred readiness component (for manual refresh) ──────────────
 const readinessRef = ref(null);
 
 // ── Data from OwnerDashboardReadiness (emitted after its dishes/categories fetch) ─
 const soldOutCount = ref(0);
-const categoryNameBySlug = ref({});
-const dishNameBySlug = ref({});
 const preloadedDishesData = ref([]); // passed to dish panel to skip a second fetch
 
-const onReadinessLoaded = ({ soldOutCount: n, categoryNameBySlug: cats, dishNameBySlug: dishes, dishesData }) => {
+const onReadinessLoaded = ({ soldOutCount: n, dishesData }) => {
   soldOutCount.value = n ?? 0;
-  if (cats) categoryNameBySlug.value = cats;
-  if (dishes) dishNameBySlug.value = dishes;
   if (dishesData) preloadedDishesData.value = dishesData;
 };
-
-// ── Today's reservations — received from the dashboard endpoint via insights ─
-const todayReservations = ref(null);     // null = not yet loaded
-const todayNewReservations = ref(0);
-
-// ── Insights state (shared between OwnerDashboardInsights + OwnerDashboardRevenue) ──
-// The insights component owns fetching; it bubbles loading state up via events
-// so OwnerDashboardRevenue can show skeletons while data is in flight.
-const revenueSummary = ref(null);
-const insightsLoading = ref(true);   // true until first data arrives
-const insightsUpdating = ref(false);
-const insightsPeriod = ref(30);
-const PERIOD_OPTIONS = [7, 14, 30, 90];
-const upgradeRequests = ref([]);
-
-// ── Global period selector ────────────────────────────────────────────────────
-const setGlobalPeriod = (days) => {
-  if (days === insightsPeriod.value) return;
-  insightsPeriod.value = days;
-  // The insights component watches its period prop and auto-refetches.
-  // BestSellersWidget and OwnerDashboardRevenue receive period as a prop too.
-};
-
-const onInsightsData = (data) => {
-  insightsLoading.value = false; // data arrived — clear loading even if event order varies
-  if (data?.today_reservations !== undefined) {
-    todayReservations.value = data.today_reservations;
-    todayNewReservations.value = data.today_new_reservations ?? 0;
-  }
-  if (data?.revenue_summary) {
-    // Merge fulfillment_breakdown into revenue_summary so OwnerDashboardRevenue
-    // can display it without needing its own prop.
-    revenueSummary.value = {
-      ...data.revenue_summary,
-      fulfillment_breakdown: data.revenue_summary.fulfillment_breakdown ?? {},
-    };
-  }
-  if (Array.isArray(data?.upgrade_requests)) upgradeRequests.value = data.upgrade_requests;
-};
-
-// ── KPI Sparklines — last N days from revenue summary daily breakdown ─────────
-// Slice the most recent 7 days for the sparkline regardless of the selected
-// analytics period (the full period chart stays in the revenue section).
-const sparklineRevenue = computed(() => {
-  const days = revenueSummary.value?.daily || [];
-  return days.slice(-7).map((d) => Number(d.revenue) || 0);
-});
-const sparklineOrders = computed(() => {
-  const days = revenueSummary.value?.daily || [];
-  return days.slice(-7).map((d) => Number(d.orders) || 0);
-});
-const sparklineAvgTicket = computed(() => {
-  const days = revenueSummary.value?.daily || [];
-  return days.slice(-7).map((d) => {
-    const rev = Number(d.revenue) || 0;
-    const orders = Number(d.orders) || 0;
-    return orders > 0 ? rev / orders : 0;
-  });
-});
-const sparklineRating = computed(() => {
-  // Ratings don't have daily breakdown — show a flat line at current average
-  // as a placeholder until a per-day endpoint is added.
-  const avg = ratingsSummary.value?.average;
-  if (!avg) return [];
-  return Array(7).fill(avg);
-});
-
-// Trend arrows: compare the last value to the first in the sparkline window
-const trend = (values) => {
-  if (values.length < 2) return "neutral";
-  const first = values[0];
-  const last = values[values.length - 1];
-  if (last > first * 1.02) return "up";
-  if (last < first * 0.98) return "down";
-  return "neutral";
-};
-
-// Data for <RevenueBarChart> — mapped from revenue summary
-const chartDays = computed(() => {
-  const days = revenueSummary.value?.daily;
-  if (!days?.length) return null;
-  return days.map((d) => ({ date: d.date, revenue: d.revenue, order_count: d.orders ?? 0 }));
-});
-const chartCurrency = computed(() => revenueSummary.value?.currency ?? null);
 
 // ── Ratings — fetched independently after first paint ────────────────────────
 const ratingsSummary = ref(null); // null = loading, {} = loaded
@@ -513,10 +298,6 @@ const planModeLabel = computed(() => {
   if (canWhatsapp.value) return t("ownerHome.whatsappEnabled");
   return t("ownerHome.browseOnly");
 });
-
-// ── Upgrade state ─────────────────────────────────────────────────────────────
-const pendingUpgrade = computed(() => upgradeRequests.value.find((r) => r.status === "pending") || null);
-const hasPendingUpgrade = computed(() => Boolean(pendingUpgrade.value));
 
 // ── Open/Closed toggle ────────────────────────────────────────────────────────
 const toggleOpen = async () => {
@@ -651,9 +432,8 @@ const manualRefresh = () => {
   void order.fetchOrders("", { silent: false });
   void tenant.fetchMeta();
   void fetchRatings();
-  insightsRef.value?.hydrate(true);
-  // Re-fetch readiness data (counts, sold-out count, name maps) so the
-  // readiness card and the alerts that depend on it stay in sync.
+  // Re-fetch readiness data (counts, sold-out count) so the readiness card and
+  // the alerts that depend on it stay in sync.
   readinessRef.value?.load();
 };
 
@@ -680,8 +460,6 @@ onMounted(async () => {
   //    before these additional calls hit the network.
   nextTick(() => {
     void fetchRatings();
-    // OwnerDashboardInsights mounts and calls its own hydrate() in onMounted,
-    // so no explicit trigger needed here.
   });
 
   // 3. Background poll setup

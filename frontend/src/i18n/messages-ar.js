@@ -310,6 +310,10 @@ const arabicMessages = {
     "navDesktop": "تنقل المالك",
     "navMobile": "تنقل المالك"
   },
+  "ownerAnalytics": {
+    "kicker": "الأداء",
+    "title": "التحليلات"
+  },
   "ownerHome": {
     "kicker": "لوحة المالك",
     "title": "أطلق قائمتك وأدرها",

@@ -32,6 +32,7 @@ const WaiterPage = () => import("../pages/WaiterPage.vue");
 const FindMyOrder = () => import("../pages/FindMyOrder.vue");
 
 const OwnerHome = () => import("../pages/OwnerHome.vue");
+const OwnerAnalytics = () => import("../pages/OwnerAnalytics.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
 const OwnerMenuBuilder = () => import("../pages/OwnerMenuBuilder.vue");
 const OwnerOrders = () => import("../pages/OwnerOrders.vue");
@@ -129,6 +130,12 @@ const routes = [
         path: "",
         name: "owner-home",
         component: OwnerHome,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "analytics",
+        name: "owner-analytics",
+        component: OwnerAnalytics,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {

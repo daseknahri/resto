@@ -156,6 +156,10 @@
                 </button>
                 <transition name="ui-fade">
                   <div v-if="settingsOpen" class="owner-settings-menu" role="menu" :aria-label="t('common.profile')">
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-analytics' }" @click="closeSettingsMenu">
+                      <AppIcon name="chart" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerAnalytics.title") }}</span>
+                    </RouterLink>
                     <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile' }" @click="closeSettingsMenu">
                       <AppIcon name="settings" class="owner-settings-item-icon" />
                       <span>{{ t("common.profile") }}</span>

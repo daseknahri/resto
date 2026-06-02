@@ -1757,6 +1757,10 @@ export const messages = {
       contactSupport: "Need help?",
       directBookingHint: "This restaurant also accepts reservations on an external platform."
     },
+    ownerAnalytics: {
+      kicker: "Performance",
+      title: "Analytics",
+    },
     ownerHome: {
       kicker: "Owner dashboard",
       title: "Launch and manage your menu",
@@ -4634,6 +4638,10 @@ export const messages = {
       bookingSummary: "Votre reservation",
       contactSupport: "Besoin d'aide ?",
       directBookingHint: "Ce restaurant accepte aussi les reservations sur une plateforme externe."
+    },
+    ownerAnalytics: {
+      kicker: "Performance",
+      title: "Analytique",
     },
     ownerHome: {
       readinessDone: "Tout est prêt ! Votre menu est en ligne et prêt pour vos clients.",
