@@ -237,7 +237,7 @@
       <!-- Selected calendar reservation detail (quick panel) -->
       <div
         v-if="viewMode === 'calendar' && selectedCalendarRes"
-        class="rounded-2xl border border-slate-700/60 bg-slate-900/80 p-4 space-y-2 text-sm"
+        class="ui-panel p-4 space-y-2 text-sm"
       >
         <div class="flex items-start justify-between gap-3">
           <div>

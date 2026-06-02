@@ -4,8 +4,8 @@
     <div class="ui-panel space-y-3 p-4 sm:p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
-          <p class="ui-section-kicker">{{ t("ownerOrders.kicker") }}</p>
-          <h1 class="text-2xl font-semibold text-white">{{ t("ownerOrders.title") }}</h1>
+          <p class="ui-kicker">{{ t("ownerOrders.kicker") }}</p>
+          <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerOrders.title") }}</h1>
           <p class="text-sm text-slate-400">{{ t("ownerOrders.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
