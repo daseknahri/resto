@@ -231,11 +231,11 @@
     </Transition>
 
     <main id="main-content" class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
-      <RouterView v-slot="{ Component, route: viewRoute }">
+      <RouterView v-slot="{ Component }">
         <Transition name="ui-route" mode="out-in">
-          <div :key="viewRoute.fullPath" class="ui-route-frame">
+          <KeepAlive :max="8" :exclude="KEEPALIVE_EXCLUDE">
             <component :is="Component" />
-          </div>
+          </KeepAlive>
         </Transition>
       </RouterView>
     </main>
@@ -492,8 +492,39 @@ const onLayoutPageVisible = () => {
   }
 };
 
+// Owner pages kept alive across navigation render instantly on revisit (state +
+// scroll preserved, no refetch). These are excluded because they poll live data,
+// have lifecycle cleanup that must run on unmount, or are editing surfaces that
+// must stay fresh — they keep their normal mount/unmount behaviour. Names come
+// from each page's defineOptions({ name }).
+const KEEPALIVE_EXCLUDE = [
+  "OwnerHome",
+  "OwnerOrders",
+  "OwnerKitchen",
+  "OwnerMenuBuilder",
+  "OwnerPromotions",
+  "OwnerTables",
+];
+
+// Warm the chunks for the most-visited owner pages once the browser is idle, so
+// the first navigation to them doesn't pay a JS download. Same dynamic imports the
+// router uses, so this just fills the module cache — no duplicate chunk.
+const prefetchOwnerChunks = () => {
+  if (typeof window === "undefined") return;
+  const run = () => {
+    import("../pages/OwnerOrders.vue");
+    import("../pages/OwnerMenuBuilder.vue");
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    setTimeout(run, 1500);
+  }
+};
+
 onMounted(async () => {
   activateTheme(); // paint the saved dark/light choice onto <html>
+  prefetchOwnerChunks();
   if (!tenant.meta && !tenant.loading) {
     await tenant.fetchMeta();
   }

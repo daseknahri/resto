@@ -589,6 +589,10 @@ import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
 import { escapeHtml } from "../lib/escape";
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (live orders — polls and must mount & unmount normally).
+defineOptions({ name: "OwnerOrders" });
+
 const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();

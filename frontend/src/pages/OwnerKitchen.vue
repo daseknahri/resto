@@ -164,6 +164,10 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (live kitchen display — polls and must mount & unmount normally).
+defineOptions({ name: "OwnerKitchen" });
+
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 

@@ -623,13 +623,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onActivated, onMounted, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import ReservationCalendar from "../components/ReservationCalendar.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
 import { safeExternalUrl } from "../lib/escape";
+import { readCache, writeCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
+
+// SWR cache for the default (unfiltered, page 1) list — read only on initial
+// mount for an instant first paint, then revalidated silently. fetchReservations
+// itself always hits the network, so the many post-mutation refetches never serve
+// a stale status; they just refresh this cache when the default view is active.
+const RES_CACHE = "owner.reservations";
 
 const toast = useToastStore();
 const { t, formatDateTime } = useI18n();
@@ -826,8 +833,16 @@ const buildListParams = () => ({
   page_size: pageSize.value,
 });
 
-const fetchReservations = async () => {
-  loading.value = true;
+const isDefaultReservationView = () =>
+  !statusFilter.value &&
+  !reminderFilter.value &&
+  !searchQuery.value &&
+  !dateFrom.value &&
+  !dateTo.value &&
+  page.value === 1;
+
+const fetchReservations = async ({ silent = false } = {}) => {
+  if (!silent) loading.value = true;
   error.value = "";
   try {
     const res = await api.get("/owner/reservations/", { params: buildListParams() });
@@ -849,12 +864,20 @@ const fetchReservations = async () => {
       if (payload.counts) serverCounts.value = { ...serverCounts.value, ...payload.counts };
     }
     selectedIds.value = [];
+    // Keep the default-view cache warm with the freshest data.
+    if (isDefaultReservationView()) {
+      writeCache(RES_CACHE, {
+        reservations: reservations.value,
+        pagination: pagination.value,
+        counts: serverCounts.value,
+      });
+    }
   } catch (err) {
     const message = parseApiError(err, t("ownerReservations.loadFailed"));
     error.value = message;
-    toast.show(message, "error");
+    if (!silent) toast.show(message, "error");
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -1261,7 +1284,28 @@ const waitlistStatusClass = (status) => {
 };
 
 onMounted(() => {
-  fetchReservations();
+  // Instant first paint from cache (default view only), then revalidate silently.
+  const cached = isDefaultReservationView() ? readCache(RES_CACHE) : null;
+  if (cached) {
+    reservations.value = Array.isArray(cached.reservations) ? cached.reservations : [];
+    pagination.value = cached.pagination || pagination.value;
+    if (cached.counts) serverCounts.value = { ...serverCounts.value, ...cached.counts };
+    fetchReservations({ silent: true });
+  } else {
+    fetchReservations();
+  }
+  fetchWaitlist();
+});
+
+// Kept alive (see OwnerLayout) — onMounted won't re-run on revisit, so silently
+// revalidate the list (and waitlist) when the user navigates back to this page.
+let reservationsActivatedOnce = false;
+onActivated(() => {
+  if (!reservationsActivatedOnce) {
+    reservationsActivatedOnce = true; // first activation pairs with onMounted
+    return;
+  }
+  fetchReservations({ silent: true });
   fetchWaitlist();
 });
 </script>

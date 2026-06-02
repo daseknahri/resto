@@ -273,6 +273,10 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (has event-listener cleanup that must run on unmount).
+defineOptions({ name: "OwnerPromotions" });
+
 const { t } = useI18n();
 const toast = useToastStore();
 

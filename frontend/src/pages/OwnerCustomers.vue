@@ -185,13 +185,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import api from "../lib/api";
+import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t, currentLocale } = useI18n();
+
+// SWR cache for the default (unfiltered) view only — so returning to the page
+// renders instantly and revalidates in the background. Searches/filters/sorts
+// always hit the network fresh (and aren't cached, to avoid localStorage bloat).
+const CUSTOMERS_CACHE = "owner.customers";
+const CUSTOMERS_TTL = 2 * 60 * 1000; // 2 min
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(false);
@@ -229,8 +236,23 @@ const columns = computed(() => [
 ]);
 
 // ── API ───────────────────────────────────────────────────────────────────────
-const fetchCustomers = async () => {
-  loading.value = true;
+const isDefaultView = () =>
+  activeSegment.value === "total" &&
+  !search.value.trim() &&
+  sortKey.value === "last_order" &&
+  sortOrder.value === "desc";
+
+const fetchCustomers = async ({ silent = false } = {}) => {
+  const useCache = isDefaultView();
+  const cached = useCache ? readCache(CUSTOMERS_CACHE) : null;
+  if (cached) {
+    customers.value = cached.customers || [];
+    summary.value = cached.summary || null;
+    if (isFresh(CUSTOMERS_CACHE, CUSTOMERS_TTL)) return; // fresh → no network
+    // stale → revalidate silently below (no spinner)
+  } else if (!silent) {
+    loading.value = true;
+  }
   error.value = false;
   try {
     const params = {
@@ -243,8 +265,9 @@ const fetchCustomers = async () => {
     const { data } = await api.get("/owner/customers/", { params });
     customers.value = data.customers || [];
     summary.value = data.summary || null;
+    if (useCache) writeCache(CUSTOMERS_CACHE, data);
   } catch {
-    error.value = true;
+    if (!cached) error.value = true; // only surface the error state if we have nothing
   } finally {
     loading.value = false;
   }
@@ -336,5 +359,16 @@ const reviewScoreClass = (score) => {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(fetchCustomers);
+
+// This page is kept alive (see OwnerLayout), so onMounted won't re-run on revisit.
+// Silently revalidate the current view when the user navigates back to it.
+let customersActivatedOnce = false;
+onActivated(() => {
+  if (!customersActivatedOnce) {
+    customersActivatedOnce = true; // first activation pairs with onMounted's load
+    return;
+  }
+  fetchCustomers({ silent: true });
+});
 watch(currentLocale, fetchCustomers);
 </script>

@@ -157,6 +157,10 @@ import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
 import StepDishes from "../onboarding/StepDishes.vue";
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (editing surface — keep its data fresh and its cleanup running on unmount).
+defineOptions({ name: "OwnerMenuBuilder" });
+
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();

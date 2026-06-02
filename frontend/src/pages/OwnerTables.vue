@@ -415,6 +415,10 @@ import { useTenantStore } from "../stores/tenant";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 import { escapeHtml } from "../lib/escape";
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (has listener cleanup that must run on unmount).
+defineOptions({ name: "OwnerTables" });
+
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t, currentLocale } = useI18n();

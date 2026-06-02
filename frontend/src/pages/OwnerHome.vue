@@ -377,6 +377,10 @@ import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
 
+// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
+// (it polls / has lifecycle cleanup and must mount & unmount normally).
+defineOptions({ name: "OwnerHome" });
+
 const session = useSessionStore();
 const tenant = useTenantStore();
 const order = useOrderStore();
