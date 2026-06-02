@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="space-y-4">
     <!-- Header -->
-    <div class="ui-panel space-y-3 p-4 sm:p-5">
+    <div class="ui-panel space-y-3 p-4 sm:p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-section-kicker">{{ t("ownerOrders.kicker") }}</p>
@@ -198,7 +198,7 @@
       <article
         v-for="o in filteredOrders"
         :key="o.id"
-        class="ui-panel space-y-4 p-4 sm:p-5 transition-colors"
+        class="ui-panel space-y-4 p-4 sm:p-4 transition-colors"
         :class="orderCardClass(o)"
       >
         <!-- Order header -->

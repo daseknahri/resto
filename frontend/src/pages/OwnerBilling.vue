@@ -1,14 +1,14 @@
 <template>
-  <div class="space-y-5">
+  <div class="space-y-4">
 
     <!-- ── Current plan ──────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-5 p-5">
+    <section class="ui-panel space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.currentPlanSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.yourPlan') }}</h3>
       </div>
 
-      <div class="rounded-2xl border border-[var(--color-secondary)]/30 bg-gradient-to-br from-[var(--color-secondary)]/8 to-transparent p-5">
+      <div class="rounded-2xl border border-[var(--color-secondary)]/30 bg-gradient-to-br from-[var(--color-secondary)]/8 to-transparent p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="space-y-3">
             <div class="flex items-center gap-3">
@@ -82,13 +82,13 @@
     </section>
 
     <!-- ── Available upgrades ─────────────────────────────────────────── -->
-    <section v-if="loading" class="ui-panel p-5">
+    <section v-if="loading" class="ui-panel p-4">
       <div class="mb-3 space-y-1">
         <div class="h-2.5 w-20 animate-pulse rounded bg-slate-700/50" />
         <div class="h-5 w-40 animate-pulse rounded bg-slate-700/60" />
       </div>
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <div v-for="i in 2" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/40 p-5 space-y-3">
+        <div v-for="i in 2" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/40 p-4 space-y-3">
           <div class="h-5 w-24 rounded-full bg-slate-700/60" />
           <div class="space-y-2">
             <div v-for="j in 4" :key="j" class="flex items-center gap-2">
@@ -101,7 +101,7 @@
       </div>
     </section>
 
-    <section v-else-if="targets.length" class="ui-panel space-y-5 p-5">
+    <section v-else-if="targets.length" class="ui-panel space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.upgradeSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.upgradeTitle') }}</h3>
@@ -116,7 +116,7 @@
           v-for="target in targets"
           :key="target.code"
           type="button"
-          class="relative rounded-2xl border p-5 text-left transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:cursor-not-allowed disabled:opacity-40"
+          class="relative rounded-2xl border p-4 text-left transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:cursor-not-allowed disabled:opacity-40"
           :class="selectedCode === target.code
             ? 'border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/6'
             : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-900/80'"
@@ -173,7 +173,7 @@
           v-if="selectedCode && !hasPendingRequest"
           class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"
         >
-          <div class="space-y-4 p-5">
+          <div class="space-y-4 p-4">
             <div class="space-y-0.5">
               <p class="text-sm font-semibold text-white">
                 {{ t('ownerBilling.requestFormTitle', { plan: selectedPlanName }) }}
@@ -208,12 +208,12 @@
       </Transition>
     </section>
 
-    <section v-else-if="!loading" class="ui-panel p-5">
+    <section v-else-if="!loading" class="ui-panel p-4">
       <p class="py-4 text-center text-sm text-slate-400">{{ t('ownerBilling.highestTier') }}</p>
     </section>
 
     <!-- ── Request history ────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-5 p-5">
+    <section class="ui-panel space-y-4 p-4">
       <div class="flex items-center justify-between gap-3">
         <div class="space-y-0.5">
           <p class="ui-section-kicker">{{ t('ownerBilling.historySection') }}</p>
@@ -314,7 +314,7 @@
     </section>
 
     <!-- ── Data & privacy ──────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-5">
+    <section class="ui-panel space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.dataExportSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.dataExportTitle') }}</h3>
@@ -338,7 +338,7 @@
     </section>
 
     <!-- ── Commission statement ─────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-5">
+    <section class="ui-panel space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.commissionSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.commissionTitle') }}</h3>
@@ -375,7 +375,7 @@
     </section>
 
     <!-- ── Close account ────────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-5">
+    <section class="ui-panel space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.deletionSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.deletionTitle') }}</h3>

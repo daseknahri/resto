@@ -1,11 +1,11 @@
 <template>
-  <section class="space-y-6 ui-safe-bottom">
+  <section class="space-y-5 ui-safe-bottom">
     <header
       class="ui-workspace-stage overflow-hidden"
       :class="isPublished ? 'border-emerald-500/30' : 'border-amber-500/30'"
     >
       <div class="relative ui-workspace-grid gap-5">
-        <div class="space-y-5">
+        <div class="space-y-4">
           <span class="ui-chip-strong w-fit">{{ t("ownerLaunchSuccess.launch") }}</span>
           <div class="space-y-2">
             <h2 class="ui-display text-3xl font-semibold md:text-4xl" :class="isPublished ? 'text-emerald-100' : 'text-amber-100'">
@@ -72,7 +72,7 @@
     </header>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr),420px]">
-      <article v-if="isPublished" class="ui-spotlight-card space-y-3 p-5">
+      <article v-if="isPublished" class="ui-spotlight-card space-y-3 p-4">
         <div class="space-y-1">
           <p class="ui-kicker">{{ t("ownerLaunchSuccess.shareMessageTitle") }}</p>
           <h3 class="text-lg font-semibold text-white">{{ tenantName }}</h3>
@@ -93,7 +93,7 @@
         </div>
       </article>
 
-      <article class="ui-action-tile space-y-3 p-5">
+      <article class="ui-action-tile space-y-3 p-4">
         <p class="ui-kicker">{{ t("ownerLaunchSuccess.nextActions") }}</p>
         <div class="space-y-2 text-sm text-slate-300">
           <div class="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-3">

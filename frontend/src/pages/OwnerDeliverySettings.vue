@@ -15,7 +15,7 @@
     <!-- Loading: skeleton -->
     <div v-if="loading" class="space-y-4">
       <!-- Zone card skeleton -->
-      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5 space-y-3">
+      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-4 space-y-3">
         <div class="h-3.5 w-24 rounded bg-slate-700/60" />
         <div class="flex items-center justify-between">
           <div class="h-4 w-32 rounded bg-slate-700/60" />
@@ -27,7 +27,7 @@
         </div>
       </div>
       <!-- Settings card skeleton -->
-      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5 space-y-4">
+      <div class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-4 space-y-4">
         <div class="h-3.5 w-28 rounded bg-slate-700/60" />
         <div class="grid gap-3 sm:grid-cols-2">
           <div v-for="i in 4" :key="i" class="space-y-1.5">
@@ -53,7 +53,7 @@
 
     <template v-else>
       <!-- Assigned zone card -->
-      <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-4">
+      <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
         <h2 class="text-sm font-semibold text-slate-300">{{ t('ownerDelivery.zoneTitle') }}</h2>
 
         <div v-if="zone" class="space-y-3">
@@ -91,7 +91,7 @@
       </div>
 
       <!-- Radius setting (only shown when a zone is assigned) -->
-      <div v-if="zone" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-4">
+      <div v-if="zone" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
         <div>
           <h2 class="text-sm font-semibold text-slate-300">{{ t('ownerDelivery.radiusTitle') }}</h2>
           <p class="text-xs text-slate-500 mt-0.5">{{ t('ownerDelivery.radiusHint', { max: zone.approx_radius_km }) }}</p>

@@ -1,8 +1,8 @@
 <template>
-  <section class="space-y-4 pb-24 sm:space-y-5 sm:pb-6">
+  <section class="space-y-4 pb-24 sm:space-y-4 sm:pb-6">
 
     <!-- ── CRITICAL SECTION: renders on first paint from cached store data ──── -->
-    <article class="ui-workspace-stage ui-fade-up space-y-4 p-3 sm:space-y-4 sm:p-4 md:p-5">
+    <article class="ui-workspace-stage ui-fade-up space-y-4 p-3 sm:space-y-4 sm:p-4 md:p-4">
 
       <!-- Header row -->
       <div class="flex flex-wrap items-start justify-between gap-3">

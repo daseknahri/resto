@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
     <!-- Header -->
-    <div class="ui-panel space-y-3 p-4 sm:p-5">
+    <div class="ui-panel space-y-3 p-4 sm:p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-section-kicker">{{ t("ownerRatings.kicker") }}</p>

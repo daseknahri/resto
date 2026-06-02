@@ -1,6 +1,6 @@
 ﻿<template>
-  <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
-    <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
+  <section class="space-y-4 ui-safe-bottom pb-24 sm:space-y-5 sm:pb-6">
+    <header class="no-print rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-4">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="flex items-start gap-3">
           <div class="space-y-1.5">
@@ -275,7 +275,7 @@
         @click.self="closeSetup"
         @keydown.esc="closeSetup"
       >
-        <div ref="setupDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-tables-setup-dialog-title" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-5">
+        <div ref="setupDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-tables-setup-dialog-title" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl md:p-4">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
             <p id="owner-tables-setup-dialog-title" class="ui-kicker">{{ formMode === "create" ? t("ownerTables.createTable") : t("ownerTables.bulkGenerate") }}</p>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeSetup">

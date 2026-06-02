@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-6 pb-6">
+  <div class="space-y-5 pb-6">
 
     <!-- Header -->
     <div class="flex items-start justify-between gap-3">
@@ -15,7 +15,7 @@
 
     <!-- Loading: skeleton cards -->
     <div v-if="loading" class="space-y-4">
-      <div v-for="i in 3" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-5">
+      <div v-for="i in 3" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/60 p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="flex-1 space-y-2">
             <div class="flex items-center gap-2">
@@ -54,7 +54,7 @@
       <li
         v-for="sale in sales"
         :key="sale.id"
-        class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 transition-colors hover:border-slate-600"
+        class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 transition-colors hover:border-slate-600"
       >
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <!-- Info -->
@@ -125,7 +125,7 @@
     </ul>
 
     <!-- How it works info box -->
-    <div class="rounded-2xl border border-slate-700/40 bg-slate-900/30 p-5">
+    <div class="rounded-2xl border border-slate-700/40 bg-slate-900/30 p-4">
       <h3 class="mb-2 text-sm font-semibold text-slate-200">{{ t('ownerFlashSales.howItWorksTitle') }}</h3>
       <ul class="space-y-1.5 text-xs text-slate-400">
         <li>⚡ {{ t('ownerFlashSales.howItWorks1') }}</li>

@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-6 pb-6">
+  <div class="space-y-5 pb-6">
     <!-- Page header -->
     <div class="space-y-0.5">
       <p class="ui-kicker">{{ t('ownerWallet.kicker') }}</p>
@@ -8,7 +8,7 @@
     </div>
 
     <!-- Customer search card -->
-    <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-4">
+    <div class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.searchTitle') }}</p>
 
       <!-- Search input -->
@@ -63,7 +63,7 @@
       leave-active-class="transition-all duration-150"
       leave-to-class="opacity-0 translate-y-2"
     >
-      <div v-if="selected" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-4">
+      <div v-if="selected" class="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 space-y-4">
         <!-- Selected customer summary -->
         <div class="flex items-center justify-between gap-3">
           <div>

@@ -1,6 +1,6 @@
 ﻿<template>
-  <section class="space-y-5 ui-safe-bottom pb-24 sm:space-y-6 sm:pb-6">
-    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-5">
+  <section class="space-y-4 ui-safe-bottom pb-24 sm:space-y-5 sm:pb-6">
+    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-4">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>

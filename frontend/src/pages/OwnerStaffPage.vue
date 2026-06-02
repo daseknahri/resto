@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-6 max-w-2xl">
+  <div class="space-y-5 max-w-2xl">
     <!-- Header -->
     <div class="flex items-start justify-between gap-3">
       <div>
@@ -13,7 +13,7 @@
     </div>
 
     <!-- Create form -->
-    <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-5 space-y-4">
+    <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t("ownerStaff.inviteSection") }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <input
@@ -55,7 +55,7 @@
     <div
       v-if="newCredentials"
       role="status"
-      class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-5 space-y-3"
+      class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-4 space-y-3"
     >
       <p class="text-sm font-semibold text-emerald-300">{{ t("ownerStaff.credentialsTitle") }}</p>
       <p class="text-xs text-slate-400">{{ t("ownerStaff.credentialsHint") }}</p>
