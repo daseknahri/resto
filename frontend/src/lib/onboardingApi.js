@@ -172,24 +172,30 @@ export const superCategoryApi = {
       disabled_note: String(group.disabled_note || "").trim(),
     };
     try {
+      let result;
       if (group.id) {
         const slug = String(group.slug || baseSlug || "").trim();
         const updatePayload = slug ? { ...payload, slug } : payload;
         const { data } = await api.put(`/super-categories/${group.id}/`, updatePayload);
-        return data;
+        result = data;
+      } else {
+        result = await withSlugRetry({
+          baseSlug,
+          maxLen: 160,
+          requestFn: async (slug) => {
+            const { data } = await api.post("/super-categories/", { ...payload, slug });
+            return data;
+          },
+        });
       }
-      return await withSlugRetry({
-        baseSlug,
-        maxLen: 160,
-        requestFn: async (slug) => {
-          const { data } = await api.post("/super-categories/", { ...payload, slug });
-          return data;
-        },
-      });
+      // Bust the menu cache so the customer-facing menu reflects the change.
+      // (Previously this ran after the try/catch and was unreachable — the
+      // early returns inside try meant the cache was never invalidated.)
+      bustCache(MENU_CACHE);
+      return result;
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveSuperCategoryFailed"));
     }
-    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/super-categories/${id}/`);
@@ -215,24 +221,27 @@ export const categoryApi = {
       is_published: cat.is_published ?? true,
     };
     try {
+      let result;
       if (cat.id) {
         const slug = String(cat.slug || baseSlug || "").trim();
         const updatePayload = slug ? { ...payload, slug } : payload;
         const { data } = await api.put(`/categories/${cat.id}/`, updatePayload);
-        return data;
+        result = data;
+      } else {
+        result = await withSlugRetry({
+          baseSlug,
+          maxLen: 160,
+          requestFn: async (slug) => {
+            const { data } = await api.post("/categories/", { ...payload, slug });
+            return data;
+          },
+        });
       }
-      return await withSlugRetry({
-        baseSlug,
-        maxLen: 160,
-        requestFn: async (slug) => {
-          const { data } = await api.post("/categories/", { ...payload, slug });
-          return data;
-        },
-      });
+      bustCache(MENU_CACHE); // was unreachable after the early returns above
+      return result;
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveCategoryFailed"));
     }
-    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/categories/${id}/`);
@@ -263,24 +272,27 @@ export const dishApi = {
       is_published: dish.is_published ?? true,
     };
     try {
+      let result;
       if (dish.id) {
         const slug = String(dish.slug || baseSlug || "").trim();
         const updatePayload = slug ? { ...payload, slug } : payload;
         const { data } = await api.put(`/dishes/${dish.id}/`, updatePayload);
-        return data;
+        result = data;
+      } else {
+        result = await withSlugRetry({
+          baseSlug,
+          maxLen: 210,
+          requestFn: async (slug) => {
+            const { data } = await api.post("/dishes/", { ...payload, slug });
+            return data;
+          },
+        });
       }
-      return await withSlugRetry({
-        baseSlug,
-        maxLen: 210,
-        requestFn: async (slug) => {
-          const { data } = await api.post("/dishes/", { ...payload, slug });
-          return data;
-        },
-      });
+      bustCache(MENU_CACHE); // was unreachable after the early returns above
+      return result;
     } catch (err) {
       throw asValidationError(err, translate("onboardingApi.saveDishFailed"));
     }
-    bustCache(MENU_CACHE);
   },
   async remove(id) {
     await api.delete(`/dishes/${id}/`);
