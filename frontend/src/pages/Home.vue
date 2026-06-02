@@ -32,6 +32,19 @@
             <RouterLink v-if="session.canEditTenantMenu" to="/owner" class="ui-btn-outline ui-touch-target">{{ t("home.openWorkspace") }}</RouterLink>
           </div>
 
+          <!-- Customer / marketplace entry point -->
+          <div class="flex items-center gap-3 pt-1">
+            <div class="h-px flex-1 bg-slate-800" />
+            <span class="text-xs text-slate-500">{{ t("home.customerDivider") }}</span>
+            <div class="h-px flex-1 bg-slate-800" />
+          </div>
+          <RouterLink
+            to="/order"
+            class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--color-secondary,#f59e0b)]/40 bg-[var(--color-secondary,#f59e0b)]/8 px-5 py-2.5 text-sm font-semibold text-[var(--color-secondary,#f59e0b)] transition-colors hover:border-[var(--color-secondary,#f59e0b)]/70 hover:bg-[var(--color-secondary,#f59e0b)]/15 sm:w-auto"
+          >
+            🍽️ {{ t("home.browseRestaurants") }}
+          </RouterLink>
+
           <div class="grid gap-3 pt-2 sm:grid-cols-3">
             <article class="ui-metric-card">
               <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.launchTime") }}</p>

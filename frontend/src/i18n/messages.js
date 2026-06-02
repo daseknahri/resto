@@ -100,6 +100,8 @@ export const messages = {
       heroTitle: "Build and sell premium restaurant menus with one strong SaaS core.",
       heroSubtitle: "One product, three user interfaces: conversion landing, owner workspace, and customer menu. Launch with Basic now, then scale to Growth and Pro.",
       getMyMenu: "Get my menu",
+      customerDivider: "Hungry?",
+      browseRestaurants: "Browse restaurants",
       viewLiveDemo: "View live demo",
       openWorkspace: "Open owner workspace",
       stats: {
@@ -3160,6 +3162,8 @@ export const messages = {
       heroTitle: "Creez et vendez des menus premium avec un socle SaaS solide.",
       heroSubtitle: "Un seul produit, trois interfaces: landing de conversion, espace proprietaire et menu client. Lancez Basic maintenant puis passez a Growth et Pro.",
       getMyMenu: "Obtenir mon menu",
+      customerDivider: "Vous avez faim ?",
+      browseRestaurants: "Parcourir les restaurants",
       viewLiveDemo: "Voir la demo",
       openWorkspace: "Ouvrir l'espace proprietaire",
       stats: {

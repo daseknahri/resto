@@ -78,6 +78,8 @@ const arabicMessages = {
     "heroTitle": "أنشئ وبِع قوائم مطاعم احترافية عبر منصة SaaS قوية واحدة.",
     "heroSubtitle": "منتج واحد، ثلاث واجهات استخدام: صفحة تحويل، مساحة عمل للمالك، وقائمة عميل مهيأة للجوال. ابدأ الآن بباقة Basic ثم توسع لاحقاً إلى Growth وPro.",
     "getMyMenu": "أريد قائمتي",
+    "customerDivider": "جائع؟",
+    "browseRestaurants": "تصفّح المطاعم",
     "viewLiveDemo": "شاهد العرض الحي",
     "openWorkspace": "افتح مساحة المالك",
     "stats": {
