@@ -263,12 +263,18 @@
       ><AppIcon name="plus" class="h-3.5 w-3.5 text-slate-950" /></button>
     </div>
   </div>
+
+  <!-- Quick-add sheet for items that need a required choice (skips the full detail page) -->
+  <Teleport to="body">
+    <QuickAddSheet v-if="showQuickAdd" :dish="dish" :currency="currency" @close="showQuickAdd = false" />
+  </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from './AppIcon.vue'
+import QuickAddSheet from './QuickAddSheet.vue'
 import { useI18n } from '../composables/useI18n'
 import { withImageFallback } from '../lib/images'
 import { useCartStore } from '../stores/cart'
@@ -305,6 +311,11 @@ const needsDetailPage = computed(() => {
   return hasRequiredGroups || hasRequiredOptions
 })
 
+// Quick-add sheet handles the common case (a few option groups); complex dishes
+// (more than 3 groups) still get the full detail page.
+const showQuickAdd = ref(false)
+const useQuickAdd = computed(() => needsDetailPage.value && (props.dish.option_groups || []).length <= 3)
+
 // ── Cart integration ────────────────────────────────────────────────────────
 /** Stable line key for a simple (no-option) cart entry */
 const lineKey = computed(() => `${props.dish.slug}::`)
@@ -320,7 +331,10 @@ const handleOpen = () => {
 }
 
 const handleAdd = () => {
-  if (needsDetailPage.value) { handleOpen(); return }
+  if (needsDetailPage.value) {
+    if (useQuickAdd.value) { showQuickAdd.value = true } else { handleOpen() }
+    return
+  }
   cart.add({
     key:           lineKey.value,
     slug:          props.dish.slug,
