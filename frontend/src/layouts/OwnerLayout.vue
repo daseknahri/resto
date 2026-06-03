@@ -176,18 +176,6 @@
                       <AppIcon name="tag" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.promotions") }}</span>
                     </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-flash-sales' }" @click="closeSettingsMenu">
-                      <AppIcon name="sparkles" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.flashSales") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-delivery' }" @click="closeSettingsMenu">
-                      <AppIcon name="truck" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.delivery") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-customers' }" @click="closeSettingsMenu">
-                      <AppIcon name="user" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.customers") }}</span>
-                    </RouterLink>
                     <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
                       <AppIcon name="star" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.loyalty") }}</span>
@@ -416,12 +404,9 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/staff")) return t("ownerLayout.staff");
   if (path.startsWith("/owner/ratings")) return t("ownerLayout.ratings");
   if (path.startsWith("/owner/kitchen")) return t("ownerLayout.kitchen");
-  if (path.startsWith("/owner/customers")) return t("ownerLayout.customers");
   if (path.startsWith("/owner/loyalty")) return t("ownerLayout.loyalty");
   if (path.startsWith("/owner/wallet")) return t("ownerLayout.wallet");
   if (path.startsWith("/owner/promotions")) return t("ownerLayout.promotions");
-  if (path.startsWith("/owner/flash-sales")) return t("ownerLayout.flashSales");
-  if (path.startsWith("/owner/delivery")) return t("ownerLayout.delivery");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);

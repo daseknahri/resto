@@ -43,9 +43,6 @@ const OwnerStaffPage = () => import("../pages/OwnerStaffPage.vue");
 const OwnerRatings = () => import("../pages/OwnerRatings.vue");
 const OwnerKitchen = () => import("../pages/OwnerKitchen.vue");
 const OwnerPromotions = () => import("../pages/OwnerPromotions.vue");
-const OwnerFlashSales = () => import("../pages/OwnerFlashSales.vue");
-const OwnerDeliverySettings = () => import("../pages/OwnerDeliverySettings.vue");
-const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
@@ -207,24 +204,6 @@ const routes = [
         path: "promotions",
         name: "owner-promotions",
         component: OwnerPromotions,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
-      },
-      {
-        path: "flash-sales",
-        name: "owner-flash-sales",
-        component: OwnerFlashSales,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
-      },
-      {
-        path: "delivery",
-        name: "owner-delivery",
-        component: OwnerDeliverySettings,
-        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
-      },
-      {
-        path: "customers",
-        name: "owner-customers",
-        component: OwnerCustomers,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {

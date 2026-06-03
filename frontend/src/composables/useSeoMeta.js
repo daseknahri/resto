@@ -100,11 +100,8 @@ const routeTitleLabel = (route, t) => {
   if (name === "owner-tables") return t("ownerLayout.tablesQr");
   if (name === "owner-kitchen") return t("ownerLayout.kitchen");
   if (name === "owner-staff") return t("ownerLayout.staff");
-  if (name === "owner-customers") return t("ownerLayout.customers");
   if (name === "owner-ratings") return t("ownerLayout.ratings");
   if (name === "owner-promotions") return t("ownerLayout.promotions");
-  if (name === "owner-flash-sales") return t("ownerLayout.flashSales");
-  if (name === "owner-delivery") return t("ownerLayout.delivery");
   if (name === "owner-loyalty") return t("ownerLayout.loyalty");
   if (name === "owner-wallet") return t("ownerLayout.wallet");
   if (name === "owner-profile") return t("ownerLayout.profile");
