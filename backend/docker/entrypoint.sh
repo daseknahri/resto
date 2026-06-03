@@ -1,9 +1,26 @@
 #!/bin/sh
 set -eu
 
+echo "[entrypoint] migrate_schemas --shared"
 python manage.py migrate_schemas --shared --noinput
+echo "[entrypoint] migrate_schemas --tenant"
 python manage.py migrate_schemas --tenant --noinput
+
+# Assert the DB physically matches the models for critical tables. Catches the
+# "migration recorded as applied but column never created" case that `set -e`
+# can't (migrate exits 0). On drift this exits non-zero and -- thanks to set -e --
+# halts startup, so Coolify keeps the old healthy container instead of serving
+# 500s. Bypass only in an emergency with SKIP_SCHEMA_HEALTHCHECK=1.
+if [ "${SKIP_SCHEMA_HEALTHCHECK:-0}" = "1" ]; then
+  echo "[entrypoint] SKIP_SCHEMA_HEALTHCHECK=1 -> skipping schema health check"
+else
+  echo "[entrypoint] check_schema_health"
+  python manage.py check_schema_health
+fi
+
+echo "[entrypoint] collectstatic"
 python manage.py collectstatic --noinput
+echo "[entrypoint] seed_plans"
 python manage.py seed_plans
 
 if [ -n "${DJANGO_SUPERADMIN_EMAIL:-}" ] && [ -n "${DJANGO_SUPERADMIN_PASSWORD:-}" ]; then
