@@ -18,7 +18,8 @@
             {{ soundEnabled ? "🔔" : "🔕" }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="exporting || !order.orders.length" @click="exportCsv">
-            ⬇ {{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}
+            <AppIcon name="download" class="h-3.5 w-3.5" />
+            {{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="order.ordersLoading" @click="refresh">
             <AppIcon name="refresh" class="h-3.5 w-3.5" />

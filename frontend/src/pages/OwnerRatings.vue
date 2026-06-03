@@ -10,7 +10,8 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="exporting || !ratings.length" @click="exportCsv">
-            ⬇ {{ exporting ? t("ownerRatings.exporting") : t("ownerRatings.exportCsv") }}
+            <AppIcon name="download" class="h-3.5 w-3.5" />
+            {{ exporting ? t("ownerRatings.exporting") : t("ownerRatings.exportCsv") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="loading || updating" @click="fetchRatings(true)">
             <AppIcon name="refresh" class="h-3.5 w-3.5" :class="updating ? 'animate-spin' : ''" />
