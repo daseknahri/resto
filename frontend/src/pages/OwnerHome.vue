@@ -1,8 +1,8 @@
 <template>
-  <section class="space-y-4 pb-24 sm:space-y-4 sm:pb-6">
+  <section class="space-y-3 pb-24 sm:pb-6">
 
     <!-- ── CRITICAL SECTION: renders on first paint from cached store data ──── -->
-    <article class="ui-workspace-stage ui-fade-up space-y-4 p-3 sm:space-y-4 sm:p-4 md:p-4">
+    <article class="ui-workspace-stage ui-fade-up space-y-3 p-3 sm:p-4">
 
       <!-- Header row -->
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -18,17 +18,23 @@
 
       <!-- Open / Closed — the first thing an owner checks: are we taking orders? -->
       <div
-        class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors"
+        class="flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors"
         :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'"
       >
-        <div class="space-y-0.5">
-          <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'">
-            {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
-          </p>
-          <p class="text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+        <div class="flex min-w-0 items-center gap-2.5">
+          <span class="relative flex h-2.5 w-2.5 shrink-0">
+            <span v-if="isOpen" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full" :class="isOpen ? 'bg-emerald-400' : 'bg-red-400'" />
+          </span>
+          <div class="min-w-0 leading-tight">
+            <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'">
+              {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
+            </p>
+            <p class="text-[11px] text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+          </div>
         </div>
         <button
-          class="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
+          class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
           :class="isOpen
             ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
             : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
@@ -149,7 +155,7 @@
     <OwnerDashboardReadiness ref="readinessRef" @loaded="onReadinessLoaded" />
 
     <!-- ── LIVE ORDERS: from order store ───────────────────────────────────── -->
-    <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
+    <article class="ui-command-deck space-y-3 p-3 sm:p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
           <AppIcon name="cart" class="owner-home-section-icon" />
