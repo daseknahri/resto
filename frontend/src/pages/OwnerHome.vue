@@ -16,6 +16,29 @@
         </div>
       </div>
 
+      <!-- Open / Closed — the first thing an owner checks: are we taking orders? -->
+      <div
+        class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors"
+        :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'"
+      >
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'">
+            {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
+          </p>
+          <p class="text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
+        </div>
+        <button
+          class="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
+          :class="isOpen
+            ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
+            : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
+          :disabled="togglingOpen"
+          @click="toggleOpen"
+        >
+          {{ togglingOpen ? "…" : (isOpen ? t("ownerHome.closeNow") : t("ownerHome.openNow")) }}
+        </button>
+      </div>
+
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
       <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
@@ -86,29 +109,6 @@
         </div>
       </template>
       <div v-else class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
-
-      <!-- Open / Closed toggle — from tenant store, no fetch -->
-      <div
-        class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors"
-        :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'"
-      >
-        <div class="space-y-0.5">
-          <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'">
-            {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
-          </p>
-          <p class="text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
-        </div>
-        <button
-          class="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
-          :class="isOpen
-            ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
-            : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
-          :disabled="togglingOpen"
-          @click="toggleOpen"
-        >
-          {{ togglingOpen ? "…" : (isOpen ? t("ownerHome.closeNow") : t("ownerHome.openNow")) }}
-        </button>
-      </div>
 
       <!-- Dish availability — pre-seeded with data from readiness to skip double-fetch -->
       <OwnerDashboardDishPanel
@@ -217,7 +217,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="space-y-1">
           <h3 class="inline-flex items-center gap-2 text-base font-semibold">
-            <AppIcon name="plus" class="owner-home-section-icon" />
+            <AppIcon name="card" class="owner-home-section-icon" />
             <span>{{ t("ownerHome.planSection") }}</span>
           </h3>
           <div class="flex flex-wrap items-center gap-2">
