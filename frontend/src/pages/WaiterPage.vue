@@ -34,6 +34,7 @@
       </button>
       <!-- Charge wallet -->
       <button
+        v-if="canManageOrders"
         class="ml-auto shrink-0 rounded-xl border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/12 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20"
         @click="openCharge()"
       >
@@ -41,6 +42,7 @@
       </button>
       <!-- New Order -->
       <button
+        v-if="canManageOrders"
         class="shrink-0 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/25"
         @click="showNewOrder = true"
       >
@@ -209,7 +211,7 @@
         <!-- Action footer -->
         <div class="mt-3 flex items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
           <button
-            v-if="waiter.nextStatus(order.status)"
+            v-if="canManageOrders && waiter.nextStatus(order.status)"
             class="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-opacity"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
@@ -218,7 +220,7 @@
             <span v-if="waiter.updatingOrderIds.has(order.id)">…</span>
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
-          <span v-else class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
+          <span v-else-if="canManageOrders" class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
           <!-- Bill button -->
           <button
             class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
@@ -300,7 +302,7 @@
           </div>
 
           <!-- Pay with wallet (when there's still an outstanding amount) -->
-          <div v-if="billOutstanding > 0" class="px-5 pb-1 no-print">
+          <div v-if="billOutstanding > 0 && canManageOrders" class="px-5 pb-1 no-print">
             <button
               class="w-full rounded-xl border border-emerald-500/60 bg-emerald-500/10 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/20 transition-colors"
               @click="chargeFromBill"
@@ -329,12 +331,17 @@ import { ref, computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, watch
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useTenantStore } from "../stores/tenant";
+import { useSessionStore } from "../stores/session";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 const tenant = useTenantStore();
+const session = useSessionStore();
+// Staff need the 'manage orders' permission to mutate orders or take payment;
+// owners always have it. Read-only staff still see the board.
+const canManageOrders = computed(() => session.canManageOrders);
 const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 const showNewOrder = ref(false);
