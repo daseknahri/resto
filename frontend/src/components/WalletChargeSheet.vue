@@ -64,6 +64,10 @@ import { usePayCodeScanner } from '../composables/usePayCodeScanner';
 import { newIdempotencyKey } from '../lib/idempotency';
 import api from '../lib/api';
 
+const props = defineProps({
+  prefillAmount: { type: [String, Number], default: '' },
+  orderNumber: { type: String, default: '' },
+});
 const emit = defineEmits(['close', 'charged']);
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
@@ -72,7 +76,7 @@ const { scanning, videoEl, start, stop } = usePayCodeScanner();
 const manualToken = ref('');
 const resolving = ref(false);
 const customer = ref(null);
-const amount = ref('');
+const amount = ref(props.prefillAmount ? String(props.prefillAmount) : '');
 const charging = ref(false);
 const error = ref('');
 let chargeKey = null;
@@ -110,7 +114,11 @@ const resolve = async (token) => {
   }
 };
 
-const reset = () => { customer.value = null; amount.value = ''; error.value = ''; };
+const reset = () => {
+  customer.value = null;
+  amount.value = props.prefillAmount ? String(props.prefillAmount) : '';
+  error.value = '';
+};
 
 const charge = async () => {
   error.value = '';
@@ -122,6 +130,7 @@ const charge = async () => {
     const { data } = await api.post('/owner/wallet/charge/', {
       token: customer.value.token,
       amount: value.toFixed(2),
+      order_number: props.orderNumber || '',
       idempotency_key: chargeKey,
     });
     toast.show(t('walletCharge.charged', { amount: fmtMoney(data.amount) }), 'success');

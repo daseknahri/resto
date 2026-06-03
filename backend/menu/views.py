@@ -5053,6 +5053,16 @@ class OwnerWalletChargeView(APIView):
         except WalletError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        # If this charge settles a specific order, reflect it on the order's bill.
+        if order_number:
+            try:
+                from django.db.models import F as _F
+                Order.objects.filter(order_number=order_number).update(
+                    wallet_amount_paid=_F("wallet_amount_paid") + amount
+                )
+            except Exception:
+                pass  # the payment is recorded regardless; bill update is best-effort
+
         return Response({
             "customer_id": int(customer_id),
             "amount": str(amount),

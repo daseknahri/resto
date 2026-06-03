@@ -35,7 +35,7 @@
       <!-- Charge wallet -->
       <button
         class="ml-auto shrink-0 rounded-xl border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/12 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20"
-        @click="showCharge = true"
+        @click="openCharge()"
       >
         {{ t('waiterPage.chargeWalletBtn') }}
       </button>
@@ -56,7 +56,13 @@
     />
 
     <!-- Charge wallet sheet -->
-    <WalletChargeSheet v-if="showCharge" @close="showCharge = false" />
+    <WalletChargeSheet
+      v-if="showCharge"
+      :prefill-amount="chargeContext.amount"
+      :order-number="chargeContext.orderNumber"
+      @close="showCharge = false"
+      @charged="onWalletCharged"
+    />
 
     <!-- Loading skeleton (orders only) -->
     <div v-if="activeTab !== 'shift' && waiter.loading" class="space-y-3">
@@ -293,6 +299,14 @@
             </div>
           </div>
 
+          <!-- Pay with wallet (when there's still an outstanding amount) -->
+          <div v-if="billOutstanding > 0" class="px-5 pb-1 no-print">
+            <button
+              class="w-full rounded-xl border border-emerald-500/60 bg-emerald-500/10 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/20 transition-colors"
+              @click="chargeFromBill"
+            >💰 {{ t('waiterPage.billPayWallet', { amount: fmtOrderPrice(billOutstanding, billOrder.currency) }) }}</button>
+          </div>
+
           <!-- Actions -->
           <div class="flex gap-2 px-5 pb-5 no-print">
             <button
@@ -325,6 +339,31 @@ const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 const showNewOrder = ref(false);
 const showCharge = ref(false);
+const chargeContext = ref({ amount: '', orderNumber: '' });
+
+// Outstanding amount on the open bill (total minus any wallet already applied).
+const billOutstanding = computed(() => {
+  if (!billOrder.value) return 0;
+  const total = Number(billOrder.value.total) || 0;
+  const paid = Number(billOrder.value.wallet_amount_paid) || 0;
+  return Math.max(0, +(total - paid).toFixed(2));
+});
+
+const openCharge = (ctx = { amount: '', orderNumber: '' }) => {
+  chargeContext.value = ctx;
+  showCharge.value = true;
+};
+
+const chargeFromBill = () => {
+  if (!billOrder.value) return;
+  openCharge({ amount: billOutstanding.value.toFixed(2), orderNumber: billOrder.value.order_number });
+  billOrder.value = null;
+};
+
+const onWalletCharged = () => {
+  showCharge.value = false;
+  reload(); // refresh orders so the bill reflects the wallet payment
+};
 const onOrderPlaced = () => {
   // Immediately reload the order list so the new order appears
   waiter.fetchOrders({ silent: true });

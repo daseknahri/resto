@@ -1083,6 +1083,7 @@ export const messages = {
       billTotal: "Total",
       billWallet: "Wallet credit",
       billPrint: "Print",
+      billPayWallet: "Pay {amount} with wallet",
       billClose: "Close",
     },
     ownerProfileSections: {
@@ -4243,6 +4244,7 @@ export const messages = {
       billTotal: "Total",
       billWallet: "Credit portefeuille",
       billPrint: "Imprimer",
+      billPayWallet: "Payer {amount} avec le portefeuille",
       billClose: "Fermer",
     },
     ownerProfileSections: {
