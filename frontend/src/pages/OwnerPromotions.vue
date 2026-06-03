@@ -190,6 +190,12 @@
             <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" :aria-label="t('ownerPromotions.minOrderLabel')" />
           </div>
 
+          <!-- Live preview of what the customer sees -->
+          <div class="rounded-xl border border-indigo-500/25 bg-indigo-500/8 px-4 py-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 mb-1">{{ t('ownerPromotions.previewTitle') }}</p>
+            <p class="text-sm text-slate-200">{{ promoPreview }}</p>
+          </div>
+
           <!-- Days checkboxes -->
           <div class="space-y-1.5">
             <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</label>
@@ -374,6 +380,18 @@ const promoLabel = (promo) => {
   if (promo.promo_type === 'fixed') return t('ownerPromotions.labelFixed', { value: promo.discount_value });
   return t('ownerPromotions.typeFreeDelivery');
 };
+
+// Live, human-readable preview of what a customer sees as the owner fills the form.
+const promoPreview = computed(() => {
+  const v = parseFloat(form.discount_value) || 0;
+  let base;
+  if (form.promo_type === 'percentage') base = t('ownerPromotions.labelPercentage', { value: v });
+  else if (form.promo_type === 'fixed') base = t('ownerPromotions.labelFixed', { value: v });
+  else base = t('ownerPromotions.typeFreeDelivery');
+  const min = parseFloat(form.min_order_amount) || 0;
+  if (min > 0) base += ' ' + t('ownerPromotions.previewMinClause', { min });
+  return base;
+});
 
 const toggleDay = (key) => {
   const idx = form.days.indexOf(key);
