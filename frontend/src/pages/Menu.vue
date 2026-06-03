@@ -226,12 +226,12 @@
 
     </div>
 
-    <!-- ── Sticky cart bar (mobile) ──────────────────────────────────────── -->
+    <!-- ── Sticky cart bar — full-width on mobile, floating pill bottom-right on desktop ── -->
     <Transition name="cart-bar">
       <RouterLink
         v-if="cart.count"
         :to="{ name: 'cart' }"
-        class="ui-cart-bar fixed bottom-[5.15rem] left-3 right-3 z-20 sm:hidden flex items-center justify-between rounded-2xl px-4 py-3 backdrop-blur-xl"
+        class="ui-cart-bar fixed z-20 flex items-center justify-between gap-4 rounded-2xl px-4 py-3 backdrop-blur-xl bottom-[5.15rem] left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 sm:w-auto sm:min-w-[15rem] sm:shadow-2xl"
       >
         <div class="flex items-center gap-2.5">
           <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-slate-950" style="background:var(--color-secondary)">{{ cart.count }}</span>
