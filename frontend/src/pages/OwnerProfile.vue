@@ -71,7 +71,7 @@ const tabs = computed(() => [
   {
     key: "billing",
     label: t("ownerBilling.tabLabel"),
-    icon: "plus",
+    icon: "card",
     component: OwnerBilling,
   },
 ]);

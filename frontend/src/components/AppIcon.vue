@@ -199,6 +199,10 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M3 7h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z", "M3 7V5a1 1 0 0 1 1-1h14", "M16 13h2"],
   },
+  card: {
+    viewBox: "0 0 24 24",
+    paths: ["M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z", "M2 10h20", "M6 15h4"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;
