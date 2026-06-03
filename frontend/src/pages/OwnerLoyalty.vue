@@ -43,6 +43,17 @@
     </div>
 
     <template v-else>
+      <!-- How it works — shown first so owners understand the model before configuring -->
+      <div class="ui-panel p-4 space-y-3">
+        <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider">{{ t('ownerLoyalty.howItWorksTitle') }}</p>
+        <ul class="space-y-2 text-xs text-slate-400">
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how1') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how2') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how3') }}</li>
+          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how4') }}</li>
+        </ul>
+      </div>
+
       <!-- Settings card -->
       <div class="ui-panel p-4 space-y-4">
         <!-- Enable / disable toggle -->
@@ -143,17 +154,6 @@
         >
           {{ saving ? t('common.saving') : t('common.save') }}
         </button>
-      </div>
-
-      <!-- How it works info box -->
-      <div class="ui-panel p-4 space-y-3">
-        <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider">{{ t('ownerLoyalty.howItWorksTitle') }}</p>
-        <ul class="space-y-2 text-xs text-slate-400">
-          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how1') }}</li>
-          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how2') }}</li>
-          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how3') }}</li>
-          <li class="flex items-start gap-2"><span class="mt-0.5 shrink-0 text-[var(--color-secondary)]">•</span>{{ t('ownerLoyalty.how4') }}</li>
-        </ul>
       </div>
     </template>
   </div>

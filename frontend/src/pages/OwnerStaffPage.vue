@@ -71,7 +71,7 @@
       </div>
       <div class="flex gap-2">
         <button
-          class="ui-btn-outline px-4 py-2 text-xs font-semibold"
+          class="ui-btn-primary px-4 py-2 text-xs font-semibold"
           @click="copyCredentials"
         >
           {{ copied ? t("ownerStaff.credentialsCopied") : t("ownerStaff.credentialsCopy") }}
