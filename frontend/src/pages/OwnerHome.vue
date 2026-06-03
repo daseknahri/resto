@@ -47,45 +47,45 @@
 
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
-      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-        <div v-for="i in 5" :key="i" class="ui-admin-subcard animate-pulse space-y-2">
+      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4">
+        <div v-for="i in 4" :key="i" class="animate-pulse space-y-2 bg-slate-950/60 px-3 py-2.5">
           <div class="h-2.5 w-14 rounded bg-slate-700/60" />
           <div class="h-7 w-16 rounded bg-slate-700/40" />
-          <div class="h-7 rounded bg-slate-800/40" />
         </div>
       </div>
 
-      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <!-- Today's snapshot — unified stat strip with hairline dividers -->
+      <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4">
         <!-- Today's orders -->
-        <article class="ui-admin-subcard space-y-1">
+        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
-          <div class="flex items-end justify-between gap-1">
+          <div class="flex items-end gap-1.5">
             <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
             <span
               v-if="yesterdayStats.count > 0"
-              class="mb-0.5 text-[10px] tabular-nums"
+              class="mb-1 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
             >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
           </div>
-        </article>
+        </div>
 
         <!-- Today's revenue -->
-        <article class="ui-admin-subcard space-y-1">
+        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
-        </article>
+        </div>
 
         <!-- Avg ticket today -->
-        <article class="ui-admin-subcard space-y-1">
+        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
           <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
-        </article>
+        </div>
 
-        <!-- Pending orders -->
-        <article class="ui-admin-subcard space-y-1 transition-colors" :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''">
+        <!-- Pending orders — tinted when there's a queue -->
+        <div class="space-y-1 px-3 py-2.5 transition-colors" :class="todayStats.pending > 0 ? 'bg-amber-500/10' : 'bg-slate-950/60'">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
           <p class="ui-stat-value" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
-        </article>
+        </div>
       </div>
 
       <!-- Alerts strip — shown below KPIs, above ratings -->
