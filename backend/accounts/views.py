@@ -3681,6 +3681,18 @@ class AdminPlatformAnalyticsView(APIView):
             total_payments=Sum("amount", filter=Q(type="payment")),
         )
 
+        # ── Money model: outstanding liabilities ──────────────────────────────
+        from decimal import Decimal as _Dec
+        from .models import DriverPayout, TenantFloatTransaction  # noqa: F401
+        from tenancy.models import Tenant as _Tenant
+
+        total_float = _Tenant.objects.aggregate(s=Sum("float_balance"))["s"] or _Dec("0")
+        driver_earned = (
+            DeliveryJob.objects.filter(status="delivered").aggregate(s=Sum("driver_payout"))["s"] or _Dec("0")
+        )
+        driver_paid = DriverPayout.objects.aggregate(s=Sum("amount"))["s"] or _Dec("0")
+        driver_owed = driver_earned - driver_paid
+
         def _f(val, decimals=2):
             """Safely convert decimal/float/None to rounded float."""
             if val is None:
@@ -3723,6 +3735,11 @@ class AdminPlatformAnalyticsView(APIView):
                 "total_transactions": txn_agg["total"] or 0,
                 "total_bonus_issued": _f(txn_agg["total_bonus"]),
                 "total_payments": _f(txn_agg["total_payments"]),
+            },
+            "financials": {
+                "customer_wallet_liability": _f(wallet_agg["total_balance"]) or 0.0,
+                "restaurant_float_outstanding": _f(total_float) or 0.0,
+                "driver_owed": _f(driver_owed) or 0.0,
             },
         })
 

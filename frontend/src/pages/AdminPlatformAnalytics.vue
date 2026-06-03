@@ -36,6 +36,17 @@
     <!-- Data -->
     <template v-else-if="data">
       <!-- Tenants -->
+      <!-- Money model: outstanding liabilities -->
+      <section v-if="data.financials">
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionFinancials') }}</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard :value="currency(data.financials.customer_wallet_liability)" :label="t('adminAnalytics.walletLiability')" color="violet" icon="👛" />
+          <StatCard :value="currency(data.financials.restaurant_float_outstanding)" :label="t('adminAnalytics.floatOutstanding')" color="sky" icon="🏪" />
+          <StatCard :value="currency(data.financials.driver_owed)" :label="t('adminAnalytics.driverOwed')" color="emerald" icon="🛵" />
+        </div>
+        <p class="mt-2 text-[11px] text-slate-600">{{ t('adminAnalytics.financialsHint') }}</p>
+      </section>
+
       <section>
         <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionTenants') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
