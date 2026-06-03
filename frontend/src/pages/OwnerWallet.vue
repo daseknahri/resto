@@ -137,13 +137,13 @@
           <label class="block text-xs font-semibold text-slate-300 mb-1.5">
             {{ t('ownerWallet.amountLabel') }}
             <div class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">+</span>
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">MAD</span>
               <input
                 v-model="topupAmount"
                 type="number"
                 step="0.01"
                 min="0.01"
-                class="ui-input w-full pl-7 pr-4 text-sm"
+                class="ui-input w-full pl-12 pr-4 text-sm"
                 :placeholder="t('ownerWallet.amountPlaceholder')"
               />
             </div>

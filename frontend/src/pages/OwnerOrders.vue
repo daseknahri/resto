@@ -96,14 +96,15 @@
         >✕</button>
       </div>
 
-      <!-- Status filter tabs -->
-      <div class="flex flex-wrap gap-1.5">
+      <!-- Status filter tabs: horizontal scroll on mobile (keeps the order list in view),
+           wraps on larger screens where there's room. -->
+      <div class="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-x-visible sm:pb-0">
         <button
           v-for="tab in statusTabs"
           :key="tab.value"
           type="button"
           :aria-pressed="activeStatus === tab.value"
-          class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
+          class="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
           :class="activeStatus === tab.value
             ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
             : 'border-slate-700 text-slate-300 hover:border-slate-600'"
