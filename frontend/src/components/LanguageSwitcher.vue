@@ -107,7 +107,7 @@ const toggle = () => {
     optionRefs.value = [];
     nextTick(() => {
       // Focus the currently selected option, or the first one
-      const selectedIdx = localeOptions.value.findIndex(o => o.code === currentLocaleValue.value);
+      const selectedIdx = localeOptions.findIndex(o => o.code === currentLocaleValue.value);
       const focusIdx = selectedIdx >= 0 ? selectedIdx : 0;
       optionRefs.value[focusIdx]?.focus();
     });
