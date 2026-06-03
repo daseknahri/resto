@@ -14,7 +14,9 @@
     </div>
   </article>
 
-  <article v-else class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
+  <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
+       cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
+  <article v-else-if="readinessScore < 100" class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
     <div class="flex items-center justify-between gap-3">
       <p class="text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
       <span
