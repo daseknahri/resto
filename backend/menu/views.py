@@ -2492,6 +2492,18 @@ class OwnerOrderListView(APIView):
         tenant = getattr(request, "tenant", None)
         tenant_id = tenant.id if tenant else None
 
+        # Reconcile any approved-but-unsynced wallet charge requests into these bills, so a
+        # charge a customer approved after the owner closed the charge sheet still shows as
+        # paid here (and can't be accidentally charged again). Claim-safe + best-effort.
+        try:
+            _applied = _sync_charged_request_bills(tenant_id, [o.order_number for o in all_orders])
+            if _applied:
+                for _o in all_orders:
+                    if _o.order_number in _applied:
+                        _o.wallet_amount_paid = (_o.wallet_amount_paid or Decimal("0")) + _applied[_o.order_number]
+        except Exception:
+            pass  # never break the order list over bill reconciliation
+
         customer_ids = list({o.customer_id for o in all_orders if o.customer_id})
         trust_map: dict = {}      # customer_id → {avg_score, rating_count}
         my_rating_map: dict = {}  # order_number → {score, note}
@@ -5155,6 +5167,38 @@ class OwnerWalletChargeView(APIView):
         })
 
 
+def _sync_charged_request_bills(tenant_id, order_numbers):
+    """Apply approved-but-unsynced wallet charge requests to their tenant Order bills.
+
+    A customer approves an above-threshold charge in the PUBLIC schema, which can't reach
+    the tenant-schema Order. This runs in tenant context to keep the bill in sync. Each
+    request is claimed atomically (flip bill_synced) before its amount is applied, so two
+    concurrent callers (the owner's status poll and the order list) can never double-apply
+    the same charge. Returns {order_number: amount_applied}.
+    """
+    from accounts.models import WalletChargeRequest as _WCR
+    from django.db.models import F as _F
+    applied = {}
+    nums = [n for n in (order_numbers or []) if n]
+    if not nums:
+        return applied
+    pending = list(_WCR.objects.filter(
+        tenant_id=tenant_id, status=_WCR.Status.CHARGED, bill_synced=False, order_number__in=nums
+    ).values_list("id", "order_number", "amount"))
+    for cr_id, onum, amount in pending:
+        # Atomic claim: only the caller that flips bill_synced False->True applies the bill.
+        if not _WCR.objects.filter(pk=cr_id, bill_synced=False).update(bill_synced=True):
+            continue
+        try:
+            Order.objects.filter(order_number=onum).update(
+                wallet_amount_paid=_F("wallet_amount_paid") + amount
+            )
+            applied[onum] = applied.get(onum, Decimal("0")) + amount
+        except Exception:
+            pass  # best-effort; the payment is recorded in the wallet ledger regardless
+    return applied
+
+
 class OwnerWalletChargeRequestStatusView(APIView):
     """GET /api/owner/wallet/charge-request/<id>/ — poll a pending charge's outcome.
 
@@ -5184,18 +5228,11 @@ class OwnerWalletChargeRequestStatusView(APIView):
             cr.resolved_at = _tz.now()
             cr.save(update_fields=["status", "resolved_at"])
 
-        # Apply the bill update exactly once now that we're in tenant context.
+        # Apply the bill update once now that we're in tenant context (claim-safe helper).
         if (cr.status == WalletChargeRequest.Status.CHARGED and cr.order_number
                 and not cr.bill_synced):
-            try:
-                from django.db.models import F as _F
-                Order.objects.filter(order_number=cr.order_number).update(
-                    wallet_amount_paid=_F("wallet_amount_paid") + cr.amount
-                )
-            except Exception:
-                pass  # best-effort; the payment is recorded regardless
-            cr.bill_synced = True
-            cr.save(update_fields=["bill_synced"])
+            _sync_charged_request_bills(cr.tenant_id, [cr.order_number])
+            cr.bill_synced = True  # reflect locally; helper already persisted it
 
         data = {"status": cr.status, "request_id": cr.id, "amount": str(cr.amount)}
         if cr.status == WalletChargeRequest.Status.CHARGED:

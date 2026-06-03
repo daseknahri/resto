@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
-from menu.views import _refund_wallet_for_cancelled_order
+from menu.views import _refund_wallet_for_cancelled_order, _sync_charged_request_bills
 from sales.views import _log_reservation_timeline_event
 from accounts.views import _resolve_customer_from_request
 
@@ -172,6 +172,38 @@ class RefundWalletTests(SimpleTestCase):
             _refund_wallet_for_cancelled_order(order)
 
         mock_cust.objects.select_for_update.return_value.get.assert_called_once_with(pk=99)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _sync_charged_request_bills
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SyncChargedRequestBillsTests(SimpleTestCase):
+    """Approved charge requests are applied to their Order bills exactly once."""
+
+    def test_claims_and_applies_each_request_once(self):
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
+             patch("menu.views.Order.objects") as mock_order:
+            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
+            mock_wcr.filter.return_value.update.return_value = 1  # claim succeeds
+            applied = _sync_charged_request_bills(3, ["ORD1"])
+        self.assertEqual(applied, {"ORD1": Decimal("100.00")})
+        mock_order.filter.return_value.update.assert_called_once()
+
+    def test_skips_when_claim_lost_to_concurrent_caller(self):
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_wcr, \
+             patch("menu.views.Order.objects") as mock_order:
+            mock_wcr.filter.return_value.values_list.return_value = [(1, "ORD1", Decimal("100.00"))]
+            mock_wcr.filter.return_value.update.return_value = 0  # another caller already claimed it
+            applied = _sync_charged_request_bills(3, ["ORD1"])
+        self.assertEqual(applied, {})
+        mock_order.filter.return_value.update.assert_not_called()
+
+    def test_no_order_numbers_is_a_noop(self):
+        with patch("accounts.models.WalletChargeRequest.objects") as mock_wcr:
+            applied = _sync_charged_request_bills(3, [])
+        self.assertEqual(applied, {})
+        mock_wcr.filter.assert_not_called()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
