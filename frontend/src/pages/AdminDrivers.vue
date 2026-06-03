@@ -98,7 +98,8 @@
           <tr
             v-for="d in drivers"
             :key="d.id"
-            class="hover:bg-slate-800/30 transition-colors"
+            class="cursor-pointer hover:bg-slate-800/30 transition-colors"
+            @click="openDriver(d)"
           >
             <td class="px-4 py-3 text-slate-200 font-medium">
               {{ d.name || t('adminDrivers.unnamed') }}
@@ -134,18 +135,92 @@
               {{ fmtMoney(d.owed) }}
             </td>
             <td class="px-4 py-3 text-right text-slate-500 text-xs">{{ formatDate(d.created_at) }}</td>
-            <td class="px-4 py-3 text-right">
-              <button
-                v-if="Number(d.owed) > 0"
-                class="rounded-full border border-emerald-500/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
-                :disabled="payingId === d.id"
-                @click="payoutDriver(d)"
-              >{{ payingId === d.id ? '…' : t('adminDrivers.payOut') }}</button>
-            </td>
+            <td class="px-4 py-3 text-right text-slate-600">›</td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Driver earnings detail slide-over -->
+    <Teleport to="body">
+      <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-to-class="opacity-0">
+        <div v-if="selected" class="fixed inset-0 z-50 bg-black/60" @click.self="selected = null">
+          <Transition enter-active-class="transition-transform duration-200" enter-from-class="translate-x-full" leave-active-class="transition-transform duration-150" leave-to-class="translate-x-full">
+            <aside v-if="selected" class="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-900 p-5 space-y-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-lg font-semibold text-white">{{ selected.name || t('adminDrivers.unnamed') }}</h2>
+                  <p class="text-xs text-slate-500">{{ selected.phone }}</p>
+                </div>
+                <button class="rounded-full p-1.5 text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="selected = null">✕</button>
+              </div>
+
+              <div v-if="loadingDetail" class="space-y-3">
+                <div v-for="i in 3" :key="i" class="h-14 animate-pulse rounded-xl bg-slate-800/50" />
+              </div>
+
+              <template v-else-if="detail">
+                <!-- Earnings tiles -->
+                <div class="grid grid-cols-3 gap-2">
+                  <div class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('adminDrivers.earned') }}</p>
+                    <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-200">{{ fmtMoney(detail.earned) }}</p>
+                  </div>
+                  <div class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('adminDrivers.paid') }}</p>
+                    <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-400">{{ fmtMoney(detail.paid) }}</p>
+                  </div>
+                  <div class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('adminDrivers.colOwed') }}</p>
+                    <p class="mt-0.5 text-sm font-bold tabular-nums text-emerald-400">{{ fmtMoney(detail.owed) }}</p>
+                  </div>
+                </div>
+
+                <!-- Payout form -->
+                <div v-if="Number(detail.owed) > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
+                  <p class="text-sm font-semibold text-slate-200">{{ t('adminDrivers.recordPayout') }}</p>
+                  <div class="flex gap-2">
+                    <input v-model="payAmount" type="number" step="0.01" min="0.01" :max="detail.owed" class="ui-input flex-1 text-sm" :placeholder="t('adminDrivers.amount')" />
+                    <select v-model="payMethod" class="ui-input text-sm">
+                      <option value="cash">{{ t('adminDrivers.methodCash') }}</option>
+                      <option value="transfer">{{ t('adminDrivers.methodTransfer') }}</option>
+                    </select>
+                  </div>
+                  <button class="w-full rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="paying" @click="submitPayout">
+                    {{ paying ? '…' : t('adminDrivers.payOut') }}
+                  </button>
+                  <p v-if="payError" class="text-xs text-red-300">{{ payError }}</p>
+                </div>
+
+                <!-- Recent deliveries -->
+                <div class="space-y-2">
+                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminDrivers.recentDeliveries') }}</p>
+                  <p v-if="!detail.deliveries.length" class="py-2 text-center text-xs text-slate-600 italic">{{ t('adminDrivers.noneYet') }}</p>
+                  <ul v-else class="space-y-1.5">
+                    <li v-for="j in detail.deliveries" :key="j.order_number" class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
+                      <span class="font-mono text-slate-400">#{{ j.order_number }}</span>
+                      <span class="flex items-center gap-2"><span class="text-slate-600">{{ formatDate(j.delivered_at) }}</span><span class="font-semibold tabular-nums text-emerald-300">+{{ fmtMoney(j.payout) }}</span></span>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Payout history -->
+                <div class="space-y-2">
+                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminDrivers.payoutHistory') }}</p>
+                  <p v-if="!detail.payouts.length" class="py-2 text-center text-xs text-slate-600 italic">{{ t('adminDrivers.noneYet') }}</p>
+                  <ul v-else class="space-y-1.5">
+                    <li v-for="p in detail.payouts" :key="p.id" class="flex items-center justify-between gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-xs">
+                      <span class="text-slate-400">{{ p.method === 'cash' ? t('adminDrivers.methodCash') : t('adminDrivers.methodTransfer') }} · {{ formatDate(p.created_at) }}</span>
+                      <span class="font-semibold tabular-nums text-slate-300">−{{ fmtMoney(p.amount) }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </template>
+            </aside>
+          </Transition>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -162,7 +237,6 @@ const toast = useToastStore();
 const loading = ref(true);
 const fetchError = ref(false);
 const drivers = ref([]);
-const payingId = ref(null);
 
 const fmtMoney = (v) => {
   try {
@@ -172,26 +246,52 @@ const fmtMoney = (v) => {
   }
 };
 
-const payoutDriver = async (d) => {
-  const owed = parseFloat(d.owed || 0);
-  if (owed <= 0) return;
-  const raw = window.prompt(t('adminDrivers.payoutPrompt', { name: d.name || d.phone, owed: owed.toFixed(2) }), owed.toFixed(2));
-  if (raw == null) return;
-  const amount = parseFloat(raw);
-  if (!amount || amount <= 0) { toast.show(t('adminDrivers.payoutInvalid'), 'error'); return; }
-  payingId.value = d.id;
+// ── Earnings detail slide-over + payout ─────────────────────────────────────
+const selected = ref(null);
+const detail = ref(null);
+const loadingDetail = ref(false);
+const payAmount = ref('');
+const payMethod = ref('cash');
+const paying = ref(false);
+const payError = ref('');
+
+const openDriver = async (d) => {
+  selected.value = d;
+  detail.value = null;
+  payError.value = '';
+  loadingDetail.value = true;
   try {
-    await api.post(`/admin/drivers/${d.id}/payout/`, {
+    const res = await api.get(`/admin/drivers/${d.id}/earnings/`);
+    detail.value = res.data;
+    payAmount.value = res.data.owed;
+    payMethod.value = 'cash';
+  } catch {
+    payError.value = t('adminDrivers.fetchError');
+  } finally {
+    loadingDetail.value = false;
+  }
+};
+
+const submitPayout = async () => {
+  payError.value = '';
+  const amount = parseFloat(payAmount.value);
+  if (!amount || amount <= 0) { payError.value = t('adminDrivers.payoutInvalid'); return; }
+  paying.value = true;
+  try {
+    const res = await api.post(`/admin/drivers/${selected.value.id}/payout/`, {
       amount: amount.toFixed(2),
-      method: 'cash',
+      method: payMethod.value,
       idempotency_key: newIdempotencyKey(),
     });
     toast.show(t('adminDrivers.payoutDone'), 'success');
-    await fetchDrivers();
+    // Refresh the detail panel + the row's owed.
+    await openDriver(selected.value);
+    const row = drivers.value.find((d) => d.id === selected.value.id);
+    if (row) { row.owed = res.data.owed; row.paid = res.data.paid; }
   } catch (err) {
-    toast.show(err?.response?.data?.detail || t('adminDrivers.payoutFailed'), 'error');
+    payError.value = err?.response?.data?.detail || t('adminDrivers.payoutFailed');
   } finally {
-    payingId.value = null;
+    paying.value = false;
   }
 };
 
