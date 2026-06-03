@@ -96,6 +96,11 @@ class OwnerWalletTopupViewTests(SimpleTestCase):
         mock_order_objs.filter.return_value.exists.return_value = False
         resp = self._post({"customer_id": 42, "amount": "10.00"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        # Regression: Order has no tenant FK (it's schema-isolated). Filtering by
+        # tenant=... raises FieldError at runtime — only customer_id is valid here.
+        _, kwargs = mock_order_objs.filter.call_args
+        self.assertNotIn("tenant", kwargs)
+        self.assertEqual(kwargs.get("customer_id"), 42)
 
     @patch("menu.views.Order.objects")
     def test_invalid_amount_returns_400(self, mock_order_objs):

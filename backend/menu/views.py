@@ -4972,7 +4972,9 @@ class OwnerWalletResolveTokenView(APIView):
 
         customer_id = payload.get("cid")
         # Same gate as manual top-up: only customers who have ordered at this restaurant.
-        if not Order.objects.filter(customer_id=customer_id, tenant=tenant).exists():
+        # We are already in this restaurant's schema, so Order.objects is scoped to it
+        # (Order has no tenant FK — it's isolated by schema).
+        if not Order.objects.filter(customer_id=customer_id).exists():
             return Response({"detail": "Customer has no orders at this restaurant.", "code": "no_orders"}, status=status.HTTP_404_NOT_FOUND)
         try:
             customer = Customer.objects.get(pk=customer_id)
@@ -5103,11 +5105,10 @@ class OwnerWalletTopupView(APIView):
         if not customer_id:
             return Response({"detail": "customer_id is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Security: only allow topping up customers who have ordered at this restaurant
-        has_orders = Order.objects.filter(
-            customer_id=customer_id,
-            tenant=tenant,
-        ).exists()
+        # Security: only allow topping up customers who have ordered at this restaurant.
+        # Already in this restaurant's schema, so Order.objects is scoped to it (Order
+        # has no tenant FK — schema isolation does the scoping).
+        has_orders = Order.objects.filter(customer_id=customer_id).exists()
         if not has_orders:
             return Response(
                 {"detail": "Customer has no orders at this restaurant."},
@@ -5189,8 +5190,9 @@ class OwnerWalletHistoryView(APIView):
         if tenant is None:
             return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Security: only expose history for customers who ordered at this restaurant
-        has_orders = Order.objects.filter(customer_id=customer_id, tenant=tenant).exists()
+        # Security: only expose history for customers who ordered at this restaurant.
+        # Already scoped to this restaurant's schema (Order has no tenant FK).
+        has_orders = Order.objects.filter(customer_id=customer_id).exists()
         if not has_orders:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
