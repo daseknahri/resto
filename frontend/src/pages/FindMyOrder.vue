@@ -128,7 +128,7 @@ const statusLabel = (s) => STATUS_LABEL[s]?.() ?? s;
 const STATUS_CLASS = {
   pending: "bg-amber-500/20 text-amber-300",
   confirmed: "bg-blue-500/20 text-blue-300",
-  preparing: "bg-violet-500/20 text-violet-300",
+  preparing: "bg-orange-500/20 text-orange-300",
   ready: "bg-emerald-500/20 text-emerald-300",
   completed: "bg-slate-700 text-slate-400",
   cancelled: "bg-red-500/20 text-red-300",

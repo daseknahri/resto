@@ -760,7 +760,7 @@ const confirmAllPending = async () => {
 const statusClass = (s) => ({
   pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
-  preparing: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
+  preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
   ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
   completed: "bg-slate-700 text-slate-300",
   cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
