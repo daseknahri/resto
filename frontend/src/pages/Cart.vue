@@ -259,7 +259,7 @@
                     :disabled="locating"
                     @click="useCurrentLocation"
                   >
-                    <AppIcon name="info" class="h-3 w-3 shrink-0" />
+                    <AppIcon name="location" class="h-3 w-3 shrink-0" />
                     {{ locating ? t('cartPage.locating') : t('cartPage.useCurrentLocation') }}
                   </button>
                   <button
