@@ -32,9 +32,16 @@
       >
         {{ t('waiterPage.tabShift') }}
       </button>
+      <!-- Charge wallet -->
+      <button
+        class="ml-auto shrink-0 rounded-xl border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/12 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/20"
+        @click="showCharge = true"
+      >
+        {{ t('waiterPage.chargeWalletBtn') }}
+      </button>
       <!-- New Order -->
       <button
-        class="ml-auto shrink-0 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/25"
+        class="shrink-0 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/25"
         @click="showNewOrder = true"
       >
         + {{ t('waiterPage.newOrderBtn') }}
@@ -47,6 +54,9 @@
       @close="showNewOrder = false"
       @placed="onOrderPlaced"
     />
+
+    <!-- Charge wallet sheet -->
+    <WalletChargeSheet v-if="showCharge" @close="showCharge = false" />
 
     <!-- Loading skeleton (orders only) -->
     <div v-if="activeTab !== 'shift' && waiter.loading" class="space-y-3">
@@ -306,6 +316,7 @@ import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useTenantStore } from "../stores/tenant";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
+import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
@@ -313,6 +324,7 @@ const tenant = useTenantStore();
 const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 
 const showNewOrder = ref(false);
+const showCharge = ref(false);
 const onOrderPlaced = () => {
   // Immediately reload the order list so the new order appears
   waiter.fetchOrders({ silent: true });

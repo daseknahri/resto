@@ -4987,6 +4987,79 @@ class OwnerWalletResolveTokenView(APIView):
         })
 
 
+class OwnerWalletChargeView(APIView):
+    """POST /api/owner/wallet/charge/ — charge a customer's wallet for an in-person order.
+
+    Body: { token, amount, order_number?, note?, idempotency_key? }
+
+    The pay-code token (from the customer's QR) is their consent; this debits their
+    wallet for the amount (a payment to this restaurant). Fails with 402 if the balance
+    is short, returning the balance so staff can collect the remainder in cash.
+    Owner/staff only. No order-history gate — the customer is present and authorising.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal as _Dec, InvalidOperation
+        from django.core import signing
+        from accounts.models import Customer
+        from accounts.views import _WALLET_PAY_SALT, _WALLET_PAY_TTL
+        from accounts.wallet_service import debit_wallet, InsufficientFunds, WalletError
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = str(request.data.get("token") or "").strip()
+        if not token:
+            return Response({"detail": "token is required.", "code": "missing_token"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            payload = signing.loads(token, salt=_WALLET_PAY_SALT, max_age=_WALLET_PAY_TTL)
+        except signing.SignatureExpired:
+            return Response({"detail": "This pay code has expired. Ask the customer to refresh it.", "code": "expired"}, status=status.HTTP_400_BAD_REQUEST)
+        except signing.BadSignature:
+            return Response({"detail": "Invalid pay code.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+        customer_id = payload.get("cid")
+
+        try:
+            amount = _Dec(str(request.data.get("amount"))).quantize(_Dec("0.01"))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount <= _Dec("0"):
+            return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
+
+        order_number = str(request.data.get("order_number") or "").strip()[:100]
+        note = str(request.data.get("note") or "").strip()[:200]
+        idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+
+        try:
+            tx = debit_wallet(
+                customer_id, amount,
+                reference=order_number, tenant_id=tenant.id, note=note, idempotency_key=idem,
+            )
+        except InsufficientFunds:
+            cust = Customer.objects.filter(pk=customer_id).first()
+            return Response(
+                {"detail": "Insufficient wallet balance.", "code": "insufficient",
+                 "balance": str(cust.wallet_balance) if cust else "0.00", "requested": str(amount)},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "customer_id": int(customer_id),
+            "amount": str(amount),
+            "new_balance": str(tx.balance_after),
+        })
+
+
 class OwnerWalletTopupView(APIView):
     """
     POST /api/owner/wallet/topup/
