@@ -3458,10 +3458,26 @@ class AdminDriverListView(APIView):
                       )):
                 stats_map[s["driver_id"]] = s
 
+        # Batch earnings (sum of delivered payouts) and payouts (sum of settlements).
+        earned_map, paid_map = {}, {}
+        if drivers:
+            from .models import DriverPayout
+            from django.db.models import Sum
+            for row in (DeliveryJob.objects
+                        .filter(driver_id__in=driver_ids, status="delivered")
+                        .values("driver_id").annotate(e=Sum("driver_payout"))):
+                earned_map[row["driver_id"]] = row["e"] or 0
+            for row in (DriverPayout.objects
+                        .filter(driver_id__in=driver_ids)
+                        .values("driver_id").annotate(p=Sum("amount"))):
+                paid_map[row["driver_id"]] = row["p"] or 0
+
         result = []
         for d in drivers:
             s = stats_map.get(d.id, {})
             avg = s.get("avg_rating")
+            earned = earned_map.get(d.id, 0)
+            paid = paid_map.get(d.id, 0)
             result.append({
                 "id": d.id,
                 "name": d.name or "",
@@ -3477,9 +3493,121 @@ class AdminDriverListView(APIView):
                 "total_jobs": s.get("total_jobs", 0),
                 "completed_jobs": s.get("completed_jobs", 0),
                 "avg_rating": round(float(avg), 1) if avg is not None else None,
+                "earned": str(earned),
+                "paid": str(paid),
+                "owed": str(earned - paid),
                 "created_at": d.created_at.isoformat(),
             })
         return Response(result)
+
+
+class AdminDriverEarningsView(APIView):
+    """GET  /api/admin/drivers/<id>/earnings/ — earnings summary + recent deliveries/payouts.
+       POST /api/admin/drivers/<id>/payout/   — record a settlement paid to the driver.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _check(self, request):
+        u = getattr(request, "user", None)
+        from .models import User
+        return isinstance(u, User) and u.is_platform_admin
+
+    def get(self, request, driver_id, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            driver = Customer.objects.get(pk=driver_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .models import DeliveryJob, DriverPayout
+        from .driver_service import driver_earnings_summary
+
+        summary = driver_earnings_summary(driver_id)
+        deliveries = list(
+            DeliveryJob.objects.filter(driver_id=driver_id, status="delivered")
+            .order_by("-delivered_at")[:20]
+        )
+        payouts = list(DriverPayout.objects.filter(driver_id=driver_id)[:20])
+        return Response({
+            "driver_id": driver.id,
+            "name": driver.name or "",
+            "phone": driver.phone or "",
+            "earned": str(summary["earned"]),
+            "paid": str(summary["paid"]),
+            "owed": str(summary["owed"]),
+            "deliveries": [
+                {
+                    "order_number": j.order_number,
+                    "payout": str(j.driver_payout),
+                    "delivered_at": j.delivered_at.isoformat() if j.delivered_at else None,
+                }
+                for j in deliveries
+            ],
+            "payouts": [
+                {
+                    "id": p.id,
+                    "amount": str(p.amount),
+                    "method": p.method,
+                    "reference": p.reference,
+                    "note": p.note,
+                    "created_at": p.created_at.isoformat(),
+                }
+                for p in payouts
+            ],
+        })
+
+    def post(self, request, driver_id, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        if not Customer.objects.filter(pk=driver_id, is_driver=True).exists():
+            return Response({"detail": "Driver not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .driver_service import record_driver_payout
+        from .wallet_service import WalletError
+
+        method = str(request.data.get("method") or "cash").strip()
+        note = str(request.data.get("note") or "").strip()[:200]
+        reference = str(request.data.get("reference") or "").strip()[:120]
+        idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        try:
+            payout = record_driver_payout(
+                driver_id, request.data.get("amount"),
+                method=method, note=note, reference=reference,
+                actor_user_id=getattr(request.user, "id", None), idempotency_key=idem,
+            )
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .driver_service import driver_earnings_summary
+        summary = driver_earnings_summary(driver_id)
+        return Response({
+            "payout_id": payout.id,
+            "amount": str(payout.amount),
+            "owed": str(summary["owed"]),
+            "paid": str(summary["paid"]),
+        })
+
+
+class DriverEarningsView(APIView):
+    """GET /api/driver/earnings/ — the signed-in driver's own earnings summary."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            Customer.objects.get(pk=customer_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .driver_service import driver_earnings_summary
+        s = driver_earnings_summary(customer_id)
+        return Response({"earned": str(s["earned"]), "paid": str(s["paid"]), "owed": str(s["owed"])})
 
 
 class AdminPlatformAnalyticsView(APIView):

@@ -81,6 +81,35 @@ class WalletTransaction(models.Model):
         return f"{self.get_type_display()} {self.amount} — {self.customer}"
 
 
+class DriverPayout(models.Model):
+    """Records a settlement paid by the platform to a delivery driver.
+
+    A driver *earns* driver_payout on each delivered DeliveryJob; this records what has
+    been paid out to them (cash/transfer). Amount owed = sum(delivered payouts) − sum(
+    these payouts). Append-only + idempotent, like the wallet ledger.
+    """
+
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash"
+        TRANSFER = "transfer", "Bank transfer"
+
+    driver = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="payouts")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    method = models.CharField(max_length=16, choices=Method.choices, default=Method.CASH)
+    reference = models.CharField(max_length=120, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    actor_user_id = models.IntegerField(null=True, blank=True)
+    currency = models.CharField(max_length=8, default="MAD")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Payout {self.amount} to driver {self.driver_id}"
+
+
 class CustomerOrderRef(models.Model):
     """Public-schema mirror of a customer's order, for cross-restaurant history.
 

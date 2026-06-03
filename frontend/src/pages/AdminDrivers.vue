@@ -89,7 +89,9 @@
             <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colJobs') }}</th>
             <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colCompleted') }}</th>
             <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colRating') }}</th>
+            <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colOwed') }}</th>
             <th scope="col" class="px-4 py-3 text-right">{{ t('adminDrivers.colSince') }}</th>
+            <th scope="col" class="px-4 py-3 text-right"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">
@@ -128,7 +130,18 @@
               <span v-if="d.avg_rating" class="text-amber-300">★ {{ d.avg_rating }}</span>
               <span v-else class="text-slate-600">—</span>
             </td>
+            <td class="px-4 py-3 text-right tabular-nums" :class="Number(d.owed) > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'">
+              {{ fmtMoney(d.owed) }}
+            </td>
             <td class="px-4 py-3 text-right text-slate-500 text-xs">{{ formatDate(d.created_at) }}</td>
+            <td class="px-4 py-3 text-right">
+              <button
+                v-if="Number(d.owed) > 0"
+                class="rounded-full border border-emerald-500/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
+                :disabled="payingId === d.id"
+                @click="payoutDriver(d)"
+              >{{ payingId === d.id ? '…' : t('adminDrivers.payOut') }}</button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -140,12 +153,47 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { useToastStore } from '../stores/toast';
+import { newIdempotencyKey } from '../lib/idempotency';
 
 const { t, currentLocale } = useI18n();
+const toast = useToastStore();
 
 const loading = ref(true);
 const fetchError = ref(false);
 const drivers = ref([]);
+const payingId = ref(null);
+
+const fmtMoney = (v) => {
+  try {
+    return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', maximumFractionDigits: 2 }).format(parseFloat(v || 0));
+  } catch {
+    return `${parseFloat(v || 0).toFixed(2)}`;
+  }
+};
+
+const payoutDriver = async (d) => {
+  const owed = parseFloat(d.owed || 0);
+  if (owed <= 0) return;
+  const raw = window.prompt(t('adminDrivers.payoutPrompt', { name: d.name || d.phone, owed: owed.toFixed(2) }), owed.toFixed(2));
+  if (raw == null) return;
+  const amount = parseFloat(raw);
+  if (!amount || amount <= 0) { toast.show(t('adminDrivers.payoutInvalid'), 'error'); return; }
+  payingId.value = d.id;
+  try {
+    await api.post(`/admin/drivers/${d.id}/payout/`, {
+      amount: amount.toFixed(2),
+      method: 'cash',
+      idempotency_key: newIdempotencyKey(),
+    });
+    toast.show(t('adminDrivers.payoutDone'), 'success');
+    await fetchDrivers();
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminDrivers.payoutFailed'), 'error');
+  } finally {
+    payingId.value = null;
+  }
+};
 
 const onlineCount = computed(() => drivers.value.filter(d => d.is_online).length);
 const totalDeliveries = computed(() => drivers.value.reduce((sum, d) => sum + d.completed_jobs, 0));

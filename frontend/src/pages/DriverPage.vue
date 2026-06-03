@@ -62,6 +62,22 @@
         {{ errorMsg }}
       </p>
 
+      <!-- Earnings summary -->
+      <div v-if="earnings" class="ui-panel grid grid-cols-3 gap-2 p-4">
+        <div class="text-center">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.earned') }}</p>
+          <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-200">{{ fmtMoney(earnings.earned) }}</p>
+        </div>
+        <div class="text-center">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.paidOut') }}</p>
+          <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-400">{{ fmtMoney(earnings.paid) }}</p>
+        </div>
+        <div class="text-center">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.owed') }}</p>
+          <p class="mt-0.5 text-sm font-bold tabular-nums text-emerald-400">{{ fmtMoney(earnings.owed) }}</p>
+        </div>
+      </div>
+
       <!-- Active job -->
       <div v-if="activeJob" class="ui-panel p-4 space-y-3">
         <div class="flex items-center justify-between">
@@ -220,6 +236,16 @@ const mapsLink = (lat, lng, address) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address || '')}`;
 };
 
+const earnings = ref(null);
+const fetchEarnings = async () => {
+  try {
+    const { data } = await api.get('/driver/earnings/');
+    earnings.value = data;
+  } catch {
+    earnings.value = null;
+  }
+};
+
 const fetchStatus = async () => {
   try {
     const { data } = await api.get('/driver/status/');
@@ -313,6 +339,7 @@ const advance = async (toStatus) => {
       stopGeo();
       toast.show(t('driver.deliveredToast'), 'success');
       await fetchJobs();
+      fetchEarnings(); // a completed delivery just added to earnings
     } else {
       activeJob.value = data;
     }
@@ -363,6 +390,7 @@ onMounted(async () => {
   await fetchStatus();
   if (isDriver.value) {
     await fetchJobs();
+    fetchEarnings();
     if (online.value) startGeo();
     ensurePoll();
   }
