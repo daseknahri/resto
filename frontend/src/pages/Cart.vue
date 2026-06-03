@@ -238,7 +238,9 @@
                     ? 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300'
                     : 'border-amber-500/40 bg-amber-500/8 text-amber-300'"
                 >
-                  {{ t('cartPage.deliveryMinOrderLabel', { amount: formatPrice(deliveryMinOrder) }) }}
+                  {{ deliveryMinGap > 0
+                    ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) })
+                    : t('cartPage.deliveryMinOrderLabel', { amount: formatPrice(deliveryMinOrder) }) }}
                 </span>
               </div>
 
@@ -923,6 +925,9 @@ const deliveryMinOrder = computed(() => {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 0;
 });
+
+// How much more is needed to reach the delivery minimum (0 = already met).
+const deliveryMinGap = computed(() => Math.max(0, deliveryMinOrder.value - (Number(cart.total) || 0)));
 
 // Short zone description shown to customers (empty = not set)
 const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
