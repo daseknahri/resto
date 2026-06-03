@@ -502,7 +502,7 @@ const copyCredentials = async () => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.staff-toggle-on  { background: var(--color-secondary, #f59e0b); }
+.staff-toggle-on  { background: #10b981; } /* emerald — matches the on-state used across the app */
 .staff-toggle-off { background: #334155; }
 
 .staff-toggle-thumb {

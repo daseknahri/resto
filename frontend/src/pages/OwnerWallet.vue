@@ -55,6 +55,13 @@
       <p v-if="resolveError" class="text-xs text-red-300">{{ resolveError }}</p>
     </div>
 
+    <!-- The two methods below are alternatives — scan the customer's code OR search by name -->
+    <div class="flex items-center gap-3 px-2">
+      <div class="h-px flex-1 bg-slate-700/60"></div>
+      <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('ownerWallet.orSearch') }}</span>
+      <div class="h-px flex-1 bg-slate-700/60"></div>
+    </div>
+
     <!-- Customer search card -->
     <div class="ui-panel p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.searchTitle') }}</p>
