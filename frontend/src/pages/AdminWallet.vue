@@ -290,6 +290,34 @@
       >{{ fundSaving ? t('adminWallet.fundSaving') : t('adminWallet.fundBtn') }}</button>
     </div>
 
+    <!-- Platform settings: wallet charge approval threshold -->
+    <div class="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 space-y-3">
+      <div>
+        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.settingsTitle') }}</h2>
+        <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.settingsSubtitle') }}</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="block text-xs text-slate-400">
+          {{ t('adminWallet.thresholdLabel') }}
+          <input
+            v-model="threshold"
+            type="number"
+            step="0.01"
+            min="0"
+            class="mt-1 w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            :placeholder="t('adminWallet.thresholdPlaceholder')"
+          />
+        </label>
+        <button
+          class="rounded-full bg-slate-700 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
+          :disabled="settingsSaving || threshold === ''"
+          @click="saveSettings"
+        >{{ settingsSaving ? t('adminWallet.thresholdSaving') : t('adminWallet.thresholdSave') }}</button>
+      </div>
+      <p class="text-[11px] text-slate-500">{{ t('adminWallet.thresholdHint') }}</p>
+      <p v-if="settingsError" class="text-xs text-red-300" role="alert">{{ settingsError }}</p>
+    </div>
+
     <!-- Bonus modal -->
     <Teleport to="body">
       <Transition
@@ -590,9 +618,38 @@ const issueBonus = async () => {
   }
 };
 
+// ── Platform settings: wallet charge approval threshold ────────────────────────
+const threshold = ref('');
+const settingsSaving = ref(false);
+const settingsError = ref('');
+
+const fetchSettings = async () => {
+  try {
+    const res = await adminApi.get('/admin/settings/');
+    threshold.value = res.data?.wallet_charge_approval_threshold ?? '';
+  } catch { /* non-fatal — leave the field blank */ }
+};
+
+const saveSettings = async () => {
+  settingsError.value = '';
+  const val = parseFloat(threshold.value);
+  if (!Number.isFinite(val) || val < 0) { settingsError.value = t('adminWallet.thresholdError'); return; }
+  settingsSaving.value = true;
+  try {
+    const res = await adminApi.patch('/admin/settings/', { wallet_charge_approval_threshold: val.toFixed(2) });
+    threshold.value = res.data?.wallet_charge_approval_threshold ?? threshold.value;
+    toast.show(t('adminWallet.thresholdSaved'), 'success');
+  } catch (err) {
+    settingsError.value = err?.response?.data?.detail || t('adminWallet.thresholdError');
+  } finally {
+    settingsSaving.value = false;
+  }
+};
+
 onMounted(() => {
   fetch();
   fetchTenants();
   fetchVouchers();
+  fetchSettings();
 });
 </script>

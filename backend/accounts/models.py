@@ -1,5 +1,6 @@
 import secrets
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -195,6 +196,36 @@ class WalletChargeRequest(models.Model):
 
     def __str__(self) -> str:
         return f"ChargeRequest {self.amount} {self.status} — {self.customer} @ {self.restaurant_name}"
+
+
+class PlatformConfig(models.Model):
+    """Platform-wide settings editable by a platform admin. Single row (pk=1), public schema.
+
+    Keeps operationally-tunable values out of env vars so a platform admin can change them
+    live. Fall back to the matching Django setting when a row hasn't been created yet.
+    """
+
+    # Wallet charges ABOVE this amount require customer approval; at/below debit instantly
+    # on QR scan. 0 means every charge needs approval. In the platform base currency (MAD).
+    wallet_charge_approval_threshold = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("50.00")
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Platform configuration"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # enforce a single row
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self) -> str:
+        return "Platform configuration"
 
 
 class TenantFloatTransaction(models.Model):

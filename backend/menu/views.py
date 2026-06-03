@@ -5101,9 +5101,14 @@ class OwnerWalletChargeView(APIView):
 
         # Above the instant-charge threshold → the customer must approve before any money
         # moves. The QR scan identified them; this asks explicit consent for the amount.
-        # (At or below the threshold, a scan is consent enough for a small tap.)
+        # (At or below the threshold, a scan is consent enough for a small tap.) The
+        # threshold is admin-editable (PlatformConfig); fall back to the env setting.
         from django.conf import settings as _settings
-        _threshold = _Dec(str(getattr(_settings, "WALLET_CHARGE_APPROVAL_THRESHOLD", "50") or "0"))
+        try:
+            from accounts.models import PlatformConfig as _PC
+            _threshold = _PC.get_solo().wallet_charge_approval_threshold
+        except Exception:
+            _threshold = _Dec(str(getattr(_settings, "WALLET_CHARGE_APPROVAL_THRESHOLD", "50") or "0"))
         if amount > _threshold:
             from accounts.models import WalletChargeRequest
             from django.utils import timezone as _tz

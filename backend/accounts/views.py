@@ -1392,6 +1392,50 @@ class AdminFundTenantView(APIView):
         })
 
 
+class AdminPlatformSettingsView(APIView):
+    """GET/PATCH /api/admin/settings/ — platform-wide, admin-editable settings.
+
+    Currently exposes the wallet charge approval threshold. Platform admin only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _check(self, request):
+        from .models import User
+        u = getattr(request, "user", None)
+        return isinstance(u, User) and (u.is_platform_admin or u.is_superuser or u.is_staff)
+
+    def _serialize(self, cfg):
+        return {
+            "wallet_charge_approval_threshold": str(cfg.wallet_charge_approval_threshold),
+        }
+
+    def get(self, request, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        from .models import PlatformConfig
+        return Response(self._serialize(PlatformConfig.get_solo()))
+
+    def patch(self, request, *args, **kwargs):
+        if not self._check(request):
+            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        from decimal import Decimal as _Dec, InvalidOperation
+        from .models import PlatformConfig
+
+        cfg = PlatformConfig.get_solo()
+        raw = request.data.get("wallet_charge_approval_threshold")
+        if raw is not None:
+            try:
+                val = _Dec(str(raw)).quantize(_Dec("0.01"))
+            except (InvalidOperation, TypeError, ValueError):
+                return Response({"detail": "Invalid threshold."}, status=status.HTTP_400_BAD_REQUEST)
+            if val < 0:
+                return Response({"detail": "Threshold cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+            cfg.wallet_charge_approval_threshold = val
+            cfg.save(update_fields=["wallet_charge_approval_threshold", "updated_at"])
+        return Response(self._serialize(cfg))
+
+
 class AdminCustomerListView(APIView):
     """GET /api/admin/customers/ — the platform customer directory (marketplace clients).
 

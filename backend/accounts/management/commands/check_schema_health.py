@@ -34,6 +34,7 @@ CRITICAL_MODELS = [
     ("accounts", "DriverPayout"),
     ("accounts", "CustomerOrderRef"),
     ("accounts", "WalletChargeRequest"),
+    ("accounts", "PlatformConfig"),
     ("tenancy", "Tenant"),
 ]
 
