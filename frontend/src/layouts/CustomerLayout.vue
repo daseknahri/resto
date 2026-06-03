@@ -149,6 +149,9 @@
         </RouterLink>
       </div>
     </nav>
+
+    <!-- App-wide: surfaces a pending wallet-charge approval on any customer page. -->
+    <ChargeApprovalWatcher />
   </div>
 </template>
 
@@ -157,6 +160,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import api from "../lib/api";
 import AppIcon from "../components/AppIcon.vue";
+import ChargeApprovalWatcher from "../components/ChargeApprovalWatcher.vue";
 import CurrencySelector from "../components/CurrencySelector.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
