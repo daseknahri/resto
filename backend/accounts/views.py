@@ -1026,6 +1026,128 @@ class CustomerWalletPayTokenView(APIView):
         return Response({"token": token, "expires_in": _WALLET_PAY_TTL})
 
 
+class CustomerWalletChargeRequestsView(APIView):
+    """GET /api/customer/wallet/charge-requests/ — pending wallet charges awaiting this
+    customer's approval (above-threshold charges a restaurant initiated)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        from .models import WalletChargeRequest
+        from django.utils import timezone as _tz
+        now = _tz.now()
+        # Lazy-expire stale pendings so the customer never sees a dead request.
+        WalletChargeRequest.objects.filter(
+            customer_id=customer_id,
+            status=WalletChargeRequest.Status.PENDING,
+            expires_at__lte=now,
+        ).update(status=WalletChargeRequest.Status.EXPIRED, resolved_at=now)
+        pendings = WalletChargeRequest.objects.filter(
+            customer_id=customer_id, status=WalletChargeRequest.Status.PENDING
+        ).order_by("created_at")
+        return Response({"requests": [
+            {
+                "id": r.id,
+                "amount": str(r.amount),
+                "currency": r.currency,
+                "restaurant_name": r.restaurant_name,
+                "order_number": r.order_number,
+                "note": r.note,
+                "expires_at": r.expires_at.isoformat(),
+            }
+            for r in pendings
+        ]})
+
+
+class CustomerWalletChargeApproveView(APIView):
+    """POST /api/customer/wallet/charge-requests/<id>/approve/ — approve a pending charge,
+    debiting the wallet. Idempotent: the request carries the debit key, and a re-approve
+    of an already-charged request replays the result instead of charging again."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, request_id, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from .models import WalletChargeRequest
+        from .wallet_service import debit_wallet, InsufficientFunds, WalletError
+        from django.db import transaction as _dbtx
+        from django.utils import timezone as _tz
+
+        try:
+            with _dbtx.atomic():
+                cr = WalletChargeRequest.objects.select_for_update().get(
+                    pk=request_id, customer_id=customer_id
+                )
+                if cr.status == WalletChargeRequest.Status.CHARGED:
+                    return Response({"status": "charged", "amount": str(cr.amount), "duplicate": True})
+                if cr.status != WalletChargeRequest.Status.PENDING:
+                    return Response(
+                        {"detail": "This request is no longer pending.", "code": cr.status},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if cr.expires_at <= _tz.now():
+                    cr.status = WalletChargeRequest.Status.EXPIRED
+                    cr.resolved_at = _tz.now()
+                    cr.save(update_fields=["status", "resolved_at"])
+                    return Response(
+                        {"detail": "This charge request has expired.", "code": "expired"},
+                        status=status.HTTP_410_GONE,
+                    )
+                tx = debit_wallet(
+                    customer_id, cr.amount,
+                    reference=cr.order_number, tenant_id=cr.tenant_id, note=cr.note,
+                    idempotency_key=cr.idempotency_key,
+                )
+                cr.status = WalletChargeRequest.Status.CHARGED
+                cr.resolved_at = _tz.now()
+                cr.wallet_tx_id = tx.id
+                cr.save(update_fields=["status", "resolved_at", "wallet_tx_id"])
+        except WalletChargeRequest.DoesNotExist:
+            return Response({"detail": "Charge request not found."}, status=status.HTTP_404_NOT_FOUND)
+        except InsufficientFunds:
+            # Leave it PENDING so the customer can top up and approve again.
+            cust = Customer.objects.filter(pk=customer_id).first()
+            return Response(
+                {"detail": "Insufficient wallet balance.", "code": "insufficient",
+                 "balance": str(cust.wallet_balance) if cust else "0.00"},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"status": "charged", "amount": str(tx.amount), "new_balance": str(tx.balance_after)})
+
+
+class CustomerWalletChargeDeclineView(APIView):
+    """POST /api/customer/wallet/charge-requests/<id>/decline/ — decline a pending charge."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, request_id, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        from .models import WalletChargeRequest
+        from django.utils import timezone as _tz
+        cr = WalletChargeRequest.objects.filter(pk=request_id, customer_id=customer_id).first()
+        if cr is None:
+            return Response({"detail": "Charge request not found."}, status=status.HTTP_404_NOT_FOUND)
+        if cr.status == WalletChargeRequest.Status.PENDING:
+            cr.status = WalletChargeRequest.Status.DECLINED
+            cr.resolved_at = _tz.now()
+            cr.save(update_fields=["status", "resolved_at"])
+        return Response({"status": cr.status})
+
+
 class CustomerWalletView(APIView):
     """GET /api/customer/wallet/ — return balance + transaction history (last 50)."""
 

@@ -5087,6 +5087,39 @@ class OwnerWalletChargeView(APIView):
         note = str(request.data.get("note") or "").strip()[:200]
         idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
 
+        # Above the instant-charge threshold → the customer must approve before any money
+        # moves. The QR scan identified them; this asks explicit consent for the amount.
+        # (At or below the threshold, a scan is consent enough for a small tap.)
+        from django.conf import settings as _settings
+        _threshold = _Dec(str(getattr(_settings, "WALLET_CHARGE_APPROVAL_THRESHOLD", "50") or "0"))
+        if amount > _threshold:
+            from accounts.models import WalletChargeRequest
+            from django.utils import timezone as _tz
+            from django.utils.crypto import get_random_string
+            from datetime import timedelta as _td
+            _ttl = int(getattr(_settings, "WALLET_CHARGE_REQUEST_TTL", 300))
+            cr, _ = WalletChargeRequest.objects.get_or_create(
+                idempotency_key=(idem or f"cr-{get_random_string(24)}"),
+                defaults={
+                    "customer_id": customer_id,
+                    "tenant_id": tenant.id,
+                    "restaurant_name": getattr(tenant, "name", "") or "",
+                    "amount": amount,
+                    "order_number": order_number,
+                    "note": note,
+                    "status": WalletChargeRequest.Status.PENDING,
+                    "actor_user_id": getattr(request.user, "id", None),
+                    "expires_at": _tz.now() + _td(seconds=_ttl),
+                },
+            )
+            return Response({
+                "status": "pending",
+                "request_id": cr.id,
+                "customer_id": int(customer_id),
+                "amount": str(amount),
+                "expires_at": cr.expires_at.isoformat(),
+            }, status=status.HTTP_202_ACCEPTED)
+
         try:
             tx = debit_wallet(
                 customer_id, amount,
@@ -5115,10 +5148,60 @@ class OwnerWalletChargeView(APIView):
                 pass  # the payment is recorded regardless; bill update is best-effort
 
         return Response({
+            "status": "charged",
             "customer_id": int(customer_id),
             "amount": str(amount),
             "new_balance": str(tx.balance_after),
         })
+
+
+class OwnerWalletChargeRequestStatusView(APIView):
+    """GET /api/owner/wallet/charge-request/<id>/ — poll a pending charge's outcome.
+
+    The owner/staff poll this after creating an above-threshold charge request until the
+    customer approves (charged), declines, or it expires. When it becomes charged and is
+    tied to an order, this — running in the tenant schema — applies the bill update once
+    (the customer's approval runs in the public schema and can't reach the tenant Order).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from accounts.models import WalletChargeRequest, Customer
+        from django.utils import timezone as _tz
+
+        tenant = getattr(request, "tenant", None)
+        cr = WalletChargeRequest.objects.filter(pk=request_id).first()
+        if cr is None or (tenant is not None and cr.tenant_id != tenant.id):
+            return Response({"detail": "Charge request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Lazy-expire a stale pending request.
+        if cr.status == WalletChargeRequest.Status.PENDING and cr.expires_at <= _tz.now():
+            cr.status = WalletChargeRequest.Status.EXPIRED
+            cr.resolved_at = _tz.now()
+            cr.save(update_fields=["status", "resolved_at"])
+
+        # Apply the bill update exactly once now that we're in tenant context.
+        if (cr.status == WalletChargeRequest.Status.CHARGED and cr.order_number
+                and not cr.bill_synced):
+            try:
+                from django.db.models import F as _F
+                Order.objects.filter(order_number=cr.order_number).update(
+                    wallet_amount_paid=_F("wallet_amount_paid") + cr.amount
+                )
+            except Exception:
+                pass  # best-effort; the payment is recorded regardless
+            cr.bill_synced = True
+            cr.save(update_fields=["bill_synced"])
+
+        data = {"status": cr.status, "request_id": cr.id, "amount": str(cr.amount)}
+        if cr.status == WalletChargeRequest.Status.CHARGED:
+            cust = Customer.objects.filter(pk=cr.customer_id).first()
+            data["new_balance"] = str(cust.wallet_balance) if cust else None
+        return Response(data)
 
 
 class OwnerWalletTopupView(APIView):

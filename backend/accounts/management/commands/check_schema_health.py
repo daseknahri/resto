@@ -33,6 +33,7 @@ CRITICAL_MODELS = [
     ("accounts", "TenantFloatTransaction"),
     ("accounts", "DriverPayout"),
     ("accounts", "CustomerOrderRef"),
+    ("accounts", "WalletChargeRequest"),
     ("tenancy", "Tenant"),
 ]
 

@@ -150,6 +150,53 @@ class CustomerOrderRef(models.Model):
         return f"OrderRef {self.order_number} @ {self.restaurant_name} ({self.status})"
 
 
+class WalletChargeRequest(models.Model):
+    """A wallet charge that needs the CUSTOMER's explicit approval before money moves.
+
+    Small charges (at or below the approval threshold) debit instantly on QR scan — the
+    scan is consent enough for a small tap. Above the threshold, the owner/staff create
+    one of these PENDING requests; the customer approves it in their app, and only then
+    is the wallet debited. Short-lived (TTL) so a forgotten request can't be approved
+    much later. Lives in the public schema (links a platform Customer to a tenant_id).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CHARGED = "charged", "Charged"
+        DECLINED = "declined", "Declined"
+        EXPIRED = "expired", "Expired"
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="charge_requests")
+    tenant_id = models.IntegerField(db_index=True)
+    restaurant_name = models.CharField(max_length=200, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default="MAD")
+    order_number = models.CharField(max_length=100, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
+    # Idempotency key for the eventual debit_wallet, generated at creation so a
+    # double-tapped approval (or a retry after top-up) can't debit twice.
+    idempotency_key = models.CharField(max_length=120, null=True, blank=True, unique=True)
+    actor_user_id = models.IntegerField(null=True, blank=True)  # owner/staff who initiated
+    wallet_tx_id = models.IntegerField(null=True, blank=True)   # resulting WalletTransaction id
+    # The debit runs in the public schema (customer approval), which can't reach the
+    # tenant-schema Order. The owner's poll (in tenant context) applies the bill update
+    # once and flips this, so repeated polls don't double-count it.
+    bill_synced = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["customer", "status"], name="charge_req_customer_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"ChargeRequest {self.amount} {self.status} — {self.customer} @ {self.restaurant_name}"
+
+
 class TenantFloatTransaction(models.Model):
     """Append-only ledger for a restaurant's distributable wallet float.
 

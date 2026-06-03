@@ -311,6 +311,13 @@ WALLET_P2P_ENABLED = parse_bool_env("WALLET_P2P_ENABLED", False)
 # recipient numbers like "0612…" into E.164 "+212612…" for P2P transfers. Empty means
 # strict mode: senders must type the full international "+…" number (no guessing).
 WALLET_DEFAULT_DIAL_CODE = os.getenv("WALLET_DEFAULT_DIAL_CODE", "").strip()
+# Wallet charges at or below this amount debit instantly when the owner/staff scans the
+# customer's QR pay-code (the scan is consent for a small tap). Charges ABOVE it become a
+# pending request the customer must approve in their app before any money moves. Set to 0
+# to require approval for every charge. In the platform's base currency (MAD).
+WALLET_CHARGE_APPROVAL_THRESHOLD = os.getenv("WALLET_CHARGE_APPROVAL_THRESHOLD", "50").strip() or "50"
+# How long a pending charge request stays approvable before it auto-expires (seconds).
+WALLET_CHARGE_REQUEST_TTL = parse_int_env("WALLET_CHARGE_REQUEST_TTL", 300)
 PUBLIC_MENU_BASE_URL = os.getenv("PUBLIC_MENU_BASE_URL", "").strip()
 TENANT_DOMAIN_SUFFIX = hostname_from_url(os.getenv("TENANT_DOMAIN_SUFFIX", "")) or hostname_from_url(PUBLIC_MENU_BASE_URL)
 if TENANT_DOMAIN_SUFFIX:
