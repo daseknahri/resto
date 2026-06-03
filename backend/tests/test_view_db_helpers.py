@@ -91,6 +91,24 @@ class RefundWalletTests(SimpleTestCase):
         mock_cust.objects.select_for_update.assert_not_called()
         mock_wtm.objects.create.assert_not_called()
 
+    def test_concurrent_refund_caught_under_lock(self):
+        """The fast-path check misses (False) but the under-lock re-check (True) must
+        prevent a second refund — closing the double-cancel race."""
+        order = _order(customer_id=5, wallet_amount_paid="10.00")
+        mock_customer = SimpleNamespace(wallet_balance=Decimal("0.00"), updated_at=None)
+        mock_customer.save = MagicMock()
+        with patch("accounts.models.WalletTransaction") as mock_wtm, \
+             patch("accounts.models.Customer") as mock_cust, \
+             patch("django.db.transaction.atomic"):
+            # First .exists() (fast path) → False; second (under lock) → True.
+            mock_wtm.objects.filter.return_value.exists.side_effect = [False, True]
+            mock_cust.objects.select_for_update.return_value.get.return_value = mock_customer
+            _refund_wallet_for_cancelled_order(order)
+        # The lock was acquired (fast path missed) but nothing was written.
+        mock_cust.objects.select_for_update.return_value.get.assert_called_once_with(pk=5)
+        mock_wtm.objects.create.assert_not_called()
+        mock_customer.save.assert_not_called()
+
     def test_idempotency_filter_uses_customer_id_type_and_reference(self):
         """Filter kwargs: customer_id, type=REFUND, reference=order_number."""
         order = _order(order_number="ORD-IDEM", customer_id=7)

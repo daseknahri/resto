@@ -3006,15 +3006,24 @@ def _refund_wallet_for_cancelled_order(order) -> None:
     refund_amount = _Dec(str(order.wallet_amount_paid or "0"))
     if refund_amount <= _Dec("0"):
         return
-    # Idempotency guard
-    if _WTM.objects.filter(
-        customer_id=order.customer_id,
-        type=_WTM.Type.REFUND,
-        reference=order.order_number,
-    ).exists():
+
+    def _already_refunded():
+        return _WTM.objects.filter(
+            customer_id=order.customer_id,
+            type=_WTM.Type.REFUND,
+            reference=order.order_number,
+        ).exists()
+
+    # Fast path: skip locking when a refund already exists (the common replay case).
+    if _already_refunded():
         return
     with _dbtx.atomic():
         _cust = _CustM.objects.select_for_update().get(pk=order.customer_id)
+        # Authoritative re-check UNDER the customer-row lock. The status-update view
+        # does not serialize cancellations, so two concurrent cancels can both pass
+        # the fast-path check above; the lock + this re-check prevents a double refund.
+        if _already_refunded():
+            return
         _cust.wallet_balance = _cust.wallet_balance + refund_amount
         _cust.save(update_fields=["wallet_balance", "updated_at"])
         _WTM.objects.create(
