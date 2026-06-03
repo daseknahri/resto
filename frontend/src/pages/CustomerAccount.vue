@@ -1457,12 +1457,17 @@ const fetchLoyaltyConfig = async () => {
   } catch { /* silent */ }
 };
 
+let redeemKey = null; // stable across retries of the same redemption; cleared on success
+
 const redeemPoints = async () => {
   redeemError.value = '';
   redeemSuccess.value = '';
+  const pts = parseInt(redeemAmount.value, 10);
+  if (!Number.isFinite(pts) || pts <= 0) { redeemError.value = t('customerAccount.loyaltyRedeemFailed'); return; }
   redeeming.value = true;
+  if (!redeemKey) redeemKey = newIdempotencyKey();
   try {
-    const res = await api.post('/customer/loyalty/redeem/', { points: redeemAmount.value });
+    const res = await api.post('/customer/loyalty/redeem/', { points: redeemAmount.value, idempotency_key: redeemKey });
     if (customerStore.customer) {
       customerStore.setCustomer({
         ...customerStore.customer,
@@ -1470,6 +1475,7 @@ const redeemPoints = async () => {
         wallet_balance: res.data.new_wallet_balance,
       });
     }
+    redeemKey = null; // confirmed — next redemption gets a fresh key
     redeemSuccess.value = t('customerAccount.loyaltyRedeemSuccess', {
       pts: res.data.redeemed_points,
       credit: res.data.credit_amount,

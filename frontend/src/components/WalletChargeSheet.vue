@@ -123,7 +123,7 @@ const reset = () => {
 const charge = async () => {
   error.value = '';
   const value = parseFloat(amount.value);
-  if (!value || value <= 0) { error.value = t('walletCharge.invalidAmount'); return; }
+  if (!Number.isFinite(value) || value <= 0) { error.value = t('walletCharge.invalidAmount'); return; }
   charging.value = true;
   if (!chargeKey) chargeKey = newIdempotencyKey();
   try {

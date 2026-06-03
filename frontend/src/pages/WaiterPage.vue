@@ -360,9 +360,16 @@ const chargeFromBill = () => {
   billOrder.value = null;
 };
 
-const onWalletCharged = () => {
+const onWalletCharged = async () => {
+  const num = chargeContext.value.orderNumber;
   showCharge.value = false;
-  reload(); // refresh orders so the bill reflects the wallet payment
+  await reload(); // refresh orders so the bill reflects the wallet payment
+  // Reopen the bill (now showing the wallet payment applied) so the waiter gets
+  // visible confirmation instead of the bill silently vanishing after a charge.
+  if (num) {
+    const updated = waiter.orders.find((o) => o.order_number === num);
+    if (updated) billOrder.value = updated;
+  }
 };
 const onOrderPlaced = () => {
   // Immediately reload the order list so the new order appears

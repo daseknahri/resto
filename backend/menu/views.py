@@ -4660,6 +4660,27 @@ class CustomerLoyaltyRedeemView(APIView):
         except (TypeError, ValueError):
             return Response({"detail": "Invalid points value."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Idempotent replay: a retried submit (e.g. a lost-response resubmit) with the
+        # same key must not redeem a second time. Checked BEFORE the threshold guard,
+        # because the first redemption already spent the points — re-validating would
+        # wrongly reject the replay as "below threshold".
+        _idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        if _idem:
+            _prior = _WTM.objects.filter(idempotency_key=_idem, type=_WTM.Type.LOYALTY).first()
+            if _prior is not None:
+                _prior_pts = 0
+                try:
+                    _prior_pts = int(str(_prior.reference or "").split(":")[1].replace("pts", ""))
+                except (IndexError, ValueError):
+                    _prior_pts = 0
+                return Response({
+                    "redeemed_points": _prior_pts,
+                    "credit_amount": str(_prior.amount),
+                    "new_points_balance": _customer.loyalty_points,
+                    "new_wallet_balance": str(_customer.wallet_balance),
+                    "duplicate": True,
+                })
+
         # Validate threshold and balance
         if _customer.loyalty_points < _cfg.redeem_threshold:
             return Response(
@@ -4691,7 +4712,23 @@ class CustomerLoyaltyRedeemView(APIView):
                     tenant_id=tenant_id,
                     note=f"Redeemed {_redeemable} loyalty points",
                     balance_after=_locked.wallet_balance,
+                    idempotency_key=_idem,
                 )
+        except IntegrityError:
+            # Concurrent duplicate with the same idempotency_key — the other request
+            # won the unique constraint. Treat this as an idempotent replay.
+            _customer.refresh_from_db()
+            _prior = (
+                _WTM.objects.filter(idempotency_key=_idem, type=_WTM.Type.LOYALTY).first()
+                if _idem else None
+            )
+            return Response({
+                "redeemed_points": 0,
+                "credit_amount": str(_prior.amount) if _prior else "0.00",
+                "new_points_balance": _customer.loyalty_points,
+                "new_wallet_balance": str(_customer.wallet_balance),
+                "duplicate": True,
+            })
         except Exception as _exc:
             return Response({"detail": "Redemption failed. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

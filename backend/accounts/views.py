@@ -1660,6 +1660,16 @@ class CustomerWalletRedeemVoucherView(APIView):
                 return Response({"detail": "Invalid voucher code."}, status=status.HTTP_400_BAD_REQUEST)
 
             if voucher.is_used:
+                # Idempotent replay: if THIS customer already redeemed it (e.g. a
+                # lost-response retry), return success with their current balance
+                # instead of a false "already used" error. The credit happened once.
+                if voucher.used_by_id == customer.id:
+                    return Response({
+                        "credited": str(voucher.amount),
+                        "new_balance": str(customer.wallet_balance),
+                        "note": voucher.note,
+                        "duplicate": True,
+                    })
                 return Response({"detail": "This voucher has already been used."}, status=status.HTTP_400_BAD_REQUEST)
 
             now = _tz.now()
