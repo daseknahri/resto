@@ -122,29 +122,25 @@
       </template>
       <div v-else class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
 
-      <!-- Action buttons -->
-      <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
-        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2.5 sm:w-auto">
+      <!-- Quick actions (Analytics lives in the top nav now, so it's not duplicated here) -->
+      <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
+        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2 sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <RouterLink :to="{ name: 'owner-analytics' }" class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto">
-          <AppIcon name="chart" class="owner-home-btn-icon" />
-          {{ t("ownerAnalytics.title") }}
-        </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto">
+        <RouterLink to="/menu" class="ui-btn-outline w-full px-4 py-2 sm:w-auto">
           <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
         <button
-          class="ui-btn-outline w-full px-4 py-2.5 sm:w-auto transition-colors"
+          class="ui-btn-outline w-full px-4 py-2 sm:w-auto transition-colors"
           :class="copied ? 'border-emerald-500/50 text-emerald-300' : ''"
           @click="copyMenuUrl"
         >
           <AppIcon :name="copied ? 'check' : 'copy'" class="owner-home-btn-icon" />
           {{ copied ? t("ownerHome.menuUrlCopied") : t("ownerHome.copyPublicUrl") }}
         </button>
-        <button class="ui-btn-outline col-span-2 w-full px-4 py-2.5 sm:w-auto" @click="manualRefresh">
+        <button class="ui-btn-outline col-span-2 w-full px-4 py-2 sm:w-auto" @click="manualRefresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" />
           {{ t("common.refresh") }}
         </button>
