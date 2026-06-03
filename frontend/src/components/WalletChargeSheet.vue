@@ -31,7 +31,17 @@
         <p v-if="error" class="text-xs text-red-300">{{ error }}</p>
       </template>
 
-      <!-- Step 2: charge the resolved customer -->
+      <!-- Step 2a: waiting for the customer to approve an above-threshold charge -->
+      <template v-else-if="awaiting">
+        <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 text-center space-y-2">
+          <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400"></div>
+          <p class="text-sm font-semibold text-slate-100">{{ t('walletCharge.awaitingTitle', { amount: fmtMoney(awaiting.amount) }) }}</p>
+          <p class="text-xs text-slate-400">{{ t('walletCharge.awaitingHint', { name: customer.name || customer.phone }) }}</p>
+        </div>
+        <button class="w-full rounded-xl border border-slate-600 px-4 py-2.5 text-sm text-slate-300" @click="cancelAwaiting">{{ t('common.cancel') }}</button>
+      </template>
+
+      <!-- Step 2b: charge the resolved customer -->
       <template v-else>
         <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3">
           <p class="text-sm font-semibold text-slate-100">{{ customer.name || customer.phone }}</p>
@@ -56,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onBeforeUnmount } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
@@ -79,7 +89,48 @@ const customer = ref(null);
 const amount = ref(props.prefillAmount ? String(props.prefillAmount) : '');
 const charging = ref(false);
 const error = ref('');
+const awaiting = ref(null); // { request_id, amount } while waiting for customer approval
 let chargeKey = null;
+let pollTimer = null;
+const POLL_MS = 2500;
+
+const stopPolling = () => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+};
+
+const startPolling = (requestId) => {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    try {
+      const { data } = await api.get(`/owner/wallet/charge-request/${requestId}/`);
+      if (data.status === 'charged') {
+        stopPolling();
+        awaiting.value = null;
+        toast.show(t('walletCharge.charged', { amount: fmtMoney(data.amount) }), 'success');
+        emit('charged', data);
+        emit('close');
+      } else if (data.status === 'declined') {
+        stopPolling();
+        awaiting.value = null;
+        error.value = t('walletCharge.declined');
+      } else if (data.status === 'expired') {
+        stopPolling();
+        awaiting.value = null;
+        error.value = t('walletCharge.requestExpired');
+      }
+      // pending → keep polling
+    } catch {
+      // transient error — keep polling until charged/declined/expired or cancelled
+    }
+  }, POLL_MS);
+};
+
+const cancelAwaiting = () => {
+  stopPolling();
+  awaiting.value = null; // back to the amount step; the request expires on its own TTL
+};
+
+onBeforeUnmount(stopPolling);
 
 const fmtMoney = (v) => {
   try {
@@ -115,6 +166,8 @@ const resolve = async (token) => {
 };
 
 const reset = () => {
+  stopPolling();
+  awaiting.value = null;
   customer.value = null;
   amount.value = props.prefillAmount ? String(props.prefillAmount) : '';
   error.value = '';
@@ -133,6 +186,13 @@ const charge = async () => {
       order_number: props.orderNumber || '',
       idempotency_key: chargeKey,
     });
+    if (data.status === 'pending') {
+      // Above the approval threshold — wait for the customer to approve on their phone.
+      awaiting.value = { request_id: data.request_id, amount: data.amount };
+      charging.value = false;
+      startPolling(data.request_id);
+      return;
+    }
     toast.show(t('walletCharge.charged', { amount: fmtMoney(data.amount) }), 'success');
     emit('charged', data);
     emit('close');
