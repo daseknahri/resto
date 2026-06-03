@@ -118,12 +118,12 @@
       </div>
 
       <!-- Stats grid -->
-      <div v-else-if="waiter.shiftSummary" class="grid grid-cols-3 gap-3">
+      <div v-else-if="waiter.shiftSummary" class="grid gap-3" :class="showShiftRevenue ? 'grid-cols-3' : 'grid-cols-2'">
         <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
           <p class="text-3xl font-bold text-white">{{ waiter.shiftSummary.orders_handled }}</p>
           <p class="text-[11px] text-slate-400 uppercase tracking-wide">{{ t('waiterPage.shiftOrders') }}</p>
         </div>
-        <div class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
+        <div v-if="showShiftRevenue" class="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4 text-center space-y-1">
           <p class="text-3xl font-bold text-emerald-300">{{ shiftRevenue }}</p>
           <p class="text-[11px] text-slate-400 uppercase tracking-wide">{{ t('waiterPage.shiftRevenue') }}</p>
         </div>
@@ -431,6 +431,9 @@ const _defaultSince = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 const shiftSinceInput = ref(_defaultSince());
+
+// Revenue is gated by the 'view revenue' permission (backend sends show_revenue).
+const showShiftRevenue = computed(() => waiter.shiftSummary?.show_revenue !== false);
 
 const shiftRevenue = computed(() => {
   const s = waiter.shiftSummary;

@@ -23,10 +23,30 @@ def user_can_edit_tenant(user, tenant):
     return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
 
 
+def user_can_edit_menu(user, tenant):
+    """Write-authorization for the MENU builder (dishes, categories, options, tables).
+
+    Owner, or staff with the 'edit menu' permission. Stricter than user_can_edit_tenant
+    (which gates live order updates and stays open to all staff) — editing the menu is an
+    owner-delegated capability, not a default waiter one.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None:
+        return False
+    if getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    if user.role == User.Roles.TENANT_OWNER:
+        return True
+    return user.role == User.Roles.TENANT_STAFF and bool(getattr(user, "perm_edit_menu", False))
+
+
 class IsTenantEditorOrReadOnly(permissions.BasePermission):
-    message = "Editing requires tenant owner or staff permissions."
+    message = "Editing the menu requires owner or 'edit menu' staff permission."
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
-        return user_can_edit_tenant(request.user, getattr(request, "tenant", None))
+        return user_can_edit_menu(request.user, getattr(request, "tenant", None))

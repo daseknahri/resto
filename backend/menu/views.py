@@ -2299,6 +2299,11 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
 
 
 def _can_edit_tenant_order(request) -> bool:
+    """Owner, or staff with the 'manage orders' permission, on this tenant.
+
+    This is the waiter's core capability (handle orders + take payment). Staff without
+    perm_manage_orders are read-only and cannot mutate orders or charge wallets.
+    """
     user = getattr(request, "user", None)
     tenant = getattr(request, "tenant", None)
     if not user or not user.is_authenticated:
@@ -2308,7 +2313,38 @@ def _can_edit_tenant_order(request) -> bool:
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
     from accounts.models import User
-    return user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+    return (user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+            and user.effective_perm_manage_orders())
+
+
+def _can_view_revenue(request) -> bool:
+    """Owner, or staff with the 'view revenue' permission, on this tenant."""
+    user = getattr(request, "user", None)
+    tenant = getattr(request, "tenant", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    from accounts.models import User
+    return (user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+            and user.effective_perm_view_revenue())
+
+
+def _can_edit_menu(request) -> bool:
+    """Owner, or staff with the 'edit menu' permission, on this tenant."""
+    user = getattr(request, "user", None)
+    tenant = getattr(request, "tenant", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        return True
+    if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
+        return False
+    from accounts.models import User
+    return (user.role in {User.Roles.TENANT_OWNER, User.Roles.TENANT_STAFF}
+            and user.effective_perm_edit_menu())
 
 
 class StaffOrderListView(APIView):
@@ -2458,10 +2494,14 @@ class StaffShiftSummaryView(APIView):
         now = timezone.now()
         period_hours = round((now - since_dt).total_seconds() / 3600, 1)
 
+        # Revenue figures are gated by the 'view revenue' permission. Staff without it
+        # still see throughput (orders handled, prep time) but not the money totals.
+        show_revenue = _can_view_revenue(request)
         return Response({
             "orders_handled": orders_handled,
-            "total_revenue": str(total_revenue),
-            "currency": currency,
+            "total_revenue": str(total_revenue) if show_revenue else None,
+            "currency": currency if show_revenue else "",
+            "show_revenue": show_revenue,
             "average_prep_time_minutes": avg_prep_minutes,
             "since": since_dt.isoformat(),
             "period_hours": period_hours,
@@ -2839,13 +2879,13 @@ class OwnerPromotionListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
+        if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         promos = Promotion.objects.all()
         return Response([_serialize_promotion(p) for p in promos])
 
     def post(self, request, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
+        if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         from decimal import Decimal as _Dec, InvalidOperation
@@ -2927,7 +2967,7 @@ class OwnerPromotionDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_promo(self, request, promo_id):
-        if not _can_edit_tenant_order(request):
+        if not _is_tenant_owner(request):
             return None, Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         p = Promotion.objects.filter(pk=promo_id).first()
         if p is None:
@@ -3262,7 +3302,7 @@ class DishBulkAvailabilityResetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
+        if not _can_edit_menu(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         clear_stock = bool(request.data.get("clear_stock", False))
@@ -3455,7 +3495,13 @@ class OwnerRatingListView(APIView):
 # ── Closure dates (holiday / one-off closures) ────────────────────────────────
 
 def _is_tenant_owner(request) -> bool:
-    """Return True if the requesting user has owner or above access on this tenant."""
+    """Return True ONLY for the tenant owner (or platform-level staff/superuser).
+
+    Tenant STAFF (waiters) are intentionally excluded — owner-exclusive endpoints
+    (revenue, promotions, settings, billing, loyalty, float, customer directory…)
+    must not be reachable by staff. Staff capabilities go through the perm-specific
+    helpers (_can_edit_tenant_order / _can_view_revenue / _can_edit_menu).
+    """
     user = request.user
     if not user or not user.is_authenticated:
         return False
@@ -3464,7 +3510,7 @@ def _is_tenant_owner(request) -> bool:
     tenant = getattr(request, "tenant", None)
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
-    return user.role in {user.Roles.TENANT_OWNER, user.Roles.TENANT_STAFF}
+    return user.role == user.Roles.TENANT_OWNER
 
 
 class OwnerClosureDateListCreateView(APIView):
@@ -4586,13 +4632,13 @@ class OwnerLoyaltyView(APIView):
         }
 
     def get(self, request, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
+        if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         cfg = self._get_or_create_config()
         return Response(self._serialize(cfg))
 
     def patch(self, request, *args, **kwargs):
-        if not _can_edit_tenant_order(request):
+        if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         from decimal import Decimal as _Dec, InvalidOperation
         cfg = self._get_or_create_config()
@@ -4816,7 +4862,7 @@ class OwnerMenuImportView(APIView):
 
     def get(self, request, *args, **kwargs):
         """Return a ready-to-fill CSV template."""
-        if not _can_edit_tenant_order(request):
+        if not _can_edit_menu(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         import io as _io
         buf = _io.StringIO()
@@ -4829,7 +4875,7 @@ class OwnerMenuImportView(APIView):
 
     def post(self, request, *args, **kwargs):
         """Parse an uploaded CSV and create categories + dishes."""
-        if not _can_edit_tenant_order(request):
+        if not _can_edit_menu(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         uploaded = request.FILES.get("file")
@@ -5009,7 +5055,8 @@ class OwnerWalletResolveTokenView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
+        # Waiter capability: resolving a pay code is part of taking payment.
+        if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         from django.core import signing
@@ -5064,7 +5111,8 @@ class OwnerWalletChargeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        if not _is_tenant_owner(request):
+        # Waiter capability: charging a customer's wallet is taking payment for an order.
+        if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         from decimal import Decimal as _Dec, InvalidOperation
@@ -5224,7 +5272,8 @@ class OwnerWalletChargeRequestStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, request_id, *args, **kwargs):
-        if not _is_tenant_owner(request):
+        # Waiter capability: polling the outcome of a charge they initiated.
+        if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         from accounts.models import WalletChargeRequest, Customer

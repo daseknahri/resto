@@ -408,7 +408,9 @@ export const messages = {
       signInAdminFirst: "Please sign in as platform admin first.",
       signInBeforeAccess: "Please sign in before accessing this page.",
       adminRequired: "Admin access required.",
-      editorRequired: "Menu editor access required."
+      editorRequired: "Menu editor access required.",
+      ownerRequired: "This area is for restaurant owners only.",
+      staffRequired: "This area requires a staff account.",
     },
     leadStore: {
       received: "Lead received. We will reach out shortly.",
@@ -3597,7 +3599,9 @@ export const messages = {
       signInAdminFirst: "Connectez-vous d'abord en tant qu'admin plateforme.",
       signInBeforeAccess: "Connectez-vous avant d'acceder a cette page.",
       adminRequired: "Acces admin requis.",
-      editorRequired: "Acces editeur de menu requis."
+      editorRequired: "Acces editeur de menu requis.",
+      ownerRequired: "Cet espace est reserve aux proprietaires du restaurant.",
+      staffRequired: "Cet espace necessite un compte staff.",
     },
     leadStore: {
       received: "Lead recu. Nous vous contacterons bientot.",

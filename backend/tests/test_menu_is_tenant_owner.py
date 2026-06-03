@@ -1,14 +1,10 @@
 """
 Unit tests for menu.views._is_tenant_owner(request).
 
-The function returns True when the requesting user has owner or higher access
-for the current tenant — i.e. the request's tenant matches the user's tenant
-and the role is TENANT_OWNER or TENANT_STAFF, OR the user is a superuser /
-platform admin.
-
-Distinct from accounts.views._is_tenant_owner(request, tenant) which:
-  - takes tenant as a separate argument
-  - only grants to TENANT_OWNER (not TENANT_STAFF)
+The function returns True only when the request's tenant matches the user's tenant
+and the role is TENANT_OWNER, OR the user is a superuser / platform admin. TENANT_STAFF
+(waiters) are intentionally excluded — owner-exclusive endpoints must reject staff;
+staff capabilities go through the perm-specific helpers instead.
 
 All tests are unit-level (SimpleTestCase — no real DB).
 """
@@ -105,10 +101,10 @@ class MenuIsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(role="tenant_owner", tenant_id=1), tenant=_tenant(1))
         self.assertTrue(_is_tenant_owner(req))
 
-    def test_tenant_staff_role_returns_true(self):
-        """TENANT_STAFF is also allowed in the menu version."""
+    def test_tenant_staff_role_returns_false(self):
+        """TENANT_STAFF must NOT pass the owner-only gate (security fix)."""
         req = _request(user=_user(role="tenant_staff", tenant_id=1), tenant=_tenant(1))
-        self.assertTrue(_is_tenant_owner(req))
+        self.assertFalse(_is_tenant_owner(req))
 
     def test_unrecognised_role_returns_false(self):
         req = _request(user=_user(role="platform_superadmin", tenant_id=1), tenant=_tenant(1))

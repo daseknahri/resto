@@ -344,10 +344,26 @@ router.beforeEach(async (to) => {
     return { name: "unauthorized", query: { reason: "admin", next: to.fullPath } };
   }
 
-  const needsTenantEditor = to.matched.some((route) => route.meta?.tenantEditorOnly);
-  if (needsTenantEditor && !session.canEditTenantMenu) {
-    toast.show(translate("router.editorRequired"), "error");
-    return { name: "unauthorized", query: { reason: "editor", next: to.fullPath } };
+  // Owner app vs waiter app. Staff (waiters) are confined to the waiter app; the owner
+  // app is owner-only (admins/superusers may enter for support). Driven by the route's
+  // `interface` meta so we don't have to flag every child route individually.
+  const ownerRoute = to.matched.some((route) => route.meta?.interface === "owner");
+  const waiterRoute = to.matched.some((route) => route.meta?.interface === "waiter");
+  const isAdminLevel =
+    session.isPlatformAdmin || session.user?.is_superuser === true || session.user?.is_staff === true;
+
+  if (ownerRoute && !session.isTenantOwner && !isAdminLevel) {
+    if (session.isTenantStaff) {
+      // Send staff to their own app rather than a dead-end error.
+      return { name: "waiter" };
+    }
+    toast.show(translate("router.ownerRequired"), "error");
+    return { name: "unauthorized", query: { reason: "owner", next: to.fullPath } };
+  }
+
+  if (waiterRoute && !session.isTenantOwner && !session.isTenantStaff && !isAdminLevel) {
+    toast.show(translate("router.staffRequired"), "error");
+    return { name: "unauthorized", query: { reason: "staff", next: to.fullPath } };
   }
 
   return true;

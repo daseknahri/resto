@@ -258,10 +258,11 @@ class IsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(role=User.Roles.TENANT_OWNER, tenant_id=1), tenant=_tenant(1))
         self.assertTrue(_is_tenant_owner(req))
 
-    def test_tenant_staff_with_matching_tenant_returns_true(self):
+    def test_tenant_staff_with_matching_tenant_returns_false(self):
+        """Staff are excluded from the owner-only gate (security fix)."""
         from accounts.models import User
         req = _request(user=_user(role=User.Roles.TENANT_STAFF, tenant_id=1), tenant=_tenant(1))
-        self.assertTrue(_is_tenant_owner(req))
+        self.assertFalse(_is_tenant_owner(req))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

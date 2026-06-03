@@ -60,7 +60,13 @@ def _parse_coord(value, lo: float, hi: float) -> float | None:
 def serialize_user_session(user):
     tenant = getattr(user, "tenant", None)
     can_access_admin_console = bool(user.is_staff or user.is_superuser or user.is_platform_admin)
-    can_edit_tenant_menu = bool(user.is_tenant_owner or user.is_tenant_staff)
+    # Effective permissions: owners and platform-level staff have everything; tenant
+    # staff respect their per-account flags. The frontend reads `permissions` to gate
+    # waiter-app features, and uses role/`can_edit_tenant_menu` for route access.
+    all_access = bool(user.is_tenant_owner or user.is_superuser or user.is_staff or user.is_platform_admin)
+    perm_manage_orders = bool(all_access or user.perm_manage_orders)
+    perm_view_revenue = bool(all_access or user.perm_view_revenue)
+    perm_edit_menu = bool(all_access or user.perm_edit_menu)
     return {
         "id": user.id,
         "username": user.username,
@@ -70,7 +76,12 @@ def serialize_user_session(user):
         "is_superuser": user.is_superuser,
         "is_platform_admin": user.is_platform_admin,
         "can_access_admin_console": can_access_admin_console,
-        "can_edit_tenant_menu": can_edit_tenant_menu,
+        "can_edit_tenant_menu": perm_edit_menu,
+        "permissions": {
+            "manage_orders": perm_manage_orders,
+            "view_revenue": perm_view_revenue,
+            "edit_menu": perm_edit_menu,
+        },
         "tenant": {
             "id": tenant.id,
             "slug": tenant.slug,
