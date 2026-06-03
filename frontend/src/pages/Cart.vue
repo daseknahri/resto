@@ -44,6 +44,9 @@
     >
       <p class="text-sm font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
       <p class="text-xs text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
+      <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm">
+        <AppIcon name="menu" class="h-4 w-4" />{{ t('cartPage.browseMenu') }}
+      </RouterLink>
     </div>
 
     <!-- ── Main ─────────────────────────────────────────────────────────────── -->
@@ -645,7 +648,7 @@
               :disabled="processingCheckout"
               @click="startCheckout"
             >
-              <AppIcon name="cart" class="h-3.5 w-3.5" />
+              <AppIcon name="card" class="h-3.5 w-3.5" />
               {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
             </button>
             <button
