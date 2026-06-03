@@ -4,7 +4,7 @@
     <div class="flex items-start justify-between gap-3">
       <div class="space-y-0.5">
         <p class="ui-kicker">{{ t('ownerLoyalty.kicker') }}</p>
-        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerLoyalty.title') }}</h1>
+        <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t('ownerLoyalty.title') }}</h1>
         <p class="text-sm text-slate-400">{{ t('ownerLoyalty.subtitle') }}</p>
       </div>
       <svg v-if="updating" aria-hidden="true" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

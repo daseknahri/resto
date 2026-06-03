@@ -5,7 +5,7 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-kicker">{{ t("ownerOrders.kicker") }}</p>
-          <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerOrders.title") }}</h1>
+          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerOrders.title") }}</h1>
           <p class="text-sm text-slate-400">{{ t("ownerOrders.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -196,11 +196,11 @@
     </div>
 
     <!-- Order list -->
-    <div v-else class="space-y-3">
+    <div v-else class="space-y-2.5">
       <article
         v-for="o in filteredOrders"
         :key="o.id"
-        class="ui-panel space-y-4 p-4 sm:p-4 transition-colors"
+        class="ui-panel space-y-3 p-3.5 transition-colors"
         :class="orderCardClass(o)"
         style="content-visibility: auto; contain-intrinsic-size: auto 220px;"
       >

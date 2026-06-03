@@ -4,7 +4,7 @@
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-0.5">
         <p class="ui-kicker">{{ t('ownerPromotions.kicker') }}</p>
-        <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerPromotions.title') }}</h1>
+        <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t('ownerPromotions.title') }}</h1>
         <p class="text-sm text-slate-400">{{ t('ownerPromotions.subtitle') }}</p>
       </div>
       <div class="flex items-center gap-2">
@@ -55,13 +55,13 @@
     </div>
 
     <!-- List -->
-    <div v-else class="space-y-3">
+    <div v-else class="space-y-2">
       <div
         v-for="promo in promotions"
         :key="promo.id"
-        class="ui-panel p-4 flex items-start justify-between gap-4 transition-colors hover:border-slate-600"
+        class="ui-panel p-3 flex items-start justify-between gap-3 transition-colors hover:border-slate-600"
       >
-        <div class="flex-1 min-w-0 space-y-1.5">
+        <div class="flex-1 min-w-0 space-y-1">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-sm font-semibold text-white">{{ promo.name }}</span>
             <span

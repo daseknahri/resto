@@ -1,6 +1,6 @@
 ﻿<template>
-  <div class="ui-panel space-y-4 p-5">
-    <div class="ui-section-band rounded-[24px] p-4 sm:p-5 space-y-4">
+  <div class="ui-panel space-y-3 p-4">
+    <div class="ui-section-band rounded-[24px] p-4 space-y-3">
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
@@ -60,67 +60,77 @@
         </div>
       </div>
 
-      <div class="space-y-3">
+      <div class="space-y-1.5">
         <template v-if="activeCategoryDishesFiltered.length">
           <article
-            v-for="(dish, idx) in activeCategoryDishesFiltered"
+            v-for="dish in activeCategoryDishesFiltered"
             :key="dish.local_id"
-            class="rounded-2xl border border-slate-800 bg-slate-950/75 p-4 shadow-[0_12px_28px_rgba(2,8,23,0.18)]"
-            style="content-visibility: auto; contain-intrinsic-size: auto 160px;"
+            class="group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
+            :class="dish.is_published ? '' : 'opacity-70'"
+            style="content-visibility: auto; contain-intrinsic-size: auto 68px;"
           >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("stepDishes.dishCardLabel", { index: idx + 1 }) }}</p>
-                  <span
-                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                    :class="dish.is_published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-400'"
-                  >
-                    {{ dish.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}
-                  </span>
-                </div>
-                <h3 class="mt-1 truncate text-base font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder") }}</h3>
-                <p class="mt-1 line-clamp-2 text-sm text-slate-400">{{ dish.description || t("stepDishes.descriptionPlaceholder") }}</p>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <span class="ui-data-strip">{{ t("stepDishes.pricePlaceholder") }}: {{ Number(dish.price || 0).toFixed(2) }}</span>
-                  <span class="ui-data-strip">{{ t("stepDishes.variantsTitle") }}: {{ Array.isArray(dish.options) ? dish.options.length : 0 }}</span>
-                  <span v-if="dish.option_groups?.length" class="ui-data-strip text-sky-200">{{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
-                </div>
-              </div>
-              <img
-                v-if="dish.image_url"
-                :src="dish.image_url"
-                alt=""
-                loading="lazy"
-                decoding="async"
-                class="h-14 w-14 shrink-0 rounded-xl border border-slate-700 object-cover"
-                @error="$event.target.style.display='none'"
-              />
+            <!-- Reorder: stacked chevrons -->
+            <div class="flex shrink-0 flex-col">
+              <button
+                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                type="button" :disabled="!canMoveDishUp(dish.local_id)" :aria-label="t('common.moveUp')"
+                @click="moveDish(dish.local_id, -1)"
+              >
+                <AppIcon name="chevronUp" class="h-4 w-4" />
+              </button>
+              <button
+                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                type="button" :disabled="!canMoveDishDown(dish.local_id)" :aria-label="t('common.moveDown')"
+                @click="moveDish(dish.local_id, 1)"
+              >
+                <AppIcon name="chevronDown" class="h-4 w-4" />
+              </button>
             </div>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveDishUp(dish.local_id)" @click="moveDish(dish.local_id, -1)">
-                <AppIcon name="chevronUp" class="h-3.5 w-3.5" />
-                {{ t("common.moveUp") }}
-              </button>
-              <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveDishDown(dish.local_id)" @click="moveDish(dish.local_id, 1)">
-                <AppIcon name="chevronDown" class="h-3.5 w-3.5" />
-                {{ t("common.moveDown") }}
-              </button>
-              <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openDishEditor(dish.local_id)">
-                {{ t("common.edit") }}
-              </button>
-              <label class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-700/80 px-3 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 select-none">
-                <input
-                  v-model="dish.is_published"
-                  type="checkbox"
-                  class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-emerald-400 focus:ring-0"
-                />
-                <span :class="dish.is_published ? 'text-emerald-300' : 'text-slate-400'">
-                  {{ dish.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}
-                </span>
+
+            <!-- Thumbnail (placeholder when no image) -->
+            <img
+              v-if="dish.image_url"
+              :src="dish.image_url" alt="" loading="lazy" decoding="async"
+              class="h-11 w-11 shrink-0 rounded-lg border border-slate-700 object-cover"
+              @error="$event.target.style.display='none'"
+            />
+            <div v-else class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/80 text-slate-600">
+              <AppIcon name="cart" class="h-4 w-4" />
+            </div>
+
+            <!-- Name + meta — the whole block opens the editor -->
+            <button type="button" class="min-w-0 flex-1 text-left" @click="openDishEditor(dish.local_id)">
+              <div class="flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
+                <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder") }}</h3>
+              </div>
+              <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                <span class="font-semibold tabular-nums text-slate-300">{{ Number(dish.price || 0).toFixed(2) }}</span>
+                <span v-if="Array.isArray(dish.options) && dish.options.length">· {{ dish.options.length }} {{ t("stepDishes.variantsTitle") }}</span>
+                <span v-if="dish.option_groups?.length" class="text-sky-300">· {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
+              </div>
+            </button>
+
+            <!-- Inline actions: publish switch · edit · delete -->
+            <div class="flex shrink-0 items-center gap-1.5">
+              <label
+                class="inline-flex cursor-pointer items-center"
+                :title="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
+              >
+                <input v-model="dish.is_published" type="checkbox" class="peer sr-only" />
+                <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4" />
               </label>
-              <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" type="button" @click="removeDishByLocalId(dish.local_id)">
-                {{ t("stepDishes.removeDish") }}
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+                type="button" :aria-label="t('common.edit')" @click="openDishEditor(dish.local_id)"
+              >
+                <AppIcon name="pencil" class="h-3.5 w-3.5" />
+              </button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
+                type="button" :aria-label="t('stepDishes.removeDish')" @click="removeDishByLocalId(dish.local_id)"
+              >
+                <AppIcon name="trash" class="h-3.5 w-3.5" />
               </button>
             </div>
           </article>

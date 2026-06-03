@@ -203,6 +203,18 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z", "M2 10h20", "M6 15h4"],
   },
+  pencil: {
+    viewBox: "0 0 24 24",
+    paths: ["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"],
+  },
+  trash: {
+    viewBox: "0 0 24 24",
+    paths: ["M3 6h18", "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2", "M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6", "M10 11v6", "M14 11v6"],
+  },
+  grip: {
+    viewBox: "0 0 24 24",
+    paths: ["M9 5h.01", "M9 12h.01", "M9 19h.01", "M15 5h.01", "M15 12h.01", "M15 19h.01"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

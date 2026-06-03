@@ -4,7 +4,7 @@
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-2">
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ tenantName }}</h2>
+          <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ tenantName }}</h2>
         </div>
         <nav class="owner-profile-nav" aria-label="Owner profile sections">
           <button

@@ -254,11 +254,11 @@
         <p class="mt-3 text-sm text-slate-500">{{ t('ownerBilling.noRequests') }}</p>
       </div>
 
-      <ul v-else class="space-y-3">
+      <ul v-else class="space-y-2">
         <li
           v-for="req in requests"
           :key="req.id"
-          class="rounded-xl border border-slate-800 bg-slate-900/50 p-4"
+          class="rounded-xl border border-slate-800 bg-slate-900/50 p-3"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="space-y-1.5">

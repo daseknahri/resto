@@ -1,37 +1,33 @@
 <template>
-  <div class="space-y-4">
-    <section class="ui-panel overflow-hidden p-4 sm:p-4">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div class="space-y-2">
-          <p class="ui-section-kicker">{{ t("ownerLayout.menuBuilder") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ activeTabTitle }}</h2>
-        </div>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <!-- CSV import button -->
-          <button
-            class="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 hover:border-indigo-400/60 hover:bg-indigo-500/15 transition-colors"
-            @click="showImport = true"
-          >
-            <AppIcon name="upload" class="h-3.5 w-3.5" />
-            {{ t("ownerMenuBuilder.importCsv") }}
-          </button>
-          <nav class="owner-menu-builder-nav" aria-label="Menu builder sections">
-            <button
-              v-for="tab in tabs"
-              :key="tab.key"
-              type="button"
-              class="owner-menu-builder-nav-item"
-              :data-active="activeTab === tab.key"
-              :aria-pressed="activeTab === tab.key"
-              @click="setTab(tab.key)"
-            >
-              <AppIcon :name="tab.icon" class="owner-menu-builder-nav-icon" />
-              <span>{{ tab.label }}</span>
-            </button>
-          </nav>
-        </div>
+  <div class="space-y-3">
+    <!-- Compact toolbar — the active tab pill already indicates the section, so the heavy
+         title panel is dropped to reclaim working room. -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="ui-display text-base font-semibold text-white sm:text-lg">{{ activeTabTitle }}</h2>
+        <button
+          class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:border-indigo-400/60 hover:bg-indigo-500/15 transition-colors"
+          @click="showImport = true"
+        >
+          <AppIcon name="upload" class="h-3.5 w-3.5" />
+          <span class="hidden sm:inline">{{ t("ownerMenuBuilder.importCsv") }}</span>
+        </button>
       </div>
-    </section>
+      <nav class="owner-menu-builder-nav" aria-label="Menu builder sections">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          class="owner-menu-builder-nav-item"
+          :data-active="activeTab === tab.key"
+          :aria-pressed="activeTab === tab.key"
+          @click="setTab(tab.key)"
+        >
+          <AppIcon :name="tab.icon" class="owner-menu-builder-nav-icon" />
+          <span>{{ tab.label }}</span>
+        </button>
+      </nav>
+    </div>
 
     <component :is="activeComponent" standalone />
 
@@ -310,26 +306,26 @@ const runImport = async () => {
 .owner-menu-builder-nav {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.3rem;
   width: 100%;
-  max-width: 32rem;
+  max-width: 30rem;
   border: 1px solid rgba(51, 65, 85, 0.72);
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(3, 15, 35, 0.78));
-  padding: 0.35rem;
+  padding: 0.25rem;
 }
 
 .owner-menu-builder-nav-item {
-  min-height: 2.85rem;
-  border-radius: 0.8rem;
+  min-height: 2.3rem;
+  border-radius: 0.65rem;
   border: 1px solid rgba(51, 65, 85, 0.4);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.4rem 0.7rem;
   color: rgb(203, 213, 225);
-  font-size: 0.86rem;
+  font-size: 0.83rem;
   font-weight: 600;
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }

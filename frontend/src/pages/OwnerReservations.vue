@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-end justify-between gap-4">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
-          <h2 class="ui-page-title ui-display text-[1.55rem] sm:text-[2rem]">{{ t("ownerReservations.title") }}</h2>
+          <h2 class="ui-display text-xl font-semibold tracking-tight text-white sm:text-2xl">{{ t("ownerReservations.title") }}</h2>
           <div class="ui-scroll-row">
             <span class="ui-data-strip">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
             <span class="ui-data-strip">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>

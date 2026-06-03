@@ -99,85 +99,63 @@
       </div>
 
       <article
-        v-for="(row, index) in filteredRows"
+        v-for="row in filteredRows"
         :key="row.local_id"
-        class="ui-selection-card p-4 sm:p-5"
+        class="ui-selection-card flex items-center gap-2.5 p-2.5 sm:gap-3"
         :data-warning="row.is_temporarily_disabled"
-        style="content-visibility: auto; contain-intrinsic-size: auto 200px;"
+        style="content-visibility: auto; contain-intrinsic-size: auto 64px;"
       >
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="min-w-0 flex-1 space-y-3">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0 space-y-1">
-                <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("stepSuperCategories.cardLabel", { index: index + 1 }) }}</p>
-                <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="truncate text-base font-semibold text-white sm:text-lg">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
-                  <span class="ui-route-badge">{{ row.slug || 'draft' }}</span>
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <span class="ui-state-chip" :data-active="row.is_published && !row.is_temporarily_disabled">
-                  <AppIcon :name="row.is_published && !row.is_temporarily_disabled ? 'check' : 'close'" class="h-3.5 w-3.5" />
-                  {{ row.is_temporarily_disabled ? t("stepSuperCategories.disabled") : (row.is_published ? t("stepSuperCategories.enabled") : t("common.soon")) }}
-                </span>
-              </div>
-            </div>
+        <!-- Reorder: stacked chevrons -->
+        <div class="flex shrink-0 flex-col">
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            type="button" :disabled="!canMoveUp(row.local_id)" :aria-label="t('common.moveUp')"
+            @click="moveRow(row.local_id, -1)"
+          >
+            <AppIcon name="chevronUp" class="h-4 w-4" />
+          </button>
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            type="button" :disabled="!canMoveDown(row.local_id)" :aria-label="t('common.moveDown')"
+            @click="moveRow(row.local_id, 1)"
+          >
+            <AppIcon name="chevronDown" class="h-4 w-4" />
+          </button>
+        </div>
 
-            <p class="text-sm text-slate-300">
-              {{ row.is_temporarily_disabled ? (row.disabled_note || t("stepSuperCategories.disabledNotePlaceholder")) : t("stepSuperCategories.description") }}
-            </p>
-
-            <div class="grid gap-2 sm:grid-cols-3">
-              <div class="ui-admin-subcard">
-                <p class="ui-stat-label">{{ t("stepSuperCategories.position") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ Number(row.position || 0) }}</p>
-              </div>
-              <div class="ui-admin-subcard">
-                <p class="ui-stat-label">{{ t("common.categories") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ Number(row.category_count || 0) }}</p>
-              </div>
-              <div class="ui-admin-subcard">
-                <p class="ui-stat-label">{{ t("stepSuperCategories.visibility") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ row.is_published ? t("common.available") : t("common.soon") }}</p>
-              </div>
-            </div>
+        <!-- Name + slug + meta — the whole block opens the editor -->
+        <button type="button" class="min-w-0 flex-1 text-left" @click="openEditor(row.local_id)">
+          <div class="flex items-center gap-2">
+            <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="(row.is_published && !row.is_temporarily_disabled) ? 'bg-emerald-400' : 'bg-slate-600'" />
+            <h3 class="truncate text-sm font-semibold text-white">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
+            <span class="ui-route-badge shrink-0">{{ row.slug || 'draft' }}</span>
           </div>
-
-          <div class="flex flex-wrap gap-2 lg:w-auto lg:flex-col lg:items-stretch">
-            <div class="flex flex-wrap gap-2 lg:grid lg:grid-cols-2">
-              <button
-                class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm"
-                type="button"
-                :disabled="!canMoveUp(row.local_id)"
-                @click="moveRow(row.local_id, -1)"
-              >
-                <AppIcon name="chevronUp" class="h-4 w-4" />
-                {{ t("common.moveUp") }}
-              </button>
-              <button
-                class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm"
-                type="button"
-                :disabled="!canMoveDown(row.local_id)"
-                @click="moveRow(row.local_id, 1)"
-              >
-                <AppIcon name="chevronDown" class="h-4 w-4" />
-                {{ t("common.moveDown") }}
-              </button>
-            </div>
-            <button class="ui-btn-outline gap-2 px-3 py-2 text-xs sm:text-sm" type="button" @click="openEditor(row.local_id)">
-              <AppIcon name="settings" class="h-4 w-4" />
-              {{ t("common.edit") }}
-            </button>
-            <button
-              class="inline-flex items-center justify-center gap-2 rounded-full border border-red-400/25 px-3 py-2 text-xs text-red-200 transition hover:border-red-400/50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-              type="button"
-              :disabled="Number(row.category_count || 0) > 0"
-              @click="removeByLocalId(row.local_id)"
-            >
-              <AppIcon name="close" class="h-4 w-4" />
-              {{ t("common.remove") }}
-            </button>
+          <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            <span :class="row.is_temporarily_disabled ? 'text-amber-300' : ''">
+              {{ row.is_temporarily_disabled ? t("stepSuperCategories.disabled") : (row.is_published ? t("stepSuperCategories.enabled") : t("common.soon")) }}
+            </span>
+            <span>· {{ Number(row.category_count || 0) }} {{ t("common.categories") }}</span>
           </div>
+        </button>
+
+        <!-- Actions: edit · delete (delete blocked while it still holds categories) -->
+        <div class="flex shrink-0 items-center gap-1.5">
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+            type="button" :aria-label="t('common.edit')" @click="openEditor(row.local_id)"
+          >
+            <AppIcon name="pencil" class="h-3.5 w-3.5" />
+          </button>
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            :disabled="Number(row.category_count || 0) > 0"
+            :title="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
+            :aria-label="t('common.remove')"
+            @click="removeByLocalId(row.local_id)"
+          >
+            <AppIcon name="trash" class="h-3.5 w-3.5" />
+          </button>
         </div>
       </article>
     </div>

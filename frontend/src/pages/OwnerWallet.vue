@@ -3,7 +3,7 @@
     <!-- Page header -->
     <div class="space-y-0.5">
       <p class="ui-kicker">{{ t('ownerWallet.kicker') }}</p>
-      <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t('ownerWallet.title') }}</h1>
+      <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t('ownerWallet.title') }}</h1>
       <p class="text-sm text-slate-400">{{ t('ownerWallet.subtitle') }}</p>
     </div>
 

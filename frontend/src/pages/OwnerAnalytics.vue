@@ -5,7 +5,7 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerAnalytics.kicker") }}</p>
-          <h2 class="ui-page-title ui-display text-[1.42rem] leading-tight sm:text-[2rem]">{{ t("ownerAnalytics.title") }}</h2>
+          <h2 class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerAnalytics.title") }}</h2>
         </div>
         <div class="flex items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
           <button

@@ -5,7 +5,7 @@
         <div class="flex items-start gap-3">
           <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
-            <h2 class="ui-display text-2xl font-semibold text-white sm:text-3xl">{{ t("ownerTables.title") }}</h2>
+            <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerTables.title") }}</h2>
             <div class="ui-scroll-row">
               <span class="ui-data-strip">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
               <span class="ui-data-strip">{{ t("ownerTables.activeTables") }}: {{ activeTablesCount }}</span>

@@ -49,43 +49,55 @@
       </div>
 
       <article
-        v-for="(cat, index) in filteredCategories"
+        v-for="cat in filteredCategories"
         :key="cat.local_id"
-        class="rounded-2xl border border-slate-800 bg-slate-950/75 p-4 shadow-[0_12px_28px_rgba(2,8,23,0.18)]"
-        style="content-visibility: auto; contain-intrinsic-size: auto 160px;"
+        class="group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
+        :class="cat.is_published ? '' : 'opacity-70'"
+        style="content-visibility: auto; contain-intrinsic-size: auto 60px;"
       >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("stepCategories.cardLabel", { index: index + 1 }) }}</p>
-              <span
-                class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                :class="cat.is_published ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-400'"
-              >
-                {{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}
-              </span>
-            </div>
-            <h3 class="mt-1 truncate text-base font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
-            <p class="mt-1 line-clamp-2 text-sm text-slate-400">{{ cat.description || t("stepCategories.categoryDescriptionPlaceholder") }}</p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <span class="ui-data-strip">{{ t("stepCategories.translationsTitle") }}: {{ Object.keys(cat.name_i18n || {}).length }}</span>
-            </div>
-          </div>
+        <!-- Reorder: stacked chevrons -->
+        <div class="flex shrink-0 flex-col">
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            type="button" :disabled="!canMoveCategoryUp(cat.local_id)" :aria-label="t('common.moveUp')"
+            @click="moveCategory(cat.local_id, -1)"
+          >
+            <AppIcon name="chevronUp" class="h-4 w-4" />
+          </button>
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            type="button" :disabled="!canMoveCategoryDown(cat.local_id)" :aria-label="t('common.moveDown')"
+            @click="moveCategory(cat.local_id, 1)"
+          >
+            <AppIcon name="chevronDown" class="h-4 w-4" />
+          </button>
         </div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveCategoryUp(cat.local_id)" @click="moveCategory(cat.local_id, -1)">
-            <AppIcon name="chevronUp" class="h-3.5 w-3.5" />
-            {{ t("common.moveUp") }}
+
+        <!-- Name + meta — the whole block opens the editor -->
+        <button type="button" class="min-w-0 flex-1 text-left" @click="openEditor(cat.local_id)">
+          <div class="flex items-center gap-1.5">
+            <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="cat.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
+            <h3 class="truncate text-sm font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
+          </div>
+          <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            <span>{{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}</span>
+            <span v-if="Object.keys(cat.name_i18n || {}).length">· {{ Object.keys(cat.name_i18n || {}).length }} {{ t("stepCategories.translationsTitle") }}</span>
+          </div>
+        </button>
+
+        <!-- Actions: edit · delete -->
+        <div class="flex shrink-0 items-center gap-1.5">
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+            type="button" :aria-label="t('common.edit')" @click="openEditor(cat.local_id)"
+          >
+            <AppIcon name="pencil" class="h-3.5 w-3.5" />
           </button>
-          <button class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" type="button" :disabled="!canMoveCategoryDown(cat.local_id)" @click="moveCategory(cat.local_id, 1)">
-            <AppIcon name="chevronDown" class="h-3.5 w-3.5" />
-            {{ t("common.moveDown") }}
-          </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs" type="button" @click="openEditor(cat.local_id)">
-            {{ t("common.edit") }}
-          </button>
-          <button class="rounded-full border border-red-400/25 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/50" type="button" @click="removeByLocalId(cat.local_id)">
-            {{ t("common.remove") }}
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
+            type="button" :aria-label="t('common.remove')" @click="removeByLocalId(cat.local_id)"
+          >
+            <AppIcon name="trash" class="h-3.5 w-3.5" />
           </button>
         </div>
       </article>
