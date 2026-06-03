@@ -228,6 +228,26 @@ class PlatformConfig(models.Model):
         return "Platform configuration"
 
 
+class CustomerPushSubscription(models.Model):
+    """Browser Web Push subscription for a platform CUSTOMER (public schema).
+
+    Parallels menu.PushSubscription (owner/staff, tenant schema). Used to nudge a customer
+    to approve a pending wallet charge even when the app is backgrounded or closed.
+    """
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="push_subscriptions")
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField(help_text="Client public key (URL-safe base64)")
+    auth = models.CharField(max_length=200, help_text="Auth secret (URL-safe base64)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Push sub for customer {self.customer_id}"
+
+
 class TenantFloatTransaction(models.Model):
     """Append-only ledger for a restaurant's distributable wallet float.
 

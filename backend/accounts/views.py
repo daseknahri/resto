@@ -1148,6 +1148,53 @@ class CustomerWalletChargeDeclineView(APIView):
         return Response({"status": cr.status})
 
 
+class CustomerPushVapidKeyView(APIView):
+    """GET /api/customer/push-vapid-key/ — VAPID public key so a customer can subscribe to
+    Web Push (used to nudge them to approve a pending wallet charge). Public; no auth."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        from django.conf import settings
+        key = (getattr(settings, "VAPID_PUBLIC_KEY", "") or "").strip()
+        return Response({"enabled": bool(key), "public_key": key or None})
+
+
+class CustomerPushSubscribeView(APIView):
+    """POST/DELETE /api/customer/push-subscribe/ — register or remove a customer's browser
+    Web Push subscription (session-authenticated customer)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        endpoint = (request.data.get("endpoint") or "").strip()
+        p256dh = (request.data.get("p256dh") or "").strip()
+        auth = (request.data.get("auth") or "").strip()
+        if not (endpoint and p256dh and auth):
+            return Response({"detail": "Incomplete subscription."}, status=status.HTTP_400_BAD_REQUEST)
+        from .models import CustomerPushSubscription
+        CustomerPushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={"customer_id": customer_id, "p256dh": p256dh, "auth": auth},
+        )
+        return Response({"subscribed": True}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        endpoint = (request.data.get("endpoint") or "").strip()
+        if endpoint:
+            from .models import CustomerPushSubscription
+            CustomerPushSubscription.objects.filter(endpoint=endpoint, customer_id=customer_id).delete()
+        return Response({"unsubscribed": True})
+
+
 class CustomerWalletView(APIView):
     """GET /api/customer/wallet/ — return balance + transaction history (last 50)."""
 

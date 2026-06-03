@@ -165,6 +165,7 @@ import CurrencySelector from "../components/CurrencySelector.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
+import { useCustomerPush } from "../composables/useCustomerPush";
 import { useCartStore } from "../stores/cart";
 import { useCustomerStore } from "../stores/customer";
 import { useCurrencyStore } from "../stores/currency";
@@ -325,10 +326,17 @@ const syncTableFromQuery = async () => {
   await resolveTableFromSlug(normalizedSlug);
 };
 
+const { autoRestore: pushAutoRestore, checkEnabled: pushCheckEnabled } = useCustomerPush();
+
 onMounted(() => {
   loadOrderTracking();
   syncTableFromQuery();
-  customerStore.fetchCustomer();
+  customerStore.fetchCustomer().then(() => {
+    // Re-establish a previously-granted push subscription so charge nudges keep working.
+    if (customerStore.isAuthenticated) {
+      pushCheckEnabled().then((on) => { if (on) pushAutoRestore(); });
+    }
+  });
   currencyStore.fetchRates();
   applyColorScheme();
   _mqDark = window.matchMedia('(prefers-color-scheme: dark)')

@@ -38,19 +38,20 @@ self.addEventListener('push', (event) => {
 // ── Notification click ────────────────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/owner/orders';
+  const targetUrl = event.notification.data?.url || '/';
 
   event.waitUntil(
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Try to focus an existing owner-dashboard window
+        // Focus any existing app window and navigate it to the target (works for both
+        // the owner dashboard and customer-facing pages like /account).
         for (const client of clientList) {
-          if (client.url.includes('/owner') && 'focus' in client) {
-            return client.navigate(targetUrl).then(() => client.focus());
+          if ('focus' in client) {
+            return Promise.resolve(client.navigate(targetUrl)).then((c) => (c || client).focus());
           }
         }
-        // Otherwise open a new window
+        // Otherwise open a new window.
         if (clients.openWindow) {
           return clients.openWindow(targetUrl);
         }

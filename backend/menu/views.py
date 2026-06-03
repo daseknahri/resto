@@ -5115,7 +5115,7 @@ class OwnerWalletChargeView(APIView):
             from django.utils.crypto import get_random_string
             from datetime import timedelta as _td
             _ttl = int(getattr(_settings, "WALLET_CHARGE_REQUEST_TTL", 300))
-            cr, _ = WalletChargeRequest.objects.get_or_create(
+            cr, _created = WalletChargeRequest.objects.get_or_create(
                 idempotency_key=(idem or f"cr-{get_random_string(24)}"),
                 defaults={
                     "customer_id": customer_id,
@@ -5129,6 +5129,14 @@ class OwnerWalletChargeView(APIView):
                     "expires_at": _tz.now() + _td(seconds=_ttl),
                 },
             )
+            if _created:
+                # Best-effort push nudge so the customer sees the approval prompt even if
+                # their app is backgrounded. The in-app modal + polling is the fallback.
+                try:
+                    from accounts.push import push_charge_request
+                    push_charge_request(customer_id, getattr(tenant, "name", "") or "", str(amount))
+                except Exception:
+                    pass
             return Response({
                 "status": "pending",
                 "request_id": cr.id,

@@ -632,6 +632,15 @@
             </div>
             <p class="text-center text-[11px] text-slate-500">{{ t('customerAccount.payCodeHint') }}</p>
             <button class="text-xs text-[var(--color-secondary)] hover:underline" @click="refreshPayCode">{{ t('customerAccount.payCodeRefresh') }}</button>
+            <div v-if="pushSupported && pushEnabled" class="w-full border-t border-slate-700/50 pt-3 text-center">
+              <button
+                v-if="!pushSubscribed"
+                class="text-xs font-semibold text-[var(--color-secondary)] hover:underline disabled:opacity-50"
+                :disabled="pushLoading"
+                @click="pushSubscribe"
+              >🔔 {{ t('customerAccount.notifyEnable') }}</button>
+              <p v-else class="text-[11px] text-emerald-400">🔔 {{ t('customerAccount.notifyOn') }}</p>
+            </div>
           </div>
 
           <!-- Voucher redemption -->
@@ -1211,6 +1220,7 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useCustomerPush } from '../composables/useCustomerPush';
 import QRCode from 'qrcode';
 
 const { t, formatPrice, currentLocale } = useI18n();
@@ -1573,6 +1583,16 @@ const togglePayCode = () => {
   if (showPayCode.value && !payCodeImg.value) refreshPayCode();
 };
 
+// Web Push opt-in so the customer is nudged to approve above-threshold charges.
+const {
+  supported: pushSupported,
+  enabled: pushEnabled,
+  subscribed: pushSubscribed,
+  loading: pushLoading,
+  subscribe: pushSubscribe,
+  checkEnabled: pushCheckEnabled,
+} = useCustomerPush();
+
 // ── P2P gifting (only active when the platform enables it) ─────────────────────
 const p2pEnabled = ref(false);
 const sendPhone = ref('');
@@ -1757,6 +1777,7 @@ onMounted(async () => {
     fetchWallet();
     fetchLoyaltyConfig();
     fetchAddresses();
+    pushCheckEnabled();
   }
 });
 </script>

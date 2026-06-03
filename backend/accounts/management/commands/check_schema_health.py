@@ -35,6 +35,7 @@ CRITICAL_MODELS = [
     ("accounts", "CustomerOrderRef"),
     ("accounts", "WalletChargeRequest"),
     ("accounts", "PlatformConfig"),
+    ("accounts", "CustomerPushSubscription"),
     ("tenancy", "Tenant"),
 ]
 
