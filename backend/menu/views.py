@@ -1908,9 +1908,20 @@ class PlaceOrderView(APIView):
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
 
                 order_number = _generate_order_number()
+                # Attribute waiter-created orders to the staff member who took them. The
+                # waiter app posts here authenticated as tenant staff/owner; a customer
+                # checkout is anonymous, so those stay unattributed until a staff advances.
+                _staff_creator_id = None
+                _ru = getattr(request, "user", None)
+                if _ru is not None and getattr(_ru, "is_authenticated", False) and getattr(_ru, "id", None):
+                    from accounts.models import User as _U
+                    if getattr(_ru, "role", None) in {_U.Roles.TENANT_OWNER, _U.Roles.TENANT_STAFF}:
+                        _staff_creator_id = _ru.id
+
                 order = Order.objects.create(
                     order_number=order_number,
                     status=Order.Status.PENDING,
+                    handled_by_user_id=_staff_creator_id,
                     customer=_linked_customer,
                     customer_name=_customer_name,
                     customer_phone=_customer_phone,
@@ -3129,9 +3140,10 @@ class OwnerOrderStatusUpdateView(APIView):
 
         update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
 
-        # Attribute the order to whoever advanced its status (staff or owner), for
-        # per-staff work stats and the waiter's own shift view.
-        if new_status:
+        # Attribute the order for per-staff work stats. The waiter who TOOK the order keeps
+        # the credit, so we only fill this when it isn't already set (e.g. a customer-placed
+        # order that a staff member is now handling).
+        if new_status and not order.handled_by_user_id:
             _uid = getattr(request.user, "id", None)
             if _uid:
                 order.handled_by_user_id = _uid

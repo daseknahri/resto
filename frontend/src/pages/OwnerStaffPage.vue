@@ -87,7 +87,18 @@
 
     <!-- Staff list -->
     <div class="space-y-3">
-      <p class="text-sm font-semibold text-slate-300">{{ t("ownerStaff.teamSection") }}</p>
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-sm font-semibold text-slate-300">{{ t("ownerStaff.teamSection") }}</p>
+        <div class="flex items-center gap-0.5 rounded-xl border border-slate-700/50 bg-slate-800/40 p-0.5">
+          <button
+            v-for="opt in periodOptions"
+            :key="opt.days"
+            class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors"
+            :class="selectedDays === opt.days ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
+            @click="changePeriod(opt.days)"
+          >{{ t(opt.labelKey) }}</button>
+        </div>
+      </div>
 
       <div v-if="loadingStaff" class="space-y-2">
         <div v-for="i in 2" :key="i" class="h-14 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
@@ -283,6 +294,17 @@ const copied = ref(false);
 // ── Per-staff work stats ─────────────────────────────────────────────────────
 const statsDays = ref(7);
 const statsCurrency = ref("MAD");
+const selectedDays = ref(7);
+const periodOptions = [
+  { days: 1, labelKey: "ownerStaff.periodToday" },
+  { days: 7, labelKey: "ownerStaff.period7d" },
+  { days: 30, labelKey: "ownerStaff.period30d" },
+];
+const changePeriod = (days) => {
+  if (days === selectedDays.value) return;
+  selectedDays.value = days;
+  fetchStaff(true);
+};
 
 const fmtMoney = (v) => {
   const n = parseFloat(v || 0);
@@ -313,8 +335,10 @@ const mapStaff = (s) => ({
   permissions: s.permissions ?? { manage_orders: true, view_revenue: false, edit_menu: false },
 });
 
-const fetchStaff = async () => {
-  const cached = readCache(STAFF_CACHE_KEY);
+const fetchStaff = async (force = false) => {
+  // Cache only the default 7-day view; other periods always fetch fresh.
+  const useCache = !force && selectedDays.value === 7;
+  const cached = useCache ? readCache(STAFF_CACHE_KEY) : null;
   if (cached) {
     staffList.value = cached.map(mapStaff);
     if (isFresh(STAFF_CACHE_KEY, STAFF_TTL_MS)) return;
@@ -324,12 +348,12 @@ const fetchStaff = async () => {
   }
   staffError.value = false;
   try {
-    const { data } = await api.get("/owner/staff/");
+    const { data } = await api.get("/owner/staff/", { params: { stats_days: selectedDays.value } });
     const list = (data.results ?? []).map(mapStaff);
     staffList.value = list;
     if (typeof data.stats_days === "number") statsDays.value = data.stats_days;
     if (data.currency) statsCurrency.value = data.currency;
-    writeCache(STAFF_CACHE_KEY, data.results ?? []);
+    if (selectedDays.value === 7) writeCache(STAFF_CACHE_KEY, data.results ?? []);
   } catch {
     if (!cached) staffError.value = true;
   } finally {

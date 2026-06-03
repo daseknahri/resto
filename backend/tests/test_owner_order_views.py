@@ -350,8 +350,9 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
     def test_status_change_records_handler(self, objects_mock, tz_mock):
-        """The user who advances an order is recorded for per-staff work stats."""
+        """The user who advances an unattributed (customer-placed) order is recorded."""
         order = _make_order(order_status="pending")
+        order.handled_by_user_id = None  # customer-placed order, not yet handled
         objects_mock.select_related.return_value.filter.return_value.first.return_value = order
         user = _user()
         user.id = 7
@@ -361,6 +362,22 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
         self.assertEqual(order.handled_by_user_id, 7)
         _, kwargs = order.save.call_args
         self.assertIn("handled_by_user_id", kwargs["update_fields"])
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
+    def test_status_change_preserves_existing_handler(self, objects_mock, tz_mock):
+        """The waiter who took the order keeps credit when someone else advances it."""
+        order = _make_order(order_status="pending")
+        order.handled_by_user_id = 3  # original taker
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+        user = _user()
+        user.id = 7
+
+        resp = self._patch(data={"status": "confirmed"}, user=user)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.handled_by_user_id, 3)  # unchanged
+        _, kwargs = order.save.call_args
+        self.assertNotIn("handled_by_user_id", kwargs["update_fields"])
 
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
