@@ -250,18 +250,22 @@
                 {{ t('cartPage.deliveryFee') }}: {{ t('cartPage.free') }}
               </div>
 
-              <!-- ── Location (FIRST) ── -->
+              <!-- ── Delivery location ── -->
               <div class="space-y-2">
-                <!-- Action chips -->
+                <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.deliveryLocationTitle') }}</p>
+
+                <!-- Primary: use current location (fastest path) -->
+                <button
+                  class="ui-btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-50"
+                  :disabled="locating"
+                  @click="useCurrentLocation"
+                >
+                  <AppIcon name="location" class="h-4 w-4" />
+                  {{ locating ? t('cartPage.locating') : t('cartPage.useCurrentLocation') }}
+                </button>
+
+                <!-- Secondary actions -->
                 <div class="flex flex-wrap gap-1.5">
-                  <button
-                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors disabled:opacity-50"
-                    :disabled="locating"
-                    @click="useCurrentLocation"
-                  >
-                    <AppIcon name="location" class="h-3 w-3 shrink-0" />
-                    {{ locating ? t('cartPage.locating') : t('cartPage.useCurrentLocation') }}
-                  </button>
                   <button
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
                     @click="openInAppMapPicker"
@@ -270,11 +274,11 @@
                     {{ t('cartPage.pickPinInApp') }}
                   </button>
                   <button
-                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
-                    @click="openExternalMap"
+                    class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+                    @click="showMoreLocationOptions = !showMoreLocationOptions"
                   >
-                    <AppIcon name="link" class="h-3 w-3 shrink-0" />
-                    {{ t('cartPage.openExternalMap') }}
+                    {{ t('cartPage.moreLocationOptions') }}
+                    <span aria-hidden="true" class="text-[10px]">{{ (showMoreLocationOptions || deliveryLocationUrl) ? '▾' : '▸' }}</span>
                   </button>
                   <button
                     v-if="hasLocationCoords || deliveryLocationUrl"
@@ -285,6 +289,7 @@
                     {{ t('cartPage.clearLocation') }}
                   </button>
                 </div>
+
                 <!-- GPS status -->
                 <p class="text-[11px]" :class="hasLocationCoords ? 'text-emerald-400/80' : 'text-slate-600'">
                   {{ hasLocationCoords
@@ -293,9 +298,17 @@
                 </p>
                 <p v-if="locationError" id="cart-location-error" class="text-xs text-red-300">{{ locationError }}</p>
 
-                <!-- Map URL + Paste button inline -->
-                <div class="space-y-1">
-                  <span class="text-[11px] text-slate-400">{{ t('cartPage.mapPinUrlOptional') }}</span>
+                <!-- More options: paste a map link (collapsed by default) -->
+                <div v-show="showMoreLocationOptions || deliveryLocationUrl" class="space-y-1 pt-1">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                    @click="openExternalMap"
+                  >
+                    <AppIcon name="link" class="h-3 w-3 shrink-0" />
+                    {{ t('cartPage.openExternalMap') }}
+                  </button>
+                  <span class="block text-[11px] text-slate-400">{{ t('cartPage.mapPinUrlOptional') }}</span>
                   <div class="flex gap-1.5">
                     <input
                       ref="deliveryUrlInputRef"
@@ -876,6 +889,7 @@ const deliveryLng = ref(null);
 const locating = ref(false);
 const locationError = ref('');
 const locationAdvancedOpen = ref(false);
+const showMoreLocationOptions = ref(false);
 const waitingForPaste = ref(false);
 const deliveryUrlInputRef = ref(null);
 let waitingForPasteTimer = null;
