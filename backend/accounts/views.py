@@ -1204,6 +1204,10 @@ class AdminWalletBonusView(APIView):
             Customer.objects.filter(pk__in=ids).update(
                 wallet_balance=F("wallet_balance") + amount
             )
+            # balance_after is intentionally left null here: this is a bulk credit
+            # over many customers via a single F() update, so per-row post-balances
+            # aren't available without N extra queries. Single-row ledger writes
+            # elsewhere always snapshot balance_after.
             WalletTransaction.objects.bulk_create([
                 WalletTransaction(
                     customer_id=cid,
@@ -1676,6 +1680,7 @@ class CustomerWalletRedeemVoucherView(APIView):
                 amount=voucher.amount,
                 note=voucher.note or f"Voucher {voucher.code}",
                 reference=voucher.code,
+                balance_after=customer.wallet_balance,
             )
 
         return Response({
@@ -2443,6 +2448,7 @@ class MarketplacePlaceOrderView(APIView):
                                     amount=_actual,
                                     reference=order.order_number,
                                     tenant_id=tenant.id,
+                                    balance_after=_cust_locked.wallet_balance,
                                 )
                                 order.wallet_amount_paid = _actual
                                 order.save(update_fields=["wallet_amount_paid"])

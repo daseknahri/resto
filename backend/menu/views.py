@@ -1953,6 +1953,7 @@ class PlaceOrderView(APIView):
                             amount=_actual,
                             reference=order.order_number,
                             tenant_id=tenant.id,
+                            balance_after=_cust_locked.wallet_balance,
                         )
                         order.wallet_amount_paid = _actual
                         order.save(update_fields=["wallet_amount_paid"])
@@ -3022,6 +3023,7 @@ def _refund_wallet_for_cancelled_order(order) -> None:
             amount=refund_amount,
             reference=order.order_number,
             note="Refund for cancelled order",
+            balance_after=_cust.wallet_balance,
         )
 
 
@@ -4688,6 +4690,7 @@ class CustomerLoyaltyRedeemView(APIView):
                     reference=f"loyalty:{_redeemable}pts",
                     tenant_id=tenant_id,
                     note=f"Redeemed {_redeemable} loyalty points",
+                    balance_after=_locked.wallet_balance,
                 )
         except Exception as _exc:
             return Response({"detail": "Redemption failed. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
