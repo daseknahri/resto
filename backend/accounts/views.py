@@ -1004,6 +1004,27 @@ class OwnerStaffDeleteView(APIView):
 
 # ── Customer wallet ────────────────────────────────────────────────────────────
 
+_WALLET_PAY_SALT = "wallet-pay-code"
+_WALLET_PAY_TTL = 300  # seconds — the QR rotates every few minutes
+
+
+class CustomerWalletPayTokenView(APIView):
+    """GET /api/customer/wallet/pay-token/ — a short-lived signed token identifying the
+    customer, rendered as a QR ("pay code") so a restaurant can scan it to top up the
+    customer's wallet without searching by phone. Expires in 5 minutes."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        from django.core import signing
+
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        token = signing.dumps({"cid": customer_id}, salt=_WALLET_PAY_SALT)
+        return Response({"token": token, "expires_in": _WALLET_PAY_TTL})
+
 
 class CustomerWalletView(APIView):
     """GET /api/customer/wallet/ — return balance + transaction history (last 50)."""

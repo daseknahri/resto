@@ -611,6 +611,27 @@
                 <AppIcon name="wallet" class="h-6 w-6 text-[var(--color-secondary)]/70" />
               </div>
             </div>
+            <button
+              v-if="walletVerified"
+              class="relative mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 py-2.5 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15"
+              @click="togglePayCode"
+            >
+              <AppIcon name="qr" class="h-4 w-4" />
+              {{ showPayCode ? t('customerAccount.payCodeHide') : t('customerAccount.payCodeShow') }}
+            </button>
+          </div>
+
+          <!-- Pay code (QR) — restaurant scans this to top up the wallet -->
+          <div v-if="showPayCode" class="ui-panel flex flex-col items-center gap-3 p-5">
+            <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
+            <div class="rounded-2xl bg-white p-3">
+              <img v-if="payCodeImg" :src="payCodeImg" alt="Wallet pay code" class="h-44 w-44" />
+              <div v-else class="flex h-44 w-44 items-center justify-center">
+                <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+              </div>
+            </div>
+            <p class="text-center text-[11px] text-slate-500">{{ t('customerAccount.payCodeHint') }}</p>
+            <button class="text-xs text-[var(--color-secondary)] hover:underline" @click="refreshPayCode">{{ t('customerAccount.payCodeRefresh') }}</button>
           </div>
 
           <!-- Voucher redemption -->
@@ -1190,6 +1211,7 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import QRCode from 'qrcode';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -1525,6 +1547,25 @@ const txLabel = (tx) => {
 
 // No verified phone → no usable wallet. Gates the credit actions in the wallet tab.
 const walletVerified = computed(() => !!customerStore.customer?.phone_verified);
+
+// ── Pay code (QR) — a restaurant scans this to top up the wallet ───────────────
+const showPayCode = ref(false);
+const payCodeImg = ref('');
+
+const refreshPayCode = async () => {
+  payCodeImg.value = '';
+  try {
+    const { data } = await api.get('/customer/wallet/pay-token/');
+    payCodeImg.value = await QRCode.toDataURL(data.token, { width: 320, margin: 1 });
+  } catch {
+    payCodeImg.value = '';
+  }
+};
+
+const togglePayCode = () => {
+  showPayCode.value = !showPayCode.value;
+  if (showPayCode.value && !payCodeImg.value) refreshPayCode();
+};
 
 // ── P2P gifting (only active when the platform enables it) ─────────────────────
 const p2pEnabled = ref(false);

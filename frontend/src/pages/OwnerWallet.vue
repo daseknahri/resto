@@ -20,6 +20,41 @@
       <AppIcon name="wallet" class="h-8 w-8 shrink-0 text-emerald-500/70" />
     </div>
 
+    <!-- Scan pay code card -->
+    <div class="ui-panel p-4 space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.scanTitle') }}</p>
+        <button
+          v-if="!scanning"
+          class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/15"
+          @click="startScan"
+        >
+          <AppIcon name="qr" class="h-3.5 w-3.5" />{{ t('ownerWallet.scanBtn') }}
+        </button>
+        <button v-else class="rounded-full border border-slate-600 px-3 py-1.5 text-xs text-slate-300" @click="stopScan">{{ t('common.cancel') }}</button>
+      </div>
+
+      <!-- Camera viewfinder -->
+      <div v-if="scanning" class="overflow-hidden rounded-xl border border-slate-700 bg-black">
+        <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline />
+      </div>
+
+      <!-- Manual entry fallback -->
+      <div class="flex gap-2">
+        <input
+          v-model="manualToken"
+          type="text"
+          class="ui-input flex-1 text-sm"
+          :placeholder="t('ownerWallet.scanManualPlaceholder')"
+          @keyup.enter="resolveToken(manualToken)"
+        />
+        <button class="shrink-0 rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-slate-400 disabled:opacity-50" :disabled="!manualToken.trim()" @click="resolveToken(manualToken)">
+          {{ t('ownerWallet.scanFind') }}
+        </button>
+      </div>
+      <p v-if="resolveError" class="text-xs text-red-300">{{ resolveError }}</p>
+    </div>
+
     <!-- Customer search card -->
     <div class="ui-panel p-4 space-y-4">
       <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.searchTitle') }}</p>
@@ -174,7 +209,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, onBeforeUnmount, nextTick, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
@@ -286,6 +321,70 @@ const selectCustomer = (c) => {
   topupError.value = '';
   fetchHistory(c.id);
 };
+
+// ── Scan pay code (QR) → resolve customer for a fast top-up ────────────────────
+const scanning = ref(false);
+const manualToken = ref('');
+const resolveError = ref('');
+const videoEl = ref(null);
+let scanStream = null;
+let scanRaf = null;
+
+const resolveToken = async (token) => {
+  const value = String(token || '').trim();
+  if (!value) return;
+  resolveError.value = '';
+  try {
+    const { data } = await api.post('/owner/wallet/resolve-token/', { token: value });
+    manualToken.value = '';
+    selectCustomer({ id: data.customer_id, name: data.name, phone: data.phone, wallet_balance: data.wallet_balance });
+    toast.show(t('ownerWallet.scanResolved', { name: data.name || data.phone }), 'success');
+  } catch (err) {
+    resolveError.value = err?.response?.data?.detail || t('ownerWallet.scanFailed');
+  }
+};
+
+const stopScan = () => {
+  scanning.value = false;
+  if (scanRaf) { cancelAnimationFrame(scanRaf); scanRaf = null; }
+  if (scanStream) { scanStream.getTracks().forEach((tr) => tr.stop()); scanStream = null; }
+};
+
+const startScan = async () => {
+  resolveError.value = '';
+  if (!('BarcodeDetector' in window)) {
+    resolveError.value = t('ownerWallet.scanUnsupported');
+    return;
+  }
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    scanning.value = true;
+    await nextTick();
+    if (!videoEl.value) { stopScan(); return; }
+    videoEl.value.srcObject = scanStream;
+    await videoEl.value.play();
+    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    const loop = async () => {
+      if (!scanning.value || !videoEl.value) return;
+      try {
+        const codes = await detector.detect(videoEl.value);
+        if (codes && codes.length) {
+          const token = codes[0].rawValue;
+          stopScan();
+          resolveToken(token);
+          return;
+        }
+      } catch { /* keep scanning */ }
+      scanRaf = requestAnimationFrame(loop);
+    };
+    scanRaf = requestAnimationFrame(loop);
+  } catch {
+    resolveError.value = t('ownerWallet.scanCameraFailed');
+    stopScan();
+  }
+};
+
+onBeforeUnmount(stopScan);
 
 const fetchHistory = async (customerId) => {
   walletHistory.value = [];

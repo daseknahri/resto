@@ -4935,6 +4935,58 @@ class CurrencyRateListView(APIView):
 
 # ── Owner wallet top-up ────────────────────────────────────────────────────────
 
+class OwnerWalletResolveTokenView(APIView):
+    """POST /api/owner/wallet/resolve-token/ — resolve a customer's wallet pay-code (QR).
+
+    Body: { "token": "<signed token from the customer's QR>" }
+
+    Validates the short-lived token and returns the customer IF they have ordered at
+    this restaurant — the same gate as the manual top-up. Lets the owner scan a QR to
+    instantly pull up a customer for a fast top-up instead of searching by phone.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.core import signing
+        from accounts.models import Customer
+        from accounts.views import _WALLET_PAY_SALT, _WALLET_PAY_TTL
+
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Tenant context missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = str(request.data.get("token") or "").strip()
+        if not token:
+            return Response({"detail": "token is required.", "code": "missing_token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payload = signing.loads(token, salt=_WALLET_PAY_SALT, max_age=_WALLET_PAY_TTL)
+        except signing.SignatureExpired:
+            return Response({"detail": "This pay code has expired. Ask the customer to refresh it.", "code": "expired"}, status=status.HTTP_400_BAD_REQUEST)
+        except signing.BadSignature:
+            return Response({"detail": "Invalid pay code.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer_id = payload.get("cid")
+        # Same gate as manual top-up: only customers who have ordered at this restaurant.
+        if not Order.objects.filter(customer_id=customer_id, tenant=tenant).exists():
+            return Response({"detail": "Customer has no orders at this restaurant.", "code": "no_orders"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "customer_id": customer.id,
+            "name": customer.name or "",
+            "phone": customer.phone or "",
+            "wallet_balance": str(customer.wallet_balance),
+        })
+
+
 class OwnerWalletTopupView(APIView):
     """
     POST /api/owner/wallet/topup/
