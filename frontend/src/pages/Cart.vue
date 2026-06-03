@@ -481,11 +481,12 @@
             <template v-else>
               <button
                 type="button"
-                class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-[var(--color-secondary)] transition-colors"
                 @click="promoOpen = !promoOpen"
               >
+                <AppIcon name="tag" class="h-3.5 w-3.5" />
+                {{ t('cartPage.promoCodeCta') }}
                 <span aria-hidden="true" class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
-                {{ t('cartPage.promoCodeLabel') }}
               </button>
               <div v-show="promoOpen" class="mt-2 flex gap-2">
                 <input
