@@ -89,7 +89,13 @@
         @reset-complete="soldOutCount = 0"
       />
 
-      <!-- Ratings strip — skeleton until DeferredRatings mounts -->
+      <!-- Dish availability — pre-seeded with data from readiness to skip double-fetch -->
+      <OwnerDashboardDishPanel
+        :initial-sold-out-count="soldOutCount"
+        :preloaded-dishes="preloadedDishesData"
+      />
+
+      <!-- Ratings strip — a passive metric, kept below the operational controls -->
       <template v-if="ratingsSummary">
         <RouterLink
           v-if="ratingsSummary.count > 0"
@@ -109,12 +115,6 @@
         </div>
       </template>
       <div v-else class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
-
-      <!-- Dish availability — pre-seeded with data from readiness to skip double-fetch -->
-      <OwnerDashboardDishPanel
-        :initial-sold-out-count="soldOutCount"
-        :preloaded-dishes="preloadedDishesData"
-      />
 
       <!-- Action buttons -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
