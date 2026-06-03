@@ -505,7 +505,7 @@
             class="ui-btn-outline px-3 py-1.5 text-xs"
             @click="openEdit(o)"
           >
-            {{ t("ownerOrders.ownerNote") }}
+            {{ t("ownerOrders.noteEtaBtn") }}
           </button>
 
           <!-- Print ticket -->
