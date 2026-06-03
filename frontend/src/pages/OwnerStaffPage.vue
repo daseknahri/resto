@@ -125,6 +125,11 @@
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-100 truncate">{{ member.name }}</p>
             <p class="text-xs text-slate-500 truncate">{{ member.email }}</p>
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
+              <span>{{ t('ownerStaff.statOrders', { n: member.stats?.orders_handled || 0 }) }}</span>
+              <span class="font-semibold text-emerald-400/90">{{ fmtMoney(member.stats?.revenue) }}</span>
+              <span class="text-slate-600">{{ t('ownerStaff.statsPeriod', { days: statsDays }) }}</span>
+            </p>
           </div>
           <button
             class="shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
@@ -149,6 +154,25 @@
             v-if="expandedIds.has(member.id)"
             class="border-t border-slate-700/40 bg-slate-900/40 px-4 py-4 space-y-4"
           >
+            <!-- Work stats -->
+            <div>
+              <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t('ownerStaff.statsTitle', { days: statsDays }) }}</p>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
+                  <p class="text-lg font-bold text-white">{{ member.stats?.orders_handled || 0 }}</p>
+                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statOrdersLabel') }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
+                  <p class="text-lg font-bold text-emerald-300">{{ fmtMoney(member.stats?.revenue) }}</p>
+                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statRevenueLabel') }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
+                  <p class="text-sm font-semibold text-sky-300">{{ member.stats?.last_active ? fmtRelative(member.stats.last_active) : '—' }}</p>
+                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statLastActiveLabel') }}</p>
+                </div>
+              </div>
+            </div>
+
             <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerStaff.permissionsTitle") }}</p>
 
             <!-- Permission toggles -->
@@ -214,7 +238,7 @@ import api from "../lib/api";
 import { useToastStore } from "../stores/toast";
 import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
 // ── Permission definitions ─────────────────────────────────────────────────────
@@ -256,6 +280,33 @@ const creating = ref(false);
 const newCredentials = ref(null);
 const copied = ref(false);
 
+// ── Per-staff work stats ─────────────────────────────────────────────────────
+const statsDays = ref(7);
+const statsCurrency = ref("MAD");
+
+const fmtMoney = (v) => {
+  const n = parseFloat(v || 0);
+  try {
+    return new Intl.NumberFormat(currentLocale.value, {
+      style: "currency",
+      currency: statsCurrency.value || "MAD",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return n.toFixed(2);
+  }
+};
+
+const fmtRelative = (iso) => {
+  if (!iso) return "—";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return t("ownerStaff.justNow");
+  if (mins < 60) return t("ownerStaff.minsAgo", { n: mins });
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return t("ownerStaff.hrsAgo", { n: hrs });
+  return t("ownerStaff.daysAgo", { n: Math.round(hrs / 24) });
+};
+
 // ── Staff list ─────────────────────────────────────────────────────────────────
 const mapStaff = (s) => ({
   ...s,
@@ -276,6 +327,8 @@ const fetchStaff = async () => {
     const { data } = await api.get("/owner/staff/");
     const list = (data.results ?? []).map(mapStaff);
     staffList.value = list;
+    if (typeof data.stats_days === "number") statsDays.value = data.stats_days;
+    if (data.currency) statsCurrency.value = data.currency;
     writeCache(STAFF_CACHE_KEY, data.results ?? []);
   } catch {
     if (!cached) staffError.value = true;

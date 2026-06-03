@@ -318,6 +318,16 @@ class Order(models.Model):
         blank=True,
         help_text="Loyalty points credited to the customer for this order. Null = loyalty not active at placement time.",
     )
+    # Loose reference to accounts.User (public schema) — the staff member / owner who
+    # last advanced this order's status. Powers per-staff work stats and the waiter's
+    # own shift view. Loose IntegerField (not FK) to avoid a tenant→public cross-app FK,
+    # matching PushSubscription.user_id.
+    handled_by_user_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="accounts.User pk of the staff/owner who last advanced this order.",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     status_updated_at = models.DateTimeField(null=True, blank=True)

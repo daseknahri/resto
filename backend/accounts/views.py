@@ -835,6 +835,46 @@ class OwnerStaffListCreateView(APIView):
                 "perm_manage_orders", "perm_view_revenue", "perm_edit_menu",
             )
         )
+        staff_ids = [s["id"] for s in staff]
+
+        # Per-staff work stats over a recent window (default 7 days). Orders live in the
+        # tenant schema; this owner endpoint runs in tenant context, so Order resolves to
+        # this restaurant. Best-effort — never break the staff list over stats.
+        try:
+            stats_days = max(1, min(90, int(request.query_params.get("stats_days") or 7)))
+        except (TypeError, ValueError):
+            stats_days = 7
+        stats_map = {}
+        currency = "MAD"
+        if staff_ids:
+            try:
+                from datetime import timedelta as _td
+                from django.utils import timezone as _tz
+                from django.db.models import Count as _Count, Sum as _Sum, Max as _Max
+                from menu.models import Order as _Order
+
+                since = _tz.now() - _td(days=stats_days)
+                rows = (
+                    _Order.objects.filter(
+                        status=_Order.Status.COMPLETED,
+                        status_updated_at__gte=since,
+                        handled_by_user_id__in=staff_ids,
+                    )
+                    .values("handled_by_user_id")
+                    .annotate(orders=_Count("id"), revenue=_Sum("total"), last_active=_Max("status_updated_at"))
+                )
+                for r in rows:
+                    stats_map[r["handled_by_user_id"]] = {
+                        "orders_handled": r["orders"] or 0,
+                        "revenue": str(r["revenue"]) if r["revenue"] is not None else "0.00",
+                        "last_active": r["last_active"].isoformat() if r["last_active"] else None,
+                    }
+                _c = _Order.objects.filter(status=_Order.Status.COMPLETED).values_list("currency", flat=True).first()
+                if _c:
+                    currency = _c
+            except Exception:
+                stats_map = {}
+
         results = [
             {
                 "id": s["id"],
@@ -847,10 +887,11 @@ class OwnerStaffListCreateView(APIView):
                     "view_revenue": s["perm_view_revenue"],
                     "edit_menu": s["perm_edit_menu"],
                 },
+                "stats": stats_map.get(s["id"], {"orders_handled": 0, "revenue": "0.00", "last_active": None}),
             }
             for s in staff
         ]
-        return Response({"results": results, "count": len(results)})
+        return Response({"results": results, "count": len(results), "stats_days": stats_days, "currency": currency})
 
     def post(self, request, *args, **kwargs):
         tenant = getattr(request, "tenant", None)

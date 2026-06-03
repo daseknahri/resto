@@ -2458,9 +2458,13 @@ class StaffShiftSummaryView(APIView):
         if since_dt is None:
             since_dt = timezone.now() - timedelta(hours=8)
 
+        # Scope to the orders THIS user personally handled — their own shift, not the
+        # whole restaurant. Owners using the waiter view see their own handled orders too;
+        # restaurant-wide figures live in the owner dashboard.
         qs = Order.objects.filter(
             status=Order.Status.COMPLETED,
             status_updated_at__gte=since_dt,
+            handled_by_user_id=getattr(request.user, "id", None),
         )
 
         from django.db.models import Avg, Count, Sum
@@ -3123,6 +3127,16 @@ class OwnerOrderStatusUpdateView(APIView):
             order.status = new_status
             order.status_updated_at = timezone.now()
 
+        update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
+
+        # Attribute the order to whoever advanced its status (staff or owner), for
+        # per-staff work stats and the waiter's own shift view.
+        if new_status:
+            _uid = getattr(request.user, "id", None)
+            if _uid:
+                order.handled_by_user_id = _uid
+                update_fields.append("handled_by_user_id")
+
         if owner_note is not None:
             order.owner_note = str(owner_note).strip()[:500]
 
@@ -3133,7 +3147,7 @@ class OwnerOrderStatusUpdateView(APIView):
             except (TypeError, ValueError):
                 order.estimated_ready_minutes = None
 
-        order.save(update_fields=["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"])
+        order.save(update_fields=update_fields)
 
         # Real-time ping so other connected owner/kitchen screens refresh immediately
         # (no-op if WS not configured). Low-sensitivity signal only.

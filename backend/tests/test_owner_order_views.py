@@ -349,6 +349,21 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
 
     @patch("menu.views.timezone")
     @patch("menu.views.Order.objects")
+    def test_status_change_records_handler(self, objects_mock, tz_mock):
+        """The user who advances an order is recorded for per-staff work stats."""
+        order = _make_order(order_status="pending")
+        objects_mock.select_related.return_value.filter.return_value.first.return_value = order
+        user = _user()
+        user.id = 7
+
+        resp = self._patch(data={"status": "confirmed"}, user=user)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(order.handled_by_user_id, 7)
+        _, kwargs = order.save.call_args
+        self.assertIn("handled_by_user_id", kwargs["update_fields"])
+
+    @patch("menu.views.timezone")
+    @patch("menu.views.Order.objects")
     def test_confirmed_to_preparing_succeeds(self, objects_mock, tz_mock):
         order = _make_order(order_status="confirmed")
         objects_mock.select_related.return_value.filter.return_value.first.return_value = order
