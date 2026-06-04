@@ -576,7 +576,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
-import { escapeHtml } from "../lib/escape";
+import { usePrintTicket } from "../composables/usePrintTicket";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live orders — polls and must mount & unmount normally).
@@ -914,88 +914,9 @@ const submitJobRating = async (o) => {
 };
 
 // ── Print ticket ──────────────────────────────────────────────────────────────
-const printTicket = (o) => {
-  const itemRows = (o.items || []).map((item) => {
-    const opts = item.options?.length
-      ? `<div style="font-size:11px;color:#555">${item.options.map((x) => escapeHtml(x.name)).join(", ")}</div>`
-      : "";
-    const note = item.note
-      ? `<div style="font-size:11px;color:#555;font-style:italic">${escapeHtml(item.note)}</div>`
-      : "";
-    return `<tr>
-      <td style="padding:3px 0;vertical-align:top">
-        <strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${opts}${note}
-      </td>
-      <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top">
-        ${formatCurrency(item.subtotal, o.currency)}
-      </td>
-    </tr>`;
-  }).join("");
-
-  const meta = [
-    fulfillmentLabel(o),
-    o.customer_name ? `${t("ownerOrders.ticketCustomer")}: ${escapeHtml(o.customer_name)}` : "",
-    o.customer_phone ? `${t("ownerOrders.ticketPhone")}: ${escapeHtml(o.customer_phone)}` : "",
-    o.customer_email ? `${t("ownerOrders.ticketEmail")}: ${escapeHtml(o.customer_email)}` : "",
-    o.delivery_address ? `${t("ownerOrders.ticketAddress")}: ${escapeHtml(o.delivery_address)}` : "",
-    new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(o.created_at)),
-  ].filter(Boolean).map((line) => `<div>${line}</div>`).join("");
-
-  const noteLabel      = t("ownerOrders.ticketNote");
-  const totalLabel     = t("ownerOrders.ticketTotal");
-  const printedLabel   = t("ownerOrders.ticketPrinted");
-  const feeLabel       = t("ownerOrders.deliveryFee");
-  const subtotalLabel  = t("ownerOrders.ticketSubtotal");
-  const walletLabel    = t("ownerOrders.walletPaid");
-
-  const note = o.customer_note
-    ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px"><strong>${noteLabel}:</strong> ${escapeHtml(o.customer_note)}</div>`
-    : "";
-
-  const html = `<!DOCTYPE html><html lang="${currentLocale.value}" dir="${currentLocale.value === 'ar' ? 'rtl' : 'ltr'}"><head>
-    <meta charset="utf-8">
-    <title>Order ${o.order_number}</title>
-    <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { font-family: 'Courier New', monospace; font-size: 13px; width: 300px; padding: 12px; }
-      h1 { font-size: 18px; text-align: center; letter-spacing: 1px; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-      .meta { font-size: 11px; margin-bottom: 8px; line-height: 1.6; }
-      table { width: 100%; border-collapse: collapse; }
-      .divider { border-top: 1px dashed #000; margin: 8px 0; }
-      .total td { font-weight: bold; font-size: 15px; padding: 4px 0; }
-      .footer { text-align: center; font-size: 10px; color: #666; margin-top: 12px; border-top: 1px dashed #000; padding-top: 8px; }
-      @media print { @page { margin: 0; size: 80mm auto; } }
-    </style>
-  </head><body>
-    <h1>#${o.order_number}</h1>
-    <div class="meta">${meta}</div>
-    <div class="divider"></div>
-    <table>${itemRows}</table>
-    <div class="divider"></div>
-    <table>
-      ${Number(o.delivery_fee) > 0 ? `
-      <tr><td style="padding:2px 0;font-size:12px;color:#444">${subtotalLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(Number(o.total) - Number(o.delivery_fee), o.currency)}</td></tr>
-      <tr><td style="padding:2px 0;font-size:12px;color:#444">${feeLabel}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.delivery_fee, o.currency)}</td></tr>
-      ` : ""}
-      ${Number(o.vat_amount) > 0 ? `
-      <tr><td style="padding:2px 0;font-size:12px;color:#444">${escapeHtml(t("orderStatus.vatIncluded", { label: o.vat_label, rate: Number(o.vat_rate) }))}</td><td style="text-align:right;font-size:12px;color:#444">${formatCurrency(o.vat_amount, o.currency)}</td></tr>
-      ` : ""}
-      <tr class="total"><td>${totalLabel}</td><td style="text-align:right">${formatCurrency(o.total, o.currency)}</td></tr>
-      ${Number(o.wallet_amount_paid) > 0 ? `
-      <tr><td style="padding:2px 0;font-size:12px;color:#16a34a">💰 ${walletLabel}</td><td style="text-align:right;font-size:12px;color:#16a34a">−${formatCurrency(o.wallet_amount_paid, o.currency)}</td></tr>
-      ` : ""}
-    </table>
-    ${note}
-    <div class="footer">${printedLabel} ${new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date())}</div>
-  </body></html>`;
-
-  const win = window.open("", "_blank", "width=420,height=620");
-  if (!win) { toast.show(t("ownerOrders.printBlocked"), "error"); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); win.close(); }, 300);
-};
+// Thermal-friendly receipt printer (shared with OwnerKitchen). Includes tip + the
+// restaurant thank-you note.
+const { printTicket } = usePrintTicket();
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 // Calls the server export endpoint (up to 5 000 rows, BOM-prefixed for Excel)

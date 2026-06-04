@@ -297,6 +297,18 @@
           <AppIcon name="info" class="h-3 w-3 shrink-0" />
           {{ t('orderStatus.payCashHint') }}
         </p>
+
+        <!-- Self-cancel — early pickup/delivery orders, signed-in owner only (server-gated) -->
+        <template v-if="orderData.can_cancel">
+          <button
+            class="w-full justify-center rounded-xl border border-red-400/30 py-2.5 text-sm font-semibold text-red-300 transition hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
+            :disabled="cancelling"
+            @click="cancelOrder"
+          >
+            {{ cancelling ? t('orderStatus.cancelling') : t('orderStatus.cancelOrder') }}
+          </button>
+          <p class="text-center text-[11px] text-slate-500">{{ t('orderStatus.cancelHint') }}</p>
+        </template>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->
@@ -728,6 +740,27 @@ const payWithWallet = async () => {
     );
   } finally {
     payingWallet.value = false;
+  }
+};
+
+// Self-cancel an early pickup/delivery order (wallet auto-refunds server-side).
+const cancelling = ref(false);
+const cancelOrder = async () => {
+  if (cancelling.value) return;
+  if (typeof window !== "undefined" && !window.confirm(t("orderStatus.cancelConfirm"))) return;
+  cancelling.value = true;
+  try {
+    await api.post(`/order-status/${props.orderNumber}/cancel/`);
+    await fetchStatus(); // refresh → flips to Cancelled, hides the button
+    toast.show(t("orderStatus.cancelledOk"), "success");
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    toast.show(
+      code === "not_cancellable" ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed"),
+      "error",
+    );
+  } finally {
+    cancelling.value = false;
   }
 };
 

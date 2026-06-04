@@ -2335,6 +2335,13 @@ class CustomerOrderStatusView(APIView):
             # table when you leave" (dine-in) / "Payment due" (pickup/delivery).
             "payment_status": order.payment_status,
             "requires_prepayment": order.requires_prepayment,
+            # Self-cancel affordance — only for the signed-in owner of an early
+            # pickup/delivery order (server-driven so the UI button matches the rule).
+            "can_cancel": bool(
+                _customer_can_cancel(order)
+                and session_customer_id and order.customer_id
+                and str(session_customer_id) == str(order.customer_id)
+            ),
             # Wallet self-pay affordance (only for the signed-in order owner).
             "can_pay_with_wallet": can_pay_with_wallet,
             "wallet_balance": wallet_balance,
@@ -2357,6 +2364,53 @@ class CustomerOrderStatusView(APIView):
             **vat_fields,
         })
 
+
+class CustomerOrderCancelView(APIView):
+    """POST /api/order-status/<order_number>/cancel/ — the signed-in customer cancels
+    their OWN early pickup/delivery order. Refunds any wallet payment and returns reserved
+    stock. Session ownership is required; dine-in and already-started orders are refused.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, order_number, *args, **kwargs):
+        order_number = (order_number or "").strip().upper()
+        order = Order.objects.filter(order_number=order_number).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        session_customer_id = request.session.get("customer_id")
+        try:
+            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
+        except (TypeError, ValueError):
+            owns = False
+        if not owns:
+            return Response({"detail": "Sign in to cancel this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status == Order.Status.CANCELLED:
+            return Response({"status": order.status, "payment_status": order.payment_status})
+        if not _customer_can_cancel(order):
+            return Response(
+                {"detail": "This order can no longer be cancelled — please contact the restaurant.",
+                 "code": "not_cancellable"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        from django.db import transaction as _tx
+        with _tx.atomic():
+            order.status = Order.Status.CANCELLED
+            order.status_updated_at = timezone.now()
+            order.save(update_fields=["status", "status_updated_at", "updated_at"])
+            _refund_wallet_for_cancelled_order(order)  # idempotent wallet credit
+            _restock_cancelled_order(order)
+
+        _broadcast_order_change(order)  # live-update the tracking page
+        tenant = getattr(request, "tenant", None)
+        if tenant:
+            try:
+                _send_order_status_email(order, tenant, Order.Status.CANCELLED)
+            except Exception:
+                pass
+        return Response({"status": order.status, "payment_status": order.payment_status})
 
 
 class CustomerOrdersByPhoneView(APIView):
@@ -3407,6 +3461,41 @@ def _refund_wallet_for_cancelled_order(order) -> None:
         )
 
 
+def _restock_cancelled_order(order) -> None:
+    """Return reserved stock to inventory when an order is cancelled. Only affects
+    dishes that track stock (stock_qty is not None); re-enables a dish that had gone
+    sold-out. Best-effort. Called once per order (cancel is a one-way transition)."""
+    from django.db import transaction as _dbtx
+    from django.db.models import F as _F
+    try:
+        by_slug = {}
+        for it in order.items.all():
+            if it.dish_slug:
+                by_slug[it.dish_slug] = by_slug.get(it.dish_slug, 0) + int(it.qty or 0)
+        if not by_slug:
+            return
+        with _dbtx.atomic():
+            locked = {
+                d.slug: d
+                for d in Dish.objects.select_for_update().filter(slug__in=list(by_slug.keys()))
+            }
+            for slug, qty in by_slug.items():
+                d = locked.get(slug)
+                if d is not None and d.stock_qty is not None and qty > 0:
+                    Dish.objects.filter(pk=d.pk).update(stock_qty=_F("stock_qty") + qty, is_available=True)
+    except Exception:
+        pass  # restock is best-effort — never block a cancellation
+
+
+def _customer_can_cancel(order) -> bool:
+    """A customer may self-cancel only while the order is still early (pending/confirmed)
+    and is a pickup/delivery order — dine-in tabs are settled by staff, not self-cancelled."""
+    return (
+        order.status in (Order.Status.PENDING, Order.Status.CONFIRMED)
+        and order.fulfillment_type != Order.FulfillmentType.TABLE
+    )
+
+
 class OwnerOrderStatusUpdateView(APIView):
     """PATCH /api/owner/orders/<id>/status/ — owner updates order status."""
     permission_classes = [IsAuthenticated]
@@ -3493,12 +3582,13 @@ class OwnerOrderStatusUpdateView(APIView):
         except Exception:
             pass
 
-        # Auto-refund wallet credits when an order is cancelled
+        # Auto-refund wallet credits + return reserved stock when an order is cancelled
         if new_status == Order.Status.CANCELLED:
             try:
                 _refund_wallet_for_cancelled_order(order)
+                _restock_cancelled_order(order)
             except Exception:
-                pass  # Non-fatal — refund failure must not block the status update response
+                pass  # Non-fatal — refund/restock failure must not block the status update response
 
         tenant = getattr(request, "tenant", None)
         if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}:

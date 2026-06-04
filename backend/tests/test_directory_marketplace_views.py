@@ -245,12 +245,24 @@ class MarketplaceMenuViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
 
+    def test_suspended_tenant_returns_404(self):
+        """A non-ACTIVE (suspended/past-grace) tenant is not reachable via the marketplace."""
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            t = MagicMock()
+            t.lifecycle_status = "suspended"  # != mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = t
+            resp = self._get(slug="bistro")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "unavailable")
+
     def test_schema_error_returns_500(self):
         """If anything inside schema_context raises, the view returns 500."""
         tenant = MagicMock()
         tenant.schema_name = "bistro"
         with patch("tenancy.models.Tenant") as mock_tenant:
             mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
             mock_tenant.objects.get.return_value = tenant
             # schema_context itself raises
             with patch("django_tenants.utils.schema_context", side_effect=Exception("db error")):
@@ -285,23 +297,35 @@ class MarketplacePlaceOrderViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
 
+    def test_suspended_tenant_refuses_order(self):
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            t = MagicMock(); t.lifecycle_status = "suspended"  # != ACTIVE
+            mock_tenant.objects.get.return_value = t
+            resp = self._post({"restaurant": "bistro", "items": [{"slug": "x", "qty": 1}]})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["code"], "unavailable")
+
     def test_missing_items_returns_400(self):
         with patch("tenancy.models.Tenant") as mock_tenant:
-            mock_tenant.objects.get.return_value = MagicMock()
+            t = MagicMock(); t.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = t
             resp = self._post({"restaurant": "bistro"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "missing_items")
 
     def test_empty_items_list_returns_400(self):
         with patch("tenancy.models.Tenant") as mock_tenant:
-            mock_tenant.objects.get.return_value = MagicMock()
+            t = MagicMock(); t.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = t
             resp = self._post({"restaurant": "bistro", "items": []})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "missing_items")
 
     def test_delivery_without_auth_returns_403(self):
         with patch("tenancy.models.Tenant") as mock_tenant:
-            mock_tenant.objects.get.return_value = MagicMock()
+            t = MagicMock(); t.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = t
             resp = self._post({
                 "restaurant": "bistro",
                 "items": [{"slug": "burger", "qty": 1}],

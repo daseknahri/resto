@@ -2053,7 +2053,9 @@ class DirectoryView(APIView):
 
         qs = (
             Profile.objects
-            .filter(directory_opt_in=True, is_menu_published=True)
+            # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
+            # restaurants drop out of the marketplace but keep serving their own subdomain.
+            .filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
             .select_related("tenant")
             .order_by("tenant__name")
         )
@@ -2094,7 +2096,7 @@ class DirectoryView(APIView):
                 "delivery_enabled": bool(profile.delivery_enabled),
             })
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True)
+        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
         cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
         cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
 
@@ -2160,7 +2162,9 @@ class MarketplaceView(APIView):
 
         qs = (
             Profile.objects
-            .filter(directory_opt_in=True, is_menu_published=True)
+            # Only ACTIVE tenants are discoverable — suspended / past-grace (and canceled)
+            # restaurants drop out of the marketplace but keep serving their own subdomain.
+            .filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
             .select_related("tenant")
             .order_by("tenant__name")
         )
@@ -2269,7 +2273,7 @@ class MarketplaceView(APIView):
         else:
             results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True)
+        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
         cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
         cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
         all_tags: set = set()
@@ -2306,6 +2310,9 @@ class MarketplaceMenuView(APIView):
             tenant = Tenant.objects.get(slug=slug)
         except Tenant.DoesNotExist:
             return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        # Suspended/canceled tenants are not reachable via the marketplace.
+        if tenant.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
+            return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             with _sc(tenant.schema_name):
@@ -2456,6 +2463,9 @@ class MarketplacePlaceOrderView(APIView):
             tenant = Tenant.objects.get(slug=restaurant_slug)
         except Tenant.DoesNotExist:
             return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        # Refuse marketplace orders to suspended/canceled tenants.
+        if tenant.lifecycle_status != Tenant.LifecycleStatus.ACTIVE:
+            return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
         _customer_id = request.session.get("customer_id")
         _linked_customer = None

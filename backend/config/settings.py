@@ -469,6 +469,11 @@ TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER", "")  # E.164, e.g. +1201555
 SESSION_COOKIE_SECURE = parse_bool_env("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = parse_bool_env("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_HTTPONLY = parse_bool_env("DJANGO_SESSION_COOKIE_HTTPONLY", True)
+# CSRF_COOKIE_HTTPONLY MUST stay False: the SPA uses Django's double-submit defence —
+# it reads the `csrftoken` cookie via JS (frontend/src/lib/api.js, adminApi.js) and echoes
+# it in the X-CSRFToken header on unsafe requests. Setting this True would hide the cookie
+# from JS and 403 every POST/PATCH/DELETE. The header echo is itself the CSRF protection,
+# so a JS-readable cookie is the intended design here — do not "harden" this to True.
 CSRF_COOKIE_HTTPONLY = parse_bool_env("DJANGO_CSRF_COOKIE_HTTPONLY", False)
 SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")

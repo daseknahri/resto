@@ -141,7 +141,7 @@
         </div>
 
         <!-- Action button -->
-        <div class="mt-auto px-4 pb-4 pt-3">
+        <div class="mt-auto px-4 pb-4 pt-3 space-y-2">
           <button
             v-if="waiter.nextStatus(order)"
             class="kitchen-action-btn"
@@ -153,6 +153,10 @@
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <p v-else class="text-center text-xs text-slate-500 italic">{{ t("kitchen.handedOff") }}</p>
+          <button
+            class="w-full rounded-lg border border-slate-600/70 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-400 hover:text-white"
+            @click="printTicket(order)"
+          >🖨 {{ t("ownerOrders.printTicket") }}</button>
         </div>
       </div>
     </div>
@@ -163,6 +167,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
+import { usePrintTicket } from "../composables/usePrintTicket";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live kitchen display — polls and must mount & unmount normally).
@@ -170,6 +175,7 @@ defineOptions({ name: "OwnerKitchen" });
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
+const { printTicket } = usePrintTicket();
 
 const isFullscreen = ref(false);
 const stationFilter = ref("all");

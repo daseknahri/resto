@@ -26,7 +26,28 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 | `DJANGO_EMAIL_HOST_PASSWORD` | Your SMTP password |
 | `DJANGO_DEFAULT_FROM_EMAIL` | `noreply@yourdomain.com` |
 | `DJANGO_SENTRY_DSN` | From sentry.io (create a Django project if not done) |
+| `VAPID_PUBLIC_KEY` | Web-push public key (URL-safe base64). **Without it, all web push silently no-ops** — drivers get no new-job alerts, owners no new-order alerts, customers no review nudge. |
+| `VAPID_PRIVATE_KEY` | Web-push private key (PEM). Generate the pair with `python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); v.save_key('private.pem')"` (or any VAPID keygen) and paste both. |
+| `VAPID_ADMIN_EMAIL` | Contact `mailto:` for push (e.g. `admin@yourdomain.com`). |
 | `OPENROUTER_API_KEY` | Optional — only needed for the AI translation feature |
+
+> **Note on CSRF:** leave `DJANGO_CSRF_COOKIE_HTTPONLY` unset/`False`. The SPA reads the
+> `csrftoken` cookie in JS and echoes it in the `X-CSRFToken` header (Django double-submit) —
+> setting it `True` would 403 every POST/PATCH/DELETE. See the comment in `config/settings.py`.
+
+---
+
+## 2b — Schedule the cron jobs (Coolify Scheduled Tasks)
+These management commands are idempotent and safe; nothing runs them automatically.
+
+| Command | Cadence | Purpose |
+|---|---|---|
+| `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (they drop out of the marketplace). |
+| `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
+| `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
+| `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
+
+Also enable Coolify's **Postgres backup schedule** (daily, ≥30-day retention) and test a restore.
 
 ---
 
