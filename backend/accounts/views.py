@@ -3428,6 +3428,30 @@ class DriverJobAcceptView(APIView):
         return Response(_serialize_delivery_job(job), status=status.HTTP_200_OK)
 
 
+def _mark_order_out_for_delivery(job) -> None:
+    """When the driver picks the order up, advance the tenant order to
+    OUT_FOR_DELIVERY so the customer's timeline reflects it. Best-effort."""
+    try:
+        from tenancy.models import Tenant as _T
+        from django_tenants.utils import schema_context
+        from django.utils import timezone as _tz
+        from menu.models import Order as _O
+
+        tenant = _T.objects.filter(id=job.tenant_id).first()
+        if not tenant:
+            return
+        with schema_context(tenant.schema_name):
+            order = _O.objects.filter(order_number=job.order_number).first()
+            if order and order.status in (
+                _O.Status.CONFIRMED, _O.Status.PREPARING, _O.Status.READY,
+            ):
+                order.status = _O.Status.OUT_FOR_DELIVERY
+                order.status_updated_at = _tz.now()
+                order.save(update_fields=["status", "status_updated_at", "updated_at"])
+    except Exception:
+        pass
+
+
 def _complete_delivered_order(job) -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
@@ -3511,6 +3535,7 @@ class DriverJobStatusUpdateView(APIView):
         if new_status == DeliveryJob.Status.PICKED_UP:
             job.picked_up_at = now
             update_fields.append("picked_up_at")
+            _mark_order_out_for_delivery(job)
         elif new_status == DeliveryJob.Status.DELIVERED:
             job.delivered_at = now
             update_fields.append("delivered_at")

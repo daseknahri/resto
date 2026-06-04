@@ -273,6 +273,21 @@
           <span v-else>{{ t('orderStatus.payAtTable') }}</span>
           <span v-if="orderData.payment_status === 'paid'" class="font-semibold">✓</span>
         </div>
+
+        <!-- Pay this open bill from wallet — only the signed-in order owner sees this -->
+        <template v-if="orderData.can_pay_with_wallet">
+          <button
+            class="ui-btn-primary w-full justify-center py-2.5 text-sm font-semibold disabled:opacity-50"
+            :disabled="payingWallet"
+            @click="payWithWallet"
+          >
+            <AppIcon name="wallet" class="h-4 w-4" />
+            {{ payingWallet ? t('orderStatus.payingWallet') : t('orderStatus.payWithWallet', { amount: formatCurrency(orderData.amount_due, orderData.currency) }) }}
+          </button>
+          <p class="text-center text-[11px] text-slate-500">
+            {{ t('orderStatus.walletBalanceLine', { balance: formatCurrency(orderData.wallet_balance, orderData.currency) }) }}
+          </p>
+        </template>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->
@@ -499,37 +514,65 @@ const reorder = () => {
   router.push({ name: "cart" });
 };
 
-const statusSteps = computed(() => [
-  { value: "pending", label: t("orderStatus.statusPending") },
-  { value: "confirmed", label: t("orderStatus.statusConfirmed") },
-  { value: "preparing", label: t("orderStatus.statusPreparing") },
-  { value: "ready", label: t("orderStatus.statusReady") },
-  { value: "completed", label: t("orderStatus.statusCompleted") },
-]);
-
-const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready", "completed"];
+// The visible flow differs by fulfillment type: pickup ends at "Picked up",
+// dine-in adds a final "To pay" step, delivery adds "Out for delivery → Delivered".
+const statusSteps = computed(() => {
+  const ft = orderData.value?.fulfillment_type;
+  const base = [
+    { value: "pending", label: t("orderStatus.statusPending") },
+    { value: "confirmed", label: t("orderStatus.statusConfirmed") },
+    { value: "preparing", label: t("orderStatus.statusPreparing") },
+  ];
+  if (ft === "delivery") {
+    return [
+      ...base,
+      { value: "ready", label: t("orderStatus.stepReadyDispatch") },
+      { value: "out_for_delivery", label: t("orderStatus.stepOutForDelivery") },
+      { value: "completed", label: t("orderStatus.stepDelivered") },
+    ];
+  }
+  if (ft === "table") {
+    return [
+      ...base,
+      { value: "ready", label: t("orderStatus.stepServed") },
+      { value: "pay", label: t("orderStatus.stepToPay") },
+      { value: "completed", label: t("orderStatus.stepPaidClosed") },
+    ];
+  }
+  return [
+    ...base,
+    { value: "ready", label: t("orderStatus.stepReadyPickup") },
+    { value: "completed", label: t("orderStatus.stepPickedUp") },
+  ];
+});
 
 const currentStepIndex = computed(() => {
-  const s = orderData.value?.status;
-  if (s === "cancelled") return -1;
-  return STATUS_ORDER.indexOf(s);
+  const d = orderData.value;
+  if (!d || d.status === "cancelled") return -1;
+  const steps = statusSteps.value;
+  // Dine-in: once served and still unpaid, the active step is "To pay".
+  if (d.fulfillment_type === "table" && d.status === "ready" && d.payment_status !== "paid") {
+    return steps.findIndex((st) => st.value === "pay");
+  }
+  return steps.findIndex((st) => st.value === d.status);
 });
 
 const progressPercent = computed(() => {
-  if (currentStepIndex.value < 0) return 0;
-  return Math.round(((currentStepIndex.value + 1) / STATUS_ORDER.length) * 100);
+  const steps = statusSteps.value;
+  if (currentStepIndex.value < 0 || !steps.length) return 0;
+  return Math.round(((currentStepIndex.value + 1) / steps.length) * 100);
 });
 
 const isStepDone = (stepValue) => {
-  const stepIdx = STATUS_ORDER.indexOf(stepValue);
-  return stepIdx <= currentStepIndex.value;
+  const idx = statusSteps.value.findIndex((st) => st.value === stepValue);
+  return idx >= 0 && idx <= currentStepIndex.value;
 };
 
 const stepClass = (stepValue) => {
-  const stepIdx = STATUS_ORDER.indexOf(stepValue);
+  const idx = statusSteps.value.findIndex((st) => st.value === stepValue);
   const curr = currentStepIndex.value;
-  if (stepIdx < curr) return "border-[var(--color-secondary)] bg-[var(--color-secondary)] text-black";
-  if (stepIdx === curr) return "border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]";
+  if (idx < curr) return "border-[var(--color-secondary)] bg-[var(--color-secondary)] text-black";
+  if (idx === curr) return "border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]";
   return "border-slate-700 bg-slate-900 text-slate-600";
 };
 
@@ -538,6 +581,7 @@ const statusClass = (s) => ({
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
   preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
   ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
+  out_for_delivery: "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30",
   completed: "bg-slate-700 text-slate-300",
   cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
 }[s] || "bg-slate-700 text-slate-300");
@@ -547,6 +591,7 @@ const statusLabel = (s) => ({
   confirmed: t("orderStatus.statusConfirmed"),
   preparing: t("orderStatus.statusPreparing"),
   ready: t("orderStatus.statusReady"),
+  out_for_delivery: t("orderStatus.stepOutForDelivery"),
   completed: t("orderStatus.statusCompleted"),
   cancelled: t("orderStatus.statusCancelled"),
 }[s] || s);
@@ -654,6 +699,26 @@ const fetchStatus = async () => {
     }
   } finally {
     loading.value = false;
+  }
+};
+
+// Pay the open bill from the customer's wallet (e.g. settling a dine-in tab).
+const payingWallet = ref(false);
+const payWithWallet = async () => {
+  if (payingWallet.value) return;
+  payingWallet.value = true;
+  try {
+    await api.post(`/orders/${props.orderNumber}/pay-wallet/`);
+    await fetchStatus(); // refresh → flips to Paid, hides the button
+    toast.show(t("orderStatus.walletPaidOk"), "success");
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    toast.show(
+      code === "insufficient" ? t("orderStatus.walletInsufficient") : t("orderStatus.walletPayError"),
+      "error",
+    );
+  } finally {
+    payingWallet.value = false;
   }
 };
 

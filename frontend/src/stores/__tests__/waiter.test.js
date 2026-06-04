@@ -114,7 +114,8 @@ describe("useWaiterStore", () => {
   });
 
   it("advanceStatus removes completed order from list on success", async () => {
-    api.get.mockResolvedValueOnce({ data: { results: [makeOrder(1, "ready")], count: 1 } });
+    // Pickup order: ready → completed (picked up) removes it from the active list.
+    api.get.mockResolvedValueOnce({ data: { results: [{ ...makeOrder(1, "ready"), fulfillment_type: "pickup" }], count: 1 } });
     api.patch.mockResolvedValueOnce({ data: {} });
 
     const store = useWaiterStore();
@@ -219,13 +220,19 @@ describe("useWaiterStore", () => {
     expect(store.byStatus.confirmed).toHaveLength(0);
   });
 
-  it("nextStatus returns correct next status", () => {
+  it("nextStatus returns correct next status (fulfillment-aware)", () => {
     const store = useWaiterStore();
-    expect(store.nextStatus("pending")).toBe("confirmed");
-    expect(store.nextStatus("confirmed")).toBe("preparing");
-    expect(store.nextStatus("preparing")).toBe("ready");
-    expect(store.nextStatus("ready")).toBe("completed");
-    expect(store.nextStatus("completed")).toBeNull();
+    expect(store.nextStatus({ status: "pending" })).toBe("confirmed");
+    expect(store.nextStatus({ status: "confirmed" })).toBe("preparing");
+    expect(store.nextStatus({ status: "preparing" })).toBe("ready");
+    // Pickup: ready → completed (picked up)
+    expect(store.nextStatus({ status: "ready", fulfillment_type: "pickup" })).toBe("completed");
+    // Delivery: ready → out_for_delivery → completed
+    expect(store.nextStatus({ status: "ready", fulfillment_type: "delivery" })).toBe("out_for_delivery");
+    expect(store.nextStatus({ status: "out_for_delivery", fulfillment_type: "delivery" })).toBe("completed");
+    // Dine-in unpaid: finished by Settle, not a plain advance
+    expect(store.nextStatus({ status: "ready", fulfillment_type: "table" })).toBeNull();
+    expect(store.nextStatus({ status: "completed" })).toBeNull();
   });
 
   it("queueLength reflects offlineQueue size", () => {

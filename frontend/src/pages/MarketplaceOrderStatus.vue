@@ -278,12 +278,13 @@ const submitDriverRating = async () => {
 };
 
 // ── Status stepper ────────────────────────────────────────────────────────────
-const STATUS_ORDER = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
+const STATUS_ORDER = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'];
 const statusSteps = [
   { key: 'pending' },
   { key: 'confirmed' },
   { key: 'preparing' },
   { key: 'ready' },
+  { key: 'out_for_delivery' },
   { key: 'completed' },
 ];
 

@@ -288,6 +288,7 @@ class Order(models.Model):
         CONFIRMED = "confirmed", "Confirmed"
         PREPARING = "preparing", "Preparing"
         READY = "ready", "Ready"
+        OUT_FOR_DELIVERY = "out_for_delivery", "Out for delivery"  # delivery only
         COMPLETED = "completed", "Completed"
         CANCELLED = "cancelled", "Cancelled"
 

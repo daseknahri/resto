@@ -1,12 +1,29 @@
 import { defineStore } from "pinia";
 import api from "../lib/api";
 
-const NEXT_STATUS = {
+const LINEAR_NEXT = {
   pending: "confirmed",
   confirmed: "preparing",
   preparing: "ready",
-  ready: "completed",
 };
+
+// Next status is fulfillment-type aware:
+//  - pickup:  ready → completed (picked up)
+//  - delivery: ready → out_for_delivery → completed (delivered)
+//  - dine-in: ready (unpaid) is finished by the Settle action, not a plain
+//             advance, so return null; a prepaid dine-in ready → completed.
+function nextStatusFor(order) {
+  if (!order) return null;
+  const s = order.status;
+  if (s in LINEAR_NEXT) return LINEAR_NEXT[s];
+  if (s === "ready") {
+    if (order.fulfillment_type === "delivery") return "out_for_delivery";
+    if (order.fulfillment_type === "table" && order.payment_status !== "paid") return null;
+    return "completed";
+  }
+  if (s === "out_for_delivery") return "completed";
+  return null;
+}
 
 export const useWaiterStore = defineStore("waiter", {
   state: () => ({
@@ -38,7 +55,7 @@ export const useWaiterStore = defineStore("waiter", {
 
     queueLength: (state) => state.offlineQueue.length,
 
-    nextStatus: () => (currentStatus) => NEXT_STATUS[currentStatus] ?? null,
+    nextStatus: () => (order) => nextStatusFor(order),
   },
 
   actions: {
@@ -91,7 +108,7 @@ export const useWaiterStore = defineStore("waiter", {
       const order = this.orders.find((o) => o.id === orderId);
       if (!order) return;
 
-      const next = NEXT_STATUS[order.status];
+      const next = nextStatusFor(order);
       if (!next) return;
 
       const prev = order.status;

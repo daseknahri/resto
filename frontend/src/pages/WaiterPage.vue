@@ -215,7 +215,7 @@
         <!-- Action footer -->
         <div class="mt-3 flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
           <button
-            v-if="canManageOrders && waiter.nextStatus(order.status)"
+            v-if="canManageOrders && waiter.nextStatus(order)"
             class="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-opacity"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
@@ -688,12 +688,14 @@ const timeAgo = (iso) => {
 
 const actionLabel = (order) => {
   const isDelivery = order.fulfillment_type === "delivery";
-  return {
-    pending: t("waiterPage.actionAccept"),
-    confirmed: t("waiterPage.actionPreparing"),
-    preparing: isDelivery ? t("waiterPage.actionOutForDelivery") : t("waiterPage.actionReady"),
-    ready: isDelivery ? t("waiterPage.actionDelivered") : t("waiterPage.actionDone"),
-  }[order.status] ?? "";
+  switch (order.status) {
+    case "pending": return t("waiterPage.actionAccept");
+    case "confirmed": return t("waiterPage.actionPreparing");
+    case "preparing": return t("waiterPage.actionReady");
+    case "ready": return isDelivery ? t("waiterPage.actionOutForDelivery") : t("waiterPage.actionDone");
+    case "out_for_delivery": return t("waiterPage.actionDelivered");
+    default: return "";
+  }
 };
 
 // ── Styling ────────────────────────────────────────────────────────────────────
@@ -702,6 +704,7 @@ const statusCardClass = (s) => ({
   confirmed: "border-sky-500/30 bg-sky-500/5",
   preparing: "border-orange-500/30 bg-orange-500/5",
   ready:     "border-emerald-500/30 bg-emerald-500/5",
+  out_for_delivery: "border-indigo-500/30 bg-indigo-500/5",
 }[s] ?? "border-slate-700/40 bg-slate-800/30");
 
 const statusChipClass = (s) => ({
@@ -709,6 +712,7 @@ const statusChipClass = (s) => ({
   confirmed: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   preparing: "border-orange-500/40 bg-orange-500/10 text-orange-300",
   ready:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  out_for_delivery: "border-indigo-500/40 bg-indigo-500/10 text-indigo-300",
 }[s] ?? "border-slate-600 bg-slate-700/40 text-slate-300");
 
 const statusBorderClass = (s) => ({
@@ -716,6 +720,7 @@ const statusBorderClass = (s) => ({
   confirmed: "border-sky-500/20",
   preparing: "border-orange-500/20",
   ready:     "border-emerald-500/20",
+  out_for_delivery: "border-indigo-500/20",
 }[s] ?? "border-slate-700/30");
 
 const actionBtnClass = (s) => ({
@@ -723,6 +728,7 @@ const actionBtnClass = (s) => ({
   confirmed: "bg-sky-500 hover:bg-sky-400 text-white",
   preparing: "bg-orange-500 hover:bg-orange-400 text-white",
   ready:     "bg-emerald-500 hover:bg-emerald-400 text-white",
+  out_for_delivery: "bg-indigo-500 hover:bg-indigo-400 text-white",
 }[s] ?? "bg-slate-600 hover:bg-slate-500 text-white");
 </script>
 

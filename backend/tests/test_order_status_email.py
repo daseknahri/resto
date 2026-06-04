@@ -118,7 +118,7 @@ class SendOrderStatusEmailTests(SimpleTestCase):
         self.assertNotIn("minutes", body)
 
     # ── ready + fulfillment type ──────────────────────────────────────────────
-    def test_ready_delivery_says_on_its_way(self):
+    def test_ready_delivery_says_dispatched_shortly(self):
         order = _order(
             customer_email="x@example.com",
             fulfillment_type=Order.FulfillmentType.DELIVERY,
@@ -126,7 +126,18 @@ class SendOrderStatusEmailTests(SimpleTestCase):
         with patch("menu.views.send_mail") as mock_send:
             _send_order_status_email(order, _tenant(), Order.Status.READY)
         body = mock_send.call_args[1]["message"]
+        self.assertIn("dispatched", body)
+
+    def test_out_for_delivery_says_on_its_way(self):
+        order = _order(
+            customer_email="x@example.com",
+            fulfillment_type=Order.FulfillmentType.DELIVERY,
+        )
+        with patch("menu.views.send_mail") as mock_send:
+            _send_order_status_email(order, _tenant(), Order.Status.OUT_FOR_DELIVERY)
+        body = mock_send.call_args[1]["message"]
         self.assertIn("on its way", body)
+        self.assertIn("out for delivery", body)
 
     def test_ready_pickup_says_ready_for_pickup(self):
         order = _order(

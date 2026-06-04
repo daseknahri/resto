@@ -120,6 +120,7 @@ const STATUS_LABEL = {
   confirmed: () => t("orderStatus.statusConfirmed"),
   preparing: () => t("orderStatus.statusPreparing"),
   ready: () => t("orderStatus.statusReady"),
+  out_for_delivery: () => t("orderStatus.stepOutForDelivery"),
   completed: () => t("orderStatus.statusCompleted"),
   cancelled: () => t("orderStatus.statusCancelled"),
 };
@@ -130,6 +131,7 @@ const STATUS_CLASS = {
   confirmed: "bg-blue-500/20 text-blue-300",
   preparing: "bg-orange-500/20 text-orange-300",
   ready: "bg-emerald-500/20 text-emerald-300",
+  out_for_delivery: "bg-indigo-500/20 text-indigo-300",
   completed: "bg-slate-700 text-slate-400",
   cancelled: "bg-red-500/20 text-red-300",
 };

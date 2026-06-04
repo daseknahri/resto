@@ -1343,7 +1343,7 @@ const loadingOrders = ref(false);
 const ordersError = ref(false);
 const apiOrders = ref([]);
 
-const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready']);
+const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
 const activeOrders = computed(() => apiOrders.value.filter(o => ACTIVE_STATUSES.has(o.status)));
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
@@ -1540,6 +1540,7 @@ const STATUS_I18N = {
   confirmed: 'orderStatus.statusConfirmed',
   preparing: 'orderStatus.statusPreparing',
   ready: 'orderStatus.statusReady',
+  out_for_delivery: 'orderStatus.stepOutForDelivery',
   completed: 'orderStatus.statusCompleted',
   cancelled: 'orderStatus.statusCancelled',
 };
@@ -1670,6 +1671,7 @@ const MKT_ORDER_STATUS = {
   confirmed: 'orderStatus.statusConfirmed',
   preparing: 'orderStatus.statusPreparing',
   ready: 'orderStatus.statusReady',
+  out_for_delivery: 'orderStatus.stepOutForDelivery',
   completed: 'orderStatus.statusCompleted',
   cancelled: 'orderStatus.statusCancelled',
 };

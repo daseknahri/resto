@@ -143,7 +143,7 @@
         <!-- Action button -->
         <div class="mt-auto px-4 pb-4 pt-3">
           <button
-            v-if="waiter.nextStatus(order.status)"
+            v-if="waiter.nextStatus(order)"
             class="kitchen-action-btn"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
@@ -324,8 +324,8 @@ const timeAgo = (iso) => {
 const actionLabel = (order) => ({
   pending: t("kitchen.actionAccept"),
   confirmed: t("kitchen.actionPreparing"),
-  preparing: order.fulfillment_type === "delivery" ? t("kitchen.actionOutForDelivery") : t("kitchen.actionReady"),
-  ready: order.fulfillment_type === "delivery" ? t("kitchen.actionDelivered") : t("kitchen.actionDone"),
+  preparing: t("kitchen.actionReady"),
+  ready: order.fulfillment_type === "delivery" ? t("kitchen.actionOutForDelivery") : t("kitchen.actionDone"),
 }[order.status] ?? "");
 
 // ── Styling ────────────────────────────────────────────────────────────────────

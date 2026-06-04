@@ -2179,6 +2179,31 @@ class CustomerOrderStatusView(APIView):
         except Exception:
             pass
 
+        # Wallet self-pay — offer the signed-in order owner a one-tap "pay from
+        # wallet" while the bill is still open (e.g. a dine-in tab). We surface
+        # their balance + the amount due so the UI can show/disable the button.
+        can_pay_with_wallet = False
+        wallet_balance = None
+        try:
+            order_outstanding = Decimal(str(order.total or "0")) - Decimal(str(order.wallet_amount_paid or "0"))
+        except Exception:
+            order_outstanding = Decimal("0")
+        if (
+            session_customer_id and order.customer_id
+            and order.payment_status != Order.PaymentStatus.PAID
+            and order.status != Order.Status.CANCELLED
+            and order_outstanding > Decimal("0")
+        ):
+            try:
+                if int(session_customer_id) == int(order.customer_id):
+                    from accounts.models import Customer as _Cust
+                    _c = _Cust.objects.filter(pk=order.customer_id).only("wallet_balance").first()
+                    if _c is not None:
+                        wallet_balance = str(_c.wallet_balance)
+                        can_pay_with_wallet = True
+            except Exception:
+                pass  # balance lookup is best-effort; never breaks order status
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
@@ -2197,6 +2222,10 @@ class CustomerOrderStatusView(APIView):
             # table when you leave" (dine-in) / "Payment due" (pickup/delivery).
             "payment_status": order.payment_status,
             "requires_prepayment": order.requires_prepayment,
+            # Wallet self-pay affordance (only for the signed-in order owner).
+            "can_pay_with_wallet": can_pay_with_wallet,
+            "wallet_balance": wallet_balance,
+            "amount_due": str(order_outstanding if order_outstanding > Decimal("0") else Decimal("0.00")),
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "items_count": sum(i["qty"] for i in items),
@@ -2328,6 +2357,7 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
             Order.Status.CONFIRMED: "confirmed",
             Order.Status.PREPARING: "being prepared",
             Order.Status.READY: "ready",
+            Order.Status.OUT_FOR_DELIVERY: "out for delivery",
             Order.Status.COMPLETED: "completed",
             Order.Status.CANCELLED: "cancelled",
         }
@@ -2345,11 +2375,14 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
 
         if new_status == Order.Status.READY:
             if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
-                lines.append("Your order is on its way!")
+                lines.append("Your order is ready and will be dispatched shortly.")
             elif order.fulfillment_type == Order.FulfillmentType.PICKUP:
                 lines.append("Your order is ready for pickup.")
             else:
                 lines.append("Your order is ready.")
+
+        if new_status == Order.Status.OUT_FOR_DELIVERY:
+            lines.append("Your order is on its way!")
 
         if order.owner_note:
             lines.append(f"\nNote from restaurant: {order.owner_note}")
@@ -2435,6 +2468,7 @@ class StaffOrderListView(APIView):
         Order.Status.CONFIRMED,
         Order.Status.PREPARING,
         Order.Status.READY,
+        Order.Status.OUT_FOR_DELIVERY,
     ]
 
     def get(self, request):
@@ -2715,6 +2749,37 @@ class OwnerOrderListView(APIView):
         except Exception:
             _vat_rate, _vat_label = 0, ""
 
+        # ── Section + responsible waiter(s) for table orders ───────────────────
+        # So the owner can see WHO covers each table at a glance.
+        section_by_slug: dict = {}  # slug → {"name": str, "waiters": [names]}
+        try:
+            _table_slugs = [o.table_slug for o in all_orders if o.table_slug]
+            if _table_slugs:
+                _tl_rows = list(
+                    TableLink.objects.filter(slug__in=_table_slugs)
+                    .values("slug", "section_id", "section__name")
+                )
+                _section_ids = {r["section_id"] for r in _tl_rows if r["section_id"]}
+                _servers_by_section: dict = {}
+                _uid_set = set()
+                if _section_ids:
+                    for ss in SectionServer.objects.filter(section_id__in=_section_ids).values("section_id", "user_id"):
+                        _servers_by_section.setdefault(ss["section_id"], []).append(ss["user_id"])
+                        _uid_set.add(ss["user_id"])
+                _name_map = {}
+                if _uid_set:
+                    from accounts.models import User as _User
+                    for u in _User.objects.filter(id__in=list(_uid_set)).values("id", "name", "email"):
+                        _name_map[u["id"]] = u["name"] or u["email"]
+                for r in _tl_rows:
+                    _waiters = [_name_map.get(uid, "") for uid in _servers_by_section.get(r["section_id"], [])]
+                    section_by_slug[r["slug"]] = {
+                        "name": r["section__name"] or "",
+                        "waiters": [w for w in _waiters if w],
+                    }
+        except Exception:
+            section_by_slug = {}  # best-effort — never break the order list
+
         orders = []
         for order in all_orders:
             orders.append({
@@ -2724,6 +2789,9 @@ class OwnerOrderListView(APIView):
                 "payment_status": order.payment_status,
                 "fulfillment_type": order.fulfillment_type,
                 "table_label": order.table_label,
+                # Floor section + the waiter(s) responsible for this table.
+                "section_name": section_by_slug.get(order.table_slug, {}).get("name", "") if order.table_slug else "",
+                "responsible_waiters": section_by_slug.get(order.table_slug, {}).get("waiters", []) if order.table_slug else [],
                 "customer_name": order.customer_name,
                 "customer_phone": order.customer_phone,
                 "customer_email": order.customer.email if order.customer else "",
@@ -3218,14 +3286,23 @@ class OwnerOrderStatusUpdateView(APIView):
     """PATCH /api/owner/orders/<id>/status/ — owner updates order status."""
     permission_classes = [IsAuthenticated]
 
-    ALLOWED_TRANSITIONS = {
-        Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
-        Order.Status.CONFIRMED: {Order.Status.PREPARING, Order.Status.CANCELLED},
-        Order.Status.PREPARING: {Order.Status.READY, Order.Status.CANCELLED},
-        Order.Status.READY: {Order.Status.COMPLETED, Order.Status.CANCELLED},
-        Order.Status.COMPLETED: set(),
-        Order.Status.CANCELLED: set(),
-    }
+    @staticmethod
+    def _allowed_transitions(order):
+        """Allowed next statuses — fulfillment-type aware. Delivery gets an extra
+        'Out for delivery' step; pickup & dine-in go straight Ready → Completed."""
+        t = {
+            Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
+            Order.Status.CONFIRMED: {Order.Status.PREPARING, Order.Status.CANCELLED},
+            Order.Status.PREPARING: {Order.Status.READY, Order.Status.CANCELLED},
+            Order.Status.COMPLETED: set(),
+            Order.Status.CANCELLED: set(),
+        }
+        if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+            t[Order.Status.READY] = {Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}
+            t[Order.Status.OUT_FOR_DELIVERY] = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+        else:
+            t[Order.Status.READY] = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+        return t.get(order.status, set())
 
     def patch(self, request, order_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
@@ -3240,7 +3317,7 @@ class OwnerOrderStatusUpdateView(APIView):
         estimated_ready_minutes = request.data.get("estimated_ready_minutes")
 
         if new_status:
-            allowed = self.ALLOWED_TRANSITIONS.get(order.status, set())
+            allowed = self._allowed_transitions(order)
             if new_status not in {s.value for s in allowed}:
                 return Response(
                     {"detail": f"Cannot transition from '{order.status}' to '{new_status}'.", "code": "invalid_transition"},
@@ -3299,7 +3376,7 @@ class OwnerOrderStatusUpdateView(APIView):
                 pass  # Non-fatal — refund failure must not block the status update response
 
         tenant = getattr(request, "tenant", None)
-        if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.CANCELLED}:
+        if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}:
             if tenant:
                 _send_order_status_email(order, tenant, new_status)
 
@@ -3438,11 +3515,11 @@ class OwnerOrderExportView(APIView):
 
         writer = csv.writer(response)
         writer.writerow([
-            "order_number", "created_at", "status", "fulfillment_type",
+            "order_number", "created_at", "status", "payment_status", "fulfillment_type",
             "table_label", "customer_name", "customer_phone",
             "customer_note", "delivery_address",
             "items", "subtotal", "delivery_fee", "tip_amount",
-            "promotion_discount", "wallet_amount_paid", "total", "currency",
+            "promotion_discount", "wallet_amount_paid", "paid_at", "total", "currency",
         ])
 
         for order in qs[:5000]:
@@ -3460,6 +3537,7 @@ class OwnerOrderExportView(APIView):
                 order.order_number,                          # system-generated — safe
                 timezone.localtime(order.created_at).isoformat(),
                 order.status,
+                order.payment_status,
                 order.fulfillment_type or "",
                 _csv_safe(order.table_label or ""),          # owner-set label
                 _csv_safe(order.customer_name or ""),        # customer-provided
@@ -3472,6 +3550,7 @@ class OwnerOrderExportView(APIView):
                 str(order.tip_amount),
                 str(order.promotion_discount or "0"),
                 str(order.wallet_amount_paid or "0"),
+                timezone.localtime(order.paid_at).isoformat() if order.paid_at else "",
                 str(order.total),
                 order.currency or "",
             ])
@@ -5420,6 +5499,93 @@ class OwnerWalletResolveTokenView(APIView):
         })
 
 
+def _settle_order_if_wallet_covers(order_number):
+    """Flip an order to PAID once its accumulated wallet payments cover the total.
+    This is what lets paying a (dine-in) tab from the wallet actually close the
+    bill. Best-effort — the wallet ledger is the source of truth regardless.
+    """
+    if not order_number:
+        return
+    try:
+        o = Order.objects.filter(order_number=order_number).only(
+            "id", "total", "wallet_amount_paid", "payment_status", "paid_at"
+        ).first()
+        if (
+            o is not None
+            and o.payment_status != Order.PaymentStatus.PAID
+            and o.total > Decimal("0")
+            and o.wallet_amount_paid >= o.total
+        ):
+            o.mark_paid()  # sets payment_status=PAID + paid_at + saves
+    except Exception:
+        pass
+
+
+class CustomerOrderPayWalletView(APIView):
+    """POST /api/orders/<order_number>/pay-wallet/
+
+    The signed-in customer settles their OWN unpaid order from their wallet
+    balance — e.g. paying a dine-in tab at the end. Their session both identifies
+    and authorises them (the tap is consent, so no approval threshold). Idempotent
+    on the wallet debit, so a double-tap never double-charges.
+    """
+
+    permission_classes = [AllowAny]  # gated below: session customer must own the order
+
+    def post(self, request, order_number, *args, **kwargs):
+        order_number = (order_number or "").strip().upper()
+        order = Order.objects.filter(order_number=order_number).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        session_customer_id = request.session.get("customer_id")
+        try:
+            owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
+        except (TypeError, ValueError):
+            owns = False
+        if not owns:
+            return Response({"detail": "Sign in to pay this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.payment_status == Order.PaymentStatus.PAID:
+            return Response({"status": "paid", "payment_status": order.payment_status})
+
+        outstanding = (order.total or Decimal("0")) - (order.wallet_amount_paid or Decimal("0"))
+        if outstanding <= Decimal("0"):
+            order.mark_paid()
+            return Response({"status": "paid", "payment_status": order.payment_status})
+
+        tenant = getattr(request, "tenant", None)
+        from accounts.wallet_service import debit_wallet, InsufficientFunds, WalletError
+        from accounts.models import Customer as _Cust
+        try:
+            tx = debit_wallet(
+                order.customer_id, outstanding,
+                reference=order_number, tenant_id=(tenant.id if tenant else None),
+                note="Order payment", idempotency_key=f"order-pay-{order_number}",
+            )
+        except InsufficientFunds:
+            cust = _Cust.objects.filter(pk=order.customer_id).first()
+            return Response(
+                {"detail": "Insufficient wallet balance.", "code": "insufficient",
+                 "balance": str(cust.wallet_balance) if cust else "0.00",
+                 "outstanding": str(outstanding)},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        except WalletError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.wallet_amount_paid = (order.wallet_amount_paid or Decimal("0")) + outstanding
+        order.mark_paid(save=False)
+        order.save(update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"])
+
+        return Response({
+            "status": "paid",
+            "payment_status": order.payment_status,
+            "amount_paid": str(outstanding),
+            "new_balance": str(getattr(tx, "balance_after", "")) if tx is not None else "",
+        })
+
+
 class OwnerWalletChargeView(APIView):
     """POST /api/owner/wallet/charge/ — charge a customer's wallet for an in-person order.
 
@@ -5540,6 +5706,7 @@ class OwnerWalletChargeView(APIView):
                 Order.objects.filter(order_number=order_number).update(
                     wallet_amount_paid=_F("wallet_amount_paid") + amount
                 )
+                _settle_order_if_wallet_covers(order_number)
             except Exception:
                 pass  # the payment is recorded regardless; bill update is best-effort
 
@@ -5577,6 +5744,7 @@ def _sync_charged_request_bills(tenant_id, order_numbers):
             Order.objects.filter(order_number=onum).update(
                 wallet_amount_paid=_F("wallet_amount_paid") + amount
             )
+            _settle_order_if_wallet_covers(onum)
             applied[onum] = applied.get(onum, Decimal("0")) + amount
         except Exception:
             pass  # best-effort; the payment is recorded in the wallet ledger regardless

@@ -240,6 +240,14 @@
               </span>
             </div>
             <p class="text-xs text-slate-400">{{ formatTime(o.created_at) }}</p>
+            <!-- Floor section + responsible waiter (table orders) -->
+            <p v-if="o.section_name || (o.responsible_waiters && o.responsible_waiters.length)" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+              <span v-if="o.section_name" class="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5 text-[10px] font-medium text-slate-300">{{ o.section_name }}</span>
+              <span v-if="o.responsible_waiters && o.responsible_waiters.length" class="text-slate-400">
+                {{ t('ownerOrders.servedBy', { waiters: o.responsible_waiters.join(', ') }) }}
+              </span>
+              <span v-else-if="o.fulfillment_type === 'table'" class="text-amber-400/80">{{ t('ownerOrders.noWaiterAssigned') }}</span>
+            </p>
           </div>
           <div class="text-right">
             <p class="text-lg font-bold text-[var(--color-secondary)]">{{ formatCurrency(o.total, o.currency) }}</p>
@@ -504,13 +512,31 @@
             </button>
           </template>
           <template v-else-if="o.status === 'ready'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
+            <!-- Delivery: dispatch. Pickup / prepaid dine-in: complete. Unpaid dine-in
+                 is finished by the Settle & close button (the pay step). -->
+            <button
+              v-if="o.fulfillment_type === 'delivery'"
+              class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              @click="updateStatus(o, 'out_for_delivery')"
+            >
+              {{ t("ownerOrders.outForDelivery") }}
+            </button>
+            <button
+              v-else-if="o.fulfillment_type !== 'table' || o.payment_status === 'paid'"
+              class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              @click="updateStatus(o, 'completed')"
+            >
               {{ t("ownerOrders.complete") }}
+            </button>
+          </template>
+          <template v-else-if="o.status === 'out_for_delivery'">
+            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
+              {{ t("ownerOrders.markDelivered") }}
             </button>
           </template>
 
           <button
-            v-if="['pending','confirmed','preparing','ready'].includes(o.status)"
+            v-if="['pending','confirmed','preparing','ready','out_for_delivery'].includes(o.status)"
             class="ui-btn-outline px-3 py-1.5 text-xs"
             @click="openEdit(o)"
           >
@@ -621,6 +647,7 @@ const statusTabs = computed(() => {
     { value: "confirmed", label: t("ownerOrders.statusConfirmed"), count: counts.confirmed || 0 },
     { value: "preparing", label: t("ownerOrders.statusPreparing"), count: counts.preparing || 0 },
     { value: "ready", label: t("ownerOrders.statusReady"), count: counts.ready || 0 },
+    { value: "out_for_delivery", label: t("ownerOrders.outForDelivery"), count: counts.out_for_delivery || 0 },
     { value: "completed", label: t("ownerOrders.statusCompleted"), count: counts.completed || 0 },
     { value: "cancelled", label: t("ownerOrders.statusCancelled"), count: counts.cancelled || 0 },
   ];
@@ -637,7 +664,7 @@ const todayStats = computed(() => {
 });
 
 // ── Filtered + sorted orders ──────────────────────────────────────────────────
-const STATUS_SORT = { pending: 0, confirmed: 1, preparing: 2, ready: 3, completed: 4, cancelled: 5 };
+const STATUS_SORT = { pending: 0, confirmed: 1, preparing: 2, ready: 3, out_for_delivery: 4, completed: 5, cancelled: 6 };
 
 const filteredOrders = computed(() => {
   const now = new Date();
@@ -721,6 +748,7 @@ const statusClass = (s) => ({
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
   preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
   ready: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
+  out_for_delivery: "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30",
   completed: "bg-slate-700 text-slate-300",
   cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
 }[s] || "bg-slate-700 text-slate-300");
@@ -730,6 +758,7 @@ const statusLabel = (s) => ({
   confirmed: t("ownerOrders.statusConfirmed"),
   preparing: t("ownerOrders.statusPreparing"),
   ready: t("ownerOrders.statusReady"),
+  out_for_delivery: t("ownerOrders.outForDelivery"),
   completed: t("ownerOrders.statusCompleted"),
   cancelled: t("ownerOrders.statusCancelled"),
 }[s] || s);
