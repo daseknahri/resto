@@ -28,6 +28,8 @@ function nextStatusFor(order) {
 export const useWaiterStore = defineStore("waiter", {
   state: () => ({
     orders: [],
+    recentOrders: [],       // recently finished orders (for the waiter's history view)
+    recentLoading: false,
     loading: false,
     error: null,
     lastSyncAt: null,          // ISO string of last successful full fetch
@@ -98,6 +100,22 @@ export const useWaiterStore = defineStore("waiter", {
         if (!silent) this.error = "Failed to load orders.";
       } finally {
         if (!silent) this.loading = false;
+      }
+    },
+
+    // -------------------------------------------------------
+    // Recently finished orders (last 24h) — the waiter's history view
+    // -------------------------------------------------------
+    async fetchRecent() {
+      this.recentLoading = true;
+      try {
+        const res = await api.get("/staff/orders/", { params: { recent: 1 } });
+        this.recentOrders = Array.isArray(res.data?.results) ? res.data.results : [];
+        return this.recentOrders;
+      } catch {
+        /* keep last */
+      } finally {
+        this.recentLoading = false;
       }
     },
 

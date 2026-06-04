@@ -1,6 +1,8 @@
 const arabicMessages = {
   "common": {
     "language": "اللغة",
+    "sectionsNav": "الأقسام",
+    "owner": "المالك",
     "landing": "الرئيسية",
     "liveDemo": "عرض حي",
     "getStarted": "ابدأ الآن",
@@ -322,6 +324,7 @@ const arabicMessages = {
     "title": "التحليلات"
   },
   "ownerHome": {
+    "platformFeeNote": "عمولة المنصة 10%",
     "kicker": "لوحة المالك",
     "title": "أطلق قائمتك وأدرها",
     "description": "تابع الجاهزية، أكمل الإعداد، وانشر تجربة مستقرة للعملاء.",
@@ -1664,6 +1667,7 @@ const arabicMessages = {
     "title": "التواصل مع الدعم",
     "description": "هل تحتاج إلى مساعدة في التهيئة أو الحساب أو طلبات الخصوصية؟ نرد عادة خلال يوم عمل واحد.",
     "whatsapp": "واتساب",
+    "direct": "مباشر",
     "hours": "ساعات العمل",
     "hoursValue": "الاثنين - الجمعة، 09:00 - 18:00",
     "fasterSupport": "لتسريع المساعدة، أرفق:",
@@ -2657,6 +2661,8 @@ Object.assign(arabicMessages, {
   waiterPage: {
     noActiveOrders: "\u0643\u0644 \u0634\u064a\u0621 \u0639\u0644\u0649 \u0645\u0627 \u064a\u0631\u0627\u0645 \u2014 \u0644\u0627 \u0637\u0644\u0628\u0627\u062a \u0646\u0634\u0637\u0629",
     noActiveOrdersBody: "\u0633\u062a\u0638\u0647\u0631 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u062c\u062f\u064a\u062f\u0629 \u0647\u0646\u0627 \u062a\u0644\u0642\u0627\u0626\u064a\u0627\u064b.",
+    noRecentOrders: "\u0644\u0627 \u0637\u0644\u0628\u0627\u062a \u062d\u062f\u064a\u062b\u0629",
+    noRecentOrdersBody: "\u062a\u0638\u0647\u0631 \u0647\u0646\u0627 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0643\u062a\u0645\u0644\u0629 \u062e\u0644\u0627\u0644 \u0622\u062e\u0631 24 \u0633\u0627\u0639\u0629.",
     retry: "\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629",
     tabAll: "\u0627\u0644\u0643\u0644",
     tabPending: "\u0642\u064a\u062f \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631",
@@ -2684,6 +2690,10 @@ Object.assign(arabicMessages, {
     minutesAgo: "\u0645\u0646\u0630 {n} \u062f\u0642\u064a\u0642\u0629",
     hoursAgo: "\u0645\u0646\u0630 {n} \u0633\u0627\u0639\u0629",
     tabShift: "\u0627\u0644\u0648\u0631\u062f\u064a\u0629",
+    tabRecent: "\u0627\u0644\u0623\u062e\u064a\u0631\u0629",
+    settleTitle: "\u0643\u064a\u0641 \u062a\u0645 \u0627\u0644\u062f\u0641\u0639\u061f",
+    payCash: "\u0646\u0642\u062f\u0627\u064b",
+    payWalletMethod: "\u0627\u0644\u0645\u062d\u0641\u0638\u0629",
     shiftSince: "\u0628\u062f\u0623\u062a \u0627\u0644\u0648\u0631\u062f\u064a\u0629 \u0641\u064a",
     shiftRefresh: "\u062a\u062d\u0645\u064a\u0644",
     shiftLoading: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026",

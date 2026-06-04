@@ -17,7 +17,7 @@
           </article>
           <article class="ui-stat-tile">
             <p class="ui-stat-label">WhatsApp</p>
-            <p class="ui-stat-value text-xl">Direct</p>
+            <p class="ui-stat-value text-xl">{{ t("contactPage.direct") }}</p>
             <p class="ui-stat-note">{{ t("contactPage.whatsapp") }}</p>
           </article>
         </div>

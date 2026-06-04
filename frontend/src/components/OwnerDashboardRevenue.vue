@@ -168,7 +168,7 @@
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.marketplaceCommission") }}</p>
           <p class="ui-stat-value text-rose-400">{{ fmt(marketplaceStats.commission_total) }}</p>
-          <p class="mt-0.5 text-[10px] text-slate-600">10% platform fee</p>
+          <p class="mt-0.5 text-[10px] text-slate-600">{{ t("ownerHome.platformFeeNote") }}</p>
         </div>
       </div>
     </div>

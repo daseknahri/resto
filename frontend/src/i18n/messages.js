@@ -4,6 +4,8 @@ export const messages = {
   en: {
     common: {
       language: "Language",
+      sectionsNav: "Sections",
+      owner: "Owner",
       currency: "Currency",
       landing: "Landing",
       liveDemo: "Live demo",
@@ -384,6 +386,7 @@ export const messages = {
       title: "Contact support",
       description: "Need onboarding support, account help, or privacy requests? We usually respond within one business day.",
       whatsapp: "WhatsApp",
+      direct: "Direct",
       hours: "Hours",
       hoursValue: "Monday-Friday, 09:00-18:00",
       fasterSupport: "For faster support, include:",
@@ -1092,6 +1095,8 @@ export const messages = {
     waiterPage: {
       noActiveOrders: "All clear — no active orders",
       noActiveOrdersBody: "New orders will appear here automatically.",
+      noRecentOrders: "No recent orders",
+      noRecentOrdersBody: "Orders finished in the last 24 hours show here.",
       retry: "Retry",
       tabAll: "All",
       tabPending: "Pending",
@@ -1119,6 +1124,10 @@ export const messages = {
       minutesAgo: "{n}m ago",
       hoursAgo: "{n}h ago",
       tabShift: "Shift",
+      tabRecent: "Recent",
+      settleTitle: "How was it paid?",
+      payCash: "Cash",
+      payWalletMethod: "Wallet",
       shiftSince: "Shift started at",
       shiftRefresh: "Load",
       shiftLoading: "Loading…",
@@ -2211,6 +2220,7 @@ export const messages = {
       marketplaceOrders: "Orders via marketplace",
       marketplaceRevenue: "Revenue",
       marketplaceCommission: "Platform fee",
+      platformFeeNote: "10% platform fee",
       readinessActionContact: "Edit profile",
       readinessActionTheme: "Configure theme",
       readinessActionCategories: "Add categories",
@@ -3284,6 +3294,8 @@ export const messages = {
   fr: {
     common: {
       language: "Langue",
+      sectionsNav: "Sections",
+      owner: "Proprietaire",
       currency: "Devise",
       landing: "Accueil",
       liveDemo: "Demo live",
@@ -3664,6 +3676,7 @@ export const messages = {
       title: "Contacter le support",
       description: "Besoin d aide onboarding, compte ou confidentialite ? Nous repondons en general sous un jour ouvre.",
       whatsapp: "WhatsApp",
+      direct: "Direct",
       hours: "Horaires",
       hoursValue: "Lundi-Vendredi, 09:00-18:00",
       fasterSupport: "Pour un support plus rapide, incluez :",
@@ -4372,6 +4385,8 @@ export const messages = {
     waiterPage: {
       noActiveOrders: "Tout est calme — aucune commande active",
       noActiveOrdersBody: "Les nouvelles commandes apparaitront ici automatiquement.",
+      noRecentOrders: "Aucune commande recente",
+      noRecentOrdersBody: "Les commandes terminees ces dernieres 24 h apparaissent ici.",
       retry: "Reessayer",
       tabAll: "Tout",
       tabPending: "En attente",
@@ -4399,6 +4414,10 @@ export const messages = {
       minutesAgo: "il y a {n}m",
       hoursAgo: "il y a {n}h",
       tabShift: "Shift",
+      tabRecent: "Recentes",
+      settleTitle: "Comment a-t-il ete paye ?",
+      payCash: "Especes",
+      payWalletMethod: "Portefeuille",
       shiftSince: "Debut du shift",
       shiftRefresh: "Charger",
       shiftLoading: "Chargement…",
@@ -5460,6 +5479,7 @@ export const messages = {
       marketplaceOrders: "Commandes via marketplace",
       marketplaceRevenue: "Revenu",
       marketplaceCommission: "Commission plateforme",
+      platformFeeNote: "Commission plateforme 10%",
       readinessActionContact: "Modifier le profil",
       readinessActionTheme: "Configurer le theme",
       readinessActionCategories: "Ajouter des categories",
@@ -6570,7 +6590,7 @@ const isCorruptedTranslation = (value) => {
   if (typeof value !== "string") return false;
   const normalized = value.trim();
   if (!normalized) return false;
-  if (/[ÃÂØÙÐ]/.test(normalized) && !/[\u0600-\u06FF]/.test(normalized)) return true;
+  if (/[\u00C3\u00C2\u00D8\u00D9\u00D0]/.test(normalized) && !/[\u0600-\u06FF]/.test(normalized)) return true;
   if (!normalized.includes("?")) return false;
   return normalized.replace(/[\s?.,:;!()[\]{}%0-9/+\\-]/g, "").length === 0;
 };

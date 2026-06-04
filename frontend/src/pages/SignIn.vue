@@ -24,7 +24,7 @@
         <div class="grid gap-3 sm:grid-cols-3">
           <article class="ui-metric-card">
             <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.workspace") }}</p>
-            <p class="mt-1 text-xl font-semibold text-white">Owner</p>
+            <p class="mt-1 text-xl font-semibold text-white">{{ t("common.owner") }}</p>
           </article>
           <article class="ui-metric-card">
             <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.available") }}</p>

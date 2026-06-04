@@ -13,7 +13,7 @@
           <span class="hidden sm:inline">{{ t("ownerMenuBuilder.importCsv") }}</span>
         </button>
       </div>
-      <nav class="owner-menu-builder-nav" aria-label="Menu builder sections">
+      <nav class="owner-menu-builder-nav" :aria-label="t('common.sectionsNav')">
         <button
           v-for="tab in tabs"
           :key="tab.key"

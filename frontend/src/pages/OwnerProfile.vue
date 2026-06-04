@@ -6,7 +6,7 @@
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>
           <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ tenantName }}</h2>
         </div>
-        <nav class="owner-profile-nav" aria-label="Owner profile sections">
+        <nav class="owner-profile-nav" :aria-label="t('common.sectionsNav')">
           <button
             v-for="tab in tabs"
             :key="tab.key"

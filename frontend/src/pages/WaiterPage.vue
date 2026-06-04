@@ -20,6 +20,18 @@
           :class="tab.key === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-600 text-slate-200'"
         >{{ tab.count }}</span>
       </button>
+      <!-- Recent / past orders tab -->
+      <button
+        role="tab"
+        :aria-selected="activeTab === 'recent'"
+        class="shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
+        :class="activeTab === 'recent'
+          ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300'
+          : 'border-slate-700/50 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
+        @click="activeTab = 'recent'"
+      >
+        {{ t('waiterPage.tabRecent') }}
+      </button>
       <!-- Shift summary tab -->
       <button
         role="tab"
@@ -67,7 +79,7 @@
     />
 
     <!-- Loading skeleton (orders only) -->
-    <div v-if="activeTab !== 'shift' && waiter.loading" class="space-y-3">
+    <div v-if="activeTab !== 'shift' && (activeTab === 'recent' ? waiter.recentLoading : waiter.loading)" class="space-y-3">
       <div
         v-for="i in 3"
         :key="i"
@@ -87,9 +99,9 @@
       v-else-if="activeTab !== 'shift' && visibleOrders.length === 0"
       class="rounded-2xl border border-slate-700/30 bg-slate-800/20 px-6 py-12 text-center"
     >
-      <p class="text-2xl">✓</p>
-      <p class="mt-2 text-sm font-medium text-slate-300">{{ t('waiterPage.noActiveOrders') }}</p>
-      <p class="mt-1 text-xs text-slate-500">{{ t('waiterPage.noActiveOrdersBody') }}</p>
+      <p class="text-2xl">{{ activeTab === 'recent' ? '🗒️' : '✓' }}</p>
+      <p class="mt-2 text-sm font-medium text-slate-300">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrders') : t('waiterPage.noActiveOrders') }}</p>
+      <p class="mt-1 text-xs text-slate-500">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrdersBody') : t('waiterPage.noActiveOrdersBody') }}</p>
     </div>
 
     <!-- Shift summary panel -->
@@ -226,12 +238,13 @@
           </button>
           <span v-else-if="canManageOrders" class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
 
-          <!-- Settle / mark paid — records cash/card; closes a ready dine-in order -->
+          <!-- Settle — opens a Cash / Wallet chooser, then marks paid (and closes
+               a ready dine-in order). -->
           <button
             v-if="canManageOrders && order.payment_status !== 'paid'"
             class="shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 hover:border-emerald-400 transition-colors disabled:opacity-50"
             :disabled="waiter.updatingOrderIds.has(order.id)"
-            @click="settle(order)"
+            @click="settleChooser = order"
           >💵 {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
 
           <!-- Rate the customer — only the server who handled this order -->
@@ -294,6 +307,45 @@
             @click="submitCustomerRating"
           >{{ submittingCustRating ? '…' : t('ownerOrders.customerRatingSubmit') }}</button>
         </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Settle: choose how the order was paid (cash or wallet) -->
+  <Teleport to="body">
+    <div
+      v-if="settleChooser"
+      class="fixed inset-0 z-[2500] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="settleChooser = null"
+      @keydown.esc="settleChooser = null"
+    >
+      <div class="w-full max-w-sm space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+        <div>
+          <p class="text-sm font-semibold text-white">{{ t('waiterPage.settleTitle') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">
+            {{ settleChooser.table_label || ('#' + settleChooser.order_number) }} ·
+            {{ fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency) }}
+          </p>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            class="flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400"
+            @click="payCash(settleChooser)"
+          >
+            <span class="text-2xl">💵</span>
+            <span class="text-sm font-semibold">{{ t('waiterPage.payCash') }}</span>
+          </button>
+          <button
+            class="flex flex-col items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-4 text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)]"
+            @click="payWallet(settleChooser)"
+          >
+            <span class="text-2xl">💳</span>
+            <span class="text-sm font-semibold">{{ t('waiterPage.payWalletMethod') }}</span>
+          </button>
+        </div>
+        <button class="w-full px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200" @click="settleChooser = null">
+          {{ t('common.cancel') }}
+        </button>
       </div>
     </div>
   </Teleport>
@@ -414,6 +466,10 @@ const tenantName = computed(() => tenant.resolvedMeta?.name || '');
 const showNewOrder = ref(false);
 const showCharge = ref(false);
 const chargeContext = ref({ amount: '', orderNumber: '' });
+const settleChooser = ref(null);        // order awaiting a cash/wallet choice
+const pendingWalletSettle = ref(null);  // order being settled via the wallet charge sheet
+const settleOutstanding = (order) =>
+  Math.max(0, +((Number(order.total) || 0) - (Number(order.wallet_amount_paid) || 0)).toFixed(2));
 
 // Outstanding amount on the open bill (total minus any wallet already applied).
 const billOutstanding = computed(() => {
@@ -438,8 +494,15 @@ const onWalletCharged = async () => {
   const num = chargeContext.value.orderNumber;
   showCharge.value = false;
   await reload(); // refresh orders so the bill reflects the wallet payment
-  // Reopen the bill (now showing the wallet payment applied) so the waiter gets
-  // visible confirmation instead of the bill silently vanishing after a charge.
+  // If this charge came from the Settle chooser, close the order out (completes a
+  // ready dine-in order) and prompt the rating — same as the cash path.
+  const settling = pendingWalletSettle.value;
+  pendingWalletSettle.value = null;
+  if (settling) {
+    await _finishSettle(settling);
+    return;
+  }
+  // Otherwise (charged from the bill), reopen the bill so the waiter sees confirmation.
   if (num) {
     const updated = waiter.orders.find((o) => o.order_number === num);
     if (updated) billOrder.value = updated;
@@ -569,8 +632,14 @@ const tabs = computed(() => [
 ]);
 
 const visibleOrders = computed(() => {
+  if (activeTab.value === "recent") return waiter.recentOrders;
   if (activeTab.value === "all") return waiter.orders;
   return waiter.byStatus[activeTab.value] ?? [];
+});
+
+// Load history on demand when the waiter opens the Recent tab.
+watch(activeTab, (tab) => {
+  if (tab === "recent") waiter.fetchRecent();
 });
 
 // ── Polling ────────────────────────────────────────────────────────────────────
@@ -661,14 +730,27 @@ const submitCustomerRating = async () => {
 };
 
 // Settle / mark paid — records cash/card collected; closes a ready dine-in order.
-// The moment a dine-in order closes is exactly when service ends, so prompt the
-// server to rate the customer right then (before the card leaves the list).
-const settle = async (order) => {
+// Mark the order paid and close it out. The moment a dine-in order closes is
+// exactly when service ends, so prompt the server to rate the customer right then.
+const _finishSettle = async (order) => {
   const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
   const res = await waiter.markPaid(order.id);
   if (res && res.completed && eligibleToRate) {
     openCustomerRating(order);
   }
+};
+
+// Cash: just record it as paid.
+const payCash = async (order) => {
+  settleChooser.value = null;
+  await _finishSettle(order);
+};
+
+// Wallet: charge the customer's wallet via their pay-code, then close out.
+const payWallet = (order) => {
+  settleChooser.value = null;
+  pendingWalletSettle.value = order;
+  openCharge({ amount: settleOutstanding(order).toFixed(2), orderNumber: order.order_number });
 };
 
 // ── Display helpers ────────────────────────────────────────────────────────────

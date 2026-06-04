@@ -28,7 +28,7 @@
           </article>
           <article class="ui-stat-tile">
             <p class="ui-stat-label">{{ t("common.workspace") }}</p>
-            <p class="ui-stat-value text-2xl">Owner</p>
+            <p class="ui-stat-value text-2xl">{{ t("common.owner") }}</p>
             <p class="ui-stat-note">{{ t("leadCapture.qualityRule") }}</p>
           </article>
         </div>

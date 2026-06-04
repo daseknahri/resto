@@ -625,7 +625,7 @@
           <div v-if="showPayCode" class="ui-panel flex flex-col items-center gap-3 p-5">
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
             <div class="rounded-2xl bg-white p-3">
-              <img v-if="payCodeImg" :src="payCodeImg" alt="Wallet pay code" class="h-44 w-44" />
+              <img v-if="payCodeImg" :src="payCodeImg" :alt="t('customerAccount.payCodeTitle')" class="h-44 w-44" />
               <div v-else class="flex h-44 w-44 items-center justify-center">
                 <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
               </div>

@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from menu.views import StaffOrderListView
+from menu.models import Order
 from accounts.models import User
 
 
@@ -139,6 +140,22 @@ class StaffOrderListViewTests(SimpleTestCase):
         self.assertEqual(len(result["items"]), 1)
         self.assertEqual(result["items"][0]["dish_name"], "Burger")
         self.assertEqual(result["items"][0]["qty"], 2)
+
+    @patch("menu.views.Order.objects")
+    def test_recent_param_queries_terminal_statuses(self, objects_mock):
+        qs_mock = MagicMock()
+        qs_mock.__iter__ = lambda s: iter([])
+        qs_mock.__getitem__ = lambda s, sl: []
+        objects_mock.filter.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+
+        resp = self._get(params={"recent": "1"})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # First Order.objects.filter call selects only finished orders.
+        kwargs = objects_mock.filter.call_args_list[0][1]
+        self.assertIn("status__in", kwargs)
+        self.assertIn(Order.Status.COMPLETED, kwargs["status__in"])
+        self.assertIn(Order.Status.CANCELLED, kwargs["status__in"])
+        self.assertIn("created_at__gte", kwargs)
 
     @patch("menu.views.Order.objects")
     def test_owner_can_also_access_staff_endpoint(self, objects_mock):

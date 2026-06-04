@@ -2475,20 +2475,32 @@ class StaffOrderListView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        qs = (
-            Order.objects
-            .filter(status__in=self._ACTIVE_STATUSES)
-            .prefetch_related("items")
-            .order_by("created_at")  # oldest-first → most urgent at top
-        )
+        # ?recent=1 → recently finished orders (completed/cancelled, last 24h) so a
+        # waiter can review or re-open a bill after it left the active list.
+        recent = request.query_params.get("recent", "").strip() in ("1", "true", "yes")
+        if recent:
+            cutoff = timezone.now() - timedelta(hours=24)
+            qs = (
+                Order.objects
+                .filter(status__in=[Order.Status.COMPLETED, Order.Status.CANCELLED], created_at__gte=cutoff)
+                .prefetch_related("items")
+                .order_by("-created_at")  # newest-first for history
+            )
+        else:
+            qs = (
+                Order.objects
+                .filter(status__in=self._ACTIVE_STATUSES)
+                .prefetch_related("items")
+                .order_by("created_at")  # oldest-first → most urgent at top
+            )
 
-        since_raw = request.query_params.get("since", "").strip()
-        if since_raw:
-            try:
-                since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
-                qs = qs.filter(updated_at__gt=since_dt)
-            except ValueError:
-                pass  # ignore unparseable timestamp — return full active list
+            since_raw = request.query_params.get("since", "").strip()
+            if since_raw:
+                try:
+                    since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+                    qs = qs.filter(updated_at__gt=since_dt)
+                except ValueError:
+                    pass  # ignore unparseable timestamp — return full active list
 
         # ── Hard section filter ────────────────────────────────────────────────
         # A waiter sees ONLY their assigned sections' table orders, plus every
