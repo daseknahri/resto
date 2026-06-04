@@ -24,8 +24,16 @@ class Customer(models.Model):
         default=0,
         help_text="Accumulated loyalty points, redeemable for wallet credits at each restaurant.",
     )
-    # Driver flags — set by the platform when a customer registers as a delivery driver
+    # Driver flags — is_driver marks an APPLICATION; driver_approved gates going online.
     is_driver = models.BooleanField(default=False, db_index=True)
+    driver_approved = models.BooleanField(
+        default=False,
+        help_text="A platform admin has vetted and approved this driver. Only approved drivers can go online or accept jobs.",
+    )
+    driver_vehicle = models.CharField(
+        max_length=120, blank=True,
+        help_text="Driver's vehicle, supplied at application (e.g. 'Motorbike — 1234-AB').",
+    )
     is_driver_online = models.BooleanField(default=False)
     driver_lat = models.FloatField(null=True, blank=True)
     driver_lng = models.FloatField(null=True, blank=True)

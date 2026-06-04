@@ -3287,9 +3287,11 @@ def _serialize_zone(zone) -> dict:
 
 
 class DriverRegisterView(APIView):
-    """POST /api/driver/register/ — customer signs up as a delivery driver.
+    """POST /api/driver/register/ — customer applies to become a delivery driver.
 
-    Requires an active customer session. Sets is_driver=True on the Customer.
+    Requires an active customer session. Records the application (is_driver=True,
+    driver_approved=False) plus optional vehicle info. A platform admin must approve
+    before the driver can go online. Body: { "vehicle"?: str }
     """
 
     permission_classes = [AllowAny]
@@ -3304,14 +3306,24 @@ class DriverRegisterView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        fields = []
+        vehicle = str(request.data.get("vehicle") or "").strip()[:120]
+        if vehicle and vehicle != (customer.driver_vehicle or ""):
+            customer.driver_vehicle = vehicle
+            fields.append("driver_vehicle")
         if not customer.is_driver:
             customer.is_driver = True
-            customer.save(update_fields=["is_driver", "updated_at"])
+            fields.append("is_driver")
+        if fields:
+            fields.append("updated_at")
+            customer.save(update_fields=fields)
 
         return Response({
             "is_driver": True,
+            "driver_approved": bool(customer.driver_approved),
+            "driver_status": "approved" if customer.driver_approved else "pending",
             "is_driver_online": customer.is_driver_online,
-            "message": "Driver account activated.",
+            "message": "Approved." if customer.driver_approved else "Application received — pending approval.",
         })
 
 
@@ -3333,6 +3345,9 @@ class DriverStatusView(APIView):
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response({
             "is_driver": bool(customer.is_driver),
+            "driver_approved": bool(customer.driver_approved),
+            "driver_status": ("approved" if customer.driver_approved else "pending") if customer.is_driver else "none",
+            "driver_vehicle": customer.driver_vehicle or "",
             "is_driver_online": bool(customer.is_driver_online),
         })
 
@@ -3346,6 +3361,12 @@ class DriverStatusView(APIView):
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
         online = bool(request.data.get("online", False))
+        # Only vetted drivers may go online (and therefore receive/accept jobs).
+        if online and not customer.driver_approved:
+            return Response(
+                {"detail": "Your driver application is pending approval.", "code": "pending_approval"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         customer.is_driver_online = online
         customer.save(update_fields=["is_driver_online", "updated_at"])
 
@@ -3478,9 +3499,11 @@ class DriverJobAcceptView(APIView):
         if not customer_id:
             return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
         try:
-            customer = Customer.objects.get(pk=customer_id, is_driver=True, is_driver_online=True)
+            customer = Customer.objects.get(
+                pk=customer_id, is_driver=True, driver_approved=True, is_driver_online=True
+            )
         except Customer.DoesNotExist:
-            return Response({"detail": "Driver must be online to accept jobs."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Driver must be approved and online to accept jobs."}, status=status.HTTP_403_FORBIDDEN)
 
         # Check driver doesn't already have an active job
         if DeliveryJob.objects.filter(
@@ -3961,6 +3984,8 @@ class AdminDriverListView(APIView):
                 "name": d.name or "",
                 "phone": d.phone or "",
                 "email": d.email or "",
+                "approved": bool(d.driver_approved),
+                "vehicle": d.driver_vehicle or "",
                 "is_online": d.is_driver_online,
                 "driver_lat": d.driver_lat,
                 "driver_lng": d.driver_lng,
@@ -3977,6 +4002,43 @@ class AdminDriverListView(APIView):
                 "created_at": d.created_at.isoformat(),
             })
         return Response(result)
+
+
+class AdminDriverApprovalView(APIView):
+    """POST /api/admin/drivers/<driver_id>/approve/  — vet & approve a driver application.
+       POST /api/admin/drivers/<driver_id>/reject/   — decline it (revokes driver status).
+    Platform admin only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, driver_id, *args, **kwargs):
+        from .models import User, Customer
+        u = request.user
+        if not isinstance(u, User) or not u.is_platform_admin:
+            return Response({"detail": "Platform admin access required."}, status=403)
+
+        approve = request.path.rstrip("/").endswith("approve")
+        try:
+            driver = Customer.objects.get(pk=driver_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver not found.", "code": "not_found"}, status=404)
+
+        if approve:
+            driver.driver_approved = True
+            driver.save(update_fields=["driver_approved", "updated_at"])
+        else:
+            # Decline: revoke the application and force offline.
+            driver.driver_approved = False
+            driver.is_driver = False
+            driver.is_driver_online = False
+            driver.save(update_fields=["driver_approved", "is_driver", "is_driver_online", "updated_at"])
+
+        return Response({
+            "id": driver.id,
+            "is_driver": bool(driver.is_driver),
+            "approved": bool(driver.driver_approved),
+        })
 
 
 class AdminDriverEarningsView(APIView):

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.views import (
     DriverRegisterView,
@@ -24,6 +24,7 @@ from accounts.views import (
     DriverJobAcceptView,
     DriverJobStatusUpdateView,
     DriverDeliveriesView,
+    AdminDriverApprovalView,
 )
 
 
@@ -36,11 +37,13 @@ def _session(customer_id=None):
     return sess
 
 
-def _make_customer(pk=1, is_driver=True, is_driver_online=True):
+def _make_customer(pk=1, is_driver=True, is_driver_online=True, driver_approved=True):
     c = MagicMock()
     c.pk = pk
     c.id = pk
     c.is_driver = is_driver
+    c.driver_approved = driver_approved
+    c.driver_vehicle = ""
     c.is_driver_online = is_driver_online
     c.driver_lat = None
     c.driver_lng = None
@@ -152,6 +155,16 @@ class DriverStatusViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(customer.is_driver_online)
         customer.save.assert_called_once_with(update_fields=["is_driver_online", "updated_at"])
+
+    @patch("accounts.models.Customer.objects")
+    def test_unapproved_driver_cannot_go_online(self, mock_objs):
+        customer = _make_customer(is_driver_online=False, driver_approved=False)
+        mock_objs.get.return_value = customer
+        req = self._patch({"online": True}, session=_session(customer_id=1))
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "pending_approval")
+        customer.save.assert_not_called()
 
     @patch("accounts.models.Customer.objects")
     def test_go_offline_updates_status(self, mock_objs):
@@ -339,6 +352,47 @@ class DriverDeliveriesViewTests(SimpleTestCase):
         filter_kwargs = mock_dj.objects.filter.call_args[1]
         self.assertIn("delivered", filter_kwargs["status__in"])
         self.assertIn("failed", filter_kwargs["status__in"])
+
+
+# ── AdminDriverApprovalView ───────────────────────────────────────────────────
+
+class AdminDriverApprovalViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminDriverApprovalView.as_view()
+
+    def _admin_req(self, path):
+        from accounts.models import User
+        admin = MagicMock(spec=User)
+        admin.is_platform_admin = True
+        admin.is_authenticated = True
+        req = self.factory.post(path)
+        force_authenticate(req, user=admin)
+        return req
+
+    @patch("accounts.models.Customer.objects")
+    def test_approve_sets_driver_approved(self, mock_objs):
+        customer = _make_customer(driver_approved=False)
+        mock_objs.get.return_value = customer
+        resp = self.view(self._admin_req("/api/admin/drivers/1/approve/"), driver_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(customer.driver_approved)
+        self.assertTrue(resp.data["approved"])
+
+    @patch("accounts.models.Customer.objects")
+    def test_reject_revokes_application(self, mock_objs):
+        customer = _make_customer(driver_approved=False)
+        mock_objs.get.return_value = customer
+        resp = self.view(self._admin_req("/api/admin/drivers/1/reject/"), driver_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(customer.is_driver)
+        self.assertFalse(resp.data["is_driver"])
+
+    def test_non_admin_forbidden(self):
+        req = self.factory.post("/api/admin/drivers/1/approve/")
+        force_authenticate(req, user=MagicMock(is_authenticated=True))  # not a User instance
+        resp = self.view(req, driver_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
 # ── DriverJobAcceptView ───────────────────────────────────────────────────────

@@ -176,6 +176,32 @@
                   </div>
                 </div>
 
+                <!-- Vetting / approval -->
+                <div
+                  class="rounded-xl border p-3 space-y-2.5"
+                  :class="selected.approved ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
+                >
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold" :class="selected.approved ? 'text-emerald-300' : 'text-amber-300'">
+                      {{ selected.approved ? t('adminDrivers.approved') : t('adminDrivers.pending') }}
+                    </p>
+                    <p v-if="selected.vehicle" class="truncate text-xs text-slate-400">{{ selected.vehicle }}</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      v-if="!selected.approved"
+                      class="flex-1 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      :disabled="vetting"
+                      @click="setApproval(true)"
+                    >{{ t('adminDrivers.approve') }}</button>
+                    <button
+                      class="flex-1 rounded-xl border border-red-400/40 py-2 text-sm font-semibold text-red-300 hover:border-red-400/70 disabled:opacity-50"
+                      :disabled="vetting"
+                      @click="setApproval(false)"
+                    >{{ t('adminDrivers.reject') }}</button>
+                  </div>
+                </div>
+
                 <!-- Payout form -->
                 <div v-if="Number(detail.owed) > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
                   <p class="text-sm font-semibold text-slate-200">{{ t('adminDrivers.recordPayout') }}</p>
@@ -254,6 +280,7 @@ const payAmount = ref('');
 const payMethod = ref('cash');
 const paying = ref(false);
 const payError = ref('');
+const vetting = ref(false);
 
 const openDriver = async (d) => {
   selected.value = d;
@@ -292,6 +319,28 @@ const submitPayout = async () => {
     payError.value = err?.response?.data?.detail || t('adminDrivers.payoutFailed');
   } finally {
     paying.value = false;
+  }
+};
+
+const setApproval = async (approve) => {
+  if (!selected.value || vetting.value) return;
+  vetting.value = true;
+  try {
+    await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'approve' : 'reject'}/`, {});
+    toast.show(approve ? t('adminDrivers.approveDone') : t('adminDrivers.rejectDone'), 'success');
+    if (approve) {
+      selected.value.approved = true;
+      const row = drivers.value.find((d) => d.id === selected.value.id);
+      if (row) row.approved = true;
+    } else {
+      // Rejected drivers are no longer drivers — drop from the list and close.
+      drivers.value = drivers.value.filter((d) => d.id !== selected.value.id);
+      selected.value = null;
+    }
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminDrivers.actionFailed'), 'error');
+  } finally {
+    vetting.value = false;
   }
 };
 

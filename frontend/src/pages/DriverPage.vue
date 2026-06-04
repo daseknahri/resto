@@ -28,13 +28,34 @@
         <p class="text-base font-semibold text-slate-100">{{ t('driver.becomeTitle') }}</p>
       </div>
       <p class="text-sm text-slate-400">{{ t('driver.becomeDesc') }}</p>
+      <div class="space-y-1">
+        <label class="text-xs font-medium text-slate-400">{{ t('driver.vehicleLabel') }}</label>
+        <input
+          v-model.trim="vehicle"
+          type="text"
+          class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+          :placeholder="t('driver.vehiclePlaceholder')"
+        />
+      </div>
       <p v-if="errorMsg" class="text-xs text-red-300">{{ errorMsg }}</p>
       <button class="ui-btn-primary w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
         {{ busy ? '…' : t('driver.becomeCta') }}
       </button>
     </div>
 
-    <!-- Driver dashboard -->
+    <!-- Applied, awaiting admin approval -->
+    <div v-else-if="!approved" class="ui-panel p-5 space-y-3 text-center">
+      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
+        <AppIcon name="info" class="h-5 w-5 text-amber-300" />
+      </div>
+      <p class="text-base font-semibold text-slate-100">{{ t('driver.pendingTitle2') }}</p>
+      <p class="text-sm text-slate-400">{{ t('driver.pendingDesc') }}</p>
+      <button class="text-xs text-slate-400 hover:text-slate-200" :disabled="busy" @click="fetchStatus">
+        {{ t('driver.refresh') }}
+      </button>
+    </div>
+
+    <!-- Driver dashboard (approved) -->
     <template v-else>
       <!-- Online toggle -->
       <div class="ui-panel flex items-center justify-between gap-3 p-4">
@@ -272,6 +293,8 @@ const toast = useToastStore();
 const driverPush = useCustomerPush();
 
 const isDriver = ref(false);
+const approved = ref(false);
+const vehicle = ref('');
 const online = ref(false);
 const activeJob = ref(null);
 const pendingJobs = ref([]);
@@ -361,6 +384,7 @@ const fetchStatus = async () => {
   try {
     const { data } = await api.get('/driver/status/');
     isDriver.value = Boolean(data.is_driver);
+    approved.value = Boolean(data.driver_approved);
     online.value = Boolean(data.is_driver_online);
   } catch {
     isDriver.value = Boolean(customerStore.customer?.is_driver);
@@ -390,13 +414,16 @@ const becomeDriver = async () => {
   errorMsg.value = '';
   busy.value = true;
   try {
-    const { data } = await api.post('/driver/register/', {});
+    const { data } = await api.post('/driver/register/', { vehicle: vehicle.value });
     isDriver.value = Boolean(data.is_driver);
+    approved.value = Boolean(data.driver_approved);
     online.value = Boolean(data.is_driver_online);
     if (customerStore.customer) customerStore.setCustomer({ ...customerStore.customer, is_driver: true });
-    toast.show(t('driver.registered'), 'success');
-    await fetchJobs();
-    ensurePoll();
+    toast.show(approved.value ? t('driver.registered') : t('driver.applied'), 'success');
+    if (approved.value) {
+      await fetchJobs();
+      ensurePoll();
+    }
   } catch (err) {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {
@@ -537,7 +564,7 @@ onMounted(async () => {
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await fetchStatus();
-  if (isDriver.value) {
+  if (isDriver.value && approved.value) {
     await fetchJobs();
     fetchEarnings();
     if (online.value) {
