@@ -63,7 +63,7 @@
     <div v-else-if="!drivers.length" class="py-12 text-center text-sm text-slate-400">{{ t('adminDrivers.empty') }}</div>
 
     <!-- Stats bar -->
-    <div v-else class="grid grid-cols-3 gap-3">
+    <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div class="rounded-2xl border border-slate-700/60 bg-slate-900 p-4 text-center">
         <p class="text-2xl font-bold text-white">{{ drivers.length }}</p>
         <p class="text-xs text-slate-500 mt-0.5">{{ t('adminDrivers.totalDrivers') }}</p>
@@ -71,6 +71,13 @@
       <div class="rounded-2xl border border-slate-700/60 bg-slate-900 p-4 text-center">
         <p class="text-2xl font-bold text-emerald-400">{{ onlineCount }}</p>
         <p class="text-xs text-slate-500 mt-0.5">{{ t('adminDrivers.online') }}</p>
+      </div>
+      <div
+        class="rounded-2xl border bg-slate-900 p-4 text-center"
+        :class="pendingCount ? 'border-amber-500/40' : 'border-slate-700/60'"
+      >
+        <p class="text-2xl font-bold" :class="pendingCount ? 'text-amber-400' : 'text-white'">{{ pendingCount }}</p>
+        <p class="text-xs text-slate-500 mt-0.5">{{ t('adminDrivers.pendingCount') }}</p>
       </div>
       <div class="rounded-2xl border border-slate-700/60 bg-slate-900 p-4 text-center">
         <p class="text-2xl font-bold text-white">{{ totalDeliveries }}</p>
@@ -96,9 +103,10 @@
         </thead>
         <tbody class="divide-y divide-slate-700/40">
           <tr
-            v-for="d in drivers"
+            v-for="d in sortedDrivers"
             :key="d.id"
             class="cursor-pointer hover:bg-slate-800/30 transition-colors"
+            :class="{ 'bg-amber-500/5': !d.approved }"
             @click="openDriver(d)"
           >
             <td class="px-4 py-3 text-slate-200 font-medium">
@@ -110,6 +118,13 @@
             </td>
             <td class="px-4 py-3 text-center">
               <span
+                v-if="!d.approved"
+                class="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300"
+              >
+                {{ t('adminDrivers.pendingCount') }}
+              </span>
+              <span
+                v-else
                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 :class="d.is_online
                   ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
@@ -345,6 +360,11 @@ const setApproval = async (approve) => {
 };
 
 const onlineCount = computed(() => drivers.value.filter(d => d.is_online).length);
+const pendingCount = computed(() => drivers.value.filter(d => !d.approved).length);
+// Surface pending applications first so admins review them promptly.
+const sortedDrivers = computed(() =>
+  [...drivers.value].sort((a, b) => (a.approved === b.approved ? 0 : a.approved ? 1 : -1))
+);
 const totalDeliveries = computed(() => drivers.value.reduce((sum, d) => sum + d.completed_jobs, 0));
 
 const fetchDrivers = async () => {
