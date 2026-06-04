@@ -226,11 +226,13 @@ import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
+import { useCustomerPush } from '../composables/useCustomerPush';
 import api from '../lib/api';
 
 const { t, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
 const toast = useToastStore();
+const driverPush = useCustomerPush();
 
 const isDriver = ref(false);
 const online = ref(false);
@@ -345,6 +347,8 @@ const toggleOnline = async () => {
     online.value = Boolean(data.is_driver_online);
     if (online.value) {
       startGeo();
+      // Subscribe to web push so new jobs reach the driver even when backgrounded.
+      driverPush.subscribe().catch(() => {});
       await fetchJobs();
     } else {
       stopGeo();
@@ -470,7 +474,10 @@ onMounted(async () => {
   if (isDriver.value) {
     await fetchJobs();
     fetchEarnings();
-    if (online.value) startGeo();
+    if (online.value) {
+      startGeo();
+      driverPush.autoRestore().catch(() => {}); // re-arm push if previously opted in
+    }
     ensurePoll();
   }
 });

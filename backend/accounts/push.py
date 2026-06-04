@@ -66,6 +66,77 @@ _REVIEW_MESSAGES = {
 }
 
 
+# New-delivery dispatch nudge, sent to online + free drivers. {r} = restaurant.
+_NEW_JOB_MESSAGES = {
+    "en": {"title": "New delivery available", "body": "A delivery from {r} is ready to claim — tap to view."},
+    "fr": {"title": "Nouvelle livraison disponible", "body": "Une livraison de {r} est a prendre — touchez pour voir."},
+    "ar": {"title": "توصيل جديد متاح", "body": "هناك توصيل من {r} متاح — اضغط للعرض."},
+}
+
+
+def notify_online_drivers_new_job_sync(restaurant_name=None) -> int:
+    """Web-push every ONLINE, FREE driver that a new delivery is up for grabs, deep-linking
+    to the /driver dashboard. Free = no active (assigned/at_restaurant/picked_up) job, so we
+    don't ping drivers mid-delivery. SYNCHRONOUS; returns the number of pushes delivered.
+    """
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription, DeliveryJob
+
+    with schema_context("public"):
+        online_ids = list(
+            Customer.objects.filter(is_driver=True, is_driver_online=True).values_list("id", flat=True)
+        )
+        if not online_ids:
+            return 0
+        busy_ids = set(
+            DeliveryJob.objects.filter(
+                driver_id__in=online_ids,
+                status__in=[
+                    DeliveryJob.Status.ASSIGNED,
+                    DeliveryJob.Status.AT_RESTAURANT,
+                    DeliveryJob.Status.PICKED_UP,
+                ],
+            ).values_list("driver_id", flat=True)
+        )
+        free_ids = [i for i in online_ids if i not in busy_ids]
+        if not free_ids:
+            return 0
+        locales = dict(Customer.objects.filter(id__in=free_ids).values_list("id", "locale"))
+        subs = list(CustomerPushSubscription.objects.filter(customer_id__in=free_ids))
+    if not subs:
+        return 0
+
+    gone, sent = [], 0
+    for s in subs:
+        loc = locales.get(s.customer_id, "en")
+        if loc not in _NEW_JOB_MESSAGES:
+            loc = "en"
+        msg = _NEW_JOB_MESSAGES[loc]
+        title = msg["title"]
+        body = msg["body"].format(r=restaurant_name or "a restaurant")
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/driver")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    return sent
+
+
+def push_new_job_to_drivers(restaurant_name=None) -> None:
+    """Fire-and-forget dispatch nudge to online drivers. Daemon thread; never raises."""
+    def _run():
+        try:
+            notify_online_drivers_new_job_sync(restaurant_name)
+        except Exception as exc:  # pragma: no cover - best-effort
+            logger.warning("push_new_job_to_drivers failed: %s", exc)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     """Send a post-order review nudge to a customer. SYNCHRONOUS — safe to call
     from a management command (the cron process waits for delivery rather than

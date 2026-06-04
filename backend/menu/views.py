@@ -2142,6 +2142,9 @@ class PlaceOrderView(APIView):
                     delivery_fee=_delivery_fee,
                     driver_payout=_delivery_fee,  # 100% of the delivery fee goes to the driver
                 )
+                # Real-time dispatch: nudge online/free drivers to claim it.
+                from accounts.push import push_new_job_to_drivers as _pnj
+                _pnj(getattr(tenant, "name", ""))
             except Exception:
                 pass  # never fail the order response if job creation hiccups
 

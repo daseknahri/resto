@@ -2785,6 +2785,29 @@ class MarketplacePlaceOrderView(APIView):
                         status=status.HTTP_503_SERVICE_UNAVAILABLE,
                     )
 
+                # Platform delivery: spawn a searching driver job and dispatch to online
+                # drivers. Best-effort and post-commit — a hiccup must never affect the order.
+                if fulfillment_type == "delivery" and getattr(profile, "platform_delivery_enabled", False):
+                    try:
+                        from .models import DeliveryJob as _DJob
+                        _DJob.objects.create(
+                            tenant_id=tenant.id,
+                            order_number=order.order_number,
+                            status=_DJob.Status.SEARCHING,
+                            pickup_address=(getattr(profile, "address", "") or "")[:200],
+                            pickup_lat=getattr(profile, "lat", None),
+                            pickup_lng=getattr(profile, "lng", None),
+                            delivery_address=(delivery_address or "")[:200],
+                            delivery_lat=delivery_lat,
+                            delivery_lng=delivery_lng,
+                            delivery_fee=_delivery_fee,
+                            driver_payout=_delivery_fee,
+                        )
+                        from accounts.push import push_new_job_to_drivers as _pnj
+                        _pnj(getattr(tenant, "name", ""))
+                    except Exception:
+                        pass
+
         except Exception as exc:
             logger.exception("MarketplacePlaceOrderView error for tenant=%s: %s", restaurant_slug, exc)
             return Response({"detail": "Could not place order.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -4524,4 +4547,10 @@ class AdminCreateDeliveryJobView(APIView):
             driver_payout=driver_payout,
             zone=zone,
         )
+        # Real-time dispatch: nudge online/free drivers to claim the new job.
+        try:
+            from accounts.push import push_new_job_to_drivers as _pnj
+            _pnj(None)
+        except Exception:
+            pass
         return Response(_serialize_delivery_job(job), status=status.HTTP_201_CREATED)
