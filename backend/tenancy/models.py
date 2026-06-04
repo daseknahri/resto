@@ -185,6 +185,14 @@ class Profile(models.Model):
         default=False,
         help_text="When enabled, customers receive an SMS when their order status changes to 'ready'. Requires Twilio credentials in environment.",
     )
+    cod_enabled = models.BooleanField(
+        default=False,
+        help_text="Allow trusted repeat customers to pay cash on handover for pickup/delivery instead of prepaying from their wallet.",
+    )
+    cod_min_paid_orders = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Number of completed & paid orders a customer must have before cash-on-handover is offered to them.",
+    )
     auto_confirm_reservations = models.BooleanField(
         default=False,
         help_text="Automatically confirm (status → won) new reservation requests that are far enough in advance.",

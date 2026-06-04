@@ -512,6 +512,74 @@ class PlaceOrderViewTests(SimpleTestCase):
         # Must NOT be blocked by the customer-wallet prepay gate.
         self.assertNotIn(resp.data.get("code"), ("auth_required", "wallet_insufficient"))
 
+    @patch("menu.views._cod_eligible", return_value=True)
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_cod_eligible_cash_pickup_is_allowed_unpaid(self, profile_mock, dish_mock, promo_mock, _cod_mock):
+        """A trusted customer choosing cash-on-handover places a pickup order without
+        wallet prepayment (created unpaid, settled later)."""
+        promo_mock.filter.return_value = []
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+
+        customer = MagicMock()
+        customer.wallet_balance = "0"  # no wallet funds, but COD-eligible
+        customer.id = 7
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup", "payment_method": "cash"}
+        req = self._post(data=payload, session=_session(customer_id=7))
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                with patch("menu.views.Order.objects") as order_mock:
+                    mock_order = MagicMock()
+                    mock_order.order_number = "ORD555"
+                    mock_order.status = "pending"
+                    mock_order.total = Decimal("10.00")
+                    mock_order.delivery_fee = Decimal("0")
+                    mock_order.currency = "MAD"
+                    mock_order.estimated_ready_minutes = None
+                    order_mock.create.return_value = mock_order
+                    with patch("menu.views.OrderItem.objects"), \
+                         patch("menu.views._generate_order_number", return_value="ORD555"), \
+                         patch("menu.views.transaction") as tx_mock:
+                        cm = MagicMock()
+                        cm.__enter__ = MagicMock(return_value=None)
+                        cm.__exit__ = MagicMock(return_value=False)
+                        tx_mock.atomic.return_value = cm
+                        resp = self.view(req)
+
+        self.assertNotIn(resp.data.get("code"), ("auth_required", "wallet_insufficient"))
+
+    @patch("menu.views._cod_eligible", return_value=False)
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_cash_without_cod_eligibility_still_requires_wallet(self, profile_mock, dish_mock, promo_mock, _cod_mock):
+        """Choosing cash when NOT COD-eligible falls back to the wallet requirement."""
+        promo_mock.filter.return_value = []
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish_mock.filter.return_value.select_related.return_value = [_dish(price="10.00")]
+
+        customer = MagicMock()
+        customer.wallet_balance = Decimal("2.00")  # < 10.00 total, not COD-eligible
+        customer.id = 7
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup", "payment_method": "cash"}
+        req = self._post(data=payload, session=_session(customer_id=7))
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(resp.data["code"], "wallet_insufficient")
+
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")
     @patch("menu.views.Profile.objects")

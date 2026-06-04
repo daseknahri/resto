@@ -1646,6 +1646,54 @@ def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str) -
         _log.warning("Could not send new-order WhatsApp notification: %s", exc)
 
 
+def _cod_eligible(profile, customer_id):
+    """True when a signed-in customer may pay cash on handover for a pickup/delivery
+    order instead of prepaying from their wallet. Requires the owner to have enabled
+    COD and the customer to have at least the configured number of completed & paid
+    orders at this restaurant (a trusted repeat customer).
+    """
+    if not customer_id or not getattr(profile, "cod_enabled", False):
+        return False
+    try:
+        threshold = max(1, int(getattr(profile, "cod_min_paid_orders", 3) or 3))
+        paid = Order.objects.filter(
+            customer_id=customer_id,
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+        ).count()
+        return paid >= threshold
+    except Exception:
+        return False
+
+
+class OrderEligibilityView(APIView):
+    """GET /api/order-eligibility/ — payment options for the signed-in customer on a
+    pay-now (pickup/delivery) order at this restaurant. Lets the cart offer trusted
+    customers a 'pay cash on handover' choice alongside wallet prepayment.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        profile = Profile.objects.filter(tenant=getattr(request, "tenant", None)).first()
+        cust_id = request.session.get("customer_id")
+        paid = 0
+        if cust_id:
+            try:
+                paid = Order.objects.filter(
+                    customer_id=cust_id,
+                    status=Order.Status.COMPLETED,
+                    payment_status=Order.PaymentStatus.PAID,
+                ).count()
+            except Exception:
+                paid = 0
+        return Response({
+            "cod_enabled": bool(getattr(profile, "cod_enabled", False)),
+            "cod_eligible": bool(profile and _cod_eligible(profile, cust_id)),
+            "cod_min_paid_orders": int(getattr(profile, "cod_min_paid_orders", 3) or 3) if profile else 3,
+            "paid_orders": paid,
+        })
+
+
 class PlaceOrderView(APIView):
     """POST /api/place-order/ — customer submits an in-app order."""
     permission_classes = [AllowAny]
@@ -1883,6 +1931,11 @@ class PlaceOrderView(APIView):
             not _is_staff_order
             and fulfillment_type in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY)
         )
+        # Trusted-customer cash-on-handover: a repeat customer (COD enabled + enough
+        # completed/paid orders) may choose to pay cash to the staff/driver instead of
+        # prepaying from their wallet. Such orders are created UNPAID and settled at
+        # handover via the Settle action.
+        _cod_order = False
         if _requires_prepay and total > Decimal("0"):
             if _linked_customer is None:
                 return Response(
@@ -1890,18 +1943,22 @@ class PlaceOrderView(APIView):
                      "code": "auth_required"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
-            if _wallet_avail < total:
-                return Response(
-                    {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
-                     "code": "wallet_insufficient",
-                     "balance": str(_wallet_avail), "amount_due": str(total)},
-                    status=status.HTTP_402_PAYMENT_REQUIRED,
-                )
+            _payment_method = str(request.data.get("payment_method") or "").strip().lower()
+            if _payment_method == "cash" and _cod_eligible(profile, _linked_customer.id):
+                _cod_order = True
+            else:
+                _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
+                if _wallet_avail < total:
+                    return Response(
+                        {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                         "code": "wallet_insufficient",
+                         "balance": str(_wallet_avail), "amount_due": str(total)},
+                        status=status.HTTP_402_PAYMENT_REQUIRED,
+                    )
 
-        # Wallet payment — pickup/delivery always pay by wallet (enforced above);
-        # dine-in customers may opt in to paying their tab from credits.
-        _use_wallet = (_requires_prepay or bool(request.data.get("use_wallet"))) and _linked_customer is not None
+        # Wallet payment — pickup/delivery prepay by wallet (enforced above) UNLESS the
+        # customer opted into trusted cash-on-handover; dine-in customers may opt in.
+        _use_wallet = ((_requires_prepay and not _cod_order) or bool(request.data.get("use_wallet"))) and _linked_customer is not None
         _wallet_deduction = Decimal("0")
         if _use_wallet:
             _available = Decimal(str(_linked_customer.wallet_balance or "0"))
@@ -2022,8 +2079,9 @@ class PlaceOrderView(APIView):
 
                 # Pay-now safety net: a pickup/delivery order that wasn't fully settled
                 # (e.g. balance dropped between the pre-check and this locked debit) is
-                # rolled back rather than created unpaid.
-                if _requires_prepay and order.payment_status != Order.PaymentStatus.PAID:
+                # rolled back rather than created unpaid. Trusted cash-on-handover orders
+                # are intentionally created unpaid, so they're exempt.
+                if _requires_prepay and not _cod_order and order.payment_status != Order.PaymentStatus.PAID:
                     raise _PrepayUnpaid()
 
                 # Award loyalty points to linked customer (if programme is active)

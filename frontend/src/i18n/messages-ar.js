@@ -1260,7 +1260,11 @@ const arabicMessages = {
     "hours": "ساعات",
     "minuteUnit": "د",
     "smsNotifications": "إشعارات الرسائل القصيرة عند جاهزية الطلب",
-    "smsNotificationsHint": "إرسال رسالة قصيرة للعملاء عندما يكون طلبهم جاهزاً للاستلام. يتطلب بيانات اعتماد Twilio على الخادم."
+    "smsNotificationsHint": "إرسال رسالة قصيرة للعملاء عندما يكون طلبهم جاهزاً للاستلام. يتطلب بيانات اعتماد Twilio على الخادم.",
+    "codEnabled": "الدفع نقدًا عند الاستلام للعملاء الموثوقين",
+    "codEnabledHint": "اسمح للعملاء المتكررين بالدفع نقدًا للموظف/السائق بدلاً من الدفع المسبق من محفظتهم للاستلام والتوصيل.",
+    "codMinOrders": "عدد الطلبات قبل إتاحة الدفع نقدًا",
+    "codMinOrdersUnit": "طلبات مكتملة ومدفوعة"
   },
   "stepCategories": {
     "title": "التصنيفات",
@@ -1594,6 +1598,10 @@ const arabicMessages = {
     "payWithCredits": "الدفع برصيد المحفظة",
     "payWithCreditsBalance": "لديك {balance} رصيد متاح",
     "payFromWalletTitle": "الدفع من محفظتك",
+    "payMethodWallet": "الدفع بالمحفظة",
+    "payMethodCash": "نقدًا عند الاستلام",
+    "payCashOnHandoverTitle": "الدفع نقدًا عند الاستلام",
+    "payCashOnHandoverNote": "ادفع للموظف أو السائق عند استلام طلبك.",
     "walletShortNotice": "أضف {amount} إلى محفظتك لإتمام هذا الطلب.",
     "walletTopUpRequired": "رصيد محفظتك ({balance}) لا يغطي الإجمالي {total}. اشحن المحفظة للمتابعة.",
     "walletTopUpRequiredShort": "اشحن المحفظة للطلب",

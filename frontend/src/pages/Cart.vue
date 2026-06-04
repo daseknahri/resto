@@ -525,24 +525,51 @@
             </template>
           </div>
 
-          <!-- ── Pay now from wallet (pickup/delivery) ── -->
-          <div
-            v-if="requiresPrepay && customerStore.isAuthenticated && orderGrandTotal > 0"
-            class="rounded-xl border p-3"
-            :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
-                  {{ t('cartPage.payFromWalletTitle') }}
-                </p>
-                <p class="text-[11px] text-slate-400">{{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}</p>
-              </div>
-              <AppIcon :name="walletCoversTotal ? 'check' : 'info'" class="h-4 w-4 shrink-0" :class="walletCoversTotal ? 'text-emerald-400' : 'text-amber-400'" />
+          <!-- ── Pay now (pickup/delivery) ── -->
+          <div v-if="requiresPrepay && customerStore.isAuthenticated && orderGrandTotal > 0" class="space-y-2">
+            <!-- Trusted customers: choose wallet or cash on handover -->
+            <div v-if="codEligible" class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                :class="paymentMethod === 'wallet' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+                :aria-pressed="paymentMethod === 'wallet'"
+                @click="paymentMethod = 'wallet'"
+              >{{ t('cartPage.payMethodWallet') }}</button>
+              <button
+                type="button"
+                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                :class="paymentMethod === 'cash' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+                :aria-pressed="paymentMethod === 'cash'"
+                @click="paymentMethod = 'cash'"
+              >{{ t('cartPage.payMethodCash') }}</button>
             </div>
-            <p v-if="!walletCoversTotal" class="mt-1.5 text-[11px] text-amber-200">
-              {{ t('cartPage.walletShortNotice', { amount: formatPrice(orderGrandTotal - walletBalance) }) }}
-            </p>
+
+            <!-- Cash on handover panel -->
+            <div v-if="codChosen" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3">
+              <p class="text-xs font-semibold text-emerald-300">{{ t('cartPage.payCashOnHandoverTitle') }}</p>
+              <p class="mt-0.5 text-[11px] text-slate-400">{{ t('cartPage.payCashOnHandoverNote') }}</p>
+            </div>
+
+            <!-- Wallet panel -->
+            <div
+              v-else
+              class="rounded-xl border p-3"
+              :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
+                    {{ t('cartPage.payFromWalletTitle') }}
+                  </p>
+                  <p class="text-[11px] text-slate-400">{{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}</p>
+                </div>
+                <AppIcon :name="walletCoversTotal ? 'check' : 'info'" class="h-4 w-4 shrink-0" :class="walletCoversTotal ? 'text-emerald-400' : 'text-amber-400'" />
+              </div>
+              <p v-if="!walletCoversTotal" class="mt-1.5 text-[11px] text-amber-200">
+                {{ t('cartPage.walletShortNotice', { amount: formatPrice(orderGrandTotal - walletBalance) }) }}
+              </p>
+            </div>
           </div>
 
           <!-- ── Wallet credits (opt-in for dine-in tabs) ── -->
@@ -1027,16 +1054,40 @@ const requiresPrepay = computed(
     (fulfillmentType.value === 'pickup' || fulfillmentType.value === 'delivery')
 );
 const walletCoversTotal = computed(() => walletBalance.value >= orderGrandTotal.value);
-// Wallet is applied automatically for prepay orders; opt-in elsewhere.
+// Trusted-customer cash-on-handover (COD): eligibility comes from the backend.
+const codEligible = ref(false);
+const codMinOrders = ref(3);
+const paymentMethod = ref('wallet'); // 'wallet' | 'cash' (cash only when codEligible)
+const codChosen = computed(
+  () => requiresPrepay.value && codEligible.value && paymentMethod.value === 'cash'
+);
+// Wallet is applied for prepay orders unless the customer picked cash-on-handover.
 const walletApplied = computed(
-  () => (requiresPrepay.value && customerStore.isAuthenticated) ||
+  () => (requiresPrepay.value && customerStore.isAuthenticated && !codChosen.value) ||
     (useWallet.value && canPayWithCredits.value)
 );
-// Block checkout when a signed-in customer's wallet can't cover a pay-now order.
+// Block checkout when a signed-in customer's wallet can't cover a pay-now order
+// (unless they chose trusted cash-on-handover).
 const prepayShortfall = computed(
   () => requiresPrepay.value && orderGrandTotal.value > 0 &&
-    customerStore.isAuthenticated && !walletCoversTotal.value
+    customerStore.isAuthenticated && !walletCoversTotal.value && !codChosen.value
 );
+
+// Pull COD eligibility for the signed-in customer at this restaurant.
+const fetchCodEligibility = async () => {
+  if (!customerStore.isAuthenticated || isTableContextOrder.value) {
+    codEligible.value = false;
+    return;
+  }
+  try {
+    const res = await api.get('/order-eligibility/');
+    codEligible.value = res.data?.cod_eligible === true;
+    codMinOrders.value = Number(res.data?.cod_min_paid_orders) || 3;
+    if (!codEligible.value && paymentMethod.value === 'cash') paymentMethod.value = 'wallet';
+  } catch {
+    codEligible.value = false;
+  }
+};
 const hasLocationCoords = computed(() => {
   const lat = parseCoordinateValue(deliveryLat.value);
   const lng = parseCoordinateValue(deliveryLng.value);
@@ -1269,6 +1320,10 @@ watch(canPayWithCredits, (val) => {
   if (!val) useWallet.value = false;
 });
 
+watch(() => customerStore.isAuthenticated, () => {
+  fetchCodEligibility();
+});
+
 watch(fulfillmentType, (value) => {
   clearFieldError('fulfillment_type');
   if (value && !isTableContextOrder.value && !customerStore.isAuthenticated) {
@@ -1434,8 +1489,9 @@ const validateForm = () => {
     toast.show(t('cartPage.deliveryPhoneRequired'), 'error');
     return false;
   }
-  // Pickup & delivery are pay-now: the wallet must cover the full total.
-  if (requiresPrepay.value && orderGrandTotal.value > 0 && walletBalance.value < orderGrandTotal.value) {
+  // Pickup & delivery are pay-now: the wallet must cover the full total (unless the
+  // customer chose trusted cash-on-handover).
+  if (requiresPrepay.value && !codChosen.value && orderGrandTotal.value > 0 && walletBalance.value < orderGrandTotal.value) {
     toast.show(t('cartPage.walletTopUpRequired', {
       balance: formatPrice(walletBalance.value),
       total: formatPrice(orderGrandTotal.value),
@@ -1521,7 +1577,11 @@ const buildPayload = () => {
   };
 
   if (customerNote.value) payload.customer_note = customerNote.value;
-  if (requiresPrepay.value || (useWallet.value && canPayWithCredits.value)) payload.use_wallet = true;
+  if (codChosen.value) {
+    payload.payment_method = 'cash';
+  } else if (requiresPrepay.value || (useWallet.value && canPayWithCredits.value)) {
+    payload.use_wallet = true;
+  }
   if (promoApplied.value) payload.promo_code = promoCode.value.trim().toUpperCase();
   if (tipAmount.value > 0) payload.tip_amount = tipAmount.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
@@ -1810,6 +1870,7 @@ const handleEscapeKey = (event) => {
 onMounted(() => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
   fetchSavedAddresses();
+  fetchCodEligibility();
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },

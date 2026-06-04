@@ -220,6 +220,8 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "delivery_minimum_order",
             "delivery_zone_description",
             "platform_delivery_enabled",
+            "cod_enabled",
+            "cod_min_paid_orders",
             "receipt_message",
             "vat_rate",
             "vat_label",

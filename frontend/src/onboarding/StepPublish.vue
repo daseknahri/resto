@@ -150,6 +150,28 @@
           <input v-model="form.sms_notifications_enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
+        <!-- Cash on handover for trusted customers -->
+        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
+          <div class="space-y-1">
+            <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.codEnabled") }}</span>
+            <p class="text-xs text-slate-500">{{ t("stepPublish.codEnabledHint") }}</p>
+          </div>
+          <input v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+        </label>
+        <div v-if="form.cod_enabled" class="space-y-1 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
+          <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.codMinOrders") }}</label>
+          <div class="flex items-center gap-2">
+            <input
+              v-model.number="form.cod_min_paid_orders"
+              type="number"
+              min="1"
+              max="100"
+              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+            />
+            <span class="text-xs text-slate-500">{{ t("stepPublish.codMinOrdersUnit") }}</span>
+          </div>
+        </div>
+
         <!-- Auto-confirm reservations -->
         <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
           <div class="space-y-1">
@@ -666,6 +688,8 @@ const form = reactive({
   receipt_message: "",
   menu_theme: "dark",
   sms_notifications_enabled: false,
+  cod_enabled: false,
+  cod_min_paid_orders: 3,
   auto_confirm_reservations: false,
   auto_confirm_min_hours: 24,
   reservation_reminders_enabled: false,
@@ -743,6 +767,8 @@ const load = async () => {
     form.receipt_message = data?.receipt_message || "";
     form.menu_theme = data?.menu_theme || "dark";
     form.sms_notifications_enabled = data?.sms_notifications_enabled === true;
+    form.cod_enabled = data?.cod_enabled === true;
+    form.cod_min_paid_orders = Number(data?.cod_min_paid_orders ?? 3) || 3;
     form.auto_confirm_reservations = data?.auto_confirm_reservations === true;
     form.auto_confirm_min_hours = Number(data?.auto_confirm_min_hours ?? 24) || 24;
     form.reservation_reminders_enabled = data?.reservation_reminders_enabled === true;
@@ -794,6 +820,8 @@ const saveProfile = async (publishFlag = null) => {
     receipt_message: form.receipt_message,
     menu_theme: form.menu_theme,
     sms_notifications_enabled: form.sms_notifications_enabled,
+    cod_enabled: Boolean(form.cod_enabled),
+    cod_min_paid_orders: Math.max(1, Number(form.cod_min_paid_orders) || 3),
     auto_confirm_reservations: form.auto_confirm_reservations,
     auto_confirm_min_hours: Number(form.auto_confirm_min_hours) || 24,
     reservation_reminders_enabled: form.reservation_reminders_enabled,
