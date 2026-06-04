@@ -3436,8 +3436,29 @@ class DriverJobListView(APIView):
             ).select_related("driver")[:20]
         )
 
+        # Enrich the driver's ACTIVE job(s) with customer contact so they can call on
+        # arrival. Only the assigned driver sees this; pending jobs never expose it.
+        active_serialized = []
+        for j in active_jobs:
+            d = _serialize_delivery_job(j)
+            try:
+                from tenancy.models import Tenant as _T
+                tnt = _T.objects.filter(id=j.tenant_id).first()
+                if tnt:
+                    with schema_context(tnt.schema_name):
+                        from menu.models import Order as _O
+                        o = _O.objects.filter(order_number=j.order_number).only(
+                            "customer_name", "customer_phone"
+                        ).first()
+                        if o:
+                            d["customer_name"] = o.customer_name or ""
+                            d["customer_phone"] = o.customer_phone or ""
+            except Exception:
+                pass
+            active_serialized.append(d)
+
         return Response({
-            "active": [_serialize_delivery_job(j) for j in active_jobs],
+            "active": active_serialized,
             "pending": [_serialize_delivery_job(j) for j in pending_jobs],
         })
 

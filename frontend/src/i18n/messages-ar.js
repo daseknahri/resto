@@ -2325,6 +2325,8 @@ Object.assign(arabicMessages, {
     dropoff: "التسليم",
     payout: "أرباحك",
     openMaps: "افتح في الخرائط",
+    callCustomer: "اتصل بالعميل",
+    call: "اتصال",
     pendingTitle: "طلبات التوصيل المتاحة",
     noPending: "لا توجد طلبات توصيل متاحة الآن.",
     offlineEmpty: "أنت غير متصل. اتصل لعرض طلبات التوصيل.",
