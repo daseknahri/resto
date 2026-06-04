@@ -288,8 +288,10 @@ class AdminDriverListViewTests(SimpleTestCase):
 
         with patch("accounts.models.Customer") as mock_cust:
             mock_cust.objects.filter.return_value.order_by.return_value = [driver]
-            with patch("accounts.models.DeliveryJob") as mock_dj:
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("accounts.models.DriverPayout") as mock_dp:
                 mock_dj.objects.filter.return_value.values.return_value.annotate.return_value = []
+                mock_dp.objects.filter.return_value.values.return_value.annotate.return_value = []
                 resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -311,8 +313,10 @@ class AdminDriverListViewTests(SimpleTestCase):
 
         with patch("accounts.models.Customer") as mock_cust:
             mock_cust.objects.filter.return_value.order_by.return_value = [driver]
-            with patch("accounts.models.DeliveryJob") as mock_dj:
+            with patch("accounts.models.DeliveryJob") as mock_dj, \
+                 patch("accounts.models.DriverPayout") as mock_dp:
                 mock_dj.objects.filter.return_value.values.return_value.annotate.return_value = []
+                mock_dp.objects.filter.return_value.values.return_value.annotate.return_value = []
                 resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -367,8 +371,10 @@ class AdminPlatformAnalyticsViewTests(SimpleTestCase):
                         with patch("accounts.models.PlatformFlashSale") as mock_fs:
                             mock_fs.objects.aggregate.return_value = _zero_fs
 
-                            with patch("accounts.models.WalletTransaction") as mock_wt:
+                            with patch("accounts.models.WalletTransaction") as mock_wt, \
+                                 patch("accounts.models.DriverPayout") as mock_dp:
                                 mock_wt.objects.aggregate.return_value = _zero_txn
+                                mock_dp.objects.aggregate.return_value = {"s": None}
 
                                 resp = self._get()
 

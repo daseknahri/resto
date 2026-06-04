@@ -62,10 +62,13 @@ class ParseCsvEnvTests(SimpleTestCase):
             result = parse_csv_env("_TEST_CSV", "")
         self.assertEqual(result, ["localhost"])
 
-    def test_empty_string_env_var_returns_empty_list(self):
+    def test_empty_string_env_var_falls_back_to_default(self):
+        # Coolify forwards unset compose vars as "" — empty/whitespace must use the
+        # DEFAULT, not produce an empty list (see project_prod_deploy_env memory note).
         with patch.dict("os.environ", {"_TEST_CSV": ""}):
-            result = parse_csv_env("_TEST_CSV", "fallback")
-        self.assertEqual(result, [])
+            self.assertEqual(parse_csv_env("_TEST_CSV", "fallback"), ["fallback"])
+            # An empty default still yields an empty list.
+            self.assertEqual(parse_csv_env("_TEST_CSV", ""), [])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

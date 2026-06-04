@@ -77,7 +77,7 @@ class ActivationSerializerValidateTests(SimpleTestCase):
         with patch("accounts.serializers.ActivationToken") as mock_cls:
             mock_cls.DoesNotExist = Exception
             mock_cls.objects.select_related.return_value.get.return_value = activation
-            result = self._s().validate({"token": "good-token", "password": "secret123"})
+            result = self._s().validate({"token": "good-token", "password": "Zx9kLmop-42qR"})
         self.assertIs(result["activation"], activation)
 
     def test_valid_token_preserves_password(self):
@@ -85,8 +85,8 @@ class ActivationSerializerValidateTests(SimpleTestCase):
         with patch("accounts.serializers.ActivationToken") as mock_cls:
             mock_cls.DoesNotExist = Exception
             mock_cls.objects.select_related.return_value.get.return_value = activation
-            result = self._s().validate({"token": "good-token", "password": "mypassword"})
-        self.assertEqual(result["password"], "mypassword")
+            result = self._s().validate({"token": "good-token", "password": "Zx9kLmop-42qR"})
+        self.assertEqual(result["password"], "Zx9kLmop-42qR")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

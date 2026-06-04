@@ -42,6 +42,8 @@ def _make_customer(**kwargs):
         wallet_balance=0,
         loyalty_points=0,
         locale="en",
+        is_driver=False,
+        is_driver_online=False,
     )
     defaults.update(kwargs)
     c = SimpleNamespace(**defaults)
