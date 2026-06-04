@@ -23,6 +23,7 @@ from accounts.views import (
     DriverJobListView,
     DriverJobAcceptView,
     DriverJobStatusUpdateView,
+    DriverDeliveriesView,
 )
 
 
@@ -298,6 +299,46 @@ class DriverJobListViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("active", resp.data)
         self.assertIn("pending", resp.data)
+
+
+# ── DriverDeliveriesView ──────────────────────────────────────────────────────
+
+class DriverDeliveriesViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverDeliveriesView.as_view()
+
+    def _get(self, session=None):
+        req = self.factory.get("/api/driver/deliveries/")
+        req.session = session or _session()
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def test_no_session_returns_401(self):
+        resp = self.view(self._get(session=_session(customer_id=None)))
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.models.Customer.objects")
+    def test_returns_finished_jobs(self, mock_objs):
+        mock_objs.get.return_value = _make_customer()
+        job = _make_job(status_val="delivered", driver=_make_customer())
+
+        with patch("accounts.models.DeliveryJob") as mock_dj:
+            qs = MagicMock()
+            qs.order_by.return_value.__getitem__.return_value = [job]
+            mock_dj.objects.filter.return_value = qs
+            mock_dj.Status.DELIVERED = "delivered"
+            mock_dj.Status.FAILED = "failed"
+            with patch("accounts.views._serialize_delivery_job", side_effect=lambda j, **kw: {"restaurant_name": "Demo"}):
+                resp = self.view(self._get(session=_session(customer_id=1)))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["order_number"], "ORD-001")
+        # Only delivered/failed are queried.
+        filter_kwargs = mock_dj.objects.filter.call_args[1]
+        self.assertIn("delivered", filter_kwargs["status__in"])
+        self.assertIn("failed", filter_kwargs["status__in"])
 
 
 # ── DriverJobAcceptView ───────────────────────────────────────────────────────

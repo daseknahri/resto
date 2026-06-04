@@ -4088,6 +4088,44 @@ class DriverEarningsView(APIView):
         return Response({"earned": str(s["earned"]), "paid": str(s["paid"]), "owed": str(s["owed"])})
 
 
+class DriverDeliveriesView(APIView):
+    """GET /api/driver/deliveries/ — the signed-in driver's recent finished jobs
+    (delivered or failed), newest first, for an in-app history view."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            Customer.objects.get(pk=customer_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from .models import DeliveryJob
+        jobs = list(
+            DeliveryJob.objects.filter(
+                driver_id=customer_id,
+                status__in=[DeliveryJob.Status.DELIVERED, DeliveryJob.Status.FAILED],
+            ).order_by("-created_at")[:50]
+        )
+        results = [{
+            "id": j.id,
+            "order_number": j.order_number,
+            "status": j.status,
+            "restaurant_name": _serialize_delivery_job(j).get("restaurant_name", ""),
+            "delivery_address": j.delivery_address,
+            "driver_payout": str(j.driver_payout),
+            "delivered_at": j.delivered_at.isoformat() if j.delivered_at else None,
+            "failed_at": j.failed_at.isoformat() if j.failed_at else None,
+            "created_at": j.created_at.isoformat(),
+            "customer_driver_rating": j.customer_driver_rating,
+        } for j in jobs]
+        return Response({"results": results})
+
+
 class AdminPlatformAnalyticsView(APIView):
     """GET /api/admin/platform-analytics/ — cross-platform aggregate stats (platform admin only)."""
 

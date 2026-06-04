@@ -187,6 +187,29 @@
         <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-700" />
         <p class="mt-2 text-sm text-slate-500">{{ t('driver.offlineEmpty') }}</p>
       </div>
+
+      <!-- Recent deliveries (history) -->
+      <div class="ui-panel p-4 space-y-3">
+        <button class="flex w-full items-center justify-between" :aria-expanded="showHistory" @click="toggleHistory">
+          <p class="text-sm font-semibold text-slate-200">{{ t('driver.historyTitle') }}</p>
+          <AppIcon :name="showHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 text-slate-500" />
+        </button>
+        <template v-if="showHistory">
+          <div v-if="loadingHistory && !history.length" class="space-y-2">
+            <div v-for="i in 3" :key="i" class="h-12 animate-pulse rounded-xl bg-slate-800/50" />
+          </div>
+          <p v-else-if="!history.length" class="py-4 text-center text-sm text-slate-500">{{ t('driver.historyEmpty') }}</p>
+          <ul v-else class="space-y-2">
+            <li v-for="d in history" :key="d.id" class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2">
+              <div class="min-w-0">
+                <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
+                <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
+              </div>
+              <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
+            </li>
+          </ul>
+        </template>
+      </div>
     </template>
   </div>
 
@@ -268,6 +291,35 @@ const fmtMoney = (v) => {
   } catch {
     return `${parseFloat(v || 0).toFixed(2)}`;
   }
+};
+
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(currentLocale.value || undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+};
+
+// Recent deliveries (history) — lazy-loaded the first time the driver expands it.
+const showHistory = ref(false);
+const history = ref([]);
+const loadingHistory = ref(false);
+const fetchHistory = async () => {
+  loadingHistory.value = true;
+  try {
+    const { data } = await api.get('/driver/deliveries/');
+    history.value = Array.isArray(data.results) ? data.results : [];
+  } catch {
+    /* keep last */
+  } finally {
+    loadingHistory.value = false;
+  }
+};
+const toggleHistory = () => {
+  showHistory.value = !showHistory.value;
+  if (showHistory.value && !history.value.length) fetchHistory();
 };
 
 const STATUS_LABELS = {

@@ -2327,6 +2327,8 @@ Object.assign(arabicMessages, {
     openMaps: "افتح في الخرائط",
     callCustomer: "اتصل بالعميل",
     call: "اتصال",
+    historyTitle: "عمليات التوصيل الأخيرة",
+    historyEmpty: "لا توجد عمليات توصيل مكتملة بعد.",
     pendingTitle: "طلبات التوصيل المتاحة",
     noPending: "لا توجد طلبات توصيل متاحة الآن.",
     offlineEmpty: "أنت غير متصل. اتصل لعرض طلبات التوصيل.",
