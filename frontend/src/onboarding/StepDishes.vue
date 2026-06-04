@@ -160,7 +160,7 @@
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
-              <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.addDishToCategory") }}</h3>
+              <h3 id="step-dishes-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepDishes.editDish") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeDishEditor">{{ t("common.close") }}</button>
           </div>
@@ -215,6 +215,7 @@
                 </div>
 
                 <div class="space-y-1">
+                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
                   <select
                     v-model="editingDish.category"
                     :aria-label="t('stepDishes.selectCategory')"
@@ -231,6 +232,7 @@
                 </div>
 
                 <div class="space-y-1">
+                  <p class="text-[11px] text-slate-400">{{ t("stepDishes.pricePlaceholder") }}</p>
                   <input
                     v-model.number="editingDish.price"
                     type="number"

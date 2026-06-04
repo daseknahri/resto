@@ -114,7 +114,7 @@
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.categories") }}</p>
-              <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("common.edit") }}</h3>
+              <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.editCategory") }}</h3>
             </div>
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
@@ -326,6 +326,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -336,6 +337,7 @@ import { useToastStore } from "../stores/toast";
 
 const props = defineProps({ standalone: { type: Boolean, default: false } });
 const emit = defineEmits(["next", "back"]);
+const route = useRoute();
 const { t } = useI18n();
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -421,10 +423,21 @@ const superCategoryLabel = (group) => {
   return status ? `${group.name} · ${status}` : String(group.name || "");
 };
 
+let superQueryConsumed = false;
 const syncActiveSuperCategory = () => {
   if (!sortedSuperCategoryOptions.value.length) {
     activeSuperCategoryId.value = "";
     return;
+  }
+  // Honor a ?super=<id> deep-link once (drill-in from the super-category list),
+  // then leave the dropdown under the user's control.
+  if (!superQueryConsumed) {
+    const requested = route.query.super ? String(route.query.super) : "";
+    if (requested && sortedSuperCategoryOptions.value.some((group) => String(group.id) === requested)) {
+      activeSuperCategoryId.value = requested;
+      superQueryConsumed = true;
+      return;
+    }
   }
   const exists = sortedSuperCategoryOptions.value.some((group) => String(group.id) === String(activeSuperCategoryId.value));
   if (!exists) {

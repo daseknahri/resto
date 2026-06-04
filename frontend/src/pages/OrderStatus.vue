@@ -288,6 +288,15 @@
             {{ t('orderStatus.walletBalanceLine', { balance: formatCurrency(orderData.wallet_balance, orderData.currency) }) }}
           </p>
         </template>
+
+        <!-- Dine-in: cash is always an option — the server settles it at the table -->
+        <p
+          v-if="orderData.fulfillment_type === 'table' && orderData.payment_status !== 'paid' && orderData.status !== 'cancelled'"
+          class="flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500"
+        >
+          <AppIcon name="info" class="h-3 w-3 shrink-0" />
+          {{ t('orderStatus.payCashHint') }}
+        </p>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->

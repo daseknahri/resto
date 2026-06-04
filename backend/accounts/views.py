@@ -2623,6 +2623,27 @@ class MarketplacePlaceOrderView(APIView):
                 total = max(Decimal("0"), food_subtotal + _delivery_fee - _promo_discount)
                 commission_amount = (food_subtotal * Decimal("0.10")).quantize(Decimal("0.01"))
 
+                # Marketplace pickup & delivery are pay-now: the bill must be settled in
+                # full from the customer's wallet at checkout (mirrors the restaurant
+                # flow). There is no dine-in on the marketplace.
+                _requires_prepay = fulfillment_type in ("pickup", "delivery")
+                if _requires_prepay and total > Decimal("0"):
+                    if _linked_customer is None:
+                        return Response(
+                            {"detail": "Sign in and top up your wallet to place this order.",
+                             "code": "auth_required"},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                    _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
+                    if _wallet_avail < total:
+                        return Response(
+                            {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                             "code": "wallet_insufficient",
+                             "balance": str(_wallet_avail), "amount_due": str(total)},
+                            status=status.HTTP_402_PAYMENT_REQUIRED,
+                        )
+                    use_wallet = True  # pay-now: always settle from the wallet
+
                 _stock_updates = []
                 _pk_to_slug = {}
                 for _item_d in order_items_data:
@@ -2641,6 +2662,9 @@ class MarketplacePlaceOrderView(APIView):
                 class _OutOfStock(Exception):
                     def __init__(self, slug):
                         self.slug = slug
+
+                class _PrepayUnpaid(Exception):
+                    """Pay-now order couldn't be fully settled from the wallet — roll back."""
 
                 if fulfillment_type == "delivery" and _linked_customer:
                     customer_name = _linked_customer.name or customer_name
@@ -2739,6 +2763,17 @@ class MarketplacePlaceOrderView(APIView):
                             order.paid_at = _tz.now()
                             order.save(update_fields=["payment_status", "paid_at"])
 
+                        # Pay-now safety net: roll back if a pickup/delivery order wasn't
+                        # fully settled (e.g. balance dropped under the lock).
+                        if _requires_prepay and order.payment_status != _Order.PaymentStatus.PAID:
+                            raise _PrepayUnpaid()
+
+                except _PrepayUnpaid:
+                    return Response(
+                        {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                         "code": "wallet_insufficient"},
+                        status=status.HTTP_402_PAYMENT_REQUIRED,
+                    )
                 except _OutOfStock as _e:
                     return Response(
                         {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},

@@ -1864,8 +1864,44 @@ class PlaceOrderView(APIView):
             _tip_amount = _food_subtotal
         total = total + _tip_amount
 
-        # Wallet payment — customer may opt in to paying with their credits balance
-        _use_wallet = bool(request.data.get("use_wallet")) and _linked_customer is not None
+        # Pickup & delivery are pay-now: for now the bill must be settled in full from
+        # the customer's wallet at checkout (the only online method today). Dine-in
+        # (table) stays an open tab paid at the end, so it is exempt. A free order
+        # (total 0) needs no payment.
+        #
+        # Staff-created orders (a waiter taking a phone/counter order via the new-order
+        # screen) are EXEMPT: the waiter collects cash/card in person and settles via
+        # the Settle action, so they must not be blocked by the customer-wallet rule.
+        from accounts.models import User as _UPrepay
+        _ru_prepay = getattr(request, "user", None)
+        _is_staff_order = bool(
+            _ru_prepay is not None
+            and getattr(_ru_prepay, "is_authenticated", False)
+            and getattr(_ru_prepay, "role", None) in (_UPrepay.Roles.TENANT_OWNER, _UPrepay.Roles.TENANT_STAFF)
+        )
+        _requires_prepay = (
+            not _is_staff_order
+            and fulfillment_type in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY)
+        )
+        if _requires_prepay and total > Decimal("0"):
+            if _linked_customer is None:
+                return Response(
+                    {"detail": "Sign in and top up your wallet to place a pickup or delivery order.",
+                     "code": "auth_required"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
+            if _wallet_avail < total:
+                return Response(
+                    {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                     "code": "wallet_insufficient",
+                     "balance": str(_wallet_avail), "amount_due": str(total)},
+                    status=status.HTTP_402_PAYMENT_REQUIRED,
+                )
+
+        # Wallet payment — pickup/delivery always pay by wallet (enforced above);
+        # dine-in customers may opt in to paying their tab from credits.
+        _use_wallet = (_requires_prepay or bool(request.data.get("use_wallet"))) and _linked_customer is not None
         _wallet_deduction = Decimal("0")
         if _use_wallet:
             _available = Decimal(str(_linked_customer.wallet_balance or "0"))
@@ -1873,6 +1909,10 @@ class PlaceOrderView(APIView):
             if _wallet_deduction <= Decimal("0"):
                 _use_wallet = False
                 _wallet_deduction = Decimal("0")
+
+        class _PrepayUnpaid(Exception):
+            """Raised inside the atomic block when a pickup/delivery order can't be
+            fully prepaid from the wallet — rolls back any partial debit + the order."""
 
         class _OutOfStock(Exception):
             """Raised inside the atomic block when a dish's stock is exhausted."""
@@ -1980,6 +2020,12 @@ class PlaceOrderView(APIView):
                     order.paid_at = timezone.now()
                     order.save(update_fields=["payment_status", "paid_at"])
 
+                # Pay-now safety net: a pickup/delivery order that wasn't fully settled
+                # (e.g. balance dropped between the pre-check and this locked debit) is
+                # rolled back rather than created unpaid.
+                if _requires_prepay and order.payment_status != Order.PaymentStatus.PAID:
+                    raise _PrepayUnpaid()
+
                 # Award loyalty points to linked customer (if programme is active)
                 try:
                     _loyalty_cfg = LoyaltyConfig.objects.filter(enabled=True).first()
@@ -1998,6 +2044,12 @@ class PlaceOrderView(APIView):
             return Response(
                 {"detail": "Item sold out.", "code": "items_unavailable", "slugs": [_e.slug]},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _PrepayUnpaid:
+            return Response(
+                {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
+                 "code": "wallet_insufficient"},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
             )
         except IntegrityError:
             # Rare TOCTOU race: two requests generated the same order number.
@@ -3419,6 +3471,30 @@ class OwnerOrderStatusUpdateView(APIView):
         })
 
 
+def _broadcast_order_change(order):
+    """Best-effort realtime ping so the customer's order-tracking page and the
+    owner/kitchen screens refresh the moment an order's status or PAYMENT state
+    changes (e.g. staff marking a bill paid). No-op if realtime isn't configured.
+
+    The customer page listens for the ``status`` event on its per-order channel
+    and refetches the full order on any ping, so payment flips show up live.
+    """
+    try:
+        from django.db import connection as _ws_conn
+        from realtime.broadcast import broadcast as _ws_broadcast
+        _schema = _ws_conn.tenant.schema_name
+        _ws_broadcast(
+            _schema, "owner", "order.updated",
+            {"order_number": order.order_number, "status": order.status, "payment_status": order.payment_status},
+        )
+        _ws_broadcast(
+            _schema, f"order.{order.order_number}", "status",
+            {"status": order.status, "payment_status": order.payment_status},
+        )
+    except Exception:
+        pass
+
+
 class OwnerOrderMarkPaidView(APIView):
     """
     POST /api/owner/orders/<order_id>/mark-paid/
@@ -3459,6 +3535,10 @@ class OwnerOrderMarkPaidView(APIView):
             order.status_updated_at = timezone.now()
             order.save(update_fields=["status", "status_updated_at", "updated_at"])
             completed = True
+
+        # Live-update the customer's tracking page (and other staff screens) so the
+        # "Paid" state appears on their phone immediately.
+        _broadcast_order_change(order)
 
         return Response({
             "id": order.id,
@@ -5529,6 +5609,7 @@ def _settle_order_if_wallet_covers(order_number):
             and o.wallet_amount_paid >= o.total
         ):
             o.mark_paid()  # sets payment_status=PAID + paid_at + saves
+            _broadcast_order_change(o)
     except Exception:
         pass
 
@@ -5589,6 +5670,7 @@ class CustomerOrderPayWalletView(APIView):
         order.wallet_amount_paid = (order.wallet_amount_paid or Decimal("0")) + outstanding
         order.mark_paid(save=False)
         order.save(update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"])
+        _broadcast_order_change(order)
 
         return Response({
             "status": "paid",

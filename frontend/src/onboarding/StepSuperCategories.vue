@@ -123,19 +123,22 @@
           </button>
         </div>
 
-        <!-- Name + slug + meta — the whole block opens the editor -->
-        <button type="button" class="min-w-0 flex-1 text-left" @click="openEditor(row.local_id)">
-          <div class="flex items-center gap-2">
-            <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="(row.is_published && !row.is_temporarily_disabled) ? 'bg-emerald-400' : 'bg-slate-600'" />
-            <h3 class="truncate text-sm font-semibold text-white">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
-            <span class="ui-route-badge shrink-0">{{ row.slug || 'draft' }}</span>
+        <!-- Name + slug + meta — the whole block drills into this group's categories (pencil edits) -->
+        <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" :aria-label="t('stepSuperCategories.openCategories')" @click="drillIn(row)">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="(row.is_published && !row.is_temporarily_disabled) ? 'bg-emerald-400' : 'bg-slate-600'" />
+              <h3 class="truncate text-sm font-semibold text-white">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
+              <span class="ui-route-badge shrink-0">{{ row.slug || 'draft' }}</span>
+            </div>
+            <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+              <span :class="row.is_temporarily_disabled ? 'text-amber-300' : ''">
+                {{ row.is_temporarily_disabled ? t("stepSuperCategories.disabled") : (row.is_published ? t("stepSuperCategories.enabled") : t("common.soon")) }}
+              </span>
+              <span>· {{ Number(row.category_count || 0) }} {{ t("common.categories") }}</span>
+            </div>
           </div>
-          <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
-            <span :class="row.is_temporarily_disabled ? 'text-amber-300' : ''">
-              {{ row.is_temporarily_disabled ? t("stepSuperCategories.disabled") : (row.is_published ? t("stepSuperCategories.enabled") : t("common.soon")) }}
-            </span>
-            <span>· {{ Number(row.category_count || 0) }} {{ t("common.categories") }}</span>
-          </div>
+          <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-500" />
         </button>
 
         <!-- Actions: edit · delete (delete blocked while it still holds categories) -->
@@ -400,6 +403,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -427,6 +431,17 @@ const editorLocalId = ref("");
 const tenant = useTenantStore();
 const toast = useToastStore();
 const { t } = useI18n();
+const router = useRouter();
+
+// Clicking a super-category row drills into its categories (the pencil edits it).
+// Unsaved drafts have no id yet — fall back to opening the editor.
+const drillIn = (row) => {
+  if (!row?.id) {
+    openEditor(row.local_id);
+    return;
+  }
+  router.push({ name: "owner-menu-builder", query: { tab: "categories", super: String(row.id) } });
+};
 
 const fieldLocales = reactive({ name: "en", description: "en" });
 const quickFieldLocales = reactive({ name: "en" });

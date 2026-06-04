@@ -344,6 +344,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         customer.google_sub = None
         customer.phone = "+21261234567"
         customer.name = "Alice"
+        customer.wallet_balance = Decimal("1000")  # funds the pay-now (pickup/delivery) requirement
 
         payload = {
             "items": [{"slug": "burger", "qty": 1}],
@@ -353,8 +354,11 @@ class PlaceOrderViewTests(SimpleTestCase):
         }
         req = self._post(data=payload, session=_session(customer_id=7))
         import accounts.models as _accts
-        with patch.object(_accts.Customer, "objects") as cust_mock:
+        with patch.object(_accts.Customer, "objects") as cust_mock, \
+             patch.object(_accts.WalletTransaction, "objects"):
             cust_mock.get.return_value = customer
+            # Delivery is pay-now: the locked-row wallet debit reads this same customer.
+            cust_mock.select_for_update.return_value.get.return_value = customer
             with patch("menu.views.DishOption.objects") as opt_mock:
                 opt_mock.filter.return_value = []
                 with patch("menu.views.Order.objects") as order_mock:
@@ -398,20 +402,115 @@ class PlaceOrderViewTests(SimpleTestCase):
         dish_mock.select_for_update.return_value.filter.return_value = [locked_dish]
 
         payload = {"items": [{"slug": "burger", "qty": 2}], "fulfillment_type": "pickup"}
-        req = self._post(data=payload)
+        req = self._post(data=payload, session=_session(customer_id=7))
 
-        with patch("menu.views.DishOption.objects") as opt_mock:
-            opt_mock.filter.return_value = []
-            with patch("menu.views.transaction") as tx_mock:
-                cm = MagicMock()
-                cm.__enter__ = MagicMock(return_value=None)
-                cm.__exit__ = MagicMock(return_value=False)
-                tx_mock.atomic.return_value = cm
-                resp = self.view(req)
+        # Pickup is pay-now: supply a funded wallet customer so the request reaches
+        # the stock check (which is what this test exercises).
+        customer = MagicMock()
+        customer.wallet_balance = Decimal("1000")
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                with patch("menu.views.transaction") as tx_mock:
+                    cm = MagicMock()
+                    cm.__enter__ = MagicMock(return_value=None)
+                    cm.__exit__ = MagicMock(return_value=False)
+                    tx_mock.atomic.return_value = cm
+                    resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "items_unavailable")
         self.assertIn(dish.slug, resp.data.get("slugs", []))
+
+    # ── Pay-now enforcement (pickup & delivery) ───────────────────────────────
+
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_pickup_without_signed_in_customer_requires_auth(self, profile_mock, dish_mock, promo_mock):
+        """A pay-now (pickup) order with no session customer is rejected up front."""
+        promo_mock.filter.return_value = []
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)  # no session customer
+
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "auth_required")
+
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_pickup_insufficient_wallet_blocks_order(self, profile_mock, dish_mock, promo_mock):
+        """A pay-now order whose wallet can't cover the total is rejected (wallet_insufficient)."""
+        promo_mock.filter.return_value = []
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish_mock.filter.return_value.select_related.return_value = [_dish(price="10.00")]
+
+        customer = MagicMock()
+        customer.wallet_balance = Decimal("3.00")  # < 10.00 total
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload, session=_session(customer_id=7))
+        import accounts.models as _accts
+        with patch.object(_accts.Customer, "objects") as cust_mock:
+            cust_mock.get.return_value = customer
+            with patch("menu.views.DishOption.objects") as opt_mock:
+                opt_mock.filter.return_value = []
+                resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_402_PAYMENT_REQUIRED)
+        self.assertEqual(resp.data["code"], "wallet_insufficient")
+
+    @patch("menu.views.Promotion.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_staff_created_pickup_is_exempt_from_prepay(self, profile_mock, dish_mock, promo_mock):
+        """A waiter/owner taking a pickup order (no customer session) is NOT blocked by
+        the wallet-only rule — they collect payment in person and settle it later."""
+        from accounts.models import User
+        promo_mock.filter.return_value = []
+        profile_mock.filter.return_value.first.return_value = _profile()
+        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+
+        staff = MagicMock()
+        staff.is_authenticated = True
+        staff.id = 5
+        staff.role = User.Roles.TENANT_OWNER
+
+        payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)  # no customer session
+        req.user = staff
+
+        with patch("menu.views.DishOption.objects") as opt_mock:
+            opt_mock.filter.return_value = []
+            with patch("menu.views.Order.objects") as order_mock:
+                mock_order = MagicMock()
+                mock_order.order_number = "ORD777"
+                mock_order.status = "pending"
+                mock_order.total = Decimal("10.00")
+                mock_order.delivery_fee = Decimal("0")
+                mock_order.currency = "MAD"
+                mock_order.estimated_ready_minutes = None
+                order_mock.create.return_value = mock_order
+                with patch("menu.views.OrderItem.objects"), \
+                     patch("menu.views._generate_order_number", return_value="ORD777"), \
+                     patch("menu.views.transaction") as tx_mock:
+                    cm = MagicMock()
+                    cm.__enter__ = MagicMock(return_value=None)
+                    cm.__exit__ = MagicMock(return_value=False)
+                    tx_mock.atomic.return_value = cm
+                    resp = self.view(req)
+
+        # Must NOT be blocked by the customer-wallet prepay gate.
+        self.assertNotIn(resp.data.get("code"), ("auth_required", "wallet_insufficient"))
 
     @patch("menu.views.Promotion.objects")
     @patch("menu.views.Dish.objects")

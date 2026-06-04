@@ -525,9 +525,29 @@
             </template>
           </div>
 
-          <!-- ── Wallet credits ── -->
+          <!-- ── Pay now from wallet (pickup/delivery) ── -->
           <div
-            v-if="canPayWithCredits"
+            v-if="requiresPrepay && customerStore.isAuthenticated && orderGrandTotal > 0"
+            class="rounded-xl border p-3"
+            :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
+                  {{ t('cartPage.payFromWalletTitle') }}
+                </p>
+                <p class="text-[11px] text-slate-400">{{ t('cartPage.payWithCreditsBalance', { balance: walletBalance }) }}</p>
+              </div>
+              <AppIcon :name="walletCoversTotal ? 'check' : 'info'" class="h-4 w-4 shrink-0" :class="walletCoversTotal ? 'text-emerald-400' : 'text-amber-400'" />
+            </div>
+            <p v-if="!walletCoversTotal" class="mt-1.5 text-[11px] text-amber-200">
+              {{ t('cartPage.walletShortNotice', { amount: formatPrice(orderGrandTotal - walletBalance) }) }}
+            </p>
+          </div>
+
+          <!-- ── Wallet credits (opt-in for dine-in tabs) ── -->
+          <div
+            v-else-if="canPayWithCredits"
             class="rounded-xl border p-3 transition-colors"
             :class="useWallet
               ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8'
@@ -628,7 +648,7 @@
               <span>{{ t('cartPage.tipLabel') }}</span>
               <span class="tabular-nums">+{{ formatPrice(tipAmount) }}</span>
             </div>
-            <div v-if="useWallet && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
+            <div v-if="walletApplied && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
               <span>{{ t('cartPage.payWithCredits') }}</span>
               <span class="tabular-nums font-medium">-{{ formatPrice(walletDeduction) }}</span>
             </div>
@@ -653,11 +673,11 @@
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-3.5 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
-              :disabled="placingOrder"
+              :disabled="placingOrder || prepayShortfall"
               @click="placeInAppOrder"
             >
               <AppIcon name="cart" class="h-3.5 w-3.5" />
-              {{ placingOrder ? t('cartPage_order.placing') : t('cartPage_order.placeOrder') }}
+              {{ placingOrder ? t('cartPage_order.placing') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : t('cartPage_order.placeOrder')) }}
             </button>
             <button
               v-if="cart.canWhatsapp"
@@ -999,6 +1019,23 @@ const isTableContextOrder = computed(() =>
 );
 const isDelivery = computed(
   () => !isTableContextOrder.value && fulfillmentType.value === 'delivery'
+);
+// Pickup & delivery are pay-now: settled in full from the wallet at checkout
+// (the only online method for now). Dine-in (table) pays at the end.
+const requiresPrepay = computed(
+  () => !isTableContextOrder.value &&
+    (fulfillmentType.value === 'pickup' || fulfillmentType.value === 'delivery')
+);
+const walletCoversTotal = computed(() => walletBalance.value >= orderGrandTotal.value);
+// Wallet is applied automatically for prepay orders; opt-in elsewhere.
+const walletApplied = computed(
+  () => (requiresPrepay.value && customerStore.isAuthenticated) ||
+    (useWallet.value && canPayWithCredits.value)
+);
+// Block checkout when a signed-in customer's wallet can't cover a pay-now order.
+const prepayShortfall = computed(
+  () => requiresPrepay.value && orderGrandTotal.value > 0 &&
+    customerStore.isAuthenticated && !walletCoversTotal.value
 );
 const hasLocationCoords = computed(() => {
   const lat = parseCoordinateValue(deliveryLat.value);
@@ -1397,6 +1434,14 @@ const validateForm = () => {
     toast.show(t('cartPage.deliveryPhoneRequired'), 'error');
     return false;
   }
+  // Pickup & delivery are pay-now: the wallet must cover the full total.
+  if (requiresPrepay.value && orderGrandTotal.value > 0 && walletBalance.value < orderGrandTotal.value) {
+    toast.show(t('cartPage.walletTopUpRequired', {
+      balance: formatPrice(walletBalance.value),
+      total: formatPrice(orderGrandTotal.value),
+    }), 'error');
+    return false;
+  }
 
   const errors = {};
   if (!fulfillmentType.value) {
@@ -1476,7 +1521,7 @@ const buildPayload = () => {
   };
 
   if (customerNote.value) payload.customer_note = customerNote.value;
-  if (useWallet.value && canPayWithCredits.value) payload.use_wallet = true;
+  if (requiresPrepay.value || (useWallet.value && canPayWithCredits.value)) payload.use_wallet = true;
   if (promoApplied.value) payload.promo_code = promoCode.value.trim().toUpperCase();
   if (tipAmount.value > 0) payload.tip_amount = tipAmount.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
@@ -1547,6 +1592,9 @@ const mapOrderApiError = (err, fallback) => {
   if (code === 'auth_required') {
     showAuthModal.value = true;
     return t('cartPage.deliveryAuthRequired');
+  }
+  if (code === 'wallet_insufficient') {
+    return t('cartPage.walletInsufficientError');
   }
   if (code === 'not_verified') {
     return t('cartPage.deliveryNotVerified');

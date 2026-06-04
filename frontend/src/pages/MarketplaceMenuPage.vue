@@ -268,14 +268,19 @@
             </div>
           </div>
 
-          <!-- Wallet toggle -->
-          <div v-if="customer && Number(customer.wallet_balance) > 0">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input v-model="form.use_wallet" type="checkbox" class="rounded" />
-              <span class="text-sm text-slate-300">
-                {{ t('mktMenu.walletApply', { balance: `${customer.wallet_balance} ${restaurant?.currency}` }) }}
-              </span>
-            </label>
+          <!-- Pay now from wallet (marketplace orders are pay-now) -->
+          <div
+            v-if="customerStore.isAuthenticated && orderTotal > 0"
+            class="rounded-xl border px-4 py-3"
+            :class="walletCoversTotal ? 'border-emerald-500/30 bg-emerald-500/8' : 'border-amber-500/40 bg-amber-500/8'"
+          >
+            <p class="text-sm font-semibold" :class="walletCoversTotal ? 'text-emerald-300' : 'text-amber-300'">
+              {{ t('mktMenu.payFromWalletTitle') }}
+            </p>
+            <p class="text-xs text-slate-400">{{ t('mktMenu.walletBalanceLine', { balance: `${customer?.wallet_balance || 0} ${restaurant?.currency}` }) }}</p>
+            <p v-if="!walletCoversTotal" class="mt-1 text-xs text-amber-200">
+              {{ t('mktMenu.walletShortNotice', { amount: fmtPrice(orderTotal - walletBalanceNum) }) }}
+            </p>
           </div>
 
           <!-- Totals -->
@@ -303,10 +308,10 @@
           <!-- Submit -->
           <button
             class="w-full rounded-2xl bg-[var(--color-secondary,#f59e0b)] py-3.5 text-sm font-bold text-slate-950 hover:opacity-90 disabled:opacity-50 transition-opacity"
-            :disabled="placing"
+            :disabled="placing || prepayShortfall"
             @click="placeOrder"
           >
-            {{ placing ? t('mktMenu.placing') : t('mktMenu.placeOrder') }}
+            {{ placing ? t('mktMenu.placing') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : t('mktMenu.placeOrder')) }}
           </button>
         </div>
       </div>
@@ -394,7 +399,6 @@ const form = reactive({
   customer_phone: '',
   delivery_address: '',
   customer_note: '',
-  use_wallet: false,
 });
 
 // ── Customer ─────────────────────────────────────────────────────────────────
@@ -444,6 +448,16 @@ const orderTotal = computed(() => {
   return total;
 });
 
+// Marketplace orders are pay-now: settled in full from the wallet at checkout.
+const walletBalanceNum = computed(() => {
+  const n = Number(customer.value?.wallet_balance);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+});
+const walletCoversTotal = computed(() => walletBalanceNum.value >= orderTotal.value);
+const prepayShortfall = computed(
+  () => customerStore.isAuthenticated && orderTotal.value > 0 && !walletCoversTotal.value
+);
+
 const fmtPrice = (amount) => {
   const cur = restaurant.value?.currency;
   if (!cur) return Number(amount || 0).toFixed(2);
@@ -483,6 +497,14 @@ const placeOrder = async () => {
     checkoutError.value = t('mktMenu.nameRequired');
     return;
   }
+  // Pay-now: a signed-in customer's wallet must cover the full total.
+  if (customerStore.isAuthenticated && orderTotal.value > 0 && walletBalanceNum.value < orderTotal.value) {
+    checkoutError.value = t('mktMenu.walletTopUpRequired', {
+      balance: fmtPrice(walletBalanceNum.value),
+      total: fmtPrice(orderTotal.value),
+    });
+    return;
+  }
   placing.value = true;
   try {
     const items = cart.value.map((i) => ({ slug: i.slug, qty: i.qty }));
@@ -494,7 +516,7 @@ const placeOrder = async () => {
       customer_phone: form.customer_phone,
       customer_note: form.customer_note,
       delivery_address: form.delivery_address,
-      use_wallet: form.use_wallet,
+      use_wallet: true,
     };
     const res = await api.post('/marketplace/order/', payload);
     // Navigate to order status page
@@ -505,6 +527,8 @@ const placeOrder = async () => {
       // Don't leave the customer stuck with an error — open the sign-in modal so
       // they can sign in inline and retry without losing their cart.
       showAuthModal.value = true;
+    } else if (code === 'wallet_insufficient') {
+      checkoutError.value = t('mktMenu.walletInsufficientError');
     } else if (code === 'restaurant_closed') {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {
