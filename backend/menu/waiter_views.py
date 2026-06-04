@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 
 from realtime.broadcast import broadcast
 
-from .models import TableLink, WaiterCall
+from .models import SectionServer, TableLink, WaiterCall
 from .permissions import IsTenantEditorOrReadOnly
 from .throttles import WaiterCallThrottle
 
@@ -82,13 +82,43 @@ class WaiterCallCreateView(APIView):
         return Response(_serialize(call), status=status.HTTP_201_CREATED)
 
 
+def _section_slugs_for(user):
+    """(my_slugs, claimed_slugs) for hard section routing. claimed_slugs empty
+    means the floor isn't divided yet → no filtering (everyone sees all)."""
+    uid = getattr(user, "id", None)
+    my_section_ids = list(
+        SectionServer.objects.filter(user_id=uid).values_list("section_id", flat=True)
+    )
+    my_slugs = set(
+        TableLink.objects.filter(section_id__in=my_section_ids).values_list("slug", flat=True)
+    ) if my_section_ids else set()
+    claimed_section_ids = set(SectionServer.objects.values_list("section_id", flat=True))
+    claimed_slugs = set(
+        TableLink.objects.filter(section_id__in=claimed_section_ids).values_list("slug", flat=True)
+    ) if claimed_section_ids else set()
+    return my_slugs, claimed_slugs
+
+
 class OwnerWaiterCallListView(APIView):
-    """GET /api/owner/waiter-calls/ — pending calls for this tenant."""
+    """GET /api/owner/waiter-calls/ — pending calls for this tenant.
+
+    Hard section routing: a waiter sees only calls for tables in their sections
+    (plus orphan tables with no assigned server). Owners/managers see all.
+    """
 
     permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
 
     def get(self, request):
-        calls = WaiterCall.objects.filter(status=WaiterCall.Status.PENDING).order_by("created_at")
+        calls = list(WaiterCall.objects.filter(status=WaiterCall.Status.PENDING).order_by("created_at"))
+
+        from .views import _is_tenant_owner  # lazy import avoids a heavy module load cycle
+        if not _is_tenant_owner(request):
+            my_slugs, claimed_slugs = _section_slugs_for(request.user)
+            if claimed_slugs:
+                calls = [
+                    c for c in calls
+                    if (not c.table_slug) or c.table_slug in my_slugs or c.table_slug not in claimed_slugs
+                ]
         return Response({"results": [_serialize(c) for c in calls]})
 
 

@@ -119,7 +119,7 @@
             <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
 
-          <div class="space-y-4 px-4 pt-4 pb-28 sm:px-5 sm:pt-5">
+          <div class="space-y-4 px-4 pt-4 pb-5 sm:px-5 sm:pt-5">
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
               <label class="space-y-1 text-sm text-slate-300">
                 <span class="text-xs text-slate-400">{{ t("stepCategories.selectSuperCategory") }}</span>
@@ -187,7 +187,7 @@
 
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="space-y-1 text-sm text-slate-300">
-                  <span class="text-xs text-slate-400">{{ t("stepCategories.positionMin") }}</span>
+                  <span class="text-xs text-slate-400">{{ t("stepSuperCategories.position") }}</span>
                   <input v-model.number="editingCategory.position" type="number" min="0" class="ui-input" @input="clearRowError(editingCategory.local_id, 'position')" />
                 </label>
                 <label class="space-y-1 text-sm text-slate-300">
@@ -293,7 +293,7 @@
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
-                <input v-model.number="quickCategory.position" type="number" min="0" class="ui-input" :aria-label="t('stepCategories.positionMin')" :placeholder="t('stepCategories.positionMin')" />
+                <input v-model.number="quickCategory.position" type="number" min="0" class="ui-input" :aria-label="t('stepSuperCategories.position')" :placeholder="t('stepSuperCategories.position')" />
                 <select v-model="quickCategory.is_published" :aria-label="t('stepCategories.visibility')" class="ui-input">
                   <option :value="true">{{ t("common.available") }}</option>
                   <option :value="false">{{ t("common.soon") }}</option>

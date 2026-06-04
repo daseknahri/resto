@@ -32,29 +32,22 @@ export function useWaiterCalls() {
     }
   };
 
-  // Handle a realtime frame. Returns true when it's a NEW call (so the caller can
-  // play the alert sound / show a toast).
-  const handleRealtime = (event, payload) => {
+  // Handle a realtime frame. Async — resolves true when a NEW call became visible
+  // to THIS user (so the caller can play the alert sound / show a toast).
+  //
+  // For new calls we resync through load() rather than trusting the payload, so
+  // the server's hard section routing decides what this user sees: a non-section
+  // waiter never gets the call (or its alert), the responsible waiter does.
+  const handleRealtime = async (event, payload) => {
     const id = payload?.id;
-    if (event === "waiter.call") {
-      if (id && !pending.value.some((c) => c.id === id)) {
-        pending.value = [
-          ...pending.value,
-          {
-            id,
-            table_label: payload.table_label || "",
-            note: payload.note || "",
-            status: "pending",
-          },
-        ];
-        return true;
-      }
-      if (!id) load(); // unknown shape → resync
-      return Boolean(id);
-    }
     if (event === "waiter.call.ack") {
       if (id) pending.value = pending.value.filter((c) => c.id !== id);
       return false;
+    }
+    if (event === "waiter.call") {
+      const before = new Set(pending.value.map((c) => c.id));
+      await load(); // authoritative + section-filtered
+      return pending.value.some((c) => !before.has(c.id));
     }
     return false;
   };

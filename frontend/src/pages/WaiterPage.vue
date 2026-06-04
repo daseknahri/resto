@@ -165,7 +165,7 @@
               {{ orderHeadline(order) }}
             </p>
             <p class="mt-0.5 text-xs text-slate-400">
-              #{{ order.order_number }} · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span>
+              #{{ order.order_number }} · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span><span v-if="order.section_name" class="text-slate-500"> · {{ order.section_name }}</span>
             </p>
           </div>
           <!-- Status chip -->
@@ -200,16 +200,20 @@
           </p>
         </div>
 
-        <!-- ETA + total -->
-        <div class="mt-2 flex items-center gap-4 px-4 text-xs text-slate-500">
+        <!-- ETA + total + payment -->
+        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 text-xs text-slate-500">
           <span v-if="order.estimated_ready_minutes">
             {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
           </span>
           <span>{{ fmtOrderPrice(order.total, order.currency) }}</span>
+          <span
+            class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            :class="order.payment_status === 'paid' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+          >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
         </div>
 
         <!-- Action footer -->
-        <div class="mt-3 flex items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+        <div class="mt-3 flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
           <button
             v-if="canManageOrders && waiter.nextStatus(order.status)"
             class="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-opacity"
@@ -221,15 +225,78 @@
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <span v-else-if="canManageOrders" class="text-xs text-slate-500 italic">{{ t('waiterPage.handedOff') }}</span>
+
+          <!-- Settle / mark paid — records cash/card; closes a ready dine-in order -->
+          <button
+            v-if="canManageOrders && order.payment_status !== 'paid'"
+            class="shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 hover:border-emerald-400 transition-colors disabled:opacity-50"
+            :disabled="waiter.updatingOrderIds.has(order.id)"
+            @click="settle(order)"
+          >💵 {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
+
+          <!-- Rate the customer — only the server who handled this order -->
+          <button
+            v-if="order.customer_id && order.handled_by_me"
+            class="shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 hover:border-amber-400 transition-colors"
+            @click="openCustomerRating(order)"
+          >★ {{ t('ownerOrders.rateCustomer') }}</button>
+
           <!-- Bill button -->
           <button
             class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
             @click="openBill(order)"
           >🧾 {{ t('waiterPage.billBtn') }}</button>
         </div>
+
       </div>
     </div>
   </div>
+
+  <!-- Customer trust rating modal (server-only) — also prompted right after a
+       dine-in order is settled & closed, the moment service ends. -->
+  <Teleport to="body">
+    <div
+      v-if="ratingOrder"
+      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="ratingOrder = null"
+      @keydown.esc="ratingOrder = null"
+    >
+      <div class="w-full max-w-sm space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+        <div>
+          <p class="text-sm font-semibold text-white">{{ t('ownerOrders.customerRatingTitle') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">
+            {{ ratingOrder.customer_name || ratingOrder.table_label || ('#' + ratingOrder.order_number) }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500">{{ t('ownerOrders.customerRatingHint') }}</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button
+            v-for="n in 5" :key="n" type="button"
+            class="text-3xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
+            :aria-label="t('common.rateNStars', { n })"
+            @click="custRatingScore = n"
+          >★</button>
+        </div>
+        <input
+          v-model="custRatingNote" type="text" maxlength="200"
+          class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
+          :aria-label="t('ownerOrders.customerRatingNote')"
+          :placeholder="t('ownerOrders.customerRatingNote')"
+        />
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200" @click="ratingOrder = null">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="rounded-xl bg-[var(--color-secondary,#f59e0b)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+            :disabled="!custRatingScore || submittingCustRating"
+            @click="submitCustomerRating"
+          >{{ submittingCustRating ? '…' : t('ownerOrders.customerRatingSubmit') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Bill / receipt modal -->
   <Teleport to="body">
@@ -564,6 +631,45 @@ const reload = () => waiter.fetchOrders();
 
 // ── Actions ────────────────────────────────────────────────────────────────────
 const advance = (orderId) => waiter.advanceStatus(orderId);
+
+// Customer trust rating — only the server who handled the order may submit it.
+// Held as the full order object (not just an id) so it survives the order being
+// removed from the active list after a "settle & close".
+const ratingOrder = ref(null);
+const custRatingScore = ref(0);
+const custRatingNote = ref("");
+const submittingCustRating = ref(false);
+
+const openCustomerRating = (order) => {
+  ratingOrder.value = order;
+  custRatingScore.value = order.my_customer_rating?.score ?? 0;
+  custRatingNote.value = order.my_customer_rating?.note ?? "";
+};
+
+const submitCustomerRating = async () => {
+  const order = ratingOrder.value;
+  if (!order || !custRatingScore.value || submittingCustRating.value) return;
+  submittingCustRating.value = true;
+  try {
+    await waiter.rateCustomer(order.id, custRatingScore.value, custRatingNote.value);
+    ratingOrder.value = null;
+  } catch {
+    // Leave the dialog open so the waiter can retry.
+  } finally {
+    submittingCustRating.value = false;
+  }
+};
+
+// Settle / mark paid — records cash/card collected; closes a ready dine-in order.
+// The moment a dine-in order closes is exactly when service ends, so prompt the
+// server to rate the customer right then (before the card leaves the list).
+const settle = async (order) => {
+  const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
+  const res = await waiter.markPaid(order.id);
+  if (res && res.completed && eligibleToRate) {
+    openCustomerRating(order);
+  }
+};
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 const orderHeadline = (order) => {

@@ -570,7 +570,11 @@ const ownerRealtime = useOwnerRealtime((event, payload) => {
   if (event.startsWith("order.")) {
     layoutDoSilentPoll();
   } else if (event.startsWith("waiter.")) {
-    if (handleWaiterRealtime(event, payload)) layoutNotifyWaiterCall(payload);
+    // Async: the handler resyncs through the section-filtered list, so the alert
+    // only fires for a call this user is actually responsible for.
+    handleWaiterRealtime(event, payload).then((isNew) => {
+      if (isNew) layoutNotifyWaiterCall(payload);
+    });
   } else if (event === "chat.message") {
     handleChatRealtime(event, payload);
   }

@@ -175,6 +175,49 @@
       </div>
     </template>
   </div>
+
+  <!-- Rate the customer after delivery (driver → customer, private) -->
+  <Teleport to="body">
+    <div
+      v-if="ratingJob"
+      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="ratingJob = null"
+      @keydown.esc="ratingJob = null"
+    >
+      <div class="w-full max-w-sm space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+        <div>
+          <p class="text-sm font-semibold text-white">{{ t('driver.rateCustomerTitle') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.order') }} #{{ ratingJob.order_number }}</p>
+          <p class="mt-1 text-[11px] text-slate-500">{{ t('driver.rateCustomerHint') }}</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button
+            v-for="n in 5" :key="n" type="button"
+            class="text-3xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
+            :aria-label="t('common.rateNStars', { n })"
+            @click="custRatingScore = n"
+          >★</button>
+        </div>
+        <input
+          v-model="custRatingNote" type="text" maxlength="200"
+          class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
+          :aria-label="t('driver.rateCustomerNote')"
+          :placeholder="t('driver.rateCustomerNote')"
+        />
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200" @click="ratingJob = null">
+            {{ t('driver.rateSkip') }}
+          </button>
+          <button
+            class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            :disabled="!custRatingScore || submittingRating"
+            @click="submitCustomerRating"
+          >{{ submittingRating ? '…' : t('driver.rateSubmit') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -332,12 +375,18 @@ const advance = async (toStatus) => {
   errorMsg.value = '';
   busy.value = true;
   try {
-    const { data } = await api.patch(`/driver/jobs/${activeJob.value.id}/status/`, { status: toStatus });
+    const job = activeJob.value;
+    const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: toStatus });
     if (data.is_terminal) {
       activeJob.value = null;
       online.value = false; // backend takes the driver offline after delivery
       stopGeo();
       toast.show(t('driver.deliveredToast'), 'success');
+      // The driver just met the customer — prompt them to rate the drop-off
+      // while it's fresh (only on a successful delivery, not a failure).
+      if (toStatus === 'delivered' && job && job.restaurant_slug) {
+        openCustomerRating(job);
+      }
       await fetchJobs();
       fetchEarnings(); // a completed delivery just added to earnings
     } else {
@@ -353,6 +402,36 @@ const advance = async (toStatus) => {
 const markFailed = async () => {
   if (!window.confirm(t('driver.failConfirm'))) return;
   await advance('failed');
+};
+
+// ── Rate the customer (driver → customer, after delivery) ──────────────────────
+const ratingJob = ref(null);
+const custRatingScore = ref(0);
+const custRatingNote = ref('');
+const submittingRating = ref(false);
+
+const openCustomerRating = (job) => {
+  ratingJob.value = job;
+  custRatingScore.value = 0;
+  custRatingNote.value = '';
+};
+
+const submitCustomerRating = async () => {
+  const job = ratingJob.value;
+  if (!job || !custRatingScore.value || submittingRating.value) return;
+  submittingRating.value = true;
+  try {
+    await api.post(
+      `/marketplace/track/${job.order_number}/rate/?restaurant=${encodeURIComponent(job.restaurant_slug)}`,
+      { role: 'driver', score: custRatingScore.value, note: custRatingNote.value },
+    );
+    ratingJob.value = null;
+    toast.show(t('driver.ratingThanks'), 'success');
+  } catch {
+    toast.show(t('driver.ratingFailed'), 'error');
+  } finally {
+    submittingRating.value = false;
+  }
 };
 
 // ── Geolocation ───────────────────────────────────────────────────────────────

@@ -148,11 +148,44 @@ class DishOption(models.Model):
         return f"{self.name} (+{self.price_delta})"
 
 
+class TableSection(models.Model):
+    """A floor zone grouping tables (e.g. 'Terrace', 'Main hall').
+
+    Waiters are assigned to sections (via SectionServer); a dine-in order for a
+    table in a section is routed to that section's servers. Tenant-scoped.
+    """
+
+    name = models.CharField(max_length=60)
+    color = models.CharField(
+        max_length=9,
+        blank=True,
+        help_text="Optional hex colour for the floor UI, e.g. #f59e0b.",
+    )
+    position = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("position", "name", "id")
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class TableLink(models.Model):
     label = models.CharField(max_length=40)
     slug = models.SlugField(max_length=55, unique=True)
     position = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # Floor section this table belongs to — drives which waiter sees its orders.
+    section = models.ForeignKey(
+        "menu.TableSection",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tables",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -161,6 +194,28 @@ class TableLink(models.Model):
 
     def __str__(self) -> str:
         return self.label
+
+
+class SectionServer(models.Model):
+    """Assignment of a staff member (waiter) to a floor section.
+
+    ``user_id`` is a loose reference to accounts.User (public schema), matching
+    Order.handled_by_user_id — avoids a tenant→public cross-app FK.
+    """
+
+    section = models.ForeignKey(
+        "menu.TableSection",
+        on_delete=models.CASCADE,
+        related_name="servers",
+    )
+    user_id = models.IntegerField(
+        db_index=True,
+        help_text="accounts.User pk of the assigned waiter.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("section", "user_id")
 
 
 class WaiterCall(models.Model):
@@ -241,6 +296,10 @@ class Order(models.Model):
         DELIVERY = "delivery", "Delivery"
         TABLE = "table", "Table"
 
+    class PaymentStatus(models.TextChoices):
+        UNPAID = "unpaid", "Unpaid"
+        PAID = "paid", "Paid"
+
     order_number = models.CharField(max_length=20, unique=True, db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     # Platform-level customer link — null for anonymous orders, populated when the customer
@@ -275,6 +334,21 @@ class Order(models.Model):
         decimal_places=2,
         default=0,
         help_text="Amount deducted from the customer's wallet at order placement.",
+    )
+    # Payment state — deliberately distinct from the kitchen `status`. Pickup &
+    # delivery are expected to pay up front (wallet at placement, or staff marks
+    # cash collected); dine-in (table) runs as an open tab that is settled when
+    # the customer leaves. UNPAID until fully covered.
+    payment_status = models.CharField(
+        max_length=12,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.UNPAID,
+        db_index=True,
+    )
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the order's bill was fully settled (paid).",
     )
     # Order source — 'direct' (QR/subdomain), 'marketplace' (platform unified checkout)
     class Source(models.TextChoices):
@@ -331,6 +405,9 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     status_updated_at = models.DateTimeField(null=True, blank=True)
+    # Set when the post-meal review push has been sent, so the scheduled command
+    # that nudges customers ~30 min after completion never double-sends.
+    review_prompt_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("-created_at",)
@@ -340,6 +417,27 @@ class Order(models.Model):
 
     def __str__(self) -> str:
         return f"{self.order_number} ({self.status})"
+
+    @property
+    def requires_prepayment(self) -> bool:
+        """Pickup & delivery are pay-now; table (dine-in) is an open tab paid at the end."""
+        return self.fulfillment_type in (
+            self.FulfillmentType.PICKUP,
+            self.FulfillmentType.DELIVERY,
+        )
+
+    @property
+    def is_paid(self) -> bool:
+        return self.payment_status == self.PaymentStatus.PAID
+
+    def mark_paid(self, *, save: bool = True):
+        """Settle the order's bill. Idempotent."""
+        from django.utils import timezone as _tz
+        if self.payment_status != self.PaymentStatus.PAID:
+            self.payment_status = self.PaymentStatus.PAID
+            self.paid_at = _tz.now()
+            if save:
+                self.save(update_fields=["payment_status", "paid_at", "updated_at"])
 
 
 class OrderItem(models.Model):

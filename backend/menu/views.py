@@ -34,7 +34,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
@@ -50,7 +50,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, CurrencyRate, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SuperCategory, TableLink, WaitlistEntry
+from .models import AnalyticsEvent, Category, CurrencyRate, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .tax import order_vat_fields
 from .serializers import (
@@ -1950,6 +1950,7 @@ class PlaceOrderView(APIView):
                     )
 
                 # Deduct wallet balance (select_for_update prevents race conditions)
+                _paid_by_wallet = Decimal("0")
                 if _use_wallet and _wallet_deduction > Decimal("0"):
                     from accounts.models import Customer as _CustM, WalletTransaction as _WTM
                     _cust_locked = _CustM.objects.select_for_update().get(pk=_linked_customer.pk)
@@ -1968,6 +1969,16 @@ class PlaceOrderView(APIView):
                         )
                         order.wallet_amount_paid = _actual
                         order.save(update_fields=["wallet_amount_paid"])
+                        _paid_by_wallet = _actual
+
+                # Settle payment state. An order is PAID once wallet credits (or a
+                # zero total) fully cover it; otherwise it stays UNPAID. Pickup &
+                # delivery are expected to collect the balance up front (cash/card
+                # at handover); dine-in (table) settles the open tab when leaving.
+                if total <= Decimal("0") or _paid_by_wallet >= total:
+                    order.payment_status = Order.PaymentStatus.PAID
+                    order.paid_at = timezone.now()
+                    order.save(update_fields=["payment_status", "paid_at"])
 
                 # Award loyalty points to linked customer (if programme is active)
                 try:
@@ -2117,6 +2128,45 @@ class CustomerOrderStatusView(APIView):
                 "comment": existing_rating.comment,
             }
 
+        # Restaurant's trust rating of this customer (owner→customer). This is
+        # revealed ONLY to the authenticated customer who owns this order — the
+        # endpoint is AllowAny, so leaking it to anyone who guesses an order
+        # number would expose private feedback. We require the session customer
+        # to match the order's linked customer.
+        restaurant_feedback = None
+        try:
+            session_customer_id = request.session.get("customer_id")
+        except Exception:
+            session_customer_id = None
+        if order.customer_id and session_customer_id:
+            try:
+                same_customer = int(session_customer_id) == int(order.customer_id)
+            except (TypeError, ValueError):
+                same_customer = False
+            if same_customer:
+                _tenant = getattr(request, "tenant", None)
+                _tenant_id = _tenant.id if _tenant else 0
+                try:
+                    from accounts.models import CustomerRating as _CR
+                    _cr = (
+                        _CR.objects
+                        .filter(
+                            customer_id=order.customer_id,
+                            tenant_id=_tenant_id,
+                            order_number=order.order_number,
+                        )
+                        .order_by("-created_at")
+                        .first()
+                    )
+                    if _cr is not None:
+                        restaurant_feedback = {
+                            "score": _cr.score,
+                            "note": _cr.note,
+                            "created_at": _cr.created_at.isoformat(),
+                        }
+                except Exception:
+                    restaurant_feedback = None
+
         # Pull the receipt message + VAT settings from the tenant profile (safe fallbacks).
         receipt_message = ""
         vat_fields = {}
@@ -2143,6 +2193,10 @@ class CustomerOrderStatusView(APIView):
             "delivery_fee": str(order.delivery_fee),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
+            # Payment state — lets the customer page show "Paid" vs "Pay at the
+            # table when you leave" (dine-in) / "Payment due" (pickup/delivery).
+            "payment_status": order.payment_status,
+            "requires_prepayment": order.requires_prepayment,
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "items_count": sum(i["qty"] for i in items),
@@ -2152,6 +2206,9 @@ class CustomerOrderStatusView(APIView):
             # Rating state — frontend shows 1–5 star prompt when status=completed and has_rating=false
             "has_rating": existing_rating is not None,
             "rating": rating_data,
+            # Restaurant's feedback about this customer — only populated for the
+            # signed-in customer who owns this order (gated above).
+            "restaurant_feedback": restaurant_feedback,
             # Thank-you message written by the restaurant owner (shown for confirmed/ready/completed).
             "receipt_message": receipt_message,
             # VAT breakdown (empty/zero unless the owner set a VAT rate; prices are VAT-inclusive).
@@ -2213,6 +2270,7 @@ class CustomerOrdersByPhoneView(APIView):
             results.append({
                 "order_number": order.order_number,
                 "status": order.status,
+                "payment_status": order.payment_status,
                 "fulfillment_type": order.fulfillment_type,
                 "total": str(order.total),
                 "currency": order.currency,
@@ -2398,15 +2456,52 @@ class StaffOrderListView(APIView):
             except ValueError:
                 pass  # ignore unparseable timestamp — return full active list
 
+        # ── Hard section filter ────────────────────────────────────────────────
+        # A waiter sees ONLY their assigned sections' table orders, plus every
+        # pickup/delivery order (shared), plus any orphan table order (no section
+        # or a section with no assigned server) so nothing is ever invisible.
+        # Owners see everything.
+        if not _is_tenant_owner(request):
+            uid = getattr(request.user, "id", None)
+            my_section_ids = list(
+                SectionServer.objects.filter(user_id=uid).values_list("section_id", flat=True)
+            )
+            my_slugs = set(
+                TableLink.objects.filter(section_id__in=my_section_ids).values_list("slug", flat=True)
+            ) if my_section_ids else set()
+            claimed_section_ids = set(SectionServer.objects.values_list("section_id", flat=True))
+            claimed_slugs = set(
+                TableLink.objects.filter(section_id__in=claimed_section_ids).values_list("slug", flat=True)
+            ) if claimed_section_ids else set()
+            # Only filter once the floor is actually divided into served sections.
+            # With no assignments every waiter sees all orders (pre-section behaviour).
+            if claimed_slugs:
+                qs = qs.filter(
+                    ~Q(fulfillment_type=Order.FulfillmentType.TABLE)   # pickup/delivery: shared
+                    | Q(table_slug__in=my_slugs)                       # my section's tables
+                    | ~Q(table_slug__in=claimed_slugs)                 # orphan tables (no server)
+                )
+
+        # Section label per table slug, for display on the waiter cards.
+        section_name_by_slug = dict(
+            TableLink.objects.exclude(section__isnull=True).values_list("slug", "section__name")
+        )
+
         orders = []
         for order in qs[:100]:
             orders.append({
                 "id": order.id,
                 "order_number": order.order_number,
                 "status": order.status,
+                "payment_status": order.payment_status,
                 "fulfillment_type": order.fulfillment_type,
                 "table_label": order.table_label,
+                "section_name": section_name_by_slug.get(order.table_slug, "") if order.table_slug else "",
                 "customer_name": order.customer_name,
+                # Customer-rating affordance: only the server who handled this
+                # order may rate the linked customer.
+                "customer_id": order.customer_id,
+                "handled_by_me": order.handled_by_user_id == getattr(request.user, "id", None),
                 "customer_note": order.customer_note,
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
@@ -2626,6 +2721,7 @@ class OwnerOrderListView(APIView):
                 "id": order.id,
                 "order_number": order.order_number,
                 "status": order.status,
+                "payment_status": order.payment_status,
                 "fulfillment_type": order.fulfillment_type,
                 "table_label": order.table_label,
                 "customer_name": order.customer_name,
@@ -2794,10 +2890,12 @@ class OwnerCustomerRatingView(APIView):
     """
     POST /api/owner/orders/<order_id>/customer-rating/
 
-    Owner rates a customer's trustworthiness after a completed order.
-    The rating is stored in the public schema (shared across tenants) and is
-    never shown directly to customers — it contributes to an aggregate trust
-    score visible to restaurants when the same customer orders again.
+    The staff member who SERVED the customer rates their trustworthiness after
+    the order — the waiter/server (or an owner who personally handled it), never
+    an owner rating from behind the dashboard who never met them. The rating is
+    stored in the public schema (shared across tenants) and is never shown to the
+    customer directly — it contributes to an aggregate trust score visible to
+    restaurants when the same customer orders again.
 
     Request body:
         { "score": 1–5, "note": "optional text" }
@@ -2805,7 +2903,7 @@ class OwnerCustomerRatingView(APIView):
     Responses:
         200 OK — rating saved or updated; body: {score, note, avg_score, rating_count}
         400 Bad Request — invalid score or order has no linked customer
-        403 Forbidden — caller is not a tenant editor
+        403 Forbidden — caller did not handle/serve this order
         404 Not Found — unknown order_id
     """
 
@@ -2818,6 +2916,19 @@ class OwnerCustomerRatingView(APIView):
         order = Order.objects.select_related("customer").filter(id=order_id).first()
         if order is None:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Only the person who actually served the customer may rate them — the
+        # staff/waiter (or owner) who handled this order. An owner who never met
+        # the customer cannot rate from behind the dashboard.
+        _uid = getattr(request.user, "id", None)
+        if not order.handled_by_user_id or order.handled_by_user_id != _uid:
+            return Response(
+                {
+                    "detail": "Only the staff member who served this order can rate the customer.",
+                    "code": "not_server",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if not order.customer_id:
             return Response(
@@ -3215,6 +3326,59 @@ class OwnerOrderStatusUpdateView(APIView):
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+            "payment_status": order.payment_status,
+        })
+
+
+class OwnerOrderMarkPaidView(APIView):
+    """
+    POST /api/owner/orders/<order_id>/mark-paid/
+
+    Settle an order's bill — staff record that cash/card was collected at
+    handover (pickup/delivery), or close the open tab when a dine-in customer
+    leaves. Idempotent. Pass {"complete": true} to also complete a READY order
+    in the same call (the dine-in "settle & close" action).
+
+    Requires: a tenant editor (owner or staff with manage-orders).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.filter(id=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        was_paid = order.is_paid
+        order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
+
+        # Credit whoever settles the bill with handling the order, if unattributed.
+        if not order.handled_by_user_id:
+            _uid = getattr(request.user, "id", None)
+            if _uid:
+                order.handled_by_user_id = _uid
+                order.save(update_fields=["handled_by_user_id"])
+
+        # Optional "settle & close": settling the tab completes a READY dine-in order.
+        completed = False
+        _want_complete = str(request.data.get("complete", "")).strip().lower() in ("1", "true", "yes")
+        if _want_complete and order.status == Order.Status.READY:
+            order.status = Order.Status.COMPLETED
+            order.status_updated_at = timezone.now()
+            order.save(update_fields=["status", "status_updated_at", "updated_at"])
+            completed = True
+
+        return Response({
+            "id": order.id,
+            "order_number": order.order_number,
+            "payment_status": order.payment_status,
+            "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+            "status": order.status,
+            "already_paid": was_paid,
+            "completed": completed,
         })
 
 
@@ -3449,6 +3613,139 @@ class CustomerOrderRateView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+# ── Floor sections (route table orders to the responsible waiter) ──────────────
+
+def _resolve_staff_names(user_ids, tenant):
+    """Map accounts.User pk → {id, name, email} for the given ids (this tenant)."""
+    out = {}
+    ids = [i for i in (user_ids or []) if i]
+    if not ids:
+        return out
+    try:
+        from accounts.models import User as _User
+        qs = _User.objects.filter(id__in=ids)
+        if tenant is not None:
+            qs = qs.filter(tenant=tenant)
+        for u in qs.values("id", "name", "email"):
+            out[u["id"]] = {"id": u["id"], "name": u["name"] or "", "email": u["email"]}
+    except Exception:
+        pass
+    return out
+
+
+def _serialize_section(section, server_map):
+    return {
+        "id": section.id,
+        "name": section.name,
+        "color": section.color,
+        "position": section.position,
+        "is_active": section.is_active,
+        "tables": [
+            {"id": t.id, "label": t.label, "slug": t.slug}
+            for t in sorted(section.tables.all(), key=lambda t: (t.position, t.label))
+        ],
+        "servers": [
+            server_map.get(s.user_id, {"id": s.user_id, "name": "", "email": ""})
+            for s in section.servers.all()
+        ],
+    }
+
+
+class OwnerSectionListCreateView(APIView):
+    """GET/POST /api/owner/sections/ — list or create floor sections (owner only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        sections = list(
+            TableSection.objects.prefetch_related("tables", "servers").order_by("position", "name", "id")
+        )
+        ids = {s.user_id for sec in sections for s in sec.servers.all()}
+        server_map = _resolve_staff_names(ids, getattr(request, "tenant", None))
+        return Response({"sections": [_serialize_section(s, server_map) for s in sections]})
+
+    def post(self, request):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        name = str(request.data.get("name", "") or "").strip()[:60]
+        if not name:
+            return Response({"detail": "Name is required.", "code": "name_required"}, status=status.HTTP_400_BAD_REQUEST)
+        color = str(request.data.get("color", "") or "").strip()[:9]
+        try:
+            position = int(request.data.get("position"))
+        except (TypeError, ValueError):
+            position = TableSection.objects.count()
+        section = TableSection.objects.create(name=name, color=color, position=position)
+        return Response(_serialize_section(section, {}), status=status.HTTP_201_CREATED)
+
+
+class OwnerSectionDetailView(APIView):
+    """PATCH/DELETE /api/owner/sections/<id>/ — edit, assign tables/waiters, delete."""
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, section_id):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        section = TableSection.objects.filter(id=section_id).first()
+        if section is None:
+            return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        fields = []
+        if "name" in request.data:
+            name = str(request.data.get("name") or "").strip()[:60]
+            if name:
+                section.name = name
+                fields.append("name")
+        if "color" in request.data:
+            section.color = str(request.data.get("color") or "").strip()[:9]
+            fields.append("color")
+        if "position" in request.data:
+            try:
+                section.position = max(0, int(request.data.get("position")))
+                fields.append("position")
+            except (TypeError, ValueError):
+                pass
+        if "is_active" in request.data:
+            section.is_active = bool(request.data.get("is_active"))
+            fields.append("is_active")
+        if fields:
+            fields.append("updated_at")
+            section.save(update_fields=fields)
+
+        # Replace table membership when provided (full set).
+        if "table_ids" in request.data:
+            ids = [int(i) for i in (request.data.get("table_ids") or []) if str(i).isdigit()]
+            TableLink.objects.filter(section_id=section.id).exclude(id__in=ids).update(section=None)
+            if ids:
+                TableLink.objects.filter(id__in=ids).update(section=section)
+
+        # Replace waiter assignments when provided (full set).
+        if "server_user_ids" in request.data:
+            ids = [int(i) for i in (request.data.get("server_user_ids") or []) if str(i).isdigit()]
+            SectionServer.objects.filter(section_id=section.id).exclude(user_id__in=ids).delete()
+            existing = set(SectionServer.objects.filter(section_id=section.id).values_list("user_id", flat=True))
+            for uid in ids:
+                if uid not in existing:
+                    SectionServer.objects.create(section=section, user_id=uid)
+
+        section.refresh_from_db()
+        ids = {s.user_id for s in section.servers.all()}
+        server_map = _resolve_staff_names(ids, getattr(request, "tenant", None))
+        return Response(_serialize_section(section, server_map))
+
+    def delete(self, request, section_id):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        section = TableSection.objects.filter(id=section_id).first()
+        if section is None:
+            return Response({"detail": "Section not found."}, status=status.HTTP_404_NOT_FOUND)
+        section.delete()  # tables.section → NULL (SET_NULL); servers → cascade
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class OwnerRatingListView(APIView):

@@ -638,6 +638,16 @@
             </div>
           </div>
 
+          <!-- Payment-timing note: pickup/delivery pay now, dine-in pays at the table -->
+          <p
+            v-if="!isBrowseOnlyPlan"
+            class="flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400"
+          >
+            <AppIcon name="info" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+            <span v-if="isTableContextOrder">{{ t('cartPage.payAtEndNote') }}</span>
+            <span v-else>{{ t('cartPage.payNowNote') }}</span>
+          </p>
+
           <!-- ── CTA buttons ── -->
           <div class="space-y-2">
             <button

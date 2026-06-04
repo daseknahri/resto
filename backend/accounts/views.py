@@ -2710,6 +2710,7 @@ class MarketplacePlaceOrderView(APIView):
                             _PFS2.objects.filter(pk=_flash_sale_used.pk).update(redemption_count=_F2("redemption_count") + 1)
 
                         # Wallet deduction
+                        _paid_by_wallet = Decimal("0")
                         if _wallet_deduction > Decimal("0") and _linked_customer:
                             from .models import WalletTransaction as _WTM
                             _cust_locked = Customer.objects.select_for_update().get(pk=_linked_customer.pk)
@@ -2727,6 +2728,16 @@ class MarketplacePlaceOrderView(APIView):
                                 )
                                 order.wallet_amount_paid = _actual
                                 order.save(update_fields=["wallet_amount_paid"])
+                                _paid_by_wallet = _actual
+
+                        # Settle payment state — PAID once wallet credits (or a
+                        # zero total) fully cover it; otherwise UNPAID and the
+                        # balance is collected on delivery/pickup.
+                        if total <= Decimal("0") or _paid_by_wallet >= total:
+                            from django.utils import timezone as _tz
+                            order.payment_status = _Order.PaymentStatus.PAID
+                            order.paid_at = _tz.now()
+                            order.save(update_fields=["payment_status", "paid_at"])
 
                 except _OutOfStock as _e:
                     return Response(
@@ -2811,6 +2822,7 @@ class MarketplaceOrderStatusView(APIView):
         return Response({
             "order_number": order.order_number,
             "status": order.status,
+            "payment_status": order.payment_status,
             "fulfillment_type": order.fulfillment_type,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
@@ -3112,11 +3124,34 @@ class OwnerFlashSaleOptInView(APIView):
 
 # ── Phase 4: Delivery Platform ────────────────────────────────────────────────
 
+# Process-level cache of tenant id → (slug, name). Slugs are stable, so this
+# avoids an N+1 Tenant lookup when serializing lists of delivery jobs.
+_DELIVERY_TENANT_CACHE = {}
+
+
+def _tenant_slug_name(tenant_id):
+    if tenant_id in _DELIVERY_TENANT_CACHE:
+        return _DELIVERY_TENANT_CACHE[tenant_id]
+    try:
+        from tenancy.models import Tenant as _T
+        row = _T.objects.filter(id=tenant_id).values("slug", "name").first()
+    except Exception:
+        return ("", "")  # transient/unavailable — don't cache, retry next time
+    result = (row["slug"], row["name"]) if row else ("", "")
+    _DELIVERY_TENANT_CACHE[tenant_id] = result
+    return result
+
+
 def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
+    _slug, _name = _tenant_slug_name(job.tenant_id)
     data = {
         "id": job.id,
         "order_number": job.order_number,
         "tenant_id": job.tenant_id,
+        # Restaurant identity — the driver UI needs the slug to submit a rating
+        # (the rate endpoint is keyed by ?restaurant=<slug>).
+        "restaurant_slug": _slug,
+        "restaurant_name": _name,
         "status": job.status,
         "pickup_address": job.pickup_address,
         "pickup_lat": job.pickup_lat,
@@ -3393,6 +3428,41 @@ class DriverJobAcceptView(APIView):
         return Response(_serialize_delivery_job(job), status=status.HTTP_200_OK)
 
 
+def _complete_delivered_order(job) -> None:
+    """When a delivery is completed, close out the underlying tenant order:
+    mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
+    prepaid by wallet or cash-collected on handover). This also makes the order
+    eligible for the ~30-min review nudge. Best-effort — never blocks the driver.
+    """
+    try:
+        from tenancy.models import Tenant as _T
+        from django_tenants.utils import schema_context
+        from django.utils import timezone as _tz
+        from menu.models import Order as _O
+
+        tenant = _T.objects.filter(id=job.tenant_id).first()
+        if not tenant:
+            return
+        with schema_context(tenant.schema_name):
+            order = _O.objects.filter(order_number=job.order_number).first()
+            if not order:
+                return
+            fields = []
+            if order.status not in (_O.Status.COMPLETED, _O.Status.CANCELLED):
+                order.status = _O.Status.COMPLETED
+                order.status_updated_at = _tz.now()
+                fields += ["status", "status_updated_at"]
+            if order.payment_status != _O.PaymentStatus.PAID:
+                order.payment_status = _O.PaymentStatus.PAID
+                order.paid_at = _tz.now()
+                fields += ["payment_status", "paid_at"]
+            if fields:
+                fields.append("updated_at")
+                order.save(update_fields=fields)
+    except Exception:
+        logger.exception("Failed to complete delivered order %s", getattr(job, "order_number", "?"))
+
+
 class DriverJobStatusUpdateView(APIView):
     """PATCH /api/driver/jobs/<job_id>/status/ — driver advances job status.
 
@@ -3447,6 +3517,8 @@ class DriverJobStatusUpdateView(APIView):
             # Go offline after delivery
             customer.is_driver_online = False
             customer.save(update_fields=["is_driver_online", "updated_at"])
+            # Close out the underlying order: completed + paid, and review-eligible.
+            _complete_delivered_order(job)
         elif new_status == DeliveryJob.Status.FAILED:
             job.failed_at = now
             update_fields.append("failed_at")

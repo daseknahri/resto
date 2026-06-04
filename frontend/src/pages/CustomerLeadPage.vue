@@ -264,7 +264,7 @@ class="h-1.5 w-1.5 rounded-full"
         @click.self="closeLeadModal"
         @keydown.esc="closeLeadModal"
       >
-        <div ref="leadDialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="w-full max-w-lg rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
+        <div ref="leadDialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
           <div class="mb-4 flex items-center justify-between gap-3">
             <div>
               <p class="ui-kicker">{{ t("customerLeadPage.message") }}</p>

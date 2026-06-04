@@ -213,6 +213,14 @@
                 {{ statusLabel(o.status) }}
               </span>
               <span class="ui-data-strip">{{ fulfillmentLabel(o) }}</span>
+              <!-- Payment badge -->
+              <span
+                v-if="o.status !== 'cancelled'"
+                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="o.payment_status === 'paid' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+              >
+                {{ o.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}
+              </span>
               <!-- Marketplace source badge -->
               <span
                 v-if="o.source === 'marketplace'"
@@ -517,64 +525,16 @@
             🖨 {{ t("ownerOrders.printTicket") }}
           </button>
 
-          <!-- Rate customer (only for linked customer accounts) -->
+          <!-- Settle / Mark paid — record payment collected (cash/card); on a
+               ready dine-in order this also closes the open tab. -->
           <button
-            v-if="o.customer_id && ['completed', 'cancelled'].includes(o.status)"
-            class="ui-btn-outline px-3 py-1.5 text-xs"
-            :class="o.my_customer_rating ? 'border-amber-500/40 text-amber-300' : ''"
-            @click="openRating(o)"
+            v-if="o.payment_status !== 'paid' && o.status !== 'cancelled'"
+            class="ui-btn-outline border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
+            :disabled="settlingOrderId === o.id"
+            @click="settleOrder(o)"
           >
-            ★ {{ o.my_customer_rating ? t("ownerOrders.updateCustomerRating") : t("ownerOrders.rateCustomer") }}
+            💵 {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
           </button>
-        </div>
-
-        <!-- Customer trust rating panel -->
-        <div v-if="ratingOrderId === o.id" class="space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
-          <div class="flex items-start justify-between gap-2">
-            <div class="space-y-0.5">
-              <p class="text-xs font-semibold text-slate-200">{{ t("ownerOrders.customerRatingTitle") }}</p>
-              <p class="text-[10px] text-slate-500">{{ t("ownerOrders.customerRatingHint") }}</p>
-            </div>
-          </div>
-
-          <!-- Star selector -->
-          <div class="flex items-center gap-1">
-            <button
-              v-for="star in 5"
-              :key="star"
-              type="button"
-              class="text-xl transition-transform hover:scale-110 focus:outline-none"
-              :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-600'"
-              :aria-label="t('common.rateNStars', { n: star })"
-              @click="ratingScore = star"
-            >★</button>
-            <span class="ml-2 text-xs text-slate-400">{{ ratingScore }}/5</span>
-          </div>
-
-          <!-- Note field -->
-          <label class="block space-y-1 text-xs text-slate-400">
-            {{ t("ownerOrders.customerRatingNote") }}
-            <input
-              v-model="ratingNote"
-              type="text"
-              maxlength="200"
-              class="ui-input mt-1 text-sm"
-              :aria-invalid="ratingError ? 'true' : undefined"
-              aria-describedby="owner-orders-rating-error"
-            />
-          </label>
-
-          <div class="flex gap-2">
-            <button
-              class="ui-btn-primary px-3 py-1.5 text-xs"
-              :disabled="submittingRating"
-              @click="submitCustomerRating(o)"
-            >
-              {{ submittingRating ? t("common.saving") : t("ownerOrders.customerRatingSubmit") }}
-            </button>
-            <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="ratingOrderId = null">{{ t("common.close") }}</button>
-          </div>
-          <p v-if="ratingError" id="owner-orders-rating-error" class="text-xs text-red-400">{{ ratingError }}</p>
         </div>
       </article>
     </div>
@@ -612,14 +572,11 @@ const editNote = ref("");
 const editMinutes = ref(null);
 const noteError = ref("");
 
-// Customer trust rating
-const ratingOrderId = ref(null);
 // Driver rating (from restaurant side — shared score/note refs)
 const ratingJobId = ref(null);
 const ratingScore = ref(5);
 const ratingNote = ref("");
 const submittingRating = ref(false);
-const ratingError = ref("");
 
 // Sound preference — persisted in localStorage per hostname
 const SOUND_KEY = typeof window === "undefined" ? "orders:sound" : `orders:sound:${window.location.hostname}`;
@@ -879,36 +836,25 @@ const saveNote = async (o) => {
   }
 };
 
-// ── Customer trust rating ─────────────────────────────────────────────────────
-const openRating = (o) => {
-  ratingOrderId.value = o.id;
-  ratingScore.value = o.my_customer_rating?.score ?? 5;
-  ratingNote.value = o.my_customer_rating?.note ?? "";
-  ratingError.value = "";
-  // Close the note editor if open
-  if (editingId.value === o.id) editingId.value = null;
-};
-
-const submitCustomerRating = async (o) => {
-  ratingError.value = "";
-  submittingRating.value = true;
+// ── Settle / mark order paid ──────────────────────────────────────────────────
+// Customer trust ratings are no longer submitted from the owner dashboard — only
+// the staff/waiter who served the customer rates them (see the waiter view).
+const settlingOrderId = ref(null);
+const settleOrder = async (o) => {
+  if (settlingOrderId.value) return;
+  settlingOrderId.value = o.id;
   try {
-    const res = await api.post(`/owner/orders/${o.id}/customer-rating/`, {
-      score: ratingScore.value,
-      note: ratingNote.value,
+    // On a READY order, settling the bill also closes it out (dine-in "settle & close").
+    const res = await api.post(`/owner/orders/${o.id}/mark-paid/`, {
+      complete: o.status === "ready",
     });
-    // Update in-place so the badge refreshes immediately
-    o.my_customer_rating = { score: ratingScore.value, note: ratingNote.value };
-    o.customer_trust = {
-      avg_score: res.data.avg_score,
-      rating_count: res.data.rating_count,
-    };
-    ratingOrderId.value = null;
-    toast.show(t("ownerOrders.customerRatingSubmitted"), "success");
+    o.payment_status = res.data.payment_status;
+    if (res.data.completed) o.status = res.data.status;
+    toast.show(t("ownerOrders.markedPaid"), "success");
   } catch {
-    ratingError.value = t("ownerOrders.customerRatingFailed");
+    toast.show(t("ownerOrders.markPaidFailed"), "error");
   } finally {
-    submittingRating.value = false;
+    settlingOrderId.value = null;
   }
 };
 

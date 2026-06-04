@@ -190,3 +190,57 @@ class CustomerOrderStatusViewTests(SimpleTestCase):
         objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
         resp = self._get()
         self.assertNotIn("customer_email", resp.data)
+
+    # ── Restaurant feedback (owner→customer) is gated to the order owner ───────
+
+    def _make_cr(self, score=4, note="Reliable customer"):
+        cr = MagicMock()
+        cr.score = score
+        cr.note = note
+        cr.created_at.isoformat.return_value = "2026-05-16T10:00:00+00:00"
+        return cr
+
+    @patch("menu.views.Order.objects")
+    def test_restaurant_feedback_field_always_present(self, objects_mock):
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = _make_order()
+        resp = self._get()
+        self.assertIn("restaurant_feedback", resp.data)
+
+    @patch("menu.views.Order.objects")
+    def test_restaurant_feedback_hidden_for_anonymous_viewer(self, objects_mock):
+        """No session → even if a rating exists, it must not be exposed."""
+        order = _make_order(order_status="completed")
+        order.customer_id = 42
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        resp = self._get()  # no session on the request
+        self.assertIsNone(resp.data["restaurant_feedback"])
+
+    @patch("accounts.models.CustomerRating")
+    @patch("menu.views.Order.objects")
+    def test_restaurant_feedback_hidden_for_non_owning_customer(self, objects_mock, cr_mock):
+        order = _make_order(order_status="completed")
+        order.customer_id = 42
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr()
+        req = self.factory.get("/api/order-status/ORD123/")
+        req.session = {"customer_id": 99}  # a different customer
+        req.tenant = MagicMock(id=7)
+        resp = self.view(req, order_number="ORD123")
+        self.assertIsNone(resp.data["restaurant_feedback"])
+
+    @patch("accounts.models.CustomerRating")
+    @patch("menu.views.Order.objects")
+    def test_restaurant_feedback_shown_to_owning_customer(self, objects_mock, cr_mock):
+        order = _make_order(order_status="completed")
+        order.customer_id = 42
+        objects_mock.filter.return_value.prefetch_related.return_value.select_related.return_value.first.return_value = order
+        cr_mock.objects.filter.return_value.order_by.return_value.first.return_value = self._make_cr(score=5, note="Great")
+        req = self.factory.get("/api/order-status/ORD123/")
+        req.session = {"customer_id": 42}  # the order's owner
+        req.tenant = MagicMock(id=7)
+        resp = self.view(req, order_number="ORD123")
+        fb = resp.data["restaurant_feedback"]
+        self.assertIsNotNone(fb)
+        self.assertEqual(fb["score"], 5)
+        self.assertEqual(fb["note"], "Great")
+        self.assertEqual(fb["created_at"], "2026-05-16T10:00:00+00:00")

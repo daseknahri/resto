@@ -98,6 +98,9 @@
       </details>
     </div>
 
+    <!-- Floor sections — assign tables to waiters so table orders route to them -->
+    <OwnerFloorSections v-if="tables.length" :tables="tables" class="no-print" />
+
     <header class="print-only rounded-xl border border-slate-300 bg-white p-4 text-slate-900">
       <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("ownerTables.cardsTitle") }}</p>
       <h3 class="mt-1 text-2xl font-semibold">{{ tenantName }}</h3>
@@ -408,6 +411,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import QRCode from "qrcode";
 import AppIcon from "../components/AppIcon.vue";
+import OwnerFloorSections from "../components/OwnerFloorSections.vue";
 import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";

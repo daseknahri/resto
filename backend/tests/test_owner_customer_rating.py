@@ -17,8 +17,9 @@ from accounts.models import User
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _owner(tenant_id=1):
+def _owner(tenant_id=1, user_id=5):
     u = MagicMock(spec=User)
+    u.id = user_id
     u.is_authenticated = True
     u.is_superuser = False
     u.is_staff = False
@@ -29,8 +30,9 @@ def _owner(tenant_id=1):
     return u
 
 
-def _outsider(tenant_id=99):
+def _outsider(tenant_id=99, user_id=77):
     u = MagicMock(spec=User)
+    u.id = user_id
     u.is_authenticated = True
     u.is_superuser = False
     u.is_staff = False
@@ -45,11 +47,14 @@ def _tenant(tenant_id=1):
     return SimpleNamespace(id=tenant_id)
 
 
-def _make_order(order_id=1, order_number="ORD-001", customer_id=42):
+def _make_order(order_id=1, order_number="ORD-001", customer_id=42, handled_by_user_id=5):
+    # handled_by_user_id defaults to the _owner() id (5) so the "must have
+    # served the order" gate passes for the default requester.
     order = MagicMock()
     order.id = order_id
     order.order_number = order_number
     order.customer_id = customer_id
+    order.handled_by_user_id = handled_by_user_id
     return order
 
 
@@ -75,6 +80,38 @@ class OwnerCustomerRatingViewTests(SimpleTestCase):
     def test_outsider_returns_403(self):
         resp = self._post(1, {"score": 4}, user=_outsider())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Must have served the order (handled_by gate) ───────────────────────────
+
+    @patch("menu.views.Order.objects")
+    def test_non_server_owner_returns_403(self, mock_order_objs):
+        """An owner who did NOT handle the order cannot rate the customer."""
+        order = _make_order(handled_by_user_id=999)  # served by someone else
+        mock_order_objs.select_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post(1, {"score": 4}, user=_owner(user_id=5))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_server")
+
+    @patch("menu.views.Order.objects")
+    def test_unhandled_order_returns_403(self, mock_order_objs):
+        """An order nobody has handled yet cannot be rated."""
+        order = _make_order(handled_by_user_id=None)
+        mock_order_objs.select_related.return_value.filter.return_value.first.return_value = order
+        resp = self._post(1, {"score": 4}, user=_owner(user_id=5))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_server")
+
+    @patch("menu.views.Order.objects")
+    def test_server_can_rate(self, mock_order_objs):
+        """The staff member who handled the order CAN rate the customer."""
+        order = _make_order(handled_by_user_id=5)
+        mock_order_objs.select_related.return_value.filter.return_value.first.return_value = order
+        cr = MagicMock(score=4, note="")
+        with patch("accounts.models.CustomerRating.objects") as mock_cr_objs:
+            mock_cr_objs.update_or_create.return_value = (cr, True)
+            mock_cr_objs.filter.return_value.aggregate.return_value = {"avg": 4.0, "cnt": 1}
+            resp = self._post(1, {"score": 4}, user=_owner(user_id=5))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     # ── Order lookup ──────────────────────────────────────────────────────────
 

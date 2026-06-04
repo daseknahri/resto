@@ -149,6 +149,41 @@ export const useWaiterStore = defineStore("waiter", {
       }
     },
 
+    // -------------------------------------------------------
+    // Settle / mark paid — record cash/card collected. On a READY
+    // dine-in order this completes it too (settle & close).
+    // -------------------------------------------------------
+    async markPaid(orderId) {
+      const order = this.orders.find((o) => o.id === orderId);
+      if (!order) return null;
+      this.updatingOrderIds = new Set([...this.updatingOrderIds, orderId]);
+      try {
+        const res = await api.post(`/owner/orders/${orderId}/mark-paid/`, {
+          complete: order.status === "ready",
+        });
+        order.payment_status = res.data.payment_status;
+        if (res.data.completed) {
+          // Settled & closed — drop from the active list.
+          this.orders = this.orders.filter((o) => o.id !== orderId);
+        }
+        return res.data; // { payment_status, completed, status, ... }
+      } catch {
+        return null;
+      } finally {
+        this.updatingOrderIds = new Set([...this.updatingOrderIds].filter((id) => id !== orderId));
+      }
+    },
+
+    // -------------------------------------------------------
+    // Rate the customer — only the server who handled the order
+    // (the backend enforces this via handled_by).
+    // -------------------------------------------------------
+    async rateCustomer(orderId, score, note = "") {
+      await api.post(`/owner/orders/${orderId}/customer-rating/`, { score, note });
+      const order = this.orders.find((o) => o.id === orderId);
+      if (order) order.my_customer_rating = { score, note };
+    },
+
     async flushQueue() {
       if (this.isSyncing || !this.offlineQueue.length) return;
       this.isSyncing = true;

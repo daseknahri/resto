@@ -259,6 +259,20 @@
           <span class="text-emerald-300">{{ t("orderStatus.walletPaid", { amount: formatCurrency(orderData.wallet_amount_paid) }) }}</span>
           <span class="font-semibold text-emerald-200">💰 {{ formatCurrency(orderData.wallet_amount_paid) }}</span>
         </div>
+
+        <!-- Payment status — Paid, or what's expected (pay-now vs pay-at-table) -->
+        <div
+          v-if="orderData.status !== 'cancelled'"
+          class="flex items-center justify-between rounded-xl border px-3 py-2 text-xs"
+          :class="orderData.payment_status === 'paid'
+            ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-300'
+            : 'border-amber-500/30 bg-amber-500/8 text-amber-200'"
+        >
+          <span v-if="orderData.payment_status === 'paid'">{{ t('orderStatus.paid') }}</span>
+          <span v-else-if="orderData.requires_prepayment">{{ t('orderStatus.paymentDue') }}</span>
+          <span v-else>{{ t('orderStatus.payAtTable') }}</span>
+          <span v-if="orderData.payment_status === 'paid'" class="font-semibold">✓</span>
+        </div>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->
@@ -311,17 +325,28 @@
         </button>
       </div>
 
-      <!-- Already rated — show submitted rating -->
+      <!-- Already rated — confirmation only. The customer's own rating is not
+           echoed back to them (they only see feedback from the restaurant below). -->
       <div
-        v-else-if="orderData.status === 'completed' && orderData.has_rating && orderData.rating"
+        v-else-if="orderData.status === 'completed' && orderData.has_rating"
+        class="ui-panel ui-reveal flex items-center gap-2 p-4 text-sm font-medium text-emerald-300"
+      >
+        <AppIcon name="check" class="h-4 w-4 shrink-0" />
+        {{ t("orderStatus.rateSubmitted") }}
+      </div>
+
+      <!-- The restaurant's feedback about this order — shown only to the signed-in
+           customer who owns the order (the backend gates this to the order owner). -->
+      <div
+        v-if="orderData.restaurant_feedback"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-1"
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{{ t("orderStatus.yourRating") }}</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{{ t("orderStatus.restaurantFeedbackTitle") }}</p>
         <div class="flex items-center gap-2">
-          <span class="text-2xl text-amber-400">{{ "★".repeat(orderData.rating.score) }}<span class="text-slate-700">{{ "★".repeat(5 - orderData.rating.score) }}</span></span>
-          <span class="text-sm font-semibold text-slate-200">{{ orderData.rating.score }}/5</span>
+          <span class="text-2xl text-amber-400">{{ "★".repeat(orderData.restaurant_feedback.score) }}<span class="text-slate-700">{{ "★".repeat(5 - orderData.restaurant_feedback.score) }}</span></span>
+          <span class="text-sm font-semibold text-slate-200">{{ orderData.restaurant_feedback.score }}/5</span>
         </div>
-        <p v-if="orderData.rating.comment" class="text-sm text-slate-400 italic">{{ orderData.rating.comment }}</p>
+        <p v-if="orderData.restaurant_feedback.note" class="text-sm text-slate-400 italic">{{ orderData.restaurant_feedback.note }}</p>
       </div>
 
       <!-- Sign-in nudge for anonymous table orders -->

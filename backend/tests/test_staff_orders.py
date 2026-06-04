@@ -81,6 +81,19 @@ class StaffOrderListViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffOrderListView.as_view()
+        # The section hard-filter queries SectionServer/TableLink. Stub them so
+        # these unit tests stay DB-free; empty assignments → filter is a no-op
+        # (every active order is returned, matching pre-section behaviour).
+        self._patchers = [patch("menu.views.SectionServer"), patch("menu.views.TableLink")]
+        ss, tl = (p.start() for p in self._patchers)
+        ss.objects.filter.return_value.values_list.return_value = []
+        ss.objects.values_list.return_value = []
+        tl.objects.filter.return_value.values_list.return_value = []
+        tl.objects.exclude.return_value.values_list.return_value = []
+
+    def tearDown(self):
+        for p in self._patchers:
+            p.stop()
 
     def _get(self, user=None, tenant=None, params=None):
         req = self.factory.get("/api/staff/orders/", params or {})

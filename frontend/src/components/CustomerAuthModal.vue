@@ -5,7 +5,7 @@
       @click.self="$emit('close')"
       @keydown.esc="$emit('close')"
     >
-      <div ref="dialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-auth-dialog-title" class="w-full max-w-md rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
+      <div ref="dialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-auth-dialog-title" class="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50">
         <!-- Header -->
         <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
           <div>
