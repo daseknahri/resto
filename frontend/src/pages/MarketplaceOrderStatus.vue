@@ -215,6 +215,10 @@
             <span>{{ t('mktOrderStatus.deliveryFee') }}</span>
             <span>{{ fmtPrice(order.delivery_fee, order.currency) }}</span>
           </div>
+          <div v-if="Number(order.loyalty_discount) > 0" class="flex justify-between text-amber-400/90">
+            <span>{{ t('mktOrderStatus.loyaltyDiscount') }}</span>
+            <span>−{{ fmtPrice(order.loyalty_discount, order.currency) }}</span>
+          </div>
           <div v-if="Number(order.wallet_amount_paid) > 0" class="flex justify-between text-emerald-400/80">
             <span>{{ t('mktOrderStatus.walletPaid') }}</span>
             <span>−{{ fmtPrice(order.wallet_amount_paid, order.currency) }}</span>

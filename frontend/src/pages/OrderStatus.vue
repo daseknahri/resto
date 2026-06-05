@@ -263,6 +263,14 @@
             <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
           </div>
         </template>
+        <!-- Loyalty discount applied -->
+        <div
+          v-if="Number(orderData.loyalty_discount) > 0"
+          class="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs"
+        >
+          <span class="text-amber-300">{{ t('orderStatus.loyaltyDiscount') }}</span>
+          <span class="font-semibold text-amber-200">−{{ formatCurrency(orderData.loyalty_discount, orderData.currency) }}</span>
+        </div>
         <!-- Wallet credits applied -->
         <div
           v-if="Number(orderData.wallet_amount_paid) > 0"
