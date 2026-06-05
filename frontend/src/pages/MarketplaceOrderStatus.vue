@@ -64,6 +64,15 @@
         <p class="text-xs text-slate-500">{{ t('mktOrderStatus.trackingHint') }}</p>
       </div>
 
+      <!-- Scheduled (advance order) banner -->
+      <div
+        v-if="order.status === 'scheduled' && order.scheduled_for"
+        class="rounded-2xl border border-violet-400/40 bg-violet-500/10 p-4 text-center"
+      >
+        <p class="text-2xl">🗓️</p>
+        <p class="mt-1 text-sm font-semibold text-violet-100">{{ t('mktOrderStatus.scheduledFor', { time: formatScheduledFor(order.scheduled_for) }) }}</p>
+      </div>
+
       <!-- Status stepper -->
       <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
         <div class="flex items-center justify-between gap-1">
@@ -274,6 +283,19 @@ const submitDriverRating = async () => {
     // silently fail — don't block the UX
   } finally {
     submittingRating.value = false;
+  }
+};
+
+const formatScheduledFor = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return d.toLocaleString(undefined, {
+      weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString();
   }
 };
 

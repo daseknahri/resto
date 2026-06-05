@@ -2328,6 +2328,16 @@ class MarketplaceMenuView(APIView):
                 if not profile or not profile.is_menu_published:
                     return Response({"detail": "Restaurant menu is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
+                # Loyalty config (so the marketplace checkout can offer points redemption).
+                from menu.models import LoyaltyConfig as _LCfgM
+                _lc = _LCfgM.objects.filter(enabled=True).first()
+                loyalty_cfg_data = {
+                    "enabled": True,
+                    "points_value": str(_lc.points_value),
+                    "redeem_threshold": _lc.redeem_threshold,
+                    "points_per_unit": _lc.points_per_unit,
+                } if _lc else None
+
                 dishes_qs = (
                     _Dish.objects.filter(is_published=True, category__is_published=True)
                     .select_related("category__super_category")
@@ -2423,6 +2433,7 @@ class MarketplaceMenuView(APIView):
             "tags": profile.tags or [],
             "is_open": is_open,
             "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
+            "loyalty": loyalty_cfg_data,
             "super_categories": super_categories,
         })
 
@@ -2521,11 +2532,39 @@ class MarketplacePlaceOrderView(APIView):
                 if not profile or not profile.is_menu_published:
                     return Response({"detail": "Restaurant is not available.", "code": "unavailable"}, status=status.HTTP_404_NOT_FOUND)
 
-                if not _compute_is_open_now(profile):
+                # Advance/scheduled order — may be placed while currently closed (it's for a
+                # future open slot); the time is validated against business hours below.
+                _wants_schedule = bool(request.data.get("scheduled_for"))
+                if not _wants_schedule and not _compute_is_open_now(profile):
                     return Response(
                         {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
                         status=status.HTTP_409_CONFLICT,
                     )
+
+                # Validate the requested advance-fulfilment time (pickup/delivery only,
+                # future within the lead window, inside opening hours). Reuses the same
+                # helpers as the direct checkout for identical behaviour.
+                _scheduled_for = None
+                _sched_raw = request.data.get("scheduled_for")
+                if _sched_raw:
+                    from menu.views import _validate_scheduled_for as _vsf
+                    from datetime import datetime as _dt
+                    try:
+                        _parsed_dt = _dt.fromisoformat(str(_sched_raw).replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        return Response({"detail": "Invalid scheduled time.", "code": "schedule_invalid"},
+                                        status=status.HTTP_400_BAD_REQUEST)
+                    _scheduled_for, _sched_err = _vsf(profile, fulfillment_type, _parsed_dt)
+                    if _sched_err:
+                        _sched_msgs = {
+                            "schedule_not_supported": "Only pickup and delivery orders can be scheduled in advance.",
+                            "schedule_too_soon": "Please choose a time at least 30 minutes from now.",
+                            "schedule_too_far": "Scheduled orders can be placed up to 14 days ahead.",
+                            "schedule_closed": "The restaurant is closed at that time. Please pick a time within opening hours.",
+                        }
+                        return Response({"detail": _sched_msgs.get(_sched_err, "That scheduled time isn't available."),
+                                         "code": _sched_err}, status=status.HTTP_400_BAD_REQUEST)
+                _is_scheduled = _scheduled_for is not None
 
                 slugs = []
                 for it in items_raw:
@@ -2631,6 +2670,34 @@ class MarketplacePlaceOrderView(APIView):
                     _applied_promo_name = f"Flash Sale: {_flash_sale_used.name}" if _flash_sale_used else "Flash Sale"
 
                 total = max(Decimal("0"), food_subtotal + _delivery_fee - _promo_discount)
+
+                # ── Loyalty redemption at checkout (mirrors the direct flow) ──────────
+                _loyalty_discount = Decimal("0")
+                _loyalty_points_spent = 0
+                try:
+                    _redeem_points = int(request.data.get("redeem_points", 0) or 0)
+                except (TypeError, ValueError):
+                    _redeem_points = 0
+                if _redeem_points > 0:
+                    if _linked_customer is None:
+                        return Response({"detail": "Sign in to redeem points.", "code": "auth_required"},
+                                        status=status.HTTP_403_FORBIDDEN)
+                    from menu.models import LoyaltyConfig as _LCfg
+                    from menu.views import _size_loyalty_redemption as _slr
+                    _lc = _LCfg.objects.filter(enabled=True).first()
+                    _loyalty_discount, _loyalty_points_spent, _loy_err = _slr(
+                        _lc, getattr(_linked_customer, "loyalty_points", 0), _redeem_points, total,
+                    )
+                    if _loy_err:
+                        _loy_msgs = {
+                            "loyalty_disabled": "Loyalty isn't available right now.",
+                            "loyalty_insufficient_points": "You don't have that many points.",
+                            "loyalty_below_threshold": f"Redeem at least {getattr(_lc, 'redeem_threshold', 0)} points.",
+                        }
+                        return Response({"detail": _loy_msgs.get(_loy_err, "Couldn't redeem your points."),
+                                         "code": _loy_err}, status=status.HTTP_400_BAD_REQUEST)
+                    total = max(Decimal("0"), total - _loyalty_discount)
+
                 commission_amount = (food_subtotal * Decimal("0.10")).quantize(Decimal("0.01"))
 
                 # Marketplace pickup & delivery are pay-now: the bill must be settled in
@@ -2676,6 +2743,9 @@ class MarketplacePlaceOrderView(APIView):
                 class _PrepayUnpaid(Exception):
                     """Pay-now order couldn't be fully settled from the wallet — roll back."""
 
+                class _LoyaltyShort(Exception):
+                    """Loyalty balance no longer covers the redemption — roll the order back."""
+
                 if fulfillment_type == "delivery" and _linked_customer:
                     customer_name = _linked_customer.name or customer_name
                     customer_phone = _linked_customer.phone or customer_phone
@@ -2711,7 +2781,8 @@ class MarketplacePlaceOrderView(APIView):
 
                         order = _Order.objects.create(
                             order_number=order_number,
-                            status=_Order.Status.PENDING,
+                            status=_Order.Status.SCHEDULED if _is_scheduled else _Order.Status.PENDING,
+                            scheduled_for=_scheduled_for,
                             customer=_linked_customer,
                             customer_name=customer_name,
                             customer_phone=customer_phone,
@@ -2728,9 +2799,22 @@ class MarketplacePlaceOrderView(APIView):
                             commission_amount=commission_amount,
                             promotion_discount=_promo_discount,
                             applied_promotion_name=_applied_promo_name,
+                            loyalty_discount=_loyalty_discount,
+                            redeemed_loyalty_points=(_loyalty_points_spent or None),
                         )
                         for item_data in order_items_data:
                             _OI.objects.create(order=order, **item_data)
+
+                        # Debit redeemed loyalty points atomically (guarded UPDATE; rolls
+                        # back if the balance changed under us).
+                        if _loyalty_points_spent > 0 and _linked_customer:
+                            from django.db.models import F as _Floy
+                            _ok = Customer.objects.filter(
+                                pk=_linked_customer.pk,
+                                loyalty_points__gte=_loyalty_points_spent,
+                            ).update(loyalty_points=_Floy("loyalty_points") - _loyalty_points_spent)
+                            if not _ok:
+                                raise _LoyaltyShort()
 
                         # Increment restaurant promo use_count atomically
                         if _best_promo is not None:
@@ -2778,11 +2862,33 @@ class MarketplacePlaceOrderView(APIView):
                         if _requires_prepay and order.payment_status != _Order.PaymentStatus.PAID:
                             raise _PrepayUnpaid()
 
+                        # Award loyalty points (parity with the direct checkout — the
+                        # marketplace path previously skipped this). Best-effort.
+                        try:
+                            from menu.models import LoyaltyConfig as _LCfgEarn
+                            _earn_cfg = _LCfgEarn.objects.filter(enabled=True).first()
+                            if _earn_cfg and _linked_customer is not None:
+                                _pts = int(float(food_subtotal) * int(_earn_cfg.points_per_unit))
+                                if _pts > 0:
+                                    from django.db.models import F as _Fearn
+                                    Customer.objects.filter(pk=_linked_customer.pk).update(
+                                        loyalty_points=_Fearn("loyalty_points") + _pts
+                                    )
+                                    _Order.objects.filter(pk=order.pk).update(points_earned=_pts)
+                        except Exception:
+                            pass  # never fail the order over loyalty accounting
+
                 except _PrepayUnpaid:
                     return Response(
                         {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
                          "code": "wallet_insufficient"},
                         status=status.HTTP_402_PAYMENT_REQUIRED,
+                    )
+                except _LoyaltyShort:
+                    return Response(
+                        {"detail": "Your loyalty points balance changed — please review and try again.",
+                         "code": "loyalty_insufficient_points"},
+                        status=status.HTTP_409_CONFLICT,
                     )
                 except _OutOfStock as _e:
                     return Response(
@@ -2797,7 +2903,8 @@ class MarketplacePlaceOrderView(APIView):
 
                 # Platform delivery: spawn a searching driver job and dispatch to online
                 # drivers. Best-effort and post-commit — a hiccup must never affect the order.
-                if fulfillment_type == "delivery" and getattr(profile, "platform_delivery_enabled", False):
+                # Scheduled orders skip dispatch now — the release sweep fires it at the time.
+                if not _is_scheduled and fulfillment_type == "delivery" and getattr(profile, "platform_delivery_enabled", False):
                     try:
                         from .models import DeliveryJob as _DJob
                         _DJob.objects.create(
@@ -2831,6 +2938,10 @@ class MarketplacePlaceOrderView(APIView):
             "commission_amount": str(order.commission_amount),
             "promotion_discount": str(order.promotion_discount),
             "applied_promotion_name": order.applied_promotion_name,
+            "loyalty_discount": str(order.loyalty_discount),
+            "redeemed_loyalty_points": order.redeemed_loyalty_points,
+            "points_earned": order.points_earned,
+            "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             "currency": order.currency,
             "restaurant_slug": tenant.slug,
             "restaurant_name": tenant.name,
@@ -2895,8 +3006,10 @@ class MarketplaceOrderStatusView(APIView):
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
             "wallet_amount_paid": str(order.wallet_amount_paid),
+            "loyalty_discount": str(order.loyalty_discount),
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             "items": items,
             "restaurant_slug": slug,
             "restaurant_name": tenant.name,

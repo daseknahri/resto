@@ -266,7 +266,43 @@
                 />
               </label>
             </div>
+            <!-- When: ASAP vs scheduled -->
+            <div>
+              <p class="block text-xs font-medium text-slate-400 mb-1">{{ t('mktMenu.whenTitle') }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                  :class="!scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                  @click="scheduleEnabled = false"
+                >{{ t('mktMenu.scheduleAsap') }}</button>
+                <button
+                  type="button"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                  :class="scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                  @click="scheduleEnabled = true"
+                >{{ t('mktMenu.scheduleLater') }}</button>
+              </div>
+              <input
+                v-if="scheduleEnabled"
+                v-model="scheduledFor"
+                type="datetime-local"
+                :min="minScheduleDatetime"
+                class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
+              />
+              <p v-if="scheduleEnabled" class="mt-1 text-[11px] text-slate-500">{{ t('mktMenu.scheduleHint') }}</p>
+            </div>
           </div>
+
+          <!-- Loyalty redemption -->
+          <label
+            v-if="loyaltyAvailable"
+            class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3"
+          >
+            <input v-model="useLoyalty" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500/40" />
+            <span class="flex-1 text-xs text-amber-200">{{ t('mktMenu.loyaltyRedeem', { points: loyaltyPoints }) }}</span>
+            <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold text-amber-300">-{{ fmtPrice(loyaltyDiscount) }}</span>
+          </label>
 
           <!-- Pay now from wallet (marketplace orders are pay-now) -->
           <div
@@ -292,6 +328,10 @@
             <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
               <span>{{ t('mktMenu.deliveryFeeLabel') }}</span>
               <span>{{ fmtPrice(restaurant?.delivery_fee || 0) }}</span>
+            </div>
+            <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
+              <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
+              <span>-{{ fmtPrice(loyaltyDiscount) }}</span>
             </div>
             <div class="flex justify-between font-bold text-white border-t border-slate-800 pt-1.5 mt-1.5">
               <span>{{ t('mktMenu.total') }}</span>
@@ -401,6 +441,17 @@ const form = reactive({
   customer_note: '',
 });
 
+// Advance/scheduled order + loyalty redemption (parity with the direct checkout).
+const scheduleEnabled = ref(false);
+const scheduledFor = ref(''); // <input type="datetime-local"> value (local wall-clock)
+const loyaltyConfig = ref(null);
+const useLoyalty = ref(false);
+const minScheduleDatetime = computed(() => {
+  const d = new Date(Date.now() + 30 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+});
+
 // ── Customer ─────────────────────────────────────────────────────────────────
 const customer = computed(() => customerStore.customer);
 
@@ -440,13 +491,28 @@ const cartTotal = computed(() =>
   cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0)
 );
 
-const orderTotal = computed(() => {
+// ── Loyalty redemption ───────────────────────────────────────────────────────
+const loyaltyPoints = computed(() => Number(customerStore.customer?.loyalty_points) || 0);
+const loyaltyAvailable = computed(() =>
+  customerStore.isAuthenticated &&
+  !!loyaltyConfig.value?.enabled &&
+  loyaltyPoints.value >= (Number(loyaltyConfig.value?.redeem_threshold) || 0) &&
+  (Number(loyaltyConfig.value?.points_value) || 0) > 0
+);
+const orderBaseTotal = computed(() => {
   let total = cartTotal.value;
   if (form.fulfillment_type === 'delivery' && restaurant.value) {
     total += Number(restaurant.value.delivery_fee || 0);
   }
   return total;
 });
+const loyaltyDiscount = computed(() => {
+  if (!useLoyalty.value || !loyaltyAvailable.value) return 0;
+  const ptsValue = Number(loyaltyConfig.value.points_value) || 0;
+  return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, orderBaseTotal.value));
+});
+
+const orderTotal = computed(() => Math.max(0, orderBaseTotal.value - loyaltyDiscount.value));
 
 // Marketplace orders are pay-now: settled in full from the wallet at checkout.
 const walletBalanceNum = computed(() => {
@@ -479,6 +545,7 @@ const fetchMenu = async () => {
   try {
     const res = await api.get(`/marketplace/menu/${slug}/`);
     restaurant.value = res.data;
+    loyaltyConfig.value = res.data?.loyalty?.enabled ? res.data.loyalty : null;
     // Pre-fill customer info if signed in
     if (customer.value) {
       form.customer_name = customer.value.name || '';
@@ -491,10 +558,15 @@ const fetchMenu = async () => {
   }
 };
 
+
 const placeOrder = async () => {
   checkoutError.value = '';
   if (!form.customer_name.trim()) {
     checkoutError.value = t('mktMenu.nameRequired');
+    return;
+  }
+  if (scheduleEnabled.value && !scheduledFor.value) {
+    checkoutError.value = t('mktMenu.scheduleRequired');
     return;
   }
   // Pay-now: a signed-in customer's wallet must cover the full total.
@@ -518,6 +590,13 @@ const placeOrder = async () => {
       delivery_address: form.delivery_address,
       use_wallet: true,
     };
+    if (scheduleEnabled.value && scheduledFor.value) {
+      const dt = new Date(scheduledFor.value);
+      if (!Number.isNaN(dt.getTime())) payload.scheduled_for = dt.toISOString();
+    }
+    if (useLoyalty.value && loyaltyAvailable.value && loyaltyPoints.value > 0) {
+      payload.redeem_points = loyaltyPoints.value;
+    }
     const res = await api.post('/marketplace/order/', payload);
     // Navigate to order status page
     router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
@@ -533,6 +612,12 @@ const placeOrder = async () => {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {
       checkoutError.value = t('mktMenu.itemsUnavailable');
+    } else if (typeof code === 'string' && code.startsWith('loyalty_')) {
+      customerStore.fetchCustomer(true);
+      useLoyalty.value = false;
+      checkoutError.value = err?.response?.data?.detail || t('mktMenu.orderError');
+    } else if (typeof code === 'string' && code.startsWith('schedule_')) {
+      checkoutError.value = err?.response?.data?.detail || t('mktMenu.orderError');
     } else {
       checkoutError.value = t('mktMenu.orderError');
     }
