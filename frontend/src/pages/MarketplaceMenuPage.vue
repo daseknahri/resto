@@ -246,7 +246,7 @@
                 />
               </label>
             </div>
-            <div v-if="form.fulfillment_type === 'delivery'">
+            <div v-if="form.fulfillment_type === 'delivery'" class="space-y-2">
               <label class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.deliveryAddress') }}
                 <textarea
@@ -255,6 +255,29 @@
                   class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none resize-none"
                 />
               </label>
+              <!-- Coordinates → distance-based fee -->
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 hover:border-slate-600 disabled:opacity-50"
+                :disabled="locatingMkt"
+                @click="useMyLocation"
+              >
+                <AppIcon name="location" class="h-3 w-3" />
+                {{ locatingMkt ? t('mktMenu.locating') : (form.delivery_lat ? t('mktMenu.locationSet') : t('mktMenu.useMyLocation')) }}
+              </button>
+              <p v-if="locateError" class="text-[11px] text-rose-300">{{ locateError }}</p>
+              <p v-if="deliveryOutOfRange" class="flex items-start gap-1.5 text-[11px] text-rose-300">
+                <AppIcon name="info" class="h-3 w-3 shrink-0 mt-px" />
+                {{ t('mktMenu.deliveryOutOfRange', { km: deliveryPricing.radiusKm }) }}
+              </p>
+              <p v-else-if="deliveryFeeIsDistance" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="location" class="h-3 w-3 shrink-0" />
+                {{ t('mktMenu.deliveryFeeDistance', { fee: fmtPrice(deliveryFee), km: deliveryDistanceKm }) }}
+              </p>
+              <p v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="location" class="h-3 w-3 shrink-0" />
+                {{ t('mktMenu.deliveryFeeByDistance') }}
+              </p>
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-400 mb-1">
@@ -326,8 +349,11 @@
               <span>{{ fmtPrice(cartTotal) }}</span>
             </div>
             <div v-if="form.fulfillment_type === 'delivery'" class="flex justify-between text-slate-400">
-              <span>{{ t('mktMenu.deliveryFeeLabel') }}</span>
-              <span>{{ fmtPrice(restaurant?.delivery_fee || 0) }}</span>
+              <span>
+                {{ t('mktMenu.deliveryFeeLabel') }}
+                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500">· {{ deliveryDistanceKm }} km</span>
+              </span>
+              <span>{{ deliveryIsFree ? t('mktMenu.freeDelivery') : fmtPrice(deliveryFee) }}</span>
             </div>
             <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
               <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
@@ -348,10 +374,10 @@
           <!-- Submit -->
           <button
             class="w-full rounded-2xl bg-[var(--color-secondary,#f59e0b)] py-3.5 text-sm font-bold text-slate-950 hover:opacity-90 disabled:opacity-50 transition-opacity"
-            :disabled="placing || prepayShortfall"
+            :disabled="placing || prepayShortfall || deliveryBlocked"
             @click="placeOrder"
           >
-            {{ placing ? t('mktMenu.placing') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : t('mktMenu.placeOrder')) }}
+            {{ placing ? t('mktMenu.placing') : (deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : t('mktMenu.placeOrder'))) }}
           </button>
         </div>
       </div>
@@ -438,8 +464,34 @@ const form = reactive({
   customer_name: '',
   customer_phone: '',
   delivery_address: '',
+  delivery_lat: null,
+  delivery_lng: null,
   customer_note: '',
 });
+
+// Capture the customer's coordinates so the delivery fee can be priced by distance.
+const locatingMkt = ref(false);
+const locateError = ref('');
+const useMyLocation = () => {
+  locateError.value = '';
+  if (!navigator.geolocation) {
+    locateError.value = t('mktMenu.locateUnsupported');
+    return;
+  }
+  locatingMkt.value = true;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      form.delivery_lat = Number(pos.coords.latitude.toFixed(6));
+      form.delivery_lng = Number(pos.coords.longitude.toFixed(6));
+      locatingMkt.value = false;
+    },
+    () => {
+      locateError.value = t('mktMenu.locateFailed');
+      locatingMkt.value = false;
+    },
+    { enableHighAccuracy: true, timeout: 10000 },
+  );
+};
 
 // Advance/scheduled order + loyalty redemption (parity with the direct checkout).
 const scheduleEnabled = ref(false);
@@ -491,6 +543,59 @@ const cartTotal = computed(() =>
   cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0)
 );
 
+// ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toNum = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+  const a1 = toNum(lat1), o1 = toNum(lng1), a2 = toNum(lat2), o2 = toNum(lng2);
+  if (![a1, o1, a2, o2].every((n) => Number.isFinite(n))) return null;
+  const R = 6371.0088;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(a2 - a1), dLng = rad(o2 - o1);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a1)) * Math.cos(rad(a2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+const deliveryPricing = computed(() => {
+  const p = restaurant.value || {};
+  return {
+    flat: Number(p.delivery_fee) || 0,
+    base: Number(p.delivery_base_fee) || 0,
+    perKm: Number(p.delivery_per_km) || 0,
+    freeOver: Number(p.delivery_free_over) || 0,
+    radiusKm: p.delivery_radius_km == null ? null : Number(p.delivery_radius_km),
+    lat: p.lat,
+    lng: p.lng,
+  };
+});
+const deliveryDistanceKm = computed(() => {
+  const p = deliveryPricing.value;
+  const d = haversineKm(p.lat, p.lng, form.delivery_lat, form.delivery_lng);
+  return d == null ? null : Math.round(d * 10) / 10;
+});
+const deliveryOutOfRange = computed(() => {
+  const p = deliveryPricing.value, d = deliveryDistanceKm.value;
+  return d != null && p.radiusKm != null && p.radiusKm > 0 && d > p.radiusKm;
+});
+const deliveryFeeIsDistance = computed(
+  () => deliveryPricing.value.perKm > 0 && deliveryDistanceKm.value != null,
+);
+const deliveryIsFree = computed(() => {
+  const p = deliveryPricing.value;
+  return p.freeOver > 0 && cartTotal.value >= p.freeOver && !deliveryOutOfRange.value;
+});
+const deliveryFee = computed(() => {
+  const p = deliveryPricing.value;
+  if (form.fulfillment_type !== 'delivery') return 0;
+  if (deliveryOutOfRange.value) return 0;
+  if (p.freeOver > 0 && cartTotal.value >= p.freeOver) return 0;
+  if (deliveryFeeIsDistance.value) {
+    return Math.max(0, Math.round((p.base + p.perKm * deliveryDistanceKm.value) * 100) / 100);
+  }
+  return p.flat > 0 ? p.flat : 0;
+});
+const deliveryBlocked = computed(
+  () => form.fulfillment_type === 'delivery' && deliveryOutOfRange.value,
+);
+
 // ── Loyalty redemption ───────────────────────────────────────────────────────
 const loyaltyPoints = computed(() => Number(customerStore.customer?.loyalty_points) || 0);
 const loyaltyAvailable = computed(() =>
@@ -501,8 +606,8 @@ const loyaltyAvailable = computed(() =>
 );
 const orderBaseTotal = computed(() => {
   let total = cartTotal.value;
-  if (form.fulfillment_type === 'delivery' && restaurant.value) {
-    total += Number(restaurant.value.delivery_fee || 0);
+  if (form.fulfillment_type === 'delivery') {
+    total += deliveryFee.value;
   }
   return total;
 });
@@ -588,6 +693,8 @@ const placeOrder = async () => {
       customer_phone: form.customer_phone,
       customer_note: form.customer_note,
       delivery_address: form.delivery_address,
+      delivery_lat: form.delivery_lat,
+      delivery_lng: form.delivery_lng,
       use_wallet: true,
     };
     if (scheduleEnabled.value && scheduledFor.value) {

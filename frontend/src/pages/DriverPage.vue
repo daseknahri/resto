@@ -151,7 +151,31 @@
             {{ statusLabel(activeJob.status) }}
           </span>
         </div>
-        <p class="text-xs text-slate-500">{{ t('driver.order') }} #{{ activeJob.order_number }}</p>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p v-if="activeJob.restaurant_name" class="text-sm font-medium text-slate-200">{{ activeJob.restaurant_name }}</p>
+          <p class="text-xs text-slate-500">{{ t('driver.order') }} #{{ activeJob.order_number }}</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+          <span v-if="activeJob.distance_km != null" class="inline-flex items-center gap-1">
+            <AppIcon name="location" class="h-3 w-3" />{{ t('driver.distanceKm', { km: activeJob.distance_km }) }}
+          </span>
+          <span v-if="activeJob.items_count">{{ t('driver.itemsCount', { n: activeJob.items_count }) }}</span>
+        </div>
+
+        <!-- Cash to collect (COD) vs already paid — the driver must know -->
+        <div
+          v-if="activeJob.collect_cash"
+          class="flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+        >
+          <span class="text-xs font-semibold text-amber-200">{{ t('driver.collectCash') }}</span>
+          <span class="text-base font-bold tabular-nums text-amber-200">{{ fmtMoney(activeJob.order_total) }}</span>
+        </div>
+        <div
+          v-else-if="activeJob.order_total"
+          class="flex items-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-900/15 px-3 py-2 text-xs font-semibold text-emerald-300"
+        >
+          <AppIcon name="check" class="h-3.5 w-3.5" />{{ t('driver.prepaid', { amount: fmtMoney(activeJob.order_total) }) }}
+        </div>
 
         <div class="space-y-2">
           <a
@@ -196,10 +220,29 @@
           </a>
         </div>
 
+        <!-- What's in the order -->
+        <div v-if="activeJob.items && activeJob.items.length" class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2">
+          <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.itemsTitle') }}</p>
+          <ul class="space-y-0.5">
+            <li v-for="(it, idx) in activeJob.items" :key="idx" class="flex justify-between gap-2 text-sm text-slate-300">
+              <span class="truncate">{{ it.name }}</span>
+              <span class="shrink-0 tabular-nums text-slate-400">×{{ it.qty }}</span>
+            </li>
+          </ul>
+        </div>
+
         <div class="flex items-center justify-between rounded-xl bg-slate-800/40 px-3 py-2">
           <span class="text-xs text-slate-400">{{ t('driver.payout') }}</span>
           <span class="text-sm font-semibold tabular-nums text-emerald-300">{{ fmtMoney(activeJob.driver_payout) }}</span>
         </div>
+
+        <!-- Reminder: confirm delivery with the customer's code -->
+        <p
+          v-if="nextAction && nextAction.to === 'delivered'"
+          class="flex items-start gap-1.5 rounded-lg bg-sky-900/15 px-2.5 py-1.5 text-[11px] text-sky-300"
+        >
+          <AppIcon name="info" class="mt-px h-3 w-3 shrink-0" />{{ t('driver.codeReminder') }}
+        </p>
 
         <!-- Advance status -->
         <button
@@ -233,9 +276,24 @@
         <p v-else-if="!pendingJobs.length" class="py-6 text-center text-sm text-slate-500">{{ t('driver.noPending') }}</p>
         <ul v-else class="space-y-2">
           <li v-for="job in pendingJobs" :key="job.id" class="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-xs text-slate-500">{{ t('driver.order') }} #{{ job.order_number }}</p>
-              <span class="text-sm font-semibold tabular-nums text-emerald-300">{{ fmtMoney(job.driver_payout) }}</span>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-slate-200">{{ job.restaurant_name || ('#' + job.order_number) }}</p>
+                <p class="text-[11px] text-slate-500">{{ t('driver.order') }} #{{ job.order_number }}</p>
+              </div>
+              <span class="shrink-0 text-sm font-semibold tabular-nums text-emerald-300">{{ fmtMoney(job.driver_payout) }}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+              <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
+                <AppIcon name="location" class="h-3 w-3" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
+              </span>
+              <span v-if="job.items_count">{{ t('driver.itemsCount', { n: job.items_count }) }}</span>
+              <span v-if="job.collect_cash" class="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">
+                {{ t('driver.cashShort', { amount: fmtMoney(job.order_total) }) }}
+              </span>
+              <span v-else-if="job.order_total" class="rounded-full bg-emerald-500/12 px-2 py-0.5 font-semibold text-emerald-300">
+                {{ t('driver.prepaidShort') }}
+              </span>
             </div>
             <p v-if="job.delivery_address" class="truncate text-sm text-slate-300">
               <AppIcon name="location" class="mr-1 inline h-3.5 w-3.5 text-emerald-300" />{{ job.delivery_address }}

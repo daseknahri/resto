@@ -283,10 +283,30 @@
                 </span>
               </div>
 
-              <!-- Delivery fee note -->
-              <div v-if="deliveryFeeAmount === 0" class="flex items-center gap-1.5 text-[11px] text-emerald-400">
+              <!-- Delivery fee note (distance-aware) -->
+              <div v-if="deliveryOutOfRange" class="flex items-start gap-1.5 text-[11px] text-rose-300">
+                <AppIcon name="info" class="h-3 w-3 shrink-0 mt-px" />
+                {{ t('cartPage.deliveryOutOfRange', { km: deliveryPricing.radiusKm }) }}
+              </div>
+              <div v-else-if="deliveryIsFree" class="flex items-center gap-1.5 text-[11px] text-emerald-400">
                 <AppIcon name="check" class="h-3 w-3 shrink-0" />
                 {{ t('cartPage.deliveryFee') }}: {{ t('cartPage.free') }}
+              </div>
+              <div v-else-if="deliveryFeeIsDistance" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="location" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.deliveryFeeDistance', { fee: formatPrice(deliveryFeeAmount), km: deliveryDistanceKm }) }}
+              </div>
+              <div v-else-if="deliveryPricing.perKm > 0" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="location" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.deliveryFeeByDistance') }}
+              </div>
+              <div v-else-if="deliveryFeeAmount === 0" class="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                <AppIcon name="check" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.deliveryFee') }}: {{ t('cartPage.free') }}
+              </div>
+              <div v-else class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <AppIcon name="truck" class="h-3 w-3 shrink-0" />
+                {{ t('cartPage.deliveryFee') }}: {{ formatPrice(deliveryFeeAmount) }}
               </div>
 
               <!-- ── Delivery location ── -->
@@ -717,7 +737,10 @@
               <span class="tabular-nums font-medium">-{{ formatPrice(loyaltyDiscount) }}</span>
             </div>
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
-              <span>{{ t('cartPage.deliveryFee') }}</span>
+              <span>
+                {{ t('cartPage.deliveryFee') }}
+                <span v-if="deliveryFeeIsDistance" class="text-[11px] text-slate-500">· {{ deliveryDistanceKm }} km</span>
+              </span>
               <span class="tabular-nums font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
             </div>
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
@@ -753,11 +776,11 @@
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-3.5 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
-              :disabled="placingOrder || prepayShortfall"
+              :disabled="placingOrder || prepayShortfall || deliveryBlocked"
               @click="placeInAppOrder"
             >
               <AppIcon name="cart" class="h-3.5 w-3.5" />
-              {{ placingOrder ? t('cartPage_order.placing') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : t('cartPage_order.placeOrder')) }}
+              {{ placingOrder ? t('cartPage_order.placing') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : t('cartPage_order.placeOrder'))) }}
             </button>
             <button
               v-if="cart.canWhatsapp"
@@ -1040,12 +1063,80 @@ const meta = computed(() => tenant.resolvedMeta || null);
 // Delivery settings from restaurant profile
 const deliveryEnabled = computed(() => meta.value?.profile?.delivery_enabled !== false);
 
-// Delivery fee from restaurant profile (0 means free delivery)
-const deliveryFeeAmount = computed(() => {
-  const raw = meta.value?.profile?.delivery_fee;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+// ── Distance-based delivery pricing ─────────────────────────────────────────
+// Mirrors backend tenancy/delivery_pricing.compute_delivery_fee so the customer
+// sees the same fee before placing. The backend recomputes authoritatively.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toNum = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+  const a1 = toNum(lat1), o1 = toNum(lng1), a2 = toNum(lat2), o2 = toNum(lng2);
+  if (![a1, o1, a2, o2].every((n) => Number.isFinite(n))) return null;
+  const R = 6371.0088;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(a2 - a1);
+  const dLng = rad(o2 - o1);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a1)) * Math.cos(rad(a2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+const deliveryPricing = computed(() => {
+  const p = meta.value?.profile || {};
+  return {
+    flat: Number(p.delivery_fee) || 0,
+    base: Number(p.delivery_base_fee) || 0,
+    perKm: Number(p.delivery_per_km) || 0,
+    freeOver: Number(p.delivery_free_over) || 0,
+    radiusKm: p.delivery_radius_km == null ? null : Number(p.delivery_radius_km),
+    lat: p.lat,
+    lng: p.lng,
+  };
 });
+
+// Straight-line km from the restaurant to the chosen delivery address (1dp), or null.
+const deliveryDistanceKm = computed(() => {
+  const p = deliveryPricing.value;
+  const d = haversineKm(p.lat, p.lng, deliveryLat.value, deliveryLng.value);
+  return d == null ? null : Math.round(d * 10) / 10;
+});
+
+// True when the chosen address is beyond the restaurant's max delivery radius.
+const deliveryOutOfRange = computed(() => {
+  const p = deliveryPricing.value;
+  const d = deliveryDistanceKm.value;
+  return d != null && p.radiusKm != null && p.radiusKm > 0 && d > p.radiusKm;
+});
+
+// Whether distance pricing is actually in effect (per-km set AND distance known).
+const deliveryFeeIsDistance = computed(
+  () => deliveryPricing.value.perKm > 0 && deliveryDistanceKm.value != null,
+);
+
+// True when delivery is free because the subtotal cleared the free-over threshold.
+const deliveryIsFree = computed(() => {
+  const p = deliveryPricing.value;
+  const subtotal = Number(cart.total) || 0;
+  return p.freeOver > 0 && subtotal >= p.freeOver && !deliveryOutOfRange.value;
+});
+
+// Delivery fee preview (0 = free / out of range). Distance pricing when configured,
+// else the flat fee.
+const deliveryFeeAmount = computed(() => {
+  const p = deliveryPricing.value;
+  const subtotal = Number(cart.total) || 0;
+  if (deliveryOutOfRange.value) return 0;
+  if (p.freeOver > 0 && subtotal >= p.freeOver) return 0;
+  if (deliveryFeeIsDistance.value) {
+    const fee = p.base + p.perKm * deliveryDistanceKm.value;
+    return Math.max(0, Math.round(fee * 100) / 100);
+  }
+  return p.flat > 0 ? p.flat : 0;
+});
+
+// Block placing a delivery order when the chosen address is out of range.
+const deliveryBlocked = computed(
+  () => fulfillmentType.value === 'delivery' && deliveryOutOfRange.value,
+);
 
 // Minimum order total required for delivery (0 = no minimum)
 const deliveryMinOrder = computed(() => {

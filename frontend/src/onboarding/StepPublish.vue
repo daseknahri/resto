@@ -253,6 +253,53 @@
               </div>
             </div>
 
+            <!-- Distance-based pricing (base + per-km). Per-km > 0 turns it on. -->
+            <div class="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+              <div class="space-y-0.5">
+                <p class="text-sm font-medium text-slate-200">{{ t("stepPublish.distancePricingTitle") }}</p>
+                <p class="text-[11px] text-slate-500">{{ t("stepPublish.distancePricingHint") }}</p>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-1">
+                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryBaseFee") }}</label>
+                  <input
+                    v-model.number="form.delivery_base_fee"
+                    type="number" min="0" step="0.01"
+                    :aria-label="t('stepPublish.deliveryBaseFee')"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryPerKm") }}</label>
+                  <input
+                    v-model.number="form.delivery_per_km"
+                    type="number" min="0" step="0.01"
+                    :aria-label="t('stepPublish.deliveryPerKm')"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryRadiusKm") }}</label>
+                  <input
+                    v-model.number="form.delivery_radius_km"
+                    type="number" min="0" step="0.5"
+                    :aria-label="t('stepPublish.deliveryRadiusKm')"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                  />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFreeOver") }}</label>
+                  <input
+                    v-model.number="form.delivery_free_over"
+                    type="number" min="0" step="0.01"
+                    :aria-label="t('stepPublish.deliveryFreeOver')"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                  />
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-500">{{ t("stepPublish.distancePricingExample") }}</p>
+            </div>
+
             <div class="space-y-1">
               <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryZoneDescription") }}</label>
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryZoneDescriptionHint") }}</p>
@@ -696,6 +743,10 @@ const form = reactive({
   menu_card_layout: "row",
   delivery_enabled: true,
   delivery_fee: 0,
+  delivery_base_fee: 0,
+  delivery_per_km: 0,
+  delivery_free_over: 0,
+  delivery_radius_km: null,
   delivery_minimum_order: 0,
   delivery_zone_description: "",
   platform_delivery_enabled: false,
@@ -775,6 +826,10 @@ const load = async () => {
     form.menu_card_layout = data?.menu_card_layout || "row";
     form.delivery_enabled = data?.delivery_enabled !== false;
     form.delivery_fee = Number(data?.delivery_fee ?? 0);
+    form.delivery_base_fee = Number(data?.delivery_base_fee ?? 0);
+    form.delivery_per_km = Number(data?.delivery_per_km ?? 0);
+    form.delivery_free_over = Number(data?.delivery_free_over ?? 0);
+    form.delivery_radius_km = data?.delivery_radius_km ?? null;
     form.delivery_minimum_order = Number(data?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = data?.delivery_zone_description || "";
     form.platform_delivery_enabled = Boolean(data?.platform_delivery_enabled);
@@ -828,6 +883,13 @@ const saveProfile = async (publishFlag = null) => {
     menu_card_layout: form.menu_card_layout,
     delivery_enabled: form.delivery_enabled,
     delivery_fee: Number(form.delivery_fee) || 0,
+    delivery_base_fee: Number(form.delivery_base_fee) || 0,
+    delivery_per_km: Number(form.delivery_per_km) || 0,
+    delivery_free_over: Number(form.delivery_free_over) || 0,
+    delivery_radius_km:
+      form.delivery_radius_km === null || form.delivery_radius_km === ""
+        ? null
+        : Number(form.delivery_radius_km),
     delivery_minimum_order: Number(form.delivery_minimum_order) || 0,
     delivery_zone_description: form.delivery_zone_description || "",
     platform_delivery_enabled: Boolean(form.platform_delivery_enabled),
@@ -856,6 +918,10 @@ const saveStatus = async () => {
     form.menu_card_layout = saved?.menu_card_layout || "row";
     form.delivery_enabled = saved?.delivery_enabled !== false;
     form.delivery_fee = Number(saved?.delivery_fee ?? 0);
+    form.delivery_base_fee = Number(saved?.delivery_base_fee ?? 0);
+    form.delivery_per_km = Number(saved?.delivery_per_km ?? 0);
+    form.delivery_free_over = Number(saved?.delivery_free_over ?? 0);
+    form.delivery_radius_km = saved?.delivery_radius_km ?? null;
     form.delivery_minimum_order = Number(saved?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = saved?.delivery_zone_description || "";
     form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
@@ -971,6 +1037,10 @@ const publish = async () => {
     form.menu_card_layout = saved?.menu_card_layout || "row";
     form.delivery_enabled = saved?.delivery_enabled !== false;
     form.delivery_fee = Number(saved?.delivery_fee ?? 0);
+    form.delivery_base_fee = Number(saved?.delivery_base_fee ?? 0);
+    form.delivery_per_km = Number(saved?.delivery_per_km ?? 0);
+    form.delivery_free_over = Number(saved?.delivery_free_over ?? 0);
+    form.delivery_radius_km = saved?.delivery_radius_km ?? null;
     form.delivery_minimum_order = Number(saved?.delivery_minimum_order ?? 0);
     form.delivery_zone_description = saved?.delivery_zone_description || "";
     form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
