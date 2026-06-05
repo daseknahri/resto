@@ -743,7 +743,11 @@
               </span>
               <span class="tabular-nums font-medium">{{ formatPrice(deliveryFeeAmount) }}</span>
             </div>
-            <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
+            <div v-if="fulfillmentType === 'delivery' && deliveryFeePending" class="flex items-center justify-between text-slate-400">
+              <span>{{ t('cartPage.deliveryFee') }}</span>
+              <span class="text-[11px]">{{ t('cartPage.deliveryFeeByDistanceShort') }}</span>
+            </div>
+            <div v-else-if="fulfillmentType === 'delivery' && !deliveryOutOfRange && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
               <span>{{ t('cartPage.deliveryFee') }}</span>
               <span class="font-medium">{{ t('cartPage.free') }}</span>
             </div>
@@ -1136,6 +1140,15 @@ const deliveryFeeAmount = computed(() => {
 // Block placing a delivery order when the chosen address is out of range.
 const deliveryBlocked = computed(
   () => fulfillmentType.value === 'delivery' && deliveryOutOfRange.value,
+);
+
+// Distance pricing configured but no location yet → fee not knowable (don't show "Free").
+const deliveryFeePending = computed(
+  () =>
+    fulfillmentType.value === 'delivery' &&
+    deliveryPricing.value.perKm > 0 &&
+    deliveryDistanceKm.value == null &&
+    !deliveryIsFree.value,
 );
 
 // Minimum order total required for delivery (0 = no minimum)

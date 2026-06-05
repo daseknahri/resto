@@ -1526,6 +1526,7 @@ const arabicMessages = {
     "deliveryFee": "رسوم التوصيل",
     "deliveryFeeDistance": "التوصيل: {fee} · {km} كم",
     "deliveryFeeByDistance": "أدخل عنوانك لعرض رسوم التوصيل (تُحسب حسب المسافة).",
+    "deliveryFeeByDistanceShort": "حسب المسافة",
     "deliveryOutOfRange": "هذا العنوان خارج منطقة التوصيل (الحد الأقصى {km} كم).",
     "deliveryOutOfRangeShort": "العنوان خارج النطاق",
     "free": "مجاني",
