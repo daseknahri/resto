@@ -688,3 +688,43 @@ class SavedAddress(models.Model):
     def __str__(self) -> str:
         label = self.label or "Saved address"
         return f"{label} — {self.address[:60]}"
+
+
+class NotificationLog(models.Model):
+    """Durable audit trail of every outbound notification attempt (web push, SMS, email,
+    WhatsApp) and its outcome. Lives in the public schema so it can be written from any
+    tenant schema_context AND from platform-level (driver/customer) dispatch. Best-effort:
+    writing a row must never break the notification path it records.
+    """
+
+    class Channel(models.TextChoices):
+        PUSH = "push", "Web Push"
+        SMS = "sms", "SMS"
+        EMAIL = "email", "Email"
+        WHATSAPP = "whatsapp", "WhatsApp"
+
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"  # not configured / no recipients
+
+    channel = models.CharField(max_length=12, choices=Channel.choices, db_index=True)
+    event = models.CharField(max_length=40, blank=True, help_text="e.g. order.new, order.ready, review_prompt, driver.dispatch")
+    status = models.CharField(max_length=10, choices=Status.choices, db_index=True)
+    recipient = models.CharField(max_length=120, blank=True, help_text="Phone / email / subscriber count — never sensitive payload.")
+    detail = models.CharField(max_length=200, blank=True)
+    reference = models.CharField(max_length=40, blank=True, db_index=True, help_text="Related order number, if any.")
+    error = models.CharField(max_length=300, blank=True)
+    # Loose tenant ref (public schema model) — null for platform-level notifications.
+    tenant_id = models.IntegerField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("tenant_id", "created_at")),
+            models.Index(fields=("channel", "status")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.channel}/{self.status} {self.event} {self.reference}".strip()

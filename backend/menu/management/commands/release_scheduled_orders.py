@@ -153,6 +153,7 @@ class Command(BaseCommand):
                                     order,
                                     tenant_name=getattr(tenant, "name", "") or tenant.slug,
                                     whatsapp_phone=_wa,
+                                    tenant_id=tenant.id,
                                 )
                             except Exception:
                                 logger.exception("release: WhatsApp failed for %s", order.order_number)

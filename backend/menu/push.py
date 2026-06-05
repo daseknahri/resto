@@ -104,18 +104,33 @@ def _push_to_tenant(schema_name: str, title: str, body: str, url: str) -> None:
         with schema_context(schema_name):
             subs = list(PushSubscription.objects.all())
 
+        from accounts.notifications import record_notification
+
         if not subs:
+            record_notification(
+                channel="push", event="push", status="skipped",
+                recipient="0 subs", detail=title, schema_name=schema_name,
+            )
             return
 
         gone_ids = []
+        ok = 0
         for sub in subs:
             result = _send_one(sub.endpoint, sub.p256dh, sub.auth, title, body, url)
-            if result == "gone":
+            if result == "ok":
+                ok += 1
+            elif result == "gone":
                 gone_ids.append(sub.id)
 
         if gone_ids:
             with schema_context(schema_name):
                 PushSubscription.objects.filter(id__in=gone_ids).delete()
+
+        record_notification(
+            channel="push", event="push",
+            status="sent" if ok else "failed",
+            recipient=f"{ok}/{len(subs)} subs", detail=title, schema_name=schema_name,
+        )
 
     except Exception as exc:
         logger.warning("_push_to_tenant(%s) failed: %s", schema_name, exc)

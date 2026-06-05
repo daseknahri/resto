@@ -123,6 +123,15 @@ def notify_online_drivers_new_job_sync(restaurant_name=None) -> int:
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event="driver.dispatch",
+            status="sent" if sent else "failed",
+            recipient=f"{sent}/{len(subs)} drivers", detail=(restaurant_name or ""),
+        )
+    except Exception:
+        pass
     return sent
 
 
@@ -171,4 +180,14 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     if gone:
         with schema_context("public"):
             CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event="review_prompt",
+            status="sent" if sent else "failed",
+            recipient=f"{sent}/{len(subs)} subs", detail=(restaurant_name or ""),
+            reference=str(order_number),
+        )
+    except Exception:
+        pass
     return sent

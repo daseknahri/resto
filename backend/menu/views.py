@@ -1674,7 +1674,7 @@ def _generate_order_number() -> str:
     raise RuntimeError("Could not generate unique order number after 10 attempts.")
 
 
-def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str) -> None:
+def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str, tenant_id=None) -> None:
     """Send a WhatsApp notification to the restaurant when a new order arrives.
 
     Uses Twilio's WhatsApp API. If any configuration is missing or the call
@@ -1753,10 +1753,27 @@ def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str) -
         with _urlrequest.urlopen(req, timeout=8):
             pass  # success
 
+        try:
+            from accounts.notifications import record_notification
+            record_notification(
+                channel="whatsapp", event="order.new", status="sent",
+                recipient=digits, detail=tenant_name, reference=order.order_number, tenant_id=tenant_id,
+            )
+        except Exception:
+            pass
+
     except Exception as exc:
         # Never fail the order — just log the issue
         _log = _logging.getLogger(__name__)
         _log.warning("Could not send new-order WhatsApp notification: %s", exc)
+        try:
+            from accounts.notifications import record_notification
+            record_notification(
+                channel="whatsapp", event="order.new", status="failed",
+                detail=tenant_name, reference=getattr(order, "order_number", ""), error=str(exc), tenant_id=tenant_id,
+            )
+        except Exception:
+            pass
 
 
 def _cod_eligible(profile, customer_id):
@@ -2354,7 +2371,8 @@ class PlaceOrderView(APIView):
             threading.Thread(
                 target=_notify_restaurant_new_order,
                 args=(order,),
-                kwargs={"tenant_name": getattr(tenant, "name", ""), "whatsapp_phone": _wa_number},
+                kwargs={"tenant_name": getattr(tenant, "name", ""), "whatsapp_phone": _wa_number,
+                        "tenant_id": getattr(tenant, "id", None)},
                 daemon=True,
             ).start()
 
@@ -2722,6 +2740,7 @@ def _send_owner_new_reservation_email(tenant, lead) -> None:
 
 def _send_order_status_email(order, tenant, new_status: str) -> None:
     """Send a plain-text order status notification to the customer, if they have an email."""
+    from accounts.notifications import record_notification
     try:
         customer_email = order.customer.email if order.customer else None
         if not customer_email:
@@ -2770,8 +2789,19 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
             recipient_list=[customer_email],
             fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
         )
+        record_notification(
+            channel="email", event=f"order.{new_status}", status="sent",
+            recipient=customer_email, detail=getattr(tenant, "name", ""),
+            reference=order.order_number, tenant_id=getattr(tenant, "id", None),
+        )
     except Exception:  # noqa: BLE001
-        pass
+        try:
+            record_notification(
+                channel="email", event=f"order.{new_status}", status="failed",
+                reference=getattr(order, "order_number", ""), tenant_id=getattr(tenant, "id", None),
+            )
+        except Exception:
+            pass
 
 
 def _can_edit_tenant_order(request) -> bool:
@@ -3062,6 +3092,47 @@ class StaffOrderItemReadyView(APIView):
         except Exception:
             pass
         return Response({"id": item.id, "is_ready": item.is_ready})
+
+
+class OwnerNotificationsView(APIView):
+    """GET /api/owner/notifications/ — the outbound-notification audit log for this tenant
+    (web push + email + SMS + WhatsApp attempts and outcomes). Owner/manager only. Supports
+    ?channel= and ?status= filters; returns the most recent 100 rows + a status summary.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = getattr(request, "tenant", None)
+        tenant_id = tenant.id if tenant else None
+
+        from accounts.models import NotificationLog
+        qs = NotificationLog.objects.filter(tenant_id=tenant_id)
+        channel = (request.query_params.get("channel") or "").strip().lower()
+        if channel:
+            qs = qs.filter(channel=channel)
+        status_f = (request.query_params.get("status") or "").strip().lower()
+        if status_f:
+            qs = qs.filter(status=status_f)
+
+        from django.db.models import Count as _Count
+        summary = {row["status"]: row["n"] for row in (
+            NotificationLog.objects.filter(tenant_id=tenant_id)
+            .values("status").annotate(n=_Count("id"))
+        )}
+        rows = list(qs.order_by("-created_at")[:100])
+        return Response({
+            "summary": summary,
+            "results": [
+                {
+                    "id": n.id, "channel": n.channel, "event": n.event, "status": n.status,
+                    "recipient": n.recipient, "detail": n.detail, "reference": n.reference,
+                    "error": n.error, "created_at": n.created_at.isoformat(),
+                }
+                for n in rows
+            ],
+        })
 
 
 class OwnerOrderListView(APIView):
@@ -3876,6 +3947,7 @@ class OwnerOrderStatusUpdateView(APIView):
                         phone=customer_phone,
                         tenant_name=getattr(tenant, "name", ""),
                         order_number=order.order_number,
+                        tenant_id=getattr(tenant, "id", None),
                     )
 
         return Response({

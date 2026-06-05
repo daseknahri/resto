@@ -37,6 +37,7 @@ def send_order_ready_sms(
     phone: str,
     tenant_name: str,
     order_number: str | int,
+    tenant_id=None,
 ) -> bool:
     """
     Send an "order ready" SMS to *phone*.
@@ -44,14 +45,20 @@ def send_order_ready_sms(
     Returns True on success, False on failure (or when credentials are missing).
     Never raises — all errors are logged and swallowed so order flow is unaffected.
     """
+    from accounts.notifications import record_notification
+
     creds = _credentials()
     if creds is None:
         logger.debug("SMS skipped: Twilio credentials not configured.")
+        record_notification(channel="sms", event="order.ready", status="skipped",
+                            detail=tenant_name, reference=str(order_number), error="no credentials", tenant_id=tenant_id)
         return False
 
     to_phone = _normalize_phone(phone)
     if not to_phone:
         logger.warning("SMS skipped: invalid phone number %r.", phone)
+        record_notification(channel="sms", event="order.ready", status="skipped",
+                            detail=tenant_name, reference=str(order_number), error="invalid phone", tenant_id=tenant_id)
         return False
 
     sid, token, from_num = creds
@@ -73,6 +80,8 @@ def send_order_ready_sms(
                 to_phone,
                 resp.status_code,
             )
+            record_notification(channel="sms", event="order.ready", status="sent",
+                                recipient=to_phone, detail=tenant_name, reference=str(order_number), tenant_id=tenant_id)
             return True
         else:
             logger.warning(
@@ -80,7 +89,12 @@ def send_order_ready_sms(
                 resp.status_code,
                 resp.text[:200],
             )
+            record_notification(channel="sms", event="order.ready", status="failed",
+                                recipient=to_phone, detail=tenant_name, reference=str(order_number),
+                                error=f"twilio {resp.status_code}", tenant_id=tenant_id)
             return False
     except Exception as exc:  # noqa: BLE001
         logger.warning("SMS failed: %s", exc)
+        record_notification(channel="sms", event="order.ready", status="failed",
+                            recipient=to_phone, detail=tenant_name, reference=str(order_number), error=str(exc), tenant_id=tenant_id)
         return False
