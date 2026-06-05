@@ -1849,6 +1849,8 @@ const arabicMessages = {
     "dateLast7": "آخر 7 أيام",
     "showingFiltered": "عرض {shown} من أصل {total} طلب",
     "ticketSubtotal": "المجموع الجزئي",
+    "ticketScheduled": "مجدول",
+    "loyaltyDiscount": "خصم الولاء",
     "ticketTotal": "الإجمالي",
     "ticketNote": "ملاحظة",
     "ticketPrinted": "تمت الطباعة",

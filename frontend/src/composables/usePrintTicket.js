@@ -48,8 +48,12 @@ export function usePrintTicket() {
       </tr>`;
     }).join("");
 
+    const scheduledLine = o.scheduled_for
+      ? `${t("ownerOrders.ticketScheduled")}: ${new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "short", timeStyle: "short" }).format(new Date(o.scheduled_for))}`
+      : "";
     const meta = [
       fulfillmentLabel(o),
+      scheduledLine,
       o.customer_name ? `${t("ownerOrders.ticketCustomer")}: ${escapeHtml(o.customer_name)}` : "",
       o.customer_phone ? `${t("ownerOrders.ticketPhone")}: ${escapeHtml(o.customer_phone)}` : "",
       o.customer_email ? `${t("ownerOrders.ticketEmail")}: ${escapeHtml(o.customer_email)}` : "",
@@ -65,8 +69,10 @@ export function usePrintTicket() {
     const hasVat = Number(o.vat_amount) > 0;
     const hasTip = Number(o.tip_amount) > 0;
     const hasWallet = Number(o.wallet_amount_paid) > 0;
-    // Subtotal = food only (total already includes delivery fee + tip).
-    const subtotal = Number(o.total) - Number(o.delivery_fee || 0) - Number(o.tip_amount || 0);
+    const hasLoyalty = Number(o.loyalty_discount) > 0;
+    // Subtotal = food only. total = subtotal + delivery + tip − loyalty discount, so add
+    // the loyalty discount back out to recover the pre-discount food line.
+    const subtotal = Number(o.total) - Number(o.delivery_fee || 0) - Number(o.tip_amount || 0) + Number(o.loyalty_discount || 0);
     const line = (label, value, color = "#444") =>
       `<tr><td style="padding:2px 0;font-size:12px;color:${color}">${label}</td><td style="text-align:right;font-size:12px;color:${color}">${value}</td></tr>`;
 
@@ -94,9 +100,10 @@ export function usePrintTicket() {
       <table>${itemRows}</table>
       <div class="divider"></div>
       <table>
-        ${(hasFee || hasTip) ? line(t("ownerOrders.ticketSubtotal"), fmt(subtotal, cur)) : ""}
+        ${(hasFee || hasTip || hasLoyalty) ? line(t("ownerOrders.ticketSubtotal"), fmt(subtotal, cur)) : ""}
         ${hasFee ? line(t("ownerOrders.deliveryFee"), fmt(o.delivery_fee, cur)) : ""}
         ${hasVat ? line(escapeHtml(t("orderStatus.vatIncluded", { label: o.vat_label, rate: Number(o.vat_rate) })), fmt(o.vat_amount, cur)) : ""}
+        ${hasLoyalty ? line(t("ownerOrders.loyaltyDiscount"), `−${fmt(o.loyalty_discount, cur)}`, "#d97706") : ""}
         ${hasTip ? line(t("ownerOrders.tip"), fmt(o.tip_amount, cur)) : ""}
         <tr class="total"><td>${t("ownerOrders.ticketTotal")}</td><td style="text-align:right">${fmt(o.total, cur)}</td></tr>
         ${hasWallet ? line(`💰 ${t("ownerOrders.walletPaid")}`, `−${fmt(o.wallet_amount_paid, cur)}`, "#16a34a") : ""}
