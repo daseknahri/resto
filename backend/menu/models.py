@@ -404,6 +404,17 @@ class Order(models.Model):
         blank=True,
         help_text="Loyalty points credited to the customer for this order. Null = loyalty not active at placement time.",
     )
+    loyalty_discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Discount applied by redeeming loyalty points at checkout.",
+    )
+    redeemed_loyalty_points = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Loyalty points spent on this order's checkout discount. Null = none redeemed.",
+    )
     # Loose reference to accounts.User (public schema) — the staff member / owner who
     # last advanced this order's status. Powers per-staff work stats and the waiter's
     # own shift view. Loose IntegerField (not FK) to avoid a tenant→public cross-app FK,

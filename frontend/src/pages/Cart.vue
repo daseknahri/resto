@@ -696,11 +696,25 @@
             </template>
           </template>
 
+          <!-- ── Loyalty redemption ── -->
+          <label
+            v-if="loyaltyAvailable"
+            class="flex cursor-pointer items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5"
+          >
+            <input v-model="useLoyalty" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500/40" />
+            <span class="flex-1 text-xs text-amber-200">{{ t('cartPage.loyaltyRedeem', { points: loyaltyPoints }) }}</span>
+            <span v-if="useLoyalty && loyaltyDiscount > 0" class="text-xs font-semibold tabular-nums text-amber-300">-{{ formatPrice(loyaltyDiscount) }}</span>
+          </label>
+
           <!-- ── Order summary breakdown ── -->
           <div class="border-t border-slate-800/50 pt-3 space-y-1.5 text-xs">
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
               <span>{{ t('cartPage.subtotal') }}</span>
               <span class="tabular-nums">{{ formatPrice(cart.total) }}</span>
+            </div>
+            <div v-if="loyaltyDiscount > 0" class="flex items-center justify-between text-amber-300">
+              <span>{{ t('cartPage.loyaltyDiscount') }}</span>
+              <span class="tabular-nums font-medium">-{{ formatPrice(loyaltyDiscount) }}</span>
             </div>
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
               <span>{{ t('cartPage.deliveryFee') }}</span>
@@ -1047,12 +1061,32 @@ const deliveryMinGap = computed(() => Math.max(0, deliveryMinOrder.value - (Numb
 const deliveryZoneDesc = computed(() => String(meta.value?.profile?.delivery_zone_description || '').trim());
 
 // Grand total = items subtotal + delivery fee (when applicable)
+// ── Loyalty redemption at checkout ──────────────────────────────────────────
+const loyaltyConfig = ref(null);
+const useLoyalty = ref(false);
+const loyaltyPoints = computed(() => Number(customerStore.customer?.loyalty_points) || 0);
+const loyaltyAvailable = computed(() =>
+  customerStore.isAuthenticated &&
+  !!loyaltyConfig.value?.enabled &&
+  loyaltyPoints.value >= (Number(loyaltyConfig.value?.redeem_threshold) || 0) &&
+  (Number(loyaltyConfig.value?.points_value) || 0) > 0
+);
+// Discount preview = value of all the customer's points, capped to the pre-tip charge.
+// The backend re-caps and spends only the points the order actually consumes.
+const loyaltyDiscount = computed(() => {
+  if (!useLoyalty.value || !loyaltyAvailable.value) return 0;
+  const ptsValue = Number(loyaltyConfig.value.points_value) || 0;
+  const subtotal = Number(cart.total) || 0;
+  const base = fulfillmentType.value === 'delivery' ? subtotal + deliveryFeeAmount.value : subtotal;
+  return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, base));
+});
+
 const orderGrandTotal = computed(() => {
   const subtotal = Number(cart.total) || 0;
   const base = fulfillmentType.value === 'delivery'
     ? subtotal + deliveryFeeAmount.value
     : subtotal;
-  return base + tipAmount.value;
+  return Math.max(0, base - loyaltyDiscount.value) + tipAmount.value;
 });
 
 // Wallet credits
@@ -1141,6 +1175,18 @@ const fetchCodEligibility = async () => {
     if (!codEligible.value && paymentMethod.value === 'cash') paymentMethod.value = 'wallet';
   } catch {
     codEligible.value = false;
+  }
+};
+const fetchLoyaltyConfig = async () => {
+  if (!customerStore.isAuthenticated) {
+    loyaltyConfig.value = null;
+    return;
+  }
+  try {
+    const res = await api.get('/customer/loyalty/config/');
+    loyaltyConfig.value = res.data?.enabled ? res.data : null;
+  } catch {
+    loyaltyConfig.value = null;
   }
 };
 const hasLocationCoords = computed(() => {
@@ -1641,6 +1687,11 @@ const buildPayload = () => {
     payload.use_wallet = true;
   }
   if (promoApplied.value) payload.promo_code = promoCode.value.trim().toUpperCase();
+  // Loyalty redemption — send the full balance; the backend caps the discount to the
+  // order and debits only the points actually consumed.
+  if (useLoyalty.value && loyaltyAvailable.value && loyaltyPoints.value > 0) {
+    payload.redeem_points = loyaltyPoints.value;
+  }
   if (tipAmount.value > 0) payload.tip_amount = tipAmount.value;
   if (cart.tableLabel) payload.table_label = cart.tableLabel;
   if (cart.tableSlug) payload.table_slug = cart.tableSlug;
@@ -1737,6 +1788,12 @@ const mapOrderApiError = (err, fallback) => {
   }
   if (code === 'restaurant_closed') {
     return t('cartPage.restaurantCurrentlyClosed');
+  }
+  if (typeof code === 'string' && code.startsWith('loyalty_')) {
+    // Points balance changed under us → refresh the customer so the UI re-syncs.
+    customerStore.fetchCustomer(true);
+    useLoyalty.value = false;
+    return data?.detail || t('cartPage.loyaltyRedeemFailed');
   }
   if (typeof code === 'string' && code.startsWith('schedule_')) {
     // Backend supplies a clear, localized-enough message; surface it as the field error too.
@@ -1923,6 +1980,8 @@ const placeInAppOrder = async () => {
 
 const onCustomerAuthenticated = (customer) => {
   customerStore.setCustomer(customer);
+  fetchCodEligibility();
+  fetchLoyaltyConfig();
   toast.show(t('cartPage.signedIn'), 'success');
 };
 
@@ -1940,6 +1999,7 @@ onMounted(() => {
   customerStore.fetchCustomer(); // no-op if layout already fetched it
   fetchSavedAddresses();
   fetchCodEligibility();
+  fetchLoyaltyConfig();
   trackEvent(
     'cart_view',
     { source: 'customer_cart' },

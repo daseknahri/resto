@@ -222,6 +222,44 @@ def _validate_scheduled_for(profile, fulfillment_type, scheduled_for):
     return dt, None
 
 
+def _size_loyalty_redemption(cfg, available_points, requested_points, pre_tip_total):
+    """Size a loyalty-points redemption against an order's pre-tip charge.
+
+    Returns ``(discount: Decimal, points_spent: int, error_code: str|None)``:
+      - (0, 0, None)   → nothing redeemed (or the discount rounds to zero).
+      - (0, 0, "code") → a validation failure (loyalty_disabled /
+                         loyalty_insufficient_points / loyalty_below_threshold).
+    The discount is capped to the order so points are never wasted, and only the
+    points the applied discount actually consumes are spent.
+    """
+    from decimal import Decimal as _D
+    try:
+        requested_points = int(requested_points or 0)
+    except (TypeError, ValueError):
+        requested_points = 0
+    if requested_points <= 0:
+        return _D("0"), 0, None
+    if cfg is None or not getattr(cfg, "enabled", False):
+        return _D("0"), 0, "loyalty_disabled"
+    pts_value = _D(str(getattr(cfg, "points_value", 0) or "0"))
+    threshold = int(getattr(cfg, "redeem_threshold", 0) or 0)
+    avail = int(available_points or 0)
+    if requested_points > avail:
+        return _D("0"), 0, "loyalty_insufficient_points"
+    if requested_points < threshold:
+        return _D("0"), 0, "loyalty_below_threshold"
+    if pts_value <= _D("0"):
+        return _D("0"), 0, "loyalty_disabled"
+    raw = (_D(requested_points) * pts_value).quantize(_D("0.01"))
+    cap = pre_tip_total if pre_tip_total > _D("0") else _D("0")
+    discount = min(raw, cap)
+    if discount <= _D("0"):
+        return _D("0"), 0, None
+    import math as _math
+    points_spent = min(requested_points, int(_math.ceil(discount / pts_value)))
+    return discount, points_spent, None
+
+
 class PublishAccessMixin:
     def _tenant(self):
         return getattr(self.request, "tenant", None)
@@ -1999,6 +2037,38 @@ class PlaceOrderView(APIView):
 
         total = max(Decimal("0"), _food_subtotal + _delivery_fee - _promo_discount)
 
+        # ── Loyalty redemption at checkout ──────────────────────────────────────
+        # A signed-in customer may spend accumulated points for an instant discount on
+        # this order (separate from the account-page redeem→wallet flow). Sized here on
+        # the pre-tip charge; the points are debited atomically inside the order
+        # transaction below (conditional UPDATE → rolls the order back if they're short).
+        _loyalty_discount = Decimal("0")
+        _loyalty_points_spent = 0
+        try:
+            _redeem_points = int(request.data.get("redeem_points", 0) or 0)
+        except (TypeError, ValueError):
+            _redeem_points = 0
+        if _redeem_points > 0:
+            if _linked_customer is None:
+                return Response({"detail": "Sign in to redeem points.", "code": "auth_required"},
+                                status=status.HTTP_403_FORBIDDEN)
+            _lc = LoyaltyConfig.objects.filter(enabled=True).first()
+            _loyalty_discount, _loyalty_points_spent, _loy_err = _size_loyalty_redemption(
+                _lc,
+                getattr(_linked_customer, "loyalty_points", 0),
+                _redeem_points,
+                total,
+            )
+            if _loy_err:
+                _loy_msgs = {
+                    "loyalty_disabled": "Loyalty isn't available right now.",
+                    "loyalty_insufficient_points": "You don't have that many points.",
+                    "loyalty_below_threshold": f"Redeem at least {getattr(_lc, 'redeem_threshold', 0)} points.",
+                }
+                return Response({"detail": _loy_msgs.get(_loy_err, "Couldn't redeem your points."), "code": _loy_err},
+                                status=status.HTTP_400_BAD_REQUEST)
+            total = max(Decimal("0"), total - _loyalty_discount)
+
         # Tip — optional gratuity; must be non-negative and capped at a sane ceiling
         _tip_raw = request.data.get("tip_amount", 0)
         try:
@@ -2078,6 +2148,10 @@ class PlaceOrderView(APIView):
             def __init__(self, slug):
                 self.slug = slug
 
+        class _LoyaltyShort(Exception):
+            """Raised inside the atomic block when the customer no longer has enough
+            loyalty points to cover the redemption — rolls the whole order back."""
+
         try:
             with transaction.atomic():
                 # --- Stock check + decrement (before creating the order so a failed
@@ -2139,7 +2213,21 @@ class PlaceOrderView(APIView):
                     currency=currency,
                     promotion_discount=_promo_discount,
                     applied_promotion_name=_best_promo.name if _best_promo else "",
+                    loyalty_discount=_loyalty_discount,
+                    redeemed_loyalty_points=(_loyalty_points_spent or None),
                 )
+
+                # Debit redeemed loyalty points atomically. The conditional UPDATE only
+                # succeeds if the balance still covers it — otherwise we roll the order
+                # back rather than grant a discount the customer can't pay for in points.
+                if _loyalty_points_spent > 0 and _linked_customer is not None:
+                    from accounts.models import Customer as _CustL
+                    _ok = _CustL.objects.filter(
+                        pk=_linked_customer.pk,
+                        loyalty_points__gte=_loyalty_points_spent,
+                    ).update(loyalty_points=models.F("loyalty_points") - _loyalty_points_spent)
+                    if not _ok:
+                        raise _LoyaltyShort()
                 for item_data in order_items_data:
                     OrderItem.objects.create(order=order, **item_data)
 
@@ -2211,6 +2299,12 @@ class PlaceOrderView(APIView):
                 {"detail": "Your wallet balance doesn't cover this order. Please top up your wallet.",
                  "code": "wallet_insufficient"},
                 status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+        except _LoyaltyShort:
+            return Response(
+                {"detail": "Your loyalty points balance changed — please review and try again.",
+                 "code": "loyalty_insufficient_points"},
+                status=status.HTTP_409_CONFLICT,
             )
         except IntegrityError:
             # Rare TOCTOU race: two requests generated the same order number.
@@ -2304,6 +2398,8 @@ class PlaceOrderView(APIView):
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "points_earned": order.points_earned,
+            "loyalty_discount": str(order.loyalty_discount),
+            "redeemed_loyalty_points": order.redeemed_loyalty_points,
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
         }, status=status.HTTP_201_CREATED)
 
@@ -2436,6 +2532,7 @@ class CustomerOrderStatusView(APIView):
             "delivery_address": order.delivery_address,
             "total": str(order.total),
             "delivery_fee": str(order.delivery_fee),
+            "loyalty_discount": str(order.loyalty_discount),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "currency": order.currency,
             # Payment state — lets the customer page show "Paid" vs "Pay at the
