@@ -2006,13 +2006,33 @@ class PlaceOrderView(APIView):
             _customer_name = validated.get("customer_name", "")
             _customer_phone = validated.get("customer_phone", "")
 
-        # Apply delivery fee for delivery orders
+        # Apply delivery fee for delivery orders — distance-based when configured
+        # (base + per-km from restaurant → address), else the flat fallback fee.
         _delivery_fee = Decimal("0")
+        _delivery_distance_km = None
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
-            try:
-                _delivery_fee = Decimal(str(profile.delivery_fee or "0"))
-            except Exception:
-                _delivery_fee = Decimal("0")
+            from tenancy.delivery_pricing import compute_delivery_fee, haversine_km
+            _dlat = validated.get("delivery_lat")
+            _dlng = validated.get("delivery_lng")
+            _plat = getattr(profile, "lat", None)
+            _plng = getattr(profile, "lng", None)
+            if (
+                _plat is not None and _plng is not None
+                and _dlat is not None and _dlng is not None
+            ):
+                _delivery_distance_km = haversine_km(_plat, _plng, _dlat, _dlng)
+            _pricing = compute_delivery_fee(
+                profile, distance_km=_delivery_distance_km, food_subtotal=_food_subtotal
+            )
+            if _pricing["out_of_range"]:
+                return Response(
+                    {
+                        "detail": "This address is outside the restaurant's delivery area.",
+                        "code": "delivery_out_of_range",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            _delivery_fee = _pricing["fee"]
 
         # Apply promotion — either by customer-supplied code or best auto-applied promo
         _best_promo = None
@@ -5012,8 +5032,15 @@ class OwnerDataExportView(APIView):
                 "hero_url": p.hero_url,
                 "delivery_enabled": p.delivery_enabled,
                 "delivery_fee": str(p.delivery_fee),
+                "delivery_base_fee": str(p.delivery_base_fee),
+                "delivery_per_km": str(p.delivery_per_km),
+                "delivery_free_over": str(p.delivery_free_over),
+                "delivery_radius_km": p.delivery_radius_km,
                 "delivery_minimum_order": str(p.delivery_minimum_order),
                 "delivery_zone_description": p.delivery_zone_description,
+                # Restaurant coordinates so the cart can preview a distance-based fee.
+                "lat": p.lat,
+                "lng": p.lng,
                 "receipt_message": p.receipt_message,
                 "is_open": p.is_open,
                 "is_menu_published": p.is_menu_published,

@@ -2436,7 +2436,14 @@ class MarketplaceMenuView(APIView):
             "currency": getattr(profile, "currency", "USD") or "USD",
             "delivery_enabled": bool(profile.delivery_enabled),
             "delivery_fee": str(profile.delivery_fee) if profile.delivery_fee else "0",
+            "delivery_base_fee": str(profile.delivery_base_fee or "0"),
+            "delivery_per_km": str(profile.delivery_per_km or "0"),
+            "delivery_free_over": str(profile.delivery_free_over or "0"),
+            "delivery_radius_km": profile.delivery_radius_km,
             "delivery_minimum_order": str(profile.delivery_minimum_order) if profile.delivery_minimum_order else "0",
+            # Restaurant coordinates so the cart can preview a distance-based fee.
+            "lat": profile.lat,
+            "lng": profile.lng,
             "price_tier": profile.price_tier,
             "tags": profile.tags or [],
             "is_open": is_open,
@@ -2620,12 +2627,33 @@ class MarketplacePlaceOrderView(APIView):
                         "subtotal": subtotal,
                     })
 
+                # Delivery fee — distance-based (base + per-km) when configured,
+                # else the flat fallback fee. Driver keeps 100% of it.
                 _delivery_fee = Decimal("0")
+                _delivery_distance_km = None
                 if fulfillment_type == "delivery":
-                    try:
-                        _delivery_fee = Decimal(str(profile.delivery_fee or "0"))
-                    except Exception:
-                        _delivery_fee = Decimal("0")
+                    from tenancy.delivery_pricing import compute_delivery_fee, haversine_km
+                    _plat = getattr(profile, "lat", None)
+                    _plng = getattr(profile, "lng", None)
+                    if (
+                        _plat is not None and _plng is not None
+                        and delivery_lat is not None and delivery_lng is not None
+                    ):
+                        _delivery_distance_km = haversine_km(
+                            _plat, _plng, delivery_lat, delivery_lng
+                        )
+                    _pricing = compute_delivery_fee(
+                        profile, distance_km=_delivery_distance_km, food_subtotal=food_subtotal
+                    )
+                    if _pricing["out_of_range"]:
+                        return Response(
+                            {
+                                "detail": "This address is outside the restaurant's delivery area.",
+                                "code": "delivery_out_of_range",
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    _delivery_fee = _pricing["fee"]
 
                 # Best restaurant promo
                 _best_promo = None
@@ -3420,6 +3448,76 @@ def _tenant_slug_name(tenant_id):
     return result
 
 
+def _job_distance_km(job):
+    """Straight-line km from pickup (restaurant) → delivery (customer), or None."""
+    if (
+        job.pickup_lat is not None and job.pickup_lng is not None
+        and job.delivery_lat is not None and job.delivery_lng is not None
+    ):
+        try:
+            return round(
+                _haversine_km(job.pickup_lat, job.pickup_lng, job.delivery_lat, job.delivery_lng),
+                1,
+            )
+        except Exception:
+            return None
+    return None
+
+
+def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -> dict:
+    """Best-effort cross-schema fetch of the order behind a delivery job.
+
+    Returns the bits a driver needs on the job card: how big the order is
+    (``items_count`` + a short ``items`` list), the order ``total``/``currency``,
+    and crucially whether the driver must **collect cash** (``collect_cash`` —
+    True when the order isn't already paid). When ``include_contact`` is set
+    (only for the driver's OWN active job) it also returns the customer
+    name/phone so the driver can call on arrival. Pending/unclaimed jobs never
+    expose contact details.
+    """
+    out = {}
+    try:
+        from tenancy.models import Tenant as _T
+
+        tnt = _T.objects.filter(id=tenant_id).first()
+        if not tnt:
+            return out
+        from django_tenants.utils import schema_context
+
+        with schema_context(tnt.schema_name):
+            from menu.models import Order as _O
+
+            o = (
+                _O.objects.filter(order_number=order_number)
+                .prefetch_related("items")
+                .first()
+            )
+            if not o:
+                return out
+            items = list(o.items.all())
+            out["items_count"] = sum(int(getattr(i, "qty", 1) or 1) for i in items)
+            out["items"] = [
+                {"name": i.dish_name, "qty": int(getattr(i, "qty", 1) or 1)}
+                for i in items[:25]
+            ]
+            out["order_total"] = str(o.total)
+            out["currency"] = getattr(o, "currency", "") or ""
+            _pay = getattr(o, "payment_status", "") or ""
+            out["payment_status"] = _pay
+            # COD: the driver collects the order total in cash unless it's prepaid.
+            out["collect_cash"] = _pay != "paid"
+            out["fulfillment_type"] = getattr(o, "fulfillment_type", "") or ""
+            _note = getattr(o, "delivery_address", "") or ""
+            if _note:
+                out["delivery_address"] = _note
+            if include_contact:
+                out["customer_name"] = o.customer_name or ""
+                out["customer_phone"] = o.customer_phone or ""
+    except Exception:
+        pass
+    return out
+
+
 def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
     _slug, _name = _tenant_slug_name(job.tenant_id)
     data = {
@@ -3437,6 +3535,9 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
         "delivery_address": job.delivery_address,
         "delivery_lat": job.delivery_lat,
         "delivery_lng": job.delivery_lng,
+        # Straight-line distance the driver covers (restaurant → customer), so the
+        # job card can show "how far" before/after accepting.
+        "distance_km": _job_distance_km(job),
         "delivery_fee": str(job.delivery_fee),
         "driver_payout": str(job.driver_payout),
         "assigned_at": job.assigned_at.isoformat() if job.assigned_at else None,
@@ -3677,30 +3778,25 @@ class DriverJobListView(APIView):
             ).select_related("driver")[:20]
         )
 
-        # Enrich the driver's ACTIVE job(s) with customer contact so they can call on
-        # arrival. Only the assigned driver sees this; pending jobs never expose it.
+        # Enrich the driver's ACTIVE job(s) with the full order summary + customer
+        # contact so they can call on arrival. Only the assigned driver sees contact.
         active_serialized = []
         for j in active_jobs:
             d = _serialize_delivery_job(j)
-            try:
-                from tenancy.models import Tenant as _T
-                tnt = _T.objects.filter(id=j.tenant_id).first()
-                if tnt:
-                    with schema_context(tnt.schema_name):
-                        from menu.models import Order as _O
-                        o = _O.objects.filter(order_number=j.order_number).only(
-                            "customer_name", "customer_phone"
-                        ).first()
-                        if o:
-                            d["customer_name"] = o.customer_name or ""
-                            d["customer_phone"] = o.customer_phone or ""
-            except Exception:
-                pass
+            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=True))
             active_serialized.append(d)
+
+        # PENDING jobs show enough to decide (size, total, cash-or-prepaid, distance)
+        # but never the customer's name/phone until the driver accepts.
+        pending_serialized = []
+        for j in pending_jobs:
+            d = _serialize_delivery_job(j)
+            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=False))
+            pending_serialized.append(d)
 
         return Response({
             "active": active_serialized,
-            "pending": [_serialize_delivery_job(j) for j in pending_jobs],
+            "pending": pending_serialized,
         })
 
 

@@ -133,7 +133,40 @@ class Profile(models.Model):
         max_digits=8,
         decimal_places=2,
         default=0,
-        help_text="Fixed delivery fee added to the order total for delivery orders (0 = free delivery).",
+        help_text=(
+            "Flat delivery fee. Used as a fallback when distance pricing is not "
+            "configured (delivery_per_km = 0) or the customer's coordinates are unknown."
+        ),
+    )
+    # ── Distance-based pricing (base + per-km) ──────────────────────────────
+    # When delivery_per_km > 0 AND both the restaurant and the customer have
+    # coordinates, the delivery fee is computed as
+    #   fee = delivery_base_fee + delivery_per_km × distance_km
+    # (distance = straight-line km from the restaurant to the delivery address).
+    # Otherwise the flat delivery_fee above is used.
+    delivery_base_fee = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text="Base fee added before the per-km charge in distance-based pricing.",
+    )
+    delivery_per_km = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "Per-kilometre delivery rate. 0 = disable distance pricing and use the "
+            "flat delivery_fee instead."
+        ),
+    )
+    delivery_free_over = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "Order subtotal at or above which delivery is free (0 = never free). "
+            "Applies to both flat and distance-based pricing."
+        ),
     )
     delivery_minimum_order = models.DecimalField(
         max_digits=8,
