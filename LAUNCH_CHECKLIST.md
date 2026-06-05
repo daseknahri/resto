@@ -50,15 +50,22 @@ These management commands are idempotent and safe; nothing runs them automatical
 
 Also enable Coolify's **Postgres backup schedule** (daily, ≥30-day retention) and test a restore.
 
-## 2c — Celery worker (durable notifications) — optional but recommended at volume
-Outbound notifications (web push, SMS, WhatsApp, driver dispatch) are dispatched through a
-Celery queue when a broker is set, so they run **off the web process and survive restarts**.
-The broker reuses `REDIS_URL` (or set `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` explicitly).
+## 2c — Celery worker (durable notifications) — OPTIONAL, recommended at volume
+Outbound notifications (web push, SMS, WhatsApp, driver dispatch) can be dispatched through a
+Celery queue so they run **off the web process and survive restarts**.
 
-- **No worker?** Fine — with no broker the app falls back to in-process dispatch (the old
-  behaviour). Nothing breaks; you just don't get the queue's durability/retries.
-- **Run the worker** (one extra Coolify process/resource):
-  `celery -A config worker -l info -Q notifications,default`
+**Celery is OFF by default** — even with `REDIS_URL` set. While off, notifications are sent
+in-process (the historical behaviour); nothing breaks, you just don't get the queue's
+durability. **You can launch and test without any of this.**
+
+To turn it ON (do BOTH together — never one without the other):
+1. Set env `CELERY_BROKER_URL` = your `REDIS_URL` value (and optionally `CELERY_RESULT_BACKEND`).
+2. Run the worker as an extra Coolify process/resource:
+   `celery -A config worker -l info -Q notifications,default`
+
+> ⚠️ Setting `CELERY_BROKER_URL` **without** a running worker means tasks queue in Redis and
+> are never processed — i.e. notifications silently stop. Broker-set ⇔ worker-running.
+
 - **Optional — let Beat own the cron jobs** instead of the §2b Scheduled Tasks:
   `celery -A config beat -l info`
   Beat runs `release_scheduled_orders` / `send_review_prompts` / `send_reservation_reminders`

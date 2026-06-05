@@ -238,12 +238,16 @@ if HAS_CHANNELS:
         }
 
 # ── Celery (durable task queue for notifications + scheduled jobs) ──────────────
-# Broker + result backend reuse REDIS_URL by default (override per env if you run a
-# dedicated broker). When NO broker is configured, accounts.tasks.enqueue() falls back
-# to running work inline in a daemon thread — so dev/local and any no-Redis deploy keep
-# working without a worker. Run the worker in prod:  celery -A config worker -l info
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "").strip() or _REDIS_URL
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "").strip() or (_REDIS_URL or None)
+# OPT-IN. Celery is OFF unless CELERY_BROKER_URL is explicitly set — even when REDIS_URL
+# is configured for cache/channels. While off, accounts.tasks.enqueue() runs work inline
+# in a daemon thread (the historical behaviour), so notifications send fine with NO worker.
+#
+# To turn the durable queue ON: set CELERY_BROKER_URL (typically to the same value as
+# REDIS_URL) AND run a worker (`celery -A config worker`). IMPORTANT: don't set the broker
+# without running a worker — tasks would queue in Redis and never be processed (= silently
+# dropped notifications). It's broker-set ⇔ worker-running, together.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "").strip()
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "").strip() or (CELERY_BROKER_URL or None)
 CELERY_TASK_DEFAULT_QUEUE = "notifications"
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_TIME_LIMIT = 120          # hard kill a stuck send after 2 min
