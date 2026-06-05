@@ -213,6 +213,13 @@
                 {{ statusLabel(o.status) }}
               </span>
               <span class="ui-data-strip">{{ fulfillmentLabel(o) }}</span>
+              <!-- Scheduled-for badge (advance orders) -->
+              <span
+                v-if="o.scheduled_for"
+                class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
+              >
+                🗓️ {{ formatScheduledFor(o.scheduled_for) }}
+              </span>
               <!-- Payment badge -->
               <span
                 v-if="o.status !== 'cancelled'"
@@ -490,7 +497,15 @@
 
         <!-- Action buttons -->
         <div class="flex flex-wrap items-center gap-2">
-          <template v-if="o.status === 'pending'">
+          <template v-if="o.status === 'scheduled'">
+            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
+              {{ t("ownerOrders.releaseNow") }}
+            </button>
+            <button class="ui-btn-outline border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
+              {{ t("ownerOrders.cancel") }}
+            </button>
+          </template>
+          <template v-else-if="o.status === 'pending'">
             <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
               {{ t("ownerOrders.confirm") }}
             </button>
@@ -643,6 +658,7 @@ const statusTabs = computed(() => {
   order.orders.forEach((o) => { counts[o.status] = (counts[o.status] || 0) + 1; });
   return [
     { value: "", label: t("ownerOrders.allStatuses"), count: 0 },
+    { value: "scheduled", label: t("ownerOrders.statusScheduled"), count: counts.scheduled || 0 },
     { value: "pending", label: t("ownerOrders.statusPending"), count: counts.pending || 0 },
     { value: "confirmed", label: t("ownerOrders.statusConfirmed"), count: counts.confirmed || 0 },
     { value: "preparing", label: t("ownerOrders.statusPreparing"), count: counts.preparing || 0 },
@@ -664,7 +680,7 @@ const todayStats = computed(() => {
 });
 
 // ── Filtered + sorted orders ──────────────────────────────────────────────────
-const STATUS_SORT = { pending: 0, confirmed: 1, preparing: 2, ready: 3, out_for_delivery: 4, completed: 5, cancelled: 6 };
+const STATUS_SORT = { scheduled: -1, pending: 0, confirmed: 1, preparing: 2, ready: 3, out_for_delivery: 4, completed: 5, cancelled: 6 };
 
 const filteredOrders = computed(() => {
   const now = new Date();
@@ -744,6 +760,7 @@ const confirmAllPending = async () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const statusClass = (s) => ({
+  scheduled: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
   pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
   preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
@@ -753,7 +770,21 @@ const statusClass = (s) => ({
   cancelled: "bg-red-500/20 text-red-300 border border-red-500/30",
 }[s] || "bg-slate-700 text-slate-300");
 
+const formatScheduledFor = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return d.toLocaleString(undefined, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return d.toLocaleString();
+  }
+};
+
 const statusLabel = (s) => ({
+  scheduled: t("ownerOrders.statusScheduled"),
   pending: t("ownerOrders.statusPending"),
   confirmed: t("ownerOrders.statusConfirmed"),
   preparing: t("ownerOrders.statusPreparing"),

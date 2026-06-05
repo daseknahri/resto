@@ -46,6 +46,7 @@ These management commands are idempotent and safe; nothing runs them automatical
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
 | `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
+| `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
 
 Also enable Coolify's **Postgres backup schedule** (daily, ≥30-day retention) and test a restore.
 

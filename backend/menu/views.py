@@ -161,6 +161,67 @@ def _is_restaurant_currently_open(profile) -> bool:
     return bool(profile.is_open)
 
 
+# ── Advance / scheduled orders ──────────────────────────────────────────────
+# A customer may place a pickup/delivery order now for a future time. It is paid
+# up front (wallet), kept hidden from the kitchen as status=SCHEDULED, then moved
+# to PENDING by the release sweep shortly before the requested time.
+_SCHEDULE_MIN_LEAD_MINUTES = 30      # can't schedule for sooner than this (that's just ASAP)
+_SCHEDULE_MAX_AHEAD_DAYS = 14        # furthest out an advance order may be placed
+_SCHEDULE_RELEASE_LEAD_MINUTES = 45  # how early before scheduled_for the kitchen receives it
+
+
+def _within_business_hours(profile, dt_local_source) -> bool:
+    """True if *dt_local_source* (an aware datetime) falls inside the restaurant's
+    configured open window for that local day. When no schedule is configured we
+    accept any time — the manual is_open toggle governs live ordering, not future
+    scheduling."""
+    schedule = getattr(profile, "business_hours_schedule", None)
+    if not schedule or not isinstance(schedule, dict):
+        return True
+    if not any(isinstance(v, dict) and v.get("enabled", False) for v in schedule.values()):
+        return True
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+        local = dt_local_source.astimezone(ZoneInfo(tz_name))
+    except Exception:
+        local = dt_local_source
+    entry = schedule.get(_WEEKDAY_TO_KEY.get(local.weekday()))
+    if not entry or not isinstance(entry, dict) or not entry.get("enabled", False):
+        return False
+    open_str = (entry.get("open") or "").strip()
+    close_str = (entry.get("close") or "").strip()
+    if not open_str or not close_str:
+        return False
+    hhmm = local.strftime("%H:%M")
+    return open_str <= hhmm < close_str
+
+
+def _validate_scheduled_for(profile, fulfillment_type, scheduled_for):
+    """Validate a requested advance-order fulfilment time.
+
+    Returns ``(aware_datetime_or_None, error_code_or_None)``:
+      - (None, None)      → no scheduling requested (ASAP order).
+      - (dt, None)        → valid scheduled time.
+      - (None, "code")    → invalid; *code* is a stable machine code for the client.
+    """
+    if scheduled_for is None:
+        return None, None
+    if fulfillment_type not in (Order.FulfillmentType.PICKUP, Order.FulfillmentType.DELIVERY):
+        return None, "schedule_not_supported"
+    dt = scheduled_for
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.utc)
+    now = timezone.now()
+    if dt < now + timedelta(minutes=_SCHEDULE_MIN_LEAD_MINUTES):
+        return None, "schedule_too_soon"
+    if dt > now + timedelta(days=_SCHEDULE_MAX_AHEAD_DAYS):
+        return None, "schedule_too_far"
+    if not _within_business_hours(profile, dt):
+        return None, "schedule_closed"
+    return dt, None
+
+
 class PublishAccessMixin:
     def _tenant(self):
         return getattr(self.request, "tenant", None)
@@ -1049,6 +1110,9 @@ class OrderHandoffSerializer(serializers.Serializer):
     delivery_location_url = serializers.URLField(max_length=500, required=False, allow_blank=True)
     delivery_lat = serializers.FloatField(required=False, allow_null=True)
     delivery_lng = serializers.FloatField(required=False, allow_null=True)
+    # Advance/scheduled order — when set, the customer wants fulfilment at this future
+    # time (validated server-side against business hours + lead window in the view).
+    scheduled_for = serializers.DateTimeField(required=False, allow_null=True)
 
     def validate_table_label(self, value):
         cleaned = (value or "").strip()
@@ -1734,7 +1798,12 @@ class PlaceOrderView(APIView):
             return Response({"detail": "Menu is temporarily unavailable.", "code": "menu_temporarily_disabled"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not profile.is_menu_published and not can_preview:
             return Response({"detail": "Menu is not published yet.", "code": "menu_unpublished"}, status=status.HTTP_403_FORBIDDEN)
-        if not can_preview and not _is_restaurant_currently_open(profile):
+        # An advance/scheduled order may be placed while the restaurant is closed right
+        # now (it's for a future open slot). _validate_scheduled_for below enforces the
+        # requested time falls within business hours, so this live gate is safe to skip
+        # for scheduled requests.
+        _wants_schedule = bool(request.data.get("scheduled_for"))
+        if not can_preview and not _wants_schedule and not _is_restaurant_currently_open(profile):
             return Response(
                 {"detail": "Restaurant is currently closed.", "code": "restaurant_closed"},
                 status=status.HTTP_409_CONFLICT,
@@ -1814,6 +1883,26 @@ class PlaceOrderView(APIView):
                 )
             # Use DB label as authoritative source; fall back to client-supplied label
             table_label = resolved_table.label or table_label
+
+        # Advance/scheduled order — validate the requested fulfilment time (pickup/delivery
+        # only, future within the lead window, inside business hours). On success the order
+        # is created as SCHEDULED (hidden from the kitchen until released) but paid now.
+        _scheduled_for, _sched_err = _validate_scheduled_for(
+            profile, fulfillment_type, validated.get("scheduled_for")
+        )
+        if _sched_err:
+            _sched_messages = {
+                "schedule_not_supported": "Only pickup and delivery orders can be scheduled in advance.",
+                "schedule_too_soon": "Please choose a time at least 30 minutes from now.",
+                "schedule_too_far": "Scheduled orders can be placed up to 14 days ahead.",
+                "schedule_closed": "The restaurant is closed at that time. Please pick a time within opening hours.",
+            }
+            return Response(
+                {"detail": _sched_messages.get(_sched_err, "That scheduled time isn't available."),
+                 "code": _sched_err},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _is_scheduled = _scheduled_for is not None
 
         # Resolve linked customer from session
         from accounts.models import Customer as CustomerModel
@@ -1955,7 +2044,9 @@ class PlaceOrderView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
             _payment_method = str(request.data.get("payment_method") or "").strip().lower()
-            if _payment_method == "cash" and _cod_eligible(profile, _linked_customer.id):
+            # Advance/scheduled orders are prepaid at placement (no cash-on-handover) so
+            # the slot is genuinely committed and no-shows can't tie up stock unpaid.
+            if _payment_method == "cash" and not _is_scheduled and _cod_eligible(profile, _linked_customer.id):
                 _cod_order = True
             else:
                 _wallet_avail = Decimal(str(_linked_customer.wallet_balance or "0"))
@@ -2028,7 +2119,8 @@ class PlaceOrderView(APIView):
 
                 order = Order.objects.create(
                     order_number=order_number,
-                    status=Order.Status.PENDING,
+                    status=Order.Status.SCHEDULED if _is_scheduled else Order.Status.PENDING,
+                    scheduled_for=_scheduled_for,
                     handled_by_user_id=_staff_creator_id,
                     customer=_linked_customer,
                     customer_name=_customer_name,
@@ -2137,7 +2229,8 @@ class PlaceOrderView(APIView):
 
         # Platform delivery: spawn a searching driver job (opt-in per restaurant).
         # Best-effort and post-commit — a hiccup here must never affect the placed order.
-        if fulfillment_type == Order.FulfillmentType.DELIVERY and getattr(profile, "platform_delivery_enabled", False):
+        # Scheduled orders skip dispatch/notifications now — they fire at release time.
+        if not _is_scheduled and fulfillment_type == Order.FulfillmentType.DELIVERY and getattr(profile, "platform_delivery_enabled", False):
             try:
                 from accounts.models import DeliveryJob as _DJob
                 _DJob.objects.create(
@@ -2163,7 +2256,7 @@ class PlaceOrderView(APIView):
         # The order is already committed — a slow/failed Twilio call must never delay
         # the customer-facing 201 response.
         _wa_number = (getattr(profile, "whatsapp", "") or getattr(profile, "phone", "") or "").strip()
-        if _wa_number:
+        if _wa_number and not _is_scheduled:
             threading.Thread(
                 target=_notify_restaurant_new_order,
                 args=(order,),
@@ -2171,32 +2264,34 @@ class PlaceOrderView(APIView):
                 daemon=True,
             ).start()
 
-        # Send Web Push notification to subscribed owner/staff (daemon thread).
-        try:
-            from django.db import connection as _db_conn
-            from .push import push_new_order as _push_new_order
-            _push_new_order(
-                schema_name=_db_conn.tenant.schema_name,
-                order_number=order.order_number,
-                customer_name=order.customer_name or "",
-                total=str(order.total),
-                currency=order.currency,
-            )
-        except Exception:
-            pass  # Never fail the order response due to push errors
+        # Send Web Push notification + WS ping to subscribed owner/staff (daemon thread).
+        # Scheduled orders skip this now — the release sweep fires it at the right time.
+        if not _is_scheduled:
+            try:
+                from django.db import connection as _db_conn
+                from .push import push_new_order as _push_new_order
+                _push_new_order(
+                    schema_name=_db_conn.tenant.schema_name,
+                    order_number=order.order_number,
+                    customer_name=order.customer_name or "",
+                    total=str(order.total),
+                    currency=order.currency,
+                )
+            except Exception:
+                pass  # Never fail the order response due to push errors
 
-        # Real-time ping to connected owner/staff sockets (no-op if WS not configured).
-        # Low-sensitivity signal only — clients refetch order details over the
-        # authenticated HTTP API.
-        try:
-            from django.db import connection as _ws_conn
-            from realtime.broadcast import broadcast as _ws_broadcast
-            _ws_broadcast(
-                _ws_conn.tenant.schema_name, "owner", "order.new",
-                {"order_number": order.order_number},
-            )
-        except Exception:
-            pass
+            # Real-time ping to connected owner/staff sockets (no-op if WS not configured).
+            # Low-sensitivity signal only — clients refetch order details over the
+            # authenticated HTTP API.
+            try:
+                from django.db import connection as _ws_conn
+                from realtime.broadcast import broadcast as _ws_broadcast
+                _ws_broadcast(
+                    _ws_conn.tenant.schema_name, "owner", "order.new",
+                    {"order_number": order.order_number},
+                )
+            except Exception:
+                pass
 
         order.refresh_from_db(fields=["points_earned"])
         return Response({
@@ -2209,6 +2304,7 @@ class PlaceOrderView(APIView):
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "points_earned": order.points_earned,
+            "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -2359,6 +2455,8 @@ class CustomerOrderStatusView(APIView):
             "amount_due": str(order_outstanding if order_outstanding > Decimal("0") else Decimal("0.00")),
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            # Advance/scheduled fulfilment time (ISO 8601, null for ASAP orders).
+            "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
             "items_count": sum(i["qty"] for i in items),
             "items": items,
             "created_at": order.created_at.isoformat(),
@@ -3023,6 +3121,7 @@ class OwnerOrderListView(APIView):
                 "currency": order.currency,
                 "owner_note": order.owner_note,
                 "estimated_ready_minutes": order.estimated_ready_minutes,
+                "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
                 "items_count": sum(i.qty for i in order.items.all()),
                 "items": [
                     {
@@ -3525,10 +3624,11 @@ def _restock_cancelled_order(order) -> None:
 
 
 def _customer_can_cancel(order) -> bool:
-    """A customer may self-cancel only while the order is still early (pending/confirmed)
-    and is a pickup/delivery order — dine-in tabs are settled by staff, not self-cancelled."""
+    """A customer may self-cancel only while the order is still early (scheduled, pending or
+    confirmed) and is a pickup/delivery order — dine-in tabs are settled by staff, not
+    self-cancelled. Advance/scheduled orders are cancellable until released to the kitchen."""
     return (
-        order.status in (Order.Status.PENDING, Order.Status.CONFIRMED)
+        order.status in (Order.Status.SCHEDULED, Order.Status.PENDING, Order.Status.CONFIRMED)
         and order.fulfillment_type != Order.FulfillmentType.TABLE
     )
 
@@ -3542,6 +3642,9 @@ class OwnerOrderStatusUpdateView(APIView):
         """Allowed next statuses — fulfillment-type aware. Delivery gets an extra
         'Out for delivery' step; pickup & dine-in go straight Ready → Completed."""
         t = {
+            # Scheduled (advance) orders are released into the live flow as PENDING by
+            # the sweep; the owner may also release one early or cancel it.
+            Order.Status.SCHEDULED: {Order.Status.PENDING, Order.Status.CANCELLED},
             Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
             Order.Status.CONFIRMED: {Order.Status.PREPARING, Order.Status.CANCELLED},
             Order.Status.PREPARING: {Order.Status.READY, Order.Status.CANCELLED},

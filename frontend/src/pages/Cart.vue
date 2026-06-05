@@ -202,6 +202,45 @@
             </div>
             <p v-if="fieldErrors.fulfillment_type" id="cart-fulfillment-error" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
+            <!-- ── When: ASAP vs scheduled (pickup/delivery only) ── -->
+            <div v-if="canSchedule" class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+              <p class="text-xs font-semibold text-slate-300">{{ t('cartPage.whenTitle') }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                  :aria-pressed="!scheduleEnabled"
+                  :class="!scheduleEnabled
+                    ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                    : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                  @click="scheduleEnabled = false"
+                >
+                  {{ t('cartPage.scheduleAsap') }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                  :aria-pressed="scheduleEnabled"
+                  :class="scheduleEnabled
+                    ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                    : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                  @click="scheduleEnabled = true"
+                >
+                  {{ t('cartPage.scheduleLater') }}
+                </button>
+              </div>
+              <div v-if="scheduleEnabled" class="space-y-1">
+                <input
+                  v-model="scheduledFor"
+                  type="datetime-local"
+                  :min="minScheduleDatetime"
+                  class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
+                />
+                <p class="text-[11px] text-slate-500">{{ t('cartPage.scheduleHint') }}</p>
+                <p v-if="fieldErrors.scheduled_for" class="text-xs text-red-300">{{ fieldErrors.scheduled_for }}</p>
+              </div>
+            </div>
+
             <!-- ── Delivery form ── -->
             <div v-if="isDelivery" class="space-y-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
 
@@ -939,6 +978,9 @@ const unavailableNames = computed(() =>
 );
 
 const fulfillmentType = ref('');
+// Advance/scheduled order — pickup & delivery may be placed now for a future time.
+const scheduleEnabled = ref(false);
+const scheduledFor = ref(''); // <input type="datetime-local"> value: "YYYY-MM-DDTHH:mm" (local)
 const deliveryAddress = ref('');
 const deliveryLocationUrl = ref('');
 const deliveryLat = ref(null);
@@ -1047,6 +1089,19 @@ const isTableContextOrder = computed(() =>
 const isDelivery = computed(
   () => !isTableContextOrder.value && fulfillmentType.value === 'delivery'
 );
+// Advance orders apply to pickup & delivery (not dine-in). The "Schedule for later"
+// toggle is offered once one of those is chosen.
+const canSchedule = computed(
+  () => !isTableContextOrder.value &&
+    (fulfillmentType.value === 'pickup' || fulfillmentType.value === 'delivery')
+);
+// Earliest selectable time = now + 30 min lead, formatted for <input type="datetime-local">
+// in the browser's local wall-clock (no timezone suffix).
+const minScheduleDatetime = computed(() => {
+  const d = new Date(Date.now() + 30 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+});
 // Pickup & delivery are pay-now: settled in full from the wallet at checkout
 // (the only online method for now). Dine-in (table) pays at the end.
 const requiresPrepay = computed(
@@ -1503,6 +1558,9 @@ const validateForm = () => {
   if (!fulfillmentType.value) {
     errors.fulfillment_type = t('cartPage.selectPickupOrDelivery');
   }
+  if (canSchedule.value && scheduleEnabled.value && !scheduledFor.value) {
+    errors.scheduled_for = t('cartPage.scheduleRequired');
+  }
   if (fulfillmentType.value === 'delivery') {
     if (!deliveryAddress.value && !deliveryLocationUrl.value.trim()) {
       errors.delivery_address = t('cartPage.deliveryAddressRequiredError');
@@ -1592,6 +1650,11 @@ const buildPayload = () => {
 
   if (!isTableContextOrder.value) {
     if (fulfillmentType.value) payload.fulfillment_type = fulfillmentType.value;
+    // Advance/scheduled order — send the chosen local time as a UTC instant.
+    if (canSchedule.value && scheduleEnabled.value && scheduledFor.value) {
+      const dt = new Date(scheduledFor.value);
+      if (!Number.isNaN(dt.getTime())) payload.scheduled_for = dt.toISOString();
+    }
     if (isDelivery.value) {
       const latValue = parseCoordinateValue(deliveryLat.value);
       const lngValue = parseCoordinateValue(deliveryLng.value);
@@ -1619,6 +1682,7 @@ const assignFieldErrors = (data) => {
     'delivery_location_url',
     'delivery_lat',
     'delivery_lng',
+    'scheduled_for',
   ];
   keys.forEach((key) => {
     const value = data[key];
@@ -1673,6 +1737,11 @@ const mapOrderApiError = (err, fallback) => {
   }
   if (code === 'restaurant_closed') {
     return t('cartPage.restaurantCurrentlyClosed');
+  }
+  if (typeof code === 'string' && code.startsWith('schedule_')) {
+    // Backend supplies a clear, localized-enough message; surface it as the field error too.
+    if (data?.detail) fieldErrors.value = { ...fieldErrors.value, scheduled_for: data.detail };
+    return data?.detail || t('cartPage.scheduleInvalid');
   }
   if (code === 'contact_missing') {
     return t('cartPage.restaurantContactNotConfigured');

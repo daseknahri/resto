@@ -284,6 +284,7 @@ class StaffMessage(models.Model):
 
 class Order(models.Model):
     class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"  # advance order, not yet released to the kitchen
         PENDING = "pending", "Pending"
         CONFIRMED = "confirmed", "Confirmed"
         PREPARING = "preparing", "Preparing"
@@ -382,6 +383,16 @@ class Order(models.Model):
     )
     owner_note = models.TextField(blank=True)
     estimated_ready_minutes = models.PositiveIntegerField(null=True, blank=True)
+    scheduled_for = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "When the customer wants this advance order fulfilled (null = ASAP). "
+            "While set and status=SCHEDULED the order is hidden from the kitchen until "
+            "the release sweep moves it to PENDING shortly before this time."
+        ),
+    )
     tip_amount = models.DecimalField(
         max_digits=8,
         decimal_places=2,
@@ -430,6 +441,11 @@ class Order(models.Model):
     @property
     def is_paid(self) -> bool:
         return self.payment_status == self.PaymentStatus.PAID
+
+    @property
+    def is_scheduled(self) -> bool:
+        """True for an advance order still waiting for its release time."""
+        return self.status == self.Status.SCHEDULED
 
     def mark_paid(self, *, save: bool = True):
         """Settle the order's bill. Idempotent."""

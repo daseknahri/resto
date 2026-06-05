@@ -55,6 +55,18 @@
         </div>
       </div>
 
+      <!-- Scheduled (advance order) banner -->
+      <div
+        v-if="orderData.status === 'scheduled' && orderData.scheduled_for"
+        class="ui-reveal rounded-2xl border border-violet-400/50 bg-violet-500/12 p-4 text-center shadow-lg shadow-violet-900/20 sm:p-5"
+      >
+        <p class="text-2xl">🗓️</p>
+        <p class="mt-1 text-lg font-bold text-violet-100">{{ t("orderStatus.scheduledTitle") }}</p>
+        <p class="mt-1 text-sm text-violet-100/80">
+          {{ t("orderStatus.scheduledBody", { time: formatScheduledFor(orderData.scheduled_for) }) }}
+        </p>
+      </div>
+
       <!-- Order-cancelled banner -->
       <div
         v-if="orderData.status === 'cancelled'"
@@ -598,6 +610,7 @@ const stepClass = (stepValue) => {
 };
 
 const statusClass = (s) => ({
+  scheduled: "bg-violet-500/20 text-violet-200 border border-violet-500/30",
   pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
   preparing: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
@@ -608,6 +621,7 @@ const statusClass = (s) => ({
 }[s] || "bg-slate-700 text-slate-300");
 
 const statusLabel = (s) => ({
+  scheduled: t("orderStatus.statusScheduled"),
   pending: t("orderStatus.statusPending"),
   confirmed: t("orderStatus.statusConfirmed"),
   preparing: t("orderStatus.statusPreparing"),
@@ -616,6 +630,20 @@ const statusLabel = (s) => ({
   completed: t("orderStatus.statusCompleted"),
   cancelled: t("orderStatus.statusCancelled"),
 }[s] || s);
+
+const formatScheduledFor = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return d.toLocaleString(undefined, {
+      weekday: "short", day: "numeric", month: "short",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return d.toLocaleString();
+  }
+};
 
 const fulfillmentLabel = (o) => {
   if (o.fulfillment_type === "table") return t("orderStatus.fulfillmentTable", { table: o.table_label || "?" });
