@@ -37,41 +37,40 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 
 ---
 
-## 2b — Schedule the cron jobs (Coolify Scheduled Tasks)
-These management commands are idempotent and safe; nothing runs them automatically.
+## 2b — Background jobs (cron + notification durability) — pick ONE mode
+
+These periodic commands are idempotent and safe; **nothing runs them automatically** — you
+must enable one of the two modes below. `release_scheduled_orders` in particular is REQUIRED
+or advance/scheduled orders never reach the kitchen.
 
 | Command | Cadence | Purpose |
 |---|---|---|
-| `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (they drop out of the marketplace). |
+| `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
+| `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
-| `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
-| `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
+| `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (drop out of the marketplace). |
+
+### Mode A — Simple (no Celery). Good for launch / first test.
+- Leave `CELERY_BROKER_URL` **unset**. Notifications send in-process (works fine, no worker).
+- The `worker` + `beat` compose services stay **idle** (they no-op when the broker is unset).
+- Add each command above as a **Coolify Scheduled Task**: open the **`api`** resource →
+  *Scheduled Tasks* → container `api`, command `python manage.py <command>`, cron as in the table
+  (`*/5 * * * *`, `*/10 * * * *`, `*/15 * * * *`, `0 * * * *`, `0 3 * * *`).
+
+### Mode B — Durable queue (Celery). Recommended at volume.
+The `worker` and `beat` services are **already defined** in `docker-compose.coolify.yml`
+(idle until enabled). To switch on:
+1. Set env **`CELERY_BROKER_URL`** = the same value as your `REDIS_URL` (optionally
+   `CELERY_RESULT_BACKEND` too), then **redeploy**.
+2. The `worker` starts consuming the notification queue; `beat` starts running every command
+   in the table on the `CELERY_BEAT_SCHEDULE`.
+3. **Remove the Mode-A Scheduled Tasks** — otherwise the cron jobs run twice.
+
+> ⚠️ It's broker-set ⇔ worker-running, **together**. The compose ships both, so a redeploy with
+> `CELERY_BROKER_URL` set turns the whole thing on atomically; unset turns it back off.
 
 Also enable Coolify's **Postgres backup schedule** (daily, ≥30-day retention) and test a restore.
-
-## 2c — Celery worker (durable notifications) — OPTIONAL, recommended at volume
-Outbound notifications (web push, SMS, WhatsApp, driver dispatch) can be dispatched through a
-Celery queue so they run **off the web process and survive restarts**.
-
-**Celery is OFF by default** — even with `REDIS_URL` set. While off, notifications are sent
-in-process (the historical behaviour); nothing breaks, you just don't get the queue's
-durability. **You can launch and test without any of this.**
-
-To turn it ON (do BOTH together — never one without the other):
-1. Set env `CELERY_BROKER_URL` = your `REDIS_URL` value (and optionally `CELERY_RESULT_BACKEND`).
-2. Run the worker as an extra Coolify process/resource:
-   `celery -A config worker -l info -Q notifications,default`
-
-> ⚠️ Setting `CELERY_BROKER_URL` **without** a running worker means tasks queue in Redis and
-> are never processed — i.e. notifications silently stop. Broker-set ⇔ worker-running.
-
-- **Optional — let Beat own the cron jobs** instead of the §2b Scheduled Tasks:
-  `celery -A config beat -l info`
-  Beat runs `release_scheduled_orders` / `send_review_prompts` / `send_reservation_reminders`
-  / `expire_charge_requests` / `enforce_subscriptions` on the schedule in
-  `CELERY_BEAT_SCHEDULE`. **Pick one** — Beat *or* the §2b Scheduled Tasks, not both, for the
-  same job.
 
 ---
 
