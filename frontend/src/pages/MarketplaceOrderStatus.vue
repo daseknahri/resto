@@ -64,6 +64,16 @@
         <p class="text-xs text-slate-500">{{ t('mktOrderStatus.trackingHint') }}</p>
       </div>
 
+      <!-- Proof-of-delivery code (give it to your driver) -->
+      <div
+        v-if="order.delivery_code"
+        class="rounded-2xl border border-indigo-400/50 bg-indigo-500/12 p-4 text-center"
+      >
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-300">{{ t('mktOrderStatus.deliveryCodeTitle') }}</p>
+        <p class="mt-1 text-3xl font-bold tracking-[0.3em] text-white">{{ order.delivery_code }}</p>
+        <p class="mt-1 text-xs text-indigo-100/75">{{ t('mktOrderStatus.deliveryCodeHint') }}</p>
+      </div>
+
       <!-- Scheduled (advance order) banner -->
       <div
         v-if="order.status === 'scheduled' && order.scheduled_for"

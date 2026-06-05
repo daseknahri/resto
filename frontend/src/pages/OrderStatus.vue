@@ -39,6 +39,16 @@
     </div>
 
     <template v-else-if="orderData">
+      <!-- Proof-of-delivery code (give it to your driver) -->
+      <div
+        v-if="orderData.delivery_code"
+        class="ui-reveal rounded-2xl border border-indigo-400/50 bg-indigo-500/12 p-4 text-center"
+      >
+        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-300">{{ t("orderStatus.deliveryCodeTitle") }}</p>
+        <p class="mt-1 text-3xl font-bold tracking-[0.3em] text-white">{{ orderData.delivery_code }}</p>
+        <p class="mt-1 text-xs text-indigo-100/75">{{ t("orderStatus.deliveryCodeHint") }}</p>
+      </div>
+
       <!-- Order-ready banner -->
       <div
         v-if="orderData.status === 'ready'"

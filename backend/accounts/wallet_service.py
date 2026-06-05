@@ -80,8 +80,14 @@ def _require_active_tenant(tenant):
 
 @transaction.atomic
 def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
-                  idempotency_key=None, reference="", tenant_id=None, note="", currency="MAD"):
-    """Add funds to a wallet. Returns the WalletTransaction (existing one on retry)."""
+                  idempotency_key=None, reference="", tenant_id=None, note="", currency="MAD",
+                  require_verified=True):
+    """Add funds to a wallet. Returns the WalletTransaction (existing one on retry).
+
+    ``require_verified`` enforces the no-verified-phone-no-wallet rule (default). Pass
+    False for system-originated credits the owner didn't ask for, e.g. driver delivery
+    earnings — the driver clearly exists and shouldn't lose pay over an unverified phone.
+    """
     amount = _money(amount)
     if amount <= 0:
         raise WalletError("credit amount must be positive")
@@ -91,7 +97,8 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
         return existing
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
-    _require_verified(cust)
+    if require_verified:
+        _require_verified(cust)
     new_balance = (_money(cust.wallet_balance) + amount).quantize(_CENT)
     cust.wallet_balance = new_balance
     cust.save(update_fields=["wallet_balance", "updated_at"])

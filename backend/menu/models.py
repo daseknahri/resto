@@ -323,6 +323,10 @@ class Order(models.Model):
     delivery_location_url = models.URLField(max_length=500, blank=True)
     delivery_lat = models.FloatField(null=True, blank=True)
     delivery_lng = models.FloatField(null=True, blank=True)
+    # Proof of delivery — a short code generated for delivery orders. The customer shows
+    # it to the driver, who must enter it to mark the delivery complete. Optional photo URL.
+    delivery_code = models.CharField(max_length=12, blank=True, db_index=True)
+    delivery_proof_photo_url = models.URLField(max_length=500, blank=True)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     delivery_fee = models.DecimalField(
         max_digits=8,

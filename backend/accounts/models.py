@@ -69,6 +69,8 @@ class WalletTransaction(models.Model):
         TRANSFER_OUT = "transfer_out", "Transfer sent"      # P2P gift sent (out)
         TRANSFER_IN = "transfer_in", "Transfer received"    # P2P gift received (in)
         ADJUSTMENT = "adjustment", "Adjustment"             # admin/policy correction
+        EARNING = "earning", "Delivery earning"             # driver payout for a delivered job
+        CASHOUT = "cashout", "Cash-out"                     # driver redeemed wallet for cash at a restaurant
 
     customer = models.ForeignKey(
         Customer,

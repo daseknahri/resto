@@ -470,10 +470,17 @@ const accept = async (jobId) => {
 
 const advance = async (toStatus) => {
   errorMsg.value = '';
+  const payload = { status: toStatus };
+  if (toStatus === 'delivered') {
+    // Proof of delivery — the customer reads the code shown on their order.
+    const code = (window.prompt(t('driver.enterDeliveryCode')) || '').trim();
+    if (!code) return; // driver cancelled the prompt
+    payload.code = code;
+  }
   busy.value = true;
   try {
     const job = activeJob.value;
-    const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: toStatus });
+    const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, payload);
     if (data.is_terminal) {
       activeJob.value = null;
       online.value = false; // backend takes the driver offline after delivery
@@ -490,7 +497,10 @@ const advance = async (toStatus) => {
       activeJob.value = data;
     }
   } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    const errCode = err?.response?.data?.code;
+    errorMsg.value = errCode === 'bad_delivery_code'
+      ? t('driver.badDeliveryCode')
+      : (err?.response?.data?.detail || t('driver.errorGeneric'));
   } finally {
     busy.value = false;
   }

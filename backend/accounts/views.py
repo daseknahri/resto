@@ -2787,6 +2787,7 @@ class MarketplacePlaceOrderView(APIView):
                         else:
                             return Response({"detail": "Order could not be placed. Please try again."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+                        from menu.views import _generate_delivery_code as _gen_delivery_code
                         order = _Order.objects.create(
                             order_number=order_number,
                             status=_Order.Status.SCHEDULED if _is_scheduled else _Order.Status.PENDING,
@@ -2800,6 +2801,7 @@ class MarketplacePlaceOrderView(APIView):
                             delivery_location_url=delivery_location_url,
                             delivery_lat=delivery_lat,
                             delivery_lng=delivery_lng,
+                            delivery_code=(_gen_delivery_code() if fulfillment_type == "delivery" else ""),
                             total=total,
                             delivery_fee=_delivery_fee,
                             currency=currency,
@@ -3008,10 +3010,17 @@ class MarketplaceOrderStatusView(APIView):
 
         # Self-cancel affordance for the signed-in owner of an early pickup/delivery order.
         can_cancel = False
+        delivery_code = None
         try:
             _scid = getattr(request, "session", None) and request.session.get("customer_id")
             from menu.views import _customer_can_cancel as _ccc
-            can_cancel = bool(_ccc(order) and _scid and order.customer_id and int(_scid) == int(order.customer_id))
+            _owns = bool(_scid and order.customer_id and int(_scid) == int(order.customer_id))
+            can_cancel = bool(_ccc(order) and _owns)
+            # Proof-of-delivery code — owner-only, active delivery orders.
+            if (_owns and getattr(order, "delivery_code", "")
+                    and order.fulfillment_type == "delivery"
+                    and order.status not in ("completed", "cancelled")):
+                delivery_code = order.delivery_code
         except Exception:
             can_cancel = False
 
@@ -3019,6 +3028,7 @@ class MarketplaceOrderStatusView(APIView):
             "order_number": order.order_number,
             "status": order.status,
             "can_cancel": can_cancel,
+            "delivery_code": delivery_code,
             "payment_status": order.payment_status,
             "fulfillment_type": order.fulfillment_type,
             "total": str(order.total),
@@ -3764,11 +3774,54 @@ def _mark_order_out_for_delivery(job) -> None:
         pass
 
 
-def _complete_delivered_order(job) -> None:
+def _order_delivery_code(job) -> str:
+    """Read the proof-of-delivery code from the job's underlying order (tenant schema).
+    Returns "" if none was issued (legacy orders) — caller then skips the code check."""
+    try:
+        from tenancy.models import Tenant as _T
+        from django_tenants.utils import schema_context
+        from menu.models import Order as _O
+        tenant = _T.objects.filter(id=job.tenant_id).first()
+        if not tenant:
+            return ""
+        with schema_context(tenant.schema_name):
+            o = _O.objects.filter(order_number=job.order_number).only("delivery_code").first()
+            return (o.delivery_code or "") if o else ""
+    except Exception:
+        return ""
+
+
+def _credit_driver_earnings(job) -> None:
+    """Credit the driver's wallet with this job's payout exactly once (idempotent on the
+    job id). Best-effort — a hiccup here must never block completing the delivery; the
+    earning can be reconciled. Bypasses the verified-phone gate (the driver clearly exists)."""
+    try:
+        from decimal import Decimal as _D
+        from accounts.wallet_service import credit_wallet
+        from accounts.models import WalletTransaction as _WT
+        if not getattr(job, "driver_id", None):
+            return
+        payout = _D(str(job.driver_payout or "0"))
+        if payout <= 0:
+            return
+        credit_wallet(
+            job.driver_id, payout,
+            tx_type=_WT.Type.EARNING,
+            idempotency_key=f"earning:{job.id}",
+            reference=f"delivery:{job.order_number}",
+            tenant_id=job.tenant_id,
+            note="Delivery earning",
+            require_verified=False,
+        )
+    except Exception:
+        logger.exception("Failed to credit driver earning for job %s", getattr(job, "id", "?"))
+
+
+def _complete_delivered_order(job, proof_photo_url="") -> None:
     """When a delivery is completed, close out the underlying tenant order:
     mark it COMPLETED (delivery is the fulfilment) and PAID (delivery orders are
-    prepaid by wallet or cash-collected on handover). This also makes the order
-    eligible for the ~30-min review nudge. Best-effort — never blocks the driver.
+    prepaid by wallet or cash-collected on handover), store any proof photo, and
+    credit the driver's wallet. Best-effort — never blocks the driver.
     """
     try:
         from tenancy.models import Tenant as _T
@@ -3792,11 +3845,16 @@ def _complete_delivered_order(job) -> None:
                 order.payment_status = _O.PaymentStatus.PAID
                 order.paid_at = _tz.now()
                 fields += ["payment_status", "paid_at"]
+            if proof_photo_url and not order.delivery_proof_photo_url:
+                order.delivery_proof_photo_url = proof_photo_url[:500]
+                fields.append("delivery_proof_photo_url")
             if fields:
                 fields.append("updated_at")
                 order.save(update_fields=fields)
     except Exception:
         logger.exception("Failed to complete delivered order %s", getattr(job, "order_number", "?"))
+    # Driver earnings live in the public schema — credit outside the tenant context.
+    _credit_driver_earnings(job)
 
 
 class DriverJobStatusUpdateView(APIView):
@@ -3840,6 +3898,19 @@ class DriverJobStatusUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Proof of delivery — require the order's delivery code (if one was issued).
+        _proof_photo_url = ""
+        if new_status == DeliveryJob.Status.DELIVERED:
+            _expected_code = _order_delivery_code(job)
+            _provided_code = str(request.data.get("code") or "").strip()
+            if _expected_code and _provided_code != _expected_code:
+                return Response(
+                    {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
+                     "code": "bad_delivery_code"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
+
         now = _tz.now()
         job.status = new_status
         update_fields = ["status"]
@@ -3854,8 +3925,8 @@ class DriverJobStatusUpdateView(APIView):
             # Go offline after delivery
             customer.is_driver_online = False
             customer.save(update_fields=["is_driver_online", "updated_at"])
-            # Close out the underlying order: completed + paid, and review-eligible.
-            _complete_delivered_order(job)
+            # Close out the underlying order: completed + paid + proof, credit earnings.
+            _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
         elif new_status == DeliveryJob.Status.FAILED:
             job.failed_at = now
             update_fields.append("failed_at")

@@ -1674,6 +1674,13 @@ def _generate_order_number() -> str:
     raise RuntimeError("Could not generate unique order number after 10 attempts.")
 
 
+def _generate_delivery_code() -> str:
+    """Short 4-digit proof-of-delivery code (e.g. '4821'). The customer reads it to the
+    driver, who enters it to confirm hand-off. Not globally unique — it's only checked
+    against its own order, so a 4-digit PIN is enough and easy to read aloud."""
+    return f"{_secrets.randbelow(10000):04d}"
+
+
 def _notify_restaurant_new_order(order, tenant_name: str, whatsapp_phone: str, tenant_id=None) -> None:
     """Send a WhatsApp notification to the restaurant when a new order arrives.
 
@@ -2224,6 +2231,7 @@ class PlaceOrderView(APIView):
                     delivery_location_url=validated.get("delivery_location_url", ""),
                     delivery_lat=validated.get("delivery_lat"),
                     delivery_lng=validated.get("delivery_lng"),
+                    delivery_code=(_generate_delivery_code() if fulfillment_type == Order.FulfillmentType.DELIVERY else ""),
                     total=total,
                     delivery_fee=_delivery_fee,
                     tip_amount=_tip_amount,
@@ -2570,6 +2578,18 @@ class CustomerOrderStatusView(APIView):
             "estimated_ready_minutes": order.estimated_ready_minutes,
             # Advance/scheduled fulfilment time (ISO 8601, null for ASAP orders).
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
+            # Proof-of-delivery code — shown ONLY to the signed-in owner of an active
+            # delivery order (they read it to the driver). Gated so guessing an order
+            # number can't leak it.
+            "delivery_code": (
+                order.delivery_code
+                if (order.delivery_code
+                    and order.fulfillment_type == Order.FulfillmentType.DELIVERY
+                    and order.status not in (Order.Status.COMPLETED, Order.Status.CANCELLED)
+                    and session_customer_id and order.customer_id
+                    and str(session_customer_id) == str(order.customer_id))
+                else None
+            ),
             "items_count": sum(i["qty"] for i in items),
             "items": items,
             "created_at": order.created_at.isoformat(),
