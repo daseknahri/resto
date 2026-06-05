@@ -153,6 +153,9 @@
         </a>
       </div>
 
+      <!-- Live driver tracking (driver card + call + map) -->
+      <DeliveryTracker v-if="orderData.delivery" :delivery="orderData.delivery" />
+
       <!-- Status timeline -->
       <div class="ui-panel p-4 sm:p-5">
         <div class="flex items-center justify-between gap-1">
@@ -463,6 +466,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import CustomerAuthModal from "../components/CustomerAuthModal.vue";
+import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderRealtime } from "../composables/useOrderRealtime";
 import { useCartStore } from "../stores/cart";

@@ -126,54 +126,8 @@
         </div>
       </div>
 
-      <!-- Driver tracking panel (shown when a delivery job exists) -->
-      <div v-if="delivery" class="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-slate-300">🛵 {{ t('mktOrderStatus.driverTracking') }}</h2>
-          <span
-            class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            :class="{
-              'bg-amber-500/15 border border-amber-500/30 text-amber-300': delivery.status === 'searching',
-              'bg-sky-500/15 border border-sky-500/30 text-sky-300': delivery.status === 'assigned' || delivery.status === 'at_restaurant',
-              'bg-violet-500/15 border border-violet-500/30 text-violet-300': delivery.status === 'picked_up',
-              'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300': delivery.status === 'delivered',
-              'bg-red-500/15 border border-red-500/30 text-red-300': delivery.status === 'failed',
-            }"
-          >
-            {{ t(`mktOrderStatus.delivery_${delivery.status}`) }}
-          </span>
-        </div>
-
-        <!-- Driver info -->
-        <div v-if="delivery.driver" class="flex items-center gap-3 text-sm">
-          <div class="h-9 w-9 rounded-full bg-slate-700 flex items-center justify-center text-base">🧑</div>
-          <div>
-            <p class="text-slate-200 font-medium">{{ delivery.driver.name || t('mktOrderStatus.driverUnnamed') }}</p>
-            <p v-if="delivery.driver.is_online" class="text-[11px] text-emerald-400">{{ t('mktOrderStatus.driverOnline') }}</p>
-          </div>
-        </div>
-        <p v-else class="text-xs text-slate-400">{{ t('mktOrderStatus.searchingDriver') }}</p>
-
-        <!-- Addresses -->
-        <div v-if="delivery.pickup_address || delivery.delivery_address" class="space-y-1 text-xs text-slate-400">
-          <p v-if="delivery.pickup_address"><span class="text-slate-500">{{ t('mktOrderStatus.from') }}:</span> {{ delivery.pickup_address }}</p>
-          <p v-if="delivery.delivery_address"><span class="text-slate-500">{{ t('mktOrderStatus.to') }}:</span> {{ delivery.delivery_address }}</p>
-        </div>
-
-        <!-- Live map: driver + destination -->
-        <div v-show="hasDriverPos" ref="mapEl" class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"></div>
-
-        <!-- Maps link if driver position known -->
-        <a
-          v-if="delivery.driver?.lat && delivery.driver?.lng"
-          :href="`https://www.google.com/maps/search/?api=1&query=${delivery.driver.lat},${delivery.driver.lng}`"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
-        >
-          📍 {{ t('mktOrderStatus.viewDriverMap') }}
-        </a>
-      </div>
+      <!-- Driver tracking panel (shared component) -->
+      <DeliveryTracker :delivery="delivery" />
 
       <!-- Customer rates driver (shown after delivery) -->
       <div
@@ -248,11 +202,12 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import DeliveryTracker from '../components/DeliveryTracker.vue';
 
 const { t, currentLocale } = useI18n();
 const route = useRoute();
@@ -278,11 +233,8 @@ const loading = ref(true);
 const fetchError = ref(false);
 const order = ref(null);
 
-// ── Delivery tracking ──────────────────────────────────────────────────────────
+// ── Delivery tracking (driver card + live map rendered by <DeliveryTracker>) ─────
 const delivery = ref(null);
-const hasDriverPos = computed(() =>
-  delivery.value?.driver?.lat != null && delivery.value?.driver?.lng != null
-);
 
 const fetchDelivery = async () => {
   try {
@@ -290,59 +242,10 @@ const fetchDelivery = async () => {
       params: { restaurant: slug },
     });
     delivery.value = res.data;
-    if (hasDriverPos.value) nextTick(renderDriverMap);
   } catch {
     // 404 = no delivery job for this order, that's OK (pickup orders)
     delivery.value = null;
   }
-};
-
-// ── Live driver map (Leaflet, lazy-loaded) ──────────────────────────────────────
-const mapEl = ref(null);
-let _map = null, _driverMarker = null, _destMarker = null, _leaflet = null;
-
-const ensureLeaflet = async () => {
-  if (_leaflet) return _leaflet;
-  const [{ default: L }, m2x, m, shadow] = await Promise.all([
-    import('leaflet'),
-    import('leaflet/dist/images/marker-icon-2x.png'),
-    import('leaflet/dist/images/marker-icon.png'),
-    import('leaflet/dist/images/marker-shadow.png'),
-  ]);
-  await import('leaflet/dist/leaflet.css');
-  delete L.Icon.Default.prototype._getIconUrl;
-  L.Icon.Default.mergeOptions({ iconRetinaUrl: m2x.default, iconUrl: m.default, shadowUrl: shadow.default });
-  _leaflet = L;
-  return L;
-};
-
-const renderDriverMap = async () => {
-  const d = delivery.value?.driver;
-  if (!d || d.lat == null || d.lng == null || !mapEl.value) return;
-  const L = await ensureLeaflet();
-  const driverPos = [Number(d.lat), Number(d.lng)];
-  if (!_map) {
-    _map = L.map(mapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_map);
-  }
-  if (!_driverMarker) _driverMarker = L.marker(driverPos).addTo(_map);
-  else _driverMarker.setLatLng(driverPos);
-  if (_driverMarker.bindPopup) _driverMarker.bindPopup(t('mktOrderStatus.driverTracking'));
-
-  const destLat = delivery.value?.delivery_lat, destLng = delivery.value?.delivery_lng;
-  const points = [driverPos];
-  if (destLat != null && destLng != null) {
-    const destPos = [Number(destLat), Number(destLng)];
-    if (!_destMarker) _destMarker = L.marker(destPos, { opacity: 0.7 }).addTo(_map);
-    else _destMarker.setLatLng(destPos);
-    points.push(destPos);
-  }
-  if (points.length > 1) {
-    _map.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
-  } else {
-    _map.setView(driverPos, 14);
-  }
-  setTimeout(() => _map && _map.invalidateSize(), 0); // container just became visible
 };
 
 // ── Driver rating ──────────────────────────────────────────────────────────────
@@ -475,6 +378,5 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(_pollTimer);
   document.removeEventListener('visibilitychange', onMktStatusVisible);
-  if (_map) { _map.remove(); _map = null; }
 });
 </script>
