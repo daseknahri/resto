@@ -225,6 +225,7 @@ class SerializeDeliveryJobTests(SimpleTestCase):
             id=99,
             name="Ali",
             phone="+212600000001",
+            driver_vehicle="Motorcycle",
             driver_lat=33.0,
             driver_lng=-7.0,
             is_driver_online=True,
@@ -256,6 +257,24 @@ class SerializeDeliveryJobTests(SimpleTestCase):
         )
         self.assertIn("lat", result["driver"])
         self.assertIn("is_online", result["driver"])
+
+    def test_driver_vehicle_always_included(self):
+        result = _serialize_delivery_job(self._job(driver=self._driver()))
+        self.assertEqual(result["driver"]["vehicle"], "Motorcycle")
+
+    def test_rating_key_present_when_position_requested(self):
+        result = _serialize_delivery_job(
+            self._job(driver=self._driver()), include_driver_position=True
+        )
+        # rating is best-effort (None without a DB) but the key must be exposed.
+        self.assertIn("rating", result["driver"])
+        self.assertIn("rating_count", result["driver"])
+
+    def test_distance_km_computed_from_coords(self):
+        result = _serialize_delivery_job(self._job())
+        # pickup (33.0,-7.0) → dropoff (33.1,-7.1) ≈ 14.6 km
+        self.assertIsNotNone(result["distance_km"])
+        self.assertTrue(10 < result["distance_km"] < 20)
 
     def test_delivery_fee_is_string(self):
         result = _serialize_delivery_job(self._job())

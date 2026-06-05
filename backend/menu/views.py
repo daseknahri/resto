@@ -2564,10 +2564,36 @@ class CustomerOrderStatusView(APIView):
             except Exception:
                 pass  # balance lookup is best-effort; never breaks order status
 
+        # Delivery tracking — the order owner can see + contact their assigned driver
+        # (name, phone, vehicle, rating) and watch the live position. Owner-gated like
+        # the delivery code, since this endpoint is AllowAny (delivery orders always
+        # have a signed-in owner, so this never hides a driver from a legit customer).
+        delivery_block = None
+        if (
+            order.fulfillment_type == Order.FulfillmentType.DELIVERY
+            and session_customer_id and order.customer_id
+            and str(session_customer_id) == str(order.customer_id)
+        ):
+            try:
+                _dtenant = getattr(request, "tenant", None)
+                _dtid = _dtenant.id if _dtenant else 0
+                from accounts.models import DeliveryJob as _DJob
+                from accounts.views import _serialize_delivery_job as _ser_job
+                _djob = (
+                    _DJob.objects.select_related("driver")
+                    .filter(tenant_id=_dtid, order_number=order.order_number)
+                    .first()
+                )
+                if _djob is not None:
+                    delivery_block = _ser_job(_djob, include_driver_position=True)
+            except Exception:
+                delivery_block = None
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
             "fulfillment_type": order.fulfillment_type,
+            "delivery": delivery_block,
             "table_label": order.table_label,
             "customer_name": order.customer_name,
             # NOTE: customer_phone is intentionally omitted — this endpoint is

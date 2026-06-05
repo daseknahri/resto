@@ -3561,6 +3561,7 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
             "id": job.driver.id,
             "name": job.driver.name or "",
             "phone": job.driver.phone or "",
+            "vehicle": getattr(job.driver, "driver_vehicle", "") or "",
         }
         if include_driver_position:
             driver_data["lat"] = job.driver.driver_lat
@@ -3570,6 +3571,19 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
                 job.driver.driver_position_updated_at.isoformat()
                 if job.driver.driver_position_updated_at else None
             )
+            # Driver's average customer rating (best-effort; customer-facing tracking only).
+            try:
+                from django.db.models import Avg as _Avg, Count as _Count
+                from .models import DeliveryJob as _DJ
+
+                _agg = _DJ.objects.filter(
+                    driver=job.driver, customer_driver_rating__isnull=False
+                ).aggregate(avg=_Avg("customer_driver_rating"), n=_Count("id"))
+                driver_data["rating"] = round(_agg["avg"], 1) if _agg["avg"] is not None else None
+                driver_data["rating_count"] = _agg["n"] or 0
+            except Exception:
+                driver_data["rating"] = None
+                driver_data["rating_count"] = 0
         data["driver"] = driver_data
     return data
 
