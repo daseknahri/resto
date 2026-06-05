@@ -28,19 +28,36 @@
         <p class="text-base font-semibold text-slate-100">{{ t('driver.becomeTitle') }}</p>
       </div>
       <p class="text-sm text-slate-400">{{ t('driver.becomeDesc') }}</p>
-      <div class="space-y-1">
-        <label class="text-xs font-medium text-slate-400">{{ t('driver.vehicleLabel') }}</label>
-        <input
-          v-model.trim="vehicle"
-          type="text"
-          class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
-          :placeholder="t('driver.vehiclePlaceholder')"
-        />
+
+      <!-- Install the app first (drivers work from the installed app) -->
+      <div v-if="!isStandalone && !continueInBrowser" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
+        <p class="text-sm font-semibold text-emerald-200">{{ t('driver.installTitle') }}</p>
+        <p class="text-xs text-slate-300">{{ t('driver.installDesc') }}</p>
+        <button v-if="canInstall" class="ui-btn-primary w-full py-2 text-sm" @click="promptInstall">
+          {{ t('driver.installCta') }}
+        </button>
+        <p v-else class="text-xs text-slate-400">{{ t('driver.installManual') }}</p>
+        <button class="text-[11px] text-slate-500 underline hover:text-slate-300" @click="continueInBrowser = true">
+          {{ t('driver.continueInBrowser') }}
+        </button>
       </div>
-      <p v-if="errorMsg" class="text-xs text-red-300">{{ errorMsg }}</p>
-      <button class="ui-btn-primary w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
-        {{ busy ? '…' : t('driver.becomeCta') }}
-      </button>
+
+      <!-- Apply (after install, or after explicitly continuing in the browser) -->
+      <template v-else>
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-slate-400">{{ t('driver.vehicleLabel') }}</label>
+          <input
+            v-model.trim="vehicle"
+            type="text"
+            class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+            :placeholder="t('driver.vehiclePlaceholder')"
+          />
+        </div>
+        <p v-if="errorMsg" class="text-xs text-red-300">{{ errorMsg }}</p>
+        <button class="ui-btn-primary w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
+          {{ busy ? '…' : t('driver.becomeCta') }}
+        </button>
+      </template>
     </div>
 
     <!-- Applied, awaiting admin approval -->
@@ -325,6 +342,32 @@ const vehicle = ref('');
 const online = ref(false);
 const activeJob = ref(null);
 const pendingJobs = ref([]);
+
+// ── Install-first PWA — drivers work from the installed app ──────────────────────
+const isStandalone = ref(
+  typeof window !== 'undefined' && (
+    window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+  )
+);
+const continueInBrowser = ref(false);
+const canInstall = ref(false);
+let deferredInstallPrompt = null;
+const onBeforeInstallPrompt = (e) => {
+  e.preventDefault();           // stash it so we can trigger our own button
+  deferredInstallPrompt = e;
+  canInstall.value = true;
+};
+const onAppInstalled = () => {
+  canInstall.value = false;
+  isStandalone.value = true;
+};
+const promptInstall = async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try { await deferredInstallPrompt.userChoice; } catch { /* ignore */ }
+  deferredInstallPrompt = null;
+  canInstall.value = false;
+};
 const busy = ref(false);
 const loadingJobs = ref(false);
 const errorMsg = ref('');
@@ -638,6 +681,10 @@ const stopGeo = () => {
 };
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+  }
   await customerStore.fetchCustomer();
   if (!customerStore.isAuthenticated) return;
   await fetchStatus();
@@ -656,5 +703,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer);
   stopGeo();
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.removeEventListener('appinstalled', onAppInstalled);
+  }
 });
 </script>

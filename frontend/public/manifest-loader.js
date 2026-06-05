@@ -6,7 +6,9 @@
 // or a per-build hash.
 (function () {
   var path = location.pathname;
+  var isDriver = path.startsWith('/driver');
   var isCustomer =
+    !isDriver &&
     !path.startsWith('/owner') &&
     !path.startsWith('/waiter') &&
     !path.startsWith('/admin') &&
@@ -14,7 +16,9 @@
     !path.startsWith('/activate') &&
     !path.startsWith('/forgot') &&
     !path.startsWith('/reset');
-  var href = isCustomer ? '/app-manifest.json' : '/manifest.json';
+  var href = isDriver
+    ? '/driver-manifest.json'           // installs as a dedicated "Driver" app (start_url /driver)
+    : (isCustomer ? '/app-manifest.json' : '/manifest.json');
   var link = document.createElement('link');
   link.rel = 'manifest';
   link.href = href;
