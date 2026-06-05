@@ -129,40 +129,6 @@
       <!-- Driver tracking panel (shared component) -->
       <DeliveryTracker :delivery="delivery" />
 
-      <!-- Customer rates driver (shown after delivery) -->
-      <div
-        v-if="delivery?.status === 'delivered' && !ratingSubmitted"
-        class="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3"
-      >
-        <h2 class="text-sm font-semibold text-slate-300">{{ t('mktOrderStatus.rateDriver') }}</h2>
-        <div class="flex gap-2">
-          <button
-            v-for="n in 5"
-            :key="n"
-            class="text-2xl transition-transform hover:scale-110"
-            :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
-            :aria-label="t('common.rateNStars', { n })"
-            @click="ratingScore = n"
-          >★</button>
-        </div>
-        <textarea
-          v-model="ratingNote"
-          rows="2"
-          class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500 resize-none"
-          :aria-label="t('mktOrderStatus.ratingNotePlaceholder')"
-          :placeholder="t('mktOrderStatus.ratingNotePlaceholder')"
-        />
-        <button
-          class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50"
-          :disabled="!ratingScore || submittingRating"
-          @click="submitDriverRating"
-        >
-          {{ submittingRating ? '…' : t('mktOrderStatus.submitRating') }}
-        </button>
-      </div>
-      <div v-if="ratingSubmitted" role="status" class="rounded-2xl border border-emerald-800/40 bg-emerald-900/20 p-4 text-center text-sm text-emerald-300">
-        ✓ {{ t('mktOrderStatus.ratingThanks') }}
-      </div>
 
       <!-- Order items -->
       <div class="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
@@ -248,28 +214,7 @@ const fetchDelivery = async () => {
   }
 };
 
-// ── Driver rating ──────────────────────────────────────────────────────────────
-const ratingScore = ref(0);
-const ratingNote = ref('');
-const submittingRating = ref(false);
-const ratingSubmitted = ref(false);
-
-const submitDriverRating = async () => {
-  if (!ratingScore.value || submittingRating.value) return;
-  submittingRating.value = true;
-  try {
-    await api.post(`/marketplace/track/${orderNumber}/rate/`, {
-      role: 'customer',
-      score: ratingScore.value,
-      note: ratingNote.value,
-    }, { params: { restaurant: slug } });
-    ratingSubmitted.value = true;
-  } catch {
-    // silently fail — don't block the UX
-  } finally {
-    submittingRating.value = false;
-  }
-};
+// Driver rating now lives in <DeliveryTracker> (shared by both order pages).
 
 const formatScheduledFor = (iso) => {
   if (!iso) return '';

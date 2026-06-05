@@ -16,6 +16,11 @@
       </span>
     </div>
 
+    <!-- ETA (shown while the driver is on the way) -->
+    <p v-if="etaMinutes" class="flex items-center gap-1.5 text-sm font-semibold text-emerald-300">
+      🕐 {{ t('deliveryTracker.eta', { min: etaMinutes }) }}
+    </p>
+
     <!-- Driver identity + contact -->
     <div v-if="delivery.driver" class="flex items-center gap-3">
       <div class="h-10 w-10 shrink-0 rounded-full bg-slate-700 flex items-center justify-center text-lg">🧑</div>
@@ -56,12 +61,47 @@
     >
       📍 {{ t('deliveryTracker.viewMap') }}
     </a>
+
+    <!-- Rate your driver (after delivery) -->
+    <div v-if="showRating" class="border-t border-slate-800 pt-3 space-y-2">
+      <p class="text-xs font-semibold text-slate-300">{{ t('deliveryTracker.rateDriver') }}</p>
+      <div class="flex gap-1.5">
+        <button
+          v-for="n in 5"
+          :key="n"
+          type="button"
+          class="text-2xl leading-none transition-transform hover:scale-110"
+          :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+          :aria-label="t('common.rateNStars', { n })"
+          @click="ratingScore = n"
+        >★</button>
+      </div>
+      <textarea
+        v-model="ratingNote"
+        rows="2"
+        class="w-full resize-none rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+        :aria-label="t('deliveryTracker.ratingNote')"
+        :placeholder="t('deliveryTracker.ratingNote')"
+      />
+      <button
+        type="button"
+        class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50"
+        :disabled="!ratingScore || submittingRating"
+        @click="submitRating"
+      >
+        {{ submittingRating ? '…' : t('deliveryTracker.submitRating') }}
+      </button>
+    </div>
+    <p v-else-if="ratingDone" role="status" class="border-t border-slate-800 pt-3 text-center text-xs text-emerald-300">
+      ✓ {{ t('deliveryTracker.ratingThanks') }}
+    </p>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
+import api from '../lib/api';
 import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
@@ -69,6 +109,28 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+
+// Straight-line km between two points (rough ETA only).
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toNum = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+  const a1 = toNum(lat1), o1 = toNum(lng1), a2 = toNum(lat2), o2 = toNum(lng2);
+  if (![a1, o1, a2, o2].every((n) => Number.isFinite(n))) return null;
+  const R = 6371.0088;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(a2 - a1), dLng = rad(o2 - o1);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a1)) * Math.cos(rad(a2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+// Rough ETA in minutes — only while the driver is en route to the customer.
+// Straight-line distance ÷ ~22 km/h urban speed; clamped to a sane floor.
+const etaMinutes = computed(() => {
+  const d = props.delivery;
+  if (!d || d.status !== 'picked_up') return null;
+  const km = haversineKm(d.driver?.lat, d.driver?.lng, d.delivery_lat, d.delivery_lng);
+  if (km == null) return null;
+  return Math.max(3, Math.round((km / 22) * 60));
+});
 
 const hasDriverPos = computed(
   () => props.delivery?.driver?.lat != null && props.delivery?.driver?.lng != null,
@@ -85,6 +147,35 @@ const ratingText = computed(() => {
   const n = props.delivery?.driver?.rating_count || 0;
   return n > 0 ? `${r} (${n})` : `${r}`;
 });
+
+// ── Rate your driver (after delivery) ───────────────────────────────────────────
+const ratingScore = ref(0);
+const ratingNote = ref('');
+const submittingRating = ref(false);
+const justRated = ref(false);
+
+const alreadyRated = computed(() => props.delivery?.ratings?.customer_driver_rating != null);
+const ratingDone = computed(() => justRated.value || alreadyRated.value);
+const showRating = computed(() => props.delivery?.status === 'delivered' && !ratingDone.value);
+
+const submitRating = async () => {
+  if (!ratingScore.value || submittingRating.value) return;
+  const d = props.delivery;
+  if (!d?.order_number || !d?.restaurant_slug) return;
+  submittingRating.value = true;
+  try {
+    await api.post(
+      `/marketplace/track/${d.order_number}/rate/`,
+      { role: 'customer', score: ratingScore.value, note: ratingNote.value },
+      { params: { restaurant: d.restaurant_slug } },
+    );
+    justRated.value = true;
+  } catch {
+    // best-effort; leave the form open so the customer can retry
+  } finally {
+    submittingRating.value = false;
+  }
+};
 
 // ── Live driver map (Leaflet, lazy-loaded) ──────────────────────────────────────
 const mapEl = ref(null);
