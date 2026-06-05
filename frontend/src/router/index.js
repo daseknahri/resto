@@ -36,6 +36,7 @@ const OwnerAnalytics = () => import("../pages/OwnerAnalytics.vue");
 const OwnerLaunchSuccess = () => import("../pages/OwnerLaunchSuccess.vue");
 const OwnerMenuBuilder = () => import("../pages/OwnerMenuBuilder.vue");
 const OwnerOrders = () => import("../pages/OwnerOrders.vue");
+const OwnerNotifications = () => import("../pages/OwnerNotifications.vue");
 const OwnerProfile = () => import("../pages/OwnerProfile.vue");
 const OwnerReservations = () => import("../pages/OwnerReservations.vue");
 const OwnerTables = () => import("../pages/OwnerTables.vue");
@@ -174,6 +175,12 @@ const routes = [
         path: "orders",
         name: "owner-orders",
         component: OwnerOrders,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "notifications",
+        name: "owner-notifications",
+        component: OwnerNotifications,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
       {

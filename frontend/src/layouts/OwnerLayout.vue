@@ -198,6 +198,10 @@
                       <AppIcon name="wallet" class="owner-settings-item-icon" />
                       <span>{{ t("ownerLayout.wallet") }}</span>
                     </RouterLink>
+                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-notifications' }" @click="closeSettingsMenu">
+                      <AppIcon name="info" class="owner-settings-item-icon" />
+                      <span>{{ t("ownerLayout.notifications") }}</span>
+                    </RouterLink>
 
                     <p class="owner-settings-section">{{ t("ownerLayout.groupAccount") }}</p>
                     <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">

@@ -314,6 +314,7 @@ const arabicMessages = {
     "customers": "العملاء",
     "loyalty": "الولاء",
     "wallet": "المحفظة",
+    "notifications": "الإشعارات",
     "profile": "الملف الشخصي",
     "billing": "الفوترة",
     "navDesktop": "تنقل المالك",
@@ -1786,6 +1787,22 @@ const arabicMessages = {
     "shareDish": "مشاركة",
     "shareDishCopied": "تم نسخ الرابط إلى الحافظة",
     "shareDishFailed": "تعذّر نسخ الرابط"
+  },
+  "ownerNotifications": {
+    "title": "سجل الإشعارات",
+    "subtitle": "الإشعارات الصادرة عبر الدفع والرسائل والبريد وواتساب — وهل تم تسليمها.",
+    "refresh": "تحديث",
+    "empty": "لا توجد إشعارات مسجلة بعد.",
+    "loadError": "تعذّر تحميل سجل الإشعارات.",
+    "allChannels": "كل القنوات",
+    "allStatuses": "كل الحالات",
+    "channelPush": "دفع",
+    "channelSms": "رسالة SMS",
+    "channelEmail": "بريد",
+    "channelWhatsapp": "واتساب",
+    "statusSent": "أُرسل",
+    "statusFailed": "فشل",
+    "statusSkipped": "متخطّى"
   },
   "ownerOrders": {
     "kicker": "إدارة الطلبات",
