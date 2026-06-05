@@ -2607,6 +2607,7 @@ class CustomerOrderCancelView(APIView):
             order.status_updated_at = timezone.now()
             order.save(update_fields=["status", "status_updated_at", "updated_at"])
             _refund_wallet_for_cancelled_order(order)  # idempotent wallet credit
+            _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
             _restock_cancelled_order(order)
 
         _broadcast_order_change(order)  # live-update the tracking page
@@ -3694,6 +3695,34 @@ def _refund_wallet_for_cancelled_order(order) -> None:
         )
 
 
+def _reverse_loyalty_for_cancelled_order(order) -> None:
+    """Undo this order's loyalty effects on cancellation: claw back the points EARNED at
+    placement and restore the points SPENT as a checkout discount. The net change is
+    applied in one locked update, clamped at zero so a balance can never go negative.
+
+    Call exactly once on the →CANCELLED transition. Both cancel entry points guard
+    against re-cancelling (customer view 200-noops if already cancelled; the owner
+    transition map has no edge out of CANCELLED), so this never double-applies.
+    """
+    from django.db import transaction as _dbtx
+    from accounts.models import Customer as _CustM
+
+    if not order.customer_id:
+        return
+    earned = int(getattr(order, "points_earned", 0) or 0)
+    restored = int(getattr(order, "redeemed_loyalty_points", 0) or 0)
+    delta = restored - earned
+    if delta == 0:
+        return
+    with _dbtx.atomic():
+        _cust = _CustM.objects.select_for_update().get(pk=order.customer_id)
+        _new_balance = int(_cust.loyalty_points or 0) + delta
+        if _new_balance < 0:
+            _new_balance = 0
+        _cust.loyalty_points = _new_balance
+        _cust.save(update_fields=["loyalty_points", "updated_at"])
+
+
 def _restock_cancelled_order(order) -> None:
     """Return reserved stock to inventory when an order is cancelled. Only affects
     dishes that track stock (stock_qty is not None); re-enables a dish that had gone
@@ -3823,6 +3852,7 @@ class OwnerOrderStatusUpdateView(APIView):
         if new_status == Order.Status.CANCELLED:
             try:
                 _refund_wallet_for_cancelled_order(order)
+                _reverse_loyalty_for_cancelled_order(order)
                 _restock_cancelled_order(order)
             except Exception:
                 pass  # Non-fatal — refund/restock failure must not block the status update response
