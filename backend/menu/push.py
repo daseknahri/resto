@@ -35,7 +35,6 @@ print(base64.urlsafe_b64encode(pub_bytes).rstrip(b'=').decode())
 
 import json
 import logging
-import threading
 
 logger = logging.getLogger("app.push")
 
@@ -138,14 +137,12 @@ def _push_to_tenant(schema_name: str, title: str, body: str, url: str) -> None:
 
 def push_new_order(schema_name: str, order_number: str, customer_name: str, total: str, currency: str) -> None:
     """
-    Fire-and-forget: send a 'New order' push to all subscribed staff for a tenant.
-    Spawns a daemon thread so it never blocks the HTTP response.
+    Send a 'New order' push to all subscribed staff for a tenant. Enqueued on the Celery
+    worker when a broker is configured; otherwise runs in a daemon thread (never blocks
+    the HTTP response either way).
     """
     title = f"New order #{order_number}"
     name = (customer_name or "Customer").strip()
     body = f"{name} — {total} {currency}"
-    threading.Thread(
-        target=_push_to_tenant,
-        args=(schema_name, title, body, "/owner/orders"),
-        daemon=True,
-    ).start()
+    from accounts.tasks import enqueue, web_push_tenant
+    enqueue(web_push_tenant, schema_name, title, body, "/owner/orders")

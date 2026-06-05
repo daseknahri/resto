@@ -50,6 +50,22 @@ These management commands are idempotent and safe; nothing runs them automatical
 
 Also enable Coolify's **Postgres backup schedule** (daily, ≥30-day retention) and test a restore.
 
+## 2c — Celery worker (durable notifications) — optional but recommended at volume
+Outbound notifications (web push, SMS, WhatsApp, driver dispatch) are dispatched through a
+Celery queue when a broker is set, so they run **off the web process and survive restarts**.
+The broker reuses `REDIS_URL` (or set `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND` explicitly).
+
+- **No worker?** Fine — with no broker the app falls back to in-process dispatch (the old
+  behaviour). Nothing breaks; you just don't get the queue's durability/retries.
+- **Run the worker** (one extra Coolify process/resource):
+  `celery -A config worker -l info -Q notifications,default`
+- **Optional — let Beat own the cron jobs** instead of the §2b Scheduled Tasks:
+  `celery -A config beat -l info`
+  Beat runs `release_scheduled_orders` / `send_review_prompts` / `send_reservation_reminders`
+  / `expire_charge_requests` / `enforce_subscriptions` on the schedule in
+  `CELERY_BEAT_SCHEDULE`. **Pick one** — Beat *or* the §2b Scheduled Tasks, not both, for the
+  same job.
+
 ---
 
 ## 3 — Update `nginx.conf` to match your new admin URL

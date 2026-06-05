@@ -2368,13 +2368,11 @@ class PlaceOrderView(APIView):
         # the customer-facing 201 response.
         _wa_number = (getattr(profile, "whatsapp", "") or getattr(profile, "phone", "") or "").strip()
         if _wa_number and not _is_scheduled:
-            threading.Thread(
-                target=_notify_restaurant_new_order,
-                args=(order,),
-                kwargs={"tenant_name": getattr(tenant, "name", ""), "whatsapp_phone": _wa_number,
-                        "tenant_id": getattr(tenant, "id", None)},
-                daemon=True,
-            ).start()
+            from accounts.tasks import enqueue as _enqueue_task, whatsapp_new_order as _wa_task
+            _enqueue_task(
+                _wa_task, getattr(tenant, "schema_name", ""), order.id,
+                getattr(tenant, "name", ""), _wa_number, getattr(tenant, "id", None),
+            )
 
         # Send Web Push notification + WS ping to subscribed owner/staff (daemon thread).
         # Scheduled orders skip this now — the release sweep fires it at the right time.
@@ -3946,12 +3944,10 @@ class OwnerOrderStatusUpdateView(APIView):
             if profile and getattr(profile, "sms_notifications_enabled", False) and _cust_opted_in:
                 customer_phone = (getattr(order, "customer_phone", "") or "").strip()
                 if customer_phone:
-                    from menu.sms import send_order_ready_sms  # noqa: PLC0415
-                    send_order_ready_sms(
-                        phone=customer_phone,
-                        tenant_name=getattr(tenant, "name", ""),
-                        order_number=order.order_number,
-                        tenant_id=getattr(tenant, "id", None),
+                    from accounts.tasks import enqueue as _enqueue_task, sms_order_ready as _sms_task
+                    _enqueue_task(
+                        _sms_task, customer_phone, getattr(tenant, "name", ""),
+                        order.order_number, getattr(tenant, "id", None),
                     )
 
         return Response({

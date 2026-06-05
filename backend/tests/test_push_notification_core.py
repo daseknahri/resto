@@ -6,7 +6,6 @@ Tests for menu/push.py core functions:
 
 All tests are unit-level (SimpleTestCase + mocks — no real DB).
 """
-import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, call
 
@@ -145,70 +144,27 @@ class PushToTenantTests(SimpleTestCase):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PushNewOrderTests(SimpleTestCase):
-    def test_spawns_daemon_thread(self):
-        started_threads = []
-        original_start = threading.Thread.start
+    """push_new_order now dispatches via the Celery layer (accounts.tasks.enqueue),
+    which routes to the worker or falls back to a thread — see test_celery_tasks."""
 
-        class TrackedThread(threading.Thread):
-            def start(self):
-                started_threads.append(self)
-                # Don't actually start to keep test fast
+    @patch("accounts.tasks.enqueue")
+    def test_enqueues_web_push_task(self, enqueue):
+        from accounts.tasks import web_push_tenant
+        push_new_order("demo_schema", "99", "Bob", "120.00", "MAD")
+        enqueue.assert_called_once()
+        args = enqueue.call_args[0]
+        self.assertIs(args[0], web_push_tenant)
+        self.assertEqual(args[1], "demo_schema")   # schema_name
+        self.assertIn("99", args[2])               # title contains order number
+        self.assertIn("Bob", args[3])              # body contains customer name
+        self.assertEqual(args[4], "/owner/orders")
 
-        with patch("menu.push.threading.Thread", TrackedThread):
-            with patch("menu.push._push_to_tenant"):
-                push_new_order("demo", "42", "Alice", "55.00", "EUR")
+    @patch("accounts.tasks.enqueue")
+    def test_order_number_in_title(self, enqueue):
+        push_new_order("demo", "777", "Alice", "55.00", "EUR")
+        self.assertIn("777", enqueue.call_args[0][2])
 
-        self.assertEqual(len(started_threads), 1)
-        self.assertTrue(started_threads[0].daemon)
-
-    def test_thread_target_is_push_to_tenant(self):
-        thread_kwargs = {}
-
-        class CapturingThread(threading.Thread):
-            def __init__(self, target=None, args=(), daemon=False, **kwargs):
-                thread_kwargs["target"] = target
-                thread_kwargs["args"] = args
-                thread_kwargs["daemon"] = daemon
-
-            def start(self):
-                pass
-
-        with patch("menu.push.threading.Thread", CapturingThread):
-            push_new_order("demo_schema", "99", "Bob", "120.00", "MAD")
-
-        self.assertIs(thread_kwargs["target"], _push_to_tenant)
-        self.assertEqual(thread_kwargs["args"][0], "demo_schema")
-        self.assertIn("99", thread_kwargs["args"][1])   # title contains order number
-        self.assertIn("Bob", thread_kwargs["args"][2])  # body contains customer name
-
-    def test_order_number_in_title(self):
-        thread_kwargs = {}
-
-        class CapturingThread(threading.Thread):
-            def __init__(self, target=None, args=(), daemon=False, **kwargs):
-                thread_kwargs["args"] = args
-
-            def start(self):
-                pass
-
-        with patch("menu.push.threading.Thread", CapturingThread):
-            push_new_order("demo", "777", "Alice", "55.00", "EUR")
-
-        title = thread_kwargs["args"][1]
-        self.assertIn("777", title)
-
-    def test_empty_customer_name_falls_back_to_customer(self):
-        thread_kwargs = {}
-
-        class CapturingThread(threading.Thread):
-            def __init__(self, target=None, args=(), daemon=False, **kwargs):
-                thread_kwargs["args"] = args
-
-            def start(self):
-                pass
-
-        with patch("menu.push.threading.Thread", CapturingThread):
-            push_new_order("demo", "42", "", "25.00", "EUR")
-
-        body = thread_kwargs["args"][2]
-        self.assertIn("Customer", body)
+    @patch("accounts.tasks.enqueue")
+    def test_empty_customer_name_falls_back_to_customer(self, enqueue):
+        push_new_order("demo", "42", "", "25.00", "EUR")
+        self.assertIn("Customer", enqueue.call_args[0][3])

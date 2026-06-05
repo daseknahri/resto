@@ -136,14 +136,10 @@ def notify_online_drivers_new_job_sync(restaurant_name=None) -> int:
 
 
 def push_new_job_to_drivers(restaurant_name=None) -> None:
-    """Fire-and-forget dispatch nudge to online drivers. Daemon thread; never raises."""
-    def _run():
-        try:
-            notify_online_drivers_new_job_sync(restaurant_name)
-        except Exception as exc:  # pragma: no cover - best-effort
-            logger.warning("push_new_job_to_drivers failed: %s", exc)
-
-    threading.Thread(target=_run, daemon=True).start()
+    """Dispatch nudge to online drivers — enqueued on the Celery worker when a broker is
+    configured, else a daemon thread. Never raises, never blocks the caller."""
+    from accounts.tasks import enqueue, driver_dispatch
+    enqueue(driver_dispatch, restaurant_name)
 
 
 def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:

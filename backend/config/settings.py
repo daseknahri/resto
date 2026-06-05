@@ -237,6 +237,53 @@ if HAS_CHANNELS:
             "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
         }
 
+# ── Celery (durable task queue for notifications + scheduled jobs) ──────────────
+# Broker + result backend reuse REDIS_URL by default (override per env if you run a
+# dedicated broker). When NO broker is configured, accounts.tasks.enqueue() falls back
+# to running work inline in a daemon thread — so dev/local and any no-Redis deploy keep
+# working without a worker. Run the worker in prod:  celery -A config worker -l info
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "").strip() or _REDIS_URL
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "").strip() or (_REDIS_URL or None)
+CELERY_TASK_DEFAULT_QUEUE = "notifications"
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_TIME_LIMIT = 120          # hard kill a stuck send after 2 min
+CELERY_TASK_SOFT_TIME_LIMIT = 90
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 500
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+# Beat schedule — only used if you run `celery -A config beat`. Lets Beat own the cron
+# jobs instead of Coolify Scheduled Tasks (either works; don't run both for the same job).
+CELERY_BEAT_SCHEDULE = {
+    "release-scheduled-orders": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 300.0,  # every 5 min
+        "args": ("release_scheduled_orders",),
+    },
+    "send-review-prompts": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 900.0,  # every 15 min
+        "args": ("send_review_prompts",),
+    },
+    "send-reservation-reminders": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 3600.0,  # hourly
+        "args": ("send_reservation_reminders",),
+    },
+    "expire-charge-requests": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 600.0,  # every 10 min
+        "args": ("expire_charge_requests",),
+    },
+    "enforce-subscriptions": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily
+        "args": ("enforce_subscriptions",),
+        "kwargs": {"apply": True},
+    },
+}
+
 # ── Session store ──────────────────────────────────────────────────────────────
 # cache backend (Redis): session lives only in Redis.
 # NOTE: cached_db is NOT used here because django-tenants switches the DB
