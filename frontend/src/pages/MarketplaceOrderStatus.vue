@@ -103,6 +103,17 @@
         <p class="mt-4 text-center text-sm font-medium" :class="order.status === 'cancelled' ? 'text-red-400' : 'text-emerald-400'">
           {{ t(`mktOrderStatus.${order.status}`) }}
         </p>
+
+        <!-- Self-cancel (early pickup/delivery orders only) -->
+        <div v-if="order.can_cancel" class="mt-3 text-center">
+          <button
+            class="rounded-full border border-red-500/40 px-4 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+            :disabled="cancelling"
+            @click="cancelOrder"
+          >
+            {{ cancelling ? t('common.saving') : t('mktOrderStatus.cancelOrder') }}
+          </button>
+        </div>
       </div>
 
       <!-- Driver tracking panel (shown when a delivery job exists) -->
@@ -223,10 +234,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
+import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
 const { t, currentLocale } = useI18n();
 const route = useRoute();
+const toast = useToastStore();
 
 const fmtPrice = (amount, currency) => {
   if (!currency) return Number(amount || 0).toFixed(2);
@@ -352,6 +365,23 @@ const fetchStatus = async () => {
     fetchError.value = true;
   } finally {
     loading.value = false;
+  }
+};
+
+const cancelling = ref(false);
+const cancelOrder = async () => {
+  if (cancelling.value) return;
+  if (typeof window !== 'undefined' && !window.confirm(t('mktOrderStatus.cancelConfirm'))) return;
+  cancelling.value = true;
+  try {
+    await api.post(`/marketplace/order/${orderNumber}/cancel/`, { restaurant: slug });
+    toast.show(t('mktOrderStatus.cancelledOk'), 'success');
+    await fetchStatus();
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    toast.show(code === 'cancel_too_late' ? t('mktOrderStatus.cancelTooLate') : t('mktOrderStatus.cancelFailed'), 'error');
+  } finally {
+    cancelling.value = false;
   }
 };
 

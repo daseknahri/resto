@@ -2998,9 +2998,19 @@ class MarketplaceOrderStatusView(APIView):
             logger.exception("MarketplaceOrderStatusView error for order=%s tenant=%s: %s", order_number, slug, exc)
             return Response({"detail": "Could not load order.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # Self-cancel affordance for the signed-in owner of an early pickup/delivery order.
+        can_cancel = False
+        try:
+            _scid = getattr(request, "session", None) and request.session.get("customer_id")
+            from menu.views import _customer_can_cancel as _ccc
+            can_cancel = bool(_ccc(order) and _scid and order.customer_id and int(_scid) == int(order.customer_id))
+        except Exception:
+            can_cancel = False
+
         return Response({
             "order_number": order.order_number,
             "status": order.status,
+            "can_cancel": can_cancel,
             "payment_status": order.payment_status,
             "fulfillment_type": order.fulfillment_type,
             "total": str(order.total),
@@ -3014,6 +3024,75 @@ class MarketplaceOrderStatusView(APIView):
             "restaurant_slug": slug,
             "restaurant_name": tenant.name,
         })
+
+
+class MarketplaceOrderCancelView(APIView):
+    """POST /api/marketplace/order/<order_number>/cancel/ — a signed-in customer cancels
+    their OWN early marketplace pickup/delivery order. Body/query: restaurant=<slug>.
+    Refunds any wallet payment, reverses loyalty (claw back earned / restore spent), and
+    restocks — reusing the same helpers as the direct flow. Session ownership required.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [MarketplaceOrderStatusThrottle]
+
+    def post(self, request, order_number, *args, **kwargs):
+        from tenancy.models import Tenant
+        from django_tenants.utils import schema_context as _sc
+        from django.utils import timezone as _tz
+
+        slug = (request.data.get("restaurant") or request.query_params.get("restaurant") or "").strip().lower()
+        order_number = (order_number or "").strip().upper()
+        if not slug:
+            return Response({"detail": "restaurant is required.", "code": "missing_restaurant"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            tenant = Tenant.objects.get(slug=slug)
+        except Tenant.DoesNotExist:
+            return Response({"detail": "Restaurant not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        session_customer_id = request.session.get("customer_id")
+        try:
+            with _sc(tenant.schema_name):
+                from menu.models import Order as _Order
+                from menu.views import (
+                    _customer_can_cancel as _ccc,
+                    _refund_wallet_for_cancelled_order as _refund,
+                    _reverse_loyalty_for_cancelled_order as _revloy,
+                    _restock_cancelled_order as _restock,
+                    _broadcast_order_change as _broadcast,
+                )
+                from django.db import transaction as _dbtx
+
+                order = _Order.objects.filter(order_number=order_number).first()
+                if order is None:
+                    return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+                try:
+                    owns = bool(session_customer_id) and bool(order.customer_id) and int(session_customer_id) == int(order.customer_id)
+                except (TypeError, ValueError):
+                    owns = False
+                if not owns:
+                    return Response({"detail": "Sign in to cancel this order.", "code": "not_owner"}, status=status.HTTP_403_FORBIDDEN)
+                if order.status == _Order.Status.CANCELLED:
+                    return Response({"detail": "Order already cancelled.", "status": order.status})  # idempotent
+                if not _ccc(order):
+                    return Response({"detail": "This order can no longer be cancelled.", "code": "cancel_too_late"},
+                                    status=status.HTTP_409_CONFLICT)
+
+                with _dbtx.atomic():
+                    order.status = _Order.Status.CANCELLED
+                    order.status_updated_at = _tz.now()
+                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                    _refund(order)
+                    _revloy(order)
+                    _restock(order)
+                try:
+                    _broadcast(order)
+                except Exception:
+                    pass
+                return Response({"detail": "Order cancelled.", "status": order.status})
+        except Exception as exc:
+            logger.exception("MarketplaceOrderCancelView error order=%s tenant=%s: %s", order_number, slug, exc)
+            return Response({"detail": "Could not cancel order.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ── Platform Flash Sales ───────────────────────────────────────────────────────
