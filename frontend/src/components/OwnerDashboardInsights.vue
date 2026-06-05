@@ -100,6 +100,31 @@
       </ul>
     </div>
 
+    <!-- Loyalty & promotions performance -->
+    <div v-if="loyaltyPromo" class="rounded-xl border border-slate-700/50 bg-slate-900/40 px-4 py-3">
+      <p class="text-xs font-semibold text-slate-300">{{ t("ownerHome.loyaltyPromoTitle") }}</p>
+      <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.promoDiscountGiven") }}</p>
+          <p class="text-sm font-bold text-white">{{ fmtMoney(loyaltyPromo.promo_discount_total) }}</p>
+          <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.promo_order_count }) }}</p>
+        </div>
+        <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+          <p class="text-[10px] uppercase tracking-wide text-amber-400/80">{{ t("ownerHome.loyaltyDiscountGiven") }}</p>
+          <p class="text-sm font-bold text-amber-200">{{ fmtMoney(loyaltyPromo.loyalty_discount_total) }}</p>
+          <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.loyalty_order_count }) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsIssued") }}</p>
+          <p class="text-sm font-bold text-emerald-300">+{{ formatNumber(loyaltyPromo.points_earned_total) }}</p>
+        </div>
+        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
+          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsRedeemed") }}</p>
+          <p class="text-sm font-bold text-violet-300">−{{ formatNumber(loyaltyPromo.points_redeemed_total) }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Network error -->
     <div
       v-if="hasError && !loading"
@@ -227,6 +252,8 @@ const internalPeriod = ref(props.period);
 // ── Analytics data ────────────────────────────────────────────────────────────
 const summary = ref({ counts: {}, top_categories: [], top_dishes: [], interaction_rate_pct: 0 });
 const lowStock = ref([]); // tracked dishes at/below the low-stock threshold
+const loyaltyPromo = ref(null); // { promo_discount_total, loyalty_*_total, points_*_total }
+const dashCurrency = ref("");
 
 // ── Emits — lets parent/siblings react to period changes or loaded data ────────
 const emit = defineEmits(["data", "period-change", "loading-change", "updating-change"]);
@@ -367,6 +394,19 @@ const hydrate = async (force = false) => {
 const _apply = (data) => {
   if (data?.analytics_summary) summary.value = data.analytics_summary;
   lowStock.value = Array.isArray(data?.low_stock) ? data.low_stock : [];
+  loyaltyPromo.value = data?.revenue_summary?.loyalty_promo || null;
+  dashCurrency.value = data?.revenue_summary?.currency || "";
+};
+
+const fmtMoney = (amount) => {
+  const cur = dashCurrency.value;
+  const n = Number(amount) || 0;
+  if (!cur) return n.toFixed(2);
+  try {
+    return formatNumber(n, { style: "currency", currency: cur, maximumFractionDigits: 2 });
+  } catch {
+    return `${n.toFixed(2)} ${cur}`;
+  }
 };
 
 const setPeriod = (d) => {

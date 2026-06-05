@@ -2270,6 +2270,22 @@ class OwnerDashboardView(APIView):
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
 
+        # ── Loyalty & promotion performance (same window) ──────────────────────
+        _lp = revenue_qs.aggregate(
+            promo_discount_total=Sum("promotion_discount"),
+            loyalty_discount_total=Sum("loyalty_discount"),
+            points_earned_total=Sum("points_earned"),
+            points_redeemed_total=Sum("redeemed_loyalty_points"),
+        )
+        loyalty_promo = {
+            "promo_discount_total": round(float(_lp["promo_discount_total"] or 0), 2),
+            "promo_order_count": revenue_qs.filter(promotion_discount__gt=0).count(),
+            "loyalty_discount_total": round(float(_lp["loyalty_discount_total"] or 0), 2),
+            "loyalty_order_count": revenue_qs.filter(loyalty_discount__gt=0).count(),
+            "points_earned_total": int(_lp["points_earned_total"] or 0),
+            "points_redeemed_total": int(_lp["points_redeemed_total"] or 0),
+        }
+
         # ── Previous-period comparison (same window length, immediately before) ──
         prev_since = since - timedelta(days=days)
         prev_qs = Order.objects.filter(
@@ -2480,6 +2496,7 @@ class OwnerDashboardView(APIView):
                     },
                     "marketplace": marketplace_stats,
                     "fulfillment_breakdown": fulfillment_breakdown,
+                    "loyalty_promo": loyalty_promo,
                 },
                 "today_reservations": today_reservations,
                 "today_new_reservations": today_new_reservations,

@@ -66,9 +66,13 @@ def _order_qs_mock():
     qs = MagicMock()
     qs.filter.return_value = qs
     qs.exclude.return_value = qs
+    qs.count.return_value = 0
     qs.aggregate.return_value = {
         "total_revenue": None, "order_count": 0,
         "mkt_count": 0, "mkt_revenue": None, "mkt_commission": None,
+        # Loyalty & promotion aggregate (added with the dashboard loyalty_promo panel)
+        "promo_discount_total": None, "loyalty_discount_total": None,
+        "points_earned_total": None, "points_redeemed_total": None,
     }
     # daily / hourly / weekday chain: annotate().values().annotate().order_by()
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
@@ -304,9 +308,12 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         for key in (
             "total_revenue", "order_count", "avg_order_value", "daily", "days",
             "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
-            "currency",
+            "currency", "loyalty_promo",
         ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
+        for key in ("promo_discount_total", "promo_order_count", "loyalty_discount_total",
+                    "loyalty_order_count", "points_earned_total", "points_redeemed_total"):
+            self.assertIn(key, rs["loyalty_promo"], f"Missing loyalty_promo key: {key}")
         self.assertEqual(rs["total_revenue"], 0.0)
         self.assertEqual(rs["order_count"], 0)
         self.assertIsInstance(rs["daily"], list)
