@@ -4422,13 +4422,95 @@ class DriverEarningsView(APIView):
         if not customer_id:
             return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
         try:
-            Customer.objects.get(pk=customer_id, is_driver=True)
+            cust = Customer.objects.get(pk=customer_id, is_driver=True)
         except Customer.DoesNotExist:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        from .driver_service import driver_earnings_summary
+        from .driver_service import driver_earnings_summary, CASHOUT_MIN
         s = driver_earnings_summary(customer_id)
-        return Response({"earned": str(s["earned"]), "paid": str(s["paid"]), "owed": str(s["owed"])})
+        available = str(cust.wallet_balance or "0")
+        return Response({
+            "earned": str(s["earned"]), "paid": str(s["paid"]), "owed": str(s["owed"]),
+            # Wallet-based available balance (the cashable amount) + cash-out eligibility.
+            "available": available,
+            "cashout_min": str(CASHOUT_MIN),
+            "can_cash_out": (cust.wallet_balance or 0) >= CASHOUT_MIN,
+        })
+
+
+class DriverCashoutView(APIView):
+    """GET  /api/driver/cashout/  → the driver's current PENDING cash-out (or null).
+    POST /api/driver/cashout/  → create a cash-out request {amount} (wallet ≥ min)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def _driver(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return None, Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        cust = Customer.objects.filter(pk=customer_id, is_driver=True).first()
+        if cust is None:
+            return None, Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        return cust, None
+
+    def _serialize(self, req):
+        from django.utils import timezone as _tz
+        return {
+            "id": req.id, "amount": str(req.amount), "code": req.code,
+            "status": req.status, "expires_at": req.expires_at.isoformat(),
+            "expired": req.expires_at <= _tz.now(),
+        }
+
+    def get(self, request, *args, **kwargs):
+        cust, err = self._driver(request)
+        if err:
+            return err
+        from django.utils import timezone as _tz
+        from .models import DriverCashoutRequest
+        req = (
+            DriverCashoutRequest.objects
+            .filter(driver_id=cust.id, status=DriverCashoutRequest.Status.PENDING, expires_at__gt=_tz.now())
+            .order_by("-created_at").first()
+        )
+        return Response({"pending": self._serialize(req) if req else None})
+
+    def post(self, request, *args, **kwargs):
+        cust, err = self._driver(request)
+        if err:
+            return err
+        from .driver_service import create_cashout_request, CashoutError
+        from .wallet_service import WalletError
+        try:
+            req = create_cashout_request(cust.id, request.data.get("amount"))
+        except CashoutError as e:
+            return Response({"detail": str(e), "code": getattr(e, "code", "cashout_error")},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except WalletError as e:
+            return Response({"detail": str(e), "code": "cashout_error"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(req), status=status.HTTP_201_CREATED)
+
+
+class DriverCashoutCancelView(APIView):
+    """POST /api/driver/cashout/<id>/cancel/ — driver cancels their own pending request."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, request_id, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        from django.utils import timezone as _tz
+        from .models import DriverCashoutRequest
+        req = DriverCashoutRequest.objects.filter(pk=request_id, driver_id=customer_id).first()
+        if req is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if req.status == DriverCashoutRequest.Status.PENDING:
+            req.status = DriverCashoutRequest.Status.CANCELLED
+            req.resolved_at = _tz.now()
+            req.save(update_fields=["status", "resolved_at"])
+        return Response({"status": req.status})
 
 
 class DriverDeliveriesView(APIView):

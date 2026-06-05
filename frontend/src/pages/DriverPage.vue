@@ -99,6 +99,33 @@
         </div>
       </div>
 
+      <!-- Cash-out: available wallet balance + redeem at a restaurant -->
+      <div v-if="earnings" class="ui-panel p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.available') }}</p>
+            <p class="text-lg font-bold tabular-nums text-white">{{ fmtMoney(earnings.available) }}</p>
+          </div>
+          <button
+            v-if="!cashout"
+            class="ui-btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+            :disabled="!earnings.can_cash_out || busy"
+            @click="requestCashout"
+          >{{ t('driver.cashOut') }}</button>
+        </div>
+        <p v-if="!earnings.can_cash_out && !cashout" class="text-[11px] text-slate-500">
+          {{ t('driver.cashOutMin', { amount: fmtMoney(earnings.cashout_min) }) }}
+        </p>
+        <!-- Active cash-out request: show the code to read to a restaurant -->
+        <div v-if="cashout" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 text-center">
+          <p class="text-[11px] text-emerald-200">{{ t('driver.cashOutShowCode', { amount: fmtMoney(cashout.amount) }) }}</p>
+          <p class="my-1 text-3xl font-bold tracking-[0.3em] text-white">{{ cashout.code }}</p>
+          <button class="text-[11px] text-slate-400 underline hover:text-slate-200" :disabled="busy" @click="cancelCashout">
+            {{ t('driver.cashOutCancel') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Active job -->
       <div v-if="activeJob" class="ui-panel p-4 space-y-3">
         <div class="flex items-center justify-between">
@@ -380,6 +407,46 @@ const fetchEarnings = async () => {
   }
 };
 
+// ── Cash-out: redeem wallet balance for cash at a restaurant ─────────────────────
+const cashout = ref(null); // current pending request { id, amount, code, ... }
+const fetchCashout = async () => {
+  try {
+    const { data } = await api.get('/driver/cashout/');
+    cashout.value = data.pending || null;
+  } catch {
+    cashout.value = null;
+  }
+};
+const requestCashout = async () => {
+  errorMsg.value = '';
+  const max = Number(earnings.value?.available || 0);
+  const raw = window.prompt(t('driver.cashOutAmountPrompt', { max: fmtMoney(max) }), String(max));
+  if (raw == null) return;
+  const amount = Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  busy.value = true;
+  try {
+    const { data } = await api.post('/driver/cashout/', { amount });
+    cashout.value = data;
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+const cancelCashout = async () => {
+  if (!cashout.value) return;
+  busy.value = true;
+  try {
+    await api.post(`/driver/cashout/${cashout.value.id}/cancel/`);
+    cashout.value = null;
+  } catch {
+    /* ignore */
+  } finally {
+    busy.value = false;
+  }
+};
+
 const fetchStatus = async () => {
   try {
     const { data } = await api.get('/driver/status/');
@@ -577,6 +644,7 @@ onMounted(async () => {
   if (isDriver.value && approved.value) {
     await fetchJobs();
     fetchEarnings();
+    fetchCashout();
     if (online.value) {
       startGeo();
       driverPush.autoRestore().catch(() => {}); // re-arm push if previously opted in

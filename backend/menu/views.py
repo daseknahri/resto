@@ -3115,6 +3115,65 @@ class StaffOrderItemReadyView(APIView):
         return Response({"id": item.id, "is_ready": item.is_ready})
 
 
+class OwnerDriverCashoutLookupView(APIView):
+    """GET /api/owner/driver-cashout/?code=XXXXXX — preview a driver's pending cash-out
+    request by code (owner/manager only) before handing over cash."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        code = (request.query_params.get("code") or "").strip()
+        if not code:
+            return Response({"detail": "code is required.", "code": "missing_code"}, status=status.HTTP_400_BAD_REQUEST)
+        from accounts.models import DriverCashoutRequest, Customer as _Cust
+        req = (
+            DriverCashoutRequest.objects
+            .filter(code=code, status=DriverCashoutRequest.Status.PENDING, expires_at__gt=timezone.now())
+            .order_by("-created_at").first()
+        )
+        if req is None:
+            return Response({"detail": "No pending cash-out for that code.", "code": "not_found"},
+                            status=status.HTTP_404_NOT_FOUND)
+        driver = _Cust.objects.filter(pk=req.driver_id).only("name", "phone").first()
+        return Response({
+            "request_id": req.id,
+            "amount": str(req.amount),
+            "currency": req.currency,
+            "driver_name": (getattr(driver, "name", "") or getattr(driver, "phone", "") or "Driver"),
+        })
+
+
+class OwnerDriverCashoutConfirmView(APIView):
+    """POST /api/owner/driver-cashout/confirm/  body {code} — restaurant confirms it handed
+    the driver cash. Atomically debits the driver's wallet + credits this restaurant's float."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Restaurant context required.", "code": "no_tenant"}, status=status.HTTP_400_BAD_REQUEST)
+        code = (request.data.get("code") or "").strip()
+        if not code:
+            return Response({"detail": "code is required.", "code": "missing_code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from accounts.driver_service import confirm_cashout, CashoutError
+        from accounts.wallet_service import InsufficientFunds, WalletError
+        try:
+            req = confirm_cashout(code, tenant_id=tenant.id, actor_user_id=getattr(request.user, "id", None))
+        except InsufficientFunds:
+            return Response({"detail": "The driver's balance no longer covers this cash-out.",
+                             "code": "insufficient_funds"}, status=status.HTTP_409_CONFLICT)
+        except CashoutError as e:
+            _http = status.HTTP_410_GONE if getattr(e, "code", "") == "expired" else status.HTTP_404_NOT_FOUND
+            return Response({"detail": str(e), "code": getattr(e, "code", "cashout_error")}, status=_http)
+        except WalletError as e:
+            return Response({"detail": str(e), "code": "cashout_error"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"paid": True, "amount": str(req.amount)})
+
+
 class OwnerNotificationsView(APIView):
     """GET /api/owner/notifications/ — the outbound-notification audit log for this tenant
     (web push + email + SMS + WhatsApp attempts and outcomes). Owner/manager only. Supports

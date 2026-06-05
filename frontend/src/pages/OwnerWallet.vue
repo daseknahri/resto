@@ -20,6 +20,38 @@
       <AppIcon name="wallet" class="h-8 w-8 shrink-0 text-emerald-500/70" />
     </div>
 
+    <!-- Driver cash-out — confirm you handed a driver cash; it credits your float -->
+    <div class="ui-panel p-4 space-y-3">
+      <p class="text-sm font-semibold text-slate-200">{{ t('ownerWallet.driverCashoutTitle') }}</p>
+      <p class="text-xs text-slate-500">{{ t('ownerWallet.driverCashoutHint') }}</p>
+      <div v-if="!cashoutPreview" class="flex gap-2">
+        <input
+          v-model.trim="cashoutCode"
+          inputmode="numeric"
+          maxlength="12"
+          class="ui-input flex-1 py-2 text-sm"
+          :placeholder="t('ownerWallet.driverCashoutCodePlaceholder')"
+        />
+        <button class="ui-btn-outline px-3 py-2 text-xs" :disabled="!cashoutCode || cashoutBusy" @click="lookupCashout">
+          {{ t('ownerWallet.driverCashoutLookup') }}
+        </button>
+      </div>
+      <div v-else class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
+        <p class="text-sm text-slate-200">
+          {{ t('ownerWallet.driverCashoutConfirmLine', { name: cashoutPreview.driver_name, amount: fmtBalance(cashoutPreview.amount) }) }}
+        </p>
+        <div class="flex gap-2">
+          <button class="ui-btn-primary flex-1 py-2 text-xs" :disabled="cashoutBusy" @click="confirmCashout">
+            {{ t('ownerWallet.driverCashoutConfirm') }}
+          </button>
+          <button class="ui-btn-outline px-3 py-2 text-xs" :disabled="cashoutBusy" @click="cashoutPreview = null">
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
+      <p v-if="cashoutError" class="text-xs text-red-300">{{ cashoutError }}</p>
+    </div>
+
     <!-- Scan pay code card -->
     <div class="ui-panel p-4 space-y-3">
       <div class="flex items-center justify-between gap-2">
@@ -254,6 +286,42 @@ const fetchFloat = async () => {
     /* leave previous value */
   } finally {
     loadingFloat.value = false;
+  }
+};
+
+// ── Driver cash-out (confirm handing a driver cash for their wallet balance) ─────
+const cashoutCode = ref('');
+const cashoutPreview = ref(null);
+const cashoutBusy = ref(false);
+const cashoutError = ref('');
+
+const lookupCashout = async () => {
+  cashoutError.value = '';
+  cashoutBusy.value = true;
+  try {
+    const { data } = await api.get('/owner/driver-cashout/', { params: { code: cashoutCode.value } });
+    cashoutPreview.value = data;
+  } catch (err) {
+    cashoutError.value = err?.response?.data?.detail || t('ownerWallet.driverCashoutNotFound');
+  } finally {
+    cashoutBusy.value = false;
+  }
+};
+
+const confirmCashout = async () => {
+  cashoutError.value = '';
+  cashoutBusy.value = true;
+  try {
+    const { data } = await api.post('/owner/driver-cashout/confirm/', { code: cashoutCode.value });
+    toast.show(t('ownerWallet.driverCashoutPaid', { amount: fmtBalance(data.amount) }), 'success');
+    cashoutPreview.value = null;
+    cashoutCode.value = '';
+    fetchFloat(); // float just went up by the cash-out
+  } catch (err) {
+    cashoutError.value = err?.response?.data?.detail || t('ownerWallet.driverCashoutFailed');
+    cashoutPreview.value = null;
+  } finally {
+    cashoutBusy.value = false;
   }
 };
 

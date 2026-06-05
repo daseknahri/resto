@@ -130,6 +130,41 @@ class DriverPayout(models.Model):
         return f"Payout {self.amount} to driver {self.driver_id}"
 
 
+class DriverCashoutRequest(models.Model):
+    """A driver redeeming wallet balance for cash at a restaurant. The driver creates a
+    request (amount + a short code) once their wallet is ≥ the minimum; they show the code
+    to any restaurant, whose staff confirms handing over the cash. On confirm we atomically
+    debit the driver's wallet and credit that restaurant's float (the platform reimburses
+    the restaurant). Mirrors WalletChargeRequest but in the opposite direction.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PAID = "paid", "Paid"
+        CANCELLED = "cancelled", "Cancelled"
+        EXPIRED = "expired", "Expired"
+
+    driver = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="cashout_requests")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=8, default="MAD")
+    code = models.CharField(max_length=12, db_index=True, help_text="Short code the driver shows the restaurant.")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
+    # The restaurant that fulfilled the cash-out (set on confirm) + who confirmed it.
+    tenant_id = models.IntegerField(null=True, blank=True, db_index=True)
+    actor_user_id = models.IntegerField(null=True, blank=True)
+    wallet_tx_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("status", "expires_at"))]
+
+    def __str__(self) -> str:
+        return f"Cashout {self.amount} ({self.status}) driver {self.driver_id}"
+
+
 class CustomerOrderRef(models.Model):
     """Public-schema mirror of a customer's order, for cross-restaurant history.
 
