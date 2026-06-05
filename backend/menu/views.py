@@ -92,17 +92,28 @@ def _bust_menu_cache(tenant_slug: str) -> None:
 _WEEKDAY_TO_KEY = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
 
 
+def _profile_now(profile):
+    """Current local datetime for a restaurant, honoring its IANA ``timezone`` (falling
+    back to the platform default settings.TIME_ZONE, then UTC). Used so business-hours
+    auto open/close evaluates in the restaurant's wall-clock time, not the server's."""
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+        return _dt.now(ZoneInfo(tz_name))
+    except Exception:
+        return _dt.now(_tz.utc)  # invalid/unknown tz → safe UTC fallback
+
+
 def _schedule_open(profile) -> bool | None:
-    """Check *profile.business_hours_schedule* against the current UTC time.
+    """Check *profile.business_hours_schedule* against the restaurant's LOCAL time
+    (per ``profile.timezone``; see _profile_now).
 
     Returns:
       True  — schedule exists and says the restaurant is open right now.
       False — schedule exists and says the restaurant is currently closed.
       None  — no schedule configured (or no enabled days) — caller falls back
                to the manual ``profile.is_open`` boolean.
-
-    NOTE: Comparison is done in **UTC**.  A per-restaurant ``timezone`` field
-    would make this more accurate; add that when rolling out timezone support.
     """
     schedule = getattr(profile, "business_hours_schedule", None)
     if not schedule or not isinstance(schedule, dict):
@@ -115,8 +126,8 @@ def _schedule_open(profile) -> bool | None:
     ):
         return None
 
-    now_utc = datetime.utcnow()
-    day_key = _WEEKDAY_TO_KEY.get(now_utc.weekday())
+    now_local = _profile_now(profile)
+    day_key = _WEEKDAY_TO_KEY.get(now_local.weekday())
     entry = schedule.get(day_key)
 
     if not entry or not isinstance(entry, dict):
@@ -130,7 +141,7 @@ def _schedule_open(profile) -> bool | None:
     if not open_str or not close_str:
         return False
 
-    current_hhmm = now_utc.strftime("%H:%M")
+    current_hhmm = now_local.strftime("%H:%M")
     return open_str <= current_hhmm < close_str
 
 
@@ -2725,12 +2736,14 @@ class StaffOrderListView(APIView):
                 "items_count": sum(i.qty for i in order.items.all()),
                 "items": [
                     {
+                        "id": i.id,
                         "dish_name": i.dish_name,
                         "qty": i.qty,
                         "unit_price": str(i.unit_price),
                         "subtotal": str(i.subtotal),
                         "options": i.options,
                         "note": i.note,
+                        "is_ready": i.is_ready,
                     }
                     for i in order.items.all()
                 ],
@@ -2829,6 +2842,30 @@ class StaffShiftSummaryView(APIView):
             "since": since_dt.isoformat(),
             "period_hours": period_hours,
         })
+
+
+class StaffOrderItemReadyView(APIView):
+    """PATCH /api/staff/order-items/<item_id>/ready/ — kitchen marks a single line item
+    ready (or not) on a multi-item ticket. Body: { "ready": bool } (defaults to True).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, item_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        item = OrderItem.objects.select_related("order").filter(id=item_id).first()
+        if item is None:
+            return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        _raw = request.data.get("ready", True)
+        ready = _raw.strip().lower() in ("1", "true", "yes") if isinstance(_raw, str) else bool(_raw)
+        item.is_ready = ready
+        item.ready_at = timezone.now() if ready else None
+        item.save(update_fields=["is_ready", "ready_at"])
+        try:
+            _broadcast_order_change(item.order)  # live-refresh other kitchen/owner screens
+        except Exception:
+            pass
+        return Response({"id": item.id, "is_ready": item.is_ready})
 
 
 class OwnerOrderListView(APIView):

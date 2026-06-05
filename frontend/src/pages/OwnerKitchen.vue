@@ -121,12 +121,16 @@
         <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4">
           <li
             v-for="(item, idx) in order.items"
-            :key="idx"
-            class="kitchen-item"
+            :key="item.id ?? idx"
+            class="kitchen-item select-none"
+            :class="[item.id != null ? 'cursor-pointer' : '', item.is_ready ? 'opacity-45 line-through' : '']"
+            :title="item.id != null ? t('kitchen.tapItemReady') : ''"
+            @click="toggleItem(order, item)"
           >
             <span class="kitchen-qty" :class="headlineColorClass(order.status)">{{ item.qty }}×</span>
             <span class="kitchen-name">{{ item.dish_name }}</span>
             <span v-if="item.note" class="ml-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
+            <span v-if="item.is_ready" class="ml-auto shrink-0 text-emerald-400">✓</span>
           </li>
         </ul>
 
@@ -311,6 +315,10 @@ onUnmounted(() => {
 });
 
 const advance = (orderId) => waiter.advanceStatus(orderId);
+const toggleItem = (order, item) => {
+  if (item?.id == null) return; // older payloads without item ids → no-op
+  waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+};
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 const orderHeadline = (order) => {

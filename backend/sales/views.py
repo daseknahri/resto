@@ -2133,6 +2133,16 @@ class OwnerDashboardView(APIView):
         categories_count = Category.objects.count()
         dishes_count = Dish.objects.count()
 
+        # Low-stock alert: tracked dishes (stock_qty set) at/below the threshold, soonest
+        # to run out first. Operational signal (shown to all staff, not just revenue viewers).
+        _LOW_STOCK_THRESHOLD = 5
+        low_stock = [
+            {"slug": d.slug, "name": d.name, "stock_qty": d.stock_qty, "is_available": d.is_available}
+            for d in Dish.objects.filter(
+                stock_qty__isnull=False, stock_qty__lte=_LOW_STOCK_THRESHOLD
+            ).order_by("stock_qty", "name")[:20]
+        ]
+
         analytics_qs = AnalyticsEvent.objects.filter(created_at__gte=since)
         tracked_events = (
             "menu_view",
@@ -2218,6 +2228,7 @@ class OwnerDashboardView(APIView):
                 {
                     "categories_count": categories_count,
                     "dishes_count": dishes_count,
+                    "low_stock": low_stock,
                     "analytics_summary": {
                         "days": days,
                         "since": since.isoformat(),
@@ -2417,6 +2428,7 @@ class OwnerDashboardView(APIView):
             {
                 "categories_count": categories_count,
                 "dishes_count": dishes_count,
+                "low_stock": low_stock,
                 "analytics_summary": {
                     "days": days,
                     "since": since.isoformat(),

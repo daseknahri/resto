@@ -85,6 +85,21 @@
       </template>
     </div>
 
+    <!-- Low-stock alert -->
+    <div v-if="lowStock.length" class="rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
+      <p class="text-xs font-semibold text-amber-300">{{ t("ownerHome.lowStockTitle", { count: lowStock.length }) }}</p>
+      <ul class="mt-2 flex flex-wrap gap-1.5">
+        <li
+          v-for="d in lowStock"
+          :key="d.slug"
+          class="rounded-full border px-2.5 py-0.5 text-[11px]"
+          :class="Number(d.stock_qty) <= 0 ? 'border-red-400/40 text-red-300' : 'border-amber-500/40 text-amber-200'"
+        >
+          {{ d.name }} · {{ Number(d.stock_qty) <= 0 ? t("ownerHome.lowStockSoldOut") : t("ownerHome.lowStockLeft", { n: d.stock_qty }) }}
+        </li>
+      </ul>
+    </div>
+
     <!-- Network error -->
     <div
       v-if="hasError && !loading"
@@ -211,6 +226,7 @@ const internalPeriod = ref(props.period);
 
 // ── Analytics data ────────────────────────────────────────────────────────────
 const summary = ref({ counts: {}, top_categories: [], top_dishes: [], interaction_rate_pct: 0 });
+const lowStock = ref([]); // tracked dishes at/below the low-stock threshold
 
 // ── Emits — lets parent/siblings react to period changes or loaded data ────────
 const emit = defineEmits(["data", "period-change", "loading-change", "updating-change"]);
@@ -350,6 +366,7 @@ const hydrate = async (force = false) => {
 
 const _apply = (data) => {
   if (data?.analytics_summary) summary.value = data.analytics_summary;
+  lowStock.value = Array.isArray(data?.low_stock) ? data.low_stock : [];
 };
 
 const setPeriod = (d) => {

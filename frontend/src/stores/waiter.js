@@ -219,6 +219,20 @@ export const useWaiterStore = defineStore("waiter", {
       if (order) order.my_customer_rating = { score, note };
     },
 
+    // -------------------------------------------------------
+    // Item-level kitchen readiness — tick a single line item ready (optimistic).
+    // -------------------------------------------------------
+    async toggleItemReady(orderId, itemId, ready) {
+      const order = this.orders.find((o) => o.id === orderId);
+      const item = order?.items?.find((it) => it.id === itemId);
+      if (item) item.is_ready = ready; // optimistic
+      try {
+        await api.patch(`/staff/order-items/${itemId}/ready/`, { ready });
+      } catch {
+        if (item) item.is_ready = !ready; // revert on failure
+      }
+    },
+
     async flushQueue() {
       if (this.isSyncing || !this.offlineQueue.length) return;
       this.isSyncing = true;

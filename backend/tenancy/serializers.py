@@ -222,6 +222,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "platform_delivery_enabled",
             "cod_enabled",
             "cod_min_paid_orders",
+            "timezone",
             "receipt_message",
             "vat_rate",
             "vat_label",

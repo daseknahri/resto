@@ -48,12 +48,14 @@ def _make_order(
     updated_at="2026-05-15T10:00:00+00:00",
 ):
     item = SimpleNamespace(
+        id=901,
         dish_name="Burger",
         qty=2,
         unit_price="12.50",
         subtotal="25.00",
         options=[],
         note="",
+        is_ready=False,
     )
     items_qs = MagicMock()
     items_qs.all.return_value = [item]

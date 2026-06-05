@@ -268,6 +268,15 @@
       </div>
       <p v-if="fieldError('business_hours')" id="step-brand-business-hours-error" class="text-xs text-red-300">{{ fieldError("business_hours") }}</p>
       <p v-if="fieldError('business_hours_schedule')" id="step-brand-business-hours-schedule-error" class="text-xs text-red-300">{{ fieldError("business_hours_schedule") }}</p>
+
+      <div class="space-y-1">
+        <label class="text-xs font-medium text-slate-400">{{ t("stepBrand.timezoneLabel") }}</label>
+        <select v-model="form.timezone" :class="inputClass('timezone')">
+          <option value="">{{ t("stepBrand.timezoneDefault") }}</option>
+          <option v-for="tz in TIMEZONE_OPTIONS" :key="tz" :value="tz">{{ tz }}</option>
+        </select>
+        <p class="text-[11px] text-slate-500">{{ t("stepBrand.timezoneHint") }}</p>
+      </div>
       </div>
     </section>
 
@@ -365,6 +374,12 @@ const props = defineProps({
   },
 });
 
+// Curated IANA timezones for the business-hours schedule (owners can request more).
+const TIMEZONE_OPTIONS = [
+  "Africa/Casablanca", "UTC", "Europe/Paris", "Europe/Madrid", "Europe/London",
+  "Africa/Cairo", "Africa/Tunis", "Africa/Algiers", "Asia/Dubai", "America/New_York",
+];
+
 const form = reactive({
   tagline: "",
   tagline_i18n: {},
@@ -373,6 +388,7 @@ const form = reactive({
   business_hours: "",
   business_hours_i18n: {},
   business_hours_schedule: createEmptyBusinessHoursSchedule(),
+  timezone: "",
   phone: "",
   whatsapp: "",
   delivery_fee: "0",

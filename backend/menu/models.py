@@ -450,6 +450,10 @@ class OrderItem(models.Model):
     note = models.CharField(max_length=120, blank=True)
     options = models.JSONField(default=list, blank=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Per-item kitchen readiness — lets the kitchen tick off individual items on a
+    # multi-item ticket instead of an all-or-nothing order status.
+    is_ready = models.BooleanField(default=False)
+    ready_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("id",)

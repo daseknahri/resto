@@ -106,6 +106,11 @@ class Profile(models.Model):
     business_hours = models.TextField(blank=True)
     business_hours_i18n = models.JSONField(default=dict, blank=True)
     business_hours_schedule = models.JSONField(default=dict, blank=True)
+    timezone = models.CharField(
+        max_length=64, blank=True,
+        help_text="IANA timezone (e.g. 'Africa/Casablanca') used to evaluate the business-hours "
+                  "schedule for auto open/close. Blank falls back to the platform default.",
+    )
     phone = models.CharField(max_length=50, blank=True)
     whatsapp = models.CharField(max_length=50, blank=True)
     address = models.CharField(max_length=255, blank=True)
