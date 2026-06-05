@@ -1,5 +1,19 @@
 ﻿<template>
   <div class="space-y-4">
+    <!-- Install-the-app banner (waiters work from the installed app) -->
+    <div
+      v-if="!isStandalone && !installDismissed"
+      class="flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/8 px-3 py-2 text-xs"
+    >
+      <span class="flex-1 text-indigo-200">
+        {{ canInstall ? t('waiterInstall.prompt') : t('waiterInstall.manual') }}
+      </span>
+      <button v-if="canInstall" class="ui-btn-primary px-3 py-1 text-[11px]" @click="install">
+        {{ t('waiterInstall.cta') }}
+      </button>
+      <button class="text-slate-500 hover:text-slate-300" :aria-label="t('waiterInstall.dismiss')" @click="installDismissed = true">✕</button>
+    </div>
+
     <!-- Status tabs + New Order button -->
     <div class="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
       <button
@@ -448,6 +462,7 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
+import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useWaiterStore } from "../stores/waiter";
 import { useTenantStore } from "../stores/tenant";
 import { useSessionStore } from "../stores/session";
@@ -455,6 +470,8 @@ import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 
 const { t, currentLocale } = useI18n();
+const { canInstall, isStandalone, install } = useInstallPrompt();
+const installDismissed = ref(false);
 const waiter = useWaiterStore();
 const tenant = useTenantStore();
 const session = useSessionStore();

@@ -15,6 +15,11 @@ import { ref, readonly } from 'vue';
 const _deferred = ref(null); // BeforeInstallPromptEvent
 const _canInstall = ref(false);
 const _installed = ref(false);
+const _isStandalone = ref(
+  typeof window !== 'undefined' && (
+    window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+  )
+);
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -27,6 +32,7 @@ if (typeof window !== 'undefined') {
     _deferred.value = null;
     _canInstall.value = false;
     _installed.value = true;
+    _isStandalone.value = true;
   });
 }
 
@@ -44,6 +50,7 @@ export function useInstallPrompt() {
   return {
     canInstall: readonly(_canInstall),
     installed: readonly(_installed),
+    isStandalone: readonly(_isStandalone),
     install,
   };
 }

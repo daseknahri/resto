@@ -7,8 +7,10 @@
 (function () {
   var path = location.pathname;
   var isDriver = path.startsWith('/driver');
+  var isWaiter = path.startsWith('/waiter');
   var isCustomer =
     !isDriver &&
+    !isWaiter &&
     !path.startsWith('/owner') &&
     !path.startsWith('/waiter') &&
     !path.startsWith('/admin') &&
@@ -18,7 +20,9 @@
     !path.startsWith('/reset');
   var href = isDriver
     ? '/driver-manifest.json'           // installs as a dedicated "Driver" app (start_url /driver)
-    : (isCustomer ? '/app-manifest.json' : '/manifest.json');
+    : isWaiter
+      ? '/waiter-manifest.json'         // installs as a dedicated "Waiter" app (start_url /waiter)
+      : (isCustomer ? '/app-manifest.json' : '/manifest.json');
   var link = document.createElement('link');
   link.rel = 'manifest';
   link.href = href;

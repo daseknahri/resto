@@ -2710,6 +2710,12 @@ export const messages = {
       guests: "{n} guests",
       undatedNote: "{count} reservation(s) have no date set — visible in list view only.",
     },
+    waiterInstall: {
+      prompt: "Install the app for faster daily use.",
+      manual: "Use your browser menu → Add to Home Screen to install the app.",
+      cta: "Install",
+      dismiss: "Dismiss",
+    },
     ownerNotifications: {
       title: "Notifications log",
       subtitle: "Outbound push, SMS, email and WhatsApp — and whether they were delivered.",
@@ -6154,6 +6160,12 @@ export const messages = {
       nameSetupSave: "Enregistrer le nom",
       nameSetupSkip: "Passer pour l'instant",
       saving: "Enregistrement…",
+    },
+    waiterInstall: {
+      prompt: "Installez l application pour un usage quotidien plus rapide.",
+      manual: "Menu du navigateur → Ajouter a l ecran d accueil pour installer.",
+      cta: "Installer",
+      dismiss: "Fermer",
     },
     ownerNotifications: {
       title: "Journal des notifications",
