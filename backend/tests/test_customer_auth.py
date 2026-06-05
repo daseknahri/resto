@@ -44,6 +44,8 @@ def _make_customer(**kwargs):
         locale="en",
         is_driver=False,
         is_driver_online=False,
+        notify_order_updates=True,
+        notify_review_prompts=True,
     )
     defaults.update(kwargs)
     c = SimpleNamespace(**defaults)

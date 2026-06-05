@@ -279,6 +279,8 @@ def _serialize_customer(customer: Customer) -> dict:
         "locale": customer.locale or "en",
         "is_driver": bool(customer.is_driver),
         "is_driver_online": bool(customer.is_driver_online),
+        "notify_order_updates": bool(customer.notify_order_updates),
+        "notify_review_prompts": bool(customer.notify_review_prompts),
     }
 
 
@@ -774,6 +776,12 @@ class CustomerProfileUpdateView(APIView):
         if locale in ("en", "fr", "ar"):
             customer.locale = locale
             update_fields.append("locale")
+
+        # Notification preferences (customer opt-outs).
+        for _pref in ("notify_order_updates", "notify_review_prompts"):
+            if _pref in request.data:
+                setattr(customer, _pref, bool(request.data.get(_pref)))
+                update_fields.append(_pref)
 
         if "email" in request.data:
             email = (request.data.get("email") or "").strip().lower()[:254]

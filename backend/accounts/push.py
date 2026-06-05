@@ -159,6 +159,9 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     with schema_context("public"):
         cust = Customer.objects.filter(pk=customer_id).first()
         subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
+    # Respect the customer's opt-out for review reminders.
+    if cust is not None and not getattr(cust, "notify_review_prompts", True):
+        return 0
     if not subs:
         return 0
 

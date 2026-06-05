@@ -2745,6 +2745,9 @@ def _send_order_status_email(order, tenant, new_status: str) -> None:
         customer_email = order.customer.email if order.customer else None
         if not customer_email:
             return
+        # Respect the customer's notification opt-out.
+        if order.customer and not getattr(order.customer, "notify_order_updates", True):
+            return
 
         status_labels = {
             Order.Status.CONFIRMED: "confirmed",
@@ -3939,7 +3942,8 @@ class OwnerOrderStatusUpdateView(APIView):
                 profile = tenant.profile
             except Exception:
                 profile = None
-            if profile and getattr(profile, "sms_notifications_enabled", False):
+            _cust_opted_in = order.customer is None or getattr(order.customer, "notify_order_updates", True)
+            if profile and getattr(profile, "sms_notifications_enabled", False) and _cust_opted_in:
                 customer_phone = (getattr(order, "customer_phone", "") or "").strip()
                 if customer_phone:
                     from menu.sms import send_order_ready_sms  # noqa: PLC0415

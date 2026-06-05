@@ -1195,6 +1195,31 @@
                 >{{ r.code }} <span class="opacity-60">{{ r.symbol }}</span></button>
               </div>
             </div>
+
+            <!-- Notifications -->
+            <div class="px-4 py-3 space-y-2.5">
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t('customerAccount.notificationsTitle') }}</p>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-slate-300">{{ t('customerAccount.notifyOrderUpdates') }}</span>
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/40"
+                  :checked="!!customerStore.customer?.notify_order_updates"
+                  :disabled="savingPrefs"
+                  @change="savePref('notify_order_updates', $event.target.checked)"
+                />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-slate-300">{{ t('customerAccount.notifyReviewPrompts') }}</span>
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/40"
+                  :checked="!!customerStore.customer?.notify_review_prompts"
+                  :disabled="savingPrefs"
+                  @change="savePref('notify_review_prompts', $event.target.checked)"
+                />
+              </label>
+            </div>
           </div>
 
         </template>
@@ -1708,6 +1733,20 @@ const saveName = async () => {
     editableName.value = customerStore.customer?.name || '';
   } finally {
     savingName.value = false;
+  }
+};
+
+const savingPrefs = ref(false);
+const savePref = async (field, value) => {
+  if (savingPrefs.value) return;
+  savingPrefs.value = true;
+  try {
+    const res = await api.patch('/customer/profile/', { [field]: value });
+    customerStore.setCustomer(res.data.customer);
+  } catch {
+    toast.show(t('customerAccount.prefSaveFailed'), 'error');
+  } finally {
+    savingPrefs.value = false;
   }
 };
 

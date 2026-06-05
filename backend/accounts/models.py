@@ -38,6 +38,15 @@ class Customer(models.Model):
     driver_lat = models.FloatField(null=True, blank=True)
     driver_lng = models.FloatField(null=True, blank=True)
     driver_position_updated_at = models.DateTimeField(null=True, blank=True)
+    # Notification preferences — customer-controlled opt-outs (default opted-in).
+    notify_order_updates = models.BooleanField(
+        default=True,
+        help_text="Receive order status updates by email/SMS (e.g. confirmed, ready).",
+    )
+    notify_review_prompts = models.BooleanField(
+        default=True,
+        help_text="Receive the post-order 'rate your order' reminder push.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
