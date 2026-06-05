@@ -160,6 +160,9 @@
           <p v-if="delivery.delivery_address"><span class="text-slate-500">{{ t('mktOrderStatus.to') }}:</span> {{ delivery.delivery_address }}</p>
         </div>
 
+        <!-- Live map: driver + destination -->
+        <div v-show="hasDriverPos" ref="mapEl" class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"></div>
+
         <!-- Maps link if driver position known -->
         <a
           v-if="delivery.driver?.lat && delivery.driver?.lng"
@@ -245,7 +248,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
@@ -277,6 +280,9 @@ const order = ref(null);
 
 // ── Delivery tracking ──────────────────────────────────────────────────────────
 const delivery = ref(null);
+const hasDriverPos = computed(() =>
+  delivery.value?.driver?.lat != null && delivery.value?.driver?.lng != null
+);
 
 const fetchDelivery = async () => {
   try {
@@ -284,10 +290,59 @@ const fetchDelivery = async () => {
       params: { restaurant: slug },
     });
     delivery.value = res.data;
+    if (hasDriverPos.value) nextTick(renderDriverMap);
   } catch {
     // 404 = no delivery job for this order, that's OK (pickup orders)
     delivery.value = null;
   }
+};
+
+// ── Live driver map (Leaflet, lazy-loaded) ──────────────────────────────────────
+const mapEl = ref(null);
+let _map = null, _driverMarker = null, _destMarker = null, _leaflet = null;
+
+const ensureLeaflet = async () => {
+  if (_leaflet) return _leaflet;
+  const [{ default: L }, m2x, m, shadow] = await Promise.all([
+    import('leaflet'),
+    import('leaflet/dist/images/marker-icon-2x.png'),
+    import('leaflet/dist/images/marker-icon.png'),
+    import('leaflet/dist/images/marker-shadow.png'),
+  ]);
+  await import('leaflet/dist/leaflet.css');
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({ iconRetinaUrl: m2x.default, iconUrl: m.default, shadowUrl: shadow.default });
+  _leaflet = L;
+  return L;
+};
+
+const renderDriverMap = async () => {
+  const d = delivery.value?.driver;
+  if (!d || d.lat == null || d.lng == null || !mapEl.value) return;
+  const L = await ensureLeaflet();
+  const driverPos = [Number(d.lat), Number(d.lng)];
+  if (!_map) {
+    _map = L.map(mapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_map);
+  }
+  if (!_driverMarker) _driverMarker = L.marker(driverPos).addTo(_map);
+  else _driverMarker.setLatLng(driverPos);
+  if (_driverMarker.bindPopup) _driverMarker.bindPopup(t('mktOrderStatus.driverTracking'));
+
+  const destLat = delivery.value?.delivery_lat, destLng = delivery.value?.delivery_lng;
+  const points = [driverPos];
+  if (destLat != null && destLng != null) {
+    const destPos = [Number(destLat), Number(destLng)];
+    if (!_destMarker) _destMarker = L.marker(destPos, { opacity: 0.7 }).addTo(_map);
+    else _destMarker.setLatLng(destPos);
+    points.push(destPos);
+  }
+  if (points.length > 1) {
+    _map.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
+  } else {
+    _map.setView(driverPos, 14);
+  }
+  setTimeout(() => _map && _map.invalidateSize(), 0); // container just became visible
 };
 
 // ── Driver rating ──────────────────────────────────────────────────────────────
@@ -420,5 +475,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(_pollTimer);
   document.removeEventListener('visibilitychange', onMktStatusVisible);
+  if (_map) { _map.remove(); _map = null; }
 });
 </script>
