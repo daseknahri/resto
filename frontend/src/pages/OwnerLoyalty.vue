@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-4 pb-6">
+  <div class="ui-page-shell space-y-4 pb-6">
     <!-- Page header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
       <div class="flex items-start justify-between gap-3">
@@ -23,6 +23,7 @@
           >
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
           </svg>
+          <span class="sr-only" aria-live="polite" aria-atomic="true">{{ updating ? t('common.updating') : '' }}</span>
         </div>
       </div>
     </header>
@@ -70,7 +71,7 @@
     <template v-else>
       <!-- How it works — shown first so owners understand the model before configuring -->
       <section class="ui-panel ui-reveal p-4 space-y-3" :style="{ '--ui-delay': '28ms' }">
-        <p class="ui-kicker">{{ t('ownerLoyalty.howItWorksTitle') }}</p>
+        <h2 class="ui-kicker">{{ t('ownerLoyalty.howItWorksTitle') }}</h2>
         <ul class="space-y-2">
           <li class="flex items-start gap-2 text-xs text-slate-400">
             <span class="mt-0.5 shrink-0 text-[var(--color-secondary)]" aria-hidden="true">•</span>
@@ -93,6 +94,12 @@
 
       <!-- Settings card -->
       <section class="ui-panel ui-reveal p-4 space-y-4" :style="{ '--ui-delay': '56ms' }">
+        <!-- Section heading -->
+        <div class="space-y-0.5">
+          <p class="ui-kicker">{{ t('ownerLoyalty.settingsKicker') }}</p>
+          <h2 class="text-sm font-semibold text-slate-100 leading-snug">{{ t('ownerLoyalty.settingsTitle') }}</h2>
+        </div>
+
         <!-- Enable / disable toggle -->
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
@@ -178,9 +185,11 @@
 
         <!-- Preview card -->
         <div
-          class="rounded-xl border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/8 px-4 py-3 space-y-1"
+          class="ui-section-band space-y-1 px-4 py-3"
+          role="group"
+          aria-labelledby="loyalty-preview-label"
         >
-          <p class="ui-kicker text-[var(--color-secondary)]">{{ t('ownerLoyalty.previewTitle') }}</p>
+          <p id="loyalty-preview-label" class="ui-kicker text-[var(--color-secondary)]">{{ t('ownerLoyalty.previewTitle') }}</p>
           <p class="text-xs tabular-nums text-slate-300">{{ previewEarn }}</p>
           <p class="text-xs tabular-nums text-slate-300">{{ previewRedeem }}</p>
         </div>
@@ -205,7 +214,7 @@
           <p class="flex-1 text-sm text-red-300">{{ saveError }}</p>
         </div>
 
-        <button class="ui-btn-primary ui-press w-full" :disabled="saving" @click="save">
+        <button class="ui-btn-primary ui-press w-full" :disabled="saving" :aria-busy="saving" @click="save">
           {{ saving ? t('common.saving') : t('common.save') }}
         </button>
       </section>

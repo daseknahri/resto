@@ -1,5 +1,5 @@
 <template>
-  <section class="space-y-4 ui-safe-bottom" :aria-label="t('ownerLaunchSuccess.launch')">
+  <section class="space-y-4 ui-safe-bottom" :aria-label="t('ownerLaunchSuccess.pageRegionLabel')">
     <header
       class="ui-workspace-stage ui-reveal overflow-hidden"
       :class="isPublished ? 'border-emerald-500/30' : 'border-amber-500/30'"
@@ -40,7 +40,7 @@
               class="ui-stat-tile ui-reveal"
               :style="{ '--ui-delay': '68ms' }"
             >
-              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.shareMessageTitle") }}</p>
+              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.statActions") }}</p>
               <p class="ui-stat-value tabular-nums text-lg md:text-2xl">{{ isPublished ? 2 : 1 }}</p>
               <p class="ui-stat-note">{{ t("ownerLaunchSuccess.nextActions") }}</p>
             </article>
@@ -48,7 +48,7 @@
               class="ui-stat-tile ui-reveal"
               :style="{ '--ui-delay': '96ms' }"
             >
-              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.goDashboard") }}</p>
+              <p class="ui-stat-label">{{ t("ownerLaunchSuccess.statSteps") }}</p>
               <p class="ui-stat-value tabular-nums text-lg md:text-2xl">{{ isPublished ? activeActionsCount : 1 }}</p>
               <p class="ui-stat-note">{{ t("ownerLaunchSuccess.nextActions") }}</p>
             </article>
@@ -105,7 +105,6 @@
         </div>
         <pre
           class="overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-xs text-slate-200"
-          :aria-label="t('ownerLaunchSuccess.shareMessageTitle')"
         >{{ shareMessage }}</pre>
         <div class="flex flex-wrap gap-2">
           <button

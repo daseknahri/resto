@@ -12,15 +12,15 @@
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-1.5">
           <span class="ui-chip tabular-nums">
-            <span class="h-2 w-2 rounded-full bg-emerald-400/80"></span>
+            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400/80"></span>
             {{ summary.sent || 0 }} {{ t('ownerNotifications.statusSent') }}
           </span>
           <span class="ui-chip tabular-nums">
-            <span class="h-2 w-2 rounded-full bg-red-400/80"></span>
+            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-red-400/80"></span>
             {{ summary.failed || 0 }} {{ t('ownerNotifications.statusFailed') }}
           </span>
           <span class="ui-chip tabular-nums">
-            <span class="h-2 w-2 rounded-full bg-slate-500/80"></span>
+            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-slate-500/80"></span>
             {{ summary.skipped || 0 }} {{ t('ownerNotifications.statusSkipped') }}
           </span>
         </div>
@@ -76,13 +76,13 @@
         <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
       </svg>
       <p class="flex-1 text-sm text-red-300">{{ t('ownerNotifications.loadError') }}</p>
-      <button class="ui-press shrink-0 text-xs text-red-400 underline underline-offset-2" @click="fetchLog">
+      <button class="ui-press ui-touch-target shrink-0 rounded text-xs text-red-400 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400" @click="fetchLog">
         {{ t('common.retry') }}
       </button>
     </div>
 
     <!-- Loading skeletons -->
-    <div v-else-if="loading" class="space-y-1.5" aria-busy="true" :aria-label="t('common.loading')">
+    <div v-else-if="loading" class="space-y-1.5" aria-busy="true" aria-live="polite" :aria-label="t('common.loading')">
       <div v-for="i in 6" :key="i" class="ui-skeleton h-10 rounded-xl" />
     </div>
 
@@ -99,16 +99,18 @@
         :key="n.id"
         class="ui-panel ui-reveal flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 text-xs"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        :aria-label="`${channelLabel(n.channel)}, ${statusLabel(n.status)}, ${n.event || ''}`"
       >
-        <span class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="channelClass(n.channel)">{{ channelLabel(n.channel) }}</span>
-        <span class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="statusClass(n.status)">{{ statusLabel(n.status) }}</span>
-        <span class="min-w-0 truncate text-slate-300">{{ n.event || '—' }}</span>
+        <span role="img" class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="channelClass(n.channel)" :aria-label="channelLabel(n.channel)">{{ channelLabel(n.channel) }}</span>
+        <span role="img" class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="statusClass(n.status)" :aria-label="statusLabel(n.status)">{{ statusLabel(n.status) }}</span>
+        <span class="min-w-0 truncate text-slate-300" :title="n.event || undefined">{{ n.event || '—' }}</span>
         <span v-if="n.reference" class="shrink-0 font-mono text-slate-500">{{ n.reference }}</span>
-        <span v-if="n.detail" class="min-w-0 truncate text-slate-500">{{ n.detail }}</span>
+        <span v-if="n.detail" class="min-w-0 truncate text-slate-500" :title="n.detail">{{ n.detail }}</span>
         <span v-if="n.recipient" class="shrink-0 text-slate-500">
+          <span class="sr-only">{{ t('ownerNotifications.recipient') }}</span>
           <span aria-hidden="true" class="ltr:me-0.5 rtl:scale-x-[-1] rtl:inline-block">→</span>{{ n.recipient }}
         </span>
-        <span v-if="n.error" class="min-w-0 truncate text-red-400/80">{{ n.error }}</span>
+        <span v-if="n.error" class="min-w-0 truncate text-red-400/80" :title="n.error">{{ n.error }}</span>
         <time class="ms-auto shrink-0 whitespace-nowrap tabular-nums text-slate-500" :datetime="n.created_at">{{ fmtTime(n.created_at) }}</time>
       </li>
     </ul>

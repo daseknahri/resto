@@ -4,7 +4,7 @@
     :class="{ 'kitchen-fullscreen': isFullscreen }"
   >
     <!-- Top bar -->
-    <div class="kitchen-topbar" role="banner">
+    <div class="kitchen-topbar" role="region" :aria-label="t('kitchen.displayHeader')">
       <div class="flex items-center gap-2.5">
         <span class="ui-kicker">{{ t("kitchen.title") }}</span>
         <!-- Offline / syncing indicator -->
@@ -48,7 +48,7 @@
     </div>
 
     <!-- Station filter bar -->
-    <nav class="kitchen-filter-bar" :aria-label="t('kitchen.filterAll')">
+    <nav class="kitchen-filter-bar" :aria-label="t('kitchen.stationFilterNav')">
       <button
         v-for="f in stationFilters"
         :key="f.value"
@@ -135,26 +135,37 @@
         </div>
 
         <!-- Items -->
-        <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4" :aria-label="t('kitchen.tapItemReady')">
+        <p class="sr-only">{{ t('kitchen.tapItemReady') }}</p>
+        <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
           <li
             v-for="(item, idx) in order.items"
             :key="item.id ?? idx"
             class="kitchen-item select-none"
-            :class="[item.id != null ? 'cursor-pointer ui-press' : '', item.is_ready ? 'opacity-45 line-through' : '']"
-            :title="item.id != null ? t('kitchen.tapItemReady') : ''"
-            :aria-pressed="item.id != null ? item.is_ready : undefined"
-            :role="item.id != null ? 'button' : undefined"
-            @click="toggleItem(order, item)"
           >
-            <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
-            <span class="kitchen-name">{{ item.dish_name }}</span>
-            <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
-            <span v-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
-              <!-- Checkmark icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
-                <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
-              </svg>
-            </span>
+            <button
+              v-if="item.id != null"
+              type="button"
+              class="flex w-full items-baseline gap-2 cursor-pointer ui-press text-start"
+              :class="item.is_ready ? 'opacity-45 line-through' : ''"
+              :title="t('kitchen.tapItemReady')"
+              :aria-pressed="item.is_ready"
+              @click="toggleItem(order, item)"
+            >
+              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
+              <span v-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
+                <!-- Checkmark icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
+                </svg>
+              </span>
+            </button>
+            <template v-else>
+              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
+            </template>
           </li>
         </ul>
 
@@ -172,10 +183,11 @@
         <div class="mt-auto space-y-2 px-4 pb-4 pt-3">
           <button
             v-if="waiter.nextStatus(order)"
-            class="kitchen-action-btn ui-touch-target"
+            class="ui-btn-primary ui-touch-target w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
+            :aria-label="`${actionLabel(order)} — #${order.order_number}`"
             @click="advance(order.id)"
           >
             <span v-if="waiter.updatingOrderIds.has(order.id)" class="animate-pulse" aria-hidden="true">…</span>
@@ -183,7 +195,8 @@
           </button>
           <p v-else class="text-center text-xs italic text-slate-500">{{ t("kitchen.handedOff") }}</p>
           <button
-            class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-600/70 py-1.5 text-xs font-medium text-slate-300 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 hover:border-slate-400 hover:text-white ui-press"
+            class="ui-btn-outline ui-press w-full gap-1.5"
+            :aria-label="`${t('ownerOrders.printTicket')} — #${order.order_number}`"
             @click="printTicket(order)"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
@@ -516,16 +529,6 @@ const actionBtnClass = (s) => ({
 .kitchen-name {
   min-width: 0;
   word-break: break-word;
-}
-
-.kitchen-action-btn {
-  width: 100%;
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  font-size: 1rem;
-  font-weight: 700;
-  text-align: center;
-  transition: opacity 0.15s;
 }
 
 /* Station filter bar */

@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-4">
+  <div class="ui-page-shell space-y-4">
     <!-- Header -->
     <header class="ui-hero-ribbon ui-reveal space-y-3 px-4 py-4 sm:px-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -15,7 +15,7 @@
             :aria-label="soundEnabled ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
             @click="soundEnabled = !soundEnabled"
           >
-            {{ soundEnabled ? "🔔" : "🔕" }}
+            <span aria-hidden="true">{{ soundEnabled ? "🔔" : "🔕" }}</span>
           </button>
           <button
             class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
@@ -209,6 +209,7 @@
         :key="o.id"
         class="ui-panel ui-surface-lift ui-reveal space-y-3 p-3.5 transition-colors"
         :class="orderCardClass(o)"
+        :aria-label="o.order_number"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 220px' }"
       >
         <!-- Order header -->
@@ -225,7 +226,7 @@
                 v-if="o.scheduled_for"
                 class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
               >
-                🗓️ {{ formatScheduledFor(o.scheduled_for) }}
+                <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(o.scheduled_for) }}
               </span>
               <!-- Payment badge -->
               <span
@@ -240,7 +241,7 @@
                 v-if="o.source === 'marketplace'"
                 class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
               >
-                🛒 {{ t('ownerOrders.sourceMarketplace') }}
+                <span aria-hidden="true">🛒</span> {{ t('ownerOrders.sourceMarketplace') }}
               </span>
               <!-- Age warning badge -->
               <span
@@ -250,7 +251,7 @@
                   ? 'bg-red-500/25 text-red-300'
                   : 'bg-amber-500/25 text-amber-300'"
               >
-                ⏱ {{ orderAgeMin(o) }}m
+                <span aria-hidden="true">⏱</span> {{ orderAgeMin(o) }}m
               </span>
             </div>
             <p class="text-xs text-slate-400">{{ formatTime(o.created_at) }}</p>
@@ -272,7 +273,7 @@
               {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}
             </p>
             <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] text-emerald-300">
-              💰 {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
+              <span aria-hidden="true">💰</span> {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
             </p>
             <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
@@ -295,7 +296,7 @@
                     ? 'bg-amber-500/15 text-amber-300'
                     : 'bg-red-500/15 text-red-300'"
               >
-                ★ {{ o.customer_trust.avg_score }}
+                <span aria-hidden="true">★</span> {{ o.customer_trust.avg_score }}
                 <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
               </span>
             </template>
@@ -312,7 +313,7 @@
                     ? 'bg-amber-500/15 text-amber-300'
                     : 'bg-red-500/15 text-red-300'"
               >
-                ★ {{ o.customer_trust.avg_score }}
+                <span aria-hidden="true">★</span> {{ o.customer_trust.avg_score }}
                 <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
               </span>
             </div>
@@ -325,7 +326,7 @@
               rel="noopener noreferrer"
               class="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 hover:border-emerald-400/60 hover:bg-emerald-500/20"
             >
-              💬 {{ t("ownerOrders.whatsapp") }}
+              <span aria-hidden="true">💬</span> {{ t("ownerOrders.whatsapp") }}
             </a>
           </div>
           <div v-if="o.customer_email">
@@ -353,14 +354,14 @@
               rel="noopener noreferrer"
               class="ms-2 inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
             >
-              📍 {{ t("ownerOrders.openMap") }}
+              <span aria-hidden="true">📍</span> {{ t("ownerOrders.openMap") }}
             </a>
           </div>
 
           <!-- Delivery job panel -->
           <div v-if="o.delivery_job" class="sm:col-span-2 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 space-y-2 text-xs">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-slate-300">🛵 {{ t('ownerOrders.deliveryJobTitle') }}</span>
+              <span class="font-semibold text-slate-300"><span aria-hidden="true">🛵</span> {{ t('ownerOrders.deliveryJobTitle') }}</span>
               <span
                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 :class="{
@@ -411,22 +412,24 @@
                 >{{ t('ownerOrders.djPayNoshow') }}</button>
               </div>
               <p v-if="o.delivery_job.resolution" class="text-[11px] text-emerald-400">
-                ✓ {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
+                <span aria-hidden="true">✓</span> {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
               </p>
             </div>
 
             <!-- Rate driver button (only when delivered and not yet rated) -->
             <div v-if="o.delivery_job.status === 'delivered' && !o.delivery_job.restaurant_driver_rating">
               <div v-if="ratingJobId === o.id" class="space-y-1.5">
-                <div class="flex gap-1">
-                  <button
-                    v-for="n in 5"
-                    :key="n"
-                    class="text-lg transition-transform hover:scale-110"
-                    :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
-                    :aria-label="t('ownerOrders.djRateStar', { n })"
-                    @click="ratingScore = n"
-                  >★</button>
+                <div role="group" :aria-label="t('ownerOrders.djRateDriver')">
+                  <div class="flex gap-1">
+                    <button
+                      v-for="n in 5"
+                      :key="n"
+                      class="text-lg transition-transform hover:scale-110"
+                      :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+                      :aria-label="t('ownerOrders.djRateStar', { n })"
+                      @click="ratingScore = n"
+                    ><span aria-hidden="true">★</span></button>
+                  </div>
                 </div>
                 <input
                   v-model="ratingNote"
@@ -448,7 +451,7 @@
                 v-else
                 class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20"
                 @click="ratingJobId = o.id; ratingScore = 0; ratingNote = ''"
-              >★ {{ t('ownerOrders.djRateDriver') }}</button>
+              ><span aria-hidden="true">★</span> {{ t('ownerOrders.djRateDriver') }}</button>
             </div>
             <div v-else-if="o.delivery_job.restaurant_driver_rating" class="text-slate-500">
               {{ t('ownerOrders.djRated', { score: o.delivery_job.restaurant_driver_rating }) }}
@@ -498,6 +501,7 @@
                 v-for="preset in [10, 15, 20, 25, 30, 45]"
                 :key="preset"
                 type="button"
+                :aria-pressed="editMinutes === preset"
                 class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
                 :class="editMinutes === preset
                   ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
@@ -600,7 +604,7 @@
             class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
             @click="printTicket(o)"
           >
-            🖨 {{ t("ownerOrders.printTicket") }}
+            <span aria-hidden="true">🖨</span> {{ t("ownerOrders.printTicket") }}
           </button>
 
           <!-- Settle / Mark paid — record payment collected (cash/card); on a
@@ -611,7 +615,7 @@
             :disabled="settlingOrderId === o.id"
             @click="settleOrder(o)"
           >
-            💵 {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
+            <span aria-hidden="true">💵</span> {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
           </button>
         </div>
       </article>

@@ -338,6 +338,9 @@ const arabicMessages = {
     "navMobile": "تنقل المالك",
     "ordersBadgeLabel": "الطلبات: {count} في الانتظار"
   },
+  "ownerProfile": {
+    "sectionsNav": "أقسام الملف الشخصي"
+  },
   "ownerAnalytics": {
     "kicker": "الأداء",
     "title": "التحليلات",
@@ -639,7 +642,10 @@ const arabicMessages = {
     "shareTemplate": "مرحباً! أصبح {name} الآن متاحاً على الإنترنت.\nتصفح قائمتنا هنا: {url}\nشكراً لك.",
     "menuUrlCopied": "تم نسخ رابط القائمة",
     "shareCopied": "تم نسخ رسالة المشاركة",
-    "copyFailed": "فشل النسخ"
+    "copyFailed": "فشل النسخ",
+    "pageRegionLabel": "نظرة عامة على إطلاق المطعم",
+    "statActions": "الإجراءات المقترحة",
+    "statSteps": "الخطوات المتاحة"
   },
   "adminConsole": {
     "loadJobsFailed": "تعذر تحميل المهام (سجّل الدخول كمسؤول)",
@@ -1871,7 +1877,8 @@ const arabicMessages = {
     "channelWhatsapp": "واتساب",
     "statusSent": "أُرسل",
     "statusFailed": "فشل",
-    "statusSkipped": "متخطّى"
+    "statusSkipped": "متخطّى",
+    "recipient": "إلى"
   },
   "ownerOrders": {
     "kicker": "إدارة الطلبات",
@@ -2505,6 +2512,8 @@ Object.assign(arabicMessages, {
     how2: "\u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u062d\u0633\u0627\u0628 \u0627\u0644\u0639\u0645\u064a\u0644 \u0641\u064a \u0627\u0644\u0645\u0646\u0635\u0629 \u2014 \u062a\u0628\u0642\u0649 \u0639\u0628\u0631 \u0627\u0644\u062c\u0644\u0633\u0627\u062a.",
     how3: "\u0639\u0646\u062f\u0645\u0627 \u064a\u0645\u062a\u0644\u0643\u0648\u0646 \u0646\u0642\u0627\u0637\u0627\u064b \u0643\u0627\u0641\u064a\u0629\u060c \u064a\u0645\u0643\u0646\u0647\u0645 \u0627\u0633\u062a\u0628\u062f\u0627\u0644\u0647\u0627 \u0628\u0631\u0635\u064a\u062f \u0645\u062d\u0641\u0638\u0629 \u0641\u064a \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062d\u0629.",
     how4: "\u064a\u0645\u0643\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0631\u0635\u064a\u062f \u0627\u0644\u0645\u062d\u0641\u0638\u0629 \u0644\u062f\u0641\u0639 \u062b\u0645\u0646 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a\u0629 \u0641\u064a \u0645\u0637\u0639\u0645\u0643.",
+    settingsKicker: "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a",
+    settingsTitle: "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c",
     saved: "\u062a\u0645 \u062d\u0641\u0638 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
     saveFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0641\u0638 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
@@ -3454,6 +3463,9 @@ Object.assign(arabicMessages, {
     filterAll: "\u0627\u0644\u0643\u0644",
     filterTables: "\u0627\u0644\u0637\u0627\u0648\u0644\u0627\u062a",
     elapsedMin: "\u062f",
+    displayHeader: "\u0631\u0623\u0633 \u0634\u0627\u0634\u0629 \u0627\u0644\u0645\u0637\u0628\u062e",
+    stationFilterNav: "\u0641\u0644\u0627\u062a\u0631 \u0627\u0644\u0645\u062d\u0637\u0629",
+    orderItems: "\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0637\u0644\u0628",
   },
   customerAuth: {
     kicker: "\u062a\u0633\u062c\u064a\u0644 \u062f\u062e\u0648\u0644 \u0633\u0631\u064a\u0639",

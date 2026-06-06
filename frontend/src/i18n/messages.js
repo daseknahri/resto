@@ -80,7 +80,8 @@ export const messages = {
       offlineBackOnline: "Back online",
       opensInNewTab: "(opens in new tab)",
       included: "Included",
-      notIncluded: "Not included"
+      notIncluded: "Not included",
+      updating: "Updating..."
     },
     confirmModal: {
       defaultTitle: "Are you sure?",
@@ -619,7 +620,10 @@ export const messages = {
       shareTemplate: "Hello! {name} is now live online.\nBrowse our menu here: {url}\nThank you.",
       menuUrlCopied: "Menu URL copied",
       shareCopied: "Share message copied",
-      copyFailed: "Copy failed"
+      copyFailed: "Copy failed",
+      pageRegionLabel: "Restaurant launch overview",
+      statActions: "Suggested actions",
+      statSteps: "Steps available"
     },
     ownerSections: {
       kicker: "Floor management",
@@ -785,6 +789,9 @@ export const messages = {
       navMobile: "Owner navigation",
       ordersBadgeLabel: "Orders: {count} pending",
     },
+    ownerProfile: {
+      sectionsNav: "Profile sections",
+    },
     ownerMenuBuilder: {
       importCsv: "Import CSV",
       importTitle: "Import menu from CSV",
@@ -829,6 +836,8 @@ export const messages = {
       how2: "Points are tied to the customer's platform account — they carry across sessions.",
       how3: "When they have enough points, they can redeem them for wallet credits on this page.",
       how4: "Wallet credits can then be used to pay for future orders at your restaurant.",
+      settingsKicker: "Configuration",
+      settingsTitle: "Programme settings",
       saved: "Loyalty settings saved.",
       saveFailed: "Could not save loyalty settings.",
       fetchError: "Could not load loyalty settings.",
@@ -2945,6 +2954,7 @@ export const messages = {
       statusSent: "Sent",
       statusFailed: "Failed",
       statusSkipped: "Skipped",
+      recipient: "To",
     },
     ownerOrders: {
       kicker: "Order management",
@@ -3386,6 +3396,9 @@ export const messages = {
       filterTables: "Tables",
       elapsedMin: "m",
       elapsed: "elapsed",
+      displayHeader: "Kitchen display header",
+      stationFilterNav: "Station filters",
+      orderItems: "Order items",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -3764,7 +3777,8 @@ export const messages = {
       offlineBackOnline: "Connexion retablie",
       opensInNewTab: "(ouvre dans un nouvel onglet)",
       included: "Inclus",
-      notIncluded: "Non inclus"
+      notIncluded: "Non inclus",
+      updating: "Mise a jour..."
     },
     confirmModal: {
       defaultTitle: "Etes-vous sur ?",
@@ -4303,7 +4317,10 @@ export const messages = {
       shareTemplate: "Bonjour ! {name} est maintenant en ligne.\nConsultez notre menu ici: {url}\nMerci.",
       menuUrlCopied: "URL du menu copiee",
       shareCopied: "Message de partage copie",
-      copyFailed: "Copie echouee"
+      copyFailed: "Copie echouee",
+      pageRegionLabel: "Apercu du lancement du restaurant",
+      statActions: "Actions suggerees",
+      statSteps: "Etapes disponibles"
     },
     ownerSections: {
       kicker: "Gestion de salle",
@@ -4469,6 +4486,9 @@ export const messages = {
       navMobile: "Navigation proprietaire",
       ordersBadgeLabel: "Commandes: {count} en attente",
     },
+    ownerProfile: {
+      sectionsNav: "Sections du profil",
+    },
     ownerMenuBuilder: {
       importCsv: "Importer CSV",
       importTitle: "Importer le menu depuis un CSV",
@@ -4513,6 +4533,8 @@ export const messages = {
       how2: "Les points sont lies au compte de la plateforme du client — ils persistent entre les sessions.",
       how3: "Quand ils ont assez de points, ils peuvent les echanger contre des credits portefeuille.",
       how4: "Les credits portefeuille peuvent ensuite etre utilises pour payer des futures commandes.",
+      settingsKicker: "Configuration",
+      settingsTitle: "Parametres du programme",
       saved: "Parametres de fidelite sauvegardes.",
       saveFailed: "Impossible de sauvegarder les parametres de fidelite.",
       fetchError: "Impossible de charger les parametres de fidelite.",
@@ -6646,6 +6668,7 @@ export const messages = {
       statusSent: "Envoye",
       statusFailed: "Echec",
       statusSkipped: "Ignore",
+      recipient: "A",
     },
     ownerOrders: {
       kicker: "Gestion des commandes",
@@ -7087,6 +7110,9 @@ export const messages = {
       filterTables: "Tables",
       elapsedMin: "m",
       elapsed: "ecoule",
+      displayHeader: "En-tete affichage cuisine",
+      stationFilterNav: "Filtres de station",
+      orderItems: "Articles de la commande",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

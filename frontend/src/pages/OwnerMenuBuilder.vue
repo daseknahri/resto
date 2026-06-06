@@ -14,17 +14,18 @@
           <span class="sr-only sm:hidden">{{ t("ownerMenuBuilder.importCsv") }}</span>
         </button>
       </div>
-      <nav class="owner-menu-builder-nav" :aria-label="t('common.sectionsNav')">
+      <nav class="ui-segmented" role="tablist" :aria-label="t('common.sectionsNav')">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
-          class="owner-menu-builder-nav-item"
+          class="ui-segmented-button flex-1"
           :data-active="activeTab === tab.key"
-          :aria-pressed="activeTab === tab.key"
+          role="tab"
+          :aria-selected="activeTab === tab.key"
           @click="setTab(tab.key)"
         >
-          <AppIcon :name="tab.icon" class="owner-menu-builder-nav-icon" aria-hidden="true" />
+          <AppIcon :name="tab.icon" class="me-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>{{ tab.label }}</span>
         </button>
       </nav>
@@ -88,10 +89,13 @@
               <label class="block space-y-2">
                 <span class="text-xs font-medium text-slate-400">{{ t("ownerMenuBuilder.importChooseFile") }}</span>
                 <div
+                  tabindex="-1"
                   class="flex items-center justify-center rounded-xl border-2 border-dashed border-slate-700/70 bg-slate-950/40 px-4 py-8 cursor-pointer transition hover:border-[var(--color-secondary)]/50 hover:bg-slate-950/60 focus-within:border-[var(--color-secondary)]/60"
                   @dragover.prevent
                   @drop.prevent="onFileDrop"
                   @click="fileInputRef?.click()"
+                  @keydown.enter.prevent="fileInputRef?.click()"
+                  @keydown.space.prevent="fileInputRef?.click()"
                 >
                   <div class="text-center space-y-1.5">
                     <AppIcon name="upload" class="h-7 w-7 mx-auto text-slate-500" aria-hidden="true" />
@@ -105,7 +109,7 @@
                   accept=".csv,text/csv"
                   class="sr-only"
                   :aria-invalid="importError ? 'true' : undefined"
-                  aria-describedby="owner-menu-builder-import-error"
+                  :aria-describedby="importError ? 'owner-menu-builder-import-error' : undefined"
                   @change="onFileChange"
                 />
               </label>
@@ -135,15 +139,15 @@
               <div class="grid grid-cols-3 gap-2">
                 <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 text-center space-y-0.5">
                   <p class="text-xl font-bold tabular-nums text-emerald-300">{{ importResult.created_dishes }}</p>
-                  <p class="text-[10px] text-emerald-400/70 leading-tight">{{ t("ownerMenuBuilder.resultDishes") }}</p>
+                  <p class="text-[11px] text-emerald-400 leading-tight">{{ t("ownerMenuBuilder.resultDishes") }}</p>
                 </div>
                 <div class="rounded-xl border border-indigo-500/30 bg-indigo-500/8 p-3 text-center space-y-0.5">
                   <p class="text-xl font-bold tabular-nums text-indigo-300">{{ importResult.created_categories }}</p>
-                  <p class="text-[10px] text-indigo-400/70 leading-tight">{{ t("ownerMenuBuilder.resultCategories") }}</p>
+                  <p class="text-[11px] text-indigo-400 leading-tight">{{ t("ownerMenuBuilder.resultCategories") }}</p>
                 </div>
                 <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3 text-center space-y-0.5">
                   <p class="text-xl font-bold tabular-nums text-slate-300">{{ importResult.skipped }}</p>
-                  <p class="text-[10px] text-slate-400/70 leading-tight">{{ t("ownerMenuBuilder.resultSkipped") }}</p>
+                  <p class="text-[11px] text-slate-400 leading-tight">{{ t("ownerMenuBuilder.resultSkipped") }}</p>
                 </div>
               </div>
 
@@ -153,7 +157,7 @@
                 role="alert"
               >
                 <p class="text-xs font-semibold text-amber-300">{{ t("ownerMenuBuilder.resultWarnings") }}</p>
-                <p v-for="(err, i) in importResult.errors" :key="i" class="text-[11px] text-amber-200/70">&#x2022; {{ err }}</p>
+                <p v-for="(err, i) in importResult.errors" :key="i" class="text-[11px] text-amber-200">&#x2022; {{ err }}</p>
               </div>
 
               <div class="flex gap-2">
@@ -331,88 +335,3 @@ const runImport = async () => {
   }
 };
 </script>
-
-<style scoped>
-.owner-menu-builder-nav {
-  display: inline-grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.3rem;
-  width: 100%;
-  max-width: 30rem;
-  border: 1px solid rgba(51, 65, 85, 0.72);
-  border-radius: 0.85rem;
-  background: linear-gradient(135deg, rgba(2, 6, 23, 0.86), rgba(3, 15, 35, 0.78));
-  padding: 0.25rem;
-}
-
-.owner-menu-builder-nav-item {
-  min-height: 2.75rem;
-  border-radius: 0.65rem;
-  border: 1px solid rgba(51, 65, 85, 0.4);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.7rem;
-  color: rgb(203, 213, 225);
-  font-size: 0.83rem;
-  font-weight: 600;
-  transition: border-color var(--motion-fast, 0.2s) ease, background var(--motion-fast, 0.2s) ease, color var(--motion-fast, 0.2s) ease;
-}
-
-.owner-menu-builder-nav-item:hover {
-  border-color: rgba(245, 158, 11, 0.55);
-  background: rgba(15, 23, 42, 0.72);
-  color: rgb(245, 158, 11);
-}
-
-.owner-menu-builder-nav-item:focus-visible {
-  outline: 2px solid rgba(251, 191, 36, 0.6);
-  outline-offset: 2px;
-}
-
-.owner-menu-builder-nav-item[data-active="true"] {
-  border-color: rgba(245, 158, 11, 0.82);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.08));
-  color: rgb(245, 158, 11);
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12) inset;
-}
-
-.owner-menu-builder-nav-icon {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
-  .owner-menu-builder-nav {
-    display: flex;
-    max-width: none;
-    overflow-x: auto;
-    padding: 0.3rem;
-    scrollbar-width: none;
-  }
-
-  .owner-menu-builder-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .owner-menu-builder-nav-item {
-    min-height: 2.75rem;
-    flex: 0 0 auto;
-    font-size: 0.76rem;
-    padding: 0.48rem 0.72rem;
-  }
-
-  .owner-menu-builder-nav-icon {
-    width: 0.8rem;
-    height: 0.8rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .owner-menu-builder-nav-item {
-    transition: none;
-  }
-}
-</style>
