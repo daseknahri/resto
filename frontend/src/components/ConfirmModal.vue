@@ -14,10 +14,10 @@
           aria-modal="true"
           :aria-labelledby="dialogTitleId"
           :aria-describedby="modal.options.value.body ? dialogBodyId : undefined"
-          class="w-full max-w-sm rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/60"
+          class="confirm-dialog ui-glass w-full max-w-sm"
         >
           <!-- Header -->
-          <div class="border-b border-slate-800 px-5 py-4">
+          <div class="border-b px-5 py-4" style="border-color: var(--color-border)">
             <h2 :id="dialogTitleId" class="text-base font-semibold text-slate-100">
               {{ modal.options.value.title || t("confirmModal.defaultTitle") }}
             </h2>
@@ -25,22 +25,22 @@
 
           <!-- Body -->
           <div class="px-5 py-4">
-            <p :id="dialogBodyId" class="text-sm text-slate-300">
+            <p :id="dialogBodyId" class="ui-subtle">
               {{ modal.options.value.body || t("confirmModal.defaultBody") }}
             </p>
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-3">
+          <div class="flex items-center justify-end gap-3 border-t px-5 py-3" style="border-color: var(--color-border)">
             <button
               ref="cancelBtnRef"
-              class="ui-btn-outline px-4 py-1.5 text-sm"
+              class="ui-btn-outline ui-touch-target px-4 text-sm"
               @click="cancel"
             >
               {{ modal.options.value.cancelLabel || t("common.cancel") }}
             </button>
             <button
-              class="ui-btn-primary px-4 py-1.5 text-sm"
+              class="ui-btn-primary ui-touch-target px-4 text-sm"
               :class="modal.options.value.danger !== false ? 'bg-red-600 hover:bg-red-500 border-red-600 hover:border-red-500' : ''"
               @click="ok"
             >
@@ -109,12 +109,45 @@ const cancel = () => modal._settle(false);
 </script>
 
 <style scoped>
+/* Backdrop fade */
 .confirm-fade-enter-active,
 .confirm-fade-leave-active {
-  transition: opacity 160ms ease;
+  transition: opacity var(--motion-fast, 180ms) ease;
 }
 .confirm-fade-enter-from,
 .confirm-fade-leave-to {
   opacity: 0;
+}
+
+/* Dialog panel scale + fade entry */
+.confirm-fade-enter-active .confirm-dialog {
+  transition:
+    opacity var(--motion-base, 260ms) var(--ease-fluid, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-base, 260ms) var(--ease-fluid, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.confirm-fade-leave-active .confirm-dialog {
+  transition:
+    opacity var(--motion-fast, 180ms) ease,
+    transform var(--motion-fast, 180ms) ease;
+}
+.confirm-fade-enter-from .confirm-dialog {
+  opacity: 0;
+  transform: scale(0.94) translateY(8px);
+}
+.confirm-fade-leave-to .confirm-dialog {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* Respect prefers-reduced-motion: suppress transform, keep opacity */
+@media (prefers-reduced-motion: reduce) {
+  .confirm-fade-enter-active .confirm-dialog,
+  .confirm-fade-leave-active .confirm-dialog {
+    transition: opacity var(--motion-fast, 180ms) ease;
+  }
+  .confirm-fade-enter-from .confirm-dialog,
+  .confirm-fade-leave-to .confirm-dialog {
+    transform: none;
+  }
 }
 </style>

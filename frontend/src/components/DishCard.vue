@@ -5,7 +5,7 @@
        ══════════════════════════════════════════════════════ -->
   <article
     v-if="layout === 'row'"
-    class="ui-dish-row group relative flex overflow-hidden rounded-2xl border bg-slate-950/80 transition-all duration-200 active:scale-[0.99] cursor-pointer select-none"
+    class="ui-dish-row ui-reveal group relative flex overflow-hidden rounded-2xl border bg-slate-950/80 transition-all duration-200 active:scale-[0.99] cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
     :class="[
       isSoldOut || isScheduleUnavailable ? 'opacity-55' : '',
       qtyInCart > 0
@@ -26,7 +26,7 @@
     />
 
     <!-- Left: text -->
-    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 pl-3.5 pr-2.5">
+    <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 ps-3.5 pe-2.5">
       <div class="space-y-1">
         <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white">{{ dish.name }}</h3>
         <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90">{{ dish.description }}</p>
@@ -76,8 +76,8 @@
       <!-- left-edge blend from card background -->
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/40 via-transparent to-transparent" />
 
-      <!-- Add / qty controls overlaid at bottom-right -->
-      <div v-if="canOrder" class="absolute bottom-2 right-2 z-10" @click.stop>
+      <!-- Add / qty controls overlaid at bottom-end -->
+      <div v-if="canOrder" class="absolute bottom-2 end-2 z-10" @click.stop>
         <!-- qty stepper when already in cart -->
         <div
           v-if="qtyInCart > 0"
@@ -85,14 +85,14 @@
           style="border-color: rgba(245,158,11,0.50); box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.08) inset"
         >
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
+            class="ui-press flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
             style="color:var(--color-secondary)"
             :aria-label="t('dishPage.decreaseQuantity')"
             @click.stop="handleDecrement"
           ><AppIcon name="minus" class="h-3 w-3" /></button>
           <span class="min-w-[1.1rem] text-center text-xs font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 active:scale-90"
+            class="ui-press flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
             style="color:var(--color-secondary)"
             :aria-label="t('dishPage.increaseQuantity')"
             @click.stop="handleAdd"
@@ -101,7 +101,7 @@
         <!-- plain + button -->
         <button
           v-else
-          class="flex h-8 w-8 items-center justify-center rounded-full shadow-xl ring-[3px] ring-[var(--color-secondary)]/15 transition hover:brightness-110 hover:ring-[var(--color-secondary)]/28 active:scale-90"
+          class="ui-press flex h-8 w-8 items-center justify-center rounded-full shadow-xl ring-[3px] ring-[var(--color-secondary)]/15 transition hover:brightness-110 hover:ring-[var(--color-secondary)]/28 focus-visible:outline-none focus-visible:ring-[var(--color-secondary)]/60"
           style="background-color:var(--color-secondary)"
           :aria-label="t('dishPage.addToCart')"
           @click.stop="handleAdd"
@@ -115,7 +115,7 @@
        ══════════════════════════════════════════════════════ -->
   <article
     v-else-if="layout === 'card'"
-    class="group ui-menu-dish-card overflow-hidden rounded-[1.8rem] border bg-slate-950/82 transition-all duration-300 cursor-pointer"
+    class="ui-reveal group ui-menu-dish-card relative overflow-hidden rounded-[1.8rem] border bg-slate-950/82 transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
     :class="[
       isSoldOut || isScheduleUnavailable ? 'opacity-60' : '',
       qtyInCart > 0
@@ -156,14 +156,14 @@
         </span>
       </div>
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/88 via-slate-950/15 to-transparent" />
-      <!-- Price badge — repositioned bottom-left for visual harmony -->
-      <div class="absolute left-3 bottom-3">
-        <span class="rounded-full px-3 py-1 text-xs font-bold shadow-lg" style="background-color:var(--color-secondary); color: #0f172a">
+      <!-- Price badge — repositioned bottom-start for visual harmony -->
+      <div class="absolute start-3 bottom-3">
+        <span class="rounded-full px-3 py-1 text-xs font-bold tabular-nums shadow-lg" style="background-color:var(--color-secondary); color: #0f172a">
           {{ formatPrice(dish.price) }}
         </span>
       </div>
-      <!-- Tags top-left -->
-      <div v-if="dish.tags?.length" class="absolute left-3 top-3 flex flex-wrap gap-1">
+      <!-- Tags top-start -->
+      <div v-if="dish.tags?.length" class="absolute start-3 top-3 flex flex-wrap gap-1">
         <span
           v-for="tag in dish.tags.slice(0,2)"
           :key="tag"
@@ -190,11 +190,11 @@
           style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
-          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
+          <button class="ui-press flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
             <AppIcon name="minus" class="h-3.5 w-3.5" />
           </button>
           <span class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
-          <button class="flex h-6 w-6 items-center justify-center transition active:scale-90" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
+          <button class="ui-press flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
@@ -218,7 +218,7 @@
        ══════════════════════════════════════════════════════ -->
   <div
     v-else
-    class="group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none"
+    class="ui-reveal group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
     role="button"
     tabindex="0"
     :aria-label="dish.name"
@@ -243,20 +243,20 @@
     <div class="shrink-0" @click.stop>
       <div v-if="canOrder && qtyInCart > 0" class="flex items-center gap-1">
         <button
-          class="flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 active:scale-90"
+          class="ui-press flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.decreaseQty')"
           @click.stop="handleDecrement"
         ><AppIcon name="minus" class="h-3 w-3" /></button>
         <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white">{{ qtyInCart }}</span>
         <button
-          class="flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 active:scale-90"
+          class="ui-press flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.increaseQty')"
           @click.stop="handleAdd"
         ><AppIcon name="plus" class="h-3 w-3" /></button>
       </div>
       <button
         v-else-if="canOrder"
-        class="flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition hover:brightness-110 active:scale-90"
+        class="ui-press flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
         style="background-color:var(--color-secondary)"
         :aria-label="t('dishPage.add')"
         @click.stop="handleAdd"

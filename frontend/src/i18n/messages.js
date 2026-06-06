@@ -88,7 +88,8 @@ export const messages = {
       title: "Something went wrong",
       body: "An unexpected error occurred. Reload the page to continue — your data is safe.",
       reload: "Reload page",
-      goHome: "Go home"
+      goHome: "Go home",
+      details: "Error details"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -383,6 +384,7 @@ export const messages = {
       notCancellable: "This reservation can no longer be cancelled online.",
     },
     deliveryTracker: {
+      kicker: "Live delivery",
       title: "Driver tracking",
       driverUnnamed: "Your driver",
       online: "Online now",
@@ -391,6 +393,7 @@ export const messages = {
       to: "To",
       call: "Call driver",
       viewMap: "View on map",
+      mapAriaLabel: "Live driver location map",
       eta: "~{min} min away",
       rateDriver: "Rate your driver",
       ratingNote: "Add a note (optional)",
@@ -1525,6 +1528,8 @@ export const messages = {
       labelPlaceholder: "e.g. Christmas Day",
       add: "Add",
       empty: "No closure dates set — your restaurant follows the weekly schedule only.",
+      emptyTitle: "No closure dates set",
+      emptyBody: "Your restaurant follows the weekly schedule only.",
       past: "Past",
       today: "Today",
       loadFailed: "Could not load closure dates",
@@ -3620,7 +3625,8 @@ export const messages = {
       title: "Une erreur est survenue",
       body: "Une erreur inattendue s'est produite. Rechargez la page pour continuer — vos donnees sont en securite.",
       reload: "Recharger la page",
-      goHome: "Accueil"
+      goHome: "Accueil",
+      details: "Details de l'erreur"
     },
     landingLayout: {
       kicker: "Resto Menu",
@@ -3915,6 +3921,7 @@ export const messages = {
       notCancellable: "Cette reservation ne peut plus etre annulee en ligne.",
     },
     deliveryTracker: {
+      kicker: "Livraison en direct",
       title: "Suivi du livreur",
       driverUnnamed: "Votre livreur",
       online: "En ligne",
@@ -3923,6 +3930,7 @@ export const messages = {
       to: "A",
       call: "Appeler le livreur",
       viewMap: "Voir sur la carte",
+      mapAriaLabel: "Carte de localisation du livreur",
       eta: "~{min} min",
       rateDriver: "Notez votre livreur",
       ratingNote: "Ajouter une note (optionnel)",
@@ -5057,6 +5065,8 @@ export const messages = {
       labelPlaceholder: "ex. Jour de Noel",
       add: "Ajouter",
       empty: "Aucune date de fermeture definie — votre restaurant suit uniquement le planning hebdomadaire.",
+      emptyTitle: "Aucune date de fermeture definie",
+      emptyBody: "Votre restaurant suit uniquement le planning hebdomadaire.",
       past: "Passee",
       today: "Aujourd'hui",
       loadFailed: "Impossible de charger les dates de fermeture",
