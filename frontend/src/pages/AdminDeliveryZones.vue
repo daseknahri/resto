@@ -5,7 +5,7 @@
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="ui-kicker">{{ t('adminZones.kicker') }}</p>
-          <h1 class="text-xl font-semibold tracking-tight text-white md:text-2xl">
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">
             {{ t('adminZones.title') }}
           </h1>
           <p class="ui-subtle mt-0.5 text-xs">{{ t('adminZones.subtitle') }}</p>
@@ -22,33 +22,46 @@
       </div>
     </header>
 
-    <!-- Loading: skeleton table -->
-    <div v-if="loading" class="ui-table-wrap">
-      <table class="w-full min-w-[640px] text-sm">
-        <thead class="bg-slate-800/60 text-xs text-slate-400">
-          <tr>
-            <th scope="col" class="px-4 py-3 text-start">#</th>
-            <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colName') }}</th>
-            <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colCity') }}</th>
-            <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colRadius') }}</th>
-            <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
-            <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
-            <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colActions') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-700/40">
-          <tr v-for="i in 4" :key="i" class="animate-pulse">
-            <td class="px-4 py-3"><div class="h-3 w-4 rounded bg-slate-700/60" /></td>
-            <td class="px-4 py-3"><div class="h-3 w-28 rounded bg-slate-700/60" /></td>
-            <td class="px-4 py-3"><div class="h-3 w-20 rounded bg-slate-800/60" /></td>
-            <td class="px-4 py-3"><div class="ms-auto h-3 w-10 rounded bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="mx-auto h-3 w-10 rounded bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="mx-auto h-4 w-14 rounded-full bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="ms-auto h-3 w-16 rounded bg-slate-800/40" /></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- Loading: skeleton (mobile cards + desktop table) -->
+    <template v-if="loading">
+      <div class="block md:hidden space-y-2">
+        <div v-for="i in 4" :key="i" class="animate-pulse ui-panel px-4 py-3 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="h-3 w-28 rounded bg-slate-700/60" />
+            <div class="h-4 w-14 rounded-full bg-slate-800/50" />
+          </div>
+          <div class="h-3 w-20 rounded bg-slate-800/60" />
+          <div class="h-3 w-10 rounded bg-slate-800/50" />
+        </div>
+      </div>
+
+      <div class="ui-table-wrap hidden md:block">
+        <table class="w-full min-w-[640px] text-sm">
+          <thead class="bg-slate-800/60 text-xs text-slate-400">
+            <tr>
+              <th scope="col" class="px-4 py-3 text-start">#</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colName') }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colCity') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colRadius') }}</th>
+              <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
+              <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colActions') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/40">
+            <tr v-for="i in 4" :key="i" class="animate-pulse">
+              <td class="px-4 py-3"><div class="h-3 w-4 rounded bg-slate-700/60" /></td>
+              <td class="px-4 py-3"><div class="h-3 w-28 rounded bg-slate-700/60" /></td>
+              <td class="px-4 py-3"><div class="h-3 w-20 rounded bg-slate-800/60" /></td>
+              <td class="px-4 py-3"><div class="ms-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="mx-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="mx-auto h-4 w-14 rounded-full bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="ms-auto h-3 w-16 rounded bg-slate-800/40" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
 
     <!-- Error -->
     <div
@@ -79,8 +92,49 @@
       >{{ t('adminZones.newZone') }}</button>
     </div>
 
-    <!-- Zones table -->
-    <div v-else class="ui-table-wrap">
+    <!-- Zones: mobile cards + desktop table -->
+    <template v-else>
+      <!-- Mobile cards -->
+      <div class="block md:hidden space-y-2">
+        <div
+          v-for="(zone, index) in zones"
+          :key="zone.id"
+          class="ui-panel ui-reveal px-4 py-3 space-y-1.5"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-medium text-slate-200 truncate">{{ zone.name }}</span>
+            <span
+              class="ui-status-pill shrink-0"
+              :class="zone.is_active ? 'border-emerald-500/30 text-emerald-300' : 'text-slate-400'"
+            >
+              {{ zone.is_active ? t('adminZones.active') : t('adminZones.inactive') }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">{{ zone.city }}</p>
+          <p class="text-xs text-slate-500 tabular-nums">
+            {{ t('adminZones.radiusKm', { value: zone.approx_radius_km }) }}
+            · {{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}
+          </p>
+          <div class="flex items-center gap-1 pt-0.5">
+            <button
+              class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-sky-400 transition hover:bg-sky-400/10 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400/60"
+              :aria-label="`${t('adminZones.edit')} ${zone.name}`"
+              @click="openEdit(zone)"
+            >{{ t('adminZones.edit') }}</button>
+            <button
+              class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
+              :disabled="deletingId === zone.id"
+              :aria-label="`${t('adminZones.delete')} ${zone.name}`"
+              :aria-busy="deletingId === zone.id ? 'true' : undefined"
+              @click="deleteZone(zone)"
+            >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop table -->
+      <div class="ui-table-wrap hidden md:block">
       <table class="w-full min-w-[640px] text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
@@ -105,16 +159,16 @@
               <span class="block truncate">{{ zone.name }}</span>
             </td>
             <td class="px-4 py-3 text-slate-400">{{ zone.city }}</td>
-            <td class="px-4 py-3 text-end text-slate-400 tabular-nums">{{ zone.approx_radius_km }} km</td>
+            <td class="px-4 py-3 text-end text-slate-400 tabular-nums">{{ t('adminZones.radiusKm', { value: zone.approx_radius_km }) }}</td>
             <td class="px-4 py-3 text-center text-xs text-slate-400 tabular-nums">
               {{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}
             </td>
             <td class="px-4 py-3 text-center">
               <span
-                class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                class="ui-status-pill"
                 :class="zone.is_active
-                  ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                  : 'border-slate-600 bg-slate-700/50 text-slate-400'"
+                  ? 'border-emerald-500/30 text-emerald-300'
+                  : 'text-slate-400'"
               >
                 {{ zone.is_active ? t('adminZones.active') : t('adminZones.inactive') }}
               </span>
@@ -130,6 +184,7 @@
                   class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
                   :disabled="deletingId === zone.id"
                   :aria-label="`${t('adminZones.delete')} ${zone.name}`"
+                  :aria-busy="deletingId === zone.id ? 'true' : undefined"
                   @click="deleteZone(zone)"
                 >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
               </div>
@@ -138,6 +193,7 @@
         </tbody>
       </table>
     </div>
+    </template>
 
     <!-- Zone form drawer -->
     <Teleport to="body">
@@ -158,7 +214,7 @@
             role="dialog"
             aria-modal="true"
             aria-labelledby="admin-delivery-zones-form-dialog-title"
-            class="w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50"
+            class="ui-panel w-full max-w-lg overflow-y-auto p-6"
             style="max-height: 90dvh"
           >
             <h2
@@ -243,7 +299,7 @@
               <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1" for="az-polygon">
                   {{ t('adminZones.fieldPolygon') }}
-                  <span class="ms-1 text-slate-600">— JSON array of {lat, lng}</span>
+                  <span class="ms-1 text-slate-600">{{ t('adminZones.polygonHint') }}</span>
                 </label>
                 <textarea
                   id="az-polygon"
@@ -265,7 +321,7 @@
               <div>
                 <label class="block text-xs font-medium text-slate-400 mb-1" for="az-fee-tiers">
                   {{ t('adminZones.fieldFeeTiers') }}
-                  <span class="ms-1 text-slate-600">— JSON array of {km_up_to, fee}</span>
+                  <span class="ms-1 text-slate-600">{{ t('adminZones.feeTiersLabelHint') }}</span>
                 </label>
                 <textarea
                   id="az-fee-tiers"
@@ -289,6 +345,8 @@
                 <input
                   v-model="form.is_active"
                   type="checkbox"
+                  role="switch"
+                  :aria-checked="form.is_active ? 'true' : 'false'"
                   class="h-4 w-4 accent-[var(--color-secondary,#f59e0b)]"
                 />
                 <span class="text-sm text-slate-300">{{ t('adminZones.fieldActive') }}</span>
@@ -332,6 +390,7 @@ const fetchError = ref(false);
 const zones = ref([]);
 const showForm = ref(false);
 const formDialogRef = ref(null);
+const _returnFocus = ref(null);
 
 const FOCUSABLE_DZ = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -359,6 +418,8 @@ watch(showForm, async (open) => {
     document.addEventListener('keydown', trapFormFocus);
   } else {
     document.removeEventListener('keydown', trapFormFocus);
+    _returnFocus.value?.focus();
+    _returnFocus.value = null;
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapFormFocus));
@@ -396,6 +457,7 @@ const fetchZones = async () => {
 };
 
 const openCreate = () => {
+  _returnFocus.value = document.activeElement;
   editing.value = null;
   form.value = defaultForm();
   polygonJson.value = '[]';
@@ -406,6 +468,7 @@ const openCreate = () => {
 };
 
 const openEdit = (zone) => {
+  _returnFocus.value = document.activeElement;
   editing.value = zone;
   form.value = {
     name: zone.name,

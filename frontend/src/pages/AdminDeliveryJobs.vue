@@ -12,9 +12,11 @@
           <span v-if="!loading" class="ui-chip tabular-nums">
             {{ t('adminDeliveryJobs.totalLabel', { count: jobs.length }) }}
           </span>
+          <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t('common.loading') : '' }}</span>
           <button
             class="ui-btn-outline ui-press ui-touch-target px-4 py-2 text-sm disabled:opacity-50"
             :disabled="loading"
+            :aria-busy="loading"
             @click="fetchJobs"
           >{{ loading ? '…' : t('adminDeliveryJobs.refresh') }}</button>
         </div>
@@ -22,13 +24,14 @@
     </header>
 
     <!-- Status filter chips -->
-    <div class="ui-scroll-row min-w-0" role="group" :aria-label="t('adminDeliveryJobs.filterLabel')">
+    <div class="ui-scroll-row min-w-0" role="radiogroup" :aria-label="t('adminDeliveryJobs.filterLabel')">
       <button
         v-for="s in STATUSES"
         :key="s"
-        class="ui-state-chip shrink-0 ui-press"
+        role="radio"
+        class="ui-state-chip shrink-0 ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
         :data-active="statusFilter === s ? 'true' : 'false'"
-        :aria-pressed="statusFilter === s"
+        :aria-checked="statusFilter === s"
         @click="setFilter(s)"
       >{{ s === 'all' ? t('adminDeliveryJobs.all') : statusLabel(s) }}</button>
     </div>
@@ -44,6 +47,7 @@
 
     <!-- Error -->
     <div v-else-if="fetchError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ t('adminDeliveryJobs.fetchError') }}</p>
       <button
         class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
@@ -80,13 +84,13 @@
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
               <td class="px-4 py-3 font-mono text-xs text-slate-300">#{{ j.order_number }}</td>
-              <td class="px-4 py-3 text-slate-200 max-w-[160px] truncate">{{ j.tenant_name || ('#' + j.tenant_id) }}</td>
+              <td class="px-4 py-3 text-slate-200 max-w-[160px] truncate" :title="j.tenant_name || ('#' + j.tenant_id)">{{ j.tenant_name || ('#' + j.tenant_id) }}</td>
               <td class="px-4 py-3 text-slate-400">
                 <span v-if="j.driver" class="truncate">{{ j.driver.name || j.driver.phone || ('#' + j.driver.id) }}</span>
                 <span v-else class="italic text-slate-600">{{ t('adminDeliveryJobs.unassigned') }}</span>
               </td>
               <td class="px-4 py-3">
-                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" :class="statusClass(j.status)">{{ statusLabel(j.status) }}</span>
+                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status)">{{ statusLabel(j.status) }}</span>
               </td>
               <td class="px-4 py-3 text-end tabular-nums text-emerald-300">{{ fmtMoney(j.driver_payout) }}</td>
               <td class="px-4 py-3 text-end text-xs text-slate-500 tabular-nums">{{ fmtDate(j.created_at) }}</td>
@@ -100,14 +104,14 @@
         <li
           v-for="(j, index) in jobs"
           :key="j.id"
-          class="ui-admin-card ui-reveal ui-surface-lift"
+          class="ui-admin-card ui-reveal"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-mono text-xs text-slate-400">#{{ j.order_number }}</span>
-                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="statusClass(j.status)">{{ statusLabel(j.status) }}</span>
+                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status)">{{ statusLabel(j.status) }}</span>
               </div>
               <p class="mt-0.5 text-sm font-medium text-slate-200 truncate">{{ j.tenant_name || ('#' + j.tenant_id) }}</p>
               <p class="mt-0.5 text-xs text-slate-500 truncate">
@@ -130,6 +134,7 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import AppIcon from '../components/AppIcon.vue';
 
 const { t, currentLocale } = useI18n();
 

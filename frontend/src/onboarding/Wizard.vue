@@ -1,6 +1,6 @@
-﻿<template>
-  <div class="min-h-screen bg-slate-950 px-4 py-6 text-slate-50 ui-safe-bottom">
-    <div class="mx-auto max-w-6xl space-y-6">
+<template>
+  <div class="ui-shell ui-safe-bottom">
+    <div class="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <!-- Page header -->
       <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -35,10 +35,10 @@
                 v-for="(step, index) in steps"
                 :key="step.id"
                 type="button"
-                class="ui-journey-step ui-reveal flex min-w-[200px] items-start gap-3 lg:min-w-0"
+                class="ui-journey-step ui-reveal shrink-0 flex min-w-[200px] items-start gap-3 lg:min-w-0"
                 :data-active="current === step.id ? 'true' : undefined"
                 :data-complete="(step.id < current || (published && step.id === steps.length)) ? 'true' : undefined"
-                :aria-pressed="current === step.id"
+                :aria-current="current === step.id ? 'step' : undefined"
                 :aria-label="`${step.id}. ${t(step.titleKey)}`"
                 :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
                 @click="current = step.id"
@@ -46,7 +46,7 @@
                 <!-- Step number badge -->
                 <span
                   class="ui-step-badge shrink-0"
-                  :class="step.id < current || (published && step.id === steps.length) ? 'border-emerald-500/40 bg-emerald-500/15 !text-emerald-300' : ''"
+                  :data-complete="(step.id < current || (published && step.id === steps.length)) ? 'true' : undefined"
                   aria-hidden="true"
                 >
                   {{ step.id }}
@@ -62,7 +62,7 @@
                     </p>
                     <span
                       v-if="step.id < current || (published && step.id === steps.length)"
-                      class="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300"
+                      class="ui-chip shrink-0 text-emerald-300"
                     >
                       {{ t("common.saved") }}
                     </span>
@@ -75,8 +75,8 @@
         </aside>
 
         <!-- Active step content -->
-        <main class="min-w-0 space-y-3">
-          <div class="ui-section-band p-1.5 md:p-2">
+        <main class="min-w-0 space-y-3" aria-live="polite">
+          <div class="ui-panel p-4">
             <KeepAlive>
               <component :is="currentComponent" @next="next" @back="back" @publish="publish" />
             </KeepAlive>

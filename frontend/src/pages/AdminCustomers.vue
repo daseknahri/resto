@@ -5,7 +5,7 @@
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t('adminCustomers.kicker') }}</p>
-          <h1 class="ui-page-title text-xl md:text-2xl leading-tight">{{ t('adminCustomers.title') }}</h1>
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">{{ t('adminCustomers.title') }}</h1>
           <p class="mt-0.5 ui-subtle text-xs hidden sm:block">{{ t('adminCustomers.subtitle') }}</p>
         </div>
         <span v-if="!loading" class="ui-chip shrink-0 tabular-nums">
@@ -39,8 +39,12 @@
         <button
           class="ui-btn-outline ui-press ui-touch-target px-4 py-2 text-sm disabled:opacity-50"
           :disabled="loading"
+          :aria-busy="loading || undefined"
           @click="reload"
-        >{{ loading ? '…' : t('adminCustomers.refresh') }}</button>
+        >
+          <span v-if="loading" class="sr-only">{{ t('common.loading') }}</span>
+          {{ loading ? '…' : t('adminCustomers.refresh') }}
+        </button>
       </div>
     </div>
 
@@ -57,7 +61,7 @@
     <div v-else-if="fetchError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
       <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ t('adminCustomers.fetchError') }}</p>
-      <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press" @click="reload">
+      <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press ui-touch-target" @click="reload">
         {{ t('common.retry') }}
       </button>
     </div>
@@ -88,12 +92,16 @@
               :key="c.id"
               class="ui-reveal cursor-pointer transition-colors hover:bg-slate-800/30"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              tabindex="0"
+              role="button"
               @click="openDetail(c)"
+              @keydown.enter="openDetail(c)"
+              @keydown.space.prevent="openDetail(c)"
             >
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <span class="font-medium text-slate-200 truncate">{{ c.name || t('adminCustomers.unnamed') }}</span>
-                  <span v-if="c.is_driver" class="shrink-0 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">{{ t('adminCustomers.driver') }}</span>
+                  <span v-if="c.is_driver" class="ui-chip text-[10px] shrink-0 border-emerald-500/40 text-emerald-300">{{ t('adminCustomers.driver') }}</span>
                 </div>
               </td>
               <td class="px-4 py-3">
@@ -101,6 +109,7 @@
                   <span class="flex items-center gap-1.5 text-slate-300">
                     {{ c.phone || '—' }}
                     <span v-if="c.phone && c.phone_verified" class="text-[10px] text-emerald-400" aria-hidden="true">✓</span>
+                    <span v-if="c.phone && c.phone_verified" class="sr-only">{{ t('adminCustomers.verified') }}</span>
                   </span>
                   <span v-if="c.email" class="text-xs text-slate-500 truncate">{{ c.email }}</span>
                 </div>
@@ -124,13 +133,17 @@
           :key="c.id"
           class="ui-admin-card ui-reveal ui-surface-lift cursor-pointer"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+          tabindex="0"
+          role="button"
           @click="openDetail(c)"
+          @keydown.enter="openDetail(c)"
+          @keydown.space.prevent="openDetail(c)"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-medium text-slate-200 truncate">{{ c.name || t('adminCustomers.unnamed') }}</span>
-                <span v-if="c.is_driver" class="shrink-0 rounded-full bg-emerald-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">{{ t('adminCustomers.driver') }}</span>
+                <span v-if="c.is_driver" class="ui-chip text-[10px] shrink-0 border-emerald-500/40 text-emerald-300">{{ t('adminCustomers.driver') }}</span>
               </div>
               <p class="mt-0.5 text-xs text-slate-500 truncate">{{ c.phone || c.email || '' }}</p>
             </div>
@@ -179,12 +192,19 @@
             leave-active-class="transition-transform duration-150"
             leave-to-class="ltr:translate-x-full rtl:-translate-x-full"
           >
-            <aside v-if="selected" class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5">
+            <!-- TODO: requires logic change — focus trap and focus restore on slide-over open/close (WCAG 2.1.2) -->
+            <aside
+              v-if="selected"
+              class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="customer-detail-title"
+            >
               <!-- Header -->
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="ui-kicker">{{ t('adminCustomers.detailKicker') }}</p>
-                  <h2 class="text-lg font-semibold text-white truncate">{{ selected.name || t('adminCustomers.unnamed') }}</h2>
+                  <h2 id="customer-detail-title" class="text-lg font-semibold text-white truncate">{{ selected.name || t('adminCustomers.unnamed') }}</h2>
                   <p class="text-xs text-slate-500 truncate">{{ selected.phone || selected.email || ('#' + selected.id) }}</p>
                 </div>
                 <button class="ui-press shrink-0 rounded-full p-1.5 text-slate-500 hover:text-slate-300 ui-touch-target" :aria-label="t('common.close')" @click="selected = null">
@@ -232,16 +252,18 @@
                 <div class="ui-admin-card space-y-2.5">
                   <p class="ui-kicker">{{ t('adminCustomers.creditTitle') }}</p>
                   <div class="flex gap-2">
-                    <input v-model="creditAmount" type="number" step="0.01" min="0.01" class="ui-input flex-1 text-sm" :placeholder="t('adminCustomers.creditAmount')" />
+                    <input v-model="creditAmount" type="number" step="0.01" min="0.01" class="ui-input flex-1 text-sm" :placeholder="t('adminCustomers.creditAmount')" :aria-label="t('adminCustomers.creditAmount')" />
                     <button
                       class="ui-btn-primary ui-press shrink-0 px-4 py-2 text-sm disabled:opacity-50"
                       :disabled="crediting || !creditAmount"
+                      :aria-busy="crediting || undefined"
                       @click="creditWallet"
                     >
+                      <span v-if="crediting" class="sr-only">{{ t('common.loading') }}</span>
                       {{ crediting ? '…' : t('adminCustomers.creditBtn') }}
                     </button>
                   </div>
-                  <input v-model="creditNote" type="text" maxlength="200" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.creditNote')" />
+                  <input v-model="creditNote" type="text" maxlength="200" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.creditNote')" :aria-label="t('adminCustomers.creditNote')" />
                   <p v-if="creditError" class="text-xs text-red-300" role="alert">{{ creditError }}</p>
                 </div>
 

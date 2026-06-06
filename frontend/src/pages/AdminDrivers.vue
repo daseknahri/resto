@@ -24,7 +24,7 @@
           <div class="mx-auto h-2.5 w-20 rounded bg-slate-800/50" />
         </div>
       </div>
-      <div class="ui-table-wrap">
+      <div class="ui-table-wrap hidden md:block">
         <table class="w-full min-w-[640px] text-sm">
           <thead class="bg-slate-800/60 text-xs text-slate-400">
             <tr>
@@ -107,7 +107,7 @@
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminDrivers.colRating') }}</th>
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminDrivers.colOwed') }}</th>
               <th scope="col" class="px-4 py-3 text-end">{{ t('adminDrivers.colSince') }}</th>
-              <th scope="col" class="px-4 py-3 text-end"></th>
+              <th scope="col" class="px-4 py-3 text-end" :aria-label="t('adminDrivers.colActions')"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/40">
@@ -117,7 +117,9 @@
               class="ui-reveal cursor-pointer hover:bg-slate-800/30 transition-colors"
               :class="{ 'bg-amber-500/5': !d.approved }"
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              tabindex="0"
               @click="openDriver(d)"
+              @keydown.enter.space="openDriver(d)"
             >
               <td class="px-4 py-3 text-slate-200 font-medium">
                 <span class="truncate block">{{ d.name || t('adminDrivers.unnamed') }}</span>
@@ -149,12 +151,12 @@
                   rel="noopener noreferrer"
                   class="ms-1 text-[10px] text-sky-400 hover:text-sky-300"
                   :aria-label="t('adminDrivers.viewOnMap')"
-                >📍</a>
+                ><span aria-hidden="true">📍</span></a>
               </td>
               <td class="px-4 py-3 text-end tabular-nums text-slate-300">{{ d.total_jobs }}</td>
               <td class="px-4 py-3 text-end tabular-nums text-emerald-400">{{ d.completed_jobs }}</td>
               <td class="px-4 py-3 text-end">
-                <span v-if="d.avg_rating" class="text-amber-300 tabular-nums">★ {{ d.avg_rating }}</span>
+                <span v-if="d.avg_rating" class="text-amber-300 tabular-nums" :aria-label="t('adminDrivers.ratingLabel', { value: d.avg_rating })"><span aria-hidden="true">★</span> {{ d.avg_rating }}</span>
                 <span v-else class="text-slate-600">—</span>
               </td>
               <td class="px-4 py-3 text-end tabular-nums" :class="Number(d.owed) > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'">
@@ -175,7 +177,9 @@
           class="ui-admin-card ui-reveal ui-surface-lift cursor-pointer"
           :class="{ 'border-amber-500/30 bg-amber-500/5': !d.approved }"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+          tabindex="0"
           @click="openDriver(d)"
+          @keydown.enter.space="openDriver(d)"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -215,7 +219,7 @@
             leave-active-class="transition-transform duration-150"
             leave-to-class="ltr:translate-x-full rtl:-translate-x-full"
           >
-            <aside v-if="selected" class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5">
+            <aside v-if="selected" class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5" role="dialog" :aria-label="selected.name || t('adminDrivers.unnamed')" aria-modal="true" @keydown.esc="selected = null">
               <!-- Header -->
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -226,6 +230,7 @@
                 <button
                   class="ui-press shrink-0 rounded-full p-1.5 text-slate-500 hover:text-slate-300 ui-touch-target"
                   :aria-label="t('common.close')"
+                  autofocus
                   @click="selected = null"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
@@ -285,8 +290,8 @@
                 <div v-if="Number(detail.owed) > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
                   <p class="text-sm font-semibold text-slate-200">{{ t('adminDrivers.recordPayout') }}</p>
                   <div class="flex gap-2">
-                    <input v-model="payAmount" type="number" step="0.01" min="0.01" :max="detail.owed" class="ui-input flex-1 text-sm" :placeholder="t('adminDrivers.amount')" />
-                    <select v-model="payMethod" class="ui-input text-sm">
+                    <input v-model="payAmount" type="number" step="0.01" min="0.01" :max="detail.owed" class="ui-input flex-1 text-sm" :placeholder="t('adminDrivers.amount')" :aria-label="t('adminDrivers.amount')" />
+                    <select v-model="payMethod" class="ui-input text-sm" :aria-label="t('adminDrivers.payMethod')">
                       <option value="cash">{{ t('adminDrivers.methodCash') }}</option>
                       <option value="transfer">{{ t('adminDrivers.methodTransfer') }}</option>
                     </select>
