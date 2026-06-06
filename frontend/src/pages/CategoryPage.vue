@@ -68,7 +68,7 @@
           style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.7), transparent)"
         />
         <!-- Image -->
-        <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block" :aria-label="dish.name">
+        <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block" aria-hidden="true" tabindex="-1">
           <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
             <img
               :src="dish.image_url || placeholder"
@@ -83,7 +83,8 @@
             <!-- In-cart badge -->
             <div v-if="cartQty(dish) > 0" class="absolute start-3 top-3">
               <span class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-950 shadow-lg">
-                <AppIcon name="check" class="h-3 w-3" aria-hidden="true" />{{ cartQty(dish) }}&times;
+                <AppIcon name="check" class="h-3 w-3" aria-hidden="true" /><span aria-hidden="true">{{ cartQty(dish) }}&times;</span>
+                <span class="sr-only">{{ t('category.inCartBadge', { count: cartQty(dish) }) }}</span>
               </span>
             </div>
             <!-- Price badge -->
@@ -102,22 +103,21 @@
             <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
           </div>
 
-          <div v-if="dish.tags?.length" class="flex flex-wrap gap-1">
-            <span
+          <ul v-if="dish.tags?.length" class="flex flex-wrap gap-1 list-none p-0 m-0">
+            <li
               v-for="tag in dish.tags"
               :key="tag"
-              class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400"
-            >{{ t(`dishPage.tag_${tag}`) }}</span>
-          </div>
+            ><span class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400">{{ t(`dishPage.tag_${tag}`) }}</span></li>
+          </ul>
 
-          <div v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5">
-            <span v-if="dish.options?.length" class="ui-data-strip tabular-nums text-[11px]">
+          <ul v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5 list-none p-0 m-0">
+            <li v-if="dish.options?.length"><span class="ui-data-strip tabular-nums text-[11px]">
               {{ t("dishPage.optionsCount", { count: dish.options.length }) }}
-            </span>
-            <span v-if="dish.option_groups?.length" class="ui-data-strip tabular-nums text-[11px]">
+            </span></li>
+            <li v-if="dish.option_groups?.length"><span class="ui-data-strip tabular-nums text-[11px]">
               {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}
-            </span>
-          </div>
+            </span></li>
+          </ul>
 
           <div class="flex gap-2">
             <button
@@ -151,11 +151,11 @@
       </div>
       <div class="flex flex-wrap justify-center gap-2">
         <button class="ui-btn-outline justify-center" @click="search = ''">
-          <AppIcon name="close" class="h-3.5 w-3.5" />
+          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("common.clear") }}
         </button>
         <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
-          <AppIcon name="menu" class="h-3.5 w-3.5" />
+          <AppIcon name="menu" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("customerLayout.navMenu") }}
         </RouterLink>
       </div>
@@ -164,7 +164,7 @@
     <div v-if="menu.error" class="ui-reveal flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
       <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
-      <button class="ui-press shrink-0 rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60" @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)">{{ t('common.retry') }}</button>
+      <button class="ui-press ui-touch-target shrink-0 rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60" @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)">{{ t('common.retry') }}</button>
     </div>
   </div>
 </template>

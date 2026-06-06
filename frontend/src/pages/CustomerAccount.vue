@@ -134,7 +134,7 @@
               :aria-label="t('common.signOut')"
               @click="handleLogout"
             >
-              <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" />
+              <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" aria-hidden="true" />
             </button>
           </div>
 
@@ -204,7 +204,7 @@
       </header>
 
       <!-- ──────────────── Live order banner (always visible) ──────────────── -->
-      <div v-if="!loadingOrders && activeOrders.length" class="px-3 pb-2 space-y-2 bg-slate-950">
+      <div v-if="!loadingOrders && activeOrders.length" class="px-3 pb-2 space-y-2 bg-slate-950" aria-live="polite" aria-atomic="false">
         <div
           v-for="order in activeOrders"
           :key="order.order_number"
@@ -237,9 +237,11 @@
         <nav class="flex" role="tablist" :aria-label="t('customerAccount.tabNav')">
           <button
             v-for="tab in TABS"
+            :id="'tab-' + tab.id"
             :key="tab.id"
             role="tab"
             :aria-selected="activeTab === tab.id"
+            aria-controls="customer-account-tabpanel"
             class="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 transition-colors"
             :class="activeTab === tab.id ? 'text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
             @click="activeTab = tab.id"
@@ -269,7 +271,7 @@
       </div>
 
       <!-- ──────────────── Tab content ──────────────── -->
-      <div class="px-3 py-3 pb-28 space-y-3" role="tabpanel" :aria-label="TABS.find(tab => tab.id === activeTab)?.label">
+      <div id="customer-account-tabpanel" class="px-3 py-3 pb-28 space-y-3" role="tabpanel" :aria-labelledby="'tab-' + activeTab">
 
         <!-- ════════════ OVERVIEW TAB ════════════ -->
         <template v-if="activeTab === 'overview'">
@@ -606,7 +608,7 @@
         <template v-else-if="activeTab === 'wallet'">
 
           <!-- Verify-phone gate: no verified phone → no usable wallet -->
-          <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4">
+          <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4" role="status">
             <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10">
               <AppIcon name="wallet" class="h-4 w-4 text-amber-300" />
             </div>
@@ -646,8 +648,8 @@
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
             <div class="rounded-2xl bg-white p-3">
               <img v-if="payCodeImg" :src="payCodeImg" :alt="t('customerAccount.payCodeTitle')" class="h-44 w-44" />
-              <div v-else class="flex h-44 w-44 items-center justify-center">
-                <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+              <div v-else class="flex h-44 w-44 items-center justify-center" role="status" :aria-label="t('common.loading')">
+                <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
               </div>
             </div>
             <p class="text-center text-[11px] text-slate-500">{{ t('customerAccount.payCodeHint') }}</p>
@@ -928,6 +930,7 @@
                           ? 'text-amber-400'
                           : 'text-slate-700 hover:text-slate-500'"
                         :aria-label="t('common.rateNStars', { n: s })"
+                        :aria-pressed="s <= getDraft(order.order_number).score"
                         @mouseenter="setHover(order.order_number, s)"
                         @mouseleave="setHover(order.order_number, 0)"
                         @click="setDraftScore(order.order_number, s)"
@@ -936,6 +939,8 @@
                         v-if="getDraft(order.order_number).score || reviewHover[order.order_number]"
                         class="ms-2.5 text-xs font-semibold"
                         :class="getDraft(order.order_number).score ? 'text-amber-400' : 'text-slate-500'"
+                        aria-live="polite"
+                        role="status"
                       >{{ reviewScoreLabels[reviewHover[order.order_number] || getDraft(order.order_number).score] }}</span>
                     </div>
                   </div>

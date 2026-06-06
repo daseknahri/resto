@@ -77,7 +77,8 @@ export const messages = {
       rateNStars: "Rate {n} out of 5",
       skipToMain: "Skip to main content",
       offlineBanner: "No internet connection — changes may not save",
-      offlineBackOnline: "Back online"
+      offlineBackOnline: "Back online",
+      opensInNewTab: "(opens in new tab)"
     },
     confirmModal: {
       defaultTitle: "Are you sure?",
@@ -483,7 +484,8 @@ export const messages = {
       fasterSupport: "For faster support, include:",
       itemTenantSlug: "Tenant slug",
       itemAccountEmail: "Account email",
-      itemIssueSummary: "Short issue summary"
+      itemIssueSummary: "Short issue summary",
+      notConfigured: "Not configured"
     },
     privacyPolicy: {
       kicker: "Legal",
@@ -1140,6 +1142,7 @@ export const messages = {
       bonusNote: "Note",
       bonusNotePlaceholder: "e.g. Welcome bonus",
       defaultNote: "Platform bonus",
+      bonusSaving: "Issuing…",
       bonusIssue: "Issue",
       cancel: "Cancel",
       bonusSuccess: "Bonus issued successfully.",
@@ -2185,7 +2188,8 @@ export const messages = {
       searchPlaceholder: "Search dish in this category...",
       viewDish: "View dish details",
       noMatch: "No dishes match your search in this category.",
-      loading: "Loading dishes..."
+      loading: "Loading dishes...",
+      inCartBadge: "{count} in cart"
     },
     leadCapture: {
       kicker: "Lead intake",
@@ -3300,6 +3304,7 @@ export const messages = {
       totalTxns: "Total transactions",
       bonusIssued: "Total bonus issued",
       payments: "Total payments",
+      loaded: "Analytics data loaded.",
     },
     ownerRatings: {
       kicker: "Customer feedback",
@@ -3725,7 +3730,8 @@ export const messages = {
       rateNStars: "Noter {n} sur 5",
       skipToMain: "Aller au contenu principal",
       offlineBanner: "Pas de connexion — les modifications peuvent ne pas etre enregistrees",
-      offlineBackOnline: "Connexion retablie"
+      offlineBackOnline: "Connexion retablie",
+      opensInNewTab: "(ouvre dans un nouvel onglet)"
     },
     confirmModal: {
       defaultTitle: "Etes-vous sur ?",
@@ -4131,7 +4137,8 @@ export const messages = {
       fasterSupport: "Pour un support plus rapide, incluez :",
       itemTenantSlug: "Slug du tenant",
       itemAccountEmail: "E-mail du compte",
-      itemIssueSummary: "Resume court du probleme"
+      itemIssueSummary: "Resume court du probleme",
+      notConfigured: "Non configure"
     },
     privacyPolicy: {
       kicker: "Juridique",
@@ -4788,6 +4795,7 @@ export const messages = {
       bonusNote: "Note",
       bonusNotePlaceholder: "ex. Bonus de bienvenue",
       defaultNote: "Bonus plateforme",
+      bonusSaving: "Attribution…",
       bonusIssue: "Attribuer",
       cancel: "Annuler",
       bonusSuccess: "Bonus attribue avec succes.",
@@ -5802,7 +5810,8 @@ export const messages = {
       searchPlaceholder: "Rechercher un plat dans cette categorie...",
       viewDish: "Voir le detail du plat",
       noMatch: "Aucun plat ne correspond a votre recherche dans cette categorie.",
-      loading: "Chargement des plats..."
+      loading: "Chargement des plats...",
+      inCartBadge: "{count} dans le panier"
     },
     leadCapture: {
       kicker: "Reception des leads",
@@ -6965,6 +6974,7 @@ export const messages = {
       totalTxns: "Total transactions",
       bonusIssued: "Total bonus emis",
       payments: "Total paiements",
+      loaded: "Donnees analytiques chargees.",
     },
     ownerRatings: {
       kicker: "Retours clients",

@@ -22,7 +22,7 @@
           class="shrink-0 ui-btn-outline px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/50"
           @click="clearCart"
         >
-          <AppIcon name="close" class="h-3.5 w-3.5" />
+          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t('common.clear') }}
         </button>
       </div>
@@ -114,7 +114,7 @@
         >
           <p class="min-w-0 flex-1">{{ t('cartPage.unavailableItemsDetected', { items: unavailableNames.join(', ') }) }}</p>
           <button class="shrink-0 ui-btn-outline px-2.5 py-1 text-xs" @click="removeUnavailable">
-            <AppIcon name="close" class="h-3 w-3" />
+            <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
             {{ t('cartPage.removeUnavailableItems') }}
           </button>
         </div>
@@ -237,6 +237,7 @@
                   v-model="scheduledFor"
                   type="datetime-local"
                   :min="minScheduleDatetime"
+                  :aria-label="t('cartPage.scheduleLater')"
                   class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
                 />
                 <p class="text-[11px] text-slate-500">{{ t('cartPage.scheduleHint') }}</p>
@@ -320,6 +321,7 @@
                 <button
                   class="ui-btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-50"
                   :disabled="locating"
+                  aria-describedby="cart-location-error"
                   @click="useCurrentLocation"
                 >
                   <AppIcon name="location" class="h-4 w-4" />
@@ -337,6 +339,7 @@
                   </button>
                   <button
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+                    :aria-expanded="showMoreLocationOptions || !!deliveryLocationUrl"
                     @click="showMoreLocationOptions = !showMoreLocationOptions"
                   >
                     {{ t('cartPage.moreLocationOptions') }}
@@ -358,7 +361,7 @@
                     ? t('cartPage.locationReady', { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
                     : t('cartPage.noCoordinatesYet') }}
                 </p>
-                <p v-if="locationError" id="cart-location-error" class="text-xs text-red-300">{{ locationError }}</p>
+                <p v-if="locationError" id="cart-location-error" role="alert" class="text-xs text-red-300">{{ locationError }}</p>
 
                 <!-- More options: paste a map link (collapsed by default) -->
                 <div v-show="showMoreLocationOptions || deliveryLocationUrl" class="space-y-1 pt-1">
@@ -440,6 +443,7 @@
                 <button
                   type="button"
                   class="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                  :aria-expanded="locationAdvancedOpen"
                   @click="locationAdvancedOpen = !locationAdvancedOpen"
                 >
                   <span aria-hidden="true">{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
@@ -558,9 +562,10 @@
               <button
                 type="button"
                 class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-[var(--color-secondary)] transition-colors"
+                :aria-expanded="promoOpen"
                 @click="promoOpen = !promoOpen"
               >
-                <AppIcon name="tag" class="h-3.5 w-3.5" />
+                <AppIcon name="tag" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.promoCodeCta') }}
                 <span aria-hidden="true" class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
               </button>
@@ -581,6 +586,7 @@
                 <button
                   class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
                   :disabled="promoChecking || !promoCode.trim()"
+                  :aria-label="promoChecking ? t('common.loading') : t('cartPage.promoApply')"
                   @click="applyPromoCode"
                 >{{ promoChecking ? '…' : t('cartPage.promoApply') }}</button>
               </div>
@@ -643,7 +649,7 @@
               ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8'
               : 'border-slate-700/60 bg-slate-900/30'"
           >
-            <label class="flex cursor-pointer items-center justify-between gap-3">
+            <div class="flex cursor-pointer items-center justify-between gap-3">
               <div>
                 <p class="text-xs font-semibold" :class="useWallet ? 'text-[var(--color-secondary)]' : 'text-slate-300'">
                   {{ t('cartPage.payWithCredits') }}
@@ -664,7 +670,7 @@
                   :class="useWallet ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
                 />
               </button>
-            </label>
+            </div>
             <p v-if="useWallet" class="mt-1 text-[11px] text-emerald-300">
               {{ t('cartPage.creditsApplied', { amount: formatPrice(walletDeduction) }) }}
             </p>
@@ -678,7 +684,7 @@
             <div class="flex items-start justify-between gap-2">
               <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.tableNudgeTitle') }}</p>
               <button class="shrink-0 text-slate-500 hover:text-slate-300 transition" :aria-label="t('common.close')" @click="tableNudgeDismissed = true">
-                <AppIcon name="close" class="h-3.5 w-3.5" />
+                <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <ul class="space-y-1">
@@ -856,7 +862,7 @@
               <h2 id="cart-map-dialog-title" class="text-base font-semibold text-slate-100">{{ t('cartPage.tapMapToChoosePin') }}</h2>
             </div>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
-              <AppIcon name="close" class="h-3.5 w-3.5" />
+              <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
               {{ t('common.close') }}
             </button>
           </header>
@@ -875,7 +881,7 @@
             ></div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
-                <AppIcon name="close" class="h-3.5 w-3.5" />
+                <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.cancel') }}
               </button>
               <button
@@ -883,7 +889,7 @@
                 :disabled="!hasTemporaryMapSelection"
                 @click="applyMapSelection"
               >
-                <AppIcon name="check" class="h-3.5 w-3.5" />
+                <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.useSelectedPin') }}
               </button>
             </div>

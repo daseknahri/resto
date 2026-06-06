@@ -13,7 +13,6 @@
         <button
           class="ui-btn-outline ui-press ui-touch-target shrink-0 flex items-center gap-2 px-4 text-xs disabled:opacity-50"
           :disabled="loading"
-          :aria-label="t('adminAnalytics.refresh')"
           @click="refresh"
         >
           <svg
@@ -42,16 +41,17 @@
       </svg>
       <p class="flex-1 text-sm text-red-300">{{ t('adminAnalytics.fetchError') }}</p>
       <button
-        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 ui-touch-target"
+        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 ui-touch-target"
         @click="refresh"
       >{{ t('common.retry') }}</button>
     </div>
 
     <!-- Data -->
     <template v-else-if="data">
+      <p class="sr-only" aria-live="polite" aria-atomic="true">{{ t('adminAnalytics.loaded') }}</p>
       <!-- Money model: outstanding liabilities -->
       <section v-if="data.financials" class="ui-reveal space-y-3">
-        <p class="ui-kicker">{{ t('adminAnalytics.sectionFinancials') }}</p>
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionFinancials') }}</h2>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard :value="currency(data.financials.customer_wallet_liability)" :label="t('adminAnalytics.walletLiability')" color="violet" icon="👛" />
           <StatCard :value="currency(data.financials.restaurant_float_outstanding)" :label="t('adminAnalytics.floatOutstanding')" color="sky" icon="🏪" />
@@ -62,7 +62,7 @@
 
       <!-- Restaurants -->
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '28ms' }">
-        <p class="ui-kicker">{{ t('adminAnalytics.sectionTenants') }}</p>
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionTenants') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard :value="data.tenants.total" :label="t('adminAnalytics.totalTenants')" color="sky" icon="🏪" />
           <StatCard :value="data.tenants.active" :label="t('adminAnalytics.activeTenants')" color="emerald" icon="✅" />
@@ -73,7 +73,7 @@
 
       <!-- Customers & Drivers -->
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '56ms' }">
-        <p class="ui-kicker">{{ t('adminAnalytics.sectionCustomers') }}</p>
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionCustomers') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <StatCard :value="data.customers.total" :label="t('adminAnalytics.totalCustomers')" color="violet" icon="👤" />
           <StatCard :value="data.customers.drivers_total" :label="t('adminAnalytics.totalDrivers')" color="sky" icon="🛵" />
@@ -83,7 +83,7 @@
 
       <!-- Deliveries -->
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '84ms' }">
-        <p class="ui-kicker">{{ t('adminAnalytics.sectionDeliveries') }}</p>
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionDeliveries') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <StatCard :value="data.deliveries.total_jobs" :label="t('adminAnalytics.totalJobs')" color="sky" icon="📦" />
           <StatCard :value="data.deliveries.delivered" :label="t('adminAnalytics.deliveredJobs')" color="emerald" icon="✔" />
@@ -115,7 +115,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Zones -->
         <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
-          <p class="ui-kicker">{{ t('adminAnalytics.sectionZones') }}</p>
+          <h2 class="ui-kicker">{{ t('adminAnalytics.sectionZones') }}</h2>
           <div class="grid grid-cols-2 gap-4">
             <StatCard :value="data.zones.total" :label="t('adminAnalytics.totalZones')" color="sky" icon="🗺" />
             <StatCard :value="data.zones.active" :label="t('adminAnalytics.activeZones')" color="emerald" icon="✅" />
@@ -124,7 +124,7 @@
 
         <!-- Flash Sales -->
         <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
-          <p class="ui-kicker">{{ t('adminAnalytics.sectionFlashSales') }}</p>
+          <h2 class="ui-kicker">{{ t('adminAnalytics.sectionFlashSales') }}</h2>
           <div class="grid grid-cols-3 gap-4">
             <StatCard :value="data.flash_sales.total" :label="t('adminAnalytics.totalSales')" color="sky" icon="⚡" />
             <StatCard :value="data.flash_sales.live" :label="t('adminAnalytics.liveSales')" color="emerald" icon="🔴" />
@@ -135,7 +135,7 @@
 
       <!-- Wallet -->
       <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '140ms' }">
-        <p class="ui-kicker">{{ t('adminAnalytics.sectionWallet') }}</p>
+        <h2 class="ui-kicker">{{ t('adminAnalytics.sectionWallet') }}</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard
             :value="data.wallet.total_balance != null ? currency(data.wallet.total_balance) : '—'"
@@ -226,10 +226,10 @@ const StatCard = defineComponent({
   setup(props) {
     return () => h(
       'div',
-      { class: `rounded-2xl border p-4 flex flex-col gap-1 ${colorMap[props.color] || colorMap.sky}` },
+      { class: `rounded-2xl border p-4 flex flex-col gap-1 ${colorMap[props.color] || colorMap.sky}`, role: 'group', 'aria-label': props.label },
       [
         h('div', { class: 'flex items-center gap-2' }, [
-          props.icon ? h('span', { class: 'text-lg leading-none' }, props.icon) : null,
+          props.icon ? h('span', { class: 'text-lg leading-none', 'aria-hidden': 'true' }, props.icon) : null,
           h('span', { class: 'text-2xl font-bold tabular-nums' }, String(props.value ?? '—')),
         ]),
         h('p', { class: 'text-xs opacity-70 leading-snug' }, props.label),

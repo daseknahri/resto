@@ -33,8 +33,11 @@ export function useFocusTrap(dialogRef, openSignal) {
     }
   };
 
+  let returnFocus = null;
+
   watch(openSignal, async (open) => {
     if (open) {
+      returnFocus = document.activeElement;
       await nextTick();
       // Move focus into the dialog if it isn't already inside
       if (!dialogRef.value?.contains(document.activeElement)) {
@@ -43,6 +46,8 @@ export function useFocusTrap(dialogRef, openSignal) {
       document.addEventListener('keydown', trap);
     } else {
       document.removeEventListener('keydown', trap);
+      returnFocus?.focus();
+      returnFocus = null;
     }
   });
 

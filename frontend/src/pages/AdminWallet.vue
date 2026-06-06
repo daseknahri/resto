@@ -5,7 +5,7 @@
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t('adminWallet.kicker') }}</p>
-          <h1 class="text-xl font-semibold tracking-tight text-white md:text-2xl">{{ t('adminWallet.title') }}</h1>
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">{{ t('adminWallet.title') }}</h1>
           <p class="ui-subtle mt-0.5 text-xs">{{ t('adminWallet.subtitle') }}</p>
         </div>
       </div>
@@ -101,7 +101,7 @@
               <span
                 class="tabular-nums font-semibold"
                 :class="parseFloat(c.wallet_balance) > 0 ? 'text-emerald-400' : 'text-slate-500'"
-              >{{ fmtBalance(c.wallet_balance) }}</span>
+              ><span v-if="parseFloat(c.wallet_balance) > 0" aria-hidden="true">+</span>{{ fmtBalance(c.wallet_balance) }}</span>
             </td>
             <td class="px-4 py-3 text-end">
               <button
@@ -132,17 +132,18 @@
     </div>
 
     <!-- Create Vouchers section -->
-    <section class="ui-section-band ui-reveal p-5 space-y-4" :style="{ '--ui-delay': '60ms' }">
+    <section class="ui-section-band ui-reveal p-5 space-y-4" :style="{ '--ui-delay': '60ms' }" aria-labelledby="voucher-section-title">
       <div>
         <p class="ui-kicker">{{ t('adminWallet.voucherKicker') }}</p>
-        <h2 class="text-sm font-semibold text-white">{{ t('adminWallet.voucherSectionTitle') }}</h2>
+        <h2 id="voucher-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.voucherSectionTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.voucherSectionSubtitle') }}</p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <!-- Quantity -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.voucherQtyLabel') }}</label>
+          <label for="voucher-qty" class="block text-xs text-slate-400">{{ t('adminWallet.voucherQtyLabel') }}</label>
           <input
+            id="voucher-qty"
             v-model="voucherQty"
             type="number"
             min="1"
@@ -152,8 +153,9 @@
         </div>
         <!-- Amount -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.voucherAmountLabel') }}</label>
+          <label for="voucher-amount" class="block text-xs text-slate-400">{{ t('adminWallet.voucherAmountLabel') }}</label>
           <input
+            id="voucher-amount"
             v-model="voucherAmount"
             type="number"
             step="0.01"
@@ -164,8 +166,9 @@
         </div>
         <!-- Expiry -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.voucherExpiryLabel') }}</label>
+          <label for="voucher-expiry" class="block text-xs text-slate-400">{{ t('adminWallet.voucherExpiryLabel') }}</label>
           <input
+            id="voucher-expiry"
             v-model="voucherExpiry"
             type="datetime-local"
             class="ui-input"
@@ -173,8 +176,9 @@
         </div>
         <!-- Note -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.voucherNoteLabel') }}</label>
+          <label for="voucher-note" class="block text-xs text-slate-400">{{ t('adminWallet.voucherNoteLabel') }}</label>
           <input
+            id="voucher-note"
             v-model="voucherNote"
             type="text"
             maxlength="200"
@@ -201,6 +205,7 @@
             class="ui-press text-xs font-medium text-slate-300 hover:text-slate-100 ui-touch-target"
             @click="copyAllCodes"
           >{{ copiedAll ? t('adminWallet.voucherCopied') : t('adminWallet.voucherCopyAll') }}</button>
+          <span role="status" aria-live="polite" class="sr-only">{{ copiedAll ? t('adminWallet.voucherCopied') : '' }}</span>
         </div>
         <div class="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
           <span
@@ -234,17 +239,18 @@
     </section>
 
     <!-- Fund a restaurant float -->
-    <section class="ui-panel p-5 space-y-4 ui-reveal" :style="{ '--ui-delay': '90ms' }">
+    <section class="ui-panel p-5 space-y-4 ui-reveal" :style="{ '--ui-delay': '90ms' }" aria-labelledby="fund-section-title">
       <div>
         <p class="ui-kicker">{{ t('adminWallet.fundKicker') }}</p>
-        <h2 class="text-sm font-semibold text-white">{{ t('adminWallet.fundTitle') }}</h2>
+        <h2 id="fund-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.fundTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.fundSubtitle') }}</p>
       </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <!-- Restaurant -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.fundRestaurantLabel') }}</label>
+          <label for="fund-restaurant" class="block text-xs text-slate-400">{{ t('adminWallet.fundRestaurantLabel') }}</label>
           <select
+            id="fund-restaurant"
             v-model="fundTenantId"
             class="ui-input"
           >
@@ -256,8 +262,9 @@
         </div>
         <!-- Amount -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.fundAmountLabel') }}</label>
+          <label for="fund-amount" class="block text-xs text-slate-400">{{ t('adminWallet.fundAmountLabel') }}</label>
           <input
+            id="fund-amount"
             v-model="fundAmount"
             type="number"
             step="0.01"
@@ -268,8 +275,9 @@
         </div>
         <!-- Note -->
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.fundNoteLabel') }}</label>
+          <label for="fund-note" class="block text-xs text-slate-400">{{ t('adminWallet.fundNoteLabel') }}</label>
           <input
+            id="fund-note"
             v-model="fundNote"
             type="text"
             maxlength="200"
@@ -290,16 +298,17 @@
     </section>
 
     <!-- Platform settings: wallet charge approval threshold -->
-    <section class="ui-panel p-5 space-y-3 ui-reveal" :style="{ '--ui-delay': '120ms' }">
+    <section class="ui-panel p-5 space-y-3 ui-reveal" :style="{ '--ui-delay': '120ms' }" aria-labelledby="settings-section-title">
       <div>
         <p class="ui-kicker">{{ t('adminWallet.settingsKicker') }}</p>
-        <h2 class="text-sm font-semibold text-white">{{ t('adminWallet.settingsTitle') }}</h2>
+        <h2 id="settings-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.settingsTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.settingsSubtitle') }}</p>
       </div>
       <div class="flex flex-wrap items-end gap-3">
         <div class="space-y-1">
-          <label class="block text-xs text-slate-400">{{ t('adminWallet.thresholdLabel') }}</label>
+          <label for="threshold-input" class="block text-xs text-slate-400">{{ t('adminWallet.thresholdLabel') }}</label>
           <input
+            id="threshold-input"
             v-model="threshold"
             type="number"
             step="0.01"
@@ -328,14 +337,15 @@
           v-if="bonusTarget"
           class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           @click.self="bonusTarget = null"
-          @keydown.esc="bonusTarget = null"
         >
           <div
             ref="bonusDialogRef"
             role="dialog"
             aria-modal="true"
             aria-labelledby="admin-wallet-bonus-dialog-title"
+            tabindex="-1"
             class="ui-panel w-full max-w-sm p-6 space-y-4"
+            @keydown.esc="bonusTarget = null"
           >
             <h2 id="admin-wallet-bonus-dialog-title" class="text-sm font-semibold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
             <p class="text-xs text-slate-400">
@@ -343,8 +353,9 @@
               <span class="ms-2 text-slate-500 tabular-nums">{{ t('adminWallet.currentBalance') }}: {{ fmtBalance(bonusTarget.wallet_balance) }}</span>
             </p>
             <div class="space-y-1">
-              <label class="block text-xs text-slate-400">{{ t('adminWallet.bonusAmount') }}</label>
+              <label for="bonus-amount" class="block text-xs text-slate-400">{{ t('adminWallet.bonusAmount') }}</label>
               <input
+                id="bonus-amount"
                 v-model="bonusAmount"
                 type="number"
                 step="0.01"
@@ -354,8 +365,9 @@
               />
             </div>
             <div class="space-y-1">
-              <label class="block text-xs text-slate-400">{{ t('adminWallet.bonusNote') }}</label>
+              <label for="bonus-note" class="block text-xs text-slate-400">{{ t('adminWallet.bonusNote') }}</label>
               <input
+                id="bonus-note"
                 v-model="bonusNote"
                 type="text"
                 maxlength="200"
@@ -372,7 +384,7 @@
                 class="ui-btn-primary flex-1 disabled:opacity-50"
                 :disabled="bonusSaving || !bonusAmount"
                 @click="issueBonus"
-              >{{ bonusSaving ? '…' : t('adminWallet.bonusIssue') }}</button>
+              >{{ bonusSaving ? t('adminWallet.bonusSaving') : t('adminWallet.bonusIssue') }}</button>
               <button
                 class="ui-btn-outline ui-press px-4"
                 @click="bonusTarget = null"

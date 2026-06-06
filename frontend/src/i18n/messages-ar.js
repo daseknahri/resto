@@ -66,7 +66,8 @@ const arabicMessages = {
     "open": "مفتوح",
     "closed": "مغلق",
     "more": "المزيد",
-    "change": "تغيير"
+    "change": "تغيير",
+    "opensInNewTab": "(يفتح في تبويب جديد)"
   },
   "toast": {
     "type": {
@@ -1750,7 +1751,8 @@ const arabicMessages = {
     "fasterSupport": "لتسريع المساعدة، أرفق:",
     "itemTenantSlug": "معرّف المستأجر",
     "itemAccountEmail": "بريد الحساب",
-    "itemIssueSummary": "ملخص قصير للمشكلة"
+    "itemIssueSummary": "ملخص قصير للمشكلة",
+    "notConfigured": "غير مُهيَّأ"
   },
   "privacyPolicy": {
     "kicker": "قانوني",
@@ -2798,6 +2800,7 @@ Object.assign(arabicMessages, {
     bonusNote: "\u0645\u0644\u0627\u062d\u0638\u0629",
     bonusNotePlaceholder: "\u0645\u062b\u0627\u0644: \u0645\u0643\u0627\u0641\u0623\u0629 \u062a\u0631\u062d\u064a\u0628\u064a\u0629",
     defaultNote: "\u0645\u0643\u0627\u0641\u0623\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
+    bonusSaving: "\u062c\u0627\u0631\u064d \u0627\u0644\u0645\u0646\u062d\u2026",
     bonusIssue: "\u0645\u0646\u062d",
     cancel: "\u0625\u0644\u063a\u0627\u0621",
     bonusSuccess: "\u062a\u0645 \u0645\u0646\u062d \u0627\u0644\u0645\u0643\u0627\u0641\u0623\u0629 \u0628\u0646\u062c\u0627\u062d.",
@@ -3370,6 +3373,7 @@ Object.assign(arabicMessages, {
     totalTxns: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062a",
     bonusIssued: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0643\u0627\u0641\u0622\u062a \u0627\u0644\u0635\u0627\u062f\u0631\u0629",
     payments: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a",
+    loaded: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u062d\u0644\u064a\u0644.",
   },
   ownerRatings: {
     kicker: "\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
