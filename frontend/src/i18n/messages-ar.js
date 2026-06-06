@@ -1690,6 +1690,9 @@ const arabicMessages = {
     "planBasic": "قائمة رقمية + تحويل واتساب",
     "planGrowth": "إدارة تشغيلية أوسع داخل المنصة",
     "planPro": "مزايا احترافية وتحليلات متقدمة",
+    "planNameBasic": "Basic",
+    "planNameGrowth": "Growth",
+    "planNamePro": "Pro",
     "basicOption": "الباقة الأساسية",
     "growthOption": "باقة النمو",
     "proOption": "الباقة الاحترافية",
@@ -2308,6 +2311,7 @@ Object.assign(arabicMessages, {
     remove: "\u062d\u0630\u0641",
     qty: "\u0627\u0644\u0643\u0645\u064a\u0629",
     options: "\u0627\u0644\u062e\u064a\u0627\u0631\u0627\u062a",
+    restaurantKicker: "\u0645\u0637\u0639\u0645",
   },
   reservationManage: {
     title: "\u062d\u062c\u0632\u0643",

@@ -1,14 +1,16 @@
 <template>
-  <section class="space-y-8 px-4 py-8 md:space-y-10 md:py-12">
-    <div v-if="leadSuccess" role="status" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-100">
-      <span>{{ t("home.leadSuccess") }}</span>
-      <button class="text-sm underline" @click="dismiss">{{ t("home.dismiss") }}</button>
-    </div>
+  <main id="main-content" class="space-y-8 px-4 py-8 md:space-y-10 md:py-12">
+    <Transition name="ui-fade">
+      <div v-if="leadSuccess" role="status" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-100">
+        <span>{{ t("home.leadSuccess") }}</span>
+        <button class="ui-press ui-touch-target inline-flex items-center px-2 text-sm underline" @click="dismiss">{{ t("home.dismiss") }}</button>
+      </div>
+    </Transition>
 
-    <div class="ui-hero-stage">
-      <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-amber-400/12 blur-3xl"></div>
-      <div class="pointer-events-none absolute -left-16 bottom-0 h-64 w-64 rounded-full bg-teal-400/14 blur-3xl"></div>
-      <div class="pointer-events-none absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+    <div class="ui-hero-stage ui-reveal">
+      <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-amber-400/12 blur-3xl" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute -left-16 bottom-0 h-64 w-64 rounded-full bg-teal-400/14 blur-3xl" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" aria-hidden="true"></div>
       <div class="relative grid gap-8 p-5 sm:p-6 md:grid-cols-[1.22fr,0.98fr] md:p-10">
         <div class="space-y-6">
           <div class="ui-chip-strong w-fit">
@@ -33,30 +35,31 @@
           </div>
 
           <!-- Customer / marketplace entry point -->
-          <div class="flex items-center gap-3 pt-1">
+          <div class="flex items-center gap-3 pt-1" aria-hidden="true">
             <div class="h-px flex-1 bg-slate-800" />
             <span class="text-xs text-slate-500">{{ t("home.customerDivider") }}</span>
             <div class="h-px flex-1 bg-slate-800" />
           </div>
           <RouterLink
             to="/order"
-            class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--color-secondary,#f59e0b)]/40 bg-[var(--color-secondary,#f59e0b)]/8 px-5 py-2.5 text-sm font-semibold text-[var(--color-secondary,#f59e0b)] transition-colors hover:border-[var(--color-secondary,#f59e0b)]/70 hover:bg-[var(--color-secondary,#f59e0b)]/15 sm:w-auto"
+            class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-5 py-2.5 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:border-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 sm:w-auto"
           >
-            🍽️ {{ t("home.browseRestaurants") }}
+            <span aria-hidden="true">🍽️</span>
+            <span>{{ t("home.browseRestaurants") }}</span>
           </RouterLink>
 
           <div class="grid gap-3 pt-2 sm:grid-cols-3">
-            <article class="ui-metric-card">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.launchTime") }}</p>
-              <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+            <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '0ms' }">
+              <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
+              <p class="mt-1 text-xl font-semibold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
             </article>
-            <article class="ui-metric-card">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.interfaces") }}</p>
-              <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+            <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
+              <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
+              <p class="mt-1 text-xl font-semibold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
             </article>
-            <article class="ui-metric-card">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("home.stats.tierReady") }}</p>
-              <p class="mt-1 text-xl font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+            <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '112ms' }">
+              <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
+              <p class="mt-1 text-xl font-semibold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
             </article>
           </div>
 
@@ -67,14 +70,14 @@
                 <p class="mt-2 text-lg font-semibold text-white">{{ t("home.readyTitle") }}</p>
               </div>
               <div class="ui-chip-strong">
-                <AppIcon name="check" class="h-3.5 w-3.5" />
+                <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
                 <span>{{ t("common.available") }}</span>
               </div>
             </div>
             <div class="grid gap-3 md:grid-cols-3">
               <article class="ui-admin-subcard space-y-2 p-3">
                 <div class="ui-chip w-fit">
-                  <AppIcon name="home" class="h-3.5 w-3.5" />
+                  <AppIcon name="home" class="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{{ t("home.interfaces.landing") }}</span>
                 </div>
                 <p class="text-sm font-semibold text-white">{{ t("home.interfaces.landingTitle") }}</p>
@@ -82,7 +85,7 @@
               </article>
               <article class="ui-admin-subcard space-y-2 p-3">
                 <div class="ui-chip w-fit">
-                  <AppIcon name="settings" class="h-3.5 w-3.5" />
+                  <AppIcon name="settings" class="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{{ t("home.interfaces.owner") }}</span>
                 </div>
                 <p class="text-sm font-semibold text-white">{{ t("home.interfaces.ownerTitle") }}</p>
@@ -90,7 +93,7 @@
               </article>
               <article class="ui-admin-subcard space-y-2 p-3">
                 <div class="ui-chip w-fit">
-                  <AppIcon name="menu" class="h-3.5 w-3.5" />
+                  <AppIcon name="menu" class="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{{ t("home.interfaces.customer") }}</span>
                 </div>
                 <p class="text-sm font-semibold text-white">{{ t("home.interfaces.customerTitle") }}</p>
@@ -101,7 +104,7 @@
         </div>
 
         <div class="grid gap-3 self-end">
-          <article class="ui-spotlight-card p-5">
+          <article class="ui-spotlight-card p-5 ui-reveal" :style="{ '--ui-delay': '84ms' }">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="ui-kicker">{{ t("common.demo") }}</p>
@@ -112,26 +115,26 @@
             <p class="mt-3 text-sm text-slate-300">{{ t("home.interfaces.customerText") }}</p>
             <div class="mt-4 flex flex-wrap gap-2">
               <a :href="demoUrl" target="_blank" rel="noopener noreferrer" class="ui-btn-primary inline-flex items-center gap-2 ui-touch-target">
-                <AppIcon name="menu" class="h-4 w-4" />
+                <AppIcon name="menu" class="h-4 w-4" aria-hidden="true" />
                 <span>{{ t("home.viewLiveDemo") }}</span>
               </a>
               <RouterLink to="/demo" class="ui-btn-outline inline-flex items-center gap-2 ui-touch-target">
-                <AppIcon name="eye" class="h-4 w-4" />
+                <AppIcon name="eye" class="h-4 w-4" aria-hidden="true" />
                 <span>{{ t("common.demo") }}</span>
               </RouterLink>
             </div>
             <div class="mt-4 grid gap-2 sm:grid-cols-2">
               <div class="ui-admin-subcard p-3">
                 <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+                <p class="mt-2 text-sm font-semibold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
               </div>
               <div class="ui-admin-subcard p-3">
                 <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+                <p class="mt-2 text-sm font-semibold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
               </div>
             </div>
           </article>
-          <article class="ui-command-deck p-5">
+          <article class="ui-command-deck p-5 ui-reveal" :style="{ '--ui-delay': '140ms' }">
             <div class="flex items-start justify-between gap-3">
               <div class="space-y-2">
                 <p class="ui-kicker">{{ t("home.plansTitle") }}</p>
@@ -150,25 +153,25 @@
       </div>
     </div>
 
-    <section class="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]">
-      <article class="ui-glass p-5 md:p-6">
+    <section class="grid gap-4 lg:grid-cols-[1.15fr,0.85fr]" aria-labelledby="phases-heading">
+      <article class="ui-glass p-5 md:p-6 ui-reveal">
         <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div class="space-y-2">
             <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
-            <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.readyTitle") }}</h2>
+            <h2 id="phases-heading" class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.readyTitle") }}</h2>
             <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("home.readyText") }}</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <span class="ui-chip">
-              <AppIcon name="phone" class="h-3.5 w-3.5" />
+              <AppIcon name="phone" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.stats.launchTimeValue") }}</span>
             </span>
             <span class="ui-chip">
-              <AppIcon name="settings" class="h-3.5 w-3.5" />
+              <AppIcon name="settings" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.stats.interfacesValue") }}</span>
             </span>
             <span class="ui-chip">
-              <AppIcon name="check" class="h-3.5 w-3.5" />
+              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.stats.tierReadyValue") }}</span>
             </span>
           </div>
@@ -177,7 +180,7 @@
         <div class="mt-5 grid gap-3 md:grid-cols-3">
           <article class="ui-admin-subcard space-y-2">
             <div class="ui-chip w-fit">
-              <AppIcon name="home" class="h-3.5 w-3.5" />
+              <AppIcon name="home" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.phases.phase1") }}</span>
             </div>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase1Title") }}</p>
@@ -185,7 +188,7 @@
           </article>
           <article class="ui-admin-subcard space-y-2">
             <div class="ui-chip w-fit">
-              <AppIcon name="settings" class="h-3.5 w-3.5" />
+              <AppIcon name="settings" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.phases.phase2") }}</span>
             </div>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase2Title") }}</p>
@@ -193,7 +196,7 @@
           </article>
           <article class="ui-admin-subcard space-y-2">
             <div class="ui-chip w-fit">
-              <AppIcon name="menu" class="h-3.5 w-3.5" />
+              <AppIcon name="menu" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("home.phases.phase3") }}</span>
             </div>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("home.phases.phase3Title") }}</p>
@@ -202,7 +205,7 @@
         </div>
       </article>
 
-      <article class="ui-command-deck p-5 md:p-6">
+      <article class="ui-command-deck p-5 md:p-6 ui-reveal" :style="{ '--ui-delay': '56ms' }">
         <div class="space-y-2">
           <p class="ui-kicker">{{ t("home.plansTitle") }}</p>
           <h3 class="ui-display text-2xl font-semibold text-white">{{ t("home.plans.basic.name") }}</h3>
@@ -212,15 +215,15 @@
         <div class="mt-4 grid gap-3 sm:grid-cols-3">
           <article class="ui-admin-subcard p-3">
             <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+            <p class="mt-2 text-sm font-semibold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
           </article>
           <article class="ui-admin-subcard p-3">
             <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+            <p class="mt-2 text-sm font-semibold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
           </article>
           <article class="ui-admin-subcard p-3">
             <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+            <p class="mt-2 text-sm font-semibold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
           </article>
         </div>
 
@@ -231,46 +234,47 @@
       </article>
     </section>
 
-    <section id="plans" class="space-y-4">
+    <section id="plans" class="space-y-4" aria-labelledby="plans-heading">
       <div class="ui-section-band flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div class="space-y-2">
           <p class="ui-kicker">{{ t("home.heroBadge") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.plansTitle") }}</h2>
+          <h2 id="plans-heading" class="ui-display text-2xl font-semibold text-white md:text-3xl">{{ t("home.plansTitle") }}</h2>
           <p class="max-w-2xl text-sm text-slate-300 md:text-base">{{ t("home.heroSubtitle") }}</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-3 md:min-w-[360px]">
           <article class="ui-admin-subcard">
             <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+            <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
           </article>
           <article class="ui-admin-subcard">
             <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+            <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
           </article>
           <article class="ui-admin-subcard">
             <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-            <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+            <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
           </article>
         </div>
       </div>
       <div class="grid gap-4 md:grid-cols-3">
         <article
-          v-for="plan in plans"
+          v-for="(plan, planIndex) in plans"
           :key="plan.code"
-          class="relative overflow-hidden rounded-[1.8rem] border p-5 shadow-lg shadow-black/20 transition duration-300"
+          class="ui-reveal relative overflow-hidden rounded-[1.8rem] border p-5 shadow-lg shadow-black/20 transition duration-300"
           :class="plan.recommended ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/12' : 'border-slate-700/60 bg-slate-900/55'"
+          :style="{ '--ui-delay': `${planIndex * 56}ms` }"
         >
-          <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-          <div v-if="plan.recommended" class="pointer-events-none absolute right-5 top-5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-secondary)]">
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true"></div>
+          <div v-if="plan.recommended" class="pointer-events-none absolute end-5 top-5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-secondary)]" aria-hidden="true">
             {{ t("common.available") }}
           </div>
-          <div class="flex items-center justify-between">
-            <div>
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
               <p class="ui-kicker">{{ t("common.plan") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ plan.name }}</p>
+              <p class="mt-2 truncate text-lg font-semibold text-white">{{ plan.name }}</p>
             </div>
             <span
-              class="rounded-full px-2 py-1 text-[11px] font-semibold"
+              class="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
               :class="plan.available ? 'bg-emerald-400/90 text-emerald-950' : 'bg-slate-700 text-slate-200'"
             >
               {{ plan.available ? t("common.available") : t("common.soon") }}
@@ -279,14 +283,14 @@
           <p class="mt-3 text-sm text-slate-300">{{ plan.description }}</p>
           <ul class="mt-5 space-y-2 text-sm text-slate-300">
             <li v-for="(line, featureIndex) in plan.features" :key="line" class="flex items-start gap-2">
-              <span class="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"></span>
-              <span class="flex-1">{{ line }}</span>
-              <span class="text-[10px] uppercase tracking-[0.14em] text-slate-500">{{ String(featureIndex + 1).padStart(2, "0") }}</span>
+              <span class="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-secondary)]" aria-hidden="true"></span>
+              <span class="min-w-0 flex-1">{{ line }}</span>
+              <span class="shrink-0 text-[10px] uppercase tracking-[0.14em] text-slate-500" aria-hidden="true">{{ String(featureIndex + 1).padStart(2, "0") }}</span>
             </li>
           </ul>
           <RouterLink
             :to="{ name: 'lead', query: { plan: plan.code } }"
-            class="mt-6 inline-flex rounded-full border px-4 py-2 text-sm font-semibold transition-colors ui-touch-target"
+            class="ui-press mt-6 inline-flex rounded-full border px-4 py-2 text-sm font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
             :class="plan.recommended ? 'border-[var(--color-secondary)] text-[var(--color-secondary)]' : 'border-slate-700 text-slate-100'"
           >
             {{ plan.cta }}
@@ -295,26 +299,26 @@
       </div>
     </section>
 
-    <section class="ui-glass p-6 md:p-8">
+    <section class="ui-glass p-6 md:p-8 ui-reveal" aria-labelledby="cta-heading">
       <div class="grid gap-6 md:grid-cols-[1.18fr,0.82fr] md:items-center">
         <div class="space-y-4">
           <div class="space-y-2">
             <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
-            <h3 class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h3>
+            <h3 id="cta-heading" class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h3>
             <p class="text-slate-300">{{ t("home.readyText") }}</p>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">
             <article class="ui-metric-card">
               <p class="ui-stat-label">{{ t("home.stats.launchTime") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.launchTimeValue") }}</p>
+              <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.launchTimeValue") }}</p>
             </article>
             <article class="ui-metric-card">
               <p class="ui-stat-label">{{ t("home.stats.interfaces") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.interfacesValue") }}</p>
+              <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.interfacesValue") }}</p>
             </article>
             <article class="ui-metric-card">
               <p class="ui-stat-label">{{ t("home.stats.tierReady") }}</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ t("home.stats.tierReadyValue") }}</p>
+              <p class="mt-2 text-lg font-semibold tabular-nums text-white">{{ t("home.stats.tierReadyValue") }}</p>
             </article>
           </div>
         </div>
@@ -328,14 +332,14 @@
             <RouterLink to="/get-started" class="ui-btn-primary ui-touch-target">{{ t("home.submitLead") }}</RouterLink>
             <RouterLink to="/contact" class="ui-btn-outline ui-touch-target">{{ t("home.talkSupport") }}</RouterLink>
             <a :href="demoUrl" target="_blank" rel="noopener noreferrer" class="ui-btn-outline ui-touch-target inline-flex items-center gap-2">
-              <AppIcon name="eye" class="h-4 w-4" />
+              <AppIcon name="eye" class="h-4 w-4" aria-hidden="true" />
               <span>{{ t("home.viewLiveDemo") }}</span>
             </a>
           </div>
         </div>
       </div>
     </section>
-  </section>
+  </main>
 </template>
 
 <script setup>
