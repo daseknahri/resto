@@ -25,8 +25,8 @@
           <RouterLink class="ui-pill-nav whitespace-nowrap" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">{{ t("common.contact") }}</RouterLink>
         </nav>
 
-        <div class="flex items-center gap-1.5 sm:gap-2">
-          <div role="status" class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
+        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <div class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
             <span class="ui-live-dot bg-emerald-400" aria-hidden="true"></span>
             {{ t("home.heroLive") }}
           </div>
@@ -78,7 +78,7 @@
       </div>
     </nav>
 
-    <main id="main-content" class="mx-auto w-full max-w-6xl ui-fade-up pb-[calc(var(--safe-bottom)+4rem)] lg:pb-0">
+    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-6xl px-4 ui-fade-up pb-[calc(var(--safe-bottom)+4rem)] lg:pb-0">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath">
@@ -89,14 +89,14 @@
     </main>
 
     <footer class="ui-footer pb-[calc(var(--safe-bottom)+4.5rem)] lg:pb-8">
-      <div class="ui-reveal mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
+      <div class="ui-reveal ui-panel-soft mx-auto grid w-full max-w-6xl gap-4 p-4 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
         <div class="space-y-2">
           <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
               RM
             </div>
             <div>
-              <h2 class="ui-kicker">{{ t("landingLayout.kicker") }}</h2>
+              <p class="ui-kicker">{{ t("landingLayout.kicker") }}</p>
               <p class="ui-display text-lg font-semibold text-white">{{ t("landingLayout.footerTitle") }}</p>
             </div>
           </div>
@@ -111,8 +111,8 @@
         </div>
 
         <div class="space-y-3">
-          <h2 class="ui-kicker">{{ t("common.getStarted") }}</h2>
-          <nav :aria-label="t('common.getStarted')">
+          <p id="footer-nav-getstarted" class="ui-kicker">{{ t("common.getStarted") }}</p>
+          <nav aria-labelledby="footer-nav-getstarted">
             <ul class="flex flex-col gap-2 text-sm">
               <li>
                 <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/get-started">
@@ -137,8 +137,8 @@
         </div>
 
         <div class="space-y-3">
-          <h2 class="ui-kicker">{{ t("common.status") }}</h2>
-          <nav :aria-label="t('common.status')">
+          <p id="footer-nav-legal" class="ui-kicker">{{ t("common.legal") }}</p>
+          <nav aria-labelledby="footer-nav-legal">
             <ul class="flex flex-col gap-2 text-sm">
               <li>
                 <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/privacy">

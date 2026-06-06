@@ -1,14 +1,14 @@
 <template>
   <button
-    class="group ui-panel-soft ui-surface-lift ui-press ui-reveal w-full overflow-hidden text-start focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-amber-400/70"
+    class="group ui-panel-soft ui-surface-lift ui-press ui-reveal w-full overflow-hidden text-start focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
     :style="{ '--ui-delay': `${Math.min(index || 0, 9) * 28}ms` }"
     @click="$emit('click')"
   >
     <div class="relative h-40 w-full overflow-hidden sm:h-52">
       <img
         :src="image"
-        :alt="title"
-        class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        alt=""
+        class="h-full w-full object-cover transition-transform duration-[var(--motion-slow)] ease-[var(--ease-fluid)] group-hover:scale-105"
         :loading="eager ? 'eager' : 'lazy'"
         :fetchpriority="eager ? 'high' : 'auto'"
         decoding="async"
@@ -30,10 +30,10 @@
         </div>
         <!-- directional chevron: flips in RTL -->
         <span
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/95 font-semibold text-slate-900 transition-transform group-hover:ltr:translate-x-0.5 group-hover:rtl:-translate-x-0.5"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/95 font-semibold text-slate-900 transition-transform"
           aria-hidden="true"
         >
-          <svg viewBox="0 0 24 24" class="h-4 w-4 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 transition-transform group-hover:translate-x-0.5 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M5 12h14M13 5l7 7-7 7" />
           </svg>
         </span>

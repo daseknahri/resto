@@ -81,7 +81,8 @@ export const messages = {
       opensInNewTab: "(opens in new tab)",
       included: "Included",
       notIncluded: "Not included",
-      updating: "Updating..."
+      updating: "Updating...",
+      legal: "Legal"
     },
     confirmModal: {
       defaultTitle: "Are you sure?",
@@ -2547,6 +2548,7 @@ export const messages = {
       byRevenue: "By revenue",
       qty: "{n} sold",
       noData: "No sales data yet.",
+      noDataHint: "Orders will appear here once your first sale is placed.",
       modeNav: "Sort mode",
     },
     ownerBilling: {
@@ -3761,6 +3763,7 @@ export const messages = {
       closed: "Ferme",
       plan: "Offre",
       status: "Statut",
+      legal: "Mentions legales",
       apply: "Appliquer",
       previous: "Precedent",
       next: "Suivant",
@@ -6229,6 +6232,7 @@ export const messages = {
       byRevenue: "Par CA",
       qty: "{n} vendus",
       noData: "Aucune donnee de vente pour l instant.",
+      noDataHint: "Les commandes apparaitront ici apres votre premiere vente.",
       modeNav: "Mode de tri",
     },
     ownerBilling: {

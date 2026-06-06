@@ -2,8 +2,7 @@
   <div class="ui-shell">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <header class="ui-header ui-reveal">
-      <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
-        <div class="ui-hero-ribbon px-4 py-3.5 md:px-5 md:py-4">
+      <div class="mx-auto w-full max-w-6xl px-4 py-3.5 sm:px-5 sm:py-4">
           <div class="flex items-center justify-between gap-3">
             <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
               <img
@@ -70,7 +69,6 @@
                 </span>
               </RouterLink>
             </div>
-            </div>
           </div>
 
         <div class="mt-2 hidden items-center justify-center gap-4 md:flex">
@@ -83,7 +81,7 @@
               :data-active="activeCustomerSection === item.key"
               :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
             >
-              <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
+              <AppIcon :name="item.icon" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ item.label }}</span>
               <span v-if="item.badge" aria-hidden="true" class="ms-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">{{ item.badge }}</span>
               <span v-if="item.badge" class="sr-only">{{ t('customerLayout.signedIn') }}</span>
@@ -93,20 +91,20 @@
       </div>
     </header>
 
-    <div v-if="tenantNotice" class="mx-auto w-full max-w-5xl px-4 pt-3">
-      <div role="status" class="rounded-2xl border px-4 py-3 text-sm shadow-lg shadow-black/20" :class="tenantNotice.className">
+    <div v-if="tenantNotice" class="mx-auto w-full max-w-6xl px-4 pt-3">
+      <div :role="tenantNotice.isError ? 'alert' : 'status'" class="ui-state-strip px-4 py-3 text-sm" :class="tenantNotice.className">
         {{ tenantNotice.text }}
       </div>
     </div>
 
     <!-- Track-order banner: shown when a recent in-app order exists and user is not on the order-status page -->
-    <div v-if="trackBannerOrder" class="mx-auto w-full max-w-5xl px-4 pt-2">
-      <div class="ui-reveal flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5 shadow-lg shadow-black/20">
+    <div v-if="trackBannerOrder" class="mx-auto w-full max-w-6xl px-4 pt-2">
+      <div class="ui-panel-soft ui-reveal flex items-center justify-between border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5">
         <RouterLink
           :to="{ name: 'order-status', params: { orderNumber: trackBannerOrder } }"
           class="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[var(--color-secondary)] hover:opacity-80"
         >
-          <span class="relative flex h-2.5 w-2.5 shrink-0">
+          <span aria-hidden="true" class="relative flex h-2.5 w-2.5 shrink-0">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-secondary)] opacity-50" />
             <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-secondary)]" />
           </span>
@@ -122,7 +120,7 @@
       </div>
     </div>
 
-    <main id="main-content" class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
+    <main id="main-content" class="mx-auto w-full max-w-6xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">
@@ -138,11 +136,11 @@
           v-for="item in navItems"
           :key="item.key"
           :to="item.to"
-          class="ui-press flex min-h-[2.8rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+          class="ui-touch-target ui-press flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >
-          <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
+          <AppIcon :name="item.icon" class="h-3.5 w-3.5" aria-hidden="true" />
           <span class="text-[11px] font-semibold leading-none">{{ item.label }}</span>
           <span
             v-if="item.badge"
@@ -215,6 +213,7 @@ const tenantNotice = computed(() => {
   if (!profile) return null;
   if (profile.is_menu_temporarily_disabled) {
     return {
+      isError: true,
       className: "border-red-500/40 bg-red-500/10 text-red-200",
       text: profile.menu_disabled_note || t("customerLayout.menuDisabledFallback"),
     };

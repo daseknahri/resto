@@ -6,6 +6,9 @@ export default {
     "./index.html",
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
+  safelist: [
+    { pattern: /^grid-cols-(4|5|6)$/ },
+  ],
   theme: {
     extend: {
       fontFamily: {

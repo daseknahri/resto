@@ -69,7 +69,8 @@ const arabicMessages = {
     "change": "تغيير",
     "opensInNewTab": "(يفتح في تبويب جديد)",
     "included": "مضمّن",
-    "notIncluded": "غير مضمّن"
+    "notIncluded": "غير مضمّن",
+    "legal": "قانوني"
   },
   "toast": {
     "type": {

@@ -1,17 +1,21 @@
 <template>
-  <!-- Global offline banner -->
-  <Transition name="ui-fade">
-    <div
-      v-if="isOffline"
-      role="alert"
-      class="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-2 bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-[var(--color-secondary)] shadow-lg"
-    >
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-[var(--color-secondary)]">
-        <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
-      </svg>
-      {{ t('common.offlineBanner') }}
-    </div>
-  </Transition>
+  <!-- Global offline banner — role="alert" is always in the DOM so assistive
+       technologies register it as a live region before any content is injected.
+       The inner content is conditionally rendered via v-if so the mutation fires
+       the announcement correctly in JAWS + Chrome / NVDA + Firefox. -->
+  <div role="alert" aria-live="assertive" aria-atomic="true" class="fixed inset-x-0 top-0 z-[9999]">
+    <Transition name="ui-fade">
+      <div
+        v-if="isOffline"
+        class="flex items-center justify-center gap-2 bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-[var(--color-secondary)] shadow-lg"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 shrink-0">
+          <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+        </svg>
+        {{ t('common.offlineBanner') }}
+      </div>
+    </Transition>
+  </div>
   <ErrorBoundary>
     <RouterView />
   </ErrorBoundary>

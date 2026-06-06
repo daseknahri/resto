@@ -48,7 +48,7 @@
                   <span
                     v-if="pendingOrdersCount > 0"
                     class="owner-orders-badge"
-                    :aria-label="t('ownerLayout.ordersBadgeLabel', { count: pendingOrdersCount })"
+                    aria-hidden="true"
                   >{{ pendingOrdersCount }}</span>
                 </span>
                 <span>{{ t("ownerLayout.orders") }}</span>
@@ -102,16 +102,15 @@
               </RouterLink>
             </nav>
 
-            <!-- Waiter view shortcut (desktop) -->
-            <RouterLink
-              to="/waiter"
-              class="hidden md:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-            >
-              <AppIcon name="user" class="h-3.5 w-3.5" />
-              {{ t("ownerLayout.waiterView") }}
-            </RouterLink>
-
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <!-- Waiter view shortcut (desktop) -->
+              <RouterLink
+                to="/waiter"
+                class="ui-chip hidden md:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              >
+                <AppIcon name="user" class="h-3.5 w-3.5" />
+                {{ t("ownerLayout.waiterView") }}
+              </RouterLink>
               <LanguageSwitcher compact dropdown />
               <!-- Dark / light mode toggle -->
               <button
@@ -263,7 +262,7 @@
 
     <!-- Waiter-call alerts — live via WebSocket, persistent until acknowledged -->
     <div v-if="waiterCallsPending.length" class="mx-auto w-full max-w-7xl px-3 pt-2 sm:px-4">
-      <div role="alert" aria-live="assertive" class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+      <div role="alert" class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
         <div class="flex items-center gap-2 text-sm font-semibold text-amber-300">
           <span class="relative flex h-2.5 w-2.5">
             <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
@@ -842,7 +841,7 @@ watch(
 .owner-orders-badge {
   position: absolute;
   top: -0.45rem;
-  right: -0.55rem;
+  inset-inline-end: -0.55rem;
   min-width: 1.1rem;
   height: 1.1rem;
   border-radius: 9999px;
@@ -860,7 +859,7 @@ watch(
 .owner-orders-badge-dock {
   position: absolute;
   top: -0.3rem;
-  right: -0.35rem;
+  inset-inline-end: -0.35rem;
   min-width: 0.95rem;
   height: 0.95rem;
   border-radius: 9999px;

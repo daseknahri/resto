@@ -8,6 +8,7 @@
       role="dialog"
       aria-modal="true"
       :aria-labelledby="`charge-kicker-${activeCharge.id} charge-title-${activeCharge.id}`"
+      @keydown.capture="onPanelKey"
     >
       <div
         ref="panelRef"
@@ -21,6 +22,8 @@
           >{{ t('chargeRequest.title') }}</p>
           <p
             :id="`charge-title-${activeCharge.id}`"
+            role="heading"
+            aria-level="2"
             class="tabular-nums text-3xl font-bold tracking-tight text-white"
           >{{ formatPrice(activeCharge.amount) }}</p>
           <p class="ui-subtle">{{ t('chargeRequest.from', { name: activeCharge.restaurant_name || t('chargeRequest.aRestaurant') }) }}</p>
@@ -37,6 +40,8 @@
           v-if="chargeError"
           class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
           role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
         >
           <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
           <p class="flex-1 text-sm text-red-300">{{ chargeError }}</p>
@@ -48,6 +53,8 @@
             ref="declineRef"
             class="ui-btn-outline ui-press ui-touch-target flex-1 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50"
             :disabled="!!chargeBusy"
+            :aria-busy="!!chargeBusy"
+            :aria-label="chargeBusy ? t('common.loading') : t('chargeRequest.decline')"
             @click="declineCharge(activeCharge)"
           >{{ t('chargeRequest.decline') }}</button>
           <button
@@ -97,23 +104,48 @@ const walletBalance = computed(() => {
   return Number.isFinite(n) ? n : 0;
 });
 
-// Save focus when dialog opens; restore when it closes
+// Save focus when dialog opens; restore when it closes. Also mark app root inert
+// so background content is hidden from assistive technology while the dialog is open.
 watch(activeCharge, (next, prev) => {
   if (!prev && next) {
     // Dialog just appeared — save the currently-focused element and move focus inside
     savedFocus = document.activeElement;
+    document.getElementById('app')?.setAttribute('inert', '');
     // nextTick equivalent: the DOM is already updated by the time the watcher fires on the next frame
     requestAnimationFrame(() => {
       if (declineRef.value) declineRef.value.focus();
     });
   } else if (prev && !next) {
     // Dialog just closed — restore focus to where the user was
+    document.getElementById('app')?.removeAttribute('inert');
     if (savedFocus && typeof savedFocus.focus === 'function') {
       savedFocus.focus();
     }
     savedFocus = null;
   }
 });
+
+// Trap focus inside the dialog panel while it is open. Also dismiss on Escape.
+const onPanelKey = (e) => {
+  if (!panelRef.value) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    declineCharge(activeCharge.value);
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const focusable = Array.from(
+    panelRef.value.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])'),
+  ).filter((el) => !el.disabled);
+  if (!focusable.length) { e.preventDefault(); return; }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+};
 
 const fetchChargeRequests = async () => {
   if (!customerStore.isAuthenticated) return;

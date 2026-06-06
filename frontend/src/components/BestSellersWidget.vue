@@ -1,5 +1,5 @@
 <template>
-  <div class="ui-panel p-3">
+  <div class="ui-panel p-3" :aria-busy="loading || updating">
     <!-- Header with toggle -->
     <div class="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
       <div class="min-w-0">
@@ -18,20 +18,22 @@
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
           </svg>
         </p>
-        <span class="sr-only" aria-live="polite">{{ updating ? t('bestSellers.updating') : '' }}</span>
-        <h2 class="text-sm font-semibold text-slate-100">{{ t('bestSellers.heading') }}</h2>
+        <span class="sr-only" aria-live="polite">{{ loading ? t('common.loading') : updating ? t('bestSellers.updating') : '' }}</span>
+        <h2 class="text-sm font-semibold text-slate-50">{{ t('bestSellers.heading') }}</h2>
       </div>
-      <div role="group" class="ui-segmented shrink-0 max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
+      <div role="radiogroup" class="ui-segmented shrink-0 max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
         <button
           class="ui-segmented-button px-2.5 py-1 text-[11px]"
+          role="radio"
           :data-active="mode === 'count'"
-          :aria-pressed="mode === 'count'"
+          :aria-checked="mode === 'count'"
           @click="mode = 'count'"
         >{{ t('bestSellers.byOrders') }}</button>
         <button
           class="ui-segmented-button px-2.5 py-1 text-[11px]"
+          role="radio"
           :data-active="mode === 'revenue'"
-          :aria-pressed="mode === 'revenue'"
+          :aria-checked="mode === 'revenue'"
           @click="mode = 'revenue'"
         >{{ t('bestSellers.byRevenue') }}</button>
       </div>
@@ -64,7 +66,7 @@
         <!-- Rank -->
         <span
           class="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums"
-          :class="idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'"
+          :class="idx === 0 ? 'text-[var(--color-secondary)]' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600/70' : 'text-slate-400'"
         >{{ idx + 1 }}</span>
 
         <!-- Bar + label -->
@@ -81,7 +83,7 @@
             :aria-valuenow="barPct(dish)"
             aria-valuemin="0"
             aria-valuemax="100"
-            :aria-label="dish.dish_name"
+            :aria-label="`${dish.dish_name} — ${mode === 'count' ? t('bestSellers.qty', { n: dish.total_qty }) : fmtMoney(dish.revenue)} (${barPct(dish)}%)`"
           >
             <div
               class="h-full rounded-full bg-[var(--color-secondary)]/60"
@@ -96,8 +98,9 @@
     </ol>
 
     <!-- Empty -->
-    <div v-else-if="!loading" class="ui-empty-state p-4 text-center">
+    <div v-else-if="!loading" class="ui-empty-state p-5 text-center space-y-1">
       <p class="text-xs font-medium text-slate-300">{{ t('bestSellers.noData') }}</p>
+      <p class="text-xs text-slate-400">{{ t('bestSellers.noDataHint') }}</p>
     </div>
   </div>
 </template>
