@@ -1,32 +1,60 @@
 <template>
   <!-- Customer-confirmed charge: a restaurant is requesting an above-threshold debit.
        Mounted in CustomerLayout so it surfaces on ANY customer page, not just /account. -->
-  <div v-if="activeCharge" class="fixed inset-0 z-[3500] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
-    <div class="w-full max-w-sm rounded-t-3xl border border-slate-700 bg-slate-900 p-5 space-y-4 sm:rounded-2xl">
-      <div class="text-center space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wide text-amber-300">{{ t('chargeRequest.title') }}</p>
-        <p class="text-3xl font-bold text-white">{{ formatPrice(activeCharge.amount) }}</p>
-        <p class="text-sm text-slate-300">{{ t('chargeRequest.from', { name: activeCharge.restaurant_name || t('chargeRequest.aRestaurant') }) }}</p>
-        <p v-if="activeCharge.order_number" class="text-xs text-slate-500">{{ t('chargeRequest.order', { num: activeCharge.order_number }) }}</p>
-      </div>
-      <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 px-3 py-2 text-center text-xs text-slate-400">
-        {{ t('chargeRequest.balanceLine', { balance: formatPrice(walletBalance) }) }}
-      </div>
-      <p v-if="chargeError" class="text-center text-xs text-red-300" role="alert">{{ chargeError }}</p>
-      <div class="flex gap-2">
-        <button
-          class="flex-1 rounded-xl border border-slate-600 py-2.5 text-sm font-semibold text-slate-300 disabled:opacity-50"
-          :disabled="!!chargeBusy"
-          @click="declineCharge(activeCharge)"
-        >{{ t('chargeRequest.decline') }}</button>
-        <button
-          class="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="!!chargeBusy"
-          @click="approveCharge(activeCharge)"
-        >{{ chargeBusy === activeCharge.id ? '…' : t('chargeRequest.approve') }}</button>
+  <Transition name="ui-fade">
+    <div
+      v-if="activeCharge"
+      class="fixed inset-0 z-[3500] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="`charge-title-${activeCharge.id}`"
+    >
+      <div class="ui-glass w-full max-w-sm space-y-4 rounded-t-[2rem] p-5 sm:rounded-[2rem] ui-reveal">
+        <!-- Header -->
+        <div class="space-y-1 text-center">
+          <p class="ui-kicker" style="color: var(--color-secondary);">{{ t('chargeRequest.title') }}</p>
+          <p
+            :id="`charge-title-${activeCharge.id}`"
+            class="tabular-nums text-3xl font-bold tracking-tight text-white"
+          >{{ formatPrice(activeCharge.amount) }}</p>
+          <p class="ui-subtle">{{ t('chargeRequest.from', { name: activeCharge.restaurant_name || t('chargeRequest.aRestaurant') }) }}</p>
+          <p v-if="activeCharge.order_number" class="text-xs text-slate-500">{{ t('chargeRequest.order', { num: activeCharge.order_number }) }}</p>
+        </div>
+
+        <!-- Balance band -->
+        <div class="ui-context-band px-3 py-2 text-center text-xs text-slate-400">
+          <span class="tabular-nums">{{ t('chargeRequest.balanceLine', { balance: formatPrice(walletBalance) }) }}</span>
+        </div>
+
+        <!-- Error -->
+        <div
+          v-if="chargeError"
+          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+          role="alert"
+        >
+          <svg class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
+          <p class="flex-1 text-sm text-red-300">{{ chargeError }}</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <button
+            class="ui-btn-outline ui-press ui-touch-target flex-1 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50"
+            :disabled="!!chargeBusy"
+            @click="declineCharge(activeCharge)"
+          >{{ t('chargeRequest.decline') }}</button>
+          <button
+            class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:pointer-events-none disabled:opacity-50"
+            :disabled="!!chargeBusy"
+            :aria-busy="chargeBusy === activeCharge.id"
+            @click="approveCharge(activeCharge)"
+          >{{ chargeBusy === activeCharge.id ? '…' : t('chargeRequest.approve') }}</button>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <script setup>

@@ -1,18 +1,18 @@
 <template>
   <div class="ui-shell">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
-    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div class="absolute -left-32 -top-20 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl"></div>
-      <div class="absolute -right-20 top-10 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl"></div>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]">{{ t('common.skipToMain') }}</a>
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div class="absolute ltr:-left-32 rtl:-right-32 -top-20 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl"></div>
+      <div class="absolute ltr:-right-20 rtl:-left-20 top-10 h-72 w-72 rounded-full bg-teal-400/10 blur-3xl"></div>
     </div>
 
     <header class="ui-header ui-fade-up relative z-[2000] overflow-visible">
       <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
-        <RouterLink to="/" class="flex min-w-0 items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle">
+        <RouterLink to="/" class="flex min-w-0 items-center gap-3" :aria-label="t('landingLayout.title')">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
             RM
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0" aria-hidden="true">
             <p class="truncate text-xs uppercase tracking-[0.24em] text-slate-400">{{ t("landingLayout.kicker") }}</p>
             <p class="ui-display truncate text-base font-semibold text-slate-100">{{ t("landingLayout.title") }}</p>
           </div>
@@ -27,7 +27,7 @@
 
         <div class="flex items-center gap-1.5 sm:gap-2">
           <div class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+            <span class="ui-live-dot bg-emerald-400" aria-hidden="true"></span>
             {{ t("home.heroLive") }}
           </div>
           <LanguageSwitcher dropdown />
@@ -37,7 +37,7 @@
             to="/owner"
             class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-4 sm:text-sm"
           >
-            <AppIcon name="settings" class="mr-1.5 h-3.5 w-3.5" />
+            <AppIcon name="settings" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {{ t("common.workspace") }}
           </RouterLink>
           <RouterLink
@@ -45,7 +45,7 @@
             :to="{ name: 'customer-account' }"
             class="ui-btn-outline ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-4 sm:text-sm"
           >
-            <AppIcon name="user" class="mr-1.5 h-3.5 w-3.5" />
+            <AppIcon name="user" class="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {{ t("common.myAccount") }}
           </RouterLink>
           <RouterLink v-if="!session.isAuthenticated" to="/signin" class="ui-btn-primary ui-touch-target inline-flex px-3 py-2 text-[11px] sm:px-5 sm:text-sm">{{ t("common.signIn") }}</RouterLink>
@@ -60,19 +60,19 @@
     <nav class="ui-bottom-dock lg:hidden" :aria-label="t('landingLayout.navMobile')">
       <div class="ui-bottom-dock-grid grid-cols-4">
         <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/" :data-active="$route.path === '/'" :aria-current="$route.path === '/' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="home" class="h-4 w-4" />
+          <AppIcon name="home" class="h-4 w-4" aria-hidden="true" />
           <span>{{ t("common.landing") }}</span>
         </RouterLink>
         <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/demo" :data-active="$route.path === '/demo'" :aria-current="$route.path === '/demo' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="menu" class="h-4 w-4" />
+          <AppIcon name="menu" class="h-4 w-4" aria-hidden="true" />
           <span>{{ t("common.demo") }}</span>
         </RouterLink>
         <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/get-started" :data-active="$route.path === '/get-started'" :aria-current="$route.path === '/get-started' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="plus" class="h-4 w-4" />
+          <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
           <span>{{ t("common.getStarted") }}</span>
         </RouterLink>
         <RouterLink class="ui-pill-nav flex flex-col items-center justify-center gap-0.5 px-2 py-1 text-center text-[10px] leading-tight" to="/contact" :data-active="$route.path === '/contact'" :aria-current="$route.path === '/contact' ? 'page' : undefined" active-class="" exact-active-class="">
-          <AppIcon name="chat" class="h-4 w-4" />
+          <AppIcon name="chat" class="h-4 w-4" aria-hidden="true" />
           <span>{{ t("common.contact") }}</span>
         </RouterLink>
       </div>
@@ -89,10 +89,10 @@
     </main>
 
     <footer class="ui-footer">
-      <div class="mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
+      <div class="ui-reveal mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
         <div class="space-y-2">
           <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
               RM
             </div>
             <div>
@@ -114,15 +114,15 @@
           <p class="ui-kicker">{{ t("common.getStarted") }}</p>
           <div class="flex flex-col gap-2 text-sm">
             <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/get-started">
-              <AppIcon name="plus" class="h-3.5 w-3.5" />
+              <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("common.getStarted") }}</span>
             </RouterLink>
             <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/demo">
-              <AppIcon name="eye" class="h-3.5 w-3.5" />
+              <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("common.liveDemo") }}</span>
             </RouterLink>
             <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/contact">
-              <AppIcon name="chat" class="h-3.5 w-3.5" />
+              <AppIcon name="chat" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("common.contact") }}</span>
             </RouterLink>
           </div>
@@ -132,11 +132,11 @@
           <p class="ui-kicker">{{ t("common.status") }}</p>
           <div class="flex flex-col gap-2 text-sm">
             <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/privacy">
-              <AppIcon name="info" class="h-3.5 w-3.5" />
+              <AppIcon name="info" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("common.privacy") }}</span>
             </RouterLink>
             <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/terms">
-              <AppIcon name="check" class="h-3.5 w-3.5" />
+              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ t("common.terms") }}</span>
             </RouterLink>
             <span class="text-slate-500">&copy; {{ year }}</span>

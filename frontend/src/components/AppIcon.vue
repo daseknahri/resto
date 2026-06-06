@@ -7,6 +7,7 @@
     stroke-linejoin="round"
     :stroke-width="strokeWidth"
     aria-hidden="true"
+    focusable="false"
   >
     <path v-for="(path, index) in icon.paths" :key="`${name}-${index}`" :d="path" />
   </svg>

@@ -2410,6 +2410,7 @@ export const messages = {
       byRevenue: "By revenue",
       qty: "{n} sold",
       noData: "No sales data yet.",
+      modeNav: "Sort mode",
     },
     ownerBilling: {
       tabLabel: "Billing",
@@ -5910,6 +5911,7 @@ export const messages = {
       byRevenue: "Par CA",
       qty: "{n} vendus",
       noData: "Aucune donnee de vente pour l instant.",
+      modeNav: "Mode de tri",
     },
     ownerBilling: {
       tabLabel: "Facturation",

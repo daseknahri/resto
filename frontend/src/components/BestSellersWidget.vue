@@ -2,31 +2,51 @@
   <div>
     <!-- Header with toggle -->
     <div class="mb-3 flex items-center justify-between gap-2">
-      <p class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+      <p class="ui-kicker inline-flex items-center gap-1.5">
         {{ t('bestSellers.title') }}
-        <svg v-if="updating" aria-hidden="true" class="h-3 w-3 animate-spin text-slate-600" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
+        <svg
+          v-if="updating"
+          aria-hidden="true"
+          class="h-3 w-3 animate-spin text-slate-600"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
         </svg>
       </p>
-      <div class="flex items-center gap-1">
+      <nav class="ui-segmented max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
         <button
-          class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
-          :class="mode === 'count' ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
+          class="ui-segmented-button px-2.5 py-1 text-[11px]"
+          :data-active="mode === 'count'"
           :aria-pressed="mode === 'count'"
           @click="mode = 'count'"
         >{{ t('bestSellers.byOrders') }}</button>
         <button
-          class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
-          :class="mode === 'revenue' ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
+          class="ui-segmented-button px-2.5 py-1 text-[11px]"
+          :data-active="mode === 'revenue'"
           :aria-pressed="mode === 'revenue'"
           @click="mode = 'revenue'"
         >{{ t('bestSellers.byRevenue') }}</button>
-      </div>
+      </nav>
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="space-y-1.5">
-      <div v-for="i in 5" :key="i" class="h-7 animate-pulse rounded-lg bg-slate-800/60" />
+    <div v-if="loading" class="ui-skeleton px-3 py-2.5">
+      <div class="space-y-2.5">
+        <div v-for="i in 5" :key="i" class="flex items-center gap-2.5">
+          <div class="h-3 w-3 shrink-0 animate-pulse rounded bg-slate-700/60" />
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex justify-between gap-2">
+              <div class="h-2.5 w-24 animate-pulse rounded bg-slate-700/60" :style="{ animationDelay: `${i * 60}ms` }" />
+              <div class="h-2.5 w-10 animate-pulse rounded bg-slate-700/40" :style="{ animationDelay: `${i * 60 + 30}ms` }" />
+            </div>
+            <div class="h-1 animate-pulse rounded-full bg-slate-700/40" :style="{ animationDelay: `${i * 60 + 60}ms` }" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Rows -->
@@ -34,26 +54,31 @@
       <li
         v-for="(dish, idx) in rows"
         :key="dish.dish_slug"
-        class="flex items-center gap-2.5"
+        class="ui-reveal flex items-center gap-2.5"
+        :style="{ '--ui-delay': `${Math.min(idx, 9) * 28}ms` }"
       >
         <!-- Rank -->
         <span
-class="w-4 shrink-0 text-center text-[10px] font-bold"
+          class="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums"
           :class="idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'"
+          aria-hidden="true"
         >{{ idx + 1 }}</span>
 
         <!-- Bar + label -->
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center justify-between gap-1 mb-0.5">
+        <div class="min-w-0 flex-1">
+          <div class="mb-0.5 flex items-center justify-between gap-1">
             <span class="truncate text-xs font-medium text-slate-200">{{ dish.dish_name }}</span>
-            <span class="shrink-0 text-[10px] text-slate-400">
+            <span class="shrink-0 text-[10px] tabular-nums text-slate-400">
               {{ mode === 'count' ? t('bestSellers.qty', { n: dish.total_qty }) : fmtMoney(dish.revenue) }}
             </span>
           </div>
-          <div class="h-1 rounded-full bg-slate-800/70 overflow-hidden">
+          <div class="h-1 overflow-hidden rounded-full bg-slate-800/70">
             <div
-              class="h-full rounded-full bg-[var(--color-secondary)]/60 transition-all duration-500"
-              :style="{ width: `${barPct(dish)}%` }"
+              class="h-full rounded-full bg-[var(--color-secondary)]/60"
+              :style="{
+                width: `${barPct(dish)}%`,
+                transition: 'width var(--motion-slow) var(--ease-fluid)',
+              }"
             />
           </div>
         </div>
@@ -61,7 +86,9 @@ class="w-4 shrink-0 text-center text-[10px] font-bold"
     </ol>
 
     <!-- Empty -->
-    <p v-else-if="!loading" class="text-xs text-slate-500">{{ t('bestSellers.noData') }}</p>
+    <div v-else-if="!loading" class="ui-empty-state p-4 text-center">
+      <p class="text-xs font-medium text-slate-300">{{ t('bestSellers.noData') }}</p>
+    </div>
   </div>
 </template>
 

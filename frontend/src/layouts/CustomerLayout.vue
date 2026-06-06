@@ -1,7 +1,7 @@
 <template>
   <div class="ui-shell">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
-    <header class="ui-header relative z-[100] static md:sticky md:top-0 md:z-[100]">
+    <header class="ui-header ui-reveal">
       <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
         <div class="ui-workspace-stage overflow-visible px-2.5 py-2 sm:px-3.5 sm:py-2.5">
           <div class="flex items-center justify-between gap-3">
@@ -26,7 +26,7 @@
               <CurrencySelector />
               <!-- Color scheme toggle -->
               <button
-                class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                class="ui-touch-target ui-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
                 type="button"
                 :aria-label="t('customerLayout.toggleColorScheme')"
                 @click="toggleColorScheme"
@@ -41,10 +41,14 @@
               <!-- PWA install -->
               <button
                 v-if="pwaCanInstall"
-                class="hidden sm:inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                class="ui-press hidden items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:inline-flex"
                 type="button"
+                :aria-label="t('customerLayout.installApp')"
                 @click="pwaInstall"
-              >⬇ {{ t('customerLayout.installApp') }}</button>
+              >
+                <AppIcon name="download" class="h-3 w-3" aria-hidden="true" />
+                {{ t('customerLayout.installApp') }}
+              </button>
               <!-- sr-only live region announces cart count changes to screen readers -->
               <span class="sr-only" aria-live="polite" aria-atomic="true">
                 {{ cart.count ? t('customerLayout.cartItems', { count: cart.count }) : '' }}
@@ -52,14 +56,14 @@
               <RouterLink
                 to="/cart"
                 :aria-label="cart.count ? `${t('customerLayout.viewCart')} (${t('customerLayout.cartItems', { count: cart.count })})` : t('customerLayout.viewCart')"
-                class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm"
+                class="ui-touch-target ui-press relative inline-flex min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:px-3 sm:text-sm"
               >
                 <AppIcon name="cart" class="h-4 w-4 sm:hidden" aria-hidden="true" />
                 <span class="hidden sm:inline" aria-hidden="true">{{ t("common.cart") }}</span>
                 <span
                   v-show="cart.count"
                   aria-hidden="true"
-                  class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
+                  class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold tabular-nums text-slate-950"
                 >
                   {{ cart.count }}
                 </span>
@@ -80,7 +84,7 @@
             >
               <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
               <span>{{ item.label }}</span>
-              <span v-if="item.badge" class="ml-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
+              <span v-if="item.badge" class="ms-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
                 {{ item.badge }}
               </span>
             </RouterLink>
@@ -97,7 +101,7 @@
 
     <!-- Track-order banner: shown when a recent in-app order exists and user is not on the order-status page -->
     <div v-if="trackBannerOrder" class="mx-auto w-full max-w-5xl px-4 pt-2">
-      <div class="flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5 shadow-lg shadow-black/20">
+      <div class="ui-reveal flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5 shadow-lg shadow-black/20">
         <RouterLink
           :to="{ name: 'order-status', params: { orderNumber: trackBannerOrder } }"
           class="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[var(--color-secondary)] hover:opacity-80"
@@ -109,7 +113,7 @@
           <span class="truncate">{{ t("customerLayout.trackOrderBanner", { number: trackBannerOrder }) }}</span>
         </RouterLink>
         <button
-          class="ml-3 shrink-0 rounded-full p-1 text-slate-400 hover:text-slate-200"
+          class="ui-touch-target ui-press ms-3 shrink-0 rounded-full p-1 text-slate-400 transition-colors hover:text-slate-200"
           :aria-label="t('customerLayout.trackOrderDismiss')"
           @click="dismissTrackBanner"
         >
@@ -134,7 +138,7 @@
           v-for="item in navItems"
           :key="item.key"
           :to="item.to"
-          class="ui-press flex min-h-[2.8rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center transition"
+          class="ui-press flex min-h-[2.8rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >
@@ -142,7 +146,7 @@
           <span class="text-[11px] font-semibold leading-none">{{ item.label }}</span>
           <span
             v-if="item.badge"
-            class="rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950"
+            class="tabular-nums rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950"
           >
             {{ item.badge }}
           </span>

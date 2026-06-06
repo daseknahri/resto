@@ -105,7 +105,7 @@
             <!-- Waiter view shortcut (desktop) -->
             <RouterLink
               to="/waiter"
-              class="hidden md:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition-colors"
+              class="hidden md:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             >
               <AppIcon name="user" class="h-3.5 w-3.5" />
               {{ t("ownerLayout.waiterView") }}
@@ -115,7 +115,7 @@
               <LanguageSwitcher compact dropdown />
               <!-- Dark / light mode toggle -->
               <button
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                 type="button"
                 :aria-label="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
                 :title="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
@@ -131,17 +131,18 @@
               <!-- PWA install button -->
               <button
                 v-if="canInstall"
-                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors"
+                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                 type="button"
+                :aria-label="t('ownerLayout.installApp')"
                 :title="t('ownerLayout.installApp')"
                 @click="pwaInstall"
               >
-                ⬇ {{ t('ownerLayout.installApp') }}
+                <span aria-hidden="true">⬇</span> {{ t('ownerLayout.installApp') }}
               </button>
               <!-- Web Push bell (only when VAPID is configured) -->
               <button
                 v-if="pushSupported && pushEnabled"
-                class="relative flex h-8 w-8 items-center justify-center rounded-xl border transition-colors"
+                class="relative flex h-8 w-8 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ui-touch-target"
                 :class="pushSubscribed
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
                   : 'border-slate-700/50 bg-slate-800/50 text-slate-400 hover:border-slate-600'"
@@ -150,14 +151,14 @@
                 type="button"
                 @click="pushSubscribed ? pushUnsubscribe() : pushSubscribe()"
               >
-                <span class="text-sm leading-none" :class="pushLoading ? 'animate-pulse' : ''">
+                <span class="text-sm leading-none" :class="pushLoading ? 'animate-pulse' : ''" aria-hidden="true">
                   {{ pushSubscribed ? '🔔' : '🔕' }}
                 </span>
               </button>
               <div ref="settingsMenuRef" class="relative" @keydown.escape.stop="closeSettingsMenuByKey">
                 <button
                   ref="settingsTriggerRef"
-                  class="owner-settings-trigger"
+                  class="owner-settings-trigger ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                   type="button"
                   :aria-expanded="settingsOpen ? 'true' : 'false'"
                   :aria-label="t('common.profile')"
@@ -245,7 +246,7 @@
         <span v-else>{{ t('ownerLayout.gracePeriodWarning', { days: tenant.graceDaysRemaining }) }}</span>
         <RouterLink
           :to="{ name: 'owner-profile', query: { tab: 'billing' } }"
-          class="ml-2 underline opacity-80 hover:opacity-100"
+          class="ms-2 underline opacity-80 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1 focus-visible:ring-offset-transparent rounded"
         >{{ t('ownerLayout.gracePeriodCta') }}</RouterLink>
       </div>
     </Transition>
@@ -272,7 +273,7 @@
             </div>
             <button
               type="button"
-              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15"
+              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15 ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               @click="acknowledgeWaiterCall(call.id)"
             >
               {{ t("ownerLayout.waiterCallAcknowledge") }}
@@ -712,7 +713,7 @@ watch(
 
 .owner-settings-menu {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   top: calc(100% + 0.5rem);
   z-index: 2200;
   min-width: 11rem;
@@ -754,6 +755,11 @@ watch(
   color: var(--color-secondary);
 }
 
+.owner-settings-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.55);
+}
+
 .owner-settings-item-danger:hover {
   color: rgb(252, 165, 165);
 }
@@ -790,6 +796,11 @@ watch(
   font-weight: 600;
   color: rgb(203, 213, 225);
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.owner-main-nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.6);
 }
 
 .owner-nav-icon {
