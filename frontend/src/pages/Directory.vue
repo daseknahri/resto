@@ -11,7 +11,11 @@
       </header>
 
       <!-- Filters -->
-      <div class="flex flex-wrap gap-2">
+      <div
+        role="group"
+        :aria-label="t('directory.filtersLabel')"
+        class="flex flex-wrap gap-2 overflow-x-auto"
+      >
         <!-- Search -->
         <input
           v-model="searchQuery"
@@ -81,7 +85,7 @@
       </div>
 
       <!-- Empty state -->
-      <div v-else-if="!filteredRestaurants.length" class="ui-empty-state ui-reveal mx-auto max-w-sm text-center">
+      <div v-else-if="!filteredRestaurants.length" role="status" class="ui-empty-state ui-reveal mx-auto max-w-sm text-center">
         <p class="text-sm font-semibold text-slate-100">{{ t('directory.noResults') }}</p>
         <p class="mt-1 text-xs text-slate-400">{{ t('directory.noResultsHint') }}</p>
       </div>
@@ -109,7 +113,7 @@
               @error="$event.target.style.display='none'"
             />
             <span v-else class="text-4xl opacity-20" aria-hidden="true">
-              <svg viewBox="0 0 24 24" class="h-12 w-12 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5">
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="h-12 w-12 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.87c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513m-3 4.493V19.5m-6-7.5h12m-12 0a1.5 1.5 0 01-1.5-1.5v-.75A2.25 2.25 0 014.75 8.5M18 15.5a1.5 1.5 0 001.5-1.5v-.75A2.25 2.25 0 0019.25 8.5" />
               </svg>
             </span>
@@ -120,8 +124,8 @@
             <div class="flex items-start justify-between gap-2">
               <h2 class="min-w-0 flex-1 truncate text-sm font-bold leading-snug text-slate-100">{{ r.name }}</h2>
               <span
-                class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                :class="r.is_open ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-400'"
+                class="ui-status-pill shrink-0"
+                :class="r.is_open ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : ''"
               >
                 {{ r.is_open ? t('directory.open') : t('directory.closed') }}
               </span>
@@ -132,22 +136,27 @@
             <div class="mt-auto flex flex-wrap items-center gap-1.5">
               <span v-if="r.cuisine_type" class="ui-chip text-[10px]">{{ r.cuisine_type }}</span>
               <span v-if="r.city" class="ui-chip text-[10px]">{{ r.city }}</span>
-              <span v-if="r.delivery_enabled" class="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300">
+              <span v-if="r.delivery_enabled" class="ui-chip text-[10px]">
                 {{ t('directory.delivery') }}
               </span>
             </div>
 
             <!-- Rating -->
-            <div v-if="r.rating_average" class="flex items-center gap-1 text-xs text-amber-400">
+            <div
+              v-if="r.rating_average"
+              class="flex items-center gap-1 text-xs text-amber-400"
+              :aria-label="`${r.rating_average.toFixed(1)} ${t('directory.ratingLabel')}, ${r.rating_count} ${t('directory.reviewsLabel')}`"
+            >
               <span aria-hidden="true">★</span>
-              <span class="tabular-nums">{{ r.rating_average.toFixed(1) }}</span>
-              <span class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
+              <span aria-hidden="true" class="tabular-nums">{{ r.rating_average.toFixed(1) }}</span>
+              <span aria-hidden="true" class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
             </div>
 
             <!-- CTA -->
             <a
               :href="restaurantUrl(r.slug)"
               class="ui-btn-primary ui-press mt-2 w-full py-2 text-xs"
+              :aria-label="`${t('directory.viewMenu')} — ${r.name}`"
             >
               {{ t('directory.viewMenu') }}
             </a>

@@ -86,6 +86,8 @@ const arabicMessages = {
   "home": {
     "leadSuccess": "تم استلام طلبك. سنتواصل معك قريباً.",
     "dismiss": "إغلاق",
+    "dismissAriaLabel": "إغلاق رسالة التأكيد",
+    "recommended": "موصى به",
     "heroBadge": "منصة SaaS للمطاعم",
     "heroLive": "مباشر",
     "heroTitle": "أنشئ وبِع قوائم مطاعم احترافية عبر منصة SaaS قوية واحدة.",
@@ -1834,7 +1836,8 @@ const arabicMessages = {
     "customisable": "قابل للتخصيص",
     "shareDish": "مشاركة",
     "shareDishCopied": "تم نسخ الرابط إلى الحافظة",
-    "shareDishFailed": "تعذّر نسخ الرابط"
+    "shareDishFailed": "تعذّر نسخ الرابط",
+    "cartWithCount": "السلة، {count} عناصر"
   },
   "waiterInstall": {
     "prompt": "ثبّت التطبيق لاستخدام يومي أسرع.",
@@ -2076,6 +2079,8 @@ const arabicMessages = {
     "findMyOrderRateLimit": "محاولات كثيرة. يرجى الانتظار قليلاً ثم المحاولة مجدداً.",
     "findMyOrderPhoneTooShort": "يرجى إدخال 6 أرقام على الأقل.",
     "findMyOrderItems": "{count} عنصر",
+    "findMyOrderPhonePlaceholder": "+966 5x xxx xxxx",
+    "findMyOrderCardLabel": "طلب #{number} — {status}",
     "receiptMessage": "رسالة من المطعم",
     "walletPaid": "رصيد مُطبَّق: {amount}",
     "loyaltyDiscount": "خصم الولاء"
@@ -2228,12 +2233,15 @@ Object.assign(arabicMessages, {
     filterCity: "\u0627\u0644\u0645\u062f\u064a\u0646\u0629",
     filterCuisine: "\u0646\u0648\u0639 \u0627\u0644\u0645\u0637\u0628\u062e",
     filterAll: "\u0627\u0644\u0643\u0644",
+    filtersLabel: "\u062a\u0635\u0641\u064a\u0629 \u0627\u0644\u0645\u0637\u0627\u0639\u0645",
     open: "\u0645\u0641\u062a\u0648\u062d \u0627\u0644\u0622\u0646",
     closed: "\u0645\u063a\u0644\u0642",
     delivery: "\u062a\u0648\u0635\u064a\u0644",
     noResults: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0637\u0627\u0639\u0645.",
     noResultsHint: "\u062d\u0627\u0648\u0644 \u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0641\u0644\u0627\u062a\u0631.",
     ratingCount: "{count} \u062a\u0642\u064a\u064a\u0645",
+    ratingLabel: "\u0646\u062c\u0648\u0645",
+    reviewsLabel: "\u062a\u0642\u064a\u064a\u0645\u0627\u062a",
     viewMenu: "\u0639\u0631\u0636 \u0627\u0644\u0642\u0627\u0626\u0645\u0629",
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645\u2026",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645.",
@@ -2283,6 +2291,10 @@ Object.assign(arabicMessages, {
     ratingCount_other: "{count} \u062a\u0642\u064a\u064a\u0645\u0627\u062a",
     promo: "\ud83c\udff7 {badge}",
     flashSale: "\u062a\u062e\u0641\u064a\u0636 \u0645\u0624\u0642\u062a",
+    minRating3: "\u2605 3+",
+    minRating35: "\u2605 3.5+",
+    minRating4: "\u2605 4+",
+    minRating45: "\u2605 4.5+",
   },
   mktMenu: {
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0642\u0627\u0626\u0645\u0629\u2026",
@@ -2566,6 +2578,7 @@ Object.assign(arabicMessages, {
     available: "المتاح",
     cashOut: "سحب نقدي",
     cashOutMin: "تحتاج إلى {amount} للسحب.",
+    cashOutCode: "رمز الاسترداد",
     cashOutShowCode: "أظهر هذا الرمز في أي مطعم لاستلام {amount} نقداً:",
     cashOutCancel: "إلغاء",
     cashOutAmountPrompt: "المبلغ المراد سحبه (حتى {max}):",

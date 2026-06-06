@@ -3,7 +3,7 @@
     <Transition name="ui-fade">
       <div v-if="leadSuccess" role="status" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-emerald-100">
         <span>{{ t("home.leadSuccess") }}</span>
-        <button class="ui-press ui-touch-target inline-flex items-center px-2 text-sm underline" @click="dismiss">{{ t("home.dismiss") }}</button>
+        <button class="ui-press ui-touch-target inline-flex items-center px-2 text-sm underline" :aria-label="t('home.dismissAriaLabel')" @click="dismiss">{{ t("home.dismiss") }}</button>
       </div>
     </Transition>
 
@@ -263,11 +263,13 @@
           class="ui-reveal relative overflow-hidden rounded-[1.8rem] border p-5 shadow-lg shadow-black/20 transition duration-300"
           :class="plan.recommended ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/12' : 'border-slate-700/60 bg-slate-900/55'"
           :style="{ '--ui-delay': `${planIndex * 56}ms` }"
+          :aria-label="plan.name + ' — ' + (plan.available ? t('common.available') : t('common.soon'))"
         >
           <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true"></div>
           <div v-if="plan.recommended" class="pointer-events-none absolute end-5 top-5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-secondary)]" aria-hidden="true">
             {{ t("common.available") }}
           </div>
+          <span v-if="plan.recommended" class="sr-only">{{ t("home.recommended") }}</span>
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
               <p class="ui-kicker">{{ t("common.plan") }}</p>
@@ -304,7 +306,7 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <p class="ui-kicker">{{ t("home.readyEyebrow") }}</p>
-            <h3 id="cta-heading" class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h3>
+            <h2 id="cta-heading" class="ui-display text-3xl font-semibold text-white">{{ t("home.readyTitle") }}</h2>
             <p class="text-slate-300">{{ t("home.readyText") }}</p>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">

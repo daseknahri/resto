@@ -1,5 +1,8 @@
 ﻿<template>
   <div class="mx-auto max-w-lg space-y-4 px-3 py-3 pb-24 sm:px-4 sm:py-4">
+    <!-- Persistent live region for loading state (must be in DOM before content changes) -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only">{{ loading ? t('common.loading') : '' }}</div>
+
     <!-- Header -->
     <div class="ui-hero-ribbon ui-reveal p-4 sm:p-5">
       <div class="space-y-1.5">
@@ -14,13 +17,14 @@
     <!-- Search form -->
     <form class="ui-panel space-y-3 p-4" novalidate @submit.prevent="search">
       <div class="flex gap-2">
+        <label for="phone-input" class="sr-only">{{ t('orderStatus.findMyOrderPhone') }}</label>
         <input
+          id="phone-input"
           v-model="phone"
           type="tel"
           inputmode="tel"
           autocomplete="tel"
-          :aria-label="t('orderStatus.findMyOrderPhone')"
-          :placeholder="t('orderStatus.findMyOrderPhone')"
+          :placeholder="t('orderStatus.findMyOrderPhonePlaceholder')"
           :disabled="loading"
           aria-required="true"
           class="ui-input flex-1 disabled:opacity-50"
@@ -50,7 +54,7 @@
     </div>
 
     <!-- Loading skeleton -->
-    <div v-else-if="loading" class="space-y-2" aria-live="polite" :aria-label="t('common.loading')">
+    <div v-else-if="loading" class="space-y-2" aria-hidden="true">
       <div v-for="i in 3" :key="i" class="ui-skeleton h-20" />
     </div>
 
@@ -83,7 +87,8 @@
       >
         <RouterLink
           :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-          class="ui-panel ui-surface-lift group relative flex items-center justify-between gap-3 overflow-hidden p-3.5 hover:border-[var(--color-secondary)]/30 hover:bg-slate-900/70 sm:p-4"
+          :aria-label="t('orderStatus.findMyOrderCardLabel', { number: order.order_number, status: statusLabel(order.status) })"
+          class="ui-panel ui-surface-lift group relative flex items-center justify-between gap-3 overflow-hidden p-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] hover:border-[var(--color-secondary)]/30 hover:bg-slate-900/70 sm:p-4"
         >
           <!-- inline-start accent on hover (RTL-safe) -->
           <div

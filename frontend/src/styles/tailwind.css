@@ -573,6 +573,11 @@ body[dir="rtl"] .ui-section-kicker {
       color var(--motion-fast) var(--ease-fluid);
   }
 
+  .ui-state-chip:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+  }
+
   .ui-state-chip[data-active="true"] {
     border-color: rgba(245, 158, 11, 0.36);
     background: rgba(245, 158, 11, 0.12);

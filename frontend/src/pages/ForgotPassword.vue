@@ -1,10 +1,10 @@
 <template>
   <div class="ui-auth-page flex items-center">
     <div class="ui-auth-stage">
-      <section class="ui-auth-spotlight relative space-y-6">
+      <section class="ui-auth-spotlight relative space-y-6" aria-labelledby="forgot-spotlight-heading">
         <div class="relative space-y-3">
           <span class="ui-chip-strong w-fit">{{ t("forgotPassword.kicker") }}</span>
-          <h1 class="ui-display max-w-lg text-4xl font-semibold text-white">{{ t("forgotPassword.title") }}</h1>
+          <h1 id="forgot-spotlight-heading" class="ui-display max-w-lg text-4xl font-semibold text-white">{{ t("forgotPassword.title") }}</h1>
           <p class="max-w-md text-sm text-slate-300">{{ t("forgotPassword.description") }}</p>
         </div>
 
@@ -23,7 +23,7 @@
       </section>
 
       <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
-        <div class="ui-hero-ribbon space-y-3 text-center">
+        <div class="space-y-3 text-center">
           <p class="ui-kicker">{{ t("forgotPassword.kicker") }}</p>
           <h2 class="ui-display text-2xl font-semibold text-white">{{ t("forgotPassword.title") }}</h2>
           <p class="text-sm text-slate-300">{{ t("forgotPassword.description") }}</p>
@@ -39,20 +39,20 @@
               class="ui-input"
               :class="identifierError ? 'border-red-400' : ''"
               :aria-invalid="identifierError ? 'true' : undefined"
-              aria-describedby="forgot-identifier-error"
+              :aria-describedby="identifierError ? 'forgot-identifier-error' : undefined"
               aria-required="true"
               @input="identifierError = ''"
             />
-            <p v-if="identifierError" id="forgot-identifier-error" class="text-xs text-red-300" role="alert">{{ identifierError }}</p>
           </label>
+          <p v-if="identifierError" id="forgot-identifier-error" class="text-xs text-red-300" role="alert">{{ identifierError }}</p>
           <button
             type="submit"
             :disabled="submitting"
-            class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
+            class="ui-btn-primary ui-press ui-touch-target w-full justify-center disabled:opacity-60"
           >
             {{ submitting ? t("forgotPassword.sending") : t("forgotPassword.sendResetLink") }}
           </button>
-          <div v-if="message" role="status" class="flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <div v-if="message" role="alert" class="flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
             <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
             <p class="flex-1 text-sm text-emerald-200">{{ message }}</p>
           </div>

@@ -1,5 +1,5 @@
 <template>
-  <main class="mx-auto w-full max-w-md px-4 py-5 space-y-4">
+  <main class="ui-page-shell space-y-4">
     <!-- Header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5">
       <p class="ui-kicker">{{ t('driver.kicker') }}</p>
@@ -57,9 +57,13 @@
           <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
           <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
         </div>
-        <button class="ui-btn-primary ui-touch-target w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
-          {{ busy ? '…' : t('driver.becomeCta') }}
-        </button>
+        <button
+          class="ui-btn-primary ui-touch-target w-full px-5 py-2.5 text-sm"
+          :disabled="busy"
+          :aria-busy="busy"
+          :aria-label="busy ? t('common.loading') : undefined"
+          @click="becomeDriver"
+        >{{ busy ? '…' : t('driver.becomeCta') }}</button>
       </template>
     </div>
 
@@ -103,6 +107,7 @@
           :disabled="busy"
           role="switch"
           :aria-checked="online"
+          :aria-label="online ? t('driver.online') : t('driver.offline')"
           @click="toggleOnline"
         >
           {{ online ? t('driver.goOffline') : t('driver.goOnline') }}
@@ -150,7 +155,9 @@
         <!-- Active cash-out request: show the code to read to a restaurant -->
         <div v-if="cashout" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4 text-center space-y-2">
           <p class="text-xs font-medium text-emerald-200">{{ t('driver.cashOutShowCode', { amount: fmtMoney(cashout.amount) }) }}</p>
-          <p class="my-1 text-3xl font-bold tracking-[0.3em] text-white tabular-nums">{{ cashout.code }}</p>
+          <p class="my-1 text-3xl font-bold tracking-[0.3em] text-white tabular-nums">
+            <span class="sr-only">{{ t('driver.cashOutCode') }}: </span>{{ cashout.code }}
+          </p>
           <button
             class="ui-btn-outline ui-press px-4 py-1.5 text-xs"
             :disabled="busy"
@@ -261,7 +268,9 @@
         <div
           v-if="nextAction && nextAction.to === 'delivered'"
           class="flex items-start gap-1.5 rounded-lg bg-sky-900/15 px-2.5 py-2 text-[11px] text-sky-300"
-          role="note"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
         >
           <AppIcon name="info" class="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
           <span>{{ t('driver.codeReminder') }}</span>
@@ -272,10 +281,10 @@
           v-if="nextAction"
           class="ui-btn-primary ui-touch-target w-full px-5 py-2.5 text-sm"
           :disabled="busy"
+          :aria-busy="busy"
+          :aria-label="busy ? t('common.loading') : undefined"
           @click="advance(nextAction.to)"
-        >
-          {{ busy ? '…' : nextAction.label }}
-        </button>
+        >{{ busy ? '…' : nextAction.label }}</button>
         <button
           v-if="!failingOpen"
           class="ui-touch-target w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
@@ -377,33 +386,36 @@
         <button
           class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
           :aria-expanded="showHistory"
+          aria-controls="driver-history-panel"
           @click="toggleHistory"
         >
           <p class="text-sm font-semibold text-slate-200">{{ t('driver.historyTitle') }}</p>
           <AppIcon :name="showHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
         </button>
-        <template v-if="showHistory">
-          <div v-if="loadingHistory && !history.length" class="space-y-2" aria-busy="true">
-            <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
-          </div>
-          <div v-else-if="!history.length" class="ui-empty-state text-center py-4 space-y-1">
-            <p class="text-sm font-semibold text-slate-100">{{ t('driver.historyEmpty') }}</p>
-          </div>
-          <ul v-else class="space-y-2">
-            <li
-              v-for="(d, index) in history"
-              :key="d.id"
-              class="ui-reveal flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2"
-              :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-            >
-              <div class="min-w-0">
-                <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
-                <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
-              </div>
-              <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
-            </li>
-          </ul>
-        </template>
+        <div id="driver-history-panel">
+          <template v-if="showHistory">
+            <div v-if="loadingHistory && !history.length" class="space-y-2" aria-busy="true">
+              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
+            </div>
+            <div v-else-if="!history.length" class="ui-empty-state text-center py-4 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('driver.historyEmpty') }}</p>
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="(d, index) in history"
+                :key="d.id"
+                class="ui-reveal flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2"
+                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
+                  <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
+                </div>
+                <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
+              </li>
+            </ul>
+          </template>
+        </div>
       </div>
     </template>
   </main>
@@ -416,7 +428,7 @@
       @click.self="ratingJob = null"
       @keydown.esc="ratingJob = null"
     >
-      <div class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl" role="dialog" :aria-label="t('driver.rateCustomerTitle')">
+      <div ref="ratingDialogFirstFocus" class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl" role="dialog" aria-modal="true" :aria-label="t('driver.rateCustomerTitle')" tabindex="-1">
         <div>
           <p class="text-sm font-semibold text-white">{{ t('driver.rateCustomerTitle') }}</p>
           <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.order') }} #{{ ratingJob.order_number }}</p>
@@ -444,6 +456,8 @@
           <button
             class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
             :disabled="!custRatingScore || submittingRating"
+            :aria-busy="submittingRating"
+            :aria-label="submittingRating ? t('common.loading') : undefined"
             @click="submitCustomerRating"
           >{{ submittingRating ? '…' : t('driver.rateSubmit') }}</button>
         </div>
@@ -453,7 +467,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
@@ -763,6 +777,18 @@ const ratingJob = ref(null);
 const custRatingScore = ref(0);
 const custRatingNote = ref('');
 const submittingRating = ref(false);
+const ratingDialogFirstFocus = ref(null);
+let ratingTriggerEl = null;
+
+watch(ratingJob, (val) => {
+  if (val) {
+    ratingTriggerEl = typeof document !== 'undefined' ? document.activeElement : null;
+    nextTick(() => { ratingDialogFirstFocus.value?.focus(); });
+  } else if (ratingTriggerEl) {
+    ratingTriggerEl.focus();
+    ratingTriggerEl = null;
+  }
+});
 
 const openCustomerRating = (job) => {
   ratingJob.value = job;

@@ -78,9 +78,9 @@
             class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
           >
             <option value="">{{ t('marketplace.filterPriceTier') }}: {{ t('marketplace.filterAll') }}</option>
-            <option value="1">€</option>
-            <option value="2">€€</option>
-            <option value="3">€€€</option>
+            <option value="1">{{ t('marketplace.priceTier1') }}</option>
+            <option value="2">{{ t('marketplace.priceTier2') }}</option>
+            <option value="3">{{ t('marketplace.priceTier3') }}</option>
           </select>
 
           <!-- Min rating -->
@@ -90,10 +90,10 @@
             class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
           >
             <option value="">{{ t('marketplace.filterMinRating') }}: {{ t('marketplace.filterAll') }}</option>
-            <option value="3">★ 3+</option>
-            <option value="3.5">★ 3.5+</option>
-            <option value="4">★ 4+</option>
-            <option value="4.5">★ 4.5+</option>
+            <option value="3">{{ t('marketplace.minRating3') }}</option>
+            <option value="3.5">{{ t('marketplace.minRating35') }}</option>
+            <option value="4">{{ t('marketplace.minRating4') }}</option>
+            <option value="4.5">{{ t('marketplace.minRating45') }}</option>
           </select>
 
           <!-- Open now toggle -->
@@ -182,6 +182,7 @@
           <p class="flex-1 text-sm text-red-300">{{ t('marketplace.fetchError') }}</p>
           <button
             class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+            :aria-label="t('marketplace.retryFetchAriaLabel')"
             @click="fetchRestaurants"
           >{{ t('common.retry') }}</button>
         </div>
@@ -260,7 +261,7 @@
               v-if="r.distance_km != null"
               class="absolute start-2 top-2 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] tabular-nums text-slate-300 backdrop-blur-sm"
             >
-              📍 {{ t('marketplace.kmAway', { km: r.distance_km }) }}
+              <span aria-hidden="true">📍</span> {{ t('marketplace.kmAway', { km: r.distance_km }) }}
             </span>
           </div>
 
@@ -312,7 +313,7 @@
             <!-- Flash sale badge -->
             <div v-if="r.flash_sale_active" class="flex items-center">
               <span class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                ⚡ {{ t('marketplace.flashSale') }}
+                <span aria-hidden="true">⚡</span> {{ t('marketplace.flashSale') }}
               </span>
             </div>
 

@@ -1,11 +1,12 @@
 <template>
-  <section class="space-y-6 px-4 py-6 md:space-y-8 md:py-8">
+  <div class="ui-page-shell">
+  <section class="space-y-6 py-6 md:space-y-8 md:py-8">
     <header class="ui-hero-ribbon ui-reveal overflow-hidden p-0">
       <div class="grid gap-6 p-5 md:grid-cols-[1.15fr,0.85fr] md:p-6">
         <div class="space-y-4">
           <span class="ui-chip-strong w-fit">{{ t("leadCapture.kicker") }}</span>
           <div class="space-y-2">
-            <h2 class="ui-display max-w-3xl text-3xl font-semibold text-white md:text-4xl">{{ t("leadCapture.title") }}</h2>
+            <h1 class="ui-display max-w-3xl text-3xl font-semibold text-white md:text-4xl">{{ t("leadCapture.title") }}</h1>
             <p class="ui-subtle max-w-2xl leading-7 md:text-base">{{ t("leadCapture.description") }}</p>
           </div>
           <div class="flex flex-wrap gap-2 text-xs text-slate-300">
@@ -56,7 +57,6 @@
               required
               autocomplete="name"
               :aria-invalid="errors.name ? 'true' : undefined"
-              aria-describedby="lead-capture-name-error"
               @input="clearError('name')"
             />
             <p v-if="errors.name" id="lead-capture-name-error" class="text-xs text-red-300" role="alert">{{ errors.name }}</p>
@@ -72,7 +72,6 @@
               inputmode="email"
               spellcheck="false"
               :aria-invalid="errors.email ? 'true' : undefined"
-              aria-describedby="lead-capture-email-error"
               @input="clearError('email')"
             />
             <p v-if="errors.email" id="lead-capture-email-error" class="text-xs text-red-300" role="alert">{{ errors.email }}</p>
@@ -88,7 +87,6 @@
               autocomplete="tel"
               inputmode="tel"
               :aria-invalid="errors.phone ? 'true' : undefined"
-              aria-describedby="lead-capture-phone-error"
               @input="clearError('phone')"
             />
             <p v-if="errors.phone" id="lead-capture-phone-error" class="text-xs text-red-300" role="alert">{{ errors.phone }}</p>
@@ -99,8 +97,8 @@
               v-model="form.plan_code"
               class="ui-input mt-1"
               :class="errors.plan_code ? 'border-red-400' : 'border-slate-700'"
+              required
               :aria-invalid="errors.plan_code ? 'true' : undefined"
-              aria-describedby="lead-capture-plan-error"
               aria-required="true"
               @change="clearError('plan_code')"
             >
@@ -121,7 +119,6 @@
             :class="errors.notes ? 'border-red-400' : 'border-slate-700'"
             :placeholder="t('leadCapture.notesPlaceholder')"
             :aria-invalid="errors.notes ? 'true' : undefined"
-            aria-describedby="lead-capture-notes-error"
             @input="clearError('notes')"
           ></textarea>
           <p v-if="errors.notes" id="lead-capture-notes-error" class="text-xs text-red-300" role="alert">{{ errors.notes }}</p>
@@ -196,6 +193,7 @@
             <div
               class="ui-selection-card p-3"
               :data-active="form.plan_code === 'basic'"
+              role="presentation"
             >
               <p class="font-semibold text-white">{{ t("leadCapture.planNameBasic") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planBasic") }}</p>
@@ -203,6 +201,7 @@
             <div
               class="ui-selection-card p-3"
               :data-active="form.plan_code === 'growth'"
+              role="presentation"
             >
               <p class="font-semibold text-white">{{ t("leadCapture.planNameGrowth") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
@@ -210,6 +209,7 @@
             <div
               class="ui-selection-card p-3"
               :data-active="form.plan_code === 'pro'"
+              role="presentation"
             >
               <p class="font-semibold text-white">{{ t("leadCapture.planNamePro") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planPro") }}</p>
@@ -219,6 +219,7 @@
       </aside>
     </div>
   </section>
+  </div>
 </template>
 
 <script setup>
