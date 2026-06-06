@@ -12,9 +12,8 @@
         ? 'border-[var(--color-secondary)]/40 shadow-[0_0_0_1px_rgba(245,158,11,0.07)_inset]'
         : 'border-slate-800/70',
     ]"
-    role="button"
     tabindex="0"
-    :aria-label="dish.name"
+    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
     @click="handleOpen"
     @keydown.enter.space.prevent="handleOpen"
   >
@@ -69,7 +68,7 @@
         style="background: linear-gradient(145deg, rgba(245,158,11,0.13) 0%, rgba(15,118,110,0.09) 100%)"
       >
         <div class="pointer-events-none absolute inset-0" style="background-image: radial-gradient(rgba(245,158,11,0.22) 1px, transparent 1px); background-size: 10px 10px;" />
-        <span class="relative text-2xl font-black select-none" style="color: rgba(245,158,11,0.30)">
+        <span class="relative text-2xl font-black select-none" style="color: rgba(245,158,11,0.30)" aria-hidden="true">
           {{ (dish.name || '?')[0].toUpperCase() }}
         </span>
       </div>
@@ -85,16 +84,16 @@
           style="border-color: rgba(245,158,11,0.50); box-shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.08) inset"
         >
           <button
-            class="ui-press flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
             style="color:var(--color-secondary)"
-            :aria-label="t('dishPage.decreaseQuantity')"
+            :aria-label="t('common.decreaseQty')"
             @click.stop="handleDecrement"
           ><AppIcon name="minus" class="h-3 w-3" /></button>
           <span class="min-w-[1.1rem] text-center text-xs font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
           <button
-            class="ui-press flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center rounded-full transition hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
             style="color:var(--color-secondary)"
-            :aria-label="t('dishPage.increaseQuantity')"
+            :aria-label="t('common.increaseQty')"
             @click.stop="handleAdd"
           ><AppIcon name="plus" class="h-3 w-3" /></button>
         </div>
@@ -122,9 +121,8 @@
         ? 'border-[var(--color-secondary)]/40 shadow-[0_20px_50px_rgba(2,6,23,0.42),0_0_0_1px_rgba(245,158,11,0.06)_inset]'
         : 'border-slate-800/80 shadow-[0_20px_50px_rgba(2,6,23,0.36)] hover:border-slate-700/70 hover:shadow-[0_24px_60px_rgba(2,6,23,0.48)]',
     ]"
-    role="button"
     tabindex="0"
-    :aria-label="dish.name"
+    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
     @click="handleOpen"
     @keydown.enter.space.prevent="handleOpen"
   >
@@ -151,7 +149,7 @@
         style="background: linear-gradient(145deg, rgba(245,158,11,0.13) 0%, rgba(15,118,110,0.09) 100%)"
       >
         <div class="pointer-events-none absolute inset-0" style="background-image: radial-gradient(rgba(245,158,11,0.22) 1px, transparent 1px); background-size: 12px 12px;" />
-        <span class="relative text-4xl font-black select-none" style="color: rgba(245,158,11,0.25)">
+        <span class="relative text-4xl font-black select-none" style="color: rgba(245,158,11,0.25)" aria-hidden="true">
           {{ (dish.name || '?')[0].toUpperCase() }}
         </span>
       </div>
@@ -190,11 +188,11 @@
           style="border-color: rgba(245,158,11,0.40); background: rgba(245,158,11,0.06)"
           @click.stop
         >
-          <button class="ui-press flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
+          <button class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.decreaseQty')" @click.stop="handleDecrement">
             <AppIcon name="minus" class="h-3.5 w-3.5" />
           </button>
           <span class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ qtyInCart }}</span>
-          <button class="ui-press flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
+          <button class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60 rounded-full" style="color:var(--color-secondary)" :aria-label="t('common.increaseQty')" @click.stop="handleAdd">
             <AppIcon name="plus" class="h-3.5 w-3.5" />
           </button>
         </div>
@@ -216,15 +214,13 @@
        COMPACT layout  —  single-line: name · price · add
        Great for drinks, sides, simple items
        ══════════════════════════════════════════════════════ -->
-  <div
+  <button
     v-else
-    class="ui-reveal group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-    role="button"
-    tabindex="0"
-    :aria-label="dish.name"
+    type="button"
+    class="ui-reveal group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/70 px-3 py-2.5 text-start transition-colors duration-150 hover:border-slate-700/60 active:scale-[0.99] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+    :aria-label="dish.name + (isSoldOut ? ' — ' + t('menu.soldOut') : isScheduleUnavailable ? ' — ' + t('menu.notAvailableNow') : '')"
     :class="{ 'opacity-60': isSoldOut || isScheduleUnavailable }"
     @click="handleOpen"
-    @keydown.enter.space.prevent="handleOpen"
   >
     <!-- Tiny thumb -->
     <div v-if="dish.image_url" class="h-9 w-9 shrink-0 overflow-hidden rounded-lg">
@@ -243,13 +239,13 @@
     <div class="shrink-0" @click.stop>
       <div v-if="canOrder && qtyInCart > 0" class="flex items-center gap-1">
         <button
-          class="ui-press flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+          class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.decreaseQty')"
           @click.stop="handleDecrement"
         ><AppIcon name="minus" class="h-3 w-3" /></button>
         <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white">{{ qtyInCart }}</span>
         <button
-          class="ui-press flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+          class="ui-press ui-touch-target flex h-6 w-6 items-center justify-center rounded-full border border-amber-500/50 text-amber-400 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.increaseQty')"
           @click.stop="handleAdd"
         ><AppIcon name="plus" class="h-3 w-3" /></button>
@@ -262,7 +258,7 @@
         @click.stop="handleAdd"
       ><AppIcon name="plus" class="h-3.5 w-3.5 text-slate-950" /></button>
     </div>
-  </div>
+  </button>
 
   <!-- Quick-add sheet for items that need a required choice (skips the full detail page) -->
   <Teleport to="body">

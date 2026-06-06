@@ -7,12 +7,18 @@
       class="fixed inset-0 z-[3500] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
-      :aria-labelledby="`charge-title-${activeCharge.id}`"
+      :aria-labelledby="`charge-kicker-${activeCharge.id} charge-title-${activeCharge.id}`"
     >
-      <div class="ui-glass w-full max-w-sm space-y-4 rounded-t-[2rem] p-5 sm:rounded-[2rem] ui-reveal">
+      <div
+        ref="panelRef"
+        class="ui-glass w-full max-w-sm space-y-4 rounded-t-[2rem] p-5 pb-[calc(1.25rem+var(--safe-bottom))] sm:rounded-[2rem] sm:pb-5 ui-reveal"
+      >
         <!-- Header -->
         <div class="space-y-1 text-center">
-          <p class="ui-kicker" style="color: var(--color-secondary);">{{ t('chargeRequest.title') }}</p>
+          <p
+            :id="`charge-kicker-${activeCharge.id}`"
+            class="ui-kicker text-[var(--color-secondary)]"
+          >{{ t('chargeRequest.title') }}</p>
           <p
             :id="`charge-title-${activeCharge.id}`"
             class="tabular-nums text-3xl font-bold tracking-tight text-white"
@@ -32,15 +38,14 @@
           class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
           role="alert"
         >
-          <svg class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-          </svg>
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
           <p class="flex-1 text-sm text-red-300">{{ chargeError }}</p>
         </div>
 
         <!-- Actions -->
         <div class="flex gap-2">
           <button
+            ref="declineRef"
             class="ui-btn-outline ui-press ui-touch-target flex-1 text-sm font-semibold disabled:pointer-events-none disabled:opacity-50"
             :disabled="!!chargeBusy"
             @click="declineCharge(activeCharge)"
@@ -50,7 +55,13 @@
             :disabled="!!chargeBusy"
             :aria-busy="chargeBusy === activeCharge.id"
             @click="approveCharge(activeCharge)"
-          >{{ chargeBusy === activeCharge.id ? '…' : t('chargeRequest.approve') }}</button>
+          >
+            <template v-if="chargeBusy === activeCharge.id">
+              <span aria-hidden="true">…</span>
+              <span class="sr-only">{{ t('common.loading') }}</span>
+            </template>
+            <template v-else>{{ t('chargeRequest.approve') }}</template>
+          </button>
         </div>
       </div>
     </div>
@@ -63,6 +74,7 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import AppIcon from './AppIcon.vue';
 
 const { t, formatPrice } = useI18n();
 const customerStore = useCustomerStore();
@@ -74,10 +86,33 @@ const chargeError = ref('');
 let pollTimer = null;
 const POLL_MS = 5000;
 
+// Focus management refs
+const panelRef = ref(null);
+const declineRef = ref(null);
+let savedFocus = null;
+
 const activeCharge = computed(() => pendingCharges.value[0] || null);
 const walletBalance = computed(() => {
   const n = Number(customerStore.customer?.wallet_balance);
   return Number.isFinite(n) ? n : 0;
+});
+
+// Save focus when dialog opens; restore when it closes
+watch(activeCharge, (next, prev) => {
+  if (!prev && next) {
+    // Dialog just appeared — save the currently-focused element and move focus inside
+    savedFocus = document.activeElement;
+    // nextTick equivalent: the DOM is already updated by the time the watcher fires on the next frame
+    requestAnimationFrame(() => {
+      if (declineRef.value) declineRef.value.focus();
+    });
+  } else if (prev && !next) {
+    // Dialog just closed — restore focus to where the user was
+    if (savedFocus && typeof savedFocus.focus === 'function') {
+      savedFocus.focus();
+    }
+    savedFocus = null;
+  }
 });
 
 const fetchChargeRequests = async () => {

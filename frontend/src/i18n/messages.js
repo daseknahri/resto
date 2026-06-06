@@ -402,6 +402,7 @@ export const messages = {
       viewMap: "View on map",
       mapAriaLabel: "Live driver location map",
       eta: "~{min} min away",
+      rateKicker: "Your feedback",
       rateDriver: "Rate your driver",
       ratingNote: "Add a note (optional)",
       submitRating: "Submit rating",
@@ -1558,6 +1559,7 @@ export const messages = {
     },
     closureDates: {
       addDate: "Add a closure date",
+      addDateTitle: "New closure date",
       date: "Date",
       labelOptional: "Label (optional)",
       labelPlaceholder: "e.g. Christmas Day",
@@ -4001,6 +4003,7 @@ export const messages = {
       viewMap: "Voir sur la carte",
       mapAriaLabel: "Carte de localisation du livreur",
       eta: "~{min} min",
+      rateKicker: "Votre avis",
       rateDriver: "Notez votre livreur",
       ratingNote: "Ajouter une note (optionnel)",
       submitRating: "Envoyer la note",
@@ -5157,6 +5160,7 @@ export const messages = {
     },
     closureDates: {
       addDate: "Ajouter une date de fermeture",
+      addDateTitle: "Nouvelle date de fermeture",
       date: "Date",
       labelOptional: "Libelle (facultatif)",
       labelPlaceholder: "ex. Jour de Noel",

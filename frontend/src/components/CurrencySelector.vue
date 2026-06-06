@@ -1,11 +1,11 @@
 <template>
-  <div ref="rootRef" class="relative z-[3000]" :aria-label="t('common.currency')" @keydown="onKeydown">
+  <div ref="rootRef" role="group" class="relative z-[3000]" :aria-label="t('common.currency')" @keydown="onKeydown">
     <button
       ref="triggerRef"
       type="button"
-      class="ui-press inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-      :aria-expanded="open ? 'true' : 'false'"
-      aria-haspopup="listbox"
+      class="ui-press ui-touch-target inline-flex w-11 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+      :aria-expanded="open"
+      aria-haspopup="menu"
       @click.stop="toggle"
     >
       <span class="text-[10px] leading-none font-bold" aria-hidden="true">{{ currency.selected }}</span>
@@ -15,18 +15,18 @@
     <div
       v-if="open"
       ref="menuRef"
-      role="listbox"
+      role="menu"
       :aria-label="t('common.currency')"
-      class="ui-reveal absolute end-0 top-full z-[3100] mt-1.5 min-w-[7.5rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
+      class="ui-panel ui-reveal absolute end-0 top-full z-[3100] mt-1.5 min-w-[7.5rem] overflow-hidden p-1 shadow-2xl shadow-black/50"
     >
       <button
         v-for="(rate, idx) in currency.available"
         :key="rate.code"
         :ref="el => { if (el) optionRefs[idx] = el }"
         type="button"
-        role="option"
-        :aria-selected="currency.selected === rate.code"
-        class="flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-start text-[11px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/50"
+        role="menuitemradio"
+        :aria-checked="currency.selected === rate.code"
+        class="ui-press flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-2 text-start text-[11px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/50"
         :class="currency.selected === rate.code ? 'bg-slate-800/70 text-[var(--color-secondary)]' : ''"
         @click="select(rate.code)"
       >
@@ -86,6 +86,16 @@ const onKeydown = (e) => {
       ? Math.min(idx + 1, opts.length - 1)
       : Math.max(idx - 1, 0);
     opts[next]?.focus();
+  } else if (e.key === 'Home') {
+    e.preventDefault();
+    const opts = optionRefs.value.filter(Boolean);
+    opts[0]?.focus();
+  } else if (e.key === 'End') {
+    e.preventDefault();
+    const opts = optionRefs.value.filter(Boolean);
+    opts[opts.length - 1]?.focus();
+  } else if (e.key === 'Tab') {
+    open.value = false;
   }
 };
 

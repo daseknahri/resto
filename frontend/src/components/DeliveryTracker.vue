@@ -18,13 +18,15 @@
           'border-emerald-500/30 bg-emerald-500/12 text-emerald-300': delivery.status === 'delivered',
           'border-red-500/30 bg-red-500/12 text-red-300': delivery.status === 'failed',
         }"
+        aria-live="polite"
+        aria-atomic="true"
       >
         {{ statusLabel }}
       </span>
     </div>
 
     <!-- ETA (shown while the driver is on the way) -->
-    <p v-if="etaMinutes" class="flex items-center gap-1.5 text-sm font-semibold text-emerald-300">
+    <p v-if="etaMinutes" class="flex items-center gap-1.5 text-sm font-semibold text-emerald-300" aria-live="polite" aria-atomic="true">
       <AppIcon name="info" class="h-4 w-4 shrink-0" aria-hidden="true" />
       {{ t('deliveryTracker.eta', { min: etaMinutes }) }}
     </p>
@@ -65,19 +67,19 @@
     <p v-else class="ui-subtle text-xs">{{ t('deliveryTracker.searching') }}</p>
 
     <!-- Addresses -->
-    <div
+    <dl
       v-if="delivery.pickup_address || delivery.delivery_address"
-      class="space-y-1 rounded-xl border border-slate-800/60 bg-slate-950/40 px-3 py-2"
+      class="ui-admin-subcard space-y-1 px-3 py-2"
     >
-      <p v-if="delivery.pickup_address" class="flex items-baseline gap-1.5 text-xs">
-        <span class="shrink-0 text-slate-500">{{ t('deliveryTracker.from') }}:</span>
-        <span class="min-w-0 truncate text-slate-300">{{ delivery.pickup_address }}</span>
-      </p>
-      <p v-if="delivery.delivery_address" class="flex items-baseline gap-1.5 text-xs">
-        <span class="shrink-0 text-slate-500">{{ t('deliveryTracker.to') }}:</span>
-        <span class="min-w-0 truncate text-slate-300">{{ delivery.delivery_address }}</span>
-      </p>
-    </div>
+      <div v-if="delivery.pickup_address" class="flex items-baseline gap-1.5 text-xs">
+        <dt class="shrink-0 text-slate-500">{{ t('deliveryTracker.from') }}</dt>
+        <dd class="min-w-0 truncate text-slate-300">{{ delivery.pickup_address }}</dd>
+      </div>
+      <div v-if="delivery.delivery_address" class="flex items-baseline gap-1.5 text-xs">
+        <dt class="shrink-0 text-slate-500">{{ t('deliveryTracker.to') }}</dt>
+        <dd class="min-w-0 truncate text-slate-300">{{ delivery.delivery_address }}</dd>
+      </div>
+    </dl>
 
     <!-- Live map: driver + destination -->
     <div
@@ -109,7 +111,7 @@
       :href="`https://www.google.com/maps/search/?api=1&query=${delivery.driver.lat},${delivery.driver.lng}`"
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-1.5 text-xs text-sky-400 transition-colors hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+      class="inline-flex items-center gap-1.5 rounded text-xs text-sky-400 transition-colors hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
     >
       <AppIcon name="location" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       {{ t('deliveryTracker.viewMap') }}
@@ -117,13 +119,14 @@
 
     <!-- Rate your driver (after delivery) -->
     <div v-if="showRating" class="space-y-2 border-t border-slate-800 pt-3">
+      <p class="ui-kicker mb-1">{{ t('deliveryTracker.rateKicker') }}</p>
       <p class="text-xs font-semibold text-slate-300">{{ t('deliveryTracker.rateDriver') }}</p>
       <div class="flex gap-1" role="group" :aria-label="t('deliveryTracker.rateDriver')">
         <button
           v-for="n in 5"
           :key="n"
           type="button"
-          class="ui-touch-target ui-press flex items-center justify-center rounded-lg transition-colors"
+          class="ui-touch-target ui-press flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'"
           :aria-label="t('common.rateNStars', { n })"
           :aria-pressed="ratingScore >= n"
@@ -132,6 +135,7 @@
           <AppIcon name="star" class="h-6 w-6" aria-hidden="true" />
         </button>
       </div>
+      <p class="text-[11px] text-slate-400">{{ t('deliveryTracker.ratingNote') }}</p>
       <textarea
         v-model="ratingNote"
         rows="2"

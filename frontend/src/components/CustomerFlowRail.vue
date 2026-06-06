@@ -1,10 +1,10 @@
 <template>
-  <section class="mx-auto hidden w-full max-w-5xl px-4 pt-3 md:block">
+  <section class="mx-auto hidden w-full max-w-6xl px-4 pt-3 md:block" :aria-label="t('customerFlow.title')">
     <div class="ui-journey-rail ui-reveal space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
-          <p class="ui-subtle truncate">{{ currentStepLabel }}</p>
+          <p class="truncate text-sm font-semibold leading-tight text-white">{{ currentStepLabel }}</p>
         </div>
         <span
           class="ui-status-pill tabular-nums"
@@ -14,7 +14,15 @@
         </span>
       </div>
 
-      <div class="ui-journey-progress" role="progressbar" :aria-valuenow="activeStep" :aria-valuemin="0" :aria-valuemax="steps.length - 1">
+      <div
+        class="ui-journey-progress"
+        role="progressbar"
+        :aria-label="t('customerFlow.title')"
+        :aria-valuenow="activeStep"
+        :aria-valuemin="0"
+        :aria-valuemax="steps.length - 1"
+        :aria-valuetext="`${activeStep + 1} / ${steps.length}`"
+      >
         <span :style="{ width: progressWidth }"></span>
       </div>
 
@@ -38,7 +46,7 @@
           v-for="(step, index) in steps"
           :key="step.name"
           :to="step.to"
-          class="ui-journey-step ui-surface-lift ui-press ui-reveal md:px-3"
+          class="ui-journey-step ui-surface-lift ui-press ui-reveal"
           :data-active="step.isActive"
           :data-complete="step.isCompleted"
           :aria-current="step.isActive ? 'page' : undefined"

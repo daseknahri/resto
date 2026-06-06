@@ -1,8 +1,9 @@
-﻿<template>
+<template>
   <div class="space-y-3">
     <!-- Add new closure date -->
     <div class="ui-panel p-4 space-y-3 ui-reveal">
       <p class="ui-kicker">{{ t('closureDates.addDate') }}</p>
+      <h2 class="ui-display text-lg font-semibold text-white leading-tight">{{ t('closureDates.addDateTitle') }}</h2>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div class="min-w-0 flex-1 space-y-1">
           <label for="closure-date" class="text-xs text-slate-400">{{ t('closureDates.date') }}</label>
@@ -41,8 +42,8 @@
     </div>
 
     <!-- Existing closure dates list -->
-    <div v-if="loading" class="space-y-2">
-      <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+    <div v-if="loading" class="space-y-2" role="status" :aria-label="t('common.loading')">
+      <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3" aria-hidden="true">
         <div class="space-y-1.5">
           <div class="h-3.5 w-24 rounded bg-slate-700/60" />
           <div class="h-3 w-32 rounded bg-slate-800/50" />
@@ -51,45 +52,47 @@
       </div>
     </div>
 
-    <div v-else-if="dates.length === 0" class="ui-empty-state text-center">
+    <div v-else-if="dates.length === 0" class="ui-empty-state text-center space-y-1">
       <p class="text-sm font-semibold text-slate-100">{{ t('closureDates.emptyTitle') }}</p>
-      <p class="mt-0.5 text-xs text-slate-400">{{ t('closureDates.emptyBody') }}</p>
+      <p class="text-xs text-slate-400">{{ t('closureDates.emptyBody') }}</p>
     </div>
 
     <ul v-else class="space-y-2">
       <li
         v-for="(closure, index) in sortedDates"
         :key="closure.id"
-        class="ui-panel ui-reveal flex items-center justify-between gap-3 px-4 py-3"
+        class="ui-reveal"
         :class="isPast(closure.date) ? 'opacity-50' : ''"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-slate-200">{{ formatDate(closure.date) }}</p>
-          <p v-if="closure.label" class="mt-0.5 truncate text-xs text-slate-500">{{ closure.label }}</p>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <span
-            v-if="isPast(closure.date)"
-            class="ui-chip text-[10px]"
-          >
-            {{ t('closureDates.past') }}
-          </span>
-          <span
-            v-else-if="isToday(closure.date)"
-            class="ui-chip-strong text-[10px]"
-          >
-            {{ t('closureDates.today') }}
-          </span>
-          <button
-            class="ui-press ui-touch-target flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
-            :aria-label="t('common.remove')"
-            @click="removeDate(closure.id)"
-          >
-            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
-              <path d="M3 3l10 10M13 3L3 13" />
-            </svg>
-          </button>
+        <div class="ui-panel flex items-center justify-between gap-3 px-4 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium text-slate-200">{{ formatDate(closure.date) }}</p>
+            <p v-if="closure.label" class="mt-0.5 truncate text-xs text-slate-500">{{ closure.label }}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <span
+              v-if="isPast(closure.date)"
+              class="ui-chip text-[10px]"
+            >
+              {{ t('closureDates.past') }}
+            </span>
+            <span
+              v-else-if="isToday(closure.date)"
+              class="ui-chip-strong text-[10px]"
+            >
+              {{ t('closureDates.today') }}
+            </span>
+            <button
+              class="ui-btn-outline ui-press ui-touch-target flex h-8 w-8 items-center justify-center hover:border-red-500/50 hover:text-red-400"
+              :aria-label="`${t('common.remove')} ${formatDate(closure.date)}`"
+              @click="removeDate(closure.id)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                <path d="M3 3l10 10M13 3L3 13" />
+              </svg>
+            </button>
+          </div>
         </div>
       </li>
     </ul>

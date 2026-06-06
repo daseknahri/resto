@@ -16,7 +16,7 @@
         <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
           <div>
             <p class="ui-kicker">{{ t("customerAuth.kicker") }}</p>
-            <h2 id="customer-auth-dialog-title" class="text-base font-semibold text-slate-100">
+            <h2 id="customer-auth-dialog-title" class="ui-display text-base font-semibold text-white leading-tight">
               {{ t("customerAuth.title") }}
             </h2>
           </div>
@@ -59,7 +59,7 @@
                 @keydown.enter.prevent="requestOtp"
               />
               <p
-                v-if="phoneError"
+                v-show="phoneError"
                 id="auth-phone-error"
                 class="text-xs text-red-300"
                 role="alert"
@@ -98,7 +98,7 @@
                 @keydown.enter.prevent="verifyOtp"
               />
               <p
-                v-if="otpError"
+                v-show="otpError"
                 id="auth-otp-error"
                 class="text-xs text-red-300"
                 role="alert"
@@ -123,6 +123,8 @@
             <button
               class="ui-press ui-touch-target w-full text-center text-xs text-slate-400 transition hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="requesting || resendSeconds > 0"
+              aria-live="polite"
+              aria-atomic="true"
               @click="requestOtp"
             >
               {{ resendSeconds > 0 ? t("customerAuth.resendIn", { seconds: resendSeconds }) : t("customerAuth.resendCode") }}
@@ -131,22 +133,24 @@
 
           <!-- ── Name setup step (first sign-up only) ── -->
           <div v-else-if="step === 'setup'" class="space-y-3">
-            <div class="space-y-0.5">
-              <p class="text-sm font-semibold text-slate-100">{{ t("customerAuth.nameSetupTitle") }}</p>
-              <p class="ui-subtle text-xs">{{ t("customerAuth.nameSetupHint") }}</p>
-            </div>
-            <input
-              ref="nameInputRef"
-              v-model.trim="setupName"
-              type="text"
-              autocomplete="name"
-              maxlength="80"
-              class="ui-input ui-touch-target"
-              :aria-label="t('customerAuth.nameSetupTitle')"
-              :placeholder="t('customerAuth.namePlaceholder')"
-              :disabled="savingName"
-              @keydown.enter.prevent="saveName"
-            />
+            <label class="block space-y-1.5">
+              <div class="space-y-0.5">
+                <span class="text-sm font-semibold text-slate-100">{{ t("customerAuth.nameSetupTitle") }}</span>
+                <p id="auth-name-hint" class="ui-subtle text-xs">{{ t("customerAuth.nameSetupHint") }}</p>
+              </div>
+              <input
+                ref="nameInputRef"
+                v-model.trim="setupName"
+                type="text"
+                autocomplete="name"
+                maxlength="80"
+                class="ui-input ui-touch-target"
+                aria-describedby="auth-name-hint"
+                :placeholder="t('customerAuth.namePlaceholder')"
+                :disabled="savingName"
+                @keydown.enter.prevent="saveName"
+              />
+            </label>
             <button
               class="ui-btn-primary ui-touch-target w-full"
               :disabled="savingName || !setupName"
@@ -214,6 +218,7 @@ const resendSeconds = ref(0);
 const otpInputRef  = ref(null);
 const nameInputRef = ref(null);
 const dialogRef    = ref(null);
+const triggerEl    = ref(null);
 
 const trapFocus = (e) => {
   if (!dialogRef.value || e.key !== 'Tab') return;
@@ -372,6 +377,8 @@ const initGoogleOneTap = () => {
 };
 
 onMounted(async () => {
+  // Save the element that triggered the dialog so we can restore focus on close
+  triggerEl.value = document.activeElement;
   document.addEventListener('keydown', trapFocus);
   await nextTick();
   // Move focus into the dialog — first focusable element (phone input or close button)
@@ -396,6 +403,8 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('keydown', trapFocus);
   clearInterval(resendTimer);
+  // Restore focus to the element that opened this dialog (ARIA dialog pattern)
+  triggerEl.value?.focus();
   try { window.google?.accounts?.id?.cancel(); } catch { /* best-effort: ignore failures */ }
 });
 </script>

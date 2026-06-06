@@ -1,17 +1,22 @@
 <template>
   <Teleport to="body">
     <Transition name="confirm-fade">
+      <!-- TODO (logic owner): move Esc-key handling into trapFocus (document-level keydown listener)
+           by adding: if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }
+           The @keydown.esc below is unreachable because the backdrop has no tabindex and focus is
+           trapped inside dialogRef. -->
       <div
         v-if="modal.visible.value"
-        class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-sm"
+        style="background-color: var(--color-overlay)"
         role="presentation"
         @click.self="cancel"
-        @keydown.esc="cancel"
       >
         <div
           ref="dialogRef"
           role="alertdialog"
           aria-modal="true"
+          tabindex="-1"
           :aria-labelledby="dialogTitleId"
           :aria-describedby="modal.options.value.body ? dialogBodyId : undefined"
           class="confirm-dialog ui-glass w-full max-w-sm"
@@ -40,8 +45,8 @@
               {{ modal.options.value.cancelLabel || t("common.cancel") }}
             </button>
             <button
-              class="ui-btn-primary ui-touch-target px-4 text-sm"
-              :class="modal.options.value.danger !== false ? 'bg-red-600 hover:bg-red-500 border-red-600 hover:border-red-500' : ''"
+              class="ui-touch-target px-4 text-sm"
+              :class="modal.options.value.danger !== false ? 'ui-btn-danger' : 'ui-btn-primary'"
               @click="ok"
             >
               {{ modal.options.value.confirmLabel || t("confirmModal.confirmBtn") }}
