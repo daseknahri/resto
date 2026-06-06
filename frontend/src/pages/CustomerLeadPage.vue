@@ -96,16 +96,18 @@
     <!-- ══ Quick actions strip ══ -->
     <div v-if="quickActions.length" class="mx-3 mt-3 sm:mx-4">
       <div class="ui-panel overflow-hidden p-2.5">
-        <div class="flex gap-2">
-          <template v-for="action in quickActions" :key="action.key">
+        <div class="flex min-w-0 gap-2">
+          <template v-for="(action, index) in quickActions" :key="action.key">
             <!-- Internal route actions -->
             <RouterLink
               v-if="action.to"
               :to="action.to"
-              class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 active:scale-95"
+              class="ui-press ui-reveal flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              :aria-label="action.label"
               @click="trackContactClick(action.key)"
             >
-              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]" aria-hidden="true">
                 <AppIcon name="calendar" class="h-4 w-4" />
               </span>
               <span class="text-[10px] font-medium leading-tight text-slate-400">{{ action.label }}</span>
@@ -116,10 +118,12 @@
               :href="action.href"
               target="_blank"
               rel="noopener noreferrer"
-              class="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 active:scale-95"
+              class="ui-press ui-reveal flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800/70 bg-slate-950/50 px-2 py-3 text-center transition hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              :aria-label="action.label"
               @click="trackContactClick(action.key)"
             >
-              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-secondary)]/12 text-[var(--color-secondary)]" aria-hidden="true">
                 <!-- WhatsApp -->
                 <svg v-if="action.key === 'whatsapp'" viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -144,7 +148,7 @@
     <div class="mx-3 mt-3 space-y-3 sm:mx-4">
 
       <!-- About -->
-      <div v-if="hasAboutContent" class="ui-panel ui-reveal p-4 space-y-3">
+      <div v-if="hasAboutContent" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 28ms">
         <p class="ui-kicker">{{ t('customerLeadPage.about') }}</p>
         <p class="text-sm leading-relaxed text-slate-300">{{ tenantDescription }}</p>
         <!-- Social links -->
@@ -155,7 +159,7 @@
             :href="social.url"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 transition hover:border-[var(--color-secondary)]/40 hover:text-[var(--color-secondary)]"
+            class="ui-press inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 transition hover:border-[var(--color-secondary)]/40 hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
             @click="trackContactClick(`social_${social.key}`)"
           >
             <svg v-if="social.key === 'instagram'" viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
@@ -167,15 +171,17 @@
       </div>
 
       <!-- Business hours -->
-      <div v-if="businessHoursRows.length || businessHoursSummary" class="ui-panel ui-reveal p-4 space-y-3">
+      <div v-if="businessHoursRows.length || businessHoursSummary" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 56ms">
         <div class="flex items-center justify-between gap-2">
           <p class="ui-kicker">{{ t('customerLeadPage.businessHours') }}</p>
           <span
-class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-0.5 text-[10px] font-medium"
-            :class="isOpen ? 'text-emerald-400' : 'text-rose-400'">
+            class="inline-flex items-center gap-1.5 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-0.5 text-[10px] font-medium"
+            :class="isOpen ? 'text-emerald-400' : 'text-rose-400'"
+          >
             <span
-class="h-1.5 w-1.5 rounded-full"
-              :class="isOpen ? 'bg-emerald-400' : 'bg-rose-400'" />
+              class="h-1.5 w-1.5 rounded-full"
+              :class="isOpen ? 'bg-emerald-400' : 'bg-rose-400'"
+            />
             {{ statusLabel }}
           </span>
         </div>
@@ -198,7 +204,7 @@ class="h-1.5 w-1.5 rounded-full"
       </div>
 
       <!-- External reservation link (only when restaurant has a direct booking platform) -->
-      <div v-if="reservationUrl" class="ui-panel ui-reveal overflow-hidden p-4">
+      <div v-if="reservationUrl" class="ui-panel ui-reveal overflow-hidden p-4" style="--ui-delay: 84ms">
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-100">{{ t('customerLeadPage.bookOnPlatform') }}</p>
@@ -218,7 +224,7 @@ class="h-1.5 w-1.5 rounded-full"
       </div>
 
       <!-- Send a message card -->
-      <div class="ui-panel ui-reveal overflow-hidden p-4">
+      <div class="ui-panel ui-reveal overflow-hidden p-4" style="--ui-delay: 112ms">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-100">{{ t('customerLeadPage.helpTitle') }}</p>
@@ -239,7 +245,7 @@ class="h-1.5 w-1.5 rounded-full"
           :href="googleMapsUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-3 flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2.5 text-xs text-slate-400 transition hover:border-[var(--color-secondary)]/30 hover:text-slate-300"
+          class="mt-3 flex items-center gap-2 rounded-xl border border-slate-800/70 bg-slate-950/50 px-3 py-2.5 text-xs text-slate-400 transition hover:border-[var(--color-secondary)]/30 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
           @click="trackContactClick('google_reviews')"
         >
           <!-- Google "G" icon -->
@@ -250,7 +256,7 @@ class="h-1.5 w-1.5 rounded-full"
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
           <span class="flex-1">{{ t('customerLeadPage.googleReviews') }}</span>
-          <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 opacity-50" />
+          <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 opacity-50 rtl:scale-x-[-1]" />
         </a>
       </div>
 
@@ -265,13 +271,13 @@ class="h-1.5 w-1.5 rounded-full"
         @keydown.esc="closeLeadModal"
       >
         <div ref="leadDialogRef" role="dialog" aria-modal="true" aria-labelledby="customer-lead-contact-dialog-title" class="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-slate-700/80 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:rounded-2xl sm:p-5">
-          <div class="mb-4 flex items-center justify-between gap-3">
+          <div class="mb-4 flex items-start justify-between gap-3">
             <div>
               <p class="ui-kicker">{{ t("customerLeadPage.message") }}</p>
               <h2 id="customer-lead-contact-dialog-title" class="text-xl font-semibold text-slate-100">{{ t("customerLeadPage.contactMe") }}</h2>
               <p class="mt-1 text-sm text-slate-400">{{ t("customerLeadPage.helpText") }}</p>
             </div>
-            <button type="button" class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeLeadModal">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-outline ui-touch-target shrink-0 px-3 text-xs" @click="closeLeadModal">{{ t("common.close") }}</button>
           </div>
 
           <form class="space-y-3" novalidate @submit.prevent="submitLead">
@@ -297,7 +303,7 @@ class="h-1.5 w-1.5 rounded-full"
               <textarea v-model.trim="form.note" rows="3" class="ui-textarea" :placeholder="t('customerLeadPage.messagePlaceholder')"></textarea>
             </label>
             <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="space-y-2">
               <button
                 type="submit"
                 class="ui-btn-primary ui-touch-target w-full justify-center disabled:cursor-not-allowed disabled:opacity-65 sm:w-auto"

@@ -13,18 +13,18 @@
           decoding="async"
           @error="handleCategoryImageError"
         />
-        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/15"></div>
+        <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/15"></div>
 
         <div class="relative flex h-full flex-col justify-end space-y-2 p-4 md:p-5">
           <div class="space-y-1">
             <p class="ui-kicker">{{ t("category.kicker") }}</p>
             <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-            <p v-if="categoryDescription" class="max-w-2xl text-sm text-slate-300">{{ categoryDescription }}</p>
+            <p v-if="categoryDescription" class="ui-subtle max-w-2xl">{{ categoryDescription }}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-chip text-[11px]">{{ itemCountLabel(filteredDishes.length) }}</span>
+            <span class="ui-chip tabular-nums text-[11px]">{{ itemCountLabel(filteredDishes.length) }}</span>
             <RouterLink :to="{ name: 'menu' }" class="ui-chip text-[11px] hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
-              <AppIcon name="menu" class="h-3 w-3" />
+              <AppIcon name="menu" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
               {{ t("customerLayout.navMenu") }}
             </RouterLink>
           </div>
@@ -37,11 +37,11 @@
       <input v-model.trim="search" type="search" class="ui-input pr-10" :aria-label="t('category.searchPlaceholder')" :placeholder="t('category.searchPlaceholder')" enterkeyhint="search" />
       <button
         v-if="search"
-        class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 p-1 text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+        class="ui-press ui-touch-target absolute end-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 p-1 text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+        :aria-label="t('common.clear')"
         @click="search = ''"
       >
-        <span class="sr-only">{{ t("common.clear") }}</span>
-        <AppIcon name="close" class="h-3.5 w-3.5" />
+        <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
       </button>
     </div>
 
@@ -54,19 +54,21 @@
       <article
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
-        class="group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-all duration-300"
+        class="ui-surface-lift ui-reveal group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)]"
         :class="cartQty(dish) > 0
           ? 'border-[var(--color-secondary)]/45 shadow-[0_20px_50px_rgba(245,158,11,0.10)]'
           : 'border-slate-800/80 hover:border-slate-700/80 hover:shadow-[0_28px_64px_rgba(2,6,23,0.48)]'"
+        :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
       >
         <!-- in-cart top accent -->
         <div
           v-if="cartQty(dish) > 0"
+          aria-hidden="true"
           class="pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-[1.8rem]"
           style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.7), transparent)"
         />
         <!-- Image -->
-        <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block">
+        <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block" :aria-label="dish.name">
           <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
             <img
               :src="dish.image_url || placeholder"
@@ -77,16 +79,16 @@
               decoding="async"
               @error="handleDishImageError"
             />
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
+            <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
             <!-- In-cart badge -->
-            <div v-if="cartQty(dish) > 0" class="absolute left-3 top-3">
-              <span class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-0.5 text-[11px] font-bold text-slate-950 shadow-lg">
-                ✓ {{ cartQty(dish) }}×
+            <div v-if="cartQty(dish) > 0" class="absolute start-3 top-3">
+              <span class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-950 shadow-lg">
+                <AppIcon name="check" class="h-3 w-3" aria-hidden="true" />{{ cartQty(dish) }}&times;
               </span>
             </div>
             <!-- Price badge -->
-            <div class="absolute right-3 top-3">
-              <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold text-slate-950 shadow-lg">
+            <div class="absolute end-3 top-3">
+              <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold tabular-nums text-slate-950 shadow-lg">
                 {{ formatPrice(dish.price) }}
               </span>
             </div>
@@ -95,8 +97,8 @@
 
         <!-- Content -->
         <div class="space-y-3 p-4">
-          <div class="space-y-1">
-            <h3 class="text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
+          <div class="min-w-0 space-y-1">
+            <h3 class="truncate text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
             <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
           </div>
 
@@ -109,10 +111,10 @@
           </div>
 
           <div v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5">
-            <span v-if="dish.options?.length" class="ui-data-strip text-[11px]">
+            <span v-if="dish.options?.length" class="ui-data-strip tabular-nums text-[11px]">
               {{ t("dishPage.optionsCount", { count: dish.options.length }) }}
             </span>
-            <span v-if="dish.option_groups?.length" class="ui-data-strip text-[11px]">
+            <span v-if="dish.option_groups?.length" class="ui-data-strip tabular-nums text-[11px]">
               {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}
             </span>
           </div>
@@ -120,10 +122,10 @@
           <div class="flex gap-2">
             <button
               v-if="!quickAddDisabled"
-              class="ui-btn-primary flex-1 justify-center gap-1.5 py-2 text-sm"
+              class="ui-btn-primary ui-press flex-1 justify-center gap-1.5 py-2 text-sm"
               @click="addDishQuick(dish)"
             >
-              <AppIcon name="plus" class="h-4 w-4" />
+              <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
               {{ t("dishPage.add") }}
             </button>
             <RouterLink
@@ -131,7 +133,7 @@
               class="ui-btn-outline justify-center gap-1.5 py-2 text-sm"
               :class="quickAddDisabled ? 'flex-1' : ''"
             >
-              <AppIcon name="eye" class="h-3.5 w-3.5" />
+              <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
               {{ t("category.viewDish") }}
             </RouterLink>
           </div>
@@ -159,10 +161,10 @@
       </div>
     </div>
 
-    <div v-if="menu.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+    <div v-if="menu.error" class="ui-reveal flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
-      <button class="shrink-0 text-xs text-slate-400 underline hover:text-slate-200" @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)">{{ t('common.retry') }}</button>
+      <button class="ui-press shrink-0 rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60" @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)">{{ t('common.retry') }}</button>
     </div>
   </div>
 </template>
