@@ -14,6 +14,7 @@ class Lead(models.Model):
         CONTACTED = "contacted", "Contacted"
         WON = "won", "Won"
         LOST = "lost", "Lost"
+        NO_SHOW = "no_show", "No-show"  # reservation: confirmed guest didn't turn up
         PAID = "paid", "Paid"
         PROVISIONING = "provisioning", "Provisioning"
         LIVE = "live", "Live"

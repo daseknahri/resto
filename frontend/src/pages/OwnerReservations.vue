@@ -143,6 +143,7 @@
               <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
               <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
               <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
+              <option value="no_show">{{ t("ownerReservations.markNoShow") }}</option>
               <option value="new">{{ t("ownerReservations.resetNew") }}</option>
             </select>
             <button class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
@@ -208,6 +209,7 @@
               <option value="contacted">{{ t("ownerReservations.markContacted") }}</option>
               <option value="won">{{ t("ownerReservations.markConfirmed") }}</option>
               <option value="lost">{{ t("ownerReservations.markUnavailable") }}</option>
+              <option value="no_show">{{ t("ownerReservations.markNoShow") }}</option>
               <option value="new">{{ t("ownerReservations.resetNew") }}</option>
             </select>
             <button class="ui-btn-outline owner-action-btn px-3 py-1.5 text-xs" :disabled="!selectedCount || bulkUpdating" @click="runBulkAction">
@@ -464,6 +466,13 @@
               {{ t("ownerReservations.unavailable") }}
             </button>
             <button
+              class="owner-action-btn rounded-full border border-violet-500/70 px-3 py-1.5 text-xs font-semibold text-violet-200 disabled:opacity-60"
+              :disabled="isUpdating(reservation.id)"
+              @click="updateStatus(reservation, 'no_show')"
+            >
+              {{ t("ownerReservations.markNoShow") }}
+            </button>
+            <button
               class="owner-action-btn rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isUpdating(reservation.id)"
               @click="updateStatus(reservation, 'new')"
@@ -686,6 +695,7 @@ const statusOptions = computed(() => [
   { value: "contacted", label: t("ownerReservations.contacted") },
   { value: "won", label: t("ownerReservations.confirmed") },
   { value: "lost", label: t("ownerReservations.unavailable") },
+  { value: "no_show", label: t("ownerReservations.noShow") },
 ]);
 
 const reminderOptions = computed(() => [
@@ -749,6 +759,7 @@ const statusClass = (status) => {
   if (status === "contacted") return "bg-sky-500/20 text-sky-200";
   if (status === "won") return "bg-emerald-500/20 text-emerald-200";
   if (status === "lost") return "bg-rose-500/20 text-rose-200";
+  if (status === "no_show") return "bg-violet-500/20 text-violet-200";
   return "bg-slate-700 text-slate-200";
 };
 
@@ -757,6 +768,7 @@ const statusLabel = (status) => {
   if (status === "contacted") return t("ownerReservations.contacted");
   if (status === "won") return t("ownerReservations.confirmed");
   if (status === "lost") return t("ownerReservations.unavailable");
+  if (status === "no_show") return t("ownerReservations.noShow");
   return status ? String(status) : "";
 };
 

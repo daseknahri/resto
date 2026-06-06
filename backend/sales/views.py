@@ -87,6 +87,7 @@ OWNER_RESERVATION_STATUSES = {
     Lead.Status.CONTACTED,
     Lead.Status.WON,
     Lead.Status.LOST,
+    Lead.Status.NO_SHOW,
 }
 OWNER_REMINDER_STATUSES = {
     ReservationReminder.Statuses.SENT,
@@ -480,6 +481,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
         Lead.Status.CONTACTED: 0,
         Lead.Status.WON: 0,
         Lead.Status.LOST: 0,
+        Lead.Status.NO_SHOW: 0,
         "overdue_new": 0,
     }
     counts["total"] = _owner_reservations_queryset(
@@ -489,7 +491,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
         from_date=from_date,
         to_date=to_date,
     ).count()
-    for status_code in (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON, Lead.Status.LOST):
+    for status_code in (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON, Lead.Status.LOST, Lead.Status.NO_SHOW):
         counts[status_code] = _owner_reservations_queryset(
             tenant_id,
             status_filter=status_code,
@@ -1539,6 +1541,7 @@ class OwnerReservationListView(APIView):
                     "contacted": counts[Lead.Status.CONTACTED],
                     "won": counts[Lead.Status.WON],
                     "lost": counts[Lead.Status.LOST],
+                    "no_show": counts[Lead.Status.NO_SHOW],
                 },
             }
         )

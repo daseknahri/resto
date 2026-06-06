@@ -82,6 +82,8 @@ class OwnerReservationListViewTests(SimpleTestCase):
         won_queryset.count.return_value = 2
         lost_queryset = Mock()
         lost_queryset.count.return_value = 2
+        no_show_queryset = Mock()
+        no_show_queryset.count.return_value = 1
         overdue_queryset = Mock()
         overdue_queryset.filter.return_value = overdue_queryset
         overdue_queryset.count.return_value = 4
@@ -93,6 +95,7 @@ class OwnerReservationListViewTests(SimpleTestCase):
             contacted_queryset,
             won_queryset,
             lost_queryset,
+            no_show_queryset,
             overdue_queryset,
         ]
 
@@ -115,6 +118,7 @@ class OwnerReservationListViewTests(SimpleTestCase):
         self.assertEqual(response.data["counts"]["contacted"], 3)
         self.assertEqual(response.data["counts"]["won"], 2)
         self.assertEqual(response.data["counts"]["lost"], 2)
+        self.assertEqual(response.data["counts"]["no_show"], 1)
         first_row = response.data["results"][0]
         self.assertIn("follow_up_due_at", first_row)
         self.assertIn("sla_state", first_row)
@@ -166,7 +170,7 @@ class OwnerReservationListViewTests(SimpleTestCase):
     def test_applies_reminder_filter(self, queryset_builder_mock, schema_context_mock):
         schema_context_mock.return_value = _passthrough_cm()
         querysets = []
-        for _ in range(7):
+        for _ in range(8):  # main + total + 5 status counts (incl. no_show) + overdue
             queryset = Mock()
             queryset.count.return_value = 0
             queryset.order_by.return_value = []

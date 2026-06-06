@@ -189,6 +189,7 @@ class OwnerReservationUpdateSerializer(serializers.Serializer):
             Lead.Status.CONTACTED,
             Lead.Status.WON,
             Lead.Status.LOST,
+            Lead.Status.NO_SHOW,
         )
     )
 
@@ -205,6 +206,7 @@ class OwnerReservationBulkUpdateSerializer(serializers.Serializer):
             Lead.Status.CONTACTED,
             Lead.Status.WON,
             Lead.Status.LOST,
+            Lead.Status.NO_SHOW,
         )
     )
 
