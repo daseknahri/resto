@@ -89,15 +89,20 @@ const trapFocus = (e) => {
 };
 
 // Focus the cancel button when the modal opens; install / remove focus trap.
+// Restore focus to the previously-focused element when the modal closes (WCAG 2.4.3).
+let previouslyFocused = null;
 watch(
   () => modal.visible.value,
   async (open) => {
     if (open) {
+      previouslyFocused = document.activeElement;
       await nextTick();
       cancelBtnRef.value?.focus();
       document.addEventListener('keydown', trapFocus);
     } else {
       document.removeEventListener('keydown', trapFocus);
+      previouslyFocused?.focus();
+      previouslyFocused = null;
     }
   }
 );

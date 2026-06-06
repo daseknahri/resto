@@ -1,23 +1,27 @@
 <template>
-  <div>
+  <div class="ui-panel p-3">
     <!-- Header with toggle -->
-    <div class="mb-3 flex items-center justify-between gap-2">
-      <p class="ui-kicker inline-flex items-center gap-1.5">
-        {{ t('bestSellers.title') }}
-        <svg
-          v-if="updating"
-          aria-hidden="true"
-          class="h-3 w-3 animate-spin text-slate-600"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-        >
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
-        </svg>
-      </p>
-      <nav class="ui-segmented max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+      <div class="min-w-0">
+        <p class="ui-kicker inline-flex items-center gap-1.5">
+          {{ t('bestSellers.title') }}
+          <svg
+            v-if="updating"
+            aria-hidden="true"
+            class="h-3 w-3 animate-spin text-slate-600"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
+          </svg>
+        </p>
+        <span class="sr-only" aria-live="polite">{{ updating ? t('bestSellers.updating') : '' }}</span>
+        <h2 class="text-sm font-semibold text-slate-100">{{ t('bestSellers.heading') }}</h2>
+      </div>
+      <div role="group" class="ui-segmented shrink-0 max-w-fit p-0.5" :aria-label="t('bestSellers.modeNav')">
         <button
           class="ui-segmented-button px-2.5 py-1 text-[11px]"
           :data-active="mode === 'count'"
@@ -30,7 +34,7 @@
           :aria-pressed="mode === 'revenue'"
           @click="mode = 'revenue'"
         >{{ t('bestSellers.byRevenue') }}</button>
-      </nav>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -61,7 +65,6 @@
         <span
           class="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums"
           :class="idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'"
-          aria-hidden="true"
         >{{ idx + 1 }}</span>
 
         <!-- Bar + label -->
@@ -72,7 +75,14 @@
               {{ mode === 'count' ? t('bestSellers.qty', { n: dish.total_qty }) : fmtMoney(dish.revenue) }}
             </span>
           </div>
-          <div class="h-1 overflow-hidden rounded-full bg-slate-800/70">
+          <div
+            class="h-1 overflow-hidden rounded-full bg-slate-800/70"
+            role="progressbar"
+            :aria-valuenow="barPct(dish)"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="dish.dish_name"
+          >
             <div
               class="h-full rounded-full bg-[var(--color-secondary)]/60"
               :style="{

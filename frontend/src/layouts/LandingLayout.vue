@@ -26,7 +26,7 @@
         </nav>
 
         <div class="flex items-center gap-1.5 sm:gap-2">
-          <div class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
+          <div role="status" class="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-medium text-emerald-100 xl:inline-flex">
             <span class="ui-live-dot bg-emerald-400" aria-hidden="true"></span>
             {{ t("home.heroLive") }}
           </div>
@@ -78,17 +78,17 @@
       </div>
     </nav>
 
-    <main id="main-content" class="mx-auto w-full max-w-6xl ui-fade-up">
+    <main id="main-content" class="mx-auto w-full max-w-6xl ui-fade-up pb-[calc(var(--safe-bottom)+4rem)] lg:pb-0">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
-          <div :key="viewRoute.fullPath" class="ui-route-frame">
+          <div :key="viewRoute.fullPath">
             <component :is="Component" />
           </div>
         </Transition>
       </RouterView>
     </main>
 
-    <footer class="ui-footer">
+    <footer class="ui-footer pb-[calc(var(--safe-bottom)+4.5rem)] lg:pb-8">
       <div class="ui-reveal mx-auto grid w-full max-w-6xl gap-4 rounded-[1.8rem] border border-slate-800/80 bg-slate-950/55 p-4 shadow-xl shadow-black/25 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
         <div class="space-y-2">
           <div class="flex items-center gap-3">
@@ -96,7 +96,7 @@
               RM
             </div>
             <div>
-              <p class="ui-kicker">{{ t("landingLayout.kicker") }}</p>
+              <h2 class="ui-kicker">{{ t("landingLayout.kicker") }}</h2>
               <p class="ui-display text-lg font-semibold text-white">{{ t("landingLayout.footerTitle") }}</p>
             </div>
           </div>
@@ -111,36 +111,50 @@
         </div>
 
         <div class="space-y-3">
-          <p class="ui-kicker">{{ t("common.getStarted") }}</p>
-          <div class="flex flex-col gap-2 text-sm">
-            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/get-started">
-              <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{{ t("common.getStarted") }}</span>
-            </RouterLink>
-            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/demo">
-              <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{{ t("common.liveDemo") }}</span>
-            </RouterLink>
-            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/contact">
-              <AppIcon name="chat" class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{{ t("common.contact") }}</span>
-            </RouterLink>
-          </div>
+          <h2 class="ui-kicker">{{ t("common.getStarted") }}</h2>
+          <nav :aria-label="t('common.getStarted')">
+            <ul class="flex flex-col gap-2 text-sm">
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/get-started">
+                  <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("common.getStarted") }}</span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/demo">
+                  <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("common.liveDemo") }}</span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/contact">
+                  <AppIcon name="chat" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("common.contact") }}</span>
+                </RouterLink>
+              </li>
+            </ul>
+          </nav>
         </div>
 
         <div class="space-y-3">
-          <p class="ui-kicker">{{ t("common.status") }}</p>
-          <div class="flex flex-col gap-2 text-sm">
-            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/privacy">
-              <AppIcon name="info" class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{{ t("common.privacy") }}</span>
-            </RouterLink>
-            <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/terms">
-              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{{ t("common.terms") }}</span>
-            </RouterLink>
-            <span class="text-slate-500">&copy; {{ year }}</span>
-          </div>
+          <h2 class="ui-kicker">{{ t("common.status") }}</h2>
+          <nav :aria-label="t('common.status')">
+            <ul class="flex flex-col gap-2 text-sm">
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/privacy">
+                  <AppIcon name="info" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("common.privacy") }}</span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/terms">
+                  <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("common.terms") }}</span>
+                </RouterLink>
+              </li>
+            </ul>
+          </nav>
+          <p class="text-slate-500 text-sm mt-1">&copy; {{ year }}</p>
         </div>
       </div>
     </footer>

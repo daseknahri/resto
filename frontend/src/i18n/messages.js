@@ -192,7 +192,8 @@ export const messages = {
       toggleColorScheme: "Toggle color scheme",
       viewCart: "View cart",
       cartItems: "{count} items",
-      findMyOrder: "Find my order"
+      findMyOrder: "Find my order",
+      signedIn: "Signed in"
     },
     customerFlow: {
       title: "Guest journey",
@@ -753,6 +754,7 @@ export const messages = {
       billing: "Billing",
       navDesktop: "Owner navigation",
       navMobile: "Owner navigation",
+      ordersBadgeLabel: "Orders: {count} pending",
     },
     ownerMenuBuilder: {
       importCsv: "Import CSV",
@@ -1239,6 +1241,9 @@ export const messages = {
       queued: "{count} queued",
       signOut: "Sign out",
       ownerView: "Owner view",
+      themeLight: "Switch to light mode",
+      themeDark: "Switch to dark mode",
+      utilityNav: "Utility navigation",
     },
     waiterPage: {
       noActiveOrders: "All clear — no active orders",
@@ -2449,6 +2454,8 @@ export const messages = {
     },
     bestSellers: {
       title: "Best sellers",
+      heading: "Top Dishes",
+      updating: "Updating...",
       byOrders: "By orders",
       byRevenue: "By revenue",
       qty: "{n} sold",
@@ -3784,7 +3791,8 @@ export const messages = {
       toggleColorScheme: "Changer le theme",
       viewCart: "Voir le panier",
       cartItems: "{count} articles",
-      findMyOrder: "Retrouver ma commande"
+      findMyOrder: "Retrouver ma commande",
+      signedIn: "Connecte"
     },
     customerFlow: {
       title: "Parcours client",
@@ -4345,6 +4353,7 @@ export const messages = {
       billing: "Facturation",
       navDesktop: "Navigation proprietaire",
       navMobile: "Navigation proprietaire",
+      ordersBadgeLabel: "Commandes: {count} en attente",
     },
     ownerMenuBuilder: {
       importCsv: "Importer CSV",
@@ -4831,6 +4840,9 @@ export const messages = {
       queued: "{count} en attente",
       signOut: "Se deconnecter",
       ownerView: "Vue proprietaire",
+      themeLight: "Passer au mode clair",
+      themeDark: "Passer au mode sombre",
+      utilityNav: "Navigation utilitaire",
     },
     waiterPage: {
       noActiveOrders: "Tout est calme — aucune commande active",
@@ -6010,6 +6022,8 @@ export const messages = {
     },
     bestSellers: {
       title: "Meilleures ventes",
+      heading: "Plats populaires",
+      updating: "Mise a jour...",
       byOrders: "Par commandes",
       byRevenue: "Par CA",
       qty: "{n} vendus",

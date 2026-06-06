@@ -169,7 +169,8 @@ const arabicMessages = {
     "toggleColorScheme": "تغيير المظهر",
     "viewCart": "عرض السلة",
     "cartItems": "{count} عناصر",
-    "findMyOrder": "ابحث عن طلبي"
+    "findMyOrder": "ابحث عن طلبي",
+    "signedIn": "تم تسجيل الدخول"
   },
   "customerFlow": {
     "title": "رحلة الضيف",
@@ -320,7 +321,8 @@ const arabicMessages = {
     "profile": "الملف الشخصي",
     "billing": "الفوترة",
     "navDesktop": "تنقل المالك",
-    "navMobile": "تنقل المالك"
+    "navMobile": "تنقل المالك",
+    "ordersBadgeLabel": "الطلبات: {count} في الانتظار"
   },
   "ownerAnalytics": {
     "kicker": "الأداء",
@@ -3006,6 +3008,8 @@ Object.assign(arabicMessages, {
   },
   bestSellers: {
     title: "\u0627\u0644\u0623\u0643\u062b\u0631 \u0645\u0628\u064a\u0639\u0627\u064b",
+    heading: "\u0623\u0628\u0631\u0632 \u0627\u0644\u0623\u0637\u0628\u0627\u0642",
+    updating: "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u062f\u064a\u062b...",
     byOrders: "\u062d\u0633\u0628 \u0627\u0644\u0637\u0644\u0628\u0627\u062a",
     byRevenue: "\u062d\u0633\u0628 \u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     qty: "\u062a\u0645 \u0628\u064a\u0639 {n}",

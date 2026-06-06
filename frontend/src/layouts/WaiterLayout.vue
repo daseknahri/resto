@@ -28,7 +28,6 @@
             v-if="waiter.queueLength > 0"
             class="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300"
             role="status"
-            :aria-label="t('waiterLayout.queued', { count: waiter.queueLength })"
           >
             <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
             {{ t('waiterLayout.queued', { count: waiter.queueLength }) }}
@@ -38,14 +37,13 @@
             class="flex items-center gap-1 text-[10px] font-medium"
             :class="waiter.isOnline ? 'text-emerald-400' : 'text-slate-500'"
             role="status"
-            :aria-label="waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline')"
           >
             <span
               class="h-2 w-2 rounded-full"
               :class="waiter.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'"
               aria-hidden="true"
             />
-            <span aria-hidden="true">{{ waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline') }}</span>
+            <span>{{ waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline') }}</span>
           </span>
           <!-- Language switcher -->
           <LanguageSwitcher compact dropdown />
@@ -53,8 +51,8 @@
           <button
             class="ui-touch-target flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800/60 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ui-press"
             type="button"
-            :aria-label="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
-            :title="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
+            :aria-label="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
+            :title="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
             @click="toggleTheme"
           >
             <svg v-if="ownerTheme === 'dark'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
@@ -65,13 +63,14 @@
             </svg>
           </button>
           <!-- Back to owner dashboard (owners only) -->
-          <RouterLink
-            v-if="session.isTenantOwner"
-            to="/owner"
-            class="ui-touch-target inline-flex items-center rounded-xl border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-          >
-            {{ t('waiterLayout.ownerView') }}
-          </RouterLink>
+          <nav v-if="session.isTenantOwner" :aria-label="t('waiterLayout.utilityNav')">
+            <RouterLink
+              to="/owner"
+              class="ui-touch-target inline-flex items-center rounded-xl border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+            >
+              {{ t('waiterLayout.ownerView') }}
+            </RouterLink>
+          </nav>
           <!-- Sign out -->
           <button
             class="ui-touch-target inline-flex items-center rounded-xl border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 ui-press"
@@ -85,7 +84,7 @@
     </header>
 
     <!-- Page content -->
-    <main id="main-content" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
+    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
       <RouterView />
     </main>
   </div>
