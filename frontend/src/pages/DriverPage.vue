@@ -254,12 +254,34 @@
           {{ busy ? '…' : nextAction.label }}
         </button>
         <button
+          v-if="!failingOpen"
           class="w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50"
           :disabled="busy"
-          @click="markFailed"
+          @click="openFail"
         >
           {{ t('driver.actionFailed') }}
         </button>
+        <!-- Failure-reason picker (the restaurant decides what happens next) -->
+        <div v-else class="space-y-2 rounded-xl border border-red-500/40 bg-red-900/10 p-3">
+          <p class="text-xs font-semibold text-red-200">{{ t('driver.failReasonTitle') }}</p>
+          <button
+            v-for="r in FAIL_REASONS"
+            :key="r"
+            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-500 disabled:opacity-50"
+            :disabled="busy"
+            @click="submitFail(r)"
+          >
+            {{ t(`driver.failReason_${r}`) }}
+          </button>
+          <input
+            v-model="failNote"
+            :placeholder="t('driver.failNotePlaceholder')"
+            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600"
+          />
+          <button class="w-full py-1 text-xs text-slate-400 hover:text-slate-200" :disabled="busy" @click="failingOpen = false">
+            {{ t('driver.failCancel') }}
+          </button>
+        </div>
       </div>
 
       <!-- Pending jobs (only when online and free) -->
@@ -636,9 +658,9 @@ const accept = async (jobId) => {
   }
 };
 
-const advance = async (toStatus) => {
+const advance = async (toStatus, extra = {}) => {
   errorMsg.value = '';
-  const payload = { status: toStatus };
+  const payload = { status: toStatus, ...extra };
   if (toStatus === 'delivered') {
     // Proof of delivery — the customer reads the code shown on their order.
     const code = (window.prompt(t('driver.enterDeliveryCode')) || '').trim();
@@ -674,9 +696,16 @@ const advance = async (toStatus) => {
   }
 };
 
-const markFailed = async () => {
-  if (!window.confirm(t('driver.failConfirm'))) return;
-  await advance('failed');
+const FAIL_REASONS = ['customer_no_show', 'bad_address', 'driver_unable', 'other'];
+const failingOpen = ref(false);
+const failNote = ref('');
+const openFail = () => {
+  failNote.value = '';
+  failingOpen.value = true;
+};
+const submitFail = async (reason) => {
+  failingOpen.value = false;
+  await advance('failed', { failure_reason: reason, failure_note: failNote.value.trim() });
 };
 
 // ── Rate the customer (driver → customer, after delivery) ──────────────────────

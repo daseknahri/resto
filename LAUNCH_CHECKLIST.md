@@ -47,6 +47,7 @@ or advance/scheduled orders never reach the kitchen.
 |---|---|---|
 | `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
 | `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
+| `python manage.py sweep_delivery_jobs` | every ~3 min | Re-dispatch unclaimed delivery jobs, alert the restaurant when none accept, release jobs abandoned by an offline driver, expire stale cash-out codes. **Required for reliable delivery.** |
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
 | `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (drop out of the marketplace). |

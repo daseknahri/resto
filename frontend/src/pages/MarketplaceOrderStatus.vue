@@ -128,6 +128,13 @@
 
       <!-- Driver tracking panel (shared component) -->
       <DeliveryTracker :delivery="delivery" />
+      <!-- Self-delivery (restaurant delivers itself — no platform driver to track) -->
+      <div
+        v-if="!delivery && order && order.fulfillment_type === 'delivery' && order.status === 'out_for_delivery'"
+        class="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300"
+      >
+        🛵 {{ t('mktOrderStatus.selfDelivery') }}
+      </div>
 
 
       <!-- Order items -->

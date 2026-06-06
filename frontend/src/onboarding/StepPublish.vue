@@ -298,6 +298,10 @@
                 </div>
               </div>
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.distancePricingExample") }}</p>
+              <p
+                v-if="Number(form.delivery_per_km) > 0 && !Number(form.delivery_base_fee) && !Number(form.delivery_fee)"
+                class="text-[11px] text-amber-400"
+              >{{ t("stepPublish.distancePricingZeroWarn") }}</p>
             </div>
 
             <div class="space-y-1">

@@ -378,6 +378,36 @@
             </div>
             <p v-else class="text-slate-500">{{ t('ownerOrders.djSearching') }}</p>
 
+            <!-- Failed delivery → the restaurant decides what happens next -->
+            <div v-if="o.delivery_job.status === 'failed'" class="space-y-2 rounded-lg border border-red-500/30 bg-red-900/15 p-2">
+              <p class="text-[11px] font-semibold text-red-200">
+                {{ t('ownerOrders.djFailedTitle') }}
+                <span v-if="o.delivery_job.failure_reason" class="font-normal text-red-300/90">· {{ t(`ownerOrders.djReason_${o.delivery_job.failure_reason}`) }}</span>
+              </p>
+              <p v-if="o.delivery_job.failure_note" class="text-[11px] italic text-slate-400">“{{ o.delivery_job.failure_note }}”</p>
+              <div v-if="!o.delivery_job.resolution" class="flex flex-wrap gap-2">
+                <button
+                  class="rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/25 disabled:opacity-50"
+                  :disabled="deliveryActing === o.id"
+                  @click="deliveryAction(o, 'redispatch')"
+                >{{ t('ownerOrders.djRedispatch') }}</button>
+                <button
+                  class="rounded-full border border-red-500/30 bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                  :disabled="deliveryActing === o.id"
+                  @click="deliveryAction(o, 'refund_cancel')"
+                >{{ t('ownerOrders.djRefundCancel') }}</button>
+                <button
+                  v-if="o.delivery_job.failure_reason === 'customer_no_show'"
+                  class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                  :disabled="deliveryActing === o.id"
+                  @click="deliveryAction(o, 'confirm_noshow')"
+                >{{ t('ownerOrders.djPayNoshow') }}</button>
+              </div>
+              <p v-if="o.delivery_job.resolution" class="text-[11px] text-emerald-400">
+                ✓ {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
+              </p>
+            </div>
+
             <!-- Rate driver button (only when delivered and not yet rated) -->
             <div v-if="o.delivery_job.status === 'delivered' && !o.delivery_job.restaurant_driver_rating">
               <div v-if="ratingJobId === o.id" class="space-y-1.5">
@@ -941,6 +971,23 @@ const submitJobRating = async (o) => {
     toast.show(t('ownerOrders.djRatingFailed'), 'error');
   } finally {
     submittingRating.value = false;
+  }
+};
+
+// ── Failed-delivery resolution ──────────────────────────────────────────────────
+const deliveryActing = ref(null);  // order id currently being resolved
+const deliveryAction = async (o, action) => {
+  if (deliveryActing.value) return;
+  if (action === 'refund_cancel' && !window.confirm(t('ownerOrders.djRefundCancelConfirm'))) return;
+  deliveryActing.value = o.id;
+  try {
+    const { data } = await api.post(`/owner/orders/${o.id}/delivery-action/`, { action });
+    toast.show(t(`ownerOrders.djAction_${data.resolution || action}`), 'success');
+    await order.fetchOrders();
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('ownerOrders.djActionFailed'), 'error');
+  } finally {
+    deliveryActing.value = null;
   }
 };
 

@@ -155,6 +155,13 @@
 
       <!-- Live driver tracking (driver card + call + map) -->
       <DeliveryTracker v-if="orderData.delivery" :delivery="orderData.delivery" />
+      <!-- Self-delivery (restaurant delivers itself — no platform driver to track) -->
+      <div
+        v-else-if="orderData.fulfillment_type === 'delivery' && orderData.status === 'out_for_delivery'"
+        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 text-sm text-slate-300"
+      >
+        🛵 {{ t("orderStatus.selfDelivery") }}
+      </div>
 
       <!-- Status timeline -->
       <div class="ui-panel p-4 sm:p-5">

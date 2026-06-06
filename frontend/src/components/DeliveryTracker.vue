@@ -51,6 +51,11 @@
     <!-- Live map: driver + destination -->
     <div v-show="hasDriverPos" ref="mapEl" class="h-48 w-full overflow-hidden rounded-xl border border-slate-800"></div>
 
+    <!-- Position freshness — a frozen pin shouldn't look live -->
+    <p v-if="hasDriverPos && positionAgeText" class="text-[11px]" :class="positionStale ? 'text-amber-400' : 'text-slate-500'">
+      <span v-if="positionStale">⚠ </span>{{ positionAgeText }}
+    </p>
+
     <!-- Maps link when driver position known -->
     <a
       v-if="hasDriverPos"
@@ -146,6 +151,22 @@ const ratingText = computed(() => {
   if (r == null) return '';
   const n = props.delivery?.driver?.rating_count || 0;
   return n > 0 ? `${r} (${n})` : `${r}`;
+});
+
+// Position freshness (recomputed each poll, when the parent passes a fresh delivery object).
+const _positionMs = computed(() => {
+  const ts = props.delivery?.driver?.position_updated_at;
+  if (!ts) return null;
+  const t = new Date(ts).getTime();
+  return Number.isNaN(t) ? null : t;
+});
+const positionStale = computed(
+  () => _positionMs.value != null && Date.now() - _positionMs.value > 3 * 60 * 1000,
+);
+const positionAgeText = computed(() => {
+  if (_positionMs.value == null) return '';
+  const mins = Math.max(0, Math.round((Date.now() - _positionMs.value) / 60000));
+  return mins <= 0 ? t('deliveryTracker.updatedJustNow') : t('deliveryTracker.updatedAgo', { min: mins });
 });
 
 // ── Rate your driver (after delivery) ───────────────────────────────────────────
