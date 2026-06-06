@@ -27,6 +27,10 @@ from .throttles import (
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
+    DeliveryTrackingThrottle,
+    DriverJobAcceptThrottle,
+    DriverPositionThrottle,
+    DriverStatusUpdateThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     MarketplaceOrderStatusThrottle,
@@ -3546,6 +3550,9 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
         "failed_at": job.failed_at.isoformat() if job.failed_at else None,
         "created_at": job.created_at.isoformat(),
         "is_terminal": job.is_terminal,
+        "failure_reason": job.failure_reason,
+        "failure_note": job.failure_note,
+        "resolution": job.resolution,
         "driver": None,
         "ratings": {
             "customer_driver_rating": job.customer_driver_rating,
@@ -3717,6 +3724,7 @@ class DriverPositionUpdateView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [DriverPositionThrottle]
 
     def post(self, request, *args, **kwargs):
         from django.utils import timezone as _tz
@@ -3819,6 +3827,7 @@ class DriverJobAcceptView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [DriverJobAcceptThrottle]
 
     def post(self, request, job_id, *args, **kwargs):
         from django.utils import timezone as _tz
@@ -3857,6 +3866,8 @@ class DriverJobAcceptView(APIView):
             job.assigned_at = _tz.now()
             job.save(update_fields=["driver", "status", "assigned_at"])
 
+        # Tell the customer a driver is on it (best-effort, after commit).
+        _notify_customer_milestone(job, "assigned")
         return Response(_serialize_delivery_job(job), status=status.HTTP_200_OK)
 
 
@@ -3946,8 +3957,12 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
             order = _O.objects.filter(order_number=job.order_number).first()
             if not order:
                 return
+            # Never resurrect a cancelled order: if it was cancelled (and refunded), a late
+            # driver completion must not flip it back to completed/paid.
+            if order.status == _O.Status.CANCELLED:
+                return
             fields = []
-            if order.status not in (_O.Status.COMPLETED, _O.Status.CANCELLED):
+            if order.status != _O.Status.COMPLETED:
                 order.status = _O.Status.COMPLETED
                 order.status_updated_at = _tz.now()
                 fields += ["status", "status_updated_at"]
@@ -3967,10 +3982,53 @@ def _complete_delivered_order(job, proof_photo_url="") -> None:
     _credit_driver_earnings(job)
 
 
+def _notify_customer_milestone(job, event) -> None:
+    """Enqueue a delivery-milestone web-push to the order's customer (best-effort)."""
+    try:
+        from accounts.tasks import enqueue, customer_order_milestone
+        enqueue(customer_order_milestone, job.order_number, job.tenant_id, event)
+    except Exception:
+        pass
+
+
+def _on_job_failed(job) -> None:
+    """A driver marked a delivery FAILED → alert the restaurant + the customer. The OWNER
+    decides re-dispatch vs refund/cancel (and confirms any no-show payout). No money moves
+    and the order is not mutated here."""
+    try:
+        from tenancy.models import Tenant as _T
+        from accounts.tasks import enqueue, web_push_tenant
+        tnt = _T.objects.filter(pk=job.tenant_id).first()
+        if tnt:
+            try:
+                _reason = job.get_failure_reason_display()
+            except Exception:
+                _reason = job.failure_reason or "failed"
+            enqueue(
+                web_push_tenant, tnt.schema_name,
+                "Delivery needs attention",
+                f"Order #{job.order_number}: {_reason}. Re-dispatch or refund from Orders.",
+                "/owner/orders",
+            )
+    except Exception:
+        pass
+    _notify_customer_milestone(job, "failed")
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event="delivery.failed", status="sent",
+            recipient=f"tenant:{job.tenant_id}", reference=str(job.order_number),
+            detail=(job.failure_reason or ""),
+        )
+    except Exception:
+        pass
+
+
 class DriverJobStatusUpdateView(APIView):
     """PATCH /api/driver/jobs/<job_id>/status/ — driver advances job status.
 
-    Body: { "status": "at_restaurant" | "picked_up" | "delivered" | "failed" }
+    Body: { "status": "at_restaurant" | "picked_up" | "delivered" | "failed",
+            "code"?: str (delivered), "failure_reason"?: str (failed), "failure_note"?: str }
     """
 
     VALID_TRANSITIONS = {
@@ -3981,9 +4039,12 @@ class DriverJobStatusUpdateView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [DriverStatusUpdateThrottle]
 
     def patch(self, request, job_id, *args, **kwargs):
+        from datetime import timedelta as _td
         from django.utils import timezone as _tz
+        from django.db import transaction as _dbtx
         from .models import DeliveryJob
 
         customer_id = request.session.get("customer_id")
@@ -3994,64 +4055,92 @@ class DriverJobStatusUpdateView(APIView):
         except Customer.DoesNotExist:
             return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            job = DeliveryJob.objects.select_related("driver").get(pk=job_id, driver=customer)
-        except DeliveryJob.DoesNotExist:
-            return Response({"detail": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
-
         new_status = request.data.get("status", "").strip()
-        allowed = self.VALID_TRANSITIONS.get(job.status, [])
-        if new_status not in allowed:
-            return Response(
-                {"detail": f"Cannot transition from '{job.status}' to '{new_status}'.",
-                 "allowed": allowed},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Proof of delivery — require the order's delivery code (if one was issued).
-        _proof_photo_url = ""
-        if new_status == DeliveryJob.Status.DELIVERED:
-            _expected_code = _order_delivery_code(job)
-            _provided_code = str(request.data.get("code") or "").strip()
-            if _expected_code and _provided_code != _expected_code:
-                return Response(
-                    {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
-                     "code": "bad_delivery_code"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
-
         now = _tz.now()
-        job.status = new_status
-        update_fields = ["status"]
+        _proof_photo_url = ""
 
+        # All state checks + the mutate happen UNDER a row lock so a concurrent cancel /
+        # accept / re-dispatch can't be raced (TOCTOU). Side effects run after commit.
+        with _dbtx.atomic():
+            try:
+                job = DeliveryJob.objects.select_for_update().get(pk=job_id, driver=customer)
+            except DeliveryJob.DoesNotExist:
+                return Response({"detail": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            allowed = self.VALID_TRANSITIONS.get(job.status, [])
+            if new_status not in allowed:
+                return Response(
+                    {"detail": f"Cannot transition from '{job.status}' to '{new_status}'.",
+                     "allowed": allowed, "code": "bad_transition"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if new_status == DeliveryJob.Status.DELIVERED:
+                # Proof-of-delivery code, with a brute-force lockout.
+                if job.code_locked_until and job.code_locked_until > now:
+                    return Response(
+                        {"detail": "Too many incorrect codes — try again shortly.", "code": "code_locked"},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+                _expected_code = _order_delivery_code(job)
+                _provided_code = str(request.data.get("code") or "").strip()
+                if _expected_code and _provided_code != _expected_code:
+                    job.code_attempts = (job.code_attempts or 0) + 1
+                    _f = ["code_attempts"]
+                    if job.code_attempts >= 5:
+                        job.code_locked_until = now + _td(minutes=5)
+                        job.code_attempts = 0
+                        _f.append("code_locked_until")
+                    job.save(update_fields=_f)
+                    return Response(
+                        {"detail": "Incorrect delivery code. Ask the customer for the code on their order.",
+                         "code": "bad_delivery_code"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                _proof_photo_url = str(request.data.get("proof_photo_url") or "").strip()
+
+            if new_status == DeliveryJob.Status.FAILED:
+                _reason = str(request.data.get("failure_reason") or "").strip()
+                if _reason not in DeliveryJob.FailureReason.values:
+                    return Response(
+                        {"detail": "Select why the delivery failed.", "code": "failure_reason_required"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                job.failure_reason = _reason
+                job.failure_note = str(request.data.get("failure_note") or "")[:300]
+                job.failed_at = now
+
+            job.status = new_status
+            update_fields = ["status"]
+            if new_status == DeliveryJob.Status.PICKED_UP:
+                job.picked_up_at = now
+                update_fields.append("picked_up_at")
+            elif new_status == DeliveryJob.Status.DELIVERED:
+                job.delivered_at = now
+                update_fields.append("delivered_at")
+            elif new_status == DeliveryJob.Status.FAILED:
+                update_fields += ["failure_reason", "failure_note", "failed_at"]
+            job.save(update_fields=update_fields)
+
+        # ── Side effects (after the lock is released) ──────────────────────────
         if new_status == DeliveryJob.Status.PICKED_UP:
-            job.picked_up_at = now
-            update_fields.append("picked_up_at")
             _mark_order_out_for_delivery(job)
+            _notify_customer_milestone(job, "out_for_delivery")
         elif new_status == DeliveryJob.Status.DELIVERED:
-            job.delivered_at = now
-            update_fields.append("delivered_at")
-            # Go offline after delivery
-            customer.is_driver_online = False
+            customer.is_driver_online = False  # free the driver after a completed run
             customer.save(update_fields=["is_driver_online", "updated_at"])
-            # Close out the underlying order: completed + paid + proof, credit earnings.
             _complete_delivered_order(job, proof_photo_url=_proof_photo_url)
+            _notify_customer_milestone(job, "delivered")
         elif new_status == DeliveryJob.Status.FAILED:
-            job.failed_at = now
-            update_fields.append("failed_at")
-
-        job.save(update_fields=update_fields)
-
-        # Push notification to restaurant when driver arrives at pickup
-        if new_status == DeliveryJob.Status.AT_RESTAURANT:
+            _on_job_failed(job)
+        elif new_status == DeliveryJob.Status.AT_RESTAURANT:
             try:
                 import threading as _threading
                 from tenancy.models import Tenant as _Tenant
                 from menu.push import _push_to_tenant as _push_restaurant
                 _tenant = _Tenant.objects.filter(pk=job.tenant_id).first()
                 if _tenant:
-                    _driver_name = (getattr(job.driver, "name", "") or "Driver").strip()
+                    _driver_name = (customer.name or "Driver").strip()
                     _threading.Thread(
                         target=_push_restaurant,
                         args=(
@@ -4071,6 +4160,33 @@ class DriverJobStatusUpdateView(APIView):
 # ── Order tracking SSE ────────────────────────────────────────────────────────
 
 
+def _tracking_request_owns_order(request, tenant, order_number) -> bool:
+    """True when the requesting session customer owns this order (tenant-schema lookup).
+
+    Delivery orders always have a signed-in owner, so this never hides tracking from a
+    legitimate customer — it just stops anyone who guesses an order number from reading the
+    driver's phone + live position.
+    """
+    try:
+        sid = request.session.get("customer_id")
+    except Exception:
+        sid = None
+    if not sid:
+        return False
+    try:
+        from django_tenants.utils import schema_context
+        from menu.models import Order as _O
+        with schema_context(tenant.schema_name):
+            cid = (
+                _O.objects.filter(order_number=order_number)
+                .values_list("customer_id", flat=True)
+                .first()
+            )
+        return bool(cid) and str(cid) == str(sid)
+    except Exception:
+        return False
+
+
 class OrderTrackingView(APIView):
     """GET /api/marketplace/track/<order_number>/?restaurant=<slug>
 
@@ -4084,6 +4200,7 @@ class OrderTrackingView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [DeliveryTrackingThrottle]
 
     def get(self, request, order_number, *args, **kwargs):
         from tenancy.models import Tenant
@@ -4108,6 +4225,11 @@ class OrderTrackingView(APIView):
             )
         except DeliveryJob.DoesNotExist:
             return Response({"detail": "No delivery job found for this order.", "code": "no_job"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Privacy gate: this returns the driver's phone + live GPS, so only the order's
+        # OWNER may read it (order numbers are guessable, and this endpoint is AllowAny).
+        if not _tracking_request_owns_order(request, tenant, order_number):
+            return Response({"detail": "Not your order.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         if not use_sse:
             return Response(_serialize_delivery_job(job, include_driver_position=True))

@@ -107,11 +107,24 @@ class OrderTrackingViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("accounts.models.DeliveryJob") as mock_dj:
                 mock_dj.objects.select_related.return_value.get.return_value = job
-                with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "assigned"}):
-                    resp = self._get(params={"restaurant": "myrestaurant"})
+                with patch("accounts.views._tracking_request_owns_order", return_value=True):
+                    with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "assigned"}):
+                        resp = self._get(params={"restaurant": "myrestaurant"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("id", resp.data)
+
+    def test_non_owner_forbidden(self):
+        """Driver phone + live position must not leak to a non-owner who guesses an order #."""
+        tenant = _make_tenant()
+        job = _make_job()
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("accounts.models.DeliveryJob") as mock_dj:
+                mock_dj.objects.select_related.return_value.get.return_value = job
+                with patch("accounts.views._tracking_request_owns_order", return_value=False):
+                    resp = self._get(params={"restaurant": "myrestaurant"})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_job_data_includes_driver_position(self):
         tenant = _make_tenant()
@@ -130,7 +143,8 @@ class OrderTrackingViewTests(SimpleTestCase):
             mock_tenant.objects.get.return_value = tenant
             with patch("accounts.models.DeliveryJob") as mock_dj:
                 mock_dj.objects.select_related.return_value.get.return_value = job
-                resp = self._get(params={"restaurant": "myrestaurant"})
+                with patch("accounts.views._tracking_request_owns_order", return_value=True):
+                    resp = self._get(params={"restaurant": "myrestaurant"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 

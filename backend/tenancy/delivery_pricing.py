@@ -24,6 +24,9 @@ from decimal import Decimal, ROUND_HALF_UP
 # Earth radius in km (mean).
 _EARTH_KM = 6371.0088
 _CENT = Decimal("0.01")
+# A delivery farther than this is almost certainly a bad/foreign coordinate — refuse it so
+# bogus lat/lng can't compute an absurd fee (used even when no per-restaurant radius is set).
+MAX_PLAUSIBLE_KM = 100.0
 
 
 def haversine_km(lat1, lng1, lat2, lng2) -> float:
@@ -97,8 +100,12 @@ def compute_delivery_fee(profile, *, distance_km=None, food_subtotal=Decimal("0"
         except (TypeError, ValueError):
             dist = None
 
-    # 1) Out-of-range guard: only when we both know the distance AND a radius is set.
-    if dist is not None and radius and dist > radius:
+    # 1) Out-of-range guard: beyond the restaurant's radius, OR an implausibly far point
+    #    (bogus coordinates) even when no radius is configured — never bill a wild fee.
+    _out = dist is not None and (
+        (radius and dist > radius) or dist > MAX_PLAUSIBLE_KM
+    )
+    if _out:
         return {
             "fee": Decimal("0.00"),
             "distance_km": dist,
@@ -122,7 +129,10 @@ def compute_delivery_fee(profile, *, distance_km=None, food_subtotal=Decimal("0"
         fee = (base + per_km * Decimal(str(dist))).quantize(_CENT, rounding=ROUND_HALF_UP)
         mode = "distance"
     else:
-        fee = flat.quantize(_CENT, rounding=ROUND_HALF_UP)
+        # Flat fallback. When distance pricing IS configured (per_km>0) but the distance is
+        # unknown (no coordinates), fall back to the larger of the flat fee and the base fee
+        # so a restaurant that only set a base never silently delivers for free.
+        fee = (max(flat, base) if per_km > 0 else flat).quantize(_CENT, rounding=ROUND_HALF_UP)
         mode = "flat"
 
     if fee < 0:

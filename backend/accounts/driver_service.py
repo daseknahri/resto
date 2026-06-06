@@ -86,11 +86,22 @@ def create_cashout_request(driver_id, amount, *, ttl_seconds=CASHOUT_TTL_SECONDS
     cust = Customer.objects.filter(pk=driver_id).first()
     if cust is None:
         raise CashoutError("driver not found", code="not_found")
+    # Only approved drivers may extract cash (defense-in-depth; earning already requires approval).
+    if not getattr(cust, "driver_approved", False):
+        raise CashoutError("Your driver account isn't approved yet", code="not_approved")
     balance = _money(cust.wallet_balance)
     if balance < CASHOUT_MIN:
         raise CashoutError(f"You need at least {CASHOUT_MIN} to cash out", code="below_min")
     if amount <= 0 or amount > balance:
         raise CashoutError("Enter an amount up to your balance", code="bad_amount")
+    # One live request at a time, so a driver can't hand out several codes against one balance.
+    if DriverCashoutRequest.objects.filter(
+        driver_id=driver_id,
+        status=DriverCashoutRequest.Status.PENDING,
+        expires_at__gt=timezone.now(),
+    ).exists():
+        raise CashoutError("You already have a pending cash-out — show or cancel it first",
+                           code="already_pending")
 
     code = ""
     for _ in range(12):

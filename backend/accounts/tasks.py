@@ -79,6 +79,18 @@ def driver_dispatch(restaurant_name=None):
     notify_online_drivers_new_job_sync(restaurant_name)
 
 
+@shared_task(name="accounts.tasks.driver_job_cancelled", **_RETRY)
+def driver_job_cancelled(driver_id, order_number):
+    from accounts.push import notify_driver_job_cancelled_sync
+    notify_driver_job_cancelled_sync(driver_id, order_number)
+
+
+@shared_task(name="accounts.tasks.customer_order_milestone", **_RETRY)
+def customer_order_milestone(order_number, tenant_id, event):
+    from accounts.push import notify_customer_order_milestone_sync
+    notify_customer_order_milestone_sync(order_number, tenant_id, event)
+
+
 @shared_task(name="accounts.tasks.run_management_command", acks_late=True)
 def run_management_command(name, *args, **kwargs):
     """Run a Django management command from Beat (lets Beat own the cron jobs)."""

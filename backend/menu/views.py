@@ -2692,8 +2692,16 @@ class CustomerOrderCancelView(APIView):
             _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
             _restock_cancelled_order(order)
 
-        _broadcast_order_change(order)  # live-update the tracking page
+        # Stand down any assigned delivery driver (public-schema job; best-effort).
         tenant = getattr(request, "tenant", None)
+        if tenant:
+            try:
+                from accounts.delivery_service import cancel_delivery_job_for_order
+                cancel_delivery_job_for_order(tenant.id, order.order_number)
+            except Exception:
+                pass
+
+        _broadcast_order_change(order)  # live-update the tracking page
         if tenant:
             try:
                 _send_order_status_email(order, tenant, Order.Status.CANCELLED)
@@ -3220,6 +3228,128 @@ class OwnerDriverCashoutConfirmView(APIView):
         return Response({"paid": True, "amount": str(req.amount)})
 
 
+class OwnerDeliveryJobActionView(APIView):
+    """POST /api/owner/orders/<order_id>/delivery-action/  body {action, ...}
+
+    Owner resolves a failed / stuck delivery job:
+      - "redispatch"      → re-offer the SAME job to the driver pool (reuses the row).
+      - "refund_cancel"   → cancel the order + refund wallet + reverse loyalty + restock.
+      - "confirm_noshow"  → pay the driver for a customer-no-show failure (owner-confirmed).
+    Owner/manager of the tenant only. All actions are idempotent.
+    """
+    permission_classes = [IsAuthenticated]
+
+    MAX_REDISPATCH = 3
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Restaurant context required.", "code": "no_tenant"}, status=status.HTTP_400_BAD_REQUEST)
+
+        action = (request.data.get("action") or "").strip()
+        if action not in ("redispatch", "refund_cancel", "confirm_noshow"):
+            return Response({"detail": "Unknown action.", "code": "bad_action"}, status=status.HTTP_400_BAD_REQUEST)
+
+        order = Order.objects.filter(pk=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.db import transaction as _tx
+        from django.utils import timezone as _tz
+        from accounts.models import DeliveryJob as _DJob
+
+        # ── Refund & cancel ────────────────────────────────────────────────────
+        if action == "refund_cancel":
+            with _tx.atomic():
+                if order.status != Order.Status.CANCELLED:
+                    order.status = Order.Status.CANCELLED
+                    order.status_updated_at = _tz.now()
+                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                _refund_wallet_for_cancelled_order(order)   # idempotent
+                _reverse_loyalty_for_cancelled_order(order)
+                _restock_cancelled_order(order)
+            try:
+                from accounts.delivery_service import cancel_delivery_job_for_order
+                cancel_delivery_job_for_order(tenant.id, order.order_number)
+                _DJob.objects.filter(tenant_id=tenant.id, order_number=order.order_number).update(
+                    resolution=_DJob.Resolution.REFUNDED_CANCELLED
+                )
+            except Exception:
+                pass
+            _broadcast_order_change(order)
+            return Response({"ok": True, "order_status": order.status,
+                             "payment_status": order.payment_status, "resolution": "refunded_cancelled"})
+
+        # ── Re-dispatch / confirm no-show (operate on the job) ──────────────────
+        with _tx.atomic():
+            job = (
+                _DJob.objects.select_for_update()
+                .filter(tenant_id=tenant.id, order_number=order.order_number)
+                .first()
+            )
+            if job is None:
+                return Response({"detail": "No delivery job for this order.", "code": "no_job"}, status=status.HTTP_404_NOT_FOUND)
+
+            if action == "redispatch":
+                if job.status != _DJob.Status.FAILED:
+                    return Response({"detail": "This job isn't awaiting a decision.", "code": "job_changed"}, status=status.HTTP_409_CONFLICT)
+                if (job.redispatch_count or 0) >= self.MAX_REDISPATCH:
+                    return Response({"detail": "Re-dispatched too many times — refund instead.", "code": "redispatch_limit"}, status=status.HTTP_409_CONFLICT)
+                job.driver = None
+                job.status = _DJob.Status.SEARCHING
+                job.assigned_at = None
+                job.picked_up_at = None
+                job.failed_at = None
+                job.failure_reason = ""
+                job.failure_note = ""
+                job.owner_alerted_at = None
+                job.code_attempts = 0
+                job.code_locked_until = None
+                job.redispatch_count = (job.redispatch_count or 0) + 1
+                job.resolution = _DJob.Resolution.REDISPATCHED
+                job.save(update_fields=[
+                    "driver", "status", "assigned_at", "picked_up_at", "failed_at",
+                    "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
+                    "code_locked_until", "redispatch_count", "resolution",
+                ])
+
+            elif action == "confirm_noshow":
+                if job.status != _DJob.Status.FAILED or job.failure_reason != _DJob.FailureReason.CUSTOMER_NO_SHOW:
+                    return Response({"detail": "Only a no-show failure can be paid.", "code": "not_noshow"}, status=status.HTTP_409_CONFLICT)
+                if not job.driver_id or (job.driver_payout or 0) <= 0:
+                    return Response({"detail": "Nothing to pay this driver.", "code": "no_payout"}, status=status.HTTP_400_BAD_REQUEST)
+                from accounts.wallet_service import credit_wallet
+                from accounts.models import WalletTransaction as _WT
+                credit_wallet(
+                    job.driver_id, job.driver_payout, tx_type=_WT.Type.EARNING,
+                    idempotency_key=f"noshow:{job.id}", reference=f"noshow:{order.order_number}",
+                    tenant_id=tenant.id, note="No-show payout", require_verified=False,
+                )
+                if not job.resolution:
+                    job.resolution = _DJob.Resolution.NOSHOW_PAID
+                    job.save(update_fields=["resolution"])
+
+        if action == "redispatch":
+            try:
+                from accounts.push import push_new_job_to_drivers
+                push_new_job_to_drivers(getattr(tenant, "name", ""))
+            except Exception:
+                pass
+            # Keep the customer timeline coherent: a re-dispatched order isn't "out for delivery".
+            try:
+                if order.status == Order.Status.OUT_FOR_DELIVERY:
+                    order.status = Order.Status.READY
+                    order.status_updated_at = _tz.now()
+                    order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                    _broadcast_order_change(order)
+            except Exception:
+                pass
+            return Response({"ok": True, "resolution": "redispatched"})
+        return Response({"ok": True, "resolution": "noshow_paid"})
+
+
 class OwnerNotificationsView(APIView):
     """GET /api/owner/notifications/ — the outbound-notification audit log for this tenant
     (web push + email + SMS + WhatsApp attempts and outcomes). Owner/manager only. Supports
@@ -3345,6 +3475,10 @@ class OwnerOrderListView(APIView):
                         "assigned_at": _dj.assigned_at.isoformat() if _dj.assigned_at else None,
                         "picked_up_at": _dj.picked_up_at.isoformat() if _dj.picked_up_at else None,
                         "delivered_at": _dj.delivered_at.isoformat() if _dj.delivered_at else None,
+                        "failure_reason": _dj.failure_reason,
+                        "failure_note": _dj.failure_note,
+                        "redispatch_count": _dj.redispatch_count,
+                        "resolution": _dj.resolution,
                         "restaurant_driver_rating": _dj.restaurant_driver_rating,
                         "restaurant_driver_note": _dj.restaurant_driver_note,
                     }
@@ -3512,6 +3646,10 @@ class OwnerOrderDetailView(APIView):
                     "assigned_at": _dj.assigned_at.isoformat() if _dj.assigned_at else None,
                     "picked_up_at": _dj.picked_up_at.isoformat() if _dj.picked_up_at else None,
                     "delivered_at": _dj.delivered_at.isoformat() if _dj.delivered_at else None,
+                    "failure_reason": _dj.failure_reason,
+                    "failure_note": _dj.failure_note,
+                    "redispatch_count": _dj.redispatch_count,
+                    "resolution": _dj.resolution,
                     "restaurant_driver_rating": _dj.restaurant_driver_rating,
                     "restaurant_driver_note": _dj.restaurant_driver_note,
                 }
@@ -4053,6 +4191,14 @@ class OwnerOrderStatusUpdateView(APIView):
                 _restock_cancelled_order(order)
             except Exception:
                 pass  # Non-fatal — refund/restock failure must not block the status update response
+            # Stand down any assigned delivery driver (public-schema job; best-effort).
+            try:
+                from accounts.delivery_service import cancel_delivery_job_for_order
+                _ct = getattr(request, "tenant", None)
+                if _ct:
+                    cancel_delivery_job_for_order(_ct.id, order.order_number)
+            except Exception:
+                pass
 
         tenant = getattr(request, "tenant", None)
         if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}:

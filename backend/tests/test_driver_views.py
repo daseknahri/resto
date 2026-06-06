@@ -69,7 +69,18 @@ def _make_job(pk=1, status_val="assigned", driver=None, tenant_id=1, order_numbe
     j.failed_at = None
     j.created_at = MagicMock()
     j.created_at.isoformat.return_value = "2026-05-01T10:00:00+00:00"
+    j.code_attempts = 0
+    j.code_locked_until = None
+    j.failure_reason = ""
+    j.failure_note = ""
     return j
+
+
+def _noop_atomic():
+    cm = MagicMock()
+    cm.__enter__ = MagicMock(return_value=None)
+    cm.__exit__ = MagicMock(return_value=False)
+    return cm
 
 
 # ── DriverRegisterView ────────────────────────────────────────────────────────
@@ -459,12 +470,27 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DriverJobStatusUpdateView.as_view()
+        # The view mutates under transaction.atomic(); neutralise it (no DB in unit tests).
+        self._atomic = patch("django.db.transaction.atomic", return_value=_noop_atomic())
+        self._atomic.start()
+
+    def tearDown(self):
+        self._atomic.stop()
 
     def _patch(self, job_id, data, session=None):
         req = self.factory.patch(f"/api/driver/jobs/{job_id}/status/", data, format="json")
         req.session = session or _session()
         req.user = MagicMock(is_authenticated=False)
         return self.view(req, job_id=job_id)
+
+    @staticmethod
+    def _wire_status(mock_dj):
+        mock_dj.Status.PICKED_UP = "picked_up"
+        mock_dj.Status.DELIVERED = "delivered"
+        mock_dj.Status.FAILED = "failed"
+        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.FailureReason.values = ["customer_no_show", "bad_address", "driver_unable", "other"]
+        mock_dj.FailureReason.CUSTOMER_NO_SHOW = "customer_no_show"
 
     def test_no_session_returns_401(self):
         resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=None))
@@ -483,20 +509,21 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         customer = _make_customer()
         mock_objs.get.return_value = customer
         mock_dj.DoesNotExist = Exception
-        mock_dj.objects.select_related.return_value.get.side_effect = mock_dj.DoesNotExist
+        mock_dj.objects.select_for_update.return_value.get.side_effect = mock_dj.DoesNotExist
         resp = self._patch(999, {"status": "at_restaurant"}, session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
-    def test_invalid_transition_returns_400(self, mock_objs, mock_dj):
+    def test_invalid_transition_returns_409(self, mock_objs, mock_dj):
         customer = _make_customer()
         mock_objs.get.return_value = customer
         job = _make_job(status_val="assigned", driver=customer)
-        mock_dj.objects.select_related.return_value.get.return_value = job
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
         # "delivered" is not a valid transition from "assigned"
         resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("allowed", resp.data)
 
     @patch("accounts.models.DeliveryJob")
@@ -505,33 +532,60 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         customer = _make_customer()
         mock_objs.get.return_value = customer
         job = _make_job(status_val="assigned", driver=customer)
-        mock_dj.objects.select_related.return_value.get.return_value = job
-        mock_dj.Status.PICKED_UP = "picked_up"
-        mock_dj.Status.DELIVERED = "delivered"
-        mock_dj.Status.FAILED = "failed"
-        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
 
         with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "at_restaurant"}):
             with patch("django.utils.timezone.now", return_value=MagicMock()):
                 resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
+    @patch("accounts.views._complete_delivered_order")
     @patch("accounts.models.DeliveryJob")
     @patch("accounts.models.Customer.objects")
-    def test_delivered_transition_updates_fields(self, mock_objs, mock_dj):
+    def test_delivered_transition_updates_fields(self, mock_objs, mock_dj, mock_complete):
         customer = _make_customer()
         mock_objs.get.return_value = customer
         job = _make_job(status_val="picked_up", driver=customer)
-        mock_dj.objects.select_related.return_value.get.return_value = job
-        mock_dj.Status.PICKED_UP = "picked_up"
-        mock_dj.Status.DELIVERED = "delivered"
-        mock_dj.Status.FAILED = "failed"
-        mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
 
-        with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
-            with patch("django.utils.timezone.now", return_value=MagicMock()):
-                resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
+        with patch("accounts.views._order_delivery_code", return_value=""):
+            with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
+                with patch("django.utils.timezone.now", return_value=MagicMock()):
+                    resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # Driver should be set offline after delivery
-        self.assertFalse(customer.is_driver_online)
+        self.assertFalse(customer.is_driver_online)  # driver freed after delivery
+        mock_complete.assert_called_once()
+
+    @patch("accounts.views._on_job_failed")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_failed_requires_reason(self, mock_objs, mock_dj, mock_failed):
+        customer = _make_customer()
+        mock_objs.get.return_value = customer
+        job = _make_job(status_val="picked_up", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+        # No failure_reason → 400
+        resp = self._patch(1, {"status": "failed"}, session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "failure_reason_required")
+        mock_failed.assert_not_called()
+
+    @patch("accounts.views._on_job_failed")
+    @patch("accounts.models.DeliveryJob")
+    @patch("accounts.models.Customer.objects")
+    def test_failed_with_reason_ok(self, mock_objs, mock_dj, mock_failed):
+        customer = _make_customer()
+        mock_objs.get.return_value = customer
+        job = _make_job(status_val="picked_up", driver=customer)
+        mock_dj.objects.select_for_update.return_value.get.return_value = job
+        self._wire_status(mock_dj)
+        with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "failed"}):
+            with patch("django.utils.timezone.now", return_value=MagicMock()):
+                resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
+                                   session=_session(customer_id=1))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_failed.assert_called_once()

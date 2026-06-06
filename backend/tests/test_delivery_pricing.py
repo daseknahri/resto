@@ -143,3 +143,28 @@ class OutOfRangeTests(SimpleTestCase):
         )
         self.assertTrue(r["out_of_range"])
         self.assertFalse(r["free"])
+
+
+class FallbackGuardTests(SimpleTestCase):
+    def test_distance_pricing_no_coords_falls_back_to_base_not_free(self):
+        # per_km configured but no distance (no coords) + flat 0 → must NOT be free.
+        r = compute_delivery_fee(
+            _profile(delivery_per_km=Decimal("2"), delivery_base_fee=Decimal("7"), delivery_fee=Decimal("0")),
+            distance_km=None, food_subtotal=Decimal("40"),
+        )
+        self.assertEqual(r["fee"], Decimal("7.00"))
+        self.assertEqual(r["mode"], "flat")
+        self.assertFalse(r["free"])
+
+    def test_flat_pricing_no_coords_uses_flat(self):
+        r = compute_delivery_fee(
+            _profile(delivery_fee=Decimal("9")), distance_km=None, food_subtotal=Decimal("40"),
+        )
+        self.assertEqual(r["fee"], Decimal("9.00"))
+
+    def test_absurd_distance_is_out_of_range_without_a_radius(self):
+        # A bogus far-away coordinate must be refused even when no radius is configured.
+        r = compute_delivery_fee(
+            _profile(delivery_per_km=Decimal("2")), distance_km=250, food_subtotal=Decimal("40"),
+        )
+        self.assertTrue(r["out_of_range"])

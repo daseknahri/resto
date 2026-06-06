@@ -636,6 +636,21 @@ class DeliveryJob(models.Model):
         PICKED_UP = "picked_up", "Picked up"
         DELIVERED = "delivered", "Delivered"
         FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"  # the underlying order was cancelled
+
+    class FailureReason(models.TextChoices):
+        CUSTOMER_NO_SHOW = "customer_no_show", "Customer not reachable / no-show"
+        BAD_ADDRESS = "bad_address", "Address wrong or not found"
+        DRIVER_UNABLE = "driver_unable", "Driver unable (vehicle, accident…)"
+        OTHER = "other", "Other"
+
+    class Resolution(models.TextChoices):
+        REDISPATCHED = "redispatched", "Re-dispatched"
+        REFUNDED_CANCELLED = "refunded_cancelled", "Refunded & cancelled"
+        NOSHOW_PAID = "noshow_paid", "Driver paid (no-show)"
+
+    # Statuses where a driver is actively holding the job (assigned but not yet terminal).
+    ACTIVE_STATUSES = ("assigned", "at_restaurant", "picked_up")
 
     # Cross-schema reference to the tenant order
     tenant_id = models.IntegerField(db_index=True)
@@ -684,7 +699,24 @@ class DeliveryJob(models.Model):
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     failed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # ── Failure / recovery (unhappy-path handling) ──────────────────────────────
+    failure_reason = models.CharField(
+        max_length=20, choices=FailureReason.choices, blank=True,
+        help_text="Why the driver marked this delivery failed.",
+    )
+    failure_note = models.CharField(max_length=300, blank=True)
+    # Owner has been alerted that this job is stuck (no driver) — set once by the sweep.
+    owner_alerted_at = models.DateTimeField(null=True, blank=True)
+    # How many times this job has been re-offered (bounds re-dispatch loops; audit).
+    redispatch_count = models.PositiveSmallIntegerField(default=0)
+    # How the owner/system resolved a failed job.
+    resolution = models.CharField(max_length=20, choices=Resolution.choices, blank=True)
+    # Proof-of-delivery code brute-force guard.
+    code_attempts = models.PositiveSmallIntegerField(default=0)
+    code_locked_until = models.DateTimeField(null=True, blank=True)
 
     # ── Three-way ratings ──────────────────────────────────────────────────────
     # Customer rates the driver (speed, professionalism)
@@ -700,13 +732,20 @@ class DeliveryJob(models.Model):
     class Meta:
         unique_together = ("tenant_id", "order_number")
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["status", "owner_alerted_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"DeliveryJob {self.order_number} ({self.status})"
 
     @property
     def is_terminal(self) -> bool:
-        return self.status in (self.Status.DELIVERED, self.Status.FAILED)
+        return self.status in (
+            self.Status.DELIVERED,
+            self.Status.FAILED,
+            self.Status.CANCELLED,
+        )
 
 
 class SavedAddress(models.Model):

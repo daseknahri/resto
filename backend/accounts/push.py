@@ -142,6 +142,145 @@ def push_new_job_to_drivers(restaurant_name=None) -> None:
     enqueue(driver_dispatch, restaurant_name)
 
 
+# Driver "stand down" nudge when an order they're carrying is cancelled. {n} = order number.
+_JOB_CANCELLED_MESSAGES = {
+    "en": {"title": "Delivery cancelled", "body": "Order {n} was cancelled — you can stop. Thanks!"},
+    "fr": {"title": "Livraison annulee", "body": "La commande {n} a ete annulee — vous pouvez arreter. Merci !"},
+    "ar": {"title": "أُلغيت عملية التوصيل", "body": "أُلغي الطلب {n} — يمكنك التوقف. شكراً!"},
+}
+
+
+def notify_driver_job_cancelled_sync(driver_id, order_number) -> int:
+    """Tell one driver their job's order was cancelled (deep-links to /driver). SYNCHRONOUS."""
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=driver_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=driver_id))
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    if loc not in _JOB_CANCELLED_MESSAGES:
+        loc = "en"
+    msg = _JOB_CANCELLED_MESSAGES[loc]
+    title = msg["title"]
+    body = msg["body"].format(n=order_number)
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/driver")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event="delivery.cancelled",
+            status="sent" if sent else "failed",
+            recipient=f"driver:{driver_id}", reference=str(order_number),
+        )
+    except Exception:
+        pass
+    return sent
+
+
+# Customer-facing delivery milestone nudges. {r} = restaurant. Deep-link to /orders/<n>.
+_MILESTONE_MESSAGES = {
+    "assigned": {
+        "en": {"title": "A driver is on it", "body": "{r} assigned a driver to your order."},
+        "fr": {"title": "Un livreur est en route", "body": "{r} a assigne un livreur a votre commande."},
+        "ar": {"title": "تم تعيين سائق", "body": "{r} عيّن سائقاً لطلبك."},
+    },
+    "out_for_delivery": {
+        "en": {"title": "Out for delivery", "body": "Your order from {r} is on the way."},
+        "fr": {"title": "En cours de livraison", "body": "Votre commande de {r} est en route."},
+        "ar": {"title": "في الطريق إليك", "body": "طلبك من {r} في الطريق."},
+    },
+    "delivered": {
+        "en": {"title": "Delivered", "body": "Your order from {r} has arrived. Enjoy!"},
+        "fr": {"title": "Livre", "body": "Votre commande de {r} est arrivee. Bon appetit !"},
+        "ar": {"title": "تم التسليم", "body": "وصل طلبك من {r}. بالهناء!"},
+    },
+    "failed": {
+        "en": {"title": "Delivery problem", "body": "There was a problem delivering your {r} order — the restaurant is sorting it out."},
+        "fr": {"title": "Probleme de livraison", "body": "Un probleme est survenu avec votre commande {r} — le restaurant s'en occupe."},
+        "ar": {"title": "مشكلة في التوصيل", "body": "حدثت مشكلة في توصيل طلبك من {r} — المطعم يعالج الأمر."},
+    },
+}
+
+
+def notify_customer_order_milestone_sync(order_number, tenant_id, event) -> int:
+    """Push a delivery milestone to the order's customer (assigned / out_for_delivery /
+    delivered / failed). Respects ``notify_order_updates``. Cross-schema: resolves the
+    customer id inside the tenant schema, then pushes from the public schema. SYNCHRONOUS."""
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from tenancy.models import Tenant
+    from .models import Customer, CustomerPushSubscription
+
+    copy = _MILESTONE_MESSAGES.get(event)
+    if not copy:
+        return 0
+    tenant = Tenant.objects.filter(id=tenant_id).first()
+    if not tenant:
+        return 0
+    restaurant_name = tenant.name or "the restaurant"
+
+    with schema_context(tenant.schema_name):
+        from menu.models import Order as _O
+        customer_id = (
+            _O.objects.filter(order_number=order_number)
+            .values_list("customer_id", flat=True)
+            .first()
+        )
+    if not customer_id:
+        return 0  # guest order — nobody to push
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=customer_id).first()
+        if cust is not None and not getattr(cust, "notify_order_updates", True):
+            return 0
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    if loc not in copy:
+        loc = "en"
+    msg = copy[loc]
+    title = msg["title"].format(r=restaurant_name)
+    body = msg["body"].format(r=restaurant_name)
+    url = f"/orders/{order_number}"
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, url)
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(
+            channel="push", event=f"delivery.{event}",
+            status="sent" if sent else "failed",
+            recipient=f"{sent}/{len(subs)} subs", reference=str(order_number),
+        )
+    except Exception:
+        pass
+    return sent
+
+
 def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     """Send a post-order review nudge to a customer. SYNCHRONOUS — safe to call
     from a management command (the cron process waits for delivery rather than

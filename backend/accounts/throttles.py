@@ -55,6 +55,37 @@ class CustomerProfileUpdateThrottle(_IPThrottle):
     scope = "customer_profile_update"
 
 
+class _CustomerThrottle(SimpleRateThrottle):
+    """Throttle per signed-in customer/driver (session customer_id), falling back to IP."""
+
+    def get_cache_key(self, request, view):
+        try:
+            cid = request.session.get("customer_id")
+        except Exception:
+            cid = None
+        ident = f"c{cid}" if cid else self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class DriverPositionThrottle(_CustomerThrottle):
+    """Cap how fast a driver can post GPS updates (floods the DB + tracking clients)."""
+    scope = "driver_position"
+
+
+class DriverStatusUpdateThrottle(_CustomerThrottle):
+    """Cap driver job-status transitions (anti-spam; also brute-force backstop for the code)."""
+    scope = "driver_status"
+
+
+class DriverJobAcceptThrottle(_CustomerThrottle):
+    scope = "driver_accept"
+
+
+class DeliveryTrackingThrottle(_CustomerThrottle):
+    """Cap customer delivery-tracking polls (every ~10 s, plus tabs / SSE reconnects)."""
+    scope = "delivery_tracking"
+
+
 class MarketplaceOrderThrottle(_IPThrottle):
     """Rate-limit marketplace order placement — prevents order flooding and inventory races."""
     scope = "marketplace_order"

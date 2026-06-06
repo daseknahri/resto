@@ -51,6 +51,10 @@ REST_FRAMEWORK = {
         "translate": "30/hour",
         "waiter_call": "10/min",
         "wallet_transfer": "20/hour",
+        "driver_position": "60/min",
+        "driver_status": "30/min",
+        "driver_accept": "30/min",
+        "delivery_tracking": "120/min",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

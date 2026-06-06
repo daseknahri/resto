@@ -280,6 +280,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 600.0,  # every 10 min
         "args": ("expire_charge_requests",),
     },
+    "sweep-delivery-jobs": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 180.0,  # every 3 min — re-dispatch / escalate / recover stuck jobs
+        "args": ("sweep_delivery_jobs",),
+    },
     "enforce-subscriptions": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 86400.0,  # daily

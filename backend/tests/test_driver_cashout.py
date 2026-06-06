@@ -23,14 +23,24 @@ def _noop_atomic():
 class CreateCashoutTests(SimpleTestCase):
     @patch("accounts.models.Customer")
     def test_below_min_rejected(self, Cust):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(wallet_balance=Decimal("50"))
+        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+            wallet_balance=Decimal("50"), driver_approved=True)
         with self.assertRaises(CashoutError) as ctx:
             create_cashout_request(1, "50")
         self.assertEqual(ctx.exception.code, "below_min")
 
     @patch("accounts.models.Customer")
+    def test_not_approved_rejected(self, Cust):
+        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+            wallet_balance=Decimal("150"), driver_approved=False)
+        with self.assertRaises(CashoutError) as ctx:
+            create_cashout_request(1, "120")
+        self.assertEqual(ctx.exception.code, "not_approved")
+
+    @patch("accounts.models.Customer")
     def test_amount_over_balance_rejected(self, Cust):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(wallet_balance=Decimal("120"))
+        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+            wallet_balance=Decimal("120"), driver_approved=True)
         with self.assertRaises(CashoutError) as ctx:
             create_cashout_request(1, "200")
         self.assertEqual(ctx.exception.code, "bad_amount")
@@ -38,8 +48,9 @@ class CreateCashoutTests(SimpleTestCase):
     @patch("accounts.models.DriverCashoutRequest")
     @patch("accounts.models.Customer")
     def test_happy_path_creates_request(self, Cust, DCR):
-        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(wallet_balance=Decimal("150"))
-        DCR.objects.filter.return_value.exists.return_value = False  # code is unique
+        Cust.objects.filter.return_value.first.return_value = SimpleNamespace(
+            wallet_balance=Decimal("150"), driver_approved=True)
+        DCR.objects.filter.return_value.exists.return_value = False  # code is unique + no pending
         DCR.objects.create.return_value = SimpleNamespace(id=1, amount=Decimal("120.00"), code="123456")
         create_cashout_request(1, "120")
         DCR.objects.create.assert_called_once()
