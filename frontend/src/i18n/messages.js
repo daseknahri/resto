@@ -2836,10 +2836,12 @@ export const messages = {
       dismiss: "Dismiss",
     },
     ownerNotifications: {
+      kicker: "Notification log",
       title: "Notifications log",
       subtitle: "Outbound push, SMS, email and WhatsApp — and whether they were delivered.",
       refresh: "Refresh",
       empty: "No notifications recorded yet.",
+      emptyHint: "Notifications appear here after your first order or push event.",
       loadError: "Couldn't load the notifications log.",
       allChannels: "All channels",
       allStatuses: "All statuses",
@@ -3283,6 +3285,7 @@ export const messages = {
       filterAll: "All",
       filterTables: "Tables",
       elapsedMin: "m",
+      elapsed: "elapsed",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -6432,10 +6435,12 @@ export const messages = {
       dismiss: "Fermer",
     },
     ownerNotifications: {
+      kicker: "Journal des notifications",
       title: "Journal des notifications",
       subtitle: "Push, SMS, e-mail et WhatsApp sortants — et s'ils ont ete delivres.",
       refresh: "Actualiser",
       empty: "Aucune notification enregistree pour l'instant.",
+      emptyHint: "Les notifications apparaissent ici apres votre premiere commande ou evenement push.",
       loadError: "Impossible de charger le journal des notifications.",
       allChannels: "Tous les canaux",
       allStatuses: "Tous les statuts",
@@ -6879,6 +6884,7 @@ export const messages = {
       filterAll: "Tout",
       filterTables: "Tables",
       elapsedMin: "m",
+      elapsed: "ecoule",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

@@ -1,22 +1,22 @@
 <template>
-  <div class="space-y-4">
-    <section class="ui-panel overflow-hidden p-4">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div class="space-y-2">
+  <div class="space-y-3 ui-safe-bottom">
+    <section class="ui-workspace-stage ui-reveal overflow-hidden p-4 sm:p-5">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div class="min-w-0 space-y-1">
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>
-          <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ tenantName }}</h2>
+          <h2 class="ui-display truncate text-xl font-semibold text-white sm:text-2xl">{{ tenantName }}</h2>
         </div>
-        <nav class="owner-profile-nav" :aria-label="t('common.sectionsNav')">
+        <nav class="owner-profile-nav min-w-0" :aria-label="t('common.sectionsNav')">
           <button
             v-for="tab in tabs"
             :key="tab.key"
             type="button"
-            class="owner-profile-nav-item"
+            class="owner-profile-nav-item ui-press"
             :data-active="activeTab === tab.key"
             :aria-pressed="activeTab === tab.key"
             @click="setTab(tab.key)"
           >
-            <AppIcon :name="tab.icon" class="owner-profile-nav-icon" />
+            <AppIcon :name="tab.icon" class="owner-profile-nav-icon" aria-hidden="true" />
             <span>{{ tab.label }}</span>
           </button>
         </nav>
@@ -25,6 +25,7 @@
 
     <component
       :is="activeComponent"
+      class="ui-reveal"
       v-bind="activeComponentProps"
       @next="goNext"
       @back="goPrevious"
@@ -143,6 +144,12 @@ const handlePublish = () => {
   font-size: 0.86rem;
   font-weight: 600;
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  outline: none;
+}
+
+.owner-profile-nav-item:focus-visible {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.65);
+  border-color: rgba(245, 158, 11, 0.7);
 }
 
 .owner-profile-nav-item:hover {
@@ -164,7 +171,7 @@ const handlePublish = () => {
   flex-shrink: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .owner-profile-nav {
     display: flex;
     max-width: none;
@@ -172,6 +179,7 @@ const handlePublish = () => {
     overflow-x: auto;
     padding: 0.3rem;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .owner-profile-nav::-webkit-scrollbar {
@@ -179,15 +187,15 @@ const handlePublish = () => {
   }
 
   .owner-profile-nav-item {
-    min-height: 2.45rem;
+    min-height: 2.75rem;
     flex: 0 0 auto;
-    font-size: 0.76rem;
-    padding: 0.48rem 0.72rem;
+    font-size: 0.78rem;
+    padding: 0.5rem 0.75rem;
   }
 
   .owner-profile-nav-icon {
-    width: 0.8rem;
-    height: 0.8rem;
+    width: 0.85rem;
+    height: 0.85rem;
   }
 }
 </style>
