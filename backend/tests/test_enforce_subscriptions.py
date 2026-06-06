@@ -60,6 +60,42 @@ class EnforceSubscriptionsTests(TransactionTestCase):
         call_command("enforce_subscriptions", "--apply", stdout=StringIO())
         self.assertIsNone(self._tenant_status(tenant).payment_overdue_since)
 
+    def test_billing_suspended_tenant_reactivates_when_paid(self):
+        from sales.models import Subscription
+        from tenancy.models import Tenant
+
+        tenant = _make_tenant("reactivate-resto", self.plan)
+        # Billing soft-suspension: SUSPENDED + overdue marker + still is_active (cron did it).
+        Tenant.objects.filter(pk=tenant.pk).update(
+            lifecycle_status=Tenant.LifecycleStatus.SUSPENDED,
+            payment_overdue_since=timezone.now() - timedelta(days=30),
+            suspended_at=timezone.now() - timedelta(days=10),
+            is_active=True,
+        )
+        # They pay → open-ended active subscription.
+        Subscription.objects.create(tenant=tenant, plan=self.plan, status="active", end_date=None)
+
+        call_command("enforce_subscriptions", "--apply", stdout=StringIO())
+        t = self._tenant_status(tenant)
+        self.assertEqual(t.lifecycle_status, Tenant.LifecycleStatus.ACTIVE)
+        self.assertIsNone(t.payment_overdue_since)
+        self.assertIsNone(t.suspended_at)
+
+    def test_admin_hard_suspension_is_not_auto_reactivated(self):
+        from sales.models import Subscription
+        from tenancy.models import Tenant
+
+        tenant = _make_tenant("hardsuspend-resto", self.plan)
+        # Admin hard suspension: is_active False, no overdue marker → billing must not touch it.
+        Tenant.objects.filter(pk=tenant.pk).update(
+            lifecycle_status=Tenant.LifecycleStatus.SUSPENDED,
+            is_active=False, payment_overdue_since=None,
+        )
+        Subscription.objects.create(tenant=tenant, plan=self.plan, status="active", end_date=None)
+
+        call_command("enforce_subscriptions", "--apply", stdout=StringIO())
+        self.assertEqual(self._tenant_status(tenant).lifecycle_status, Tenant.LifecycleStatus.SUSPENDED)
+
     def test_dry_run_changes_nothing(self):
         from sales.models import Subscription
         from tenancy.models import Tenant

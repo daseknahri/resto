@@ -116,11 +116,37 @@ class Command(BaseCommand):
                             },
                         )
 
+        # REACTIVATE — a tenant the billing cron soft-suspended that has paid again
+        # (regained a valid subscription) is restored to good standing. We only touch
+        # tenants WE suspended: lifecycle SUSPENDED + an overdue marker + is_active still
+        # True. An admin's hard suspension (is_active=False, e.g. ToS) must stay manual.
+        reactivated = []
+        billing_suspended = Tenant.objects.filter(
+            lifecycle_status=Suspended, is_active=True, payment_overdue_since__isnull=False
+        )
+        for tenant in billing_suspended:
+            if not has_valid_subscription(tenant.id):
+                continue
+            reactivated.append(tenant)
+            if apply:
+                with transaction.atomic():
+                    Tenant.objects.filter(pk=tenant.pk).update(
+                        lifecycle_status=Active, suspended_at=None, payment_overdue_since=None
+                    )
+                    AdminAuditLog.objects.create(
+                        action=AdminAuditLog.Actions.TENANT_REACTIVATED,
+                        tenant_id=tenant.pk,
+                        target_repr=f"{tenant.slug} ({tenant.name})",
+                        metadata={"reason": "subscription_renewed", "auto": True},
+                    )
+
         prefix = "" if apply else "[dry-run] "
         self.stdout.write(
-            f"{prefix}recovered={len(recovered)} flagged_overdue={len(flagged)} suspended={len(suspended)} "
-            f"(grace={grace_days}d)"
+            f"{prefix}recovered={len(recovered)} flagged_overdue={len(flagged)} "
+            f"suspended={len(suspended)} reactivated={len(reactivated)} (grace={grace_days}d)"
         )
+        for tenant in reactivated:
+            self.stdout.write(f"{prefix}  reactivated: {tenant.slug} (paid again)")
         for tenant in suspended:
             self.stdout.write(f"{prefix}  suspended: {tenant.slug} (overdue since {tenant.payment_overdue_since})")
         if not apply and (recovered or flagged or suspended):

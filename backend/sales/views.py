@@ -1050,7 +1050,8 @@ class AdminTenantLifecycleView(APIView):
                 tenant.suspended_at = None
                 tenant.canceled_at = None
                 tenant.canceled_reason = ""
-                update_fields = ["is_active", "lifecycle_status", "suspended_at", "canceled_at", "canceled_reason"]
+                tenant.payment_overdue_since = None  # back in good standing — clear the grace marker
+                update_fields = ["is_active", "lifecycle_status", "suspended_at", "canceled_at", "canceled_reason", "payment_overdue_since"]
                 detail = "Tenant reactivated."
                 audit_action = AdminAuditLog.Actions.TENANT_REACTIVATED
             else:
