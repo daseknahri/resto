@@ -48,6 +48,9 @@ class Lead(models.Model):
         blank=True,
         help_text="Timestamp of when the pre-reservation reminder was sent to the customer. Null = not yet sent.",
     )
+    # Unguessable token emailed to the customer so they can view/cancel their own
+    # reservation without an account (bookings are anonymous). Set only for reservations.
+    cancel_token = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     onboarded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -637,6 +637,26 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
         headers = self.get_success_headers(serializer.data)
 
         if tenant_for_lead is not None and lead.source in RESERVATION_SOURCES:
+            # Issue an unguessable cancel token + email the customer a self-service
+            # manage/cancel link (bookings are anonymous, so the token IS their key).
+            try:
+                import uuid as _uuid
+                lead.cancel_token = _uuid.uuid4()
+                lead.save(update_fields=["cancel_token", "updated_at"])
+            except Exception:  # noqa: BLE001
+                pass
+            if lead.email and lead.cancel_token:
+                try:
+                    from sales.messaging import (
+                        build_reservation_manage_url, send_reservation_confirmation_email,
+                    )
+                    send_reservation_confirmation_email(
+                        tenant_for_lead, lead,
+                        build_reservation_manage_url(tenant_for_lead, lead.cancel_token),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+
             # Auto-confirm: if the tenant has auto_confirm_reservations enabled,
             # immediately set status to "won" when the reservation is far enough in advance.
             try:
@@ -2621,3 +2641,93 @@ class AdminTierUpgradeRequestDecisionView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PublicReservationManageView(APIView):
+    """GET/POST /api/reservations/manage/<token>/ — a customer views or cancels their
+    OWN reservation via the unguessable token emailed at booking time (no account needed).
+
+    Policy: cancellable any time before the slot, while the booking is still active
+    (new / contacted / confirmed). Idempotent; the token is the only credential.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PublicLeadThrottle]
+
+    _ACTIVE = (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON)
+
+    def _lead(self, token):
+        return (
+            Lead.objects.select_related("tenant")
+            .filter(cancel_token=token, source__in=RESERVATION_SOURCES, archived_at__isnull=True)
+            .first()
+        )
+
+    def _serialize(self, lead):
+        is_past = bool(lead.booked_for and lead.booked_for < timezone.now())
+        return {
+            "restaurant": (getattr(lead.tenant, "name", "") if lead.tenant else ""),
+            "name": lead.name or "",
+            "booked_for": lead.booked_for.isoformat() if lead.booked_for else None,
+            "party_size": lead.party_size,
+            "status": lead.status,
+            "cancelled": lead.status in (Lead.Status.LOST, Lead.Status.NO_SHOW),
+            "is_past": is_past,
+            "can_cancel": (lead.status in self._ACTIVE) and not is_past,
+        }
+
+    def get(self, request, token, *args, **kwargs):
+        lead = self._lead(token)
+        if lead is None:
+            return Response({"detail": "Reservation not found.", "code": "not_found"},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(self._serialize(lead))
+
+    def post(self, request, token, *args, **kwargs):
+        from django.db import transaction as _txn
+
+        with _txn.atomic():
+            lead = (
+                Lead.objects.select_for_update().select_related("tenant")
+                .filter(cancel_token=token, source__in=RESERVATION_SOURCES, archived_at__isnull=True)
+                .first()
+            )
+            if lead is None:
+                return Response({"detail": "Reservation not found.", "code": "not_found"},
+                                status=status.HTTP_404_NOT_FOUND)
+            # Idempotent: already cancelled / no-show → just report current state.
+            if lead.status in (Lead.Status.LOST, Lead.Status.NO_SHOW):
+                return Response(self._serialize(lead))
+            if lead.status not in self._ACTIVE:
+                return Response({"detail": "This reservation can't be cancelled.", "code": "not_cancellable"},
+                                status=status.HTTP_409_CONFLICT)
+            if lead.booked_for and lead.booked_for < timezone.now():
+                return Response({"detail": "This reservation time has already passed — please call the restaurant.",
+                                 "code": "too_late"}, status=status.HTTP_409_CONFLICT)
+            prev = lead.status
+            lead.status = Lead.Status.LOST
+            lead.save(update_fields=["status", "updated_at"])
+            _tenant = lead.tenant
+            try:
+                from .models import ReservationTimelineEvent
+                ReservationTimelineEvent.objects.create(
+                    lead=lead, tenant=_tenant,
+                    action=ReservationTimelineEvent.Actions.STATUS_CHANGE,
+                    previous_status=prev, new_status=lead.status,
+                    note="Cancelled by the customer via the self-service link.",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Tell the restaurant the table is free again (best-effort, post-commit).
+        try:
+            if _tenant is not None:
+                from accounts.tasks import enqueue, web_push_tenant
+                enqueue(
+                    web_push_tenant, _tenant.schema_name, "Reservation cancelled",
+                    f"{lead.name or 'A guest'} cancelled their booking.", "/owner/reservations",
+                )
+        except Exception:  # noqa: BLE001
+            pass
+        return Response(self._serialize(lead))

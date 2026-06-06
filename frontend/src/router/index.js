@@ -26,6 +26,7 @@ const CategoryPage = () => import("../pages/CategoryPage.vue");
 const DishPage = () => import("../pages/DishPage.vue");
 const Cart = () => import("../pages/Cart.vue");
 const ReservationPage = () => import("../pages/ReservationPage.vue");
+const ReservationManage = () => import("../pages/ReservationManage.vue");
 const LeadCapture = () => import("../pages/LeadCapture.vue");
 
 const WaiterPage = () => import("../pages/WaiterPage.vue");
@@ -107,6 +108,7 @@ const routes = [
       { path: "browse/:slug", name: "category", component: CategoryPage, props: true, meta: { interface: "customer" } },
       { path: "browse/:category/:dish", name: "dish", component: DishPage, props: true, meta: { interface: "customer" } },
       { path: "reserve", name: "reserve", component: ReservationPage, meta: { interface: "customer" } },
+      { path: "r/:token", name: "reservation-manage", component: ReservationManage, props: true, meta: { interface: "customer" } },
       { path: "cart", name: "cart", component: Cart, meta: { interface: "customer" } },
       // "orders/" (plural) avoids colliding with the LandingLayout "order/:slug"
       // marketplace route which is defined earlier in the routes array and would

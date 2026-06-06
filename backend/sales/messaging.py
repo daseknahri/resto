@@ -48,6 +48,49 @@ def build_activation_url(tenant, token: str) -> str:
     return f"{build_tenant_frontend_url(tenant)}/activate?token={token}"
 
 
+def build_reservation_manage_url(tenant, token) -> str:
+    """Public self-service link a customer uses to view/cancel their own booking."""
+    return f"{build_tenant_frontend_url(tenant)}/r/{token}"
+
+
+def send_reservation_confirmation_email(tenant, lead, manage_url: str) -> int:
+    """Email the customer their booking details + a self-service cancel link. Best-effort."""
+    email = (getattr(lead, "email", "") or "").strip()
+    if not email:
+        return 0
+    when = ""
+    try:
+        if lead.booked_for:
+            when = lead.booked_for.strftime("%A %d %B %Y at %H:%M")
+    except Exception:  # noqa: BLE001
+        when = ""
+    name = (getattr(lead, "name", "") or "").strip() or "there"
+    tenant_name = getattr(tenant, "name", "") or "the restaurant"
+    body = (
+        f"Hello {name},\n\n"
+        f"We've received your reservation at {tenant_name}.\n"
+    )
+    if when:
+        body += f"When: {when}\n"
+    if getattr(lead, "party_size", None):
+        body += f"Party size: {lead.party_size}\n"
+    body += (
+        "\nNeed to cancel or check your booking? Use this link:\n"
+        f"{manage_url}\n\n"
+        "We look forward to seeing you.\n"
+    )
+    sent = send_mail(
+        f"Your reservation at {tenant_name}",
+        body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning("Reservation confirmation email not sent", extra={"target_email": email})
+    return sent
+
+
 def build_owner_checklist(workspace_url: str, signin_url: str, activation_url: str, onboarding_url: str, public_menu_url: str):
     return [
         f"Open activation link and set password: {activation_url}",
