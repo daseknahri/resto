@@ -23,7 +23,7 @@
         <!-- Tagline -->
         <div class="space-y-1 text-sm text-slate-200">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span>{{ t("stepBrand.tagline") }}</span>
+            <span id="step-brand-tagline-label">{{ t("stepBrand.tagline") }}</span>
             <div class="flex flex-wrap gap-1">
               <button
                 v-for="localeCode in contentLocaleCodes"
@@ -32,6 +32,7 @@
                 class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
                 :class="fieldLocales.tagline === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
                 :aria-pressed="fieldLocales.tagline === localeCode"
+                :aria-label="`${localeChipLabel(localeCode)} — ${t('stepBrand.tagline')}`"
                 @click="fieldLocales.tagline = localeCode"
               >
                 {{ localeChipLabel(localeCode) }}
@@ -41,6 +42,7 @@
                 type="button"
                 class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
                 :disabled="translating['tagline']"
+                :aria-label="`${t('common.translate')} ${t('stepBrand.tagline')}`"
                 @click="runTranslate('tagline', 'tagline', fieldLocales.tagline)"
               >
                 {{ translating["tagline"] ? t("common.translating") : t("common.translate") }}
@@ -51,7 +53,7 @@
             type="text"
             :value="localizedFieldValue('tagline', fieldLocales.tagline)"
             :class="inputClass('tagline')"
-            :aria-label="t('stepBrand.tagline')"
+            aria-labelledby="step-brand-tagline-label"
             :aria-invalid="fieldError('tagline') ? 'true' : undefined"
             aria-describedby="step-brand-tagline-error"
             @input="onLocalizedFieldInput('tagline', fieldLocales.tagline, $event.target.value)"
@@ -122,7 +124,7 @@
         <!-- Address -->
         <div class="space-y-1 text-sm text-slate-200">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span>{{ t("common.address") }}</span>
+            <span id="step-brand-address-label">{{ t("common.address") }}</span>
             <div class="flex flex-wrap gap-1">
               <button
                 v-for="localeCode in contentLocaleCodes"
@@ -131,6 +133,7 @@
                 class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
                 :class="fieldLocales.address === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
                 :aria-pressed="fieldLocales.address === localeCode"
+                :aria-label="`${localeChipLabel(localeCode)} — ${t('common.address')}`"
                 @click="fieldLocales.address = localeCode"
               >
                 {{ localeChipLabel(localeCode) }}
@@ -140,6 +143,7 @@
                 type="button"
                 class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
                 :disabled="translating['address']"
+                :aria-label="`${t('common.translate')} ${t('common.address')}`"
                 @click="runTranslate('address', 'address', fieldLocales.address)"
               >
                 {{ translating["address"] ? t("common.translating") : t("common.translate") }}
@@ -150,7 +154,7 @@
             type="text"
             :value="localizedFieldValue('address', fieldLocales.address)"
             :class="inputClass('address')"
-            :aria-label="t('common.address')"
+            aria-labelledby="step-brand-address-label"
             :aria-invalid="fieldError('address') ? 'true' : undefined"
             aria-describedby="step-brand-address-error"
             @input="onLocalizedFieldInput('address', fieldLocales.address, $event.target.value)"
@@ -162,7 +166,7 @@
       <!-- Description (full-width, spans both columns) -->
       <div class="space-y-1 text-sm text-slate-200">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span>{{ t("common.description") }}</span>
+          <span id="step-brand-description-label">{{ t("common.description") }}</span>
           <div class="flex flex-wrap gap-1">
             <button
               v-for="localeCode in contentLocaleCodes"
@@ -171,6 +175,7 @@
               class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
               :class="fieldLocales.description === localeCode ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
               :aria-pressed="fieldLocales.description === localeCode"
+              :aria-label="`${localeChipLabel(localeCode)} — ${t('common.description')}`"
               @click="fieldLocales.description = localeCode"
             >
               {{ localeChipLabel(localeCode) }}
@@ -180,6 +185,7 @@
               type="button"
               class="rounded-full border border-sky-700/60 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition-colors hover:border-sky-500 hover:text-sky-200 disabled:opacity-50"
               :disabled="translating['description']"
+              :aria-label="`${t('common.translate')} ${t('common.description')}`"
               @click="runTranslate('description', 'description', fieldLocales.description)"
             >
               {{ translating["description"] ? t("common.translating") : t("common.translate") }}
@@ -190,7 +196,7 @@
           :value="localizedFieldValue('description', fieldLocales.description)"
           rows="3"
           :class="inputClass('description')"
-          :aria-label="t('common.description')"
+          aria-labelledby="step-brand-description-label"
           :aria-invalid="fieldError('description') ? 'true' : undefined"
           aria-describedby="step-brand-description-error"
           @input="onLocalizedFieldInput('description', fieldLocales.description, $event.target.value)"
@@ -263,6 +269,7 @@
               <button
                 type="button"
                 :aria-pressed="form.business_hours_schedule[day.key].enabled"
+                :aria-label="form.business_hours_schedule[day.key].enabled ? `${t('stepBrand.openLabel')} — ${day.label}` : `${t('common.closed')} — ${day.label}`"
                 class="ui-touch-target justify-self-start rounded-full border px-3 text-[11px] font-semibold transition-colors sm:justify-self-end"
                 :class="form.business_hours_schedule[day.key].enabled ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
                 @click="toggleBusinessHoursDay(day.key)"
@@ -279,14 +286,14 @@
         <p v-if="fieldError('business_hours')" id="step-brand-business-hours-error" role="alert" class="text-xs text-red-300">{{ fieldError("business_hours") }}</p>
         <p v-if="fieldError('business_hours_schedule')" id="step-brand-business-hours-schedule-error" role="alert" class="text-xs text-red-300">{{ fieldError("business_hours_schedule") }}</p>
 
-        <div class="space-y-1">
-          <label class="text-xs font-medium text-slate-400">{{ t("stepBrand.timezoneLabel") }}</label>
+        <label class="block space-y-1 text-xs font-medium text-slate-400">
+          {{ t("stepBrand.timezoneLabel") }}
           <select v-model="form.timezone" :class="inputClass('timezone')">
             <option value="">{{ t("stepBrand.timezoneDefault") }}</option>
             <option v-for="tz in TIMEZONE_OPTIONS" :key="tz" :value="tz">{{ tz }}</option>
           </select>
           <p class="text-[11px] text-slate-500">{{ t("stepBrand.timezoneHint") }}</p>
-        </div>
+        </label>
       </div>
     </section>
 
@@ -351,7 +358,7 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <button class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
+        <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
           {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
         <p v-if="status" class="text-sm text-slate-400">{{ status }}</p>

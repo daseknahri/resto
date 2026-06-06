@@ -27,17 +27,19 @@
           <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
             <!-- Fulfillment type toggle -->
-            <div class="ui-segmented" role="group" :aria-label="t('waiterPage.newOrderFulfillmentLabel')">
+            <div class="ui-segmented" role="radiogroup" :aria-label="t('waiterPage.newOrderFulfillmentLabel')">
               <button
                 class="ui-segmented-button flex-1"
                 :data-active="fulfillmentType === 'table'"
-                :aria-pressed="fulfillmentType === 'table'"
+                role="radio"
+                :aria-checked="fulfillmentType === 'table'"
                 @click="fulfillmentType = 'table'"
               >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
               <button
                 class="ui-segmented-button flex-1"
                 :data-active="fulfillmentType === 'pickup'"
-                :aria-pressed="fulfillmentType === 'pickup'"
+                role="radio"
+                :aria-checked="fulfillmentType === 'pickup'"
                 @click="fulfillmentType = 'pickup'"
               >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
             </div>
@@ -97,7 +99,7 @@
 
           <!-- Dish list -->
           <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-            <div v-if="loadingDishes" class="space-y-1.5 pt-1" aria-busy="true">
+            <div v-if="loadingDishes" class="space-y-1.5 pt-1" aria-busy="true" :aria-label="t('waiterPage.loadingDishes')">
               <div v-for="i in 5" :key="i" class="ui-skeleton h-11" />
             </div>
 
@@ -158,13 +160,13 @@
                   <p class="tabular-nums text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
                 </div>
                 <!-- Qty controls -->
-                <div class="flex items-center gap-1 shrink-0" :aria-label="`${item.dish_name} ${t('waiterPage.newOrderQtyLabel')}`">
+                <div class="flex items-center gap-1 shrink-0" role="group" :aria-label="`${item.dish_name} ${t('waiterPage.newOrderQtyLabel')}`">
                   <button
                     class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.decreaseQuantity')"
                     @click="decrement(item.line_key)"
                   >−</button>
-                  <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100">{{ item.qty }}</span>
+                  <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100" aria-live="polite">{{ item.qty }}</span>
                   <button
                     class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.increaseQuantity')"
@@ -216,16 +218,19 @@
       <div
         v-if="customizingDish"
         class="absolute inset-0 z-[3100] flex flex-col justify-end bg-slate-950/70 sm:items-center sm:justify-center"
-        role="dialog"
-        aria-modal="true"
         @click.self="closeCustomize"
-        @keydown.esc.stop="closeCustomize"
       >
-        <div class="flex max-h-[90%] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-700 bg-slate-950 sm:max-h-[85%] sm:w-[26rem] sm:rounded-2xl">
+        <div
+          class="flex max-h-[90%] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-700 bg-slate-950 sm:max-h-[85%] sm:w-[26rem] sm:rounded-2xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="customize-dialog-title"
+          @keydown.esc.stop="closeCustomize"
+        >
           <!-- Header -->
           <div class="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-3">
             <div class="min-w-0">
-              <h3 class="truncate text-base font-bold text-white">{{ customizingDish.name }}</h3>
+              <h3 id="customize-dialog-title" class="truncate text-base font-bold text-white">{{ customizingDish.name }}</h3>
               <p class="tabular-nums text-xs text-slate-500">{{ fmtPrice(customizingDish.price) }}</p>
             </div>
             <button
@@ -240,14 +245,16 @@
           <!-- Options -->
           <div class="flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <!-- Variant groups -->
-            <div v-for="group in customizingDish.option_groups || []" :key="group.id" class="space-y-2">
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-slate-200">
-                  {{ group.name }}
-                  <span v-if="group.min_select > 0" class="ms-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
-                </p>
-                <span class="text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
-              </div>
+            <fieldset v-for="group in customizingDish.option_groups || []" :key="group.id" class="space-y-2 border-0 p-0 m-0 min-w-0">
+              <legend class="float-none w-full p-0 mb-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-200">
+                    {{ group.name }}
+                    <span v-if="group.min_select > 0" class="ms-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
+                  </p>
+                  <span class="text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
+                </div>
+              </legend>
               <label
                 v-for="opt in group.options || []"
                 :key="opt.id"
@@ -266,11 +273,11 @@
                 </span>
                 <span v-if="Number(opt.price_delta) > 0" class="tabular-nums shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
               </label>
-            </div>
+            </fieldset>
 
             <!-- Add-ons -->
-            <div v-if="customizingDish.options?.length" class="space-y-2">
-              <p class="text-sm font-semibold text-slate-200">{{ t('dishPage.options') }}</p>
+            <fieldset v-if="customizingDish.options?.length" class="space-y-2 border-0 p-0 m-0 min-w-0">
+              <legend class="float-none w-full p-0 mb-2 text-sm font-semibold text-slate-200">{{ t('dishPage.options') }}</legend>
               <label
                 v-for="opt in customizingDish.options"
                 :key="opt.id"
@@ -284,7 +291,7 @@
                 </span>
                 <span v-if="Number(opt.price_delta) > 0" class="tabular-nums shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
               </label>
-            </div>
+            </fieldset>
 
             <!-- Note -->
             <input
@@ -299,7 +306,7 @@
 
           <!-- Footer: qty + add -->
           <div class="flex items-center gap-3 border-t border-slate-800 p-3">
-            <div class="flex items-center gap-1 shrink-0" :aria-label="t('waiterPage.newOrderQtyLabel')">
+            <div class="flex items-center gap-1 shrink-0" role="group" :aria-label="t('waiterPage.newOrderQtyLabel')">
               <button
                 class="ui-press flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-lg text-slate-300 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                 :aria-label="t('dishPage.decreaseQuantity')"

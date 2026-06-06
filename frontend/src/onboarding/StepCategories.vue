@@ -11,7 +11,7 @@
             <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
             {{ saving ? t("common.saving") : t("common.save") }}
           </button>
-          <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" type="button" :disabled="!superCategoryOptions.length" @click="openQuickModal">
+          <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" :disabled="!superCategoryOptions.length" @click="openQuickModal">
             <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
             {{ t("stepCategories.addCategory") }}
           </button>
@@ -84,28 +84,28 @@
             type="button" :disabled="!canMoveCategoryUp(cat.local_id)" :aria-label="t('common.moveUp')"
             @click="moveCategory(cat.local_id, -1)"
           >
-            <AppIcon name="chevronUp" class="h-4 w-4" />
+            <AppIcon name="chevronUp" class="h-4 w-4" aria-hidden="true" />
           </button>
           <button
             class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
             type="button" :disabled="!canMoveCategoryDown(cat.local_id)" :aria-label="t('common.moveDown')"
             @click="moveCategory(cat.local_id, 1)"
           >
-            <AppIcon name="chevronDown" class="h-4 w-4" />
+            <AppIcon name="chevronDown" class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
         <!-- Name + meta — the whole block opens the editor -->
-        <button type="button" class="min-w-0 flex-1 text-start" @click="openEditor(cat.local_id)">
+        <div role="button" tabindex="0" class="min-w-0 flex-1 cursor-pointer text-start" @click="openEditor(cat.local_id)" @keydown.enter.space.prevent="openEditor(cat.local_id)">
           <div class="flex items-center gap-1.5">
-            <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="cat.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
+            <span class="h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" :class="cat.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
             <h3 class="truncate text-sm font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
           </div>
           <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
             <span>{{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}</span>
             <span v-if="Object.keys(cat.name_i18n || {}).length">· {{ Object.keys(cat.name_i18n || {}).length }} {{ t("stepCategories.translationsTitle") }}</span>
           </div>
-        </button>
+        </div>
 
         <!-- Actions: edit · delete -->
         <div class="flex shrink-0 items-center gap-1.5">
@@ -138,6 +138,7 @@
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.editCategory") }}</h3>
             </div>
+            <!-- TODO: requires logic change — restore focus to trigger element on close -->
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
 
@@ -159,8 +160,8 @@
                       :key="`cat-name-${locale.code}`"
                       type="button"
                       :aria-pressed="fieldLocales.name === locale.code"
-                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      class="ui-state-chip"
+                      :data-active="fieldLocales.name === locale.code ? 'true' : undefined"
                       @click="fieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -177,7 +178,7 @@
                   :aria-label="t('stepCategories.categoryNamePlaceholder')"
                   @input="setLocalizedFieldValue(editingCategory, 'name', fieldLocales.name, $event.target.value)"
                 />
-                <p v-if="rowError(editingCategory, 'name')" :id="`step-cat-name-error-${editingCategory.local_id}`" class="text-xs text-red-300">{{ rowError(editingCategory, 'name') }}</p>
+                <p v-if="rowError(editingCategory, 'name')" :id="`step-cat-name-error-${editingCategory.local_id}`" role="alert" class="text-xs text-red-300">{{ rowError(editingCategory, 'name') }}</p>
               </div>
 
               <div class="space-y-1">
@@ -189,8 +190,8 @@
                       :key="`cat-desc-${locale.code}`"
                       type="button"
                       :aria-pressed="fieldLocales.description === locale.code"
-                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      class="ui-state-chip"
+                      :data-active="fieldLocales.description === locale.code ? 'true' : undefined"
                       @click="fieldLocales.description = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -243,6 +244,7 @@
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
             </div>
+            <!-- TODO: requires logic change — restore focus to trigger element on close -->
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeQuickModal">{{ t("common.close") }}</button>
           </div>
           <div class="space-y-4 p-4">
@@ -252,7 +254,7 @@
                 <select v-model="quickCategory.super_category" class="ui-input" :class="quickAddErrors.superCategory ? 'border-red-400' : ''" :aria-invalid="quickAddErrors.superCategory ? 'true' : undefined" aria-describedby="step-cat-quick-supcat-error" @change="quickAddErrors.superCategory = ''">
                   <option v-for="group in sortedSuperCategoryOptions" :key="group.id" :value="Number(group.id)">{{ superCategoryLabel(group) }}</option>
                 </select>
-                <p v-if="quickAddErrors.superCategory" id="step-cat-quick-supcat-error" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
+                <p v-if="quickAddErrors.superCategory" id="step-cat-quick-supcat-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddErrors.superCategory }}</p>
               </label>
 
               <div class="space-y-1">
@@ -264,8 +266,8 @@
                       :key="`quick-cat-name-${locale.code}`"
                       type="button"
                       :aria-pressed="quickFieldLocales.name === locale.code"
-                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="quickFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      class="ui-state-chip"
+                      :data-active="quickFieldLocales.name === locale.code ? 'true' : undefined"
                       @click="quickFieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -284,7 +286,7 @@
                   aria-describedby="step-cat-quick-name-error"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddErrors.name = ''"
                 />
-                <p v-if="quickAddErrors.name" id="step-cat-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
+                <p v-if="quickAddErrors.name" id="step-cat-quick-name-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddErrors.name }}</p>
               </div>
 
               <div class="space-y-1">
@@ -296,8 +298,8 @@
                       :key="`quick-cat-desc-${locale.code}`"
                       type="button"
                       :aria-pressed="quickFieldLocales.description === locale.code"
-                      class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="quickFieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      class="ui-state-chip"
+                      :data-active="quickFieldLocales.description === locale.code ? 'true' : undefined"
                       @click="quickFieldLocales.description = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -340,11 +342,11 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3 border-t border-slate-800/80 pt-3">
-      <button class="ui-btn-primary gap-2 px-4 py-2" :disabled="saving || !superCategoryOptions.length" @click="saveAll">
+      <button type="button" class="ui-btn-primary gap-2 px-4 py-2" :disabled="saving || !superCategoryOptions.length" @click="saveAll">
         <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
         {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
       </button>
-      <button v-if="!props.standalone" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
+      <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400" role="status" aria-live="polite">{{ status }}</p>
     </div>
   </div>

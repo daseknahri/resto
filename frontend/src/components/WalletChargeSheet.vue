@@ -6,14 +6,17 @@
     :aria-labelledby="'wallet-charge-title'"
     @click.self="$emit('close')"
   >
-    <div class="ui-panel-soft ui-reveal w-full max-w-md space-y-4 rounded-t-3xl p-5 sm:rounded-3xl">
+    <div ref="panelEl" class="ui-panel-soft ui-reveal w-full max-w-md space-y-4 rounded-t-3xl p-5 sm:rounded-3xl">
       <!-- Header -->
       <div class="flex items-center justify-between gap-3">
-        <h2 id="wallet-charge-title" class="text-base font-semibold text-white">
-          {{ t('walletCharge.title') }}
-        </h2>
+        <div>
+          <p class="ui-kicker">{{ t('walletCharge.kicker') }}</p>
+          <h2 id="wallet-charge-title" class="text-base font-semibold text-white">
+            {{ t('walletCharge.title') }}
+          </h2>
+        </div>
         <button
-          class="ui-btn-outline ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-0"
+          class="ui-btn-outline ui-press ui-touch-target flex shrink-0 items-center justify-center rounded-full p-0"
           :aria-label="t('common.close')"
           @click="$emit('close')"
         >
@@ -46,18 +49,21 @@
 
         <!-- Camera viewfinder -->
         <div v-if="scanning" class="ui-reveal overflow-hidden rounded-2xl border border-slate-700/70 bg-black">
-          <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline />
+          <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline aria-hidden="true" />
         </div>
 
         <!-- Manual token row -->
         <div class="flex gap-2">
-          <input
-            v-model="manualToken"
-            type="text"
-            class="ui-input flex-1 text-sm"
-            :placeholder="t('walletCharge.manualPlaceholder')"
-            @keyup.enter="resolve(manualToken)"
-          />
+          <label class="flex-1">
+            <span class="sr-only">{{ t('walletCharge.manualLabel') }}</span>
+            <input
+              v-model="manualToken"
+              type="text"
+              class="ui-input w-full text-sm"
+              :placeholder="t('walletCharge.manualPlaceholder')"
+              @keyup.enter="resolve(manualToken)"
+            />
+          </label>
           <button
             class="ui-btn-outline ui-press ui-touch-target shrink-0 px-4 text-sm disabled:opacity-50"
             :disabled="!manualToken.trim() || resolving"
@@ -80,10 +86,10 @@
 
       <!-- Step 2a: waiting for the customer to approve an above-threshold charge -->
       <template v-else-if="awaiting">
-        <div class="ui-panel space-y-3 p-4 text-center">
-          <!-- Reduced-motion-safe pulsing indicator -->
+        <div class="ui-panel space-y-3 p-4 text-center" role="status">
+          <!-- Pulse indicator (reduced-motion safe) -->
           <div
-            class="mx-auto h-8 w-8 rounded-full border-2 border-slate-600 border-t-emerald-400 motion-safe:animate-spin"
+            class="mx-auto h-8 w-8 animate-pulse rounded-full bg-slate-600"
             aria-hidden="true"
           />
           <p class="text-sm font-semibold text-slate-100 tabular-nums">
@@ -95,6 +101,7 @@
         </div>
         <button
           class="ui-btn-outline ui-press ui-touch-target w-full text-sm"
+          :aria-label="t('walletCharge.cancelRequest')"
           @click="cancelAwaiting"
         >
           {{ t('common.cancel') }}
@@ -160,7 +167,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
@@ -188,9 +195,52 @@ let chargeKey = null;
 let pollTimer = null;
 const POLL_MS = 2500;
 
+// ─── Focus trap & restoration ──────────────────────────────────────────────
+const panelEl = ref(null);
+let triggerEl = null;
+
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const trapFocus = (e) => {
+  if (!panelEl.value) return;
+  const nodes = Array.from(panelEl.value.querySelectorAll(FOCUSABLE));
+  if (!nodes.length) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (e.key === 'Tab') {
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+};
+
+onMounted(() => {
+  triggerEl = document.activeElement;
+  if (panelEl.value) {
+    const first = panelEl.value.querySelector(FOCUSABLE);
+    if (first) first.focus();
+  }
+  document.addEventListener('keydown', trapFocus);
+});
+
 const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 };
+
+onBeforeUnmount(() => {
+  stopPolling();
+  document.removeEventListener('keydown', trapFocus);
+  if (triggerEl && typeof triggerEl.focus === 'function') triggerEl.focus();
+});
 
 const startPolling = (requestId) => {
   stopPolling();
@@ -223,8 +273,6 @@ const cancelAwaiting = () => {
   stopPolling();
   awaiting.value = null; // back to the amount step; the request expires on its own TTL
 };
-
-onBeforeUnmount(stopPolling);
 
 const fmtMoney = (v) => {
   try {

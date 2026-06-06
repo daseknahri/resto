@@ -77,9 +77,8 @@
       </div>
     </section>
 
-    <div class="space-y-3">
-      <div
-        v-if="!filteredRows.length"
+    <ul class="space-y-3 list-none p-0">
+      <li v-if="!filteredRows.length" class="list-none"><div
         class="ui-empty-state flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="relative z-10 flex items-start gap-3">
@@ -98,11 +97,13 @@
           <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
           {{ t("stepSuperCategories.add") }}
         </button>
-      </div>
+      </div></li>
 
-      <article
+      <li
         v-for="(row, index) in filteredRows"
         :key="row.local_id"
+        class="list-none"
+      ><article
         class="ui-selection-card ui-surface-lift ui-reveal flex items-center gap-2.5 p-2.5 sm:gap-3"
         :data-warning="row.is_temporarily_disabled"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 64px' }"
@@ -110,14 +111,14 @@
         <!-- Reorder: stacked chevrons -->
         <div class="flex shrink-0 flex-col gap-0.5">
           <button
-            class="ui-press flex h-6 w-6 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
+            class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
             type="button" :disabled="!canMoveUp(row.local_id)" :aria-label="t('common.moveUp')"
             @click="moveRow(row.local_id, -1)"
           >
             <AppIcon name="chevronUp" class="h-4 w-4" aria-hidden="true" />
           </button>
           <button
-            class="ui-press flex h-6 w-6 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
+            class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
             type="button" :disabled="!canMoveDown(row.local_id)" :aria-label="t('common.moveDown')"
             @click="moveRow(row.local_id, 1)"
           >
@@ -162,21 +163,20 @@
             type="button"
             :disabled="Number(row.category_count || 0) > 0"
             :title="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
-            :aria-label="t('common.remove')"
+            :aria-label="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
             @click="removeByLocalId(row.local_id)"
           >
             <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
-      </article>
-    </div>
+      </article></li>
+    </ul>
 
     <Teleport to="body">
       <div
         v-if="editorOpen && editingRow"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeEditor"
-        @keydown.esc="closeEditor"
       >
         <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-super-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
@@ -222,10 +222,10 @@
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
                   :aria-label="t('stepSuperCategories.namePlaceholder')"
                   :aria-invalid="rowError(editingRow, 'name') ? 'true' : undefined"
-                  :aria-describedby="`step-supcat-name-error-${editingRow.local_id}`"
+                  :aria-describedby="rowError(editingRow, 'name') ? `step-supcat-name-error-${editingRow.local_id}` : undefined"
                   @input="setLocalizedFieldValue(editingRow, 'name', fieldLocales.name, $event.target.value)"
                 />
-                <p v-if="rowError(editingRow, 'name')" :id="`step-supcat-name-error-${editingRow.local_id}`" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
+                <p v-if="rowError(editingRow, 'name')" :id="`step-supcat-name-error-${editingRow.local_id}`" role="alert" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
               </div>
 
               <!-- Description (tagline for menu-selector card) -->
@@ -316,7 +316,6 @@
         v-if="quickModalOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickModal"
-        @keydown.esc="closeQuickModal"
       >
         <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-super-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
@@ -361,10 +360,10 @@
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
                   :aria-label="t('stepSuperCategories.namePlaceholder')"
                   :aria-invalid="quickAddError ? 'true' : undefined"
-                  aria-describedby="step-supcat-quick-name-error"
+                  :aria-describedby="quickAddError ? 'step-supcat-quick-name-error' : undefined"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddError = ''"
                 />
-                <p v-if="quickAddError" id="step-supcat-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
+                <p v-if="quickAddError" id="step-supcat-quick-name-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
@@ -421,7 +420,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <p class="text-sm text-slate-400">{{ status }}</p>
-        <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" :disabled="saving" @click="saveAll">
+        <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" :disabled="saving" @click="saveAll">
           <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
           {{ saving ? t("common.saving") : t("common.save") }}
         </button>

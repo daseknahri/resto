@@ -102,7 +102,7 @@
             </div>
 
             <!-- Name + meta — the whole block opens the editor -->
-            <button type="button" class="min-w-0 flex-1 text-start" @click="openDishEditor(dish.local_id)">
+            <button type="button" class="min-w-0 flex-1 text-start" :aria-label="`${t('common.edit')} ${dish.name || t('stepDishes.dishNamePlaceholder')}`" @click="openDishEditor(dish.local_id)">
               <div class="flex items-center gap-1.5">
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
                 <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder") }}</h3>
@@ -119,7 +119,6 @@
               <label
                 class="inline-flex cursor-pointer items-center"
                 :title="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
-                :aria-label="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
               >
                 <input
                   v-model="dish.is_published"
@@ -127,6 +126,7 @@
                   class="peer sr-only"
                   role="switch"
                   :aria-checked="dish.is_published ? 'true' : 'false'"
+                  :aria-label="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
                 />
                 <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:start-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4" />
               </label>
@@ -174,7 +174,7 @@
         @click.self="closeDishEditor"
         @keydown.esc="closeDishEditor"
       >
-        <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" tabindex="-1" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>
@@ -229,7 +229,7 @@
                     :aria-describedby="`step-dishes-name-error-${editingDish.local_id}`"
                     @input="setLocalizedDishFieldValue(editingDish, 'name', dishFieldLocales.name, $event.target.value)"
                   />
-                  <p v-if="rowError(editingDish, 'name')" :id="`step-dishes-name-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "name") }}</p>
+                  <p v-if="rowError(editingDish, 'name')" :id="`step-dishes-name-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "name") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -246,7 +246,7 @@
                     <option disabled value="">{{ t("stepDishes.selectCategory") }}</option>
                     <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">{{ categoryLabel(cat) }}</option>
                   </select>
-                  <p v-if="rowError(editingDish, 'category')" :id="`step-dishes-category-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "category") }}</p>
+                  <p v-if="rowError(editingDish, 'category')" :id="`step-dishes-category-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "category") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -264,7 +264,7 @@
                     :aria-describedby="`step-dishes-price-error-${editingDish.local_id}`"
                     @input="clearRowError(editingDish.local_id, 'price')"
                   />
-                  <p v-if="rowError(editingDish, 'price')" :id="`step-dishes-price-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "price") }}</p>
+                  <p v-if="rowError(editingDish, 'price')" :id="`step-dishes-price-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "price") }}</p>
                 </div>
 
                 <div class="space-y-1">
@@ -279,7 +279,7 @@
                     :aria-describedby="`step-dishes-slug-error-${editingDish.local_id}`"
                     @input="clearRowError(editingDish.local_id, 'slug')"
                   />
-                  <p v-if="rowError(editingDish, 'slug')" :id="`step-dishes-slug-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "slug") }}</p>
+                  <p v-if="rowError(editingDish, 'slug')" :id="`step-dishes-slug-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "slug") }}</p>
                 </div>
 
                 <!-- Stock qty — null = unlimited; positive integer = tracked inventory -->
@@ -555,6 +555,7 @@
                   <button
                     type="button"
                     class="rounded-full border border-slate-700 px-3 py-2 text-xs text-red-200 hover:border-red-400/60"
+                    :aria-label="`${t('stepDishes.remove')} ${localizedVariantNameValue(option, dishFieldLocales.variantName) || t('stepDishes.variantNamePlaceholder')}`"
                     @click="removeOption(editingDish, optIdx)"
                   >
                     {{ t("stepDishes.remove") }}
@@ -570,9 +571,9 @@
                     <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" :aria-label="t('common.moveDown')" @click="moveOption(editingDish, optIdx, 1)">↓</button>
                   </div>
                 </div>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" :id="`step-dishes-opt-name-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" :id="`step-dishes-opt-price-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
-                <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" :id="`step-dishes-opt-maxselect-error-${option.local_id}`" class="mt-1 text-xs text-red-300">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'name'))" :id="`step-dishes-opt-name-error-${option.local_id}`" class="mt-1 text-xs text-red-300" role="alert">{{ rowError(editingDish, optionFieldKey(option, "name")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'price_delta'))" :id="`step-dishes-opt-price-error-${option.local_id}`" class="mt-1 text-xs text-red-300" role="alert">{{ rowError(editingDish, optionFieldKey(option, "price_delta")) }}</p>
+                <p v-if="rowError(editingDish, optionFieldKey(option, 'max_select'))" :id="`step-dishes-opt-maxselect-error-${option.local_id}`" class="mt-1 text-xs text-red-300" role="alert">{{ rowError(editingDish, optionFieldKey(option, "max_select")) }}</p>
               </div>
             </div>
             <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
@@ -622,6 +623,7 @@
                           type="text"
                           :value="localizedGroupNameValue(group, dishFieldLocales.groupName)"
                           class="ui-input w-full"
+                          :aria-label="t('stepDishes.groupNamePlaceholder')"
                           :placeholder="t('stepDishes.groupNamePlaceholder')"
                           @input="setLocalizedGroupNameValue(group, dishFieldLocales.groupName, $event.target.value)"
                         />
@@ -653,6 +655,7 @@
                         <button
                           type="button"
                           class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                          :aria-label="`${t('stepDishes.remove')} ${localizedGroupNameValue(group, dishFieldLocales.groupName) || t('stepDishes.groupNamePlaceholder')}`"
                           @click="removeGroup(editingDish, groupIdx)"
                         >
                           {{ t("stepDishes.remove") }}
@@ -687,6 +690,7 @@
                             type="text"
                             :value="localizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName)"
                             class="ui-input flex-1 min-w-0"
+                            :aria-label="t('stepDishes.variantNamePlaceholder')"
                             :placeholder="t('stepDishes.variantNamePlaceholder')"
                             @input="setLocalizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName, $event.target.value)"
                           />
@@ -696,6 +700,7 @@
                             min="0"
                             step="0.01"
                             class="ui-input w-24 shrink-0"
+                            :aria-label="t('stepDishes.extraPricePlaceholder')"
                             :placeholder="t('stepDishes.extraPricePlaceholder')"
                           />
                           <button type="button" class="rounded border border-slate-700 px-1.5 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30 shrink-0" :disabled="!canMoveGroupOptionUp(group, optIdx)" :aria-label="t('common.moveUp')" @click="moveGroupOption(group, optIdx, -1)">↑</button>
@@ -703,6 +708,7 @@
                           <button
                             type="button"
                             class="rounded-full border border-slate-700 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/60 shrink-0"
+                            :aria-label="`${t('stepDishes.remove')} ${localizedGroupOptionNameValue(opt, dishFieldLocales.groupOptionName) || t('stepDishes.variantNamePlaceholder')}`"
                             @click="removeGroupOption(group, optIdx)"
                           >
                             {{ t("stepDishes.remove") }}
@@ -1019,10 +1025,10 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <button class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
+      <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
         {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
       </button>
-      <button v-if="!props.standalone" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
+      <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400">{{ status }}</p>
     </div>
   </div>

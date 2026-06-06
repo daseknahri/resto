@@ -116,8 +116,9 @@
         </label>
 
         <div v-if="form.is_menu_temporarily_disabled" class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-          <label class="text-sm font-medium text-slate-200">{{ t("stepPublish.disableMessage") }}</label>
+          <label for="sp-disabled-note" class="text-sm font-medium text-slate-200">{{ t("stepPublish.disableMessage") }}</label>
           <textarea
+            id="sp-disabled-note"
             v-model="form.menu_disabled_note"
             rows="2"
             class="ui-textarea"
@@ -134,14 +135,15 @@
         <!-- Receipt message -->
         <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <div class="space-y-0.5">
-            <label class="text-sm font-medium text-slate-200">{{ t("stepPublish.receiptMessage") }}</label>
+            <label for="sp-receipt-message" class="text-sm font-medium text-slate-200">{{ t("stepPublish.receiptMessage") }}</label>
             <p class="text-xs text-slate-500">{{ t("stepPublish.receiptMessageHint") }}</p>
           </div>
           <textarea
+            id="sp-receipt-message"
             v-model="form.receipt_message"
             rows="2"
             maxlength="300"
-            class="ui-textarea focus:border-[var(--color-secondary)]"
+            class="ui-textarea"
             :aria-label="t('stepPublish.receiptMessage')"
             :placeholder="t('stepPublish.receiptMessagePlaceholder')"
           ></textarea>
@@ -166,15 +168,16 @@
           <input v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
         <div v-if="form.cod_enabled" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
-          <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.codMinOrders") }}</label>
+          <label for="sp-cod-min-orders" class="text-xs font-medium text-slate-300">{{ t("stepPublish.codMinOrders") }}</label>
           <div class="flex items-center gap-2">
             <input
+              id="sp-cod-min-orders"
               v-model.number="form.cod_min_paid_orders"
               type="number"
               min="1"
               max="100"
               :aria-label="t('stepPublish.codMinOrders')"
-              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+              class="w-24 ui-input tabular-nums"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.codMinOrdersUnit") }}</span>
           </div>
@@ -189,15 +192,16 @@
           <input v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
         <div v-if="form.auto_confirm_reservations" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
-          <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.autoConfirmMinHours") }}</label>
+          <label for="sp-auto-confirm-min-hours" class="text-xs font-medium text-slate-300">{{ t("stepPublish.autoConfirmMinHours") }}</label>
           <div class="flex items-center gap-2">
             <input
+              id="sp-auto-confirm-min-hours"
               v-model.number="form.auto_confirm_min_hours"
               type="number"
               min="0"
               max="168"
               :aria-label="t('stepPublish.autoConfirmMinHours')"
-              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+              class="w-24 ui-input tabular-nums"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursUnit") }}</span>
           </div>
@@ -231,28 +235,30 @@
           <template v-if="form.delivery_enabled">
             <div class="grid gap-3 sm:grid-cols-2">
               <div class="space-y-1">
-                <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFee") }}</label>
+                <label for="sp-delivery-fee" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFee") }}</label>
                 <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryFeeHint") }}</p>
                 <input
+                  id="sp-delivery-fee"
                   v-model.number="form.delivery_fee"
                   type="number"
                   min="0"
                   step="0.01"
                   :aria-label="t('stepPublish.deliveryFee')"
-                  class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-28 ui-input tabular-nums"
                 />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryMinimumOrder") }}</label>
+                <label for="sp-delivery-min-order" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryMinimumOrder") }}</label>
                 <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryMinimumOrderHint") }}</p>
                 <input
+                  id="sp-delivery-min-order"
                   v-model.number="form.delivery_minimum_order"
                   type="number"
                   min="0"
                   step="0.01"
                   :aria-label="t('stepPublish.deliveryMinimumOrder')"
-                  class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-28 ui-input tabular-nums"
                 />
               </div>
             </div>
@@ -265,39 +271,43 @@
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1">
-                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryBaseFee") }}</label>
+                  <label for="sp-delivery-base-fee" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryBaseFee") }}</label>
                   <input
+                    id="sp-delivery-base-fee"
                     v-model.number="form.delivery_base_fee"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryBaseFee')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 ui-input tabular-nums"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryPerKm") }}</label>
+                  <label for="sp-delivery-per-km" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryPerKm") }}</label>
                   <input
+                    id="sp-delivery-per-km"
                     v-model.number="form.delivery_per_km"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryPerKm')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 ui-input tabular-nums"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryRadiusKm") }}</label>
+                  <label for="sp-delivery-radius-km" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryRadiusKm") }}</label>
                   <input
+                    id="sp-delivery-radius-km"
                     v-model.number="form.delivery_radius_km"
                     type="number" min="0" step="0.5"
                     :aria-label="t('stepPublish.deliveryRadiusKm')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 ui-input tabular-nums"
                   />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFreeOver") }}</label>
+                  <label for="sp-delivery-free-over" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFreeOver") }}</label>
                   <input
+                    id="sp-delivery-free-over"
                     v-model.number="form.delivery_free_over"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryFreeOver')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 ui-input tabular-nums"
                   />
                 </div>
               </div>
@@ -309,15 +319,16 @@
             </div>
 
             <div class="space-y-1">
-              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryZoneDescription") }}</label>
+              <label for="sp-delivery-zone-desc" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryZoneDescription") }}</label>
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryZoneDescriptionHint") }}</p>
               <input
+                id="sp-delivery-zone-desc"
                 v-model="form.delivery_zone_description"
                 type="text"
                 maxlength="200"
                 :aria-label="t('stepPublish.deliveryZoneDescription')"
                 :placeholder="t('stepPublish.deliveryZoneDescriptionPlaceholder')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full ui-input"
               />
               <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.delivery_zone_description || "").length }}/200</p>
             </div>
@@ -341,24 +352,26 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.maxCoversPerSlot") }}</label>
+              <label for="sp-max-covers" class="text-xs font-medium text-slate-300">{{ t("stepPublish.maxCoversPerSlot") }}</label>
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.maxCoversPerSlotHint") }}</p>
               <input
+                id="sp-max-covers"
                 v-model.number="form.max_covers_per_slot"
                 type="number"
                 min="0"
                 step="1"
                 :aria-label="t('stepPublish.maxCoversPerSlot')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full ui-input tabular-nums"
               />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.slotDuration") }}</label>
+              <label for="sp-slot-duration" class="text-xs font-medium text-slate-300">{{ t("stepPublish.slotDuration") }}</label>
               <p class="text-[11px] text-slate-500">{{ t("stepPublish.slotDurationHint") }}</p>
               <select
+                id="sp-slot-duration"
                 v-model.number="form.slot_duration_minutes"
                 :aria-label="t('stepPublish.slotDuration')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full ui-input"
               >
                 <option :value="30">30 {{ t("stepPublish.minuteUnit") }}</option>
                 <option :value="60">1 {{ t("stepPublish.hour") }}</option>
@@ -384,7 +397,7 @@
     <!-- Platform directory -->
     <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
       <div class="space-y-1">
-        <p class="ui-section-kicker">{{ t("stepPublish.availabilityControls") }}</p>
+        <p class="ui-section-kicker">{{ t("stepPublish.directoryControls") }}</p>
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.directoryTitle") }}</h3>
         <p class="ui-subtle">{{ t("stepPublish.directoryHint") }}</p>
       </div>
@@ -400,25 +413,27 @@
         <template v-if="form.directory_opt_in">
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.cuisineType") }}</label>
+              <label for="sp-cuisine-type" class="text-xs font-medium text-slate-300">{{ t("stepPublish.cuisineType") }}</label>
               <input
+                id="sp-cuisine-type"
                 v-model="form.cuisine_type"
                 type="text"
                 maxlength="60"
                 :aria-label="t('stepPublish.cuisineType')"
                 :placeholder="t('stepPublish.cuisineTypePlaceholder')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full ui-input"
               />
             </div>
             <div class="space-y-1">
-              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.cityLabel") }}</label>
+              <label for="sp-city" class="text-xs font-medium text-slate-300">{{ t("stepPublish.cityLabel") }}</label>
               <input
+                id="sp-city"
                 v-model="form.city"
                 type="text"
                 maxlength="80"
                 :aria-label="t('stepPublish.cityLabel')"
                 :placeholder="t('stepPublish.cityPlaceholder')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full ui-input"
               />
             </div>
           </div>
@@ -452,7 +467,7 @@
               <label
                 v-for="tag in MARKETPLACE_TAGS"
                 :key="tag"
-                class="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
+                class="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--color-secondary)]/60 has-[:focus-visible]:outline-none"
                 :class="form.tags.includes(tag)
                   ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
@@ -478,29 +493,32 @@
               :disabled="gettingLocation"
               @click="useMyLocation"
             >
-              {{ gettingLocation ? '…' : '📍 ' + t("stepPublish.useMyLocation") }}
+              <template v-if="gettingLocation">…</template>
+              <template v-else><span aria-hidden="true">📍 </span>{{ t("stepPublish.useMyLocation") }}</template>
             </button>
             <div class="grid gap-2 sm:grid-cols-2">
               <div class="space-y-0.5">
-                <label class="text-[10px] text-slate-500">{{ t("stepPublish.latLabel") }}</label>
+                <label for="sp-lat" class="text-[10px] text-slate-500">{{ t("stepPublish.latLabel") }}</label>
                 <input
+                  id="sp-lat"
                   v-model.number="form.lat"
                   type="number"
                   step="0.0001"
                   :aria-label="t('stepPublish.latLabel')"
                   placeholder="e.g. 48.8566"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-full ui-input tabular-nums"
                 />
               </div>
               <div class="space-y-0.5">
-                <label class="text-[10px] text-slate-500">{{ t("stepPublish.lngLabel") }}</label>
+                <label for="sp-lng" class="text-[10px] text-slate-500">{{ t("stepPublish.lngLabel") }}</label>
                 <input
+                  id="sp-lng"
                   v-model.number="form.lng"
                   type="number"
                   step="0.0001"
                   :aria-label="t('stepPublish.lngLabel')"
                   placeholder="e.g. 2.3522"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-full ui-input tabular-nums"
                 />
               </div>
             </div>
@@ -633,7 +651,7 @@
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
       </div>
 
-      <div v-if="!canAttemptPublish" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+      <div v-if="!canAttemptPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
       </div>
