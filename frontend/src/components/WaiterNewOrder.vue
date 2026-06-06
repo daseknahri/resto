@@ -13,11 +13,11 @@
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
         <h2 id="waiter-new-order-title" class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderTitle') }}</h2>
         <button
-          class="rounded-full p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
+          class="ui-press ui-touch-target flex items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.close')"
           @click="$emit('close')"
         >
-          <AppIcon name="close" class="h-4 w-4" />
+          <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -27,26 +27,22 @@
           <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
             <!-- Fulfillment type toggle -->
-            <div class="flex rounded-lg border border-slate-700/60 overflow-hidden text-xs font-semibold">
+            <div class="ui-segmented" role="group" :aria-label="t('waiterPage.newOrderFulfillmentLabel')">
               <button
-                class="flex-1 py-1.5 transition-colors"
-                :class="fulfillmentType === 'table'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                class="ui-segmented-button flex-1"
+                :data-active="fulfillmentType === 'table'"
                 :aria-pressed="fulfillmentType === 'table'"
                 @click="fulfillmentType = 'table'"
               >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
               <button
-                class="flex-1 py-1.5 transition-colors"
-                :class="fulfillmentType === 'pickup'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-800/40 text-slate-400 hover:text-slate-200'"
+                class="ui-segmented-button flex-1"
+                :data-active="fulfillmentType === 'pickup'"
                 :aria-pressed="fulfillmentType === 'pickup'"
                 @click="fulfillmentType = 'pickup'"
               >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
             </div>
             <div v-if="fulfillmentType === 'table'" class="flex items-center gap-2">
-              <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
               <input
                 v-model.trim="tableLabel"
                 type="text"
@@ -57,7 +53,7 @@
               />
             </div>
             <div class="flex items-center gap-2">
-              <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
               <input
                 v-model.trim="customerName"
                 type="text"
@@ -69,13 +65,13 @@
               />
             </div>
             <div class="relative">
-              <AppIcon name="search" class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <AppIcon name="search" class="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" aria-hidden="true" />
               <input
                 v-model="search"
                 type="search"
                 enterkeyhint="search"
                 :aria-label="t('waiterPage.newOrderSearch')"
-                class="ui-input w-full pl-8 text-sm"
+                class="ui-input w-full ps-8 text-sm"
                 :placeholder="t('waiterPage.newOrderSearch')"
                 @input="onSearch"
               />
@@ -85,15 +81,15 @@
           <!-- Category pills (only when not searching) -->
           <div
             v-if="!isSearching && categories.length > 1"
-            class="flex gap-1.5 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-slate-800/40"
+            class="ui-scroll-row border-b border-slate-800/40 px-3 py-2"
+            role="group"
+            :aria-label="t('waiterPage.newOrderCategoryLabel')"
           >
             <button
               v-for="cat in categories"
               :key="cat.slug"
-              class="shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors"
-              :class="activeCat === cat.slug
-                ? 'border-indigo-500/60 bg-indigo-500/15 text-indigo-300'
-                : 'border-slate-700/50 bg-slate-800/40 text-slate-400 hover:border-slate-600'"
+              class="ui-chip shrink-0"
+              :data-active="activeCat === cat.slug"
               :aria-pressed="activeCat === cat.slug"
               @click="selectCat(cat.slug)"
             >{{ cat.name }}</button>
@@ -101,35 +97,36 @@
 
           <!-- Dish list -->
           <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-            <div v-if="loadingDishes" class="space-y-1.5 pt-1">
-              <div v-for="i in 5" :key="i" class="h-11 animate-pulse rounded-xl bg-slate-800/50" />
+            <div v-if="loadingDishes" class="space-y-1.5 pt-1" aria-busy="true">
+              <div v-for="i in 5" :key="i" class="ui-skeleton h-11" />
             </div>
 
-            <p v-else-if="isSearching && !searchResults.length" class="py-6 text-center text-xs text-slate-500">
-              {{ t('waiterPage.noResults') }}
-            </p>
+            <div v-else-if="isSearching && !searchResults.length" class="ui-empty-state text-center p-5 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('waiterPage.noResults') }}</p>
+            </div>
 
             <button
-              v-for="dish in displayedDishes"
+              v-for="(dish, index) in displayedDishes"
               :key="dish.slug"
-              class="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 text-left transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/8"
+              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-2 rounded-xl border border-slate-700/40 bg-slate-800/30 px-3 py-2.5 text-left transition-colors hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
               :disabled="!dish.is_available"
-              :class="!dish.is_available ? 'opacity-40 cursor-not-allowed' : ''"
+              :class="!dish.is_available ? 'cursor-not-allowed opacity-40' : ''"
               @click="addDish(dish)"
             >
               <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-slate-100">{{ dish.name }}</p>
-                <p v-if="dishHasOptions(dish)" class="truncate text-[10px] font-medium text-indigo-300">{{ t('waiterPage.newOrderHasOptions') }}</p>
+                <p v-if="dishHasOptions(dish)" class="truncate text-[10px] font-medium text-[var(--color-secondary)]">{{ t('waiterPage.newOrderHasOptions') }}</p>
                 <p v-else-if="dish.description" class="truncate text-[10px] text-slate-500">{{ dish.description }}</p>
               </div>
-              <div class="flex shrink-0 items-center gap-2 text-right">
+              <div class="flex shrink-0 items-center gap-2 text-end">
                 <div>
-                  <p class="text-xs font-semibold text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</p>
-                  <span v-if="cartQty(dish.slug)" class="rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold text-indigo-300">
+                  <p class="tabular-nums text-xs font-semibold text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</p>
+                  <span v-if="cartQty(dish.slug)" class="tabular-nums rounded-full bg-[var(--color-secondary)]/15 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-secondary)]">
                     ×{{ cartQty(dish.slug) }}
                   </span>
                 </div>
-                <AppIcon :name="dishHasOptions(dish) ? 'chevronRight' : 'plus'" class="h-4 w-4 text-slate-500" />
+                <AppIcon :name="dishHasOptions(dish) ? 'chevronRight' : 'plus'" class="h-4 w-4 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
               </div>
             </button>
           </div>
@@ -139,46 +136,47 @@
         <div class="flex flex-col md:w-72 shrink-0">
           <p class="border-b border-slate-800 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {{ t('waiterPage.newOrderCart') }}
-            <span v-if="cartItems.length" class="ml-1 font-bold text-slate-200">({{ cartItems.length }})</span>
+            <span v-if="cartItems.length" class="ms-1 tabular-nums font-bold text-slate-200">({{ cartItems.length }})</span>
           </p>
 
           <!-- Cart items -->
           <div class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
-            <p v-if="!cartItems.length" class="py-6 text-center text-xs text-slate-500">
-              {{ t('waiterPage.newOrderEmpty') }}
-            </p>
+            <div v-if="!cartItems.length" class="ui-empty-state text-center p-5 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderEmpty') }}</p>
+            </div>
 
             <div
-              v-for="item in cartItems"
+              v-for="(item, index) in cartItems"
               :key="item.line_key"
-              class="rounded-xl border border-slate-700/40 bg-slate-800/30 px-2.5 py-2 space-y-1.5"
+              class="ui-reveal rounded-xl border border-slate-700/40 bg-slate-800/30 px-2.5 py-2 space-y-1.5"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
               <div class="flex items-center gap-2">
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-xs font-medium text-slate-100">{{ item.dish_name }}</p>
-                  <p v-if="item.options_label" class="truncate text-[10px] text-indigo-300">{{ item.options_label }}</p>
-                  <p class="text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
+                  <p v-if="item.options_label" class="truncate text-[10px] text-[var(--color-secondary)]/80">{{ item.options_label }}</p>
+                  <p class="tabular-nums text-[10px] text-slate-500">{{ fmtPrice(item.unit_price) }} {{ t('waiterPage.newOrderPriceEach') }}</p>
                 </div>
                 <!-- Qty controls -->
-                <div class="flex items-center gap-1 shrink-0">
+                <div class="flex items-center gap-1 shrink-0" :aria-label="`${item.dish_name} ${t('waiterPage.newOrderQtyLabel')}`">
                   <button
-                    class="flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.decreaseQuantity')"
                     @click="decrement(item.line_key)"
                   >−</button>
-                  <span class="w-5 text-center text-xs font-semibold text-slate-100" aria-hidden="true">{{ item.qty }}</span>
+                  <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100">{{ item.qty }}</span>
                   <button
-                    class="flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs"
+                    class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.increaseQuantity')"
                     @click="increment(item.line_key)"
                   >+</button>
                 </div>
                 <button
-                  class="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400 transition-colors"
+                  class="ui-press shrink-0 rounded p-0.5 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                   :aria-label="t('common.remove')"
                   @click="removeItem(item.line_key)"
                 >
-                  <AppIcon name="close" class="h-3 w-3" />
+                  <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
                 </button>
               </div>
               <!-- Per-item note -->
@@ -186,7 +184,7 @@
                 v-model="item.note"
                 type="text"
                 maxlength="120"
-                class="w-full rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+                class="ui-input w-full text-[11px]"
                 :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderItemNotePlaceholder')}`"
                 :placeholder="t('waiterPage.newOrderItemNotePlaceholder')"
               />
@@ -197,14 +195,14 @@
           <div class="border-t border-slate-800 p-3 space-y-2">
             <div v-if="cartItems.length" class="flex items-center justify-between text-sm font-semibold">
               <span class="text-slate-400">{{ t('waiterPage.newOrderTotal') }}</span>
-              <span class="text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
+              <span class="tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
             </div>
             <div v-if="submitError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
               <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
             </div>
             <button
-              class="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-opacity hover:bg-indigo-500 disabled:opacity-50"
+              class="ui-btn-primary w-full rounded-xl py-2.5 text-sm disabled:pointer-events-none disabled:opacity-50"
               :disabled="submitting || !cartItems.length"
               @click="submit"
             >
@@ -228,10 +226,14 @@
           <div class="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-3">
             <div class="min-w-0">
               <h3 class="truncate text-base font-bold text-white">{{ customizingDish.name }}</h3>
-              <p class="text-xs text-slate-500">{{ fmtPrice(customizingDish.price) }}</p>
+              <p class="tabular-nums text-xs text-slate-500">{{ fmtPrice(customizingDish.price) }}</p>
             </div>
-            <button class="rounded-full p-1.5 text-slate-400 hover:text-slate-200" :aria-label="t('common.close')" @click="closeCustomize">
-              <AppIcon name="close" class="h-4 w-4" />
+            <button
+              class="ui-press ui-touch-target flex items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+              :aria-label="t('common.close')"
+              @click="closeCustomize"
+            >
+              <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
 
@@ -242,7 +244,7 @@
               <div class="flex items-center justify-between gap-2">
                 <p class="text-sm font-semibold text-slate-200">
                   {{ group.name }}
-                  <span v-if="group.min_select > 0" class="ml-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
+                  <span v-if="group.min_select > 0" class="ms-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
                 </p>
                 <span class="text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
               </div>
@@ -250,19 +252,19 @@
                 v-for="opt in group.options || []"
                 :key="opt.id"
                 class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition-colors"
-                :class="isGroupOptSelected(group.id, opt.id) ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'"
+                :class="isGroupOptSelected(group.id, opt.id) ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8' : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'"
               >
                 <span class="flex items-center gap-2.5 text-sm text-slate-200">
                   <input
                     :type="group.max_select === 1 ? 'radio' : 'checkbox'"
                     :name="`wg-${group.id}`"
-                    class="h-4 w-4 accent-indigo-500"
+                    class="h-4 w-4 accent-[var(--color-secondary)]"
                     :checked="isGroupOptSelected(group.id, opt.id)"
                     @change="toggleGroupOpt(group, opt.id)"
                   />
                   {{ opt.name }}
                 </span>
-                <span v-if="Number(opt.price_delta) > 0" class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
+                <span v-if="Number(opt.price_delta) > 0" class="tabular-nums shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
               </label>
             </div>
 
@@ -273,14 +275,14 @@
                 v-for="opt in customizingDish.options"
                 :key="opt.id"
                 class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition-colors"
-                :class="isAddonSelected(opt.id) ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'"
+                :class="isAddonSelected(opt.id) ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8' : 'border-slate-700/50 bg-slate-800/30 hover:border-slate-600'"
               >
                 <span class="flex items-center gap-2.5 text-sm text-slate-200">
-                  <input type="checkbox" class="h-4 w-4 accent-indigo-500" :checked="isAddonSelected(opt.id)" @change="toggleAddon(opt.id)" />
+                  <input type="checkbox" class="h-4 w-4 accent-[var(--color-secondary)]" :checked="isAddonSelected(opt.id)" @change="toggleAddon(opt.id)" />
                   {{ opt.name }}
                   <span v-if="opt.is_required" class="rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
                 </span>
-                <span v-if="Number(opt.price_delta) > 0" class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
+                <span v-if="Number(opt.price_delta) > 0" class="tabular-nums shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ fmtPrice(opt.price_delta) }}</span>
               </label>
             </div>
 
@@ -297,13 +299,21 @@
 
           <!-- Footer: qty + add -->
           <div class="flex items-center gap-3 border-t border-slate-800 p-3">
-            <div class="flex items-center gap-1 shrink-0">
-              <button class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-lg text-slate-300 hover:border-slate-500" :aria-label="t('dishPage.decreaseQuantity')" @click="custQty = Math.max(1, custQty - 1)">−</button>
-              <span class="w-7 text-center text-sm font-semibold text-slate-100">{{ custQty }}</span>
-              <button class="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-lg text-slate-300 hover:border-slate-500" :aria-label="t('dishPage.increaseQuantity')" @click="custQty = Math.min(99, custQty + 1)">+</button>
+            <div class="flex items-center gap-1 shrink-0" :aria-label="t('waiterPage.newOrderQtyLabel')">
+              <button
+                class="ui-press flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-lg text-slate-300 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                :aria-label="t('dishPage.decreaseQuantity')"
+                @click="custQty = Math.max(1, custQty - 1)"
+              >−</button>
+              <span class="w-7 tabular-nums text-center text-sm font-semibold text-slate-100" aria-live="polite">{{ custQty }}</span>
+              <button
+                class="ui-press flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 text-lg text-slate-300 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                :aria-label="t('dishPage.increaseQuantity')"
+                @click="custQty = Math.min(99, custQty + 1)"
+              >+</button>
             </div>
             <button
-              class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white transition-opacity hover:bg-indigo-500 disabled:opacity-50"
+              class="ui-btn-primary flex-1 rounded-xl py-2.5 text-sm disabled:pointer-events-none disabled:opacity-50"
               :disabled="custRequiredUnmet"
               @click="confirmCustomize"
             >

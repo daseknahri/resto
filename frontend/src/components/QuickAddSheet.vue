@@ -1,13 +1,19 @@
 <template>
-  <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/60 sm:items-center" @click.self="$emit('close')">
-    <div class="flex max-h-[85vh] w-full max-w-md flex-col rounded-t-3xl border border-slate-700 bg-slate-900 sm:rounded-2xl">
+  <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center" @click.self="$emit('close')">
+    <div class="ui-reveal flex max-h-[85vh] w-full max-w-md flex-col rounded-t-3xl border border-slate-700/80 bg-slate-900 sm:rounded-2xl">
       <!-- Header -->
       <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
         <div class="min-w-0">
           <h2 class="truncate text-base font-semibold text-white">{{ dish.name }}</h2>
           <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-slate-400">{{ dish.description }}</p>
         </div>
-        <button class="shrink-0 rounded-full p-1.5 text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="$emit('close')">✕</button>
+        <button
+          class="ui-press ui-touch-target shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+          :aria-label="t('common.close')"
+          @click="$emit('close')"
+        >
+          <AppIcon name="close" class="h-4 w-4" />
+        </button>
       </div>
 
       <!-- Options (scrollable) -->
@@ -17,9 +23,9 @@
           <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-semibold text-slate-200">
               {{ group.name }}
-              <span v-if="group.min_select > 0" class="ml-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
+              <span v-if="group.min_select > 0" class="ms-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
             </p>
-            <span class="text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
+            <span class="shrink-0 text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
           </div>
           <ul class="grid gap-2 text-sm">
             <li
@@ -45,7 +51,7 @@
                   @change="toggleInGroup(group.id, opt.id, group.max_select, group.min_select)"
                 />
                 <p class="min-w-0 flex-1 font-medium text-slate-100">{{ opt.name }}</p>
-                <span v-if="Number(opt.price_delta) > 0" class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
+                <span v-if="Number(opt.price_delta) > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
               </label>
             </li>
           </ul>
@@ -67,22 +73,34 @@
                   <p class="font-medium text-slate-100">{{ opt.name }}</p>
                   <p v-if="opt.is_required" class="text-[10px] text-amber-300">{{ t('dishPage.required') }}</p>
                 </div>
-                <span class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
+                <span v-if="Number(opt.price_delta) > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
               </label>
             </li>
           </ul>
         </div>
 
-        <p v-if="hasRequiredMissing" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
+        <p v-if="hasRequiredMissing" class="text-xs text-amber-300" role="alert" aria-live="polite">{{ t('dishPage.selectRequiredOptions') }}</p>
       </div>
 
       <!-- Footer: quantity + add -->
-      <div class="flex items-center gap-3 border-t border-slate-800 p-4">
-        <div class="flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700 px-1">
-          <button class="flex h-8 w-8 items-center justify-center" style="color:var(--color-secondary)" :aria-label="t('dishPage.decreaseQuantity')" @click="qty = Math.max(1, qty - 1)"><AppIcon name="minus" class="h-3.5 w-3.5" /></button>
-          <span class="w-6 text-center text-sm font-bold tabular-nums text-slate-100">{{ qty }}</span>
-          <button class="flex h-8 w-8 items-center justify-center" style="color:var(--color-secondary)" :aria-label="t('dishPage.increaseQuantity')" @click="qty = Math.min(99, qty + 1)"><AppIcon name="plus" class="h-3.5 w-3.5" /></button>
-        </div>
+      <div class="flex items-center gap-3 border-t border-slate-800 p-4" style="padding-bottom: calc(var(--safe-bottom) + 1rem)">
+        <span class="ui-qty-control inline-flex shrink-0 items-center rounded-full border p-1">
+          <button
+            class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
+            :aria-label="t('dishPage.decreaseQuantity')"
+            @click="qty = Math.max(1, qty - 1)"
+          >
+            <AppIcon name="minus" class="h-3.5 w-3.5" />
+          </button>
+          <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite">{{ qty }}</span>
+          <button
+            class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
+            :aria-label="t('dishPage.increaseQuantity')"
+            @click="qty = Math.min(99, qty + 1)"
+          >
+            <AppIcon name="plus" class="h-3.5 w-3.5" />
+          </button>
+        </span>
         <button
           class="ui-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold disabled:opacity-50"
           :disabled="hasRequiredMissing"

@@ -692,6 +692,7 @@ export const messages = {
     },
     staffChat: {
       title: "Staff chat",
+      emptyTitle: "No messages yet",
       empty: "No messages yet. Say hello 👋",
       placeholder: "Message the team…",
       send: "Send",
@@ -1278,6 +1279,9 @@ export const messages = {
       newOrderNoTable: "Enter a table or label.",
       newOrderFulfillmentTable: "Table",
       newOrderFulfillmentPickup: "Pickup",
+      newOrderFulfillmentLabel: "Order type",
+      newOrderCategoryLabel: "Menu categories",
+      newOrderQtyLabel: "Quantity",
       noResults: "No matching dishes.",
       newOrderPriceEach: "each",
       newOrderTotal: "Total",
@@ -2412,6 +2416,7 @@ export const messages = {
       orders: "{count} order | {count} orders",
       noData: "No revenue data yet.",
       loadError: "Could not load chart data.",
+      periodNav: "Period selector",
     },
     bestSellers: {
       title: "Best sellers",
@@ -2798,6 +2803,7 @@ export const messages = {
       nextWeek: "Next",
       guests: "{n} guests",
       undatedNote: "{count} reservation(s) have no date set — visible in list view only.",
+      emptyDay: "—",
     },
     waiterInstall: {
       prompt: "Install the app for faster daily use.",
@@ -4233,6 +4239,7 @@ export const messages = {
     },
     staffChat: {
       title: "Messagerie équipe",
+      emptyTitle: "Aucun message pour l'instant",
       empty: "Aucun message. Dites bonjour 👋",
       placeholder: "Écrire à l'équipe…",
       send: "Envoyer",
@@ -4819,6 +4826,9 @@ export const messages = {
       newOrderNoTable: "Saisissez une table ou un label.",
       newOrderFulfillmentTable: "Table",
       newOrderFulfillmentPickup: "A emporter",
+      newOrderFulfillmentLabel: "Type de commande",
+      newOrderCategoryLabel: "Categories du menu",
+      newOrderQtyLabel: "Quantite",
       noResults: "Aucun plat correspondant.",
       newOrderPriceEach: "l'unite",
       newOrderTotal: "Total",
@@ -5922,6 +5932,7 @@ export const messages = {
       orders: "{count} commande | {count} commandes",
       noData: "Aucune donnee de CA pour l instant.",
       loadError: "Impossible de charger les donnees.",
+      periodNav: "Selecteur de periode",
     },
     bestSellers: {
       title: "Meilleures ventes",
@@ -6308,6 +6319,7 @@ export const messages = {
       nextWeek: "Suiv.",
       guests: "{n} convives",
       undatedNote: "{count} reservation(s) sans date — visibles uniquement en vue liste.",
+      emptyDay: "—",
     },
     cartPage_order: {
       placeOrder: "Passer la commande",

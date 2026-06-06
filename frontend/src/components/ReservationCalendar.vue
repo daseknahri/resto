@@ -1,33 +1,42 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <!-- Week navigation -->
     <div class="flex items-center justify-between gap-3">
       <button
-        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 text-xs"
+        :aria-label="t('reservationCalendar.prevWeek')"
         @click="prevWeek"
       >
-        ← {{ t("reservationCalendar.prevWeek") }}
+        <span class="rtl:scale-x-[-1] inline-block" aria-hidden="true">&#8249;</span>
+        {{ t("reservationCalendar.prevWeek") }}
       </button>
-      <p class="text-sm font-semibold text-slate-100">{{ weekLabel }}</p>
+      <p class="text-sm font-semibold tabular-nums text-slate-100">{{ weekLabel }}</p>
       <button
-        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 text-xs"
+        :aria-label="t('reservationCalendar.nextWeek')"
         @click="nextWeek"
       >
-        {{ t("reservationCalendar.nextWeek") }} →
+        {{ t("reservationCalendar.nextWeek") }}
+        <span class="rtl:scale-x-[-1] inline-block" aria-hidden="true">&#8250;</span>
       </button>
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="grid grid-cols-7 gap-2">
-      <div v-for="i in 7" :key="i" class="h-40 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
+    <div v-if="loading" class="flex gap-2 overflow-x-auto pb-1">
+      <div
+        v-for="i in 7"
+        :key="i"
+        class="ui-skeleton h-40 shrink-0 w-[90px] sm:w-[calc((100%-6*0.375rem)/7)]"
+      />
     </div>
 
     <!-- Week grid -->
-    <div v-else class="grid grid-cols-7 gap-1.5 overflow-x-auto">
+    <div v-else class="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
       <div
-        v-for="day in weekDays"
+        v-for="(day, dayIndex) in weekDays"
         :key="day.iso"
-        class="min-h-[140px] rounded-2xl border transition-colors"
+        class="shrink-0 w-[90px] sm:w-[calc((100%-6*0.375rem)/7)] min-h-[140px] rounded-2xl border transition-colors ui-reveal"
+        :style="{ '--ui-delay': `${Math.min(dayIndex, 6) * 30}ms` }"
         :class="[
           isToday(day.iso) ? 'border-violet-500/40 bg-violet-500/5' : 'border-slate-700/40 bg-slate-800/20',
           dragOverDay === day.iso ? 'ring-2 ring-violet-400/50' : '',
@@ -42,7 +51,10 @@
           :class="isToday(day.iso) ? 'bg-violet-500/20' : 'bg-slate-800/40'"
         >
           <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{{ day.dayName }}</p>
-          <p class="text-lg font-bold" :class="isToday(day.iso) ? 'text-violet-300' : 'text-slate-100'">
+          <p
+            class="text-lg font-bold tabular-nums"
+            :class="isToday(day.iso) ? 'text-violet-300' : 'text-slate-100'"
+          >
             {{ day.dayNum }}
           </p>
         </div>
@@ -50,35 +62,44 @@
         <!-- Reservation chips -->
         <div class="space-y-1 p-1.5">
           <div
-            v-for="res in reservationsByDay[day.iso] || []"
+            v-for="(res, resIndex) in reservationsByDay[day.iso] || []"
             :key="res.id"
             role="button"
             tabindex="0"
-            class="group cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing"
+            class="ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
+            :style="{ '--ui-delay': `${Math.min(resIndex, 5) * 20}ms` }"
             :class="statusChipClass(res.status)"
+            :aria-label="res.name"
             draggable="true"
             @dragstart="onDragStart(res)"
             @click="$emit('select', res)"
             @keydown.enter.space.prevent="$emit('select', res)"
           >
-            <p class="font-semibold text-slate-100 truncate">{{ res.name }}</p>
-            <p v-if="res.booked_for" class="text-slate-400">{{ timeLabel(res.booked_for) }}</p>
+            <p class="min-w-0 truncate font-semibold text-slate-100">{{ res.name }}</p>
+            <p v-if="res.booked_for" class="tabular-nums text-slate-400">{{ timeLabel(res.booked_for) }}</p>
             <p v-if="res.party_size" class="text-slate-500">{{ t("reservationCalendar.guests", { n: res.party_size }) }}</p>
-            <span class="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide" :class="statusBadgeClass(res.status)">
+            <span
+              class="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+              :class="statusBadgeClass(res.status)"
+            >
               {{ statusLabelShort(res.status) }}
             </span>
           </div>
 
-          <!-- Empty hint -->
-          <p v-if="!(reservationsByDay[day.iso] || []).length" class="px-1 py-2 text-center text-[10px] text-slate-600">
-            —
+          <!-- Empty day hint -->
+          <p
+            v-if="!(reservationsByDay[day.iso] || []).length"
+            class="px-1 py-2 text-center text-[10px] text-slate-600"
+            aria-hidden="true"
+          >
+            {{ t("reservationCalendar.emptyDay") }}
           </p>
         </div>
       </div>
     </div>
 
     <!-- No-date reservations note -->
-    <p v-if="undatedCount > 0" class="text-center text-xs text-slate-500">
+    <p v-if="undatedCount > 0" class="ui-subtle text-center text-xs tabular-nums">
       {{ t("reservationCalendar.undatedNote", { count: undatedCount }) }}
     </p>
   </div>

@@ -271,6 +271,7 @@ const arabicMessages = {
   },
   "staffChat": {
     "title": "دردشة الفريق",
+    "emptyTitle": "لا توجد رسائل بعد",
     "empty": "لا توجد رسائل بعد. ابدأ المحادثة 👋",
     "placeholder": "راسل الفريق…",
     "send": "إرسال",
@@ -2981,6 +2982,7 @@ Object.assign(arabicMessages, {
     orders: "{count} \u0637\u0644\u0628",
     noData: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0625\u064a\u0631\u0627\u062f\u0627\u062a \u0628\u0639\u062f.",
     loadError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0631\u0633\u0645 \u0627\u0644\u0628\u064a\u0627\u0646\u064a.",
+    periodNav: "\u0645\u062d\u062f\u062f \u0627\u0644\u0641\u062a\u0631\u0629",
   },
   bestSellers: {
     title: "\u0627\u0644\u0623\u0643\u062b\u0631 \u0645\u0628\u064a\u0639\u0627\u064b",
@@ -3059,6 +3061,7 @@ Object.assign(arabicMessages, {
     nextWeek: "\u0627\u0644\u062a\u0627\u0644\u064a",
     guests: "{n} \u0636\u064a\u0648\u0641",
     undatedNote: "{count} \u062d\u062c\u0632(\u062d\u062c\u0648\u0632\u0627\u062a) \u0628\u062f\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u2014 \u062a\u0638\u0647\u0631 \u0641\u064a \u0639\u0631\u0636 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0641\u0642\u0637.",
+    emptyDay: "\u2014",
   },
   ownerPromotions: {
     kicker: "\u0627\u0644\u0639\u0631\u0648\u0636",

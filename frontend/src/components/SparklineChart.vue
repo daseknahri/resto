@@ -32,14 +32,25 @@
       stroke-width="1.5"
       stroke-linecap="round"
       stroke-linejoin="round"
+      vector-effect="non-scaling-stroke"
     />
-    <!-- Last-point dot -->
+    <!-- Last-point dot — outer ring for contrast, inner filled dot -->
+    <circle
+      v-if="points.length >= 1"
+      :cx="points[points.length - 1][0]"
+      :cy="points[points.length - 1][1]"
+      r="3.5"
+      :fill="resolvedColor"
+      fill-opacity="0.18"
+      vector-effect="non-scaling-stroke"
+    />
     <circle
       v-if="points.length >= 1"
       :cx="points[points.length - 1][0]"
       :cy="points[points.length - 1][1]"
       r="2"
       :fill="resolvedColor"
+      vector-effect="non-scaling-stroke"
     />
   </svg>
 </template>
