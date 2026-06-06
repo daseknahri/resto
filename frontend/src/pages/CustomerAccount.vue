@@ -561,7 +561,7 @@
                       class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
                     >
                       <ul class="space-y-1">
-                        <li v-for="(item, idx) in order.items" :key="idx" class="flex items-start justify-between gap-2 text-slate-300">
+                        <li v-for="(item, itemIdx) in order.items" :key="itemIdx" class="flex items-start justify-between gap-2 text-slate-300">
                           <span class="min-w-0 flex-1">
                             <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
                             <span v-if="item.options?.length" class="ms-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
