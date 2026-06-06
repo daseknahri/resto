@@ -1,64 +1,158 @@
 <template>
-  <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/60 sm:items-center" @click.self="$emit('close')">
-    <div class="w-full max-w-md rounded-t-3xl border border-slate-700 bg-slate-900 p-5 space-y-4 sm:rounded-2xl">
-      <div class="flex items-center justify-between">
-        <h2 class="text-base font-semibold text-white">{{ t('walletCharge.title') }}</h2>
-        <button class="rounded-full p-1.5 text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="$emit('close')">✕</button>
+  <div
+    class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/60 sm:items-center"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="'wallet-charge-title'"
+    @click.self="$emit('close')"
+  >
+    <div class="ui-panel-soft ui-reveal w-full max-w-md space-y-4 rounded-t-3xl p-5 sm:rounded-3xl">
+      <!-- Header -->
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="wallet-charge-title" class="text-base font-semibold text-white">
+          {{ t('walletCharge.title') }}
+        </h2>
+        <button
+          class="ui-btn-outline ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-0"
+          :aria-label="t('common.close')"
+          @click="$emit('close')"
+        >
+          <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
 
       <!-- Step 1: resolve a customer by pay code -->
       <template v-if="!customer">
-        <p class="text-xs text-slate-400">{{ t('walletCharge.scanHint') }}</p>
+        <p class="ui-subtle text-xs">{{ t('walletCharge.scanHint') }}</p>
+
+        <!-- Scan / cancel row -->
         <div class="flex items-center gap-2">
           <button
             v-if="!scanning"
-            class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-sm font-semibold text-[var(--color-secondary)]"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 text-sm font-semibold text-[var(--color-secondary)]"
             @click="beginScan"
           >
-            <AppIcon name="qr" class="h-4 w-4" />{{ t('walletCharge.scan') }}
+            <AppIcon name="qr" class="h-4 w-4" aria-hidden="true" />
+            {{ t('walletCharge.scan') }}
           </button>
-          <button v-else class="rounded-full border border-slate-600 px-3 py-1.5 text-sm text-slate-300" @click="stop">{{ t('common.cancel') }}</button>
+          <button
+            v-else
+            class="ui-btn-outline ui-press ui-touch-target px-4 text-sm"
+            @click="stop"
+          >
+            {{ t('common.cancel') }}
+          </button>
         </div>
-        <div v-if="scanning" class="overflow-hidden rounded-xl border border-slate-700 bg-black">
+
+        <!-- Camera viewfinder -->
+        <div v-if="scanning" class="ui-reveal overflow-hidden rounded-2xl border border-slate-700/70 bg-black">
           <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline />
         </div>
+
+        <!-- Manual token row -->
         <div class="flex gap-2">
-          <input v-model="manualToken" type="text" class="ui-input flex-1 text-sm" :placeholder="t('walletCharge.manualPlaceholder')" @keyup.enter="resolve(manualToken)" />
-          <button class="shrink-0 rounded-xl border border-slate-600 px-4 py-2 text-sm text-slate-300 disabled:opacity-50" :disabled="!manualToken.trim() || resolving" @click="resolve(manualToken)">
+          <input
+            v-model="manualToken"
+            type="text"
+            class="ui-input flex-1 text-sm"
+            :placeholder="t('walletCharge.manualPlaceholder')"
+            @keyup.enter="resolve(manualToken)"
+          />
+          <button
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 px-4 text-sm disabled:opacity-50"
+            :disabled="!manualToken.trim() || resolving"
+            @click="resolve(manualToken)"
+          >
             {{ t('walletCharge.find') }}
           </button>
         </div>
-        <p v-if="error" class="text-xs text-red-300">{{ error }}</p>
+
+        <!-- Error -->
+        <div
+          v-if="error"
+          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+          role="alert"
+        >
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+        </div>
       </template>
 
       <!-- Step 2a: waiting for the customer to approve an above-threshold charge -->
       <template v-else-if="awaiting">
-        <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-4 text-center space-y-2">
-          <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400"></div>
-          <p class="text-sm font-semibold text-slate-100">{{ t('walletCharge.awaitingTitle', { amount: fmtMoney(awaiting.amount) }) }}</p>
-          <p class="text-xs text-slate-400">{{ t('walletCharge.awaitingHint', { name: customer.name || customer.phone }) }}</p>
+        <div class="ui-panel space-y-3 p-4 text-center">
+          <!-- Reduced-motion-safe pulsing indicator -->
+          <div
+            class="mx-auto h-8 w-8 rounded-full border-2 border-slate-600 border-t-emerald-400 motion-safe:animate-spin"
+            aria-hidden="true"
+          />
+          <p class="text-sm font-semibold text-slate-100 tabular-nums">
+            {{ t('walletCharge.awaitingTitle', { amount: fmtMoney(awaiting.amount) }) }}
+          </p>
+          <p class="ui-subtle text-xs">
+            {{ t('walletCharge.awaitingHint', { name: customer.name || customer.phone }) }}
+          </p>
         </div>
-        <button class="w-full rounded-xl border border-slate-600 px-4 py-2.5 text-sm text-slate-300" @click="cancelAwaiting">{{ t('common.cancel') }}</button>
+        <button
+          class="ui-btn-outline ui-press ui-touch-target w-full text-sm"
+          @click="cancelAwaiting"
+        >
+          {{ t('common.cancel') }}
+        </button>
       </template>
 
       <!-- Step 2b: charge the resolved customer -->
       <template v-else>
-        <div class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3">
-          <p class="text-sm font-semibold text-slate-100">{{ customer.name || customer.phone }}</p>
-          <p class="text-xs text-slate-400">{{ t('walletCharge.balance') }}: <span class="font-semibold text-emerald-400">{{ fmtMoney(customer.wallet_balance) }}</span></p>
+        <!-- Customer info card -->
+        <div class="ui-panel flex items-center gap-3 p-3">
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-semibold text-slate-100">{{ customer.name || customer.phone }}</p>
+            <p class="text-xs text-slate-400">
+              {{ t('walletCharge.balance') }}:
+              <span class="font-semibold tabular-nums text-emerald-400">{{ fmtMoney(customer.wallet_balance) }}</span>
+            </p>
+          </div>
         </div>
-        <label class="block text-xs font-semibold text-slate-300">
-          {{ t('walletCharge.amount') }}
-          <input v-model="amount" type="number" step="0.01" min="0.01" class="ui-input mt-1 w-full text-sm" :placeholder="t('walletCharge.amountPlaceholder')" />
+
+        <!-- Amount field -->
+        <label class="block space-y-1" :for="'wc-amount'">
+          <span class="ui-kicker">{{ t('walletCharge.amount') }}</span>
+          <input
+            id="wc-amount"
+            v-model="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            class="ui-input w-full text-sm tabular-nums"
+            :placeholder="t('walletCharge.amountPlaceholder')"
+          />
         </label>
-        <p v-if="error" class="text-xs text-red-300">{{ error }}</p>
+
+        <!-- Error -->
+        <div
+          v-if="error"
+          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+          role="alert"
+        >
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+        </div>
+
+        <!-- Actions -->
         <div class="flex gap-2">
-          <button class="rounded-xl border border-slate-600 px-4 py-2.5 text-sm text-slate-300" @click="reset">{{ t('walletCharge.back') }}</button>
           <button
-            class="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+            class="ui-btn-outline ui-press ui-touch-target px-4 text-sm"
+            @click="reset"
+          >
+            {{ t('walletCharge.back') }}
+          </button>
+          <button
+            class="ui-btn-primary ui-press ui-touch-target flex-1 text-sm disabled:opacity-50"
             :disabled="charging || !amount"
             @click="charge"
-          >{{ charging ? '…' : t('walletCharge.charge') }}</button>
+          >
+            {{ charging ? t('common.loading') : t('walletCharge.charge') }}
+          </button>
         </div>
       </template>
     </div>

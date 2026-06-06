@@ -1,6 +1,6 @@
 ﻿<template>
-  <div class="ui-panel space-y-3 p-4">
-    <div class="ui-section-band rounded-[24px] p-4 space-y-3">
+  <div class="ui-panel ui-reveal space-y-3 p-4">
+    <div class="ui-section-band ui-reveal rounded-[24px] p-4 space-y-3">
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
@@ -22,12 +22,15 @@
       </div>
     </div>
 
-    <div v-if="!sortedCategoryOptions.length" class="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-      {{ t("stepDishes.addCategoriesFirst") }}
+    <div v-if="!sortedCategoryOptions.length" class="ui-empty-state flex items-start gap-3 p-5">
+      <span class="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-300 shadow-lg shadow-black/20">
+        <AppIcon name="info" class="h-5 w-5" aria-hidden="true" />
+      </span>
+      <p class="relative z-10 text-sm text-amber-100">{{ t("stepDishes.addCategoriesFirst") }}</p>
     </div>
 
     <template v-else>
-      <div class="ui-section-band space-y-3 rounded-[24px] p-4">
+      <div class="ui-section-band ui-reveal space-y-3 rounded-[24px] p-4" :style="{ '--ui-delay': '28ms' }">
         <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end">
           <div class="space-y-1">
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{{ t("stepDishes.selectCategory") }}</p>
@@ -51,35 +54,35 @@
         <div class="flex flex-wrap items-center gap-2">
           <span class="ui-data-strip">{{ activeCategoryRecord?.name }}</span>
           <span class="ui-data-strip">{{ activeCategoryDishesFiltered.length }} {{ t("common.dishes") }}</span>
-          <button type="button" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-emerald-400/50 hover:text-emerald-300" @click="publishAllInCategory">
+          <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" @click="publishAllInCategory">
             {{ t("stepDishes.bulkPublish") }}
           </button>
-          <button type="button" class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500" @click="unpublishAllInCategory">
+          <button type="button" class="ui-btn-outline ui-press px-3 py-1 text-xs" @click="unpublishAllInCategory">
             {{ t("stepDishes.bulkUnpublish") }}
           </button>
         </div>
       </div>
 
-      <div class="space-y-1.5">
+      <div class="space-y-1.5 ui-reveal" :style="{ '--ui-delay': '56ms' }">
         <template v-if="activeCategoryDishesFiltered.length">
           <article
-            v-for="dish in activeCategoryDishesFiltered"
+            v-for="(dish, index) in activeCategoryDishesFiltered"
             :key="dish.local_id"
-            class="group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
+            class="ui-surface-lift ui-reveal group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
             :class="dish.is_published ? '' : 'opacity-70'"
-            style="content-visibility: auto; contain-intrinsic-size: auto 68px;"
+            :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 68px' }"
           >
             <!-- Reorder: stacked chevrons -->
             <div class="flex shrink-0 flex-col">
               <button
-                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
                 type="button" :disabled="!canMoveDishUp(dish.local_id)" :aria-label="t('common.moveUp')"
                 @click="moveDish(dish.local_id, -1)"
               >
                 <AppIcon name="chevronUp" class="h-4 w-4" />
               </button>
               <button
-                class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+                class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
                 type="button" :disabled="!canMoveDishDown(dish.local_id)" :aria-label="t('common.moveDown')"
                 @click="moveDish(dish.local_id, 1)"
               >
@@ -99,7 +102,7 @@
             </div>
 
             <!-- Name + meta — the whole block opens the editor -->
-            <button type="button" class="min-w-0 flex-1 text-left" @click="openDishEditor(dish.local_id)">
+            <button type="button" class="min-w-0 flex-1 text-start" @click="openDishEditor(dish.local_id)">
               <div class="flex items-center gap-1.5">
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dish.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
                 <h3 class="truncate text-sm font-semibold text-white">{{ dish.name || t("stepDishes.dishNamePlaceholder") }}</h3>
@@ -116,18 +119,25 @@
               <label
                 class="inline-flex cursor-pointer items-center"
                 :title="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
+                :aria-label="dish.is_published ? t('stepPublish.published') : t('stepPublish.draft')"
               >
-                <input v-model="dish.is_published" type="checkbox" class="peer sr-only" />
-                <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4" />
+                <input
+                  v-model="dish.is_published"
+                  type="checkbox"
+                  class="peer sr-only"
+                  role="switch"
+                  :aria-checked="dish.is_published ? 'true' : 'false'"
+                />
+                <span class="relative h-5 w-9 rounded-full bg-slate-700 transition after:absolute after:start-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:bg-emerald-500/80 peer-checked:after:translate-x-4" />
               </label>
               <button
-                class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+                class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
                 type="button" :aria-label="t('common.edit')" @click="openDishEditor(dish.local_id)"
               >
                 <AppIcon name="pencil" class="h-3.5 w-3.5" />
               </button>
               <button
-                class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
+                class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
                 type="button" :aria-label="t('stepDishes.removeDish')" @click="removeDishByLocalId(dish.local_id)"
               >
                 <AppIcon name="trash" class="h-3.5 w-3.5" />
@@ -138,11 +148,19 @@
 
         <div
           v-else
-          class="rounded-[26px] border border-dashed border-slate-700 bg-slate-950/55 p-6 text-center"
+          class="ui-empty-state flex flex-col items-start gap-4 p-5 text-start sm:flex-row sm:items-center sm:justify-between"
         >
-          <p class="text-sm font-semibold text-white">{{ dishSearch ? `${t("common.search")} - 0` : t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</p>
-          <p v-if="!dishSearch" class="mt-2 text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
-          <button type="button" class="ui-btn-primary mt-4 px-4 py-2" @click="openQuickDishModal(activeCategoryId)">
+          <div class="relative z-10 flex items-start gap-3">
+            <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/75 text-[var(--color-secondary)] shadow-lg shadow-black/25">
+              <AppIcon :name="dishSearch ? 'search' : 'filter'" class="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div class="space-y-1">
+              <p class="ui-kicker">{{ t("stepDishes.title") }}</p>
+              <h3 class="text-base font-semibold text-white">{{ dishSearch ? `${t("common.search")} — 0` : t("stepDishes.emptyCategoryTitle", { category: activeCategoryRecord?.name || '' }) }}</h3>
+              <p v-if="!dishSearch" class="max-w-xl text-sm text-slate-400">{{ t("stepDishes.emptyCategoryText") }}</p>
+            </div>
+          </div>
+          <button v-if="!dishSearch" type="button" class="ui-btn-primary relative z-10 px-4 py-2 text-sm" @click="openQuickDishModal(activeCategoryId)">
             {{ t("stepDishes.addDishToCategory") }}
           </button>
         </div>
@@ -281,7 +299,7 @@
                 </div>
 
                 <div
-class="rounded-xl border border-dashed p-3 transition-colors"
+                  class="rounded-xl border border-dashed p-3 transition-colors"
                   :class="draggingRows[editingDish.local_id] ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
                   @dragenter="setDragState(editingDish.local_id, true)"
                   @dragleave="setDragState(editingDish.local_id, false)"
@@ -357,7 +375,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                   @input="setLocalizedDishFieldValue(editingDish, 'description', dishFieldLocales.description, $event.target.value)"
                 ></textarea>
               </div>
-              <p v-if="rowError(editingDish, 'description')" :id="`step-dishes-description-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "description") }}</p>
+              <p v-if="rowError(editingDish, 'description')" :id="`step-dishes-description-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "description") }}</p>
 
               <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
                 <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.tagsTitle") }}</p>
@@ -464,7 +482,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
               <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.variantsTitle") }}</p>
               <button
                 type="button"
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
                 @click="addOption(editingDish)"
               >
                 {{ t("stepDishes.addVariant") }}
@@ -547,7 +565,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                     <input v-model="option.is_required" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
                     {{ t("stepDishes.requiredBeforeAddToCart") }}
                   </label>
-                  <div class="ml-auto flex items-center gap-1">
+                  <div class="ms-auto flex items-center gap-1">
                     <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionUp(editingDish, optIdx)" :aria-label="t('common.moveUp')" @click="moveOption(editingDish, optIdx, -1)">↑</button>
                     <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveOptionDown(editingDish, optIdx)" :aria-label="t('common.moveDown')" @click="moveOption(editingDish, optIdx, 1)">↓</button>
                   </div>
@@ -569,7 +587,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                   </div>
                   <button
                     type="button"
-                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                    class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
                     @click="addGroup(editingDish)"
                   >
                     {{ t("stepDishes.addGroup") }}
@@ -628,7 +646,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                             :aria-label="t('stepDishes.groupMaxSelect')"
                           />
                         </div>
-                        <div class="ml-auto flex items-center gap-1">
+                        <div class="ms-auto flex items-center gap-1">
                           <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupUp(editingDish, groupIdx)" :aria-label="t('common.moveUp')" @click="moveGroup(editingDish, groupIdx, -1)">↑</button>
                           <button type="button" class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500 disabled:opacity-30" :disabled="!canMoveGroupDown(editingDish, groupIdx)" :aria-label="t('common.moveDown')" @click="moveGroup(editingDish, groupIdx, 1)">↓</button>
                         </div>
@@ -705,8 +723,8 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                 <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noGroups") }}</p>
               </div>
 
-              <p v-if="rowError(editingDish, 'image_url')" :id="`step-dishes-image-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "image_url") }}</p>
-              <p v-if="rowError(editingDish, 'non_field_errors')" class="text-xs text-red-300">{{ rowError(editingDish, "non_field_errors") }}</p>
+              <p v-if="rowError(editingDish, 'image_url')" :id="`step-dishes-image-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "image_url") }}</p>
+              <p v-if="rowError(editingDish, 'non_field_errors')" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "non_field_errors") }}</p>
             </div>
           </div>
 
@@ -870,7 +888,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
                   <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.variantsTitle") }}</p>
                   <button
                     type="button"
-                    class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary"
+                    class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
                     @click="addQuickOption"
                   >
                     {{ t("stepDishes.addVariant") }}
@@ -952,7 +970,7 @@ class="rounded-xl border border-dashed p-3 transition-colors"
               <div class="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3 space-y-2">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.optionGroupsTitle") }}</p>
-                  <button type="button" class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary" @click="addQuickGroup">
+                  <button type="button" class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="addQuickGroup">
                     {{ t("stepDishes.addGroup") }}
                   </button>
                 </div>

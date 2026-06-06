@@ -1,32 +1,33 @@
 ﻿<template>
   <div class="space-y-4">
-    <section v-if="!standalone" class="ui-panel space-y-4 p-5">
-      <h2 class="text-xl font-semibold">{{ t("stepPublish.title") }}</h2>
-      <p class="text-sm text-slate-400">{{ t("stepPublish.description") }}</p>
+    <section v-if="!standalone" class="ui-panel space-y-3 p-5 ui-reveal">
+      <p class="ui-kicker">{{ t("stepPublish.title") }}</p>
+      <h2 class="text-xl font-semibold text-white leading-tight">{{ t("stepPublish.readinessSection") }}</h2>
+      <p class="ui-subtle">{{ t("stepPublish.description") }}</p>
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '28ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.title") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.readinessSection") }}</h3>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.readinessSection") }}</h3>
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
+        <span class="ui-chip tabular-nums">
           {{ categoriesCount }} {{ t("common.categories").toLowerCase() }}
         </span>
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
+        <span class="ui-chip tabular-nums">
           {{ dishesCount }} {{ t("common.dishes").toLowerCase() }}
         </span>
         <span
-          class="rounded-full border px-3 py-1 text-[11px] font-medium"
-          :class="published ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-950/55 text-slate-300'"
+          class="ui-chip"
+          :class="published ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200' : ''"
         >
           {{ published ? t("stepPublish.liveBadge") : t("stepPublish.draftBadge") }}
         </span>
         <span
-          class="rounded-full border px-3 py-1 text-[11px] font-medium"
-          :class="form.is_open ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-950/55 text-slate-300'"
+          class="ui-chip"
+          :class="form.is_open ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200' : ''"
         >
           {{ form.is_open ? t("stepPublish.restaurantOpen") : t("common.closed") }}
         </span>
@@ -37,15 +38,21 @@
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <ul class="space-y-2 text-sm">
+        <ul class="space-y-2 text-sm" role="list">
           <li
-            v-for="item in checks"
+            v-for="(item, index) in checks"
             :key="item.key"
-            class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
+            class="ui-readiness-item flex items-center justify-between gap-3 ui-reveal"
+            :data-complete="item.ok || undefined"
+            :data-warning="!item.ok || undefined"
+            :style="{ '--ui-delay': `${index * 28}ms` }"
           >
-            <span class="text-slate-200">{{ item.label }}</span>
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="ui-readiness-dot shrink-0" aria-hidden="true"></span>
+              <span class="min-w-0 truncate text-slate-200">{{ item.label }}</span>
+            </div>
             <span
-              class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
               :class="item.ok ? 'bg-emerald-500/10 text-emerald-200' : 'bg-amber-500/10 text-amber-200'"
             >
               {{ item.ok ? t("stepPublish.ok") : t("stepPublish.missing") }}
@@ -53,23 +60,23 @@
           </li>
         </ul>
 
-        <div class="space-y-4">
+        <div class="space-y-3">
           <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-2 text-sm">
             <p class="ui-section-kicker">{{ t("stepPublish.menuUrl") }}</p>
-            <p class="text-slate-100 break-all">{{ menuUrl }}</p>
+            <p class="break-all text-slate-100 text-sm tabular-nums">{{ menuUrl }}</p>
             <p v-if="publishedAt" class="text-xs text-slate-400">{{ t("stepPublish.publishedAt", { date: formattedPublishedAt }) }}</p>
           </div>
 
           <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
             <div class="flex items-center justify-between gap-3">
-              <div>
+              <div class="min-w-0">
                 <p class="ui-section-kicker">{{ t("stepPublish.publishStatus") }}</p>
-                <p class="text-lg font-semibold text-white">
+                <p class="text-lg font-semibold text-white leading-tight">
                   {{ published ? t("stepPublish.published") : t("stepPublish.draft") }}
                 </p>
               </div>
               <span
-                class="rounded-full px-3 py-1 text-xs font-semibold"
+                class="shrink-0 rounded-full px-3 py-1 text-xs font-semibold"
                 :class="published ? 'bg-emerald-500/10 text-emerald-200' : 'bg-slate-800 text-slate-300'"
               >
                 {{ published ? t("stepPublish.liveBadge") : t("stepPublish.draftBadge") }}
@@ -80,48 +87,48 @@
       </div>
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '56ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.availabilityControls") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.availabilitySectionTitle") }}</h3>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.availabilitySectionTitle") }}</h3>
       </div>
 
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.restaurantOpen") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.restaurantOpenHint") }}</p>
           </div>
-          <input v-model="form.is_open" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input v-model="form.is_open" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.disablePublicMenu") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.disablePublicMenuHint") }}</p>
           </div>
           <input
             v-model="form.is_menu_temporarily_disabled"
             type="checkbox"
-            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary"
+            class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary"
             @change="clearError('is_menu_temporarily_disabled')"
           />
         </label>
 
         <div v-if="form.is_menu_temporarily_disabled" class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-          <label class="text-sm text-slate-200">{{ t("stepPublish.disableMessage") }}</label>
+          <label class="text-sm font-medium text-slate-200">{{ t("stepPublish.disableMessage") }}</label>
           <textarea
             v-model="form.menu_disabled_note"
             rows="2"
-            class="w-full rounded-xl border bg-slate-900 px-3 py-2 text-sm"
-            :class="errors.menu_disabled_note ? 'border-red-400' : 'border-slate-700'"
+            class="ui-textarea"
+            :class="errors.menu_disabled_note ? 'border-red-400' : ''"
             :aria-label="t('stepPublish.disableMessage')"
             :aria-invalid="errors.menu_disabled_note ? 'true' : undefined"
             aria-describedby="step-publish-disabled-note-error"
             :placeholder="t('stepPublish.disableMessagePlaceholder')"
             @input="clearError('menu_disabled_note')"
           ></textarea>
-          <p v-if="errors.menu_disabled_note" id="step-publish-disabled-note-error" class="text-xs text-red-300">{{ errors.menu_disabled_note }}</p>
+          <p v-if="errors.menu_disabled_note" id="step-publish-disabled-note-error" class="text-xs text-red-300" role="alert">{{ errors.menu_disabled_note }}</p>
         </div>
 
         <!-- Receipt message -->
@@ -134,31 +141,31 @@
             v-model="form.receipt_message"
             rows="2"
             maxlength="300"
-            class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+            class="ui-textarea focus:border-[var(--color-secondary)]"
             :aria-label="t('stepPublish.receiptMessage')"
             :placeholder="t('stepPublish.receiptMessagePlaceholder')"
           ></textarea>
-          <p class="text-right text-[11px] text-slate-600">{{ (form.receipt_message || "").length }}/300</p>
+          <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.receipt_message || "").length }}/300</p>
         </div>
 
         <!-- SMS notifications -->
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.smsNotifications") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.smsNotificationsHint") }}</p>
           </div>
-          <input v-model="form.sms_notifications_enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input v-model="form.sms_notifications_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
         <!-- Cash on handover for trusted customers -->
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.codEnabled") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.codEnabledHint") }}</p>
           </div>
-          <input v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
-        <div v-if="form.cod_enabled" class="space-y-1 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
+        <div v-if="form.cod_enabled" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
           <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.codMinOrders") }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -166,21 +173,22 @@
               type="number"
               min="1"
               max="100"
-              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+              :aria-label="t('stepPublish.codMinOrders')"
+              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.codMinOrdersUnit") }}</span>
           </div>
         </div>
 
         <!-- Auto-confirm reservations -->
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.autoConfirmReservations") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmReservationsHint") }}</p>
           </div>
-          <input v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
-        <div v-if="form.auto_confirm_reservations" class="space-y-1 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
+        <div v-if="form.auto_confirm_reservations" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
           <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.autoConfirmMinHours") }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -189,31 +197,31 @@
               min="0"
               max="168"
               :aria-label="t('stepPublish.autoConfirmMinHours')"
-              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+              class="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursUnit") }}</span>
           </div>
-          <p class="text-xs text-slate-600">{{ t("stepPublish.autoConfirmMinHoursHint") }}</p>
+          <p class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursHint") }}</p>
         </div>
 
         <!-- Reservation reminders -->
-        <label class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-          <div class="space-y-1">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.reservationReminders") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.reservationRemindersHint") }}</p>
           </div>
-          <input v-model="form.reservation_reminders_enabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input v-model="form.reservation_reminders_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
         <!-- Delivery settings -->
         <div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <div class="space-y-0.5">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t("stepPublish.deliverySettings") }}</p>
+            <p class="ui-section-kicker">{{ t("stepPublish.deliverySettings") }}</p>
             <p class="text-xs text-slate-500">{{ t("stepPublish.deliverySettingsHint") }}</p>
           </div>
 
-          <label class="flex items-center justify-between gap-3">
-            <div class="space-y-0.5">
+          <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+            <div class="space-y-0.5 min-w-0">
               <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.deliveryEnabled") }}</span>
               <p class="text-xs text-slate-500">{{ t("stepPublish.deliveryEnabledHint") }}</p>
             </div>
@@ -225,31 +233,27 @@
               <div class="space-y-1">
                 <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFee") }}</label>
                 <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryFeeHint") }}</p>
-                <div class="flex items-center gap-1.5">
-                  <input
-                    v-model.number="form.delivery_fee"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    :aria-label="t('stepPublish.deliveryFee')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
-                  />
-                </div>
+                <input
+                  v-model.number="form.delivery_fee"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  :aria-label="t('stepPublish.deliveryFee')"
+                  class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                />
               </div>
 
               <div class="space-y-1">
                 <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryMinimumOrder") }}</label>
                 <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryMinimumOrderHint") }}</p>
-                <div class="flex items-center gap-1.5">
-                  <input
-                    v-model.number="form.delivery_minimum_order"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    :aria-label="t('stepPublish.deliveryMinimumOrder')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
-                  />
-                </div>
+                <input
+                  v-model.number="form.delivery_minimum_order"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  :aria-label="t('stepPublish.deliveryMinimumOrder')"
+                  class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
+                />
               </div>
             </div>
 
@@ -266,7 +270,7 @@
                     v-model.number="form.delivery_base_fee"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryBaseFee')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
                 <div class="space-y-1">
@@ -275,7 +279,7 @@
                     v-model.number="form.delivery_per_km"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryPerKm')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
                 <div class="space-y-1">
@@ -284,7 +288,7 @@
                     v-model.number="form.delivery_radius_km"
                     type="number" min="0" step="0.5"
                     :aria-label="t('stepPublish.deliveryRadiusKm')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
                 <div class="space-y-1">
@@ -293,7 +297,7 @@
                     v-model.number="form.delivery_free_over"
                     type="number" min="0" step="0.01"
                     :aria-label="t('stepPublish.deliveryFreeOver')"
-                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                    class="w-28 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                   />
                 </div>
               </div>
@@ -315,11 +319,11 @@
                 :placeholder="t('stepPublish.deliveryZoneDescriptionPlaceholder')"
                 class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
               />
-              <p class="text-right text-[11px] text-slate-600">{{ (form.delivery_zone_description || "").length }}/200</p>
+              <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.delivery_zone_description || "").length }}/200</p>
             </div>
 
-            <label class="flex items-center justify-between gap-3 border-t border-slate-800 pt-3">
-              <div class="space-y-0.5">
+            <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border-t border-slate-800 px-0 pt-3">
+              <div class="space-y-0.5 min-w-0">
                 <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.platformDelivery") }}</span>
                 <p class="text-xs text-slate-500">{{ t("stepPublish.platformDeliveryHint") }}</p>
               </div>
@@ -331,7 +335,7 @@
         <!-- Reservation capacity settings -->
         <div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <div class="space-y-0.5">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t("stepPublish.capacitySettings") }}</p>
+            <p class="ui-section-kicker">{{ t("stepPublish.capacitySettings") }}</p>
             <p class="text-xs text-slate-500">{{ t("stepPublish.capacitySettingsHint") }}</p>
           </div>
 
@@ -345,7 +349,7 @@
                 min="0"
                 step="1"
                 :aria-label="t('stepPublish.maxCoversPerSlot')"
-                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+                class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
               />
             </div>
             <div class="space-y-1">
@@ -367,7 +371,7 @@
 
         <div class="flex flex-wrap gap-3">
           <button
-            class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-50 disabled:opacity-60"
+            class="ui-btn-outline ui-press disabled:opacity-60"
             :disabled="savingStatus"
             @click="saveStatus"
           >
@@ -378,17 +382,17 @@
     </section>
 
     <!-- Platform directory -->
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
       <div class="space-y-1">
-        <p class="ui-section-kicker">{{ t("stepPublish.directoryTitle") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.directoryTitle") }}</h3>
-        <p class="text-sm text-slate-400">{{ t("stepPublish.directoryHint") }}</p>
+        <p class="ui-section-kicker">{{ t("stepPublish.availabilityControls") }}</p>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.directoryTitle") }}</h3>
+        <p class="ui-subtle">{{ t("stepPublish.directoryHint") }}</p>
       </div>
       <div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
         <!-- Opt-in toggle -->
-        <label class="flex cursor-pointer items-center justify-between gap-3">
+        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
-            <p class="text-xs font-semibold text-slate-300">{{ t("stepPublish.directoryOptIn") }}</p>
+            <p class="text-sm font-medium text-slate-100">{{ t("stepPublish.directoryOptIn") }}</p>
           </div>
           <input v-model="form.directory_opt_in" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
@@ -396,7 +400,7 @@
         <template v-if="form.directory_opt_in">
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1">
-              <p class="text-[11px] text-slate-500">{{ t("stepPublish.cuisineType") }}</p>
+              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.cuisineType") }}</label>
               <input
                 v-model="form.cuisine_type"
                 type="text"
@@ -407,7 +411,7 @@
               />
             </div>
             <div class="space-y-1">
-              <p class="text-[11px] text-slate-500">{{ t("stepPublish.cityLabel") }}</p>
+              <label class="text-xs font-medium text-slate-300">{{ t("stepPublish.cityLabel") }}</label>
               <input
                 v-model="form.city"
                 type="text"
@@ -421,14 +425,14 @@
 
           <!-- Price tier -->
           <div class="space-y-1.5">
-            <p class="text-[11px] font-medium text-slate-400">{{ t("stepPublish.priceTierLabel") }}</p>
-            <p class="text-[10px] text-slate-500">{{ t("stepPublish.priceTierHint") }}</p>
+            <p class="text-xs font-medium text-slate-300">{{ t("stepPublish.priceTierLabel") }}</p>
+            <p class="text-[11px] text-slate-500">{{ t("stepPublish.priceTierHint") }}</p>
             <div class="flex gap-2">
               <button
                 v-for="tier in [1, 2, 3]"
                 :key="tier"
                 type="button"
-                class="rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors"
+                class="ui-touch-target rounded-full border px-4 text-sm font-semibold transition-colors"
                 :class="form.price_tier === tier
                   ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-300 hover:border-slate-500'"
@@ -442,8 +446,8 @@
 
           <!-- Tags -->
           <div class="space-y-1.5">
-            <p class="text-[11px] font-medium text-slate-400">{{ t("stepPublish.tagsLabel") }}</p>
-            <p class="text-[10px] text-slate-500">{{ t("stepPublish.tagsHint") }}</p>
+            <p class="text-xs font-medium text-slate-300">{{ t("stepPublish.tagsLabel") }}</p>
+            <p class="text-[11px] text-slate-500">{{ t("stepPublish.tagsHint") }}</p>
             <div class="flex flex-wrap gap-2">
               <label
                 v-for="tag in MARKETPLACE_TAGS"
@@ -466,11 +470,11 @@
 
           <!-- Location -->
           <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-            <p class="text-[11px] font-medium text-slate-400">{{ t("stepPublish.locationTitle") }}</p>
-            <p class="text-[10px] text-slate-500">{{ t("stepPublish.locationHint") }}</p>
+            <p class="text-xs font-medium text-slate-300">{{ t("stepPublish.locationTitle") }}</p>
+            <p class="text-[11px] text-slate-500">{{ t("stepPublish.locationHint") }}</p>
             <button
               type="button"
-              class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500 disabled:opacity-50"
+              class="ui-btn-outline ui-press px-3 py-1 text-xs disabled:opacity-50"
               :disabled="gettingLocation"
               @click="useMyLocation"
             >
@@ -478,25 +482,25 @@
             </button>
             <div class="grid gap-2 sm:grid-cols-2">
               <div class="space-y-0.5">
-                <p class="text-[10px] text-slate-500">{{ t("stepPublish.latLabel") }}</p>
+                <label class="text-[10px] text-slate-500">{{ t("stepPublish.latLabel") }}</label>
                 <input
                   v-model.number="form.lat"
                   type="number"
                   step="0.0001"
                   :aria-label="t('stepPublish.latLabel')"
                   placeholder="e.g. 48.8566"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                 />
               </div>
               <div class="space-y-0.5">
-                <p class="text-[10px] text-slate-500">{{ t("stepPublish.lngLabel") }}</p>
+                <label class="text-[10px] text-slate-500">{{ t("stepPublish.lngLabel") }}</label>
                 <input
                   v-model.number="form.lng"
                   type="number"
                   step="0.0001"
                   :aria-label="t('stepPublish.lngLabel')"
                   placeholder="e.g. 2.3522"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 placeholder-slate-600 tabular-nums focus:border-[var(--color-secondary)] focus:outline-none"
                 />
               </div>
             </div>
@@ -505,7 +509,7 @@
       </div>
       <div class="flex flex-wrap gap-3">
         <button
-          class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-50 disabled:opacity-60"
+          class="ui-btn-outline ui-press disabled:opacity-60"
           :disabled="savingDirectory"
           @click="saveDirectory"
         >
@@ -515,35 +519,38 @@
     </section>
 
     <!-- Menu visual theme -->
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '112ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.menuThemeControls") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.menuThemeSectionTitle") }}</h3>
-        <p class="text-sm text-slate-400">{{ t("stepPublish.menuThemeHint") }}</p>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.menuThemeSectionTitle") }}</h3>
+        <p class="ui-subtle">{{ t("stepPublish.menuThemeHint") }}</p>
       </div>
 
       <div class="grid grid-cols-3 gap-3">
         <button
           v-for="theme in MENU_THEMES"
           :key="theme.value"
-          class="relative overflow-hidden rounded-2xl border p-0 transition-all duration-200 focus:outline-none"
+          type="button"
+          class="relative overflow-hidden rounded-2xl border p-0 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :class="form.menu_theme === theme.value
             ? 'border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/30'
             : 'border-slate-700 hover:border-slate-500'"
           :aria-pressed="form.menu_theme === theme.value"
+          :aria-label="t(theme.labelKey)"
           @click="form.menu_theme = theme.value"
         >
           <!-- Swatch preview -->
           <div class="h-16 w-full" :style="{ background: theme.preview }"></div>
-          <div class="space-y-0.5 px-3 py-2 text-left bg-slate-900/80">
+          <div class="space-y-0.5 px-3 py-2 text-start bg-slate-900/80">
             <p class="text-xs font-semibold text-slate-100">{{ t(theme.labelKey) }}</p>
           </div>
           <!-- Active checkmark -->
           <div
             v-if="form.menu_theme === theme.value"
-            class="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            class="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            aria-hidden="true"
           >
-            <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
               <path d="M2 6l3 3 5-5" />
             </svg>
           </div>
@@ -552,7 +559,7 @@
 
       <div class="flex flex-wrap gap-3">
         <button
-          class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-50 disabled:opacity-60"
+          class="ui-btn-outline ui-press disabled:opacity-60"
           :disabled="savingTheme"
           @click="saveTheme"
         >
@@ -562,34 +569,37 @@
     </section>
 
     <!-- Menu card layout picker -->
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '140ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.cardLayoutControls") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.cardLayoutSectionTitle") }}</h3>
-        <p class="text-sm text-slate-400">{{ t("stepPublish.cardLayoutHint") }}</p>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.cardLayoutSectionTitle") }}</h3>
+        <p class="ui-subtle">{{ t("stepPublish.cardLayoutHint") }}</p>
       </div>
 
       <div class="grid grid-cols-3 gap-3">
         <button
           v-for="layout in CARD_LAYOUTS"
           :key="layout.value"
-          class="relative overflow-hidden rounded-2xl border p-0 transition-all duration-200 focus:outline-none"
+          type="button"
+          class="relative overflow-hidden rounded-2xl border p-0 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :class="form.menu_card_layout === layout.value
             ? 'border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/30'
             : 'border-slate-700 hover:border-slate-500'"
           :aria-pressed="form.menu_card_layout === layout.value"
+          :aria-label="t(layout.labelKey)"
           @click="form.menu_card_layout = layout.value"
         >
           <!-- Visual preview mockup -->
           <div class="h-16 w-full overflow-hidden bg-slate-950/60" :style="{ background: layout.preview }"></div>
-          <div class="space-y-0.5 bg-slate-900/80 px-3 py-2 text-left">
+          <div class="space-y-0.5 bg-slate-900/80 px-3 py-2 text-start">
             <p class="text-xs font-semibold text-slate-100">{{ t(layout.labelKey) }}</p>
           </div>
           <div
             v-if="form.menu_card_layout === layout.value"
-            class="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            class="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            aria-hidden="true"
           >
-            <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
               <path d="M2 6l3 3 5-5" />
             </svg>
           </div>
@@ -598,7 +608,7 @@
 
       <div class="flex flex-wrap gap-3">
         <button
-          class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-50 disabled:opacity-60"
+          class="ui-btn-outline ui-press disabled:opacity-60"
           :disabled="savingTheme"
           @click="saveCardLayout"
         >
@@ -608,24 +618,25 @@
     </section>
 
     <!-- Closure dates / holiday closures -->
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '168ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.closureDatesControls") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.closureDatesSectionTitle") }}</h3>
-        <p class="text-sm text-slate-400">{{ t("stepPublish.closureDatesHint") }}</p>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.closureDatesSectionTitle") }}</h3>
+        <p class="ui-subtle">{{ t("stepPublish.closureDatesHint") }}</p>
       </div>
       <ClosureDates />
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '196ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepPublish.publishActions") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepPublish.publishSectionTitle") }}</h3>
+        <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
       </div>
 
-      <p v-if="!canAttemptPublish" class="text-xs text-amber-300">
-        {{ t("stepPublish.publishRequirement") }}
-      </p>
+      <div v-if="!canAttemptPublish" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
+      </div>
       <div v-if="errors.is_menu_published" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ errors.is_menu_published }}</p>
@@ -643,7 +654,7 @@
         >
           {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu") }}
         </button>
-        <button class="ui-btn-outline w-full justify-center sm:w-auto" :disabled="loadingChecks" @click="refreshChecks">
+        <button class="ui-btn-outline w-full justify-center sm:w-auto disabled:opacity-60" :disabled="loadingChecks" @click="refreshChecks">
           {{ loadingChecks ? t("stepPublish.refreshingChecks") : t("stepPublish.refreshChecks") }}
         </button>
         <RouterLink v-if="published" to="/owner/launch" class="ui-btn-outline w-full justify-center sm:w-auto">
