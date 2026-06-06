@@ -287,6 +287,14 @@ class AdminAuditLog(models.Model):
         USER_ROLE_CHANGED = "user_role_changed", "User role changed"
         TENANT_DEACTIVATED = "tenant_deactivated", "Tenant deactivated"
         TENANT_REACTIVATED = "tenant_reactivated", "Tenant reactivated"
+        # Money + policy actions performed from the admin console (audited for compliance).
+        WALLET_BONUS_ISSUED = "wallet_bonus_issued", "Wallet bonus issued"
+        TENANT_FLOAT_FUNDED = "tenant_float_funded", "Tenant float funded"
+        CUSTOMER_WALLET_CREDITED = "customer_wallet_credited", "Customer wallet credited"
+        VOUCHER_ISSUED = "voucher_issued", "Wallet voucher issued"
+        DRIVER_APPROVED = "driver_approved", "Driver approved"
+        DRIVER_REJECTED = "driver_rejected", "Driver rejected"
+        DRIVER_PAYOUT_RECORDED = "driver_payout_recorded", "Driver payout recorded"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

@@ -401,7 +401,10 @@ class AdminDriverApprovalViewTests(SimpleTestCase):
 
     def test_non_admin_forbidden(self):
         req = self.factory.post("/api/admin/drivers/1/approve/")
-        force_authenticate(req, user=MagicMock(is_authenticated=True))  # not a User instance
+        # A genuine non-admin: authenticated but none of the platform-admin flags set.
+        non_admin = MagicMock(is_authenticated=True, is_superuser=False, is_staff=False,
+                              is_platform_admin=False)
+        force_authenticate(req, user=non_admin)
         resp = self.view(req, driver_id=1)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 

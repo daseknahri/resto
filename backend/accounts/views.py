@@ -14,6 +14,10 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+
+from sales.audit import log_admin_action
+from sales.models import AdminAuditLog
+from sales.permissions import IsPlatformAdmin
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -1386,13 +1390,9 @@ class AdminWalletBonusView(APIView):
     Requires platform_superadmin role.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request, *args, **kwargs):
-        user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from decimal import Decimal as _Dec, InvalidOperation
         from django.db.models import F
         from .models import WalletTransaction
@@ -1452,6 +1452,13 @@ class AdminWalletBonusView(APIView):
                 for cid in ids
             ])
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.WALLET_BONUS_ISSUED,
+            request=request,
+            target_repr=(f"{len(ids)} customers" if not customer_ids else f"customers:{ids}"[:255]),
+            metadata={"amount": str(amount), "issued_to": len(ids), "note": note,
+                      "all_customers": all_customers},
+        )
         return Response({"issued_to": len(ids), "amount": str(amount), "note": note})
 
 
@@ -1463,12 +1470,10 @@ class AdminFundTenantView(APIView):
     Requires platform_superadmin (or staff/superuser).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request, *args, **kwargs):
         user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
         from accounts.wallet_service import credit_tenant_float, WalletError
         from tenancy.models import Tenant
@@ -1495,6 +1500,12 @@ class AdminFundTenantView(APIView):
         except WalletError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.TENANT_FLOAT_FUNDED,
+            request=request,
+            target_repr=f"tenant:{tenant_id}",
+            metadata={"amount": str(tx.amount), "balance_after": str(tx.balance_after), "note": note},
+        )
         return Response({
             "tenant_id": int(tenant_id),
             "amount": str(tx.amount),
@@ -1697,14 +1708,10 @@ class AdminCustomerCreditView(APIView):
     the platform rule (a verified phone is required to hold wallet funds).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request, customer_id, *args, **kwargs):
         from decimal import Decimal as _Dec, InvalidOperation
-
-        u = getattr(request, "user", None)
-        if not (u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
         from accounts.wallet_service import credit_wallet, WalletError, UnverifiedWallet
         from accounts.models import WalletTransaction
@@ -1733,6 +1740,12 @@ class AdminCustomerCreditView(APIView):
         except WalletError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_WALLET_CREDITED,
+            request=request,
+            target_repr=f"customer:{customer_id}",
+            metadata={"amount": str(tx.amount), "balance_after": str(tx.balance_after), "note": note},
+        )
         return Response({"new_balance": str(tx.balance_after), "amount": str(tx.amount)})
 
 
@@ -1804,7 +1817,7 @@ class AdminWalletVoucherView(APIView):
       Body: { "amount": "20.00", "note": "Welcome", "count": 5, "expires_days": 30 }
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def _check_admin(self, request):
         user = getattr(request, "user", None)
@@ -1888,6 +1901,13 @@ class AdminWalletVoucherView(APIView):
             for _ in range(count)
         ])
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.VOUCHER_ISSUED,
+            request=request,
+            target_repr=f"{len(vouchers)} voucher(s)",
+            metadata={"amount": str(amount), "count": len(vouchers),
+                      "expires_at": expires_at.isoformat() if expires_at else None},
+        )
         return Response({
             "created": len(vouchers),
             "codes": [v.code for v in vouchers],
@@ -4523,14 +4543,10 @@ class AdminDriverApprovalView(APIView):
     Platform admin only.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request, driver_id, *args, **kwargs):
-        from .models import User, Customer
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=403)
-
+        from .models import Customer
         approve = request.path.rstrip("/").endswith("approve")
         try:
             driver = Customer.objects.get(pk=driver_id, is_driver=True)
@@ -4547,6 +4563,13 @@ class AdminDriverApprovalView(APIView):
             driver.is_driver_online = False
             driver.save(update_fields=["driver_approved", "is_driver", "is_driver_online", "updated_at"])
 
+        log_admin_action(
+            action=(AdminAuditLog.Actions.DRIVER_APPROVED if approve
+                    else AdminAuditLog.Actions.DRIVER_REJECTED),
+            request=request,
+            target_repr=f"driver:{driver.id}",
+            metadata={"name": driver.name or "", "phone": driver.phone or ""},
+        )
         return Response({
             "id": driver.id,
             "is_driver": bool(driver.is_driver),
@@ -4559,7 +4582,7 @@ class AdminDriverEarningsView(APIView):
        POST /api/admin/drivers/<id>/payout/   — record a settlement paid to the driver.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def _check(self, request):
         u = getattr(request, "user", None)
@@ -4633,6 +4656,12 @@ class AdminDriverEarningsView(APIView):
         except WalletError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.DRIVER_PAYOUT_RECORDED,
+            request=request,
+            target_repr=f"driver:{driver_id}",
+            metadata={"amount": str(payout.amount), "method": method, "reference": reference},
+        )
         from .driver_service import driver_earnings_summary
         summary = driver_earnings_summary(driver_id)
         return Response({
