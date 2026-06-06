@@ -3,17 +3,17 @@
     <div
       class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/85 p-3 backdrop-blur-sm sm:items-center sm:p-5"
       @click.self="$emit('close')"
-      @keydown.esc="$emit('close')"
     >
       <div
         ref="dialogRef"
         role="dialog"
         aria-modal="true"
         aria-labelledby="customer-auth-dialog-title"
-        class="ui-reveal max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl shadow-black/50"
+        class="ui-auth-card ui-reveal max-h-[92vh] w-full overflow-y-auto"
+        @keydown.esc="$emit('close')"
       >
-        <!-- Header -->
-        <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <!-- Header — negative margins bleed to card edge since ui-auth-card provides p-6 -->
+        <div class="-mx-6 -mt-6 mb-2 flex items-center justify-between gap-3 border-b border-slate-800 px-6 py-3">
           <div>
             <p class="ui-kicker">{{ t("customerAuth.kicker") }}</p>
             <h2 id="customer-auth-dialog-title" class="ui-display text-base font-semibold text-white leading-tight">
@@ -29,7 +29,7 @@
           </button>
         </div>
 
-        <div class="space-y-4 p-4">
+        <div class="space-y-4">
           <p class="ui-subtle">{{ t("customerAuth.description") }}</p>
 
           <!-- Google One-Tap (env-gated) -->
@@ -58,15 +58,15 @@
                 aria-required="true"
                 @keydown.enter.prevent="requestOtp"
               />
-              <p
-                v-show="phoneError"
-                id="auth-phone-error"
-                class="text-xs text-red-300"
-                role="alert"
-              >
-                {{ phoneError }}
-              </p>
             </label>
+            <p
+              v-if="phoneError"
+              id="auth-phone-error"
+              class="text-xs text-red-300"
+              role="alert"
+            >
+              {{ phoneError }}
+            </p>
             <button
               class="ui-btn-primary ui-touch-target w-full gap-1.5"
               :disabled="requesting || !phone"
@@ -97,15 +97,15 @@
                 aria-required="true"
                 @keydown.enter.prevent="verifyOtp"
               />
-              <p
-                v-show="otpError"
-                id="auth-otp-error"
-                class="text-xs text-red-300"
-                role="alert"
-              >
-                {{ otpError }}
-              </p>
             </label>
+            <p
+              v-if="otpError"
+              id="auth-otp-error"
+              class="text-xs text-red-300"
+              role="alert"
+            >
+              {{ otpError }}
+            </p>
             <button
               class="ui-btn-primary ui-touch-target w-full"
               :disabled="verifying || otpCode.length < 4"
@@ -123,12 +123,13 @@
             <button
               class="ui-press ui-touch-target w-full text-center text-xs text-slate-400 transition hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="requesting || resendSeconds > 0"
-              aria-live="polite"
-              aria-atomic="true"
               @click="requestOtp"
             >
               {{ resendSeconds > 0 ? t("customerAuth.resendIn", { seconds: resendSeconds }) : t("customerAuth.resendCode") }}
             </button>
+            <span class="sr-only" aria-live="polite" aria-atomic="true">
+              {{ resendSeconds > 0 ? t("customerAuth.resendIn", { seconds: resendSeconds }) : "" }}
+            </span>
           </div>
 
           <!-- ── Name setup step (first sign-up only) ── -->
@@ -146,6 +147,7 @@
                 maxlength="80"
                 class="ui-input ui-touch-target"
                 aria-describedby="auth-name-hint"
+                aria-required="true"
                 :placeholder="t('customerAuth.namePlaceholder')"
                 :disabled="savingName"
                 @keydown.enter.prevent="saveName"

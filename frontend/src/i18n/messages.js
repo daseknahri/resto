@@ -87,7 +87,8 @@ export const messages = {
     confirmModal: {
       defaultTitle: "Are you sure?",
       defaultBody: "This action cannot be undone.",
-      confirmBtn: "Delete"
+      confirmBtn: "Delete",
+      dangerHint: "This action cannot be undone."
     },
     toast: {
       type: {
@@ -442,6 +443,9 @@ export const messages = {
       status_cancelled: "Cancelled",
       updatedJustNow: "Updated just now",
       updatedAgo: "Updated {min} min ago",
+      statusAriaLabel: "Delivery status: {status}",
+      driverSection: "Driver information",
+      ratingHint: "Select a star rating first",
     },
     mktOrderStatus: {
       title: "Order {number}",
@@ -1631,7 +1635,8 @@ export const messages = {
       added: "Closure date added",
       addFailed: "Could not add closure date",
       removed: "Closure date removed",
-      removeFailed: "Could not remove closure date"
+      removeFailed: "Could not remove closure date",
+      scheduledKicker: "Scheduled closures"
     },
     stepSuperCategories: {
       title: "Menu groups",
@@ -3802,7 +3807,8 @@ export const messages = {
     confirmModal: {
       defaultTitle: "Etes-vous sur ?",
       defaultBody: "Cette action est irreversible.",
-      confirmBtn: "Supprimer"
+      confirmBtn: "Supprimer",
+      dangerHint: "Cette action est irreversible."
     },
     toast: {
       type: {
@@ -4157,6 +4163,9 @@ export const messages = {
       status_cancelled: "Annulee",
       updatedJustNow: "Mis a jour a l'instant",
       updatedAgo: "Mis a jour il y a {min} min",
+      statusAriaLabel: "Statut de livraison : {status}",
+      driverSection: "Informations sur le livreur",
+      ratingHint: "Selectionnez d'abord une note",
     },
     mktOrderStatus: {
       title: "Commande {number}",
@@ -5346,7 +5355,8 @@ export const messages = {
       added: "Date de fermeture ajoutee",
       addFailed: "Impossible d'ajouter la date de fermeture",
       removed: "Date de fermeture supprimee",
-      removeFailed: "Impossible de supprimer la date de fermeture"
+      removeFailed: "Impossible de supprimer la date de fermeture",
+      scheduledKicker: "Fermetures planifiees"
     },
     stepCategories: {
       title: "Categories",

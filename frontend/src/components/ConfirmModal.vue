@@ -22,7 +22,7 @@
           class="confirm-dialog ui-glass w-full max-w-sm"
         >
           <!-- Header -->
-          <div class="border-b px-5 py-4" style="border-color: var(--color-border)">
+          <div class="border-b border-slate-800 px-5 py-4">
             <h2 :id="dialogTitleId" class="text-base font-semibold text-slate-100">
               {{ modal.options.value.title || t("confirmModal.defaultTitle") }}
             </h2>
@@ -36,7 +36,7 @@
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center justify-end gap-3 border-t px-5 py-3" style="border-color: var(--color-border)">
+          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-3">
             <button
               ref="cancelBtnRef"
               class="ui-btn-outline ui-touch-target px-4 text-sm"
@@ -50,6 +50,7 @@
               @click="ok"
             >
               {{ modal.options.value.confirmLabel || t("confirmModal.confirmBtn") }}
+              <span v-if="modal.options.value.danger !== false" class="sr-only">{{ t("confirmModal.dangerHint") }}</span>
             </button>
           </div>
         </div>

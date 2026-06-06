@@ -4,7 +4,7 @@
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t('deliveryTracker.kicker') }}</p>
-        <h2 class="flex items-center gap-1.5 text-sm font-semibold text-slate-100">
+        <h2 class="ui-display flex items-center gap-1.5 text-sm font-semibold text-white">
           <AppIcon name="truck" class="h-4 w-4 shrink-0 text-[var(--color-secondary)]" aria-hidden="true" />
           {{ t('deliveryTracker.title') }}
         </h2>
@@ -20,6 +20,7 @@
         }"
         aria-live="polite"
         aria-atomic="true"
+        :aria-label="t('deliveryTracker.statusAriaLabel', { status: statusLabel })"
       >
         {{ statusLabel }}
       </span>
@@ -32,7 +33,7 @@
     </p>
 
     <!-- Driver identity + contact -->
-    <div v-if="delivery.driver" class="flex items-center gap-3">
+    <section v-if="delivery.driver" :aria-label="t('deliveryTracker.driverSection')" class="flex items-center gap-3">
       <div
         class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-400"
         aria-hidden="true"
@@ -63,7 +64,7 @@
         <AppIcon name="phone" class="h-4 w-4" aria-hidden="true" />
         {{ t('deliveryTracker.call') }}
       </a>
-    </div>
+    </section>
     <p v-else class="ui-subtle text-xs">{{ t('deliveryTracker.searching') }}</p>
 
     <!-- Addresses -->
@@ -115,38 +116,42 @@
     >
       <AppIcon name="location" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       {{ t('deliveryTracker.viewMap') }}
+      <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
     </a>
 
     <!-- Rate your driver (after delivery) -->
     <div v-if="showRating" class="space-y-2 border-t border-slate-800 pt-3">
       <p class="ui-kicker mb-1">{{ t('deliveryTracker.rateKicker') }}</p>
       <p class="text-xs font-semibold text-slate-300">{{ t('deliveryTracker.rateDriver') }}</p>
-      <div class="flex gap-1" role="group" :aria-label="t('deliveryTracker.rateDriver')">
+      <div class="flex gap-1" role="radiogroup" :aria-label="t('deliveryTracker.rateDriver')">
         <button
           v-for="n in 5"
           :key="n"
           type="button"
+          role="radio"
           class="ui-touch-target ui-press flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'"
           :aria-label="t('common.rateNStars', { n })"
-          :aria-pressed="ratingScore >= n"
+          :aria-checked="ratingScore === n"
           @click="ratingScore = n"
         >
           <AppIcon name="star" class="h-6 w-6" aria-hidden="true" />
         </button>
       </div>
-      <p class="text-[11px] text-slate-400">{{ t('deliveryTracker.ratingNote') }}</p>
+      <label for="rating-note" class="text-[11px] text-slate-400">{{ t('deliveryTracker.ratingNote') }}</label>
       <textarea
+        id="rating-note"
         v-model="ratingNote"
         rows="2"
         class="ui-textarea text-xs"
-        :aria-label="t('deliveryTracker.ratingNote')"
         :placeholder="t('deliveryTracker.ratingNote')"
       />
+      <span id="rating-hint" class="sr-only">{{ t('deliveryTracker.ratingHint') }}</span>
       <button
         type="button"
         class="ui-btn-primary ui-press px-4 py-2 text-xs disabled:opacity-50"
         :disabled="!ratingScore || submittingRating"
+        :aria-describedby="!ratingScore ? 'rating-hint' : undefined"
         @click="submitRating"
       >
         {{ submittingRating ? t('common.saving') : t('deliveryTracker.submitRating') }}

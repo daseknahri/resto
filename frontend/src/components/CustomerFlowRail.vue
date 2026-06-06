@@ -3,7 +3,7 @@
     <div class="ui-journey-rail ui-reveal space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
-          <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
+          <h2 class="ui-kicker">{{ t("customerFlow.title") }}</h2>
           <p class="truncate text-sm font-semibold leading-tight text-white">{{ currentStepLabel }}</p>
         </div>
         <span
@@ -23,6 +23,7 @@
         :aria-valuemax="steps.length - 1"
         :aria-valuetext="`${activeStep + 1} / ${steps.length}`"
       >
+        <!-- aria-valuenow is intentionally 0-indexed (0–4); aria-valuetext overrides for AT, announcing "1 / 5" etc. -->
         <span :style="{ width: progressWidth }"></span>
       </div>
 
@@ -60,12 +61,9 @@
             >
               {{ step.index + 1 }}
             </div>
-            <span class="ui-chip text-[10px] tabular-nums">
-              {{ String(step.index + 1).padStart(2, "0") }}
-            </span>
           </div>
-          <div class="mt-3 space-y-1">
-            <p class="text-start text-sm font-semibold leading-tight">{{ step.label }}</p>
+          <div class="mt-3 min-w-0 space-y-1">
+            <p class="truncate text-start text-sm font-semibold leading-tight">{{ step.label }}</p>
             <p class="text-start text-[11px] leading-tight" :class="stepHintClass(step)">{{ step.hint }}</p>
           </div>
         </RouterLink>

@@ -1,9 +1,9 @@
 <template>
   <div class="space-y-3">
     <!-- Add new closure date -->
-    <div class="ui-panel p-4 space-y-3 ui-reveal">
+    <section class="ui-panel p-4 space-y-3 ui-reveal" aria-labelledby="closure-add-heading">
       <p class="ui-kicker">{{ t('closureDates.addDate') }}</p>
-      <h2 class="ui-display text-lg font-semibold text-white leading-tight">{{ t('closureDates.addDateTitle') }}</h2>
+      <h2 id="closure-add-heading" class="text-lg font-semibold text-white leading-tight">{{ t('closureDates.addDateTitle') }}</h2>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div class="min-w-0 flex-1 space-y-1">
           <label for="closure-date" class="text-xs text-slate-400">{{ t('closureDates.date') }}</label>
@@ -13,6 +13,9 @@
             type="date"
             :min="todayStr"
             class="ui-input"
+            required
+            aria-required="true"
+            :aria-describedby="addError ? 'closure-add-error' : undefined"
           />
         </div>
         <div class="min-w-0 flex-1 space-y-1">
@@ -30,18 +33,20 @@
         <button
           class="ui-btn-primary ui-press ui-touch-target shrink-0 gap-1.5 disabled:opacity-50"
           :disabled="!newDate || saving"
+          :aria-busy="saving"
           @click="addDate"
         >
           {{ saving ? t('common.saving') : t('closureDates.add') }}
         </button>
       </div>
-      <div v-if="addError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <div v-if="addError" id="closure-add-error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ addError }}</p>
       </div>
-    </div>
+    </section>
 
     <!-- Existing closure dates list -->
+    <p class="ui-kicker">{{ t('closureDates.scheduledKicker') }}</p>
     <div v-if="loading" class="space-y-2" role="status" :aria-label="t('common.loading')">
       <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3" aria-hidden="true">
         <div class="space-y-1.5">
@@ -84,7 +89,7 @@
               {{ t('closureDates.today') }}
             </span>
             <button
-              class="ui-btn-outline ui-press ui-touch-target flex h-8 w-8 items-center justify-center hover:border-red-500/50 hover:text-red-400"
+              class="ui-btn-outline ui-press ui-touch-target p-2 shrink-0 hover:border-red-500/50 hover:text-red-400"
               :aria-label="`${t('common.remove')} ${formatDate(closure.date)}`"
               @click="removeDate(closure.id)"
             >
