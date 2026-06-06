@@ -62,14 +62,14 @@
             <option v-for="option in statusOptions" :key="option.value || 'all'" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
-        <div class="hidden text-xs text-slate-400 md:block">
+        <label class="hidden text-xs text-slate-400 md:block">
           {{ t("adminConsole.pageSize") }}
-          <select v-model.number="pageSize" :aria-label="t('adminConsole.pageSize')" class="ui-input mt-1 w-24" @change="onPageSizeChange">
+          <select v-model.number="pageSize" class="ui-input mt-1 w-24" @change="onPageSizeChange">
             <option :value="10">10</option>
             <option :value="20">20</option>
             <option :value="50">50</option>
           </select>
-        </div>
+        </label>
         <div class="hidden flex-wrap items-end gap-2 md:flex md:justify-end">
           <button class="ui-btn-outline px-4 py-2 text-sm" :disabled="loading" @click="clearFilters">
             <AppIcon name="close" class="owner-res-icon" />
@@ -266,13 +266,14 @@
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
         </svg>
-        <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+        <p id="res-list-error-msg" class="flex-1 text-sm text-red-300">{{ error }}</p>
         <button
           class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          aria-describedby="res-list-error-msg"
           @click="fetchReservations"
         >{{ t('common.retry') }}</button>
       </div>
-      <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite" :aria-label="t('common.loading')">
+      <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite" :aria-label="t('ownerReservations.loadingList')">
         <div v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]" aria-hidden="true"></div>
       </div>
       <article v-else-if="!reservations.length" class="ui-empty-state ui-reveal space-y-3 text-center text-sm">
@@ -309,6 +310,7 @@
               <input
                 type="checkbox"
                 :checked="isSelected(reservation.id)"
+                :aria-label="reservation.name || t('ownerReservations.fallbackReservationName', { id: reservation.id })"
                 @change="toggleSelection(reservation.id)"
               />
               <span class="text-base font-semibold text-slate-100">{{ reservation.name || t("ownerReservations.fallbackReservationName", { id: reservation.id }) }}</span>
@@ -317,19 +319,20 @@
               {{ statusLabel(reservation.status) }}
             </span>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <span class="ui-state-chip" data-active="true">{{ formatDate(reservation.created_at) }}</span>
-            <span
+          <ul role="list" class="flex flex-wrap gap-2">
+            <li><span class="ui-state-chip" data-active="true">{{ formatDate(reservation.created_at) }}</span></li>
+            <li
               v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'"
+            ><span
               class="rounded-full px-2 py-1 text-[11px] font-semibold"
               :class="slaClass(reservation.sla_state)"
             >
               {{ slaLabel(reservation) }}
-            </span>
-            <span v-if="reservation.follow_up_due_at" class="ui-state-chip" :data-active="reservation.sla_state === 'warning' || reservation.sla_state === 'overdue'">
+            </span></li>
+            <li v-if="reservation.follow_up_due_at"><span class="ui-state-chip" :data-active="reservation.sla_state === 'warning' || reservation.sla_state === 'overdue'">
               {{ t("ownerReservations.dueLabel", { date: formatDate(reservation.follow_up_due_at) }) }}
-            </span>
-          </div>
+            </span></li>
+          </ul>
 
           <div class="grid gap-1.5 text-sm text-start sm:grid-cols-2">
             <p class="rounded-lg border border-slate-800/70 bg-slate-950/35 px-2.5 py-2 text-slate-200 break-all">
@@ -488,6 +491,7 @@
             <button
               class="owner-action-btn rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 disabled:opacity-60"
               :disabled="isTimelineLoading(reservation.id)"
+              :aria-expanded="isTimelineOpen(reservation.id)"
               @click="toggleTimeline(reservation.id)"
             >
               <AppIcon name="calendar" class="owner-res-icon" />
@@ -512,7 +516,7 @@
                 </div>
                 <p v-if="entry.note" class="mt-1 whitespace-pre-line text-slate-300">{{ entry.note }}</p>
                 <p v-if="entry.previous_status || entry.new_status" class="mt-1 text-slate-400">
-                  {{ statusLabel(entry.previous_status) || "-" }} -> {{ statusLabel(entry.new_status) || "-" }}
+                  {{ statusLabel(entry.previous_status) || "-" }}<span aria-hidden="true"> -&gt; </span><span class="sr-only"> {{ t("ownerReservations.statusTransitionTo") }} </span>{{ statusLabel(entry.new_status) || "-" }}
                 </p>
                 <p v-if="entry.actor_username" class="mt-1 text-slate-500">{{ t("ownerReservations.byActor", { actor: entry.actor_username }) }}</p>
               </li>

@@ -3,13 +3,14 @@
     <!-- Header -->
     <header class="ui-hero-ribbon ui-reveal space-y-3 p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0 space-y-0.5">
-          <p class="ui-section-kicker">{{ t("ownerRatings.kicker") }}</p>
+        <div class="min-w-0 space-y-1">
+          <p class="ui-kicker">{{ t("ownerRatings.kicker") }}</p>
           <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerRatings.title") }}</h1>
           <p class="ui-subtle">{{ t("ownerRatings.description") }}</p>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
           <button
+            type="button"
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 text-sm"
             :disabled="exporting || !ratings.length"
             @click="exportCsv"
@@ -18,6 +19,7 @@
             {{ exporting ? t("ownerRatings.exporting") : t("ownerRatings.exportCsv") }}
           </button>
           <button
+            type="button"
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 text-sm"
             :disabled="loading || updating"
             @click="fetchRatings(true)"
@@ -48,17 +50,17 @@
       <div v-if="summary" class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
         <div class="bg-slate-950/70 px-3 py-3 text-center">
           <p class="text-xl font-bold text-white tabular-nums">{{ summary.count }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerRatings.totalRatings") }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.totalRatings") }}</p>
         </div>
         <div class="bg-slate-950/70 px-3 py-3 text-center">
           <p class="text-xl font-bold text-amber-400 tabular-nums">
             {{ summary.average !== null ? summary.average.toFixed(1) : "—" }}
           </p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerRatings.averageScore") }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.averageScore") }}</p>
         </div>
         <div class="bg-slate-950/70 px-3 py-3 text-center">
           <p class="text-xl font-bold text-white tabular-nums">{{ summary.comments }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerRatings.withComments") }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.withComments") }}</p>
         </div>
       </div>
 
@@ -66,7 +68,7 @@
       <div v-if="ratings.length" class="space-y-1.5">
         <div v-for="s in [5, 4, 3, 2, 1]" :key="s" class="flex items-center gap-2 text-xs">
           <span class="w-4 shrink-0 text-end font-semibold text-amber-400 tabular-nums">{{ s }}</span>
-          <div class="h-2 min-w-0 flex-1 rounded-full bg-slate-800" role="progressbar" :aria-valuenow="scorePercent(s)" aria-valuemin="0" aria-valuemax="100">
+          <div class="h-2 min-w-0 flex-1 rounded-full bg-slate-800" role="progressbar" :aria-label="t('ownerRatings.starLabel', { n: s })" :aria-valuenow="scorePercent(s)" aria-valuemin="0" aria-valuemax="100">
             <div
               class="h-full rounded-full bg-amber-400/70 transition-all duration-500"
               :style="{ width: `${scorePercent(s)}%` }"
@@ -85,6 +87,7 @@
           class="ui-chip ui-press shrink-0"
           :class="activeScore === f.value ? 'router-link-active' : ''"
           :aria-pressed="activeScore === f.value"
+          :aria-label="f.value === 'all' ? f.label : t('ownerRatings.starsLabel', { n: f.value })"
           @click="activeScore = f.value"
         >
           {{ f.label }}
@@ -116,6 +119,7 @@
         :key="r.id"
         class="ui-panel ui-surface-lift ui-reveal p-4 space-y-2.5"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        :aria-label="r.customer_name ? r.customer_name + ', ' + r.score + '/5' : r.score + '/5'"
       >
         <!-- Top row: stars + score · date -->
         <div class="flex flex-wrap items-start justify-between gap-2">
@@ -123,11 +127,11 @@
           <div class="flex items-center gap-2">
             <span class="text-lg leading-none text-amber-400" aria-hidden="true">{{ "★".repeat(r.score) }}<span class="text-slate-600">{{ "★".repeat(5 - r.score) }}</span></span>
             <span
-              class="rounded-full px-2 py-0.5 text-xs font-bold"
+              class="ui-status-pill"
               :class="{
-                'bg-emerald-500/15 text-emerald-300': r.score >= 4,
-                'bg-amber-500/15 text-amber-300': r.score === 3,
-                'bg-red-500/15 text-red-300': r.score <= 2,
+                'border-emerald-500/30 bg-emerald-500/15 text-emerald-300': r.score >= 4,
+                'border-amber-500/30 bg-amber-500/15 text-amber-300': r.score === 3,
+                'border-red-500/30 bg-red-500/15 text-red-300': r.score <= 2,
               }"
             >{{ r.score }}/5</span>
           </div>

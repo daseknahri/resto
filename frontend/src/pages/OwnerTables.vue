@@ -4,7 +4,7 @@
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="min-w-0 flex-1 space-y-1.5">
           <p class="ui-kicker">{{ t("ownerTables.kicker") }}</p>
-          <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t("ownerTables.title") }}</h2>
+          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t("ownerTables.title") }}</h1>
           <div class="ui-scroll-row min-w-0">
             <span class="ui-data-strip tabular-nums">{{ t("ownerTables.tableLinksCount", { count: tables.length }) }}</span>
             <span class="ui-data-strip tabular-nums">
@@ -15,6 +15,7 @@
             <svg v-if="updating" class="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
               <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
             </svg>
+            <span aria-live="polite" class="sr-only">{{ updating ? t("ownerTables.refreshing") : "" }}</span>
           </div>
         </div>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
@@ -80,7 +81,7 @@
       </div>
       <details class="mt-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-2.5 md:hidden">
         <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
-          {{ t("ownerTables.cardsTitle") }}
+          {{ t("ownerTables.moreActions") }}
         </summary>
         <div class="mt-2 grid grid-cols-2 gap-2">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" :disabled="!tables.length" @click="exportCsv">
@@ -102,11 +103,11 @@
     <!-- Floor sections — assign tables to waiters so table orders route to them -->
     <OwnerFloorSections v-if="tables.length" :tables="tables" class="no-print" />
 
-    <header class="print-only rounded-xl border border-slate-300 bg-white p-4 text-slate-900">
+    <div class="print-only rounded-xl border border-slate-300 bg-white p-4 text-slate-900">
       <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("ownerTables.cardsTitle") }}</p>
       <h3 class="mt-1 text-2xl font-semibold">{{ tenantName }}</h3>
       <p class="mt-1 text-xs text-slate-500">{{ t("ownerTables.generatedAt", { date: generatedAt }) }}</p>
-    </header>
+    </div>
 
     <article v-if="!tables.length && !loading" class="ui-empty-state space-y-3 text-center">
       <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
@@ -156,14 +157,19 @@
       </div>
     </div>
 
-    <div v-else class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
+    <div v-else class="grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3">
       <article
         v-for="(table, index) in filteredTables"
         :key="table.id"
-        class="table-card ui-spotlight-card ui-reveal space-y-3 p-4 ui-press cursor-pointer"
+        class="table-card ui-spotlight-card ui-reveal min-w-0 space-y-3 p-4 ui-press cursor-pointer"
         :class="selectedTableId === table.id ? 'border-brand-secondary/60 shadow-brand-secondary/10' : ''"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        tabindex="0"
+        role="button"
+        :aria-pressed="selectedTableId === table.id"
         @click="selectedTableId = table.id"
+        @keydown.enter.prevent="selectedTableId = table.id"
+        @keydown.space.prevent="selectedTableId = table.id"
       >
         <div class="rounded-xl border border-slate-800/80 bg-slate-950/55 p-3">
           <div class="flex items-center gap-2">
@@ -179,7 +185,7 @@
             <p class="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{{ tenantName }}</p>
           </div>
           <p class="mt-2 truncate text-xl font-semibold text-slate-100">{{ table.label }}</p>
-          <p class="text-xs text-slate-400"><span class="text-slate-500">{{ t("ownerTables.slug") }}</span> {{ table.slug }}</p>
+          <p class="text-xs text-slate-400"><span class="text-slate-400">{{ t("ownerTables.slug") }}</span> {{ table.slug }}</p>
         </div>
 
         <div class="mx-auto w-fit rounded-xl border border-slate-700 bg-white p-2">
@@ -201,10 +207,10 @@
 
         <div class="space-y-1 text-xs">
           <p class="text-slate-300">{{ t("ownerTables.scanHint", { table: table.label }) }}</p>
-          <a :href="tableShortUrl(table)" target="_blank" rel="noopener noreferrer" class="block break-all text-[var(--color-secondary)] hover:underline focus-visible:outline-none focus-visible:underline">
+          <a :href="tableShortUrl(table)" target="_blank" rel="noopener noreferrer" class="block break-all text-[var(--color-secondary)] hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
             {{ tableShortUrl(table) }}
           </a>
-          <a :href="tableFullMenuUrl(table)" target="_blank" rel="noopener noreferrer" class="no-print block break-all text-slate-400 hover:text-slate-300 hover:underline focus-visible:outline-none focus-visible:underline">
+          <a :href="tableFullMenuUrl(table)" target="_blank" rel="noopener noreferrer" class="no-print block break-all text-slate-400 hover:text-slate-300 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
             <span class="text-slate-500">{{ t("ownerTables.fullLinkPrefix") }}:</span> {{ tableFullMenuUrl(table) }}
           </a>
         </div>
@@ -232,7 +238,7 @@
         </div>
 
         <details class="no-print rounded-xl border border-slate-800/80 bg-slate-950/45 p-2.5 sm:hidden">
-          <summary class="cursor-pointer select-none text-xs font-semibold text-slate-200">{{ t("common.more") }}</summary>
+          <summary class="cursor-pointer select-none text-xs font-semibold text-slate-200">{{ t("common.more") }}<span class="sr-only"> – {{ table.label }}</span></summary>
           <div class="mt-2 grid grid-cols-2 gap-2">
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="copyTableUrl(table)">
               <AppIcon name="copy" class="owner-table-icon" aria-hidden="true" />
@@ -306,6 +312,7 @@
                   <button
                     class="w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition"
                     :class="formMode === 'create' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
+                    :aria-pressed="formMode === 'create'"
                     @click="formMode = 'create'"
                   >
                     {{ t("ownerTables.createTable") }}
@@ -315,6 +322,7 @@
                   <button
                     class="w-full rounded-lg border px-3 py-2 text-start text-sm font-semibold transition"
                     :class="formMode === 'bulk' ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary/60'"
+                    :aria-pressed="formMode === 'bulk'"
                     @click="formMode = 'bulk'"
                   >
                     {{ t("ownerTables.bulkGenerate") }}

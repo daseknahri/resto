@@ -728,7 +728,8 @@ export const messages = {
       qrUnavailable: "QR unavailable",
       scanHintPlain: "Scan to open menu",
       statusFilter: "Status filter",
-      noFilterResults: "No tables match the current search or filter."
+      noFilterResults: "No tables match the current search or filter.",
+      moreActions: "More actions"
     },
     staffChat: {
       title: "Staff chat",
@@ -1279,6 +1280,8 @@ export const messages = {
       legendOwner: "Restaurant owners always have full access regardless of these settings.",
       legendStaff: "Staff members only see what their permissions allow.",
       fetchError: "Could not load staff list. Please try again.",
+      updating: "Updating staff list…",
+      loading: "Loading staff…",
     },
     waiterLayout: {
       role: "Waiter",
@@ -2833,6 +2836,7 @@ export const messages = {
       markFailed: "Mark failed",
       clearPending: "Clear pending",
       saving: "Saving...",
+      loadingList: "Loading reservations list",
       loadingReservations: "Loading reservations...",
       noReservations: "No reservation requests in this filter.",
       fallbackReservationName: "Reservation #{id}",
@@ -2869,6 +2873,7 @@ export const messages = {
       statusOverdue: "Overdue",
       noSla: "No SLA",
       unknown: "Unknown",
+      statusTransitionTo: "to",
       timelineActionStatusChange: "Status change",
       timelineActionNote: "Note added",
       timelineActionReminder: "Reminder activity",
@@ -3150,6 +3155,8 @@ export const messages = {
       nameRequired: "Name is required.",
       fetchError: "Could not load promotions.",
       retry: "Retry",
+      editAriaLabel: "Edit {name}",
+      deleteAriaLabel: "Delete {name}",
     },
     ownerFlashSales: {
       kicker: "Platform campaigns",
@@ -3362,6 +3369,8 @@ export const messages = {
       exporting: "Exporting…",
       exportError: "Export failed. Please try again.",
       refresh: "Refresh",
+      starLabel: "{n} stars",
+      starsLabel: "{n} stars",
     },
     kitchen: {
       title: "Kitchen Display",
@@ -4425,7 +4434,8 @@ export const messages = {
       qrUnavailable: "QR indisponible",
       scanHintPlain: "Scannez pour ouvrir le menu",
       statusFilter: "Filtre par statut",
-      noFilterResults: "Aucune table ne correspond a la recherche ou au filtre actuel."
+      noFilterResults: "Aucune table ne correspond a la recherche ou au filtre actuel.",
+      moreActions: "Plus d actions"
     },
     staffChat: {
       title: "Messagerie equipe",
@@ -4976,6 +4986,8 @@ export const messages = {
       legendOwner: "Les proprietaires ont toujours un acces complet, independamment de ces parametres.",
       legendStaff: "Les membres du personnel ne voient que ce que leurs permissions leur permettent.",
       fetchError: "Impossible de charger la liste du personnel. Veuillez reessayer.",
+      updating: "Mise a jour de la liste du personnel…",
+      loading: "Chargement du personnel…",
     },
     waiterLayout: {
       role: "Serveur",
@@ -6499,6 +6511,7 @@ export const messages = {
       markFailed: "Marquer en echec",
       clearPending: "Vider l attente",
       saving: "Enregistrement...",
+      loadingList: "Chargement de la liste des reservations",
       loadingReservations: "Chargement des reservations...",
       noReservations: "Aucune demande de reservation dans ce filtre.",
       fallbackReservationName: "Reservation #{id}",
@@ -6535,6 +6548,7 @@ export const messages = {
       statusOverdue: "En retard",
       noSla: "Pas de SLA",
       unknown: "Inconnu",
+      statusTransitionTo: "vers",
       timelineActionStatusChange: "Changement de statut",
       timelineActionNote: "Note ajoutee",
       timelineActionReminder: "Activite de rappel",
@@ -6864,6 +6878,8 @@ export const messages = {
       nameRequired: "Le nom est requis.",
       fetchError: "Impossible de charger les promotions.",
       retry: "Reessayer",
+      editAriaLabel: "Modifier {name}",
+      deleteAriaLabel: "Supprimer {name}",
     },
     ownerFlashSales: {
       kicker: "Campagnes plateforme",
@@ -7076,6 +7092,8 @@ export const messages = {
       exporting: "Export en cours…",
       exportError: "L'export a echoue. Veuillez reessayer.",
       refresh: "Actualiser",
+      starLabel: "{n} etoiles",
+      starsLabel: "{n} etoiles",
     },
     kitchen: {
       title: "Affichage cuisine",

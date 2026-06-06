@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="space-y-4 pb-6">
+  <div class="ui-page-shell space-y-4">
     <!-- Page header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
       <div class="flex items-start justify-between gap-3">
@@ -39,6 +39,7 @@
           maxlength="12"
           class="ui-input flex-1 py-2 text-sm"
           :placeholder="t('ownerWallet.driverCashoutCodePlaceholder')"
+          :aria-label="t('ownerWallet.driverCashoutCodePlaceholder')"
         />
         <button
           class="ui-btn-outline ui-press ui-touch-target shrink-0 px-4 text-sm"
@@ -73,17 +74,17 @@
         <p class="ui-kicker">{{ t('ownerWallet.scanTitle') }}</p>
         <button
           v-if="!scanning"
-          class="ui-chip ui-press inline-flex items-center gap-1.5 font-semibold text-[var(--color-secondary)]"
-          style="border-color:rgba(245,158,11,0.4);background:rgba(245,158,11,0.08)"
+          class="ui-chip ui-press inline-flex items-center gap-1.5 border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 font-semibold text-[var(--color-secondary)]"
           @click="startScan"
         >
           <AppIcon name="qr" class="h-3.5 w-3.5" aria-hidden="true" />{{ t('ownerWallet.scanBtn') }}
         </button>
-        <button v-else class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="stopScan">{{ t('common.cancel') }}</button>
+        <button v-else class="ui-btn-outline ui-press ui-touch-target px-3 text-xs" @click="stopScan">{{ t('common.cancel') }}</button>
       </div>
 
       <!-- Camera viewfinder -->
       <div v-if="scanning" class="overflow-hidden rounded-xl border border-slate-700 bg-black">
+        <p class="sr-only">{{ t('ownerWallet.scanTitle') }}</p>
         <video ref="videoEl" class="h-56 w-full object-cover" muted playsinline :aria-label="t('ownerWallet.scanTitle')" />
       </div>
 
@@ -94,6 +95,7 @@
           type="text"
           class="ui-input flex-1 text-sm"
           :placeholder="t('ownerWallet.scanManualPlaceholder')"
+          :aria-label="t('ownerWallet.scanManualPlaceholder')"
           @keyup.enter="resolveToken(manualToken)"
         />
         <button
@@ -134,41 +136,49 @@
         />
       </div>
 
-      <!-- Search results loading: skeleton rows -->
-      <div v-if="searching" class="space-y-1.5" aria-busy="true">
-        <div v-for="i in 3" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-700/40 bg-slate-800/30 px-4 py-3">
-          <div class="space-y-1.5">
-            <div class="h-3.5 w-28 rounded bg-slate-700/60" />
-            <div class="h-2.5 w-20 rounded bg-slate-800/50" />
+      <!-- Search results: live region so screen readers announce arrivals -->
+      <div aria-live="polite" aria-atomic="false">
+        <!-- Loading: skeleton rows -->
+        <div v-if="searching" class="space-y-1.5" aria-busy="true">
+          <div v-for="i in 3" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-700/40 bg-slate-800/30 px-4 py-3">
+            <div class="space-y-1.5">
+              <div class="h-3.5 w-28 rounded bg-slate-700/60" />
+              <div class="h-2.5 w-20 rounded bg-slate-800/50" />
+            </div>
+            <div class="h-4 w-14 rounded bg-slate-700/50" />
           </div>
-          <div class="h-4 w-14 rounded bg-slate-700/50" />
         </div>
-      </div>
-      <div v-else-if="searchResults.length" class="space-y-1.5">
-        <button
-          v-for="(c, index) in searchResults"
-          :key="c.id"
-          class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3 text-left transition-colors hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8"
-          :class="selected?.id === c.id ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10' : ''"
-          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-          @click="selectCustomer(c)"
-        >
-          <div class="min-w-0">
-            <p class="truncate text-sm font-medium text-slate-100">{{ c.name }}</p>
-            <p class="truncate text-xs text-slate-400">{{ c.phone || c.email || '' }}</p>
-          </div>
-          <span class="shrink-0 text-xs font-semibold tabular-nums text-emerald-400">
-            {{ fmtBalance(c.wallet_balance) }}
-          </span>
-        </button>
-      </div>
-      <div v-else-if="searchQuery.length >= 2 && !searching" class="ui-empty-state text-center p-5 space-y-1">
-        <p class="text-sm font-semibold text-slate-100">{{ t('ownerWallet.noResults') }}</p>
-        <p class="text-xs text-slate-400">{{ t('ownerWallet.noResultsHint') }}</p>
+        <ul v-else-if="searchResults.length" class="space-y-1.5">
+          <li
+            v-for="(c, index) in searchResults"
+            :key="c.id"
+          >
+            <button
+              class="ui-surface-lift ui-reveal flex w-full items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3 text-left transition-colors hover:border-[var(--color-secondary)]/40 hover:bg-[var(--color-secondary)]/8"
+              :class="selected?.id === c.id ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10' : ''"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+              :aria-pressed="selected?.id === c.id"
+              @click="selectCustomer(c)"
+            >
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-slate-100">{{ c.name }}</p>
+                <p class="truncate text-xs text-slate-400">{{ c.phone || c.email || '' }}</p>
+              </div>
+              <span class="shrink-0 text-xs font-semibold tabular-nums text-emerald-400">
+                {{ fmtBalance(c.wallet_balance) }}
+              </span>
+            </button>
+          </li>
+        </ul>
+        <div v-else-if="searchQuery.length >= 2 && !searching" class="ui-empty-state text-center p-5 space-y-1">
+          <p class="text-sm font-semibold text-slate-100">{{ t('ownerWallet.noResults') }}</p>
+          <p class="text-xs text-slate-400">{{ t('ownerWallet.noResultsHint') }}</p>
+        </div>
       </div>
     </section>
 
     <!-- Top-up form (shown when a customer is selected) -->
+    <!-- TODO: requires logic change — after selectCustomer() resolves, focus the first interactive element inside this section for keyboard users -->
     <Transition
       enter-active-class="transition-all duration-200"
       enter-from-class="opacity-0 translate-y-2"

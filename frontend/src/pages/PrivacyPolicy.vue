@@ -9,19 +9,10 @@
           </h1>
           <p class="mt-2 max-w-2xl text-sm text-slate-400">{{ t("privacyPolicy.lastUpdated") }}</p>
         </div>
-        <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
-          <article class="ui-admin-subcard">
-            <p class="ui-stat-label">01</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("privacyPolicy.kicker") }}</p>
-          </article>
-          <article class="ui-admin-subcard">
-            <p class="ui-stat-label">02</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("common.contact") }}</p>
-          </article>
-          <article class="ui-admin-subcard">
-            <p class="ui-stat-label">03</p>
-            <p class="mt-2 text-sm font-semibold text-white">{{ t("common.privacy") }}</p>
-          </article>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="ui-chip">{{ t("privacyPolicy.kicker") }}</span>
+          <span class="ui-chip">{{ t("common.contact") }}</span>
+          <span class="ui-chip">{{ t("common.privacy") }}</span>
         </div>
       </div>
     </header>
@@ -30,23 +21,22 @@
         <article
           v-for="(section, index) in sections"
           :key="section"
-          class="ui-command-deck ui-reveal p-5 text-sm leading-8 text-slate-300 md:text-base"
+          class="ui-panel ui-reveal p-5 text-sm leading-8 text-slate-300 md:text-base"
           :style="{ '--ui-delay': `${index * 60}ms` }"
         >
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <span class="ui-kicker">{{ String(index + 1).padStart(2, "0") }}</span>
-            <span class="ui-chip">{{ t("common.privacy") }}</span>
+          <div class="mb-3 flex items-center gap-3">
+            <span class="ui-kicker" aria-hidden="true">{{ String(index + 1).padStart(2, "0") }}</span>
           </div>
           <p>{{ section }}</p>
         </article>
       </div>
       <aside
-        class="ui-workspace-stage ui-reveal h-fit space-y-4 p-5 lg:sticky lg:top-24"
+        class="ui-panel-soft ui-reveal h-fit space-y-4 p-5 lg:sticky lg:top-24"
         :style="{ '--ui-delay': '180ms' }"
       >
         <div>
           <p class="ui-kicker">{{ t("common.contact") }}</p>
-          <p class="mt-2 text-xl font-semibold text-white">{{ t("privacyPolicy.title") }}</p>
+          <h2 class="mt-2 text-xl font-semibold text-white">{{ t("privacyPolicy.title") }}</h2>
           <p class="mt-2 text-sm text-slate-400">{{ supportEmail }}</p>
         </div>
         <RouterLink to="/contact" class="ui-btn-primary w-full justify-center">

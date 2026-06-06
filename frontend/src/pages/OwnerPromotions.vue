@@ -63,12 +63,13 @@
       <article
         v-for="(promo, index) in promotions"
         :key="promo.id"
+        :aria-labelledby="`promo-name-${promo.id}`"
         class="ui-panel ui-surface-lift ui-reveal p-3 flex items-start justify-between gap-3"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
         <div class="flex-1 min-w-0 space-y-1">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-sm font-semibold text-white truncate">{{ promo.name }}</span>
+            <span :id="`promo-name-${promo.id}`" class="text-sm font-semibold text-white truncate">{{ promo.name }}</span>
             <span
               class="ui-status-pill shrink-0"
               :class="promo.is_active
@@ -98,10 +99,12 @@
         <div class="flex gap-2 shrink-0">
           <button
             class="ui-btn-outline ui-press px-2.5 py-1 text-xs"
+            :aria-label="t('ownerPromotions.editAriaLabel', { name: promo.name })"
             @click="openEdit(promo)"
           >{{ t('common.edit') }}</button>
           <button
             class="ui-press rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:border-red-500/50 hover:text-red-300 transition-colors"
+            :aria-label="t('ownerPromotions.deleteAriaLabel', { name: promo.name })"
             @click="deletePromo(promo)"
           >{{ t('common.delete') }}</button>
         </div>
@@ -129,33 +132,33 @@
 
           <!-- Name -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.nameLabel') }}</label>
+            <label for="promo-name" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.nameLabel') }}</label>
             <input
+              id="promo-name"
               v-model="form.name"
               type="text"
               :placeholder="t('ownerPromotions.namePlaceholder')"
-              :aria-label="t('ownerPromotions.nameLabel')"
               class="ui-input w-full"
             />
           </div>
 
           <!-- Description -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
-            <input v-model="form.description" type="text" class="ui-input w-full" :aria-label="t('ownerPromotions.descriptionLabel')" />
+            <label for="promo-description" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
+            <input id="promo-description" v-model="form.description" type="text" class="ui-input w-full" />
           </div>
 
           <!-- Promo code -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.codeLabel') }}</label>
+            <label for="promo-code" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.codeLabel') }}</label>
             <input
+              id="promo-code"
               v-model="form.code"
               type="text"
               maxlength="20"
               autocomplete="off"
               class="ui-input w-full uppercase"
               :placeholder="t('ownerPromotions.codePlaceholder')"
-              :aria-label="t('ownerPromotions.codeLabel')"
               @input="form.code = form.code.toUpperCase()"
             />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.codeHint') }}</p>
@@ -163,8 +166,8 @@
 
           <!-- Type -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.typeLabel') }}</label>
-            <div class="flex gap-2 flex-wrap">
+            <p id="promo-type-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.typeLabel') }}</p>
+            <div role="group" aria-labelledby="promo-type-label" class="flex gap-2 flex-wrap">
               <button
                 v-for="opt in promoTypes"
                 :key="opt.value"
@@ -181,18 +184,18 @@
 
           <!-- Discount value -->
           <div v-if="form.promo_type !== 'free_delivery'" class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">
+            <label for="promo-discount-value" class="block text-xs font-semibold text-slate-300">
               {{ t('ownerPromotions.discountValueLabel') }}
               <span class="text-slate-500 font-normal ms-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
             </label>
-            <input v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" :aria-label="t('ownerPromotions.discountValueLabel')" />
+            <input id="promo-discount-value" v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.discountValueHint') }}</p>
           </div>
 
           <!-- Min order -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
-            <input v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" :aria-label="t('ownerPromotions.minOrderLabel')" />
+            <label for="promo-min-order" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
+            <input id="promo-min-order" v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" />
           </div>
 
           <!-- Live preview of what the customer sees -->
@@ -203,8 +206,8 @@
 
           <!-- Days checkboxes -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</label>
-            <div class="flex flex-wrap gap-1.5">
+            <p id="promo-days-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</p>
+            <div role="group" aria-labelledby="promo-days-label" class="flex flex-wrap gap-1.5">
               <button
                 v-for="d in DAYS"
                 :key="d.key"
@@ -222,28 +225,28 @@
 
           <!-- Time window -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</label>
-            <div class="flex items-center gap-2">
+            <p id="promo-time-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</p>
+            <div role="group" aria-labelledby="promo-time-label" class="flex items-center gap-2">
               <input v-model="form.time_start" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeStart')" />
-              <span class="text-slate-500">—</span>
+              <span class="text-slate-500" aria-hidden="true">—</span>
               <input v-model="form.time_end" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeEnd')" />
             </div>
           </div>
 
           <!-- Date range -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</label>
-            <div class="flex items-center gap-2">
+            <p id="promo-daterange-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</p>
+            <div role="group" aria-labelledby="promo-daterange-label" class="flex items-center gap-2">
               <input v-model="form.active_from" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateFrom')" />
-              <span class="text-slate-500">—</span>
+              <span class="text-slate-500" aria-hidden="true">—</span>
               <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" />
             </div>
           </div>
 
           <!-- Max uses -->
           <div class="space-y-1.5">
-            <label class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
-            <input v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" :aria-label="t('ownerPromotions.maxUsesLabel')" />
+            <label for="promo-max-uses" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
+            <input id="promo-max-uses" v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" />
             <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.maxUsesHint') }}</p>
           </div>
 
@@ -253,8 +256,6 @@
               v-model="form.is_active"
               type="checkbox"
               class="rounded"
-              role="switch"
-              :aria-checked="form.is_active"
             />
             <span class="text-sm text-slate-300">{{ t('ownerPromotions.isActiveLabel') }}</span>
           </label>

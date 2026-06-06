@@ -4,12 +4,13 @@
     <div class="flex items-start justify-between gap-3">
       <div>
         <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
-        <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t("ownerStaff.title") }}</h2>
+        <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t("ownerStaff.title") }}</h1>
         <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
       </div>
       <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
       </svg>
+      <span v-if="updatingStaff" class="sr-only">{{ t("ownerStaff.updating") }}</span>
     </div>
 
     <!-- Create form -->
@@ -21,6 +22,7 @@
           type="text"
           autocomplete="off"
           :placeholder="t('ownerStaff.namePlaceholder')"
+          :aria-label="t('ownerStaff.namePlaceholder')"
           class="ui-input"
           :disabled="creating"
           aria-required="true"
@@ -30,6 +32,7 @@
           v-model="form.email"
           type="email"
           :placeholder="t('ownerStaff.emailPlaceholder')"
+          :aria-label="t('ownerStaff.emailPlaceholder')"
           autocomplete="email"
           spellcheck="false"
           class="ui-input"
@@ -54,7 +57,7 @@
     <!-- Created credentials (shown once) -->
     <div
       v-if="newCredentials"
-      role="status"
+      role="alert"
       class="rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-4 space-y-3"
     >
       <p class="text-sm font-semibold text-emerald-300">{{ t("ownerStaff.credentialsTitle") }}</p>
@@ -105,7 +108,7 @@
         </div>
       </div>
 
-      <div v-if="loadingStaff" class="space-y-2" aria-busy="true">
+      <div v-if="loadingStaff" class="space-y-2" aria-busy="true" role="status" :aria-label="t('ownerStaff.loading')">
         <div v-for="i in 3" :key="i" class="ui-skeleton h-16" />
       </div>
 
@@ -152,6 +155,7 @@
           <button
             class="shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors ui-press ui-touch-target"
             :aria-expanded="expandedIds.has(member.id)"
+            :aria-controls="'staff-panel-' + member.id"
             @click="toggleExpanded(member.id)"
           >
             {{ t("ownerStaff.manage") }}
@@ -170,6 +174,7 @@
         <Transition name="staff-expand">
           <div
             v-if="expandedIds.has(member.id)"
+            :id="'staff-panel-' + member.id"
             class="border-t border-slate-700/40 bg-slate-900/40 px-4 py-4 space-y-4"
           >
             <!-- Work stats -->
@@ -505,23 +510,39 @@ const copyCredentials = async () => {
 .staff-toggle {
   position: relative;
   width: 2.5rem;
-  height: 1.375rem;
-  border-radius: 9999px;
+  /* 44 px interactive hit area (WCAG 2.5.5) */
+  min-height: 2.75rem;
   border: none;
+  background: transparent;
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.2s;
+  transition: opacity 0.2s;
   flex-shrink: 0;
 }
 .staff-toggle:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.staff-toggle-on  { background: #10b981; } /* emerald — matches the on-state used across the app */
-.staff-toggle-off { background: #334155; }
+/* Visual track rendered as a pseudo-element, centred in the 44 px button */
+.staff-toggle::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 1.375rem;
+  border-radius: 9999px;
+  transition: background-color 0.2s;
+}
+.staff-toggle-on::before  { background: #10b981; } /* emerald — matches the on-state used across the app */
+.staff-toggle-off::before { background: #334155; }
 
 .staff-toggle-thumb {
   position: absolute;
-  top: 0.1875rem;
+  /* Vertically centred relative to the 44 px button, then offset by the same
+     margin as before (0.1875 rem from the track edge = track-top offset).
+     track-top = 50% - 0.6875rem; thumb = track-top + 0.1875rem */
+  top: calc(50% - 0.5rem); /* centres 1rem thumb in track */
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
