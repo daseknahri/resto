@@ -200,7 +200,8 @@ const arabicMessages = {
     "failed": "فشل تسجيل الدخول",
     "identifierRequired": "اسم المستخدم أو البريد مطلوب",
     "passwordRequired": "كلمة المرور مطلوبة",
-    "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة"
+    "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة",
+    "alwaysOn": "24/7"
   },
   "forgotPassword": {
     "kicker": "استعادة الحساب",

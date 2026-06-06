@@ -9,12 +9,12 @@
         </div>
 
         <div class="relative grid gap-3">
-          <article class="ui-orbit-card">
+          <article class="ui-orbit-card ui-reveal" :style="{ '--ui-delay': '0ms' }">
             <p class="ui-kicker">{{ t("common.workspace") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.identifier") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("signIn.firstTime") }}</p>
           </article>
-          <article class="ui-orbit-card">
+          <article class="ui-orbit-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
             <p class="ui-kicker">{{ t("common.reserve") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.password") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("signIn.forgotPassword") }}</p>
@@ -22,22 +22,22 @@
         </div>
 
         <div class="grid gap-3 sm:grid-cols-3">
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.workspace") }}</p>
+          <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '28ms' }">
+            <p class="ui-kicker">{{ t("common.workspace") }}</p>
             <p class="mt-1 text-xl font-semibold text-white">{{ t("common.owner") }}</p>
           </article>
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.available") }}</p>
-            <p class="mt-1 text-xl font-semibold text-white">24/7</p>
+          <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
+            <p class="ui-kicker">{{ t("common.available") }}</p>
+            <p class="mt-1 text-xl tabular-nums font-semibold text-white">{{ t("signIn.alwaysOn") }}</p>
           </article>
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.refresh") }}</p>
+          <article class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '84ms' }">
+            <p class="ui-kicker">{{ t("common.refresh") }}</p>
             <p class="mt-1 text-xl font-semibold text-white">{{ t("signIn.kicker") }}</p>
           </article>
         </div>
       </section>
 
-      <div class="ui-auth-card space-y-6">
+      <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
         <div class="ui-hero-ribbon space-y-3 text-center">
           <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
           <h2 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h2>
@@ -55,7 +55,7 @@
         </div>
 
         <form class="space-y-4" novalidate @submit.prevent="submit">
-          <label class="space-y-1 text-sm text-slate-200">
+          <label class="block space-y-1 text-sm text-slate-200">
             {{ t("signIn.identifier") }}
             <input
               v-model="identifier"
@@ -68,9 +68,9 @@
               aria-required="true"
               @input="fieldErrors.identifier = ''"
             />
-            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
+            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.identifier }}</p>
           </label>
-          <label class="space-y-1 text-sm text-slate-200">
+          <label class="block space-y-1 text-sm text-slate-200">
             {{ t("signIn.password") }}
             <input
               v-model="password"
@@ -83,12 +83,12 @@
               aria-required="true"
               @input="fieldErrors.password = ''"
             />
-            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
+            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.password }}</p>
           </label>
           <button
             type="submit"
             :disabled="session.loading"
-            class="ui-btn-primary w-full justify-center disabled:opacity-60"
+            class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
           >
             {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
           </button>
@@ -102,11 +102,11 @@
           <p class="font-medium text-slate-100">{{ t("signIn.firstTime") }}</p>
           <p>
             {{ t("signIn.firstTime") }}
-            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
+            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline">{{ t("signIn.activationLink") }}</RouterLink>
           </p>
           <p>
             {{ t("signIn.forgotPassword") }}
-            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.resetHere") }}</RouterLink>
+            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline">{{ t("signIn.resetHere") }}</RouterLink>
           </p>
         </div>
       </div>

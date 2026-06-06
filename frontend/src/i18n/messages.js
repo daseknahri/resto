@@ -223,7 +223,8 @@ export const messages = {
       failed: "Sign in failed",
       identifierRequired: "Username or email is required",
       passwordRequired: "Password is required",
-      sessionExpired: "Your session expired — please sign in again to continue."
+      sessionExpired: "Your session expired — please sign in again to continue.",
+      alwaysOn: "24/7"
     },
     unauthorized: {
       kicker: "Access control",
@@ -3814,7 +3815,8 @@ export const messages = {
       failed: "Connexion impossible",
       identifierRequired: "Nom d'utilisateur ou e-mail requis",
       passwordRequired: "Mot de passe requis",
-      sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer."
+      sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer.",
+      alwaysOn: "24/7"
     },
     unauthorized: {
       kicker: "Controle d acces",
