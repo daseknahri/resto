@@ -1,8 +1,8 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 sm:space-y-5">
 
     <!-- ── Current plan ──────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-4">
+    <section class="ui-panel ui-reveal space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.currentPlanSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.yourPlan') }}</h3>
@@ -11,7 +11,7 @@
       <div class="rounded-2xl border border-[var(--color-secondary)]/30 bg-gradient-to-br from-[var(--color-secondary)]/8 to-transparent p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="space-y-3">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
               <span class="rounded-full border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--color-secondary)]">
                 {{ currentTierName }}
               </span>
@@ -19,7 +19,7 @@
                 {{ t('ownerBilling.active') }}
               </span>
             </div>
-            <ul class="grid grid-cols-1 gap-y-1.5 gap-x-6 sm:grid-cols-2">
+            <ul class="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
               <li
                 v-for="f in currentPlanFeatures"
                 :key="f.label"
@@ -40,7 +40,7 @@
 
       <!-- Usage limits (only shown when plan has limits set) -->
       <div v-if="usageLimits.length" class="space-y-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('ownerBilling.usageTitle') }}</p>
+        <p class="ui-section-kicker">{{ t('ownerBilling.usageTitle') }}</p>
         <div class="space-y-3">
           <div v-for="u in usageLimits" :key="u.key" class="space-y-1.5">
             <div class="flex items-center justify-between text-sm">
@@ -63,7 +63,7 @@
                 :style="{ width: Math.min(u.pct, 100) + '%' }"
               />
             </div>
-            <p v-if="u.pct >= 100" class="text-xs text-red-400">
+            <p v-if="u.pct >= 100" class="text-xs text-red-400" role="alert">
               {{ t('ownerBilling.limitReached', { label: u.label }) }}
             </p>
           </div>
@@ -73,6 +73,7 @@
       <div
         v-if="hasPendingRequest"
         class="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3"
+        role="status"
       >
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor">
           <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
@@ -82,13 +83,13 @@
     </section>
 
     <!-- ── Available upgrades ─────────────────────────────────────────── -->
-    <section v-if="loading" class="ui-panel p-4">
+    <section v-if="loading" class="ui-panel p-4 ui-reveal" style="--ui-delay: 56ms">
       <div class="mb-3 space-y-1">
         <div class="h-2.5 w-20 animate-pulse rounded bg-slate-700/50" />
         <div class="h-5 w-40 animate-pulse rounded bg-slate-700/60" />
       </div>
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <div v-for="i in 2" :key="i" class="animate-pulse rounded-2xl border border-slate-700/40 bg-slate-900/40 p-4 space-y-3">
+        <div v-for="i in 2" :key="i" class="animate-pulse space-y-3 rounded-2xl border border-slate-700/40 bg-slate-900/40 p-4">
           <div class="h-5 w-24 rounded-full bg-slate-700/60" />
           <div class="space-y-2">
             <div v-for="j in 4" :key="j" class="flex items-center gap-2">
@@ -101,11 +102,11 @@
       </div>
     </section>
 
-    <section v-else-if="targets.length" class="ui-panel space-y-4 p-4">
+    <section v-else-if="targets.length" class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 56ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.upgradeSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.upgradeTitle') }}</h3>
-        <p class="text-sm text-slate-400">{{ t('ownerBilling.upgradeHint') }}</p>
+        <p class="ui-subtle">{{ t('ownerBilling.upgradeHint') }}</p>
       </div>
 
       <div
@@ -116,18 +117,20 @@
           v-for="target in targets"
           :key="target.code"
           type="button"
-          class="relative rounded-2xl border p-4 text-left transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:cursor-not-allowed disabled:opacity-40"
+          class="relative rounded-2xl border p-4 text-start transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 disabled:cursor-not-allowed disabled:opacity-40 ui-press"
           :class="selectedCode === target.code
             ? 'border-[var(--color-secondary)] ring-2 ring-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/6'
             : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-900/80'"
           :disabled="!target.can_request || hasPendingRequest"
           :aria-pressed="selectedCode === target.code"
+          :aria-label="target.name"
           @click="selectedCode === target.code ? (selectedCode = '') : (selectedCode = target.code)"
         >
           <!-- Selected badge -->
           <div
             v-if="selectedCode === target.code"
-            class="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            class="absolute end-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-secondary)] text-slate-950"
+            aria-hidden="true"
           >
             <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
               <path d="M2 6l3 3 5-5"/>
@@ -137,12 +140,12 @@
           <!-- Coming soon badge -->
           <span
             v-if="!target.is_active"
-            class="absolute left-3 top-3 rounded-full border border-sky-700/50 bg-sky-900/30 px-2 py-0.5 text-[10px] font-semibold text-sky-400"
+            class="absolute start-3 top-3 rounded-full border border-sky-700/50 bg-sky-900/30 px-2 py-0.5 text-[10px] font-semibold text-sky-400"
           >
             {{ t('common.soon') }}
           </span>
 
-          <div class="space-y-4 pr-6">
+          <div class="space-y-4 pe-6">
             <div>
               <span class="rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-slate-200">
                 {{ target.name }}
@@ -178,14 +181,14 @@
               <p class="text-sm font-semibold text-white">
                 {{ t('ownerBilling.requestFormTitle', { plan: selectedPlanName }) }}
               </p>
-              <p class="text-xs text-slate-500">{{ t('ownerBilling.requestFormHint') }}</p>
+              <p class="ui-subtle text-xs">{{ t('ownerBilling.requestFormHint') }}</p>
             </div>
             <textarea
               v-model="note"
               rows="3"
               :aria-label="t('ownerBilling.notePlaceholder')"
               :placeholder="t('ownerBilling.notePlaceholder')"
-              class="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+              class="ui-textarea w-full resize-none text-sm"
             />
             <div v-if="submitError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
               <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
@@ -193,13 +196,14 @@
             </div>
             <div class="flex flex-wrap gap-3">
               <button
+                type="button"
                 class="ui-btn-primary px-6 py-2 text-sm disabled:opacity-60"
                 :disabled="submitting"
                 @click="submitRequest"
               >
                 {{ submitting ? t('ownerBilling.sending') : t('ownerBilling.submitRequest') }}
               </button>
-              <button class="ui-btn-outline px-4 py-2 text-sm" @click="selectedCode = ''">
+              <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="selectedCode = ''">
                 {{ t('common.cancel') }}
               </button>
             </div>
@@ -208,19 +212,22 @@
       </Transition>
     </section>
 
-    <section v-else-if="!loading" class="ui-panel p-4">
-      <p class="py-4 text-center text-sm text-slate-400">{{ t('ownerBilling.highestTier') }}</p>
+    <section v-else-if="!loading" class="ui-panel ui-reveal p-4" style="--ui-delay: 56ms">
+      <div class="ui-empty-state py-6 text-center">
+        <p class="text-sm font-semibold text-slate-100">{{ t('ownerBilling.highestTier') }}</p>
+      </div>
     </section>
 
     <!-- ── Request history ────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-4">
+    <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 84ms">
       <div class="flex items-center justify-between gap-3">
         <div class="space-y-0.5">
           <p class="ui-section-kicker">{{ t('ownerBilling.historySection') }}</p>
           <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.historyTitle') }}</h3>
         </div>
         <button
-          class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 disabled:opacity-50 transition-colors"
+          type="button"
+          class="ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
           :disabled="loading || updating"
           :aria-label="t('common.refresh')"
           @click="fetchAll(true)"
@@ -245,26 +252,27 @@
 
       <div
         v-else-if="!requests.length"
-        class="rounded-2xl border border-dashed border-slate-700 py-10 text-center"
+        class="ui-empty-state py-10 text-center"
       >
-        <svg aria-hidden="true" viewBox="0 0 40 40" class="mx-auto h-10 w-10 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.25">
+        <svg aria-hidden="true" viewBox="0 0 40 40" class="mx-auto h-10 w-10 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.25">
           <rect x="8" y="6" width="24" height="28" rx="3"/>
           <path d="M14 14h12M14 19h12M14 24h8" stroke-linecap="round"/>
         </svg>
-        <p class="mt-3 text-sm text-slate-500">{{ t('ownerBilling.noRequests') }}</p>
+        <p class="mt-3 text-sm text-slate-400">{{ t('ownerBilling.noRequests') }}</p>
       </div>
 
       <ul v-else class="space-y-2">
         <li
-          v-for="req in requests"
+          v-for="(req, index) in requests"
           :key="req.id"
-          class="rounded-xl border border-slate-800 bg-slate-900/50 p-3"
+          class="ui-reveal rounded-xl border border-slate-800 bg-slate-900/50 p-3"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="space-y-1.5">
+            <div class="min-w-0 flex-1 space-y-1.5">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-sm font-medium text-slate-200">{{ req.current_plan_name }}</span>
-                <svg aria-hidden="true" viewBox="0 0 20 12" class="h-3 w-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <span class="truncate text-sm font-medium text-slate-200">{{ req.current_plan_name }}</span>
+                <svg aria-hidden="true" viewBox="0 0 20 12" class="h-3 w-4 shrink-0 text-slate-500 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M1 6h18M13 1l5 5-5 5"/>
                 </svg>
                 <span class="text-sm font-semibold text-[var(--color-secondary)]">{{ req.target_plan_name }}</span>
@@ -294,6 +302,7 @@
           <div v-if="req.status === 'approved'" class="mt-3">
             <button
               v-if="req.invoice_amount"
+              type="button"
               class="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-60"
               :disabled="downloadingInvoice === req.id"
               @click="downloadInvoice(req.id)"
@@ -307,22 +316,23 @@
               </svg>
               {{ downloadingInvoice === req.id ? t('ownerBilling.invoiceDownloading') : t('ownerBilling.invoiceDownload') }}
             </button>
-            <p v-else class="text-[11px] text-slate-500 italic">{{ t('ownerBilling.invoiceNotReady') }}</p>
+            <p v-else class="text-[11px] italic text-slate-500">{{ t('ownerBilling.invoiceNotReady') }}</p>
           </div>
         </li>
       </ul>
     </section>
 
     <!-- ── Data & privacy ──────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-4">
+    <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 112ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.dataExportSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.dataExportTitle') }}</h3>
-        <p class="text-sm text-slate-400">{{ t('ownerBilling.dataExportHint') }}</p>
+        <p class="ui-subtle">{{ t('ownerBilling.dataExportHint') }}</p>
       </div>
 
       <button
-        class="ui-btn-outline gap-2 px-4 py-2 text-sm disabled:opacity-60"
+        type="button"
+        class="ui-btn-outline inline-flex gap-2 px-4 py-2 text-sm disabled:opacity-60"
         :disabled="exporting"
         @click="downloadDataExport"
       >
@@ -338,27 +348,28 @@
     </section>
 
     <!-- ── Commission statement ─────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-4">
+    <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 140ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.commissionSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.commissionTitle') }}</h3>
-        <p class="text-sm text-slate-400">{{ t('ownerBilling.commissionHint') }}</p>
+        <p class="ui-subtle">{{ t('ownerBilling.commissionHint') }}</p>
       </div>
       <div class="flex flex-wrap items-end gap-3">
         <div class="space-y-1">
-          <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionYear') }}</label>
-          <select v-model="commissionYear" :aria-label="t('ownerBilling.commissionYear')" class="ui-input text-sm">
+          <label for="commission-year" class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionYear') }}</label>
+          <select id="commission-year" v-model="commissionYear" class="ui-input text-sm">
             <option v-for="y in commissionYears" :key="y" :value="y">{{ y }}</option>
           </select>
         </div>
         <div class="space-y-1">
-          <label class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionMonth') }}</label>
-          <select v-model="commissionMonth" :aria-label="t('ownerBilling.commissionMonth')" class="ui-input text-sm">
+          <label for="commission-month" class="block text-xs font-medium text-slate-400">{{ t('ownerBilling.commissionMonth') }}</label>
+          <select id="commission-month" v-model="commissionMonth" class="ui-input text-sm">
             <option v-for="m in 12" :key="m" :value="m">{{ commissionMonthName(m) }}</option>
           </select>
         </div>
         <button
-          class="ui-btn-outline gap-2 px-4 py-2 text-sm disabled:opacity-60"
+          type="button"
+          class="ui-btn-outline inline-flex gap-2 px-4 py-2 text-sm disabled:opacity-60"
           :disabled="commissionDownloading"
           @click="downloadCommissionPdf"
         >
@@ -375,16 +386,19 @@
     </section>
 
     <!-- ── Close account ────────────────────────────────────────────────── -->
-    <section class="ui-panel space-y-4 p-4">
+    <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 168ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.deletionSection') }}</p>
         <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.deletionTitle') }}</h3>
-        <p class="text-sm text-slate-400">{{ t('ownerBilling.deletionHint') }}</p>
+        <p class="ui-subtle">{{ t('ownerBilling.deletionHint') }}</p>
       </div>
 
       <!-- Already requested -->
-      <div v-if="deletionAlreadyRequested" class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-        {{ t('ownerBilling.deletionAlreadyRequested') }}
+      <div v-if="deletionAlreadyRequested" class="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200" role="status">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ t('ownerBilling.deletionAlreadyRequested') }}</span>
       </div>
 
       <!-- Request form -->
@@ -396,20 +410,22 @@
               v-model="deletionReason"
               rows="2"
               maxlength="500"
-              class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-red-400 focus:outline-none"
+              class="ui-textarea w-full text-sm focus:border-red-400"
               :aria-label="t('ownerBilling.deletionReasonPlaceholder')"
               :placeholder="t('ownerBilling.deletionReasonPlaceholder')"
             ></textarea>
             <div class="flex flex-wrap gap-2">
               <button
-                class="rounded-full border border-red-500/50 bg-red-500/15 px-4 py-2 text-sm text-red-200 disabled:opacity-60 hover:bg-red-500/25 transition-colors"
+                type="button"
+                class="rounded-full border border-red-500/50 bg-red-500/15 px-4 py-2 text-sm text-red-200 transition-colors hover:bg-red-500/25 disabled:opacity-60"
                 :disabled="requestingDeletion"
                 @click="submitDeletionRequest"
               >
                 {{ requestingDeletion ? t('ownerBilling.deletionRequesting') : t('ownerBilling.deletionButton') }}
               </button>
               <button
-                class="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                type="button"
+                class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-60"
                 :disabled="requestingDeletion"
                 @click="showDeletionConfirm = false"
               >
@@ -421,7 +437,8 @@
 
         <button
           v-if="!showDeletionConfirm"
-          class="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors"
+          type="button"
+          class="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-300 transition-colors hover:border-red-400/70 hover:text-red-200"
           @click="showDeletionConfirm = true"
         >
           {{ t('ownerBilling.deletionButton') }}
@@ -766,5 +783,16 @@ onMounted(() => fetchAll())
   opacity: 0;
   transform: translateY(-6px);
   max-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billing-form-enter-active,
+  .billing-form-leave-active {
+    transition: opacity 0.1s ease, max-height 0.1s ease;
+  }
+  .billing-form-enter-from,
+  .billing-form-leave-to {
+    transform: none;
+  }
 }
 </style>

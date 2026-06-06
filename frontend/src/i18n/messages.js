@@ -457,6 +457,7 @@ export const messages = {
       ratingNotePlaceholder: "Optional comment…",
       submitRating: "Submit rating",
       ratingThanks: "Thanks for your feedback!",
+      statusStepperLabel: "Order progress steps",
     },
     contactPage: {
       kicker: "Support",
@@ -1770,6 +1771,8 @@ export const messages = {
       temporarilyUnavailable: "Temporarily unavailable",
       switchMenu: "Switch menu",
       backToMenus: "All menus",
+      emptyTitle: "No menus available",
+      emptyBody: "Check back soon — menus will appear here once published.",
     },
     customerLeadPage: {
       openNow: "Open now",
@@ -4033,6 +4036,7 @@ export const messages = {
       ratingNotePlaceholder: "Commentaire facultatif…",
       submitRating: "Envoyer l'evaluation",
       ratingThanks: "Merci pour votre retour !",
+      statusStepperLabel: "Etapes de la commande",
     },
     contactPage: {
       kicker: "Support",
@@ -5315,6 +5319,8 @@ export const messages = {
       temporarilyUnavailable: "Temporairement indisponible",
       switchMenu: "Changer de menu",
       backToMenus: "Tous les menus",
+      emptyTitle: "Aucun menu disponible",
+      emptyBody: "Revenez bientot — les menus apparaitront ici une fois publies.",
     },
     customerLeadPage: {
       openNow: "Ouvert",

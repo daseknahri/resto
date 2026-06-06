@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4 px-3 py-4 pb-24 sm:px-4">
+  <div class="mx-auto max-w-2xl space-y-4 px-3 py-4 pb-28 sm:px-4 ui-safe-bottom">
     <!-- Screen-reader live region: announces status changes as they arrive -->
     <div
       v-if="orderData"
@@ -31,7 +31,8 @@
     </div>
 
     <!-- Not found -->
-    <div v-else-if="notFound" class="ui-panel p-8 text-center space-y-3">
+    <div v-else-if="notFound" class="ui-empty-state p-8 text-center space-y-3">
+      <AppIcon name="info" class="mx-auto h-8 w-8 text-slate-500" aria-hidden="true" />
       <p class="text-base font-semibold text-slate-100">{{ t("orderStatus.notFound") }}</p>
       <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-4 py-2 text-sm">
         {{ t("orderStatus.backToMenu") }}
@@ -44,7 +45,7 @@
         v-if="orderData.delivery_code"
         class="ui-reveal rounded-2xl border border-indigo-400/50 bg-indigo-500/12 p-4 text-center"
       >
-        <p class="text-xs font-semibold uppercase tracking-wider text-indigo-300">{{ t("orderStatus.deliveryCodeTitle") }}</p>
+        <p class="ui-kicker text-indigo-300">{{ t("orderStatus.deliveryCodeTitle") }}</p>
         <p class="mt-1 text-3xl font-bold tracking-[0.3em] text-white">{{ orderData.delivery_code }}</p>
         <p class="mt-1 text-xs text-indigo-100/75">{{ t("orderStatus.deliveryCodeHint") }}</p>
       </div>
@@ -81,10 +82,11 @@
       <div
         v-if="orderData.status === 'cancelled'"
         class="ui-reveal rounded-2xl border border-red-400/60 bg-red-500/15 p-4 text-center shadow-lg shadow-red-900/20 sm:p-5"
+        role="alert"
       >
         <p class="text-2xl font-bold text-red-200">{{ t("orderStatus.cancelledTitle") }}</p>
         <p class="mt-1 text-sm text-red-100/80">{{ t("orderStatus.cancelledBody") }}</p>
-        <RouterLink :to="{ name: 'menu' }" class="mt-3 inline-flex rounded-full border border-red-400/50 px-4 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/10">
+        <RouterLink :to="{ name: 'menu' }" class="mt-3 ui-btn-outline inline-flex px-4 py-1.5 text-xs">
           {{ t("orderStatus.backToMenu") }}
         </RouterLink>
       </div>
@@ -104,7 +106,7 @@
               <span v-if="orderData.fulfillment_type" class="ui-chip">{{ fulfillmentLabel(orderData) }}</span>
             </div>
           </div>
-          <div class="text-right space-y-1">
+          <div class="text-end space-y-1 shrink-0">
             <p class="text-2xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(orderData.total, orderData.currency) }}</p>
             <p class="text-[10px] text-slate-500">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
           </div>
@@ -116,7 +118,7 @@
         v-if="orderData.fulfillment_type === 'table'"
         class="ui-reveal rounded-2xl border border-emerald-500/40 bg-emerald-500/12 p-5 text-center"
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
+        <p class="ui-kicker text-emerald-400">
           {{ t("orderStatus.tableOrderLabel") }}
         </p>
         <p class="mt-1 text-5xl font-bold text-white tracking-tight">
@@ -135,7 +137,7 @@
         v-if="orderData.fulfillment_type === 'delivery' && orderData.delivery_address"
         class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+        <p class="ui-kicker">
           {{ t("orderStatus.deliveryAddress") }}
         </p>
         <p class="mt-1.5 text-sm text-slate-200">{{ orderData.delivery_address }}</p>
@@ -158,9 +160,12 @@
       <!-- Self-delivery (restaurant delivers itself — no platform driver to track) -->
       <div
         v-else-if="orderData.fulfillment_type === 'delivery' && orderData.status === 'out_for_delivery'"
-        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 text-sm text-slate-300"
+        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
       >
-        🛵 {{ t("orderStatus.selfDelivery") }}
+        <div class="flex items-center gap-2.5 text-sm text-slate-300">
+          <AppIcon name="location" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+          {{ t("orderStatus.selfDelivery") }}
+        </div>
       </div>
 
       <!-- Status timeline -->
@@ -175,7 +180,8 @@
             <div class="relative flex items-center justify-center">
               <div
                 v-if="idx === currentStepIndex && currentStepIndex >= 0 && orderData.status !== 'completed'"
-                class="absolute -inset-1.5 animate-ping rounded-full border border-[var(--color-secondary)]/35"
+                class="absolute -inset-1.5 motion-safe:animate-ping rounded-full border border-[var(--color-secondary)]/35"
+                aria-hidden="true"
               />
               <div
                 class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-500"
@@ -216,7 +222,7 @@
         <p v-if="orderData.estimated_ready_minutes" class="text-sm font-semibold text-emerald-200">
           <template v-if="countdownSeconds !== null && countdownSeconds > 0">
             ⏱ {{ t("orderStatus.estimatedReady", { minutes: Math.ceil(countdownSeconds / 60) }) }}
-            <span class="ml-1 font-mono text-xs font-normal text-emerald-300/70 tabular-nums">
+            <span class="ms-1 font-mono text-xs font-normal text-emerald-300/70 tabular-nums">
               ({{ Math.floor(countdownSeconds / 60) }}:{{ String(countdownSeconds % 60).padStart(2, "0") }})
             </span>
           </template>
@@ -228,18 +234,19 @@
           </template>
         </p>
         <p v-if="orderData.owner_note" class="text-sm text-slate-200">
-          <span class="text-slate-400 text-xs block mb-0.5">{{ t("orderStatus.ownerNote") }}</span>
+          <span class="ui-kicker block mb-0.5">{{ t("orderStatus.ownerNote") }}</span>
           {{ orderData.owner_note }}
         </p>
       </div>
 
       <!-- Items -->
       <div class="ui-panel p-4 sm:p-5 space-y-3">
-        <h2 class="text-sm font-semibold text-slate-300">{{ t("orderStatus.items") }}</h2>
+        <h2 class="ui-kicker">{{ t("orderStatus.items") }}</h2>
         <div
-          v-for="item in orderData.items"
+          v-for="(item, idx) in orderData.items"
           :key="item.dish_name + item.note"
-          class="flex items-start justify-between gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm transition-colors hover:border-slate-700/60"
+          class="ui-reveal flex items-start justify-between gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm transition-colors hover:border-slate-700/60"
+          :style="{ '--ui-delay': `${Math.min(idx, 9) * 20}ms` }"
         >
           <div class="flex items-start gap-2.5 min-w-0">
             <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-400 tabular-nums">{{ item.qty }}</span>
@@ -341,7 +348,7 @@
         <!-- Self-cancel — early pickup/delivery orders, signed-in owner only (server-gated) -->
         <template v-if="orderData.can_cancel">
           <button
-            class="w-full justify-center rounded-xl border border-red-400/30 py-2.5 text-sm font-semibold text-red-300 transition hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
+            class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold border-red-400/30 text-red-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
             :disabled="cancelling"
             @click="cancelOrder"
           >
@@ -356,7 +363,7 @@
         v-if="orderData.receipt_message && ['confirmed', 'ready', 'completed'].includes(orderData.status)"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-1.5 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--color-secondary)]/70">
+        <p class="ui-kicker text-[var(--color-secondary)]/70">
           {{ t("orderStatus.receiptMessage") }}
         </p>
         <p class="text-sm text-slate-200 leading-relaxed">{{ orderData.receipt_message }}</p>
@@ -367,18 +374,19 @@
         v-if="orderData.status === 'completed' && !orderData.has_rating"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-4"
       >
-        <div>
+        <div class="space-y-0.5">
           <p class="text-sm font-semibold text-slate-200">{{ t("orderStatus.rateTitle") }}</p>
-          <p class="text-xs text-slate-400 mt-0.5">{{ t("orderStatus.rateSubtitle") }}</p>
+          <p class="text-xs text-slate-400">{{ t("orderStatus.rateSubtitle") }}</p>
         </div>
         <!-- Star picker -->
-        <div class="flex gap-2">
+        <div class="flex gap-1" role="group" :aria-label="t('orderStatus.rateTitle')">
           <button
             v-for="star in 5"
             :key="star"
             type="button"
-            class="text-3xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            class="ui-touch-target ui-press flex items-center justify-center text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 focus-visible:rounded-lg"
             :aria-label="t('orderStatus.ratingLabel', { score: star })"
+            :aria-pressed="star <= ratingScore"
             @click="ratingScore = star"
           >
             <span :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
@@ -417,7 +425,7 @@
         v-if="orderData.restaurant_feedback"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-1"
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">{{ t("orderStatus.restaurantFeedbackTitle") }}</p>
+        <p class="ui-kicker">{{ t("orderStatus.restaurantFeedbackTitle") }}</p>
         <div class="flex items-center gap-2">
           <span class="text-2xl text-amber-400">{{ "★".repeat(orderData.restaurant_feedback.score) }}<span class="text-slate-700">{{ "★".repeat(5 - orderData.restaurant_feedback.score) }}</span></span>
           <span class="text-sm font-semibold text-slate-200">{{ orderData.restaurant_feedback.score }}/5</span>

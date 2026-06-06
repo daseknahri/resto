@@ -1,17 +1,17 @@
 <template>
-  <section class="space-y-4 pb-24 sm:pb-6">
-    <article class="ui-workspace-stage ui-fade-up space-y-4 p-3 sm:p-4">
+  <section class="space-y-3 pb-24 sm:pb-6">
+    <article class="ui-workspace-stage ui-reveal space-y-3 p-3 sm:p-4">
       <!-- Header + period selector -->
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-1.5">
+        <div class="min-w-0 space-y-1.5">
           <p class="ui-kicker">{{ t("ownerAnalytics.kicker") }}</p>
           <h2 class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerAnalytics.title") }}</h2>
         </div>
-        <div class="flex items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
+        <div class="flex shrink-0 flex-wrap items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
           <button
             v-for="d in PERIOD_OPTIONS"
             :key="d"
-            class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+            class="ui-press ui-touch-target inline-flex items-center justify-center rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
             :class="insightsPeriod === d
               ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
               : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
@@ -21,14 +21,22 @@
         </div>
       </div>
 
+      <!-- KPI cards: loading skeleton -->
+      <div v-if="insightsLoading" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5" aria-hidden="true">
+        <div v-for="i in 5" :key="i" class="ui-skeleton h-24" />
+      </div>
+
       <!-- KPI cards: today stats + 7-day sparklines -->
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-        <article class="ui-admin-subcard space-y-1.5">
+      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <article
+          class="ui-admin-subcard ui-reveal space-y-1.5"
+          :style="{ '--ui-delay': '0ms' }"
+        >
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
           <div class="flex items-end justify-between gap-1">
-            <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
+            <p class="ui-stat-value tabular-nums text-slate-100">{{ todayStats.count }}</p>
             <span
-              v-if="!insightsLoading && yesterdayStats.count > 0"
+              v-if="yesterdayStats.count > 0"
               class="mb-0.5 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
             >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
@@ -36,43 +44,58 @@
           <SparklineChart :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
-        <article class="ui-admin-subcard space-y-1.5">
+        <article
+          class="ui-admin-subcard ui-reveal space-y-1.5"
+          :style="{ '--ui-delay': '28ms' }"
+        >
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
+          <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
           <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" />
         </article>
 
-        <article class="ui-admin-subcard space-y-1.5">
+        <article
+          class="ui-admin-subcard ui-reveal space-y-1.5"
+          :style="{ '--ui-delay': '56ms' }"
+        >
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ avgTicketLabel }}</p>
           <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
         </article>
 
-        <article class="ui-admin-subcard space-y-1.5" :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''">
+        <article
+          class="ui-admin-subcard ui-reveal space-y-1.5"
+          :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
+          :style="{ '--ui-delay': '84ms' }"
+        >
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
-          <p class="ui-stat-value" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
+          <p class="ui-stat-value tabular-nums" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
           <div class="h-7" />
         </article>
 
         <RouterLink
           :to="{ name: 'owner-reservations' }"
-          class="ui-admin-subcard space-y-1.5 transition-colors hover:border-slate-600"
-          :class="todayNewReservations > 0 ? 'border-sky-500/30' : ''"
+          class="ui-admin-subcard ui-reveal ui-surface-lift space-y-1.5"
+          :class="todayNewReservations > 0 ? 'border-sky-500/30' : 'hover:border-slate-600'"
+          :style="{ '--ui-delay': '112ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.todayReservations") }}</p>
-          <p class="ui-stat-value" :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'">
+          <p class="ui-stat-value tabular-nums" :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'">
             {{ todayReservations === null ? "—" : todayReservations }}
           </p>
-          <p class="text-[10px] text-slate-600">{{ t("ownerHome.viewReservations") }} →</p>
+          <p class="flex items-center gap-1 text-[10px] text-slate-500">
+            <span>{{ t("ownerHome.viewReservations") }}</span>
+            <span class="ltr:inline rtl:hidden" aria-hidden="true">→</span>
+            <span class="ltr:hidden rtl:inline" aria-hidden="true">←</span>
+          </p>
         </RouterLink>
       </div>
 
       <!-- Revenue chart + best sellers -->
       <div class="grid gap-3 xl:grid-cols-2">
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
+        <div class="ui-panel p-3 sm:p-4">
           <RevenueBarChart :external-days="chartDays" :external-currency="chartCurrency" :parent-loading="insightsLoading" />
         </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 sm:p-4">
+        <div class="ui-panel p-3 sm:p-4">
           <BestSellersWidget :period="insightsPeriod" />
         </div>
       </div>

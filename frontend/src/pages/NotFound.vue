@@ -1,13 +1,26 @@
 <template>
-  <div class="not-found-root">
-    <div class="not-found-inner">
+  <main
+    class="flex min-h-dvh items-center justify-center px-4 py-12"
+    aria-labelledby="not-found-heading"
+  >
+    <div class="flex w-full max-w-sm flex-col items-center gap-8 text-center">
 
       <!-- Big 404 graphic -->
-      <div class="not-found-hero" aria-hidden="true">
+      <div
+        class="ui-reveal flex select-none items-center gap-3"
+        aria-hidden="true"
+        style="--ui-delay: 0ms"
+      >
         <span class="not-found-number">4</span>
+
         <div class="not-found-plate">
-          <!-- Animated plate / dish icon -->
-          <svg aria-hidden="true" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" class="not-found-icon">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 80 80"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            class="not-found-icon"
+          >
             <circle cx="40" cy="40" r="34" stroke="currentColor" stroke-width="3" opacity="0.15"/>
             <circle cx="40" cy="40" r="24" stroke="currentColor" stroke-width="2" opacity="0.25"/>
             <path d="M28 40c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
@@ -15,41 +28,55 @@
             <path d="M40 28v-6M40 58v-6M52 40h6M28 40h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
           </svg>
         </div>
+
         <span class="not-found-number">4</span>
       </div>
 
       <!-- Message -->
-      <div class="not-found-body">
-        <h1 class="not-found-title">{{ t('notFound.title') }}</h1>
-        <p class="not-found-message">{{ t('notFound.message') }}</p>
+      <div
+        class="ui-reveal space-y-2"
+        style="--ui-delay: 60ms"
+      >
+        <h1
+          id="not-found-heading"
+          class="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl"
+        >
+          {{ t('notFound.title') }}
+        </h1>
+        <p class="ui-subtle mx-auto max-w-xs leading-relaxed">
+          {{ t('notFound.message') }}
+        </p>
       </div>
 
       <!-- CTAs -->
-      <div class="not-found-actions">
+      <div
+        class="ui-reveal flex flex-wrap justify-center gap-3"
+        style="--ui-delay: 120ms"
+      >
         <RouterLink
           v-if="isOwnerHost"
           to="/owner"
-          class="ui-btn-primary not-found-cta-primary"
+          class="ui-btn-primary ui-press min-w-[10rem] justify-center"
         >
           {{ t('notFound.goDashboard') }}
         </RouterLink>
         <RouterLink
           v-else-if="isCustomerHost"
           to="/browse"
-          class="ui-btn-primary not-found-cta-primary"
+          class="ui-btn-primary ui-press min-w-[10rem] justify-center"
         >
           {{ t('notFound.goMenu') }}
         </RouterLink>
         <RouterLink
           v-else
           to="/"
-          class="ui-btn-primary not-found-cta-primary"
+          class="ui-btn-primary ui-press min-w-[10rem] justify-center"
         >
           {{ t('notFound.goHome') }}
         </RouterLink>
 
         <button
-          class="ui-btn-outline not-found-cta-secondary"
+          class="ui-btn-outline ui-press min-w-[8rem] justify-center"
           @click="goBack"
         >
           {{ t('notFound.goBack') }}
@@ -57,10 +84,16 @@
       </div>
 
       <!-- Subtle path indicator -->
-      <p class="not-found-path">{{ currentPath }}</p>
+      <p
+        class="ui-reveal max-w-full truncate font-mono text-[11px] tracking-wide text-slate-600"
+        style="--ui-delay: 180ms"
+        aria-hidden="true"
+      >
+        {{ currentPath }}
+      </p>
 
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -88,33 +121,7 @@ const goBack = () => {
 </script>
 
 <style scoped>
-.not-found-root {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, #020b18 0%, #060f1e 55%, #030b16 100%);
-  padding: 2rem 1rem;
-}
-
-.not-found-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-  max-width: 480px;
-  width: 100%;
-  text-align: center;
-}
-
-/* ── Hero: "4 🍽 4" ─────────────────────────────────────── */
-.not-found-hero {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  user-select: none;
-}
-
+/* ── Hero numbers ───────────────────────────────────────── */
 .not-found-number {
   font-size: clamp(5rem, 18vw, 9rem);
   font-weight: 800;
@@ -126,6 +133,7 @@ const goBack = () => {
   background-clip: text;
 }
 
+/* ── Plate circle ───────────────────────────────────────── */
 .not-found-plate {
   width: clamp(4.5rem, 16vw, 8rem);
   height: clamp(4.5rem, 16vw, 8rem);
@@ -133,10 +141,12 @@ const goBack = () => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(var(--color-secondary-rgb, 245,158,11), 0.12), rgba(var(--color-secondary-rgb, 245,158,11), 0.04));
-  border: 1.5px solid rgba(var(--color-secondary-rgb, 245,158,11), 0.18);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+  border: 1.5px solid rgba(245, 158, 11, 0.18);
+  flex-shrink: 0;
 }
 
+/* ── Dish icon — respects reduced-motion ────────────────── */
 .not-found-icon {
   width: 65%;
   height: 65%;
@@ -145,54 +155,13 @@ const goBack = () => {
   animation: not-found-spin 14s linear infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .not-found-icon {
+    animation: none;
+  }
+}
+
 @keyframes not-found-spin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ── Text ──────────────────────────────────────────────── */
-.not-found-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.not-found-message {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  color: #64748b;
-  line-height: 1.6;
-}
-
-/* ── Buttons ───────────────────────────────────────────── */
-.not-found-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.not-found-cta-primary {
-  min-width: 10rem;
-  justify-content: center;
-}
-
-.not-found-cta-secondary {
-  min-width: 8rem;
-  justify-content: center;
-}
-
-/* ── Path ──────────────────────────────────────────────── */
-.not-found-path {
-  font-size: 0.7rem;
-  color: #1e293b;
-  font-family: ui-monospace, monospace;
-  letter-spacing: 0.04em;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  to { transform: rotate(360deg); }
 }
 </style>

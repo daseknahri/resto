@@ -1,8 +1,8 @@
 <template>
-  <section class="space-y-3 pb-24 sm:pb-6">
+  <section class="space-y-3 pb-24 sm:pb-6" :aria-label="t('ownerHome.kicker')">
 
     <!-- ── CRITICAL SECTION: renders on first paint from cached store data ──── -->
-    <article class="ui-workspace-stage ui-fade-up space-y-3 p-3 sm:p-4">
+    <article class="ui-workspace-stage ui-reveal space-y-3 p-3 sm:p-4">
 
       <!-- Header row -->
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -34,11 +34,12 @@
           </div>
         </div>
         <button
-          class="shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50"
+          class="ui-touch-target shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :class="isOpen
             ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
             : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
           :disabled="togglingOpen"
+          :aria-label="togglingOpen ? '' : (isOpen ? t('ownerHome.closeNow') : t('ownerHome.openNow'))"
           @click="toggleOpen"
         >
           {{ togglingOpen ? "…" : (isOpen ? t("ownerHome.closeNow") : t("ownerHome.openNow")) }}
@@ -106,14 +107,18 @@
         <RouterLink
           v-if="ratingsSummary.count > 0"
           :to="{ name: 'owner-ratings' }"
-          class="flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 transition hover:border-amber-500/35 hover:bg-amber-500/8"
+          class="ui-surface-lift flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 transition hover:border-amber-500/35 hover:bg-amber-500/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+          :aria-label="t('ownerHome.viewAllRatings')"
         >
           <div class="flex items-center gap-2.5">
             <span class="text-amber-400 text-lg leading-none">★</span>
             <span class="text-sm font-bold text-white tabular-nums">{{ ratingsSummary.average !== null ? ratingsSummary.average.toFixed(1) : "—" }}</span>
             <span class="text-xs text-slate-500">/ 5 · {{ ratingsSummary.count }} {{ t("ownerHome.avgRating").toLowerCase() }}</span>
           </div>
-          <span class="text-xs font-medium text-amber-400/80">{{ t("ownerHome.viewAllRatings") }} →</span>
+          <span class="flex items-center gap-1 text-xs font-medium text-amber-400/80">
+            {{ t("ownerHome.viewAllRatings") }}
+            <AppIcon name="chevronRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" />
+          </span>
         </RouterLink>
         <div v-else class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-2.5">
           <span class="text-sm text-slate-600">★</span>
@@ -124,23 +129,23 @@
 
       <!-- Quick actions (Analytics lives in the top nav now, so it's not duplicated here) -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
-        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary col-span-2 w-full px-5 py-2 sm:w-auto">
+        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary ui-press col-span-2 w-full gap-1.5 px-5 py-2 sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline w-full px-4 py-2 sm:w-auto">
+        <RouterLink to="/menu" class="ui-btn-outline ui-press w-full gap-1.5 px-4 py-2 sm:w-auto">
           <AppIcon name="eye" class="owner-home-btn-icon" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
         <button
-          class="ui-btn-outline w-full px-4 py-2 sm:w-auto transition-colors"
+          class="ui-btn-outline ui-press w-full gap-1.5 px-4 py-2 transition-colors sm:w-auto"
           :class="copied ? 'border-emerald-500/50 text-emerald-300' : ''"
           @click="copyMenuUrl"
         >
           <AppIcon :name="copied ? 'check' : 'copy'" class="owner-home-btn-icon" />
           {{ copied ? t("ownerHome.menuUrlCopied") : t("ownerHome.copyPublicUrl") }}
         </button>
-        <button class="ui-btn-outline col-span-2 w-full px-4 py-2 sm:w-auto" @click="manualRefresh">
+        <button class="ui-btn-outline ui-press col-span-2 w-full gap-1.5 px-4 py-2 sm:w-auto" @click="manualRefresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" />
           {{ t("common.refresh") }}
         </button>
@@ -148,16 +153,21 @@
     </article>
 
     <!-- ── READINESS: independent fetch for categories + dishes ─────────────── -->
-    <OwnerDashboardReadiness ref="readinessRef" @loaded="onReadinessLoaded" />
+    <div class="ui-reveal" style="--ui-delay: 40ms">
+      <OwnerDashboardReadiness ref="readinessRef" @loaded="onReadinessLoaded" />
+    </div>
 
     <!-- ── LIVE ORDERS: from order store ───────────────────────────────────── -->
-    <article class="ui-command-deck space-y-3 p-3 sm:p-4">
+    <article class="ui-command-deck ui-reveal space-y-3 p-3 sm:p-4" style="--ui-delay: 80ms">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
-          <AppIcon name="cart" class="owner-home-section-icon" />
-          <span>{{ t("ownerHome.liveOrders") }}</span>
-          <span v-if="order.ordersLoading" class="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-500" />
-        </h3>
+        <div>
+          <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
+          <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
+            <AppIcon name="cart" class="owner-home-section-icon" />
+            <span>{{ t("ownerHome.liveOrders") }}</span>
+            <span v-if="order.ordersLoading" class="ui-live-dot ms-0.5 bg-slate-500" aria-hidden="true" />
+          </h3>
+        </div>
         <RouterLink :to="{ name: 'owner-orders' }" class="ui-btn-outline px-3 py-1.5 text-xs">
           {{ t("ownerHome.viewAllOrders") }}
         </RouterLink>
@@ -166,73 +176,68 @@
       <!-- Status summary chips -->
       <div class="flex flex-wrap gap-2">
         <div
-          class="flex items-center gap-2 rounded-xl border px-3 py-2"
+          class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors"
           :class="pendingOrders.length ? 'border-amber-500/60 bg-amber-500/10' : 'border-slate-700 bg-slate-900/40'"
         >
-          <span class="text-xl font-bold" :class="pendingOrders.length ? 'text-amber-300' : 'text-slate-400'">{{ pendingOrders.length }}</span>
+          <span class="text-xl font-bold tabular-nums" :class="pendingOrders.length ? 'text-amber-300' : 'text-slate-400'">{{ pendingOrders.length }}</span>
           <span class="text-xs font-medium" :class="pendingOrders.length ? 'text-amber-200' : 'text-slate-500'">{{ t("ownerOrders.statusPending") }}</span>
-          <span v-if="pendingOrders.length" class="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+          <span v-if="pendingOrders.length" class="ui-live-dot bg-amber-400" aria-hidden="true" />
         </div>
         <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2">
-          <span class="text-xl font-bold text-slate-300">{{ activeOrders.length }}</span>
+          <span class="text-xl font-bold tabular-nums text-slate-300">{{ activeOrders.length }}</span>
           <span class="text-xs font-medium text-slate-500">{{ t("ownerHome.inProgress") }}</span>
         </div>
         <div
           v-if="!pendingOrders.length && !activeOrders.length && recentOrders.length"
           class="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2"
         >
-          <span class="text-emerald-400">✓</span>
+          <AppIcon name="check" class="h-3.5 w-3.5 text-emerald-400" />
           <span class="text-xs font-medium text-emerald-300/70">{{ t("ownerHome.allClear") }}</span>
         </div>
       </div>
 
       <!-- Recent orders list -->
       <div v-if="recentOrders.length" class="space-y-1.5">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.recentOrdersList") }}</p>
+        <p class="ui-kicker">{{ t("ownerHome.recentOrdersList") }}</p>
         <RouterLink
-          v-for="o in recentOrders"
+          v-for="(o, index) in recentOrders"
           :key="o.id"
           :to="{ name: 'owner-orders', query: { q: o.order_number } }"
-          class="flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:bg-slate-900/60"
+          class="ui-reveal flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:bg-slate-900/60"
           :class="['pending','confirmed','preparing','ready'].includes(o.status)
             ? 'border-slate-700 hover:border-slate-600'
             : 'border-slate-800 hover:border-slate-700'"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="font-mono font-bold text-slate-100">{{ o.order_number }}</span>
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="font-mono font-bold text-slate-100 tabular-nums">{{ o.order_number }}</span>
             <span class="rounded-full px-2 py-0.5 font-semibold" :class="orderStatusClass(o.status)">{{ orderStatusLabel(o.status) }}</span>
-            <span v-if="o.fulfillment_type" class="hidden sm:inline text-slate-400">{{ fulfillmentLabel(o) }}</span>
+            <span v-if="o.fulfillment_type" class="hidden text-slate-400 sm:inline">{{ fulfillmentLabel(o) }}</span>
           </div>
-          <div class="flex shrink-0 items-center gap-3">
+          <div class="flex shrink-0 items-center gap-3 tabular-nums">
             <span class="font-semibold text-[var(--color-secondary)]">{{ formatOrderTotal(o) }}</span>
             <span class="text-slate-500">{{ formatTimeAgo(o.created_at) }}</span>
           </div>
         </RouterLink>
       </div>
-      <div v-else-if="!order.ordersLoading" class="rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-6 text-center">
-        <p class="text-sm text-slate-400">{{ t("ownerHome.noOrdersYet") }}</p>
+      <div v-else-if="!order.ordersLoading" class="ui-empty-state text-center">
+        <p class="text-sm font-semibold text-slate-100">{{ t("ownerHome.noOrdersYet") }}</p>
       </div>
     </article>
 
     <!-- ── PLAN CARD ────────────────────────────────────────────────────────── -->
-    <article class="ui-command-deck p-3 sm:p-4">
+    <article class="ui-command-deck ui-reveal p-3 sm:p-4" style="--ui-delay: 160ms">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="space-y-1">
+          <p class="ui-kicker">{{ t("ownerHome.planSection") }}</p>
           <h3 class="inline-flex items-center gap-2 text-base font-semibold">
             <AppIcon name="card" class="owner-home-section-icon" />
-            <span>{{ t("ownerHome.planSection") }}</span>
+            <span class="text-white">{{ tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }}</span>
           </h3>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
-              {{ tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }}
-            </span>
-          </div>
         </div>
         <RouterLink :to="{ name: 'owner-profile', query: { tab: 'billing' } }" class="ui-btn-outline px-3 py-1.5 text-xs">
           {{ t("ownerBilling.manageBilling") }}
-          <svg aria-hidden="true" viewBox="0 0 16 16" class="ml-1 inline h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 8h10M9 4l4 4-4 4" />
-          </svg>
+          <AppIcon name="arrowRight" class="ms-1 inline h-3.5 w-3.5 rtl:scale-x-[-1]" />
         </RouterLink>
       </div>
     </article>
