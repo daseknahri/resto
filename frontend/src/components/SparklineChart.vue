@@ -10,12 +10,13 @@
       filled   boolean   — fill area under the line (default: true)
   -->
   <svg
-    :viewBox="`0 0 ${W} ${height}`"
+    :viewBox="`-${PAD} 0 ${W + PAD * 2} ${height}`"
     preserveAspectRatio="none"
-    aria-hidden="true"
+    :aria-hidden="label ? undefined : 'true'"
     class="w-full overflow-visible"
     :style="{ height: `${height}px` }"
   >
+    <title v-if="label">{{ label }}</title>
     <!-- Filled area -->
     <path
       v-if="filled && points.length >= 2"
@@ -35,23 +36,23 @@
       vector-effect="non-scaling-stroke"
     />
     <!-- Last-point dot — outer ring for contrast, inner filled dot -->
-    <circle
-      v-if="points.length >= 1"
-      :cx="points[points.length - 1][0]"
-      :cy="points[points.length - 1][1]"
-      r="3.5"
-      :fill="resolvedColor"
-      fill-opacity="0.18"
-      vector-effect="non-scaling-stroke"
-    />
-    <circle
-      v-if="points.length >= 1"
-      :cx="points[points.length - 1][0]"
-      :cy="points[points.length - 1][1]"
-      r="2"
-      :fill="resolvedColor"
-      vector-effect="non-scaling-stroke"
-    />
+    <g v-if="points.length >= 1" aria-hidden="true">
+      <circle
+        :cx="points[points.length - 1][0]"
+        :cy="points[points.length - 1][1]"
+        r="3.5"
+        :fill="resolvedColor"
+        fill-opacity="0.18"
+        vector-effect="non-scaling-stroke"
+      />
+      <circle
+        :cx="points[points.length - 1][0]"
+        :cy="points[points.length - 1][1]"
+        r="2"
+        :fill="resolvedColor"
+        vector-effect="non-scaling-stroke"
+      />
+    </g>
   </svg>
 </template>
 
@@ -63,6 +64,7 @@ const props = defineProps({
   color: { type: String, default: "currentColor" },
   height: { type: Number, default: 28 },
   filled: { type: Boolean, default: true },
+  label: { type: String, default: "" },
 });
 
 const W = 80; // internal viewBox width — arbitrary, scales with CSS width
@@ -72,11 +74,11 @@ const PAD = 2; // vertical padding so the stroke isn't clipped at edges
 // Only the tokens actually used in the dashboard are listed here.
 const COLOR_MAP = {
   secondary: "var(--color-secondary)",
-  emerald: "#34d399",
-  amber: "#fbbf24",
-  red: "#f87171",
-  slate: "#94a3b8",
-  sky: "#38bdf8",
+  emerald: "var(--color-success)",
+  amber: "var(--color-secondary)",
+  red: "var(--color-danger-soft)",
+  slate: "var(--color-muted)",
+  sky: "var(--color-info)",
 };
 const resolvedColor = computed(() => COLOR_MAP[props.color] || props.color || "currentColor");
 

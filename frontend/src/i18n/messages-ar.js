@@ -68,6 +68,13 @@ const arabicMessages = {
     "more": "المزيد",
     "change": "تغيير"
   },
+  "toast": {
+    "type": {
+      "success": "نجاح:",
+      "error": "خطأ:",
+      "warning": "تنبيه:"
+    }
+  },
   "landingLayout": {
     "kicker": "منصة القوائم",
     "title": "منصة SaaS للمطاعم",
@@ -273,10 +280,12 @@ const arabicMessages = {
   },
   "staffChat": {
     "title": "دردشة الفريق",
+    "titleWithUnread": "دردشة الفريق ({count} غير مقروء)",
     "emptyTitle": "لا توجد رسائل بعد",
     "empty": "لا توجد رسائل بعد. ابدأ المحادثة 👋",
     "placeholder": "راسل الفريق…",
     "send": "إرسال",
+    "sending": "جارٍ الإرسال…",
     "sendFailed": "تعذّر الإرسال. حاول مرة أخرى.",
     "someone": "الموظفون"
   },
@@ -491,7 +500,11 @@ const arabicMessages = {
     "customerReturnRate": "معدل العودة",
     "customerReturnRateHint": "{count} عميل فريد",
     "customerReturnRateNA": "بيانات غير كافية",
-    "updating": "جارٍ تحديث بيانات الإيرادات"
+    "updating": "جارٍ تحديث بيانات الإيرادات",
+    "ariaIncrease": "ارتفاع",
+    "ariaDecrease": "انخفاض",
+    "ariaNoChange": "لا تغيير",
+    "ariaChangeLabel": "{pct}% {dir} مقارنة بالفترة السابقة"
   },
   "ownerSections": {
     "kicker": "إدارة القاعة",
@@ -3014,6 +3027,9 @@ Object.assign(arabicMessages, {
     noData: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0625\u064a\u0631\u0627\u062f\u0627\u062a \u0628\u0639\u062f.",
     loadError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0631\u0633\u0645 \u0627\u0644\u0628\u064a\u0627\u0646\u064a.",
     periodNav: "\u0645\u062d\u062f\u062f \u0627\u0644\u0641\u062a\u0631\u0629",
+    periodDays: "\u0622\u062e\u0631 {n} \u0623\u064a\u0627\u0645",
+    barLabel: "{date}: {revenue}\u060c {orders} \u0637\u0644\u0628\u0627\u062a",
+    tableDate: "\u0627\u0644\u062a\u0627\u0631\u064a\u062e",
   },
   bestSellers: {
     title: "\u0627\u0644\u0623\u0643\u062b\u0631 \u0645\u0628\u064a\u0639\u0627\u064b",
@@ -3095,6 +3111,14 @@ Object.assign(arabicMessages, {
     guests: "{n} \u0636\u064a\u0648\u0641",
     undatedNote: "{count} \u062d\u062c\u0632(\u062d\u062c\u0648\u0632\u0627\u062a) \u0628\u062f\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u2014 \u062a\u0638\u0647\u0631 \u0641\u064a \u0639\u0631\u0636 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0641\u0642\u0637.",
     emptyDay: "\u2014",
+    weekGrid: "\u0639\u0631\u0636 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+    dropSuccess: "\u062a\u0645 \u0646\u0642\u0644 {name} \u0625\u0644\u0649 {day}",
+    status: {
+      new: "\u062c\u062f\u064a\u062f",
+      contacted: "\u062a\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+      won: "\u0645\u0624\u0643\u062f",
+      lost: "\u0645\u0641\u0642\u0648\u062f",
+    },
   },
   ownerPromotions: {
     kicker: "\u0627\u0644\u0639\u0631\u0648\u0636",

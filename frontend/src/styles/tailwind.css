@@ -8,6 +8,10 @@
   --color-text: #e2e8f0;
   --color-danger: #dc2626;
   --color-danger-hover: #ef4444;
+  --color-danger-soft: #f87171;
+  --color-success: #34d399;
+  --color-muted: #94a3b8;
+  --color-info: #38bdf8;
   --color-overlay: rgba(13, 23, 34, 0.8);
   --motion-fast: 180ms;
   --motion-base: 260ms;

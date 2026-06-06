@@ -11,6 +11,7 @@
             class="ui-segmented-button px-2.5 py-1 text-[11px]"
             :data-active="period === p"
             :aria-pressed="period === p"
+            :aria-label="t('revenueChart.periodDays', { n: p })"
             @click="setPeriod(p)"
           >{{ p }}d</button>
         </nav>
@@ -20,7 +21,7 @@
           :disabled="loading"
           @click="load"
         >
-          <svg aria-hidden="true" class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg aria-hidden="true" class="h-3.5 w-3.5" :class="loading ? 'motion-safe:animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
         </button>
@@ -28,23 +29,49 @@
     </div>
 
     <!-- Summary row -->
-    <div class="mb-3 grid grid-cols-3 gap-2 text-center">
+    <dl class="mb-3 grid grid-cols-3 gap-2 text-center">
       <div>
-        <p class="text-base font-semibold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</p>
-        <p class="ui-stat-label mt-0.5">{{ t('revenueChart.totalRevenue') }}</p>
+        <dd class="text-base font-semibold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</dd>
+        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.totalRevenue') }}</dt>
       </div>
       <div>
-        <p class="text-base font-semibold tabular-nums text-white">{{ totalOrders }}</p>
-        <p class="ui-stat-label mt-0.5">{{ t('revenueChart.totalOrders') }}</p>
+        <dd class="text-base font-semibold tabular-nums text-white">{{ totalOrders }}</dd>
+        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.totalOrders') }}</dt>
       </div>
       <div>
-        <p class="text-base font-semibold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</p>
-        <p class="ui-stat-label mt-0.5">{{ t('revenueChart.avgOrder') }}</p>
+        <dd class="text-base font-semibold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</dd>
+        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.avgOrder') }}</dt>
       </div>
-    </div>
+    </dl>
 
     <!-- SVG bar chart -->
     <div v-if="!loading && !parentLoading && days.length" class="ui-reveal relative">
+      <!-- Accessible live region: mirrors active tooltip for screen readers -->
+      <div aria-live="polite" aria-atomic="true" class="sr-only">
+        <template v-if="tooltip">
+          {{ fmtDateLong(tooltip.date) }} — {{ fmtMoney(tooltip.revenue) }} — {{ t('revenueChart.orders', { count: tooltip.order_count }) }}
+        </template>
+      </div>
+
+      <!-- Visually-hidden data table for screen readers -->
+      <table class="sr-only">
+        <caption>{{ t('revenueChart.title') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ t('revenueChart.tableDate') }}</th>
+            <th scope="col">{{ t('revenueChart.totalRevenue') }}</th>
+            <th scope="col">{{ t('revenueChart.totalOrders') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="day in days" :key="day.date">
+            <td>{{ fmtDateLong(day.date) }}</td>
+            <td>{{ fmtMoney(day.revenue) }}</td>
+            <td>{{ day.order_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <svg
         :viewBox="`0 0 ${SVG_W} ${SVG_H}`"
         class="w-full overflow-visible"
@@ -66,7 +93,7 @@
 
         <!-- Bars -->
         <g v-for="(day, i) in days" :key="day.date">
-          <!-- Hover hit area -->
+          <!-- Hover hit area (keyboard-accessible) -->
           <rect
             :x="barX(i) - barGap / 2"
             :y="CHART_T"
@@ -74,7 +101,12 @@
             :height="CHART_H"
             fill="transparent"
             class="cursor-pointer"
+            tabindex="0"
+            role="button"
+            :aria-label="t('revenueChart.barLabel', { date: fmtDateLong(day.date), revenue: fmtMoney(day.revenue), orders: day.order_count })"
             @mouseenter="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.enter="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.space.prevent="onBarHover(day, barX(i), barY(day.revenue))"
           />
           <!-- Bar fill -->
           <rect

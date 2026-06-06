@@ -1,10 +1,10 @@
 <template>
-  <section class="ui-panel space-y-3 p-3 sm:p-4">
+  <section class="ui-panel space-y-3 p-3 sm:p-4" aria-labelledby="owner-sections-title">
     <!-- Header -->
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t('ownerSections.kicker') }}</p>
-        <p class="text-sm font-semibold text-slate-100">{{ t('ownerSections.title') }}</p>
+        <h2 id="owner-sections-title" class="text-sm font-semibold text-slate-100">{{ t('ownerSections.title') }}</h2>
         <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerSections.subtitle') }}</p>
       </div>
       <button
@@ -22,7 +22,10 @@
       <div
         v-if="creating"
         class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/60 p-3"
+        role="group"
+        :aria-label="t('ownerSections.add')"
       >
+        <!-- TODO: requires logic change — focus should move to newName input when this form opens (startCreate) -->
         <div class="flex flex-wrap items-center gap-2">
           <input
             v-model="newName"
@@ -75,7 +78,8 @@
     </div>
 
     <!-- Section list -->
-    <div
+    <ul class="space-y-0">
+    <li
       v-for="(s, index) in sections"
       :key="s.id"
       class="ui-surface-lift ui-reveal overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50"
@@ -88,6 +92,7 @@
             :style="{ background: s.color || '#64748b' }"
             aria-hidden="true"
           />
+          <span class="sr-only">{{ s.color || '#64748b' }}</span>
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-100">{{ s.name }}</p>
             <p class="truncate text-xs text-slate-500">
@@ -103,6 +108,7 @@
             class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 transition-colors"
             :aria-label="`${t('common.edit')} ${s.name}`"
             :aria-expanded="editId === s.id"
+            :aria-controls="`section-edit-${s.id}`"
             @click="toggleEdit(s)"
           >
             <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
@@ -121,7 +127,7 @@
 
       <!-- Edit panel -->
       <Transition name="ui-fade">
-        <div v-if="editId === s.id" class="space-y-3 border-t border-slate-800/80 bg-slate-950/30 p-3">
+        <div v-if="editId === s.id" :id="`section-edit-${s.id}`" class="space-y-3 border-t border-slate-800/80 bg-slate-950/30 p-3">
           <div class="flex items-center gap-2">
             <input
               v-model="editName"
@@ -180,6 +186,7 @@
             </div>
           </fieldset>
 
+          <!-- TODO: requires logic change — focus should return to the edit toggle button when editId is cleared (cancel or save) -->
           <div class="flex items-center gap-2 pt-0.5">
             <button
               class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
@@ -198,7 +205,8 @@
           </div>
         </div>
       </Transition>
-    </div>
+    </li>
+    </ul>
   </section>
 </template>
 

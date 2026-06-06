@@ -84,6 +84,13 @@ export const messages = {
       defaultBody: "This action cannot be undone.",
       confirmBtn: "Delete"
     },
+    toast: {
+      type: {
+        success: "Success:",
+        error: "Error:",
+        warning: "Notice:"
+      }
+    },
     errorBoundary: {
       kicker: "ERROR",
       title: "Something went wrong",
@@ -703,10 +710,12 @@ export const messages = {
     },
     staffChat: {
       title: "Staff chat",
+      titleWithUnread: "Staff chat ({count} unread)",
       emptyTitle: "No messages yet",
       empty: "No messages yet. Say hello 👋",
       placeholder: "Message the team…",
       send: "Send",
+      sending: "Sending message…",
       sendFailed: "Couldn't send. Try again.",
       someone: "Staff",
     },
@@ -2427,6 +2436,10 @@ export const messages = {
       alertViewRatings: "View reviews",
       periodLabel: "Analytics period",
       vsPrevPeriod: "vs prev. period",
+      ariaIncrease: "increase",
+      ariaDecrease: "decrease",
+      ariaNoChange: "no change",
+      ariaChangeLabel: "{pct}% {dir} vs previous period",
       kpiRevenue: "Revenue",
       kpiOrders: "Orders",
       kpiAvgTicket: "Avg ticket",
@@ -2461,6 +2474,9 @@ export const messages = {
       noData: "No revenue data yet.",
       loadError: "Could not load chart data.",
       periodNav: "Period selector",
+      periodDays: "Last {n} days",
+      barLabel: "{date}: {revenue}, {orders} orders",
+      tableDate: "Date",
     },
     bestSellers: {
       title: "Best sellers",
@@ -2855,6 +2871,14 @@ export const messages = {
       guests: "{n} guests",
       undatedNote: "{count} reservation(s) have no date set — visible in list view only.",
       emptyDay: "—",
+      weekGrid: "Reservation week view",
+      dropSuccess: "{name} moved to {day}",
+      status: {
+        new: "New",
+        contacted: "Contacted",
+        won: "Confirmed",
+        lost: "Lost",
+      },
     },
     waiterInstall: {
       prompt: "Install the app for faster daily use.",
@@ -3693,6 +3717,13 @@ export const messages = {
       defaultBody: "Cette action est irreversible.",
       confirmBtn: "Supprimer"
     },
+    toast: {
+      type: {
+        success: "Succes :",
+        error: "Erreur :",
+        warning: "Avis :"
+      }
+    },
     errorBoundary: {
       kicker: "ERREUR",
       title: "Une erreur est survenue",
@@ -4311,13 +4342,15 @@ export const messages = {
       noFilterResults: "Aucune table ne correspond a la recherche ou au filtre actuel."
     },
     staffChat: {
-      title: "Messagerie équipe",
+      title: "Messagerie equipe",
+      titleWithUnread: "Messagerie equipe ({count} non lu)",
       emptyTitle: "Aucun message pour l'instant",
       empty: "Aucun message. Dites bonjour 👋",
-      placeholder: "Écrire à l'équipe…",
+      placeholder: "Ecrire a l'equipe…",
       send: "Envoyer",
-      sendFailed: "Échec de l'envoi. Réessayez.",
-      someone: "Équipe",
+      sending: "Envoi en cours…",
+      sendFailed: "Echec de l'envoi. Reessayez.",
+      someone: "Equipe",
     },
     ownerLayout: {
       kicker: "Espace proprietaire",
@@ -5995,6 +6028,10 @@ export const messages = {
       alertViewRatings: "Voir les avis",
       periodLabel: "Periode d'analyse",
       vsPrevPeriod: "vs periode prec.",
+      ariaIncrease: "hausse",
+      ariaDecrease: "baisse",
+      ariaNoChange: "aucun changement",
+      ariaChangeLabel: "{pct}% {dir} par rapport a la periode precedente",
       kpiRevenue: "Revenu",
       kpiOrders: "Commandes",
       kpiAvgTicket: "Ticket moyen",
@@ -6039,6 +6076,9 @@ export const messages = {
       noData: "Aucune donnee de CA pour l instant.",
       loadError: "Impossible de charger les donnees.",
       periodNav: "Selecteur de periode",
+      periodDays: "{n} derniers jours",
+      barLabel: "{date} : {revenue}, {orders} commandes",
+      tableDate: "Date",
     },
     bestSellers: {
       title: "Meilleures ventes",
@@ -6433,6 +6473,14 @@ export const messages = {
       guests: "{n} convives",
       undatedNote: "{count} reservation(s) sans date — visibles uniquement en vue liste.",
       emptyDay: "—",
+      weekGrid: "Vue semaine des reservations",
+      dropSuccess: "{name} deplace vers {day}",
+      status: {
+        new: "Nouveau",
+        contacted: "Contacte",
+        won: "Confirme",
+        lost: "Perdu",
+      },
     },
     cartPage_order: {
       placeOrder: "Passer la commande",

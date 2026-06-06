@@ -12,6 +12,7 @@
     v-if="pct !== null && pct !== undefined"
     class="mt-0.5 text-[10px] font-semibold tabular-nums"
     :class="colorClass"
+    role="status"
     :aria-label="ariaLabel"
   >
     {{ sign }}{{ Math.abs(pct) }}% {{ label }}
@@ -36,7 +37,7 @@ const sign = computed(() => (props.pct > 0 ? "+" : props.pct < 0 ? "−" : ""));
 
 const colorClass = computed(() => {
   if (props.pct === null || props.pct === undefined) return "";
-  if (Math.abs(props.pct) < props.threshold) return "text-slate-500";
+  if (Math.abs(props.pct) < props.threshold) return "text-slate-400";
   return props.pct > 0 ? "text-emerald-400" : "text-red-400";
 });
 
@@ -44,7 +45,12 @@ const label = computed(() => t("ownerHome.vsPrevPeriod"));
 
 const ariaLabel = computed(() => {
   if (props.pct === null) return "";
-  const dir = props.pct > 0 ? "increase" : props.pct < 0 ? "decrease" : "no change";
-  return `${Math.abs(props.pct)}% ${dir} vs previous period`;
+  const dir =
+    props.pct > 0
+      ? t("ownerHome.ariaIncrease")
+      : props.pct < 0
+        ? t("ownerHome.ariaDecrease")
+        : t("ownerHome.ariaNoChange");
+  return t("ownerHome.ariaChangeLabel", { pct: Math.abs(props.pct), dir });
 });
 </script>

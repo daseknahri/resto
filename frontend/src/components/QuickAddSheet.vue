@@ -1,10 +1,16 @@
 <template>
   <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center" @click.self="$emit('close')">
-    <div class="ui-reveal flex max-h-[85vh] w-full max-w-md flex-col rounded-t-3xl border border-slate-700/80 bg-slate-900 sm:rounded-2xl">
+    <!-- TODO: requires logic change — add useFocusTrap() on open and restore focus on close -->
+    <div
+      class="ui-panel ui-reveal flex max-h-[85vh] w-full max-w-md flex-col rounded-t-3xl sm:rounded-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="qa-sheet-title"
+    >
       <!-- Header -->
       <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
         <div class="min-w-0">
-          <h2 class="truncate text-base font-semibold text-white">{{ dish.name }}</h2>
+          <h2 id="qa-sheet-title" class="truncate text-base font-semibold text-white">{{ dish.name }}</h2>
           <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-slate-400">{{ dish.description }}</p>
         </div>
         <button
@@ -12,7 +18,7 @@
           :aria-label="t('common.close')"
           @click="$emit('close')"
         >
-          <AppIcon name="close" class="h-4 w-4" />
+          <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -21,10 +27,10 @@
         <!-- Option groups -->
         <div v-for="group in (dish.option_groups || [])" :key="group.id" class="space-y-2">
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold text-slate-200">
-              {{ group.name }}
-              <span v-if="group.min_select > 0" class="ms-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
-            </p>
+            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+              <p class="truncate text-sm font-semibold text-slate-200">{{ group.name }}</p>
+              <span v-if="group.min_select > 0" class="ui-chip-strong shrink-0">{{ t('dishPage.required') }}</span>
+            </div>
             <span class="shrink-0 text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
           </div>
           <ul class="grid gap-2 text-sm">
@@ -79,28 +85,31 @@
           </ul>
         </div>
 
-        <p v-if="hasRequiredMissing" class="text-xs text-amber-300" role="alert" aria-live="polite">{{ t('dishPage.selectRequiredOptions') }}</p>
+        <div v-if="hasRequiredMissing" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2" role="alert">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+          <p class="flex-1 text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
+        </div>
       </div>
 
       <!-- Footer: quantity + add -->
       <div class="flex items-center gap-3 border-t border-slate-800 p-4" style="padding-bottom: calc(var(--safe-bottom) + 1rem)">
-        <span class="ui-qty-control inline-flex shrink-0 items-center rounded-full border p-1">
+        <div class="ui-qty-control inline-flex shrink-0 items-center rounded-full border p-1">
           <button
             class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
             :aria-label="t('dishPage.decreaseQuantity')"
             @click="qty = Math.max(1, qty - 1)"
           >
-            <AppIcon name="minus" class="h-3.5 w-3.5" />
+            <AppIcon name="minus" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite">{{ qty }}</span>
+          <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite" :aria-label="t('dishPage.qty') + ': ' + qty">{{ qty }}</span>
           <button
             class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
             :aria-label="t('dishPage.increaseQuantity')"
             @click="qty = Math.min(99, qty + 1)"
           >
-            <AppIcon name="plus" class="h-3.5 w-3.5" />
+            <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-        </span>
+        </div>
         <button
           class="ui-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold disabled:opacity-50"
           :disabled="hasRequiredMissing"
