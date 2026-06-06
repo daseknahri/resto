@@ -3,47 +3,51 @@
     <button
       ref="triggerRef"
       type="button"
-      class="ui-press ui-touch-target inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+      class="ui-press ui-touch-target inline-flex items-center justify-center rounded-full border border-[var(--color-border)] bg-slate-950/70 font-semibold text-slate-100 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
       :class="compact ? 'h-8 w-8 text-[11px]' : 'h-9 w-9 text-xs'"
       :aria-expanded="open ? 'true' : 'false'"
-      aria-haspopup="listbox"
+      aria-haspopup="menu"
+      :aria-controls="open ? 'lang-menu' : undefined"
       :aria-label="t('common.language')"
       @click.stop="toggle"
     >
       <span class="text-sm leading-none" aria-hidden="true">{{ localeFlag(currentLocaleValue) }}</span>
-      <span class="sr-only">{{ t("common.language") }}</span>
     </button>
 
     <Transition name="ui-fade">
-      <div
+      <ul
         v-if="open"
+        id="lang-menu"
         ref="menuRef"
-        role="listbox"
+        role="menu"
         :aria-label="t('common.language')"
-        class="absolute end-0 top-full z-[3100] mt-1.5 min-w-[5.25rem] overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
+        class="absolute end-0 top-full z-[3100] mt-1.5 min-w-[5.25rem] list-none overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
       >
-        <button
+        <li
           v-for="(option, idx) in localeOptions"
           :key="option.code"
-          :ref="el => { if (el) optionRefs[idx] = el }"
-          type="button"
-          role="option"
-          :aria-selected="currentLocaleValue === option.code"
-          class="ui-press flex w-full items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[10px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
-          :class="currentLocaleValue === option.code ? 'bg-slate-800/70 font-semibold text-[var(--color-secondary)]' : ''"
-          @click="selectLocale(option.code)"
+          role="none"
         >
-          <span class="text-sm leading-none" aria-hidden="true">{{ localeFlag(option.code) }}</span>
-          <span class="truncate">{{ option.nativeLabel }}</span>
-        </button>
-      </div>
+          <button
+            :ref="el => { if (el) optionRefs[idx] = el }"
+            type="button"
+            role="menuitem"
+            :aria-current="currentLocaleValue === option.code ? 'true' : undefined"
+            class="ui-press flex w-full items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[10px] text-slate-200 transition hover:bg-slate-800/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+            :class="currentLocaleValue === option.code ? 'bg-slate-800/70 font-semibold text-[var(--color-secondary)]' : ''"
+            @click="selectLocale(option.code)"
+          >
+            <span class="text-sm leading-none" aria-hidden="true">{{ localeFlag(option.code) }}</span>
+            <span class="truncate">{{ option.nativeLabel }}</span>
+          </button>
+        </li>
+      </ul>
     </Transition>
   </div>
 
   <div
     v-else
-    class="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-950/70"
-    :class="compact ? 'p-0.5' : 'p-1'"
+    class="ui-segmented"
     :aria-label="t('common.language')"
     role="group"
   >
@@ -51,13 +55,9 @@
       v-for="option in localeOptions"
       :key="option.code"
       type="button"
-      class="ui-press ui-touch-target rounded-full font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-      :class="[
-        compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]',
-        currentLocaleValue === option.code
-          ? 'bg-[var(--color-secondary)] text-slate-950'
-          : 'text-slate-300 hover:bg-slate-800 hover:text-slate-50',
-      ]"
+      class="ui-segmented-button ui-press"
+      :class="compact ? 'px-2 py-0.5 text-[10px]' : ''"
+      :data-active="currentLocaleValue === option.code ? 'true' : undefined"
       :aria-pressed="currentLocaleValue === option.code"
       @click="setLocale(option.code)"
     >

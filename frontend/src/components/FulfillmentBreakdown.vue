@@ -9,18 +9,19 @@
       loading    Boolean  — show skeleton
       currency   String   — ISO 4217 currency code for revenue formatting
   -->
-  <div class="space-y-3">
-    <p class="ui-kicker">
+  <div class="space-y-3 sm:space-y-4" :aria-busy="loading">
+    <h2 class="ui-kicker">
       {{ t("ownerHome.fulfillmentTitle") }}
-    </p>
+    </h2>
 
     <!-- Skeleton -->
     <template v-if="loading">
+      <span class="sr-only" aria-live="polite">{{ t("common.loading") }}</span>
       <div class="ui-skeleton h-3 w-full" aria-hidden="true" />
       <div class="space-y-2 pt-0.5">
         <div v-for="i in 3" :key="i" class="flex items-center justify-between gap-3">
-          <div class="h-2.5 w-16 animate-pulse rounded bg-slate-800/60" :style="{ animationDelay: `${i * 60}ms` }" />
-          <div class="h-2.5 w-10 animate-pulse rounded bg-slate-700/60" :style="{ animationDelay: `${i * 60 + 30}ms` }" />
+          <div class="ui-skeleton h-2.5 w-16 rounded" aria-hidden="true" />
+          <div class="ui-skeleton h-2.5 w-10 rounded" aria-hidden="true" />
         </div>
       </div>
     </template>
@@ -28,9 +29,10 @@
     <!-- No data yet -->
     <div
       v-else-if="!rows.length"
-      class="ui-empty-state p-4 text-center"
+      class="ui-empty-state text-center space-y-1"
     >
-      <p class="text-xs font-medium text-slate-300">{{ t("ownerHome.noOrdersYet") }}</p>
+      <p class="text-sm font-semibold text-slate-100">{{ t("ownerHome.noOrdersYet") }}</p>
+      <p class="text-xs ui-subtle">{{ t("ownerHome.noOrdersYetBody") }}</p>
     </div>
 
     <template v-else>
@@ -50,8 +52,8 @@
       </div>
 
       <!-- Legend rows -->
-      <div class="space-y-1.5">
-        <div
+      <ul class="space-y-1.5 list-none">
+        <li
           v-for="(row, index) in rows"
           :key="row.key"
           class="ui-reveal flex min-h-[1.75rem] items-center gap-2 text-xs"
@@ -72,8 +74,8 @@
           <span class="w-20 shrink-0 text-end tabular-nums text-[var(--color-secondary)]">
             {{ fmtRevenue(row.revenue) }}
           </span>
-        </div>
-      </div>
+        </li>
+      </ul>
     </template>
   </div>
 </template>

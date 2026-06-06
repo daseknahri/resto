@@ -1,12 +1,10 @@
 <template>
   <details
-    class="group rounded-xl border border-slate-800 bg-slate-950/30"
+    class="ui-panel group overflow-hidden"
     :open="open"
-    :aria-label="t('ownerHome.dishAvailability')"
   >
     <summary
       class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 [&::-webkit-details-marker]:hidden"
-      :aria-expanded="open"
       @click.prevent="toggle"
     >
       <span class="flex items-center gap-2">
@@ -41,7 +39,7 @@
       </span>
     </summary>
 
-    <div v-if="open" class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2">
+    <div v-if="open" class="space-y-1 border-t border-slate-800 px-3 pb-3 pt-2" :aria-busy="fetching">
       <!-- Search + morning reset row -->
       <div class="mb-2 flex items-center gap-2">
         <input
@@ -56,11 +54,12 @@
           v-if="soldOutCount > 0"
           class="ui-press shrink-0 rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
           :disabled="resetting"
+          :aria-busy="resetting"
           :title="t('ownerHome.resetAvailabilityHint')"
-          :aria-label="t('ownerHome.resetAvailabilityHint')"
+          :aria-label="resetting ? t('common.loading') : t('ownerHome.resetAvailabilityHint')"
           @click="resetAll"
         >
-          {{ resetting ? "…" : t("ownerHome.resetAllAvailable") }}
+          {{ resetting ? t("common.loading") : t("ownerHome.resetAllAvailable") }}
         </button>
       </div>
 
@@ -118,10 +117,12 @@
               @change="setStock(dish, $event.target.value)"
               @keydown.enter="$event.target.blur()"
             />
+            <span v-if="dish.stock_qty === 0" class="sr-only">{{ t("ownerHome.lowStockSoldOut") }}</span>
           </div>
 
           <!-- Available toggle -->
           <button
+            role="switch"
             class="ui-press ui-touch-target shrink-0 rounded-full border px-2.5 text-[10px] font-semibold transition-colors disabled:opacity-50"
             :class="
               dish.is_available
@@ -129,14 +130,18 @@
                 : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'
             "
             :disabled="togglingId === dish.id"
+            :aria-checked="dish.is_available"
+            :aria-busy="togglingId === dish.id"
             :aria-label="
-              dish.is_available
+              togglingId === dish.id
+                ? t('common.loading')
+                : dish.is_available
                 ? `${dish.name} — ${t('ownerHome.dishAvailable')}`
                 : `${dish.name} — ${t('ownerHome.dish86d')}`
             "
             @click="toggleAvailability(dish)"
           >
-            {{ togglingId === dish.id ? "…" : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
+            {{ togglingId === dish.id ? t("common.loading") : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
           </button>
         </div>
       </div>

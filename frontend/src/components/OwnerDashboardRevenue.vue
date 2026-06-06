@@ -24,6 +24,7 @@
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
           </svg>
         </h3>
+        <span role="status" aria-live="polite" class="sr-only">{{ updating ? t('ownerHome.updating') : '' }}</span>
       </div>
       <p class="ui-chip shrink-0">
         {{ data ? t("ownerHome.revenuePeriod", { days: data.days }) : `${period}d` }}
@@ -59,7 +60,7 @@
           <p class="ui-stat-value tabular-nums" :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'">
             {{ returnRateLabel }}
           </p>
-          <p v-if="returnRate !== null" class="mt-0.5 text-[10px] text-slate-500">
+          <p v-if="returnRate !== null" class="ui-stat-note">
             {{ t("ownerHome.customerReturnRateHint", { count: data.customer_return?.total_customers }) }}
           </p>
         </div>
@@ -68,9 +69,10 @@
 
     <!-- Daily revenue mini-chart -->
     <div v-if="data && chartDays.length > 1" class="space-y-1">
-      <p class="ui-kicker">{{ t("ownerHome.revenueDailyChart") }}</p>
+      <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
+      <h3 class="text-sm font-semibold text-slate-200 leading-tight">{{ t("ownerHome.revenueDailyChart") }}</h3>
       <div
-        class="flex min-w-0 items-end gap-0.5 h-20 overflow-x-auto pb-1"
+        class="flex min-w-0 items-end gap-0.5 h-20 overflow-x-auto owner-chart-scroll pb-1"
         role="img"
         :aria-label="t('ownerHome.revenueDailyChart')"
       >
@@ -86,7 +88,7 @@
           />
         </div>
       </div>
-      <div class="flex justify-between text-[10px] tabular-nums text-slate-600" aria-hidden="true">
+      <div class="flex justify-between text-[10px] tabular-nums text-slate-500" aria-hidden="true">
         <span>{{ chartDays[0]?.shortDate }}</span>
         <span>{{ chartDays[chartDays.length - 1]?.shortDate }}</span>
       </div>
@@ -97,15 +99,16 @@
       v-if="data && data.order_count > 0 && peakHoursBars.length"
       class="space-y-3 border-t border-slate-800/60 pt-2"
     >
-      <p class="ui-kicker">{{ t("ownerHome.peakHoursTitle") }}</p>
+      <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
+      <h3 class="text-sm font-semibold text-slate-200 leading-tight">{{ t("ownerHome.peakHoursTitle") }}</h3>
       <div class="grid gap-4 sm:grid-cols-2">
         <!-- By hour of day -->
         <div class="space-y-1.5">
-          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByHour") }}</p>
+          <h4 class="ui-stat-label">{{ t("ownerHome.peakHoursByHour") }}</h4>
           <div
             class="flex h-16 items-end gap-px overflow-hidden"
             role="img"
-            :aria-label="t('ownerHome.peakHoursByHour')"
+            :aria-label="t('ownerHome.peakHoursByHourAriaLabel')"
           >
             <div
               v-for="bar in peakHoursBars"
@@ -116,13 +119,13 @@
               :title="`${bar.hour}:00 — ${bar.count}`"
             />
           </div>
-          <div class="flex justify-between text-[9px] tabular-nums text-slate-600" aria-hidden="true">
+          <div class="flex justify-between text-[9px] tabular-nums text-slate-500" aria-hidden="true">
             <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
           </div>
         </div>
         <!-- By day of week -->
         <div class="space-y-1.5">
-          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByDay") }}</p>
+          <h4 class="ui-stat-label">{{ t("ownerHome.peakHoursByDay") }}</h4>
           <div
             class="flex h-16 items-end gap-1"
             role="img"
@@ -140,7 +143,7 @@
               />
             </div>
           </div>
-          <div class="flex justify-between text-[9px] text-slate-600" aria-hidden="true">
+          <div class="flex justify-between text-[9px] text-slate-500" aria-hidden="true">
             <span v-for="bar in peakWeekdayBars" :key="bar.label">{{ bar.label }}</span>
           </div>
         </div>
@@ -183,7 +186,7 @@
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.marketplaceCommission") }}</p>
           <p class="ui-stat-value tabular-nums text-rose-400">{{ fmt(marketplaceStats.commission_total) }}</p>
-          <p class="mt-0.5 text-[10px] text-slate-600">{{ t("ownerHome.platformFeeNote") }}</p>
+          <p class="ui-stat-note">{{ t("ownerHome.platformFeeNote") }}</p>
         </div>
       </div>
     </div>
@@ -298,4 +301,5 @@ const returnRateLabel = computed(() =>
 
 <style scoped>
 .owner-revenue-icon { width: 1rem; height: 1rem; color: var(--color-secondary); }
+.owner-chart-scroll { scrollbar-width: thin; }
 </style>

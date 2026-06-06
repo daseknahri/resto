@@ -1,6 +1,6 @@
 <template>
   <!-- Readiness skeleton while loading -->
-  <article v-if="loading" class="ui-section-band animate-pulse space-y-3 p-3 sm:space-y-4 sm:p-4" aria-busy="true" :aria-label="t('ownerHome.launchProgress')">
+  <div v-if="loading" role="status" class="ui-section-band animate-pulse space-y-3 p-3 sm:space-y-4 sm:p-4" aria-busy="true" :aria-label="t('ownerHome.launchProgress')">
     <div class="flex items-center justify-between gap-3">
       <div class="h-3.5 w-28 rounded bg-slate-700/60" />
       <div class="h-3.5 w-10 rounded bg-slate-700/60" />
@@ -12,7 +12,7 @@
         <div class="h-5 w-14 shrink-0 rounded-full bg-slate-700/40" />
       </div>
     </div>
-  </article>
+  </div>
 
   <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
        cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
@@ -20,7 +20,7 @@
     <div class="flex items-center justify-between gap-3">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t("ownerHome.launchChecklist") }}</p>
-        <p class="mt-0.5 text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
+        <h2 class="mt-0.5 text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</h2>
       </div>
       <span
         class="tabular-nums text-sm font-semibold"
@@ -50,8 +50,8 @@
       {{ t("ownerHome.readinessDone") }}
     </p>
 
-    <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-      <article
+    <ul class="grid list-none gap-2 p-0 sm:grid-cols-2 xl:grid-cols-5">
+      <li
         v-for="(item, index) in readinessItems"
         :key="item.label"
         class="ui-readiness-item ui-reveal flex items-start justify-between gap-3"
@@ -67,7 +67,6 @@
               v-if="item.to"
               :to="item.to"
               class="mt-1.5 inline-flex text-[11px] text-brand-secondary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)] sm:text-xs"
-              :aria-label="item.actionLabel"
             >
               {{ item.actionLabel }}
             </RouterLink>
@@ -76,12 +75,11 @@
         <span
           class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold"
           :class="item.ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
-          :aria-label="item.ready ? t('ownerHome.ready') : t('ownerHome.missing')"
         >
           {{ item.ready ? t("ownerHome.ready") : t("ownerHome.missing") }}
         </span>
-      </article>
-    </div>
+      </li>
+    </ul>
   </article>
 </template>
 

@@ -4,7 +4,7 @@
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
-        <h3 class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg">
+        <h2 class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg">
           <AppIcon name="chart" class="owner-insights-icon shrink-0" aria-hidden="true" />
           <span class="truncate">{{ t("ownerHome.analyticsTitle", { days: internalPeriod }) }}</span>
           <svg
@@ -19,7 +19,8 @@
           >
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
           </svg>
-        </h3>
+        </h2>
+        <span role="status" aria-live="polite" class="sr-only">{{ updating ? t('ownerHome.updatingLabel') : '' }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <!-- Period selector -->
@@ -34,6 +35,7 @@
                 : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'
             "
             :aria-pressed="internalPeriod === d"
+            :aria-label="t('ownerHome.periodDaysLabel', { days: d })"
             :disabled="loading"
             @click="setPeriod(d)"
           >
@@ -43,6 +45,8 @@
         <button
           class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :disabled="exporting"
+          :aria-busy="exporting"
+          :aria-label="exporting ? t('ownerHome.exportingCsv') : t('ownerHome.exportCsv')"
           @click="exportCsv"
         >
           <svg v-if="!exporting" aria-hidden="true" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -164,12 +168,17 @@
           <div class="flex items-center justify-between gap-2 text-sm">
             <span class="min-w-0 truncate text-slate-300">{{ step.label }}</span>
             <div class="flex shrink-0 items-center gap-2">
-              <span v-if="step.dropPct !== null" class="funnel-drop-badge" aria-label="drop">−{{ step.dropPct }}%</span>
+              <span v-if="step.dropPct !== null" class="funnel-drop-badge" :aria-label="t('ownerHome.funnelDropPct', { pct: step.dropPct })">−{{ step.dropPct }}%</span>
               <span class="w-14 text-end tabular-nums font-semibold text-slate-100">{{ formatNumber(step.value) }}</span>
             </div>
           </div>
           <div class="mt-1.5 h-2 w-full rounded-full bg-slate-800">
             <div
+              role="progressbar"
+              :aria-valuenow="step.widthPct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="step.label"
               class="h-2 rounded-full transition-all duration-500"
               :class="step.barClass"
               :style="{ width: step.widthPct + '%' }"

@@ -349,7 +349,8 @@ const arabicMessages = {
     "viewAllOrders": "عرض جميع الطلبات",
     "inProgress": "قيد التنفيذ",
     "recentOrdersList": "الطلبات الأخيرة",
-    "noOrdersYet": "لا توجد طلبات بعد. ستظهر هنا عند بدء العملاء بالطلب.",
+    "noOrdersYet": "لا توجد طلبات بعد.",
+    "noOrdersYetBody": "ستظهر الطلبات هنا عند بدء العملاء بالطلب.",
     "analyticsKicker": "رؤى الأداء",
     "periodSelectorLabel": "فترة التحليلات",
     "analyticsTitle": "تحليلات {days} يوم",
@@ -465,7 +466,11 @@ const arabicMessages = {
     "readinessActionDishes": "إضافة أطباق",
     "readinessActionPublish": "نشر الآن",
     "exportCsv": "تصدير CSV",
+    "exportingCsv": "جارٍ تصدير CSV...",
     "exportFailed": "فشل تصدير التحليلات. يرجى المحاولة مجدداً.",
+    "periodDaysLabel": "آخر {days} يوم",
+    "updatingLabel": "جارٍ تحديث بيانات التحليلات",
+    "funnelDropPct": "انخفاض بنسبة {pct}% عن الخطوة السابقة",
     "funnelTitle": "قمع التحويل",
     "funnelMenuViews": "مشاهدات القائمة",
     "funnelCartViews": "مشاهدات السلة",
@@ -485,7 +490,8 @@ const arabicMessages = {
     "popularDishesTitle": "الأطباق الأكثر طلباً",
     "customerReturnRate": "معدل العودة",
     "customerReturnRateHint": "{count} عميل فريد",
-    "customerReturnRateNA": "بيانات غير كافية"
+    "customerReturnRateNA": "بيانات غير كافية",
+    "updating": "جارٍ تحديث بيانات الإيرادات"
   },
   "ownerSections": {
     "kicker": "إدارة القاعة",
@@ -2092,6 +2098,7 @@ Object.assign(arabicMessages, {
     confirmBtn: "\u062d\u0630\u0641"
   },
   errorBoundary: {
+    kicker: "\u062e\u0637\u0623",
     title: "\u062d\u062f\u062b \u062e\u0637\u0623 \u063a\u064a\u0631 \u0645\u062a\u0648\u0642\u0639",
     body: "\u062d\u062f\u062b \u062e\u0637\u0623 \u063a\u064a\u0631 \u0645\u062a\u0648\u0642\u0639. \u0623\u0639\u062f \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629 \u2014 \u0628\u064a\u0627\u0646\u0627\u062a\u0643 \u0641\u064a \u0623\u0645\u0627\u0646.",
     reload: "\u0625\u0639\u0627\u062f\u0629 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629",

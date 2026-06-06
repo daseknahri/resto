@@ -5,10 +5,10 @@
       <div
         v-for="(alert, index) in alerts"
         :key="alert.id"
-        class="ui-reveal flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm"
+        class="ui-section-band ui-reveal flex items-start gap-3 px-3 py-2.5 text-sm"
         :class="alert.borderClass"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        role="alert"
+        :role="index === 0 ? 'alert' : 'status'"
       >
         <!-- Icon -->
         <span class="mt-0.5 shrink-0 text-base leading-none" aria-hidden="true">{{ alert.icon }}</span>
@@ -22,21 +22,21 @@
         <RouterLink
           v-if="alert.to"
           :to="alert.to"
-          class="ui-press ui-touch-target shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
+          class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px] focus-visible:ring-2"
           :class="alert.actionClass"
-          :aria-label="alert.actionLabel"
         >
           {{ alert.actionLabel }}
         </RouterLink>
         <button
           v-else-if="alert.action"
           :disabled="alert.loading"
-          class="ui-press ui-touch-target shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current disabled:opacity-50"
+          class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px] disabled:opacity-50 focus-visible:ring-2"
           :class="alert.actionClass"
           :aria-busy="alert.loading || undefined"
           @click="alert.action()"
         >
-          {{ alert.loading ? "…" : alert.actionLabel }}
+          <span v-if="alert.loading" aria-hidden="true">…</span>
+          <span :class="{ 'sr-only': alert.loading }">{{ alert.actionLabel }}</span>
         </button>
       </div>
     </TransitionGroup>

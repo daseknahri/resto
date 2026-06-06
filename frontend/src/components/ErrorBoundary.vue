@@ -4,12 +4,11 @@
     v-else
     class="flex min-h-screen flex-col items-center justify-center px-4 py-10"
     role="alert"
-    aria-live="assertive"
   >
     <!-- Centered glass card -->
     <div class="ui-glass ui-reveal w-full max-w-md p-8 text-center">
       <!-- Icon -->
-      <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
+      <div aria-hidden="true" class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
@@ -26,7 +25,8 @@
 
       <!-- Message -->
       <div class="space-y-2">
-        <h1 class="text-xl font-semibold text-white">{{ t("errorBoundary.title") }}</h1>
+        <p class="ui-kicker mb-1">{{ t("errorBoundary.kicker") }}</p>
+        <h2 class="ui-display text-xl font-semibold text-white">{{ t("errorBoundary.title") }}</h2>
         <p class="ui-subtle mx-auto max-w-xs">{{ t("errorBoundary.body") }}</p>
       </div>
 
@@ -48,7 +48,7 @@
 
       <!-- Dev details (hidden in production) -->
       <details v-if="isDev && errorMessage" class="mt-6 text-start">
-        <summary class="cursor-pointer text-xs text-slate-500 transition hover:text-slate-400">
+        <summary class="cursor-pointer rounded text-xs text-slate-500 transition hover:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70">
           {{ t("errorBoundary.details") }}
         </summary>
         <pre class="mt-2 overflow-auto rounded-xl border border-red-500/20 bg-slate-950/70 p-3 text-start text-xs text-red-300">{{ errorMessage }}</pre>
