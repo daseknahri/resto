@@ -1,24 +1,38 @@
 ﻿<template>
-  <div class="p-6 space-y-8">
+  <div class="ui-page-shell space-y-6">
     <!-- Header -->
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-white">{{ t('adminAnalytics.title') }}</h1>
-        <p class="text-sm text-slate-400 mt-0.5">{{ t('adminAnalytics.subtitle') }}</p>
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="ui-kicker">{{ t('adminAnalytics.kicker') }}</p>
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">
+            {{ t('adminAnalytics.title') }}
+          </h1>
+          <p class="ui-subtle mt-0.5 text-xs">{{ t('adminAnalytics.subtitle') }}</p>
+        </div>
+        <button
+          class="ui-btn-outline ui-press ui-touch-target shrink-0 flex items-center gap-2 px-4 text-xs disabled:opacity-50"
+          :disabled="loading"
+          :aria-label="t('adminAnalytics.refresh')"
+          @click="refresh"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            class="h-4 w-4 shrink-0"
+            :class="loading ? 'animate-spin motion-reduce:animate-none' : ''"
+          >
+            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+          </svg>
+          <span>{{ t('adminAnalytics.refresh') }}</span>
+        </button>
       </div>
-      <button
-        class="rounded-full border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:border-slate-500 flex items-center gap-2"
-        :disabled="loading"
-        @click="refresh"
-      >
-        <span :class="loading ? 'animate-spin' : ''">↻</span>
-        {{ t('adminAnalytics.refresh') }}
-      </button>
-    </div>
+    </header>
 
     <!-- Loading skeleton -->
-    <div v-if="loading && !data" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      <div v-for="i in 12" :key="i" class="h-24 rounded-2xl bg-slate-800/60 animate-pulse" />
+    <div v-if="loading && !data" aria-busy="true" :aria-label="t('common.loading')" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div v-for="i in 12" :key="i" class="ui-skeleton h-24" />
     </div>
 
     <!-- Error -->
@@ -28,27 +42,27 @@
       </svg>
       <p class="flex-1 text-sm text-red-300">{{ t('adminAnalytics.fetchError') }}</p>
       <button
-        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 ui-touch-target"
         @click="refresh"
       >{{ t('common.retry') }}</button>
     </div>
 
     <!-- Data -->
     <template v-else-if="data">
-      <!-- Tenants -->
       <!-- Money model: outstanding liabilities -->
-      <section v-if="data.financials">
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionFinancials') }}</h2>
+      <section v-if="data.financials" class="ui-reveal space-y-3">
+        <p class="ui-kicker">{{ t('adminAnalytics.sectionFinancials') }}</p>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard :value="currency(data.financials.customer_wallet_liability)" :label="t('adminAnalytics.walletLiability')" color="violet" icon="👛" />
           <StatCard :value="currency(data.financials.restaurant_float_outstanding)" :label="t('adminAnalytics.floatOutstanding')" color="sky" icon="🏪" />
           <StatCard :value="currency(data.financials.driver_owed)" :label="t('adminAnalytics.driverOwed')" color="emerald" icon="🛵" />
         </div>
-        <p class="mt-2 text-[11px] text-slate-600">{{ t('adminAnalytics.financialsHint') }}</p>
+        <p class="text-[11px] text-slate-500">{{ t('adminAnalytics.financialsHint') }}</p>
       </section>
 
-      <section>
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionTenants') }}</h2>
+      <!-- Restaurants -->
+      <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '28ms' }">
+        <p class="ui-kicker">{{ t('adminAnalytics.sectionTenants') }}</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard :value="data.tenants.total" :label="t('adminAnalytics.totalTenants')" color="sky" icon="🏪" />
           <StatCard :value="data.tenants.active" :label="t('adminAnalytics.activeTenants')" color="emerald" icon="✅" />
@@ -58,8 +72,8 @@
       </section>
 
       <!-- Customers & Drivers -->
-      <section>
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionCustomers') }}</h2>
+      <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '56ms' }">
+        <p class="ui-kicker">{{ t('adminAnalytics.sectionCustomers') }}</p>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <StatCard :value="data.customers.total" :label="t('adminAnalytics.totalCustomers')" color="violet" icon="👤" />
           <StatCard :value="data.customers.drivers_total" :label="t('adminAnalytics.totalDrivers')" color="sky" icon="🛵" />
@@ -68,8 +82,8 @@
       </section>
 
       <!-- Deliveries -->
-      <section>
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionDeliveries') }}</h2>
+      <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '84ms' }">
+        <p class="ui-kicker">{{ t('adminAnalytics.sectionDeliveries') }}</p>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <StatCard :value="data.deliveries.total_jobs" :label="t('adminAnalytics.totalJobs')" color="sky" icon="📦" />
           <StatCard :value="data.deliveries.delivered" :label="t('adminAnalytics.deliveredJobs')" color="emerald" icon="✔" />
@@ -98,10 +112,10 @@
       </section>
 
       <!-- Zones & Flash Sales side by side -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Zones -->
-        <section>
-          <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionZones') }}</h2>
+        <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
+          <p class="ui-kicker">{{ t('adminAnalytics.sectionZones') }}</p>
           <div class="grid grid-cols-2 gap-4">
             <StatCard :value="data.zones.total" :label="t('adminAnalytics.totalZones')" color="sky" icon="🗺" />
             <StatCard :value="data.zones.active" :label="t('adminAnalytics.activeZones')" color="emerald" icon="✅" />
@@ -109,8 +123,8 @@
         </section>
 
         <!-- Flash Sales -->
-        <section>
-          <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionFlashSales') }}</h2>
+        <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '112ms' }">
+          <p class="ui-kicker">{{ t('adminAnalytics.sectionFlashSales') }}</p>
           <div class="grid grid-cols-3 gap-4">
             <StatCard :value="data.flash_sales.total" :label="t('adminAnalytics.totalSales')" color="sky" icon="⚡" />
             <StatCard :value="data.flash_sales.live" :label="t('adminAnalytics.liveSales')" color="emerald" icon="🔴" />
@@ -120,8 +134,8 @@
       </div>
 
       <!-- Wallet -->
-      <section>
-        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">{{ t('adminAnalytics.sectionWallet') }}</h2>
+      <section class="ui-reveal space-y-3" :style="{ '--ui-delay': '140ms' }">
+        <p class="ui-kicker">{{ t('adminAnalytics.sectionWallet') }}</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard
             :value="data.wallet.total_balance != null ? currency(data.wallet.total_balance) : '—'"
@@ -146,7 +160,7 @@
       </section>
 
       <!-- Last refreshed -->
-      <p class="text-[11px] text-slate-600 text-right">{{ t('adminAnalytics.lastRefreshed') }} {{ refreshedAt }}</p>
+      <p class="text-[11px] text-slate-500 text-end tabular-nums">{{ t('adminAnalytics.lastRefreshed') }} {{ refreshedAt }}</p>
     </template>
   </div>
 </template>

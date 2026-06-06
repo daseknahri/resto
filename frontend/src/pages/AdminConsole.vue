@@ -8,8 +8,8 @@
           <h1 class="ui-display text-3xl font-semibold text-white">{{ activeAdminViewTitle }}</h1>
           <p class="mt-1 text-xs text-slate-400">{{ t("adminConsole.reviewIncomingLeads") }}</p>
           <div class="flex flex-wrap gap-2">
-            <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ activeAdminViewLabel }}</span>
-            <span class="ui-chip text-[10px] uppercase tracking-[0.18em] text-slate-300">{{ currentDomainSuffixLabel }}</span>
+            <span class="ui-chip">{{ activeAdminViewLabel }}</span>
+            <span class="ui-chip">{{ currentDomainSuffixLabel }}</span>
           </div>
         </div>
         <div class="grid gap-3 self-start">
@@ -90,9 +90,9 @@
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article v-for="metric in activeAdminMetrics" :key="metric.label" class="ui-stat-tile">
+        <article v-for="(metric, index) in activeAdminMetrics" :key="metric.label" class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': `${index * 28}ms` }">
           <p class="ui-stat-label">{{ metric.label }}</p>
-          <p class="ui-stat-value" :class="metric.valueClass">{{ metric.value }}</p>
+          <p class="ui-stat-value tabular-nums" :class="metric.valueClass">{{ metric.value }}</p>
           <p class="ui-stat-note">{{ metric.note }}</p>
         </article>
       </div>
@@ -176,8 +176,8 @@
     <section v-if="activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">{{ t("adminConsole.incomingLeads") }}</p>
-          <h2 class="text-xl font-semibold">{{ t("adminConsole.awaitingProvisioning") }}</h2>
+          <p class="ui-kicker">{{ t("adminConsole.incomingLeads") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("adminConsole.awaitingProvisioning") }}</h2>
         </div>
         <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-50" :disabled="leadsLoading" @click="fetchLeads">{{ t("adminConsole.refreshLeads") }}</button>
       </div>
@@ -209,15 +209,16 @@
       </article>
       <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div
-          v-for="lead in leads"
+          v-for="(lead, index) in leads"
           :key="lead.id"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <div class="flex items-center justify-between">
-            <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-slate-500">{{ lead.status }}</span>
-              <span class="text-xs text-slate-400">{{ lead.plan_code?.toUpperCase() }}</span>
+          <div class="flex items-center justify-between gap-2">
+            <p class="min-w-0 truncate font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <span class="ui-status-pill text-[10px]">{{ lead.status }}</span>
+              <span class="ui-chip text-[10px]">{{ lead.plan_code?.toUpperCase() }}</span>
             </div>
           </div>
           <p class="text-xs text-slate-400">{{ lead.email }} / {{ lead.phone }}</p>
@@ -243,35 +244,35 @@
           </div>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
-              class="flex-1 rounded-full bg-brand-secondary px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+              class="ui-btn-primary ui-press w-full px-3 py-2 text-sm sm:col-span-2 disabled:opacity-60"
               :disabled="provLoading[lead.id]"
               @click="provision(lead)"
             >
               {{ provLoading[lead.id] ? t("adminConsole.provisioning") : t("adminConsole.provision") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary"
+              class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs disabled:opacity-50"
               :disabled="previewLoading[lead.id]"
               @click="checkPreview(lead, true)"
             >
               {{ t("adminConsole.check") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+              class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs disabled:opacity-50"
               :disabled="resendLoading[lead.id] || lead.status !== 'live'"
               @click="resendActivation(lead)"
             >
               {{ resendLoading[lead.id] ? t("adminConsole.sending") : t("adminConsole.resendActivation") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+              class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs disabled:opacity-50"
               :disabled="packageLoading[lead.id] || lead.status !== 'live'"
               @click="loadOnboardingPackage(lead, false)"
             >
               {{ packageLoading[lead.id] ? t("common.loading") : t("adminConsole.loadPackage") }}
             </button>
             <button
-              class="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50 sm:col-span-2"
+              class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs text-rose-300 hover:border-rose-500/50 hover:text-rose-200 disabled:opacity-50 sm:col-span-2"
               :disabled="removeLoading[lead.id]"
               @click="removeLead(lead)"
             >
@@ -285,13 +286,13 @@
     <section v-if="activeAdminView === 'tenants'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">{{ t("adminConsole.tenantLifecycleControls") }}</p>
-          <h2 class="text-xl font-semibold">{{ t("adminConsole.suspendReactivateCancel") }}</h2>
+          <p class="ui-kicker">{{ t("adminConsole.tenantLifecycleControls") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("adminConsole.suspendReactivateCancel") }}</h2>
         </div>
         <div class="ui-scroll-row">
           <label class="text-xs text-slate-400">
             {{ t("adminConsole.pageSize") }}
-            <select v-model.number="tenantPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
+            <select v-model.number="tenantPageSize" class="ui-input ms-2 px-2 py-1 text-xs">
               <option :value="10">10</option>
               <option :value="25">25</option>
               <option :value="50">50</option>
@@ -332,13 +333,14 @@
       </article>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="tenant in tenants"
+          v-for="(tenant, index) in tenants"
           :key="`tenant-${tenant.id}`"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="font-semibold text-slate-100">{{ tenant.name }}</p>
-            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="tenantLifecycleStatusClass(tenant.lifecycle_status)">
+            <p class="min-w-0 truncate font-semibold text-slate-100">{{ tenant.name }}</p>
+            <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="tenantLifecycleStatusClass(tenant.lifecycle_status)">
               {{ tenant.lifecycle_status }}
             </span>
           </div>
@@ -348,21 +350,21 @@
           <p v-if="tenant.canceled_reason" class="text-xs text-rose-200">{{ t("adminConsole.cancelReason") }}: {{ tenant.canceled_reason }}</p>
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
-              class="rounded-full border border-amber-400/70 px-3 py-1.5 text-xs font-semibold text-amber-200 disabled:opacity-50"
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs font-semibold text-amber-200 hover:border-amber-400/50 disabled:opacity-50"
               :disabled="tenant.lifecycle_status !== 'active' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'suspend')"
             >
               {{ t("adminConsole.suspend") }}
             </button>
             <button
-              class="rounded-full border border-emerald-400/70 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-50"
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:border-emerald-400/50 disabled:opacity-50"
               :disabled="tenant.lifecycle_status === 'active' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'reactivate')"
             >
               {{ t("adminConsole.reactivate") }}
             </button>
             <button
-              class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-50"
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs font-semibold text-rose-300 hover:border-rose-500/50 disabled:opacity-50"
               :disabled="tenant.lifecycle_status === 'canceled' || !!tenantLifecycleLoading[tenant.id]"
               @click="applyTenantLifecycle(tenant, 'cancel')"
             >
@@ -370,23 +372,23 @@
             </button>
           </div>
           <button
-            class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary"
+            class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
             :aria-expanded="tenantToolsExpanded(tenant.id)"
             @click="toggleTenantTools(tenant.id)"
           >
-            {{ tenantToolsExpanded(tenant.id) ? `${t("adminConsole.hide")} tools` : `${t("adminConsole.show")} tools` }}
+            {{ tenantToolsExpanded(tenant.id) ? t("adminConsole.hideTools") : t("adminConsole.showTools") }}
           </button>
           <div v-if="tenantToolsExpanded(tenant.id)" class="space-y-2">
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+                class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-50"
                 :disabled="!!tenantExportLoading[tenant.id]"
                 @click="exportTenantSettings(tenant)"
               >
                 {{ tenantExportLoading[tenant.id] ? t("adminConsole.exporting") : t("adminConsole.exportSettings") }}
               </button>
               <button
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-primary disabled:opacity-50"
+                class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-50"
                 :disabled="!!tenantImportLoading[tenant.id]"
                 @click="openTenantImportPicker(tenant.id)"
               >
@@ -404,7 +406,7 @@
               <div class="flex items-center justify-between gap-2">
                 <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500">{{ t("adminConsole.actionHistory") }}</p>
                 <button
-                  class="text-xs text-brand-secondary hover:underline disabled:opacity-50"
+                  class="ui-press text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline disabled:opacity-50"
                   :disabled="tenantTimelineLoading(tenant.id)"
                   @click="toggleTenantTimeline(tenant)"
                 >
@@ -418,21 +420,21 @@
                   </p>
                   <div class="flex flex-wrap items-center gap-1">
                     <button
-                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      class="ui-btn-outline ui-press px-2 py-1 text-[10px] disabled:opacity-50"
                       :disabled="!tenantTimelineHasPrev(tenant.id) || tenantTimelineLoading(tenant.id)"
                       @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) - 1)"
                     >
                       {{ t("common.previous") }}
                     </button>
                     <button
-                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      class="ui-btn-outline ui-press px-2 py-1 text-[10px] disabled:opacity-50"
                       :disabled="!tenantTimelineHasNext(tenant.id) || tenantTimelineLoading(tenant.id)"
                       @click="changeTenantTimelinePage(tenant.id, tenantTimelinePage(tenant.id) + 1)"
                     >
                       {{ t("common.next") }}
                     </button>
                     <button
-                      class="rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 disabled:opacity-50"
+                      class="ui-btn-outline ui-press px-2 py-1 text-[10px] disabled:opacity-50"
                       :disabled="tenantTimelineLoading(tenant.id)"
                       @click="fetchTenantTimeline(tenant.id, tenantTimelinePage(tenant.id))"
                     >
@@ -472,8 +474,8 @@
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">{{ t("adminConsole.reservationFollowUpSla") }}</p>
-          <h2 class="text-xl font-semibold">{{ t("adminConsole.overdueReservationAlerts") }}</h2>
+          <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
+          <h2 class="text-xl font-semibold text-white">{{ t("adminConsole.overdueReservationAlerts") }}</h2>
         </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.alerts = !adminPanels.alerts">
@@ -510,18 +512,18 @@
         </button>
       </div>
       <div class="grid gap-2 sm:grid-cols-3">
-        <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">{{ t("adminConsole.overdue") }}</p>
-          <p class="mt-1 text-base font-semibold text-rose-200">{{ alertCounts.overdue }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">{{ t("adminConsole.dueSoon") }}</p>
-          <p class="mt-1 text-base font-semibold text-amber-200">{{ alertCounts.due_soon }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-          <p class="text-slate-500">{{ t("adminConsole.totalAlerts") }}</p>
-          <p class="mt-1 text-base font-semibold text-slate-100">{{ alertCounts.total_alerts }}</p>
-        </div>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.overdue") }}</p>
+          <p class="ui-stat-value tabular-nums text-rose-200">{{ alertCounts.overdue }}</p>
+        </article>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.dueSoon") }}</p>
+          <p class="ui-stat-value tabular-nums text-amber-200">{{ alertCounts.due_soon }}</p>
+        </article>
+        <article class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("adminConsole.totalAlerts") }}</p>
+          <p class="ui-stat-value tabular-nums">{{ alertCounts.total_alerts }}</p>
+        </article>
       </div>
       <p class="text-xs text-slate-500">
         {{ t("adminConsole.reservationSlaCopy", { overdue: alertThresholds.overdue_minutes, dueSoon: alertThresholds.due_soon_minutes }) }}
@@ -549,13 +551,14 @@
       </article>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="lead in reservationAlerts"
+          v-for="(lead, index) in reservationAlerts"
           :key="`alert-${lead.id}`"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
-            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="slaBadgeClass(lead.sla_state)">
+            <p class="min-w-0 truncate font-semibold text-slate-100">{{ lead.name || t("adminConsole.leadLabel", { id: lead.id }) }}</p>
+            <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="slaBadgeClass(lead.sla_state)">
               {{ slaLabel(lead) }}
             </span>
           </div>
@@ -574,7 +577,7 @@
             :href="ownerReservationUrl(lead)"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-brand-primary"
+            class="ui-btn-outline ui-press inline-flex px-3 py-1 text-xs"
           >
             {{ t("adminConsole.openOwnerInbox") }}
           </a>
@@ -586,8 +589,8 @@
     <section v-if="activeAdminView === 'operations'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">{{ t("adminConsole.cashFirstUpgrades") }}</p>
-          <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.tierUpgradeRequests") }}</h2>
+          <p class="ui-kicker">{{ t("adminConsole.cashFirstUpgrades") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.tierUpgradeRequests") }}</h2>
         </div>
         <button class="ui-btn-outline px-4 py-2 text-sm disabled:opacity-50" :disabled="upgradeLoading" @click="fetchUpgradeRequests">
           {{ t("common.refresh") }}
@@ -617,32 +620,33 @@
       </article>
       <div v-else class="space-y-2 md:hidden">
         <article
-          v-for="request in upgradeRequests"
+          v-for="(request, index) in upgradeRequests"
           :key="`upgrade-mobile-${request.id}`"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-xs text-slate-400">{{ formatDate(request.requested_at) }}</p>
-            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="upgradeStatusClass(request.status)">
+            <p class="text-xs tabular-nums text-slate-400">{{ formatDate(request.requested_at) }}</p>
+            <span class="ui-status-pill text-[10px] font-semibold" :class="upgradeStatusClass(request.status)">
               {{ request.status }}
             </span>
           </div>
-          <p class="text-sm font-semibold text-slate-100">{{ request.tenant_slug }}</p>
-          <p class="text-xs text-slate-400">{{ request.current_plan_name }} -> {{ request.target_plan_name }}</p>
+          <p class="font-semibold text-slate-100">{{ request.tenant_slug }}</p>
+          <p class="text-xs text-slate-400">{{ request.current_plan_name }} &rarr; {{ request.target_plan_name }}</p>
           <p class="text-xs text-slate-500">
             {{ t("adminConsole.payment") }}: {{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}
           </p>
           <p v-if="request.target_plan_is_active === false" class="text-xs text-amber-300">{{ t("adminConsole.targetPlanInactive") }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button
-              class="rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-50"
+              class="ui-btn-primary ui-press px-3 py-1.5 text-xs disabled:opacity-50"
               :disabled="request.status !== 'pending' || request.target_plan_is_active === false || !!decisionLoading[request.id]"
               @click="decideUpgradeRequest(request, 'approve')"
             >
               {{ t("adminConsole.approve") }}
             </button>
             <button
-              class="rounded-full border border-rose-500/70 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-50"
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs text-rose-300 hover:border-rose-500/50 disabled:opacity-50"
               :disabled="request.status !== 'pending' || !!decisionLoading[request.id]"
               @click="decideUpgradeRequest(request, 'reject')"
             >
@@ -655,13 +659,13 @@
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.from") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.to") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.payment") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("common.status") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.actions") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.when") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.tenant") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.from") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.to") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.payment") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.actions") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -671,25 +675,25 @@
               <td class="px-4 py-3 text-slate-300">{{ request.current_plan_name }}</td>
               <td class="px-4 py-3 text-slate-300">
                 <span>{{ request.target_plan_name }}</span>
-                <span v-if="request.target_plan_is_active === false" class="ml-2 text-xs text-amber-300">({{ t("adminConsole.inactive") }})</span>
+                <span v-if="request.target_plan_is_active === false" class="ms-2 text-xs text-amber-300">({{ t("adminConsole.inactive") }})</span>
               </td>
               <td class="px-4 py-3 text-slate-300">{{ request.payment_method }}{{ request.payment_reference ? ` / ${request.payment_reference}` : "" }}</td>
               <td class="px-4 py-3">
-                <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="upgradeStatusClass(request.status)">
+                <span class="ui-status-pill text-[10px] font-semibold" :class="upgradeStatusClass(request.status)">
                   {{ request.status }}
                 </span>
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <button
-                    class="rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-slate-950 disabled:opacity-50"
+                    class="ui-btn-primary ui-press px-3 py-1 text-xs disabled:opacity-50"
                     :disabled="request.status !== 'pending' || request.target_plan_is_active === false || !!decisionLoading[request.id]"
                     @click="decideUpgradeRequest(request, 'approve')"
                   >
                     {{ t("adminConsole.approve") }}
                   </button>
                   <button
-                    class="rounded-full border border-rose-500/70 px-3 py-1 text-xs font-semibold text-rose-200 disabled:opacity-50"
+                    class="ui-btn-outline ui-press px-3 py-1 text-xs text-rose-300 hover:border-rose-500/50 disabled:opacity-50"
                     :disabled="request.status !== 'pending' || !!decisionLoading[request.id]"
                     @click="decideUpgradeRequest(request, 'reject')"
                   >
@@ -706,9 +710,9 @@
     <section v-if="activeAdminView === 'plans'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p class="text-sm text-slate-300">{{ t("adminConsole.planFeatureFlags") }}</p>
-          <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.planFeatureControls") }}</h2>
-          <p class="text-xs text-slate-500">{{ t("adminConsole.planFeatureControlsHint") }}</p>
+          <p class="ui-kicker">{{ t("adminConsole.planFeatureFlags") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.planFeatureControls") }}</h2>
+          <p class="ui-subtle mt-1">{{ t("adminConsole.planFeatureControlsHint") }}</p>
         </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.planFlags = !adminPanels.planFlags">
@@ -744,9 +748,10 @@
       </article>
       <div v-else class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="plan in planFeatureRows"
+          v-for="(plan, index) in planFeatureRows"
           :key="`plan-flag-${plan.plan_code}`"
-          class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 space-y-3"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-3"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
             <div>
@@ -754,8 +759,8 @@
               <p class="text-[11px] text-slate-500">{{ plan.plan_code?.toUpperCase() }}</p>
             </div>
             <span
-              class="rounded-full px-2 py-1 text-[10px] font-semibold"
-              :class="plan.plan_is_active ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-700/60 text-slate-300'"
+              class="ui-status-pill text-[10px] font-semibold"
+              :class="plan.plan_is_active ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200' : ''"
             >
               {{ plan.plan_is_active ? t("common.available") : t("adminConsole.inactive") }}
             </span>
@@ -793,7 +798,7 @@
                   {{ flag.key }}{{ planFlagDirtyKeys.has(`${plan.plan_code}:${flag.key}`) ? ' •' : '' }}
                 </span>
                 <button
-                  class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-100 hover:border-brand-primary disabled:opacity-50"
+                  class="ui-btn-outline ui-press px-3 py-1 text-xs disabled:opacity-50"
                   :disabled="!!planFlagSaving[planFlagStateKey(plan.plan_code, flag.key)]"
                   @click="savePlanFeatureFlag(plan, flag)"
                 >
@@ -809,7 +814,10 @@
 
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.provisioningJobs") }}</h2>
+        <div>
+          <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.provisioningJobs") }}</h2>
+        </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.jobs = !adminPanels.jobs">
             {{ adminPanels.jobs ? t("adminConsole.hide") : t("adminConsole.show") }}
@@ -837,13 +845,14 @@
       </article>
       <div v-else class="space-y-2 md:hidden">
         <article
-          v-for="job in jobs"
+          v-for="(job, index) in jobs"
           :key="`job-mobile-${job.id}`"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
-            <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
+            <p class="min-w-0 truncate text-sm font-semibold text-slate-100">#{{ job.id }} - {{ job.lead_name }}</p>
+            <span class="ui-status-pill shrink-0 text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
           </div>
           <p class="text-xs text-slate-400">{{ t("adminConsole.tenant") }}: {{ job.tenant_slug || '-' }}</p>
           <p class="text-xs text-slate-400">{{ t("adminConsole.updated") }}: {{ formatDate(job.updated_at) }}</p>
@@ -855,12 +864,12 @@
         <table class="w-full min-w-[920px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.id") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.lead") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.tenant") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("common.status") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.log") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.updated") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.id") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.lead") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.tenant") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.log") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.updated") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -869,7 +878,7 @@
               <td class="px-4 py-3 text-slate-200">{{ job.lead_name }}</td>
               <td class="px-4 py-3 text-slate-200">{{ job.tenant_slug || '-' }}</td>
               <td class="px-4 py-3">
-                <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
+                <span class="ui-status-pill text-[10px] font-semibold" :class="statusClass(job.status)">{{ job.status }}</span>
               </td>
               <td class="px-4 py-3 text-slate-300 whitespace-pre-line text-xs leading-snug max-w-[320px]">{{ job.log }}</td>
               <td class="px-4 py-3 text-slate-400">{{ formatDate(job.updated_at) }}</td>
@@ -882,14 +891,17 @@
 
     <section v-if="activeAdminView === 'monitoring'" class="ui-workspace-stage p-4 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="ui-display text-2xl font-semibold">{{ t("adminConsole.securityAuditLog") }}</h2>
+        <div>
+          <p class="ui-kicker">{{ t("adminConsole.reservationFollowUpSla") }}</p>
+          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("adminConsole.securityAuditLog") }}</h2>
+        </div>
         <div class="ui-scroll-row">
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="adminPanels.audit = !adminPanels.audit">
             {{ adminPanels.audit ? t("adminConsole.hide") : t("adminConsole.show") }}
           </button>
           <label class="text-xs text-slate-400">
             {{ t("adminConsole.pageSize") }}
-            <select v-model.number="auditPageSize" class="ui-input ml-2 px-2 py-1 text-xs">
+            <select v-model.number="auditPageSize" class="ui-input ms-2 px-2 py-1 text-xs">
               <option :value="25">25</option>
               <option :value="50">50</option>
               <option :value="100">100</option>
@@ -936,9 +948,10 @@
       </article>
       <div v-else class="space-y-2 md:hidden">
         <article
-          v-for="entry in auditLogs"
+          v-for="(entry, index) in auditLogs"
           :key="`audit-mobile-${entry.id}`"
-          class="ui-admin-card space-y-2"
+          class="ui-admin-card ui-surface-lift ui-reveal space-y-2"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-center justify-between gap-2">
             <p class="text-sm font-semibold text-slate-100">{{ entry.action }}</p>
@@ -953,11 +966,11 @@
         <table class="w-full min-w-[860px] text-sm">
           <thead class="bg-slate-900/70 text-slate-300">
             <tr>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.when") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.action") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.actor") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.target") }}</th>
-              <th scope="col" class="px-4 py-3 text-left">{{ t("adminConsole.details") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.when") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.action") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.actor") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.target") }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t("adminConsole.details") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -1028,25 +1041,25 @@
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article class="ui-stat-tile">
+        <article class="ui-stat-tile ui-reveal" style="--ui-delay: 0ms">
           <p class="ui-stat-label">{{ t("adminConsole.tenantUrl") }}</p>
           <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.tenant_url || "-" }}</p>
-          <button v-if="lastProvision.tenant_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
+          <button v-if="lastProvision.tenant_url" class="ui-press mt-3 text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline" @click="copyText(lastProvision.tenant_url)">{{ t("common.copy") }}</button>
         </article>
-        <article class="ui-stat-tile">
+        <article class="ui-stat-tile ui-reveal" style="--ui-delay: 28ms">
           <p class="ui-stat-label">{{ t("adminConsole.workspaceUrl") }}</p>
           <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.workspace_url || "-" }}</p>
-          <button v-if="lastProvision.workspace_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
+          <button v-if="lastProvision.workspace_url" class="ui-press mt-3 text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline" @click="copyText(lastProvision.workspace_url)">{{ t("common.copy") }}</button>
         </article>
-        <article class="ui-stat-tile">
+        <article class="ui-stat-tile ui-reveal" style="--ui-delay: 56ms">
           <p class="ui-stat-label">{{ t("adminConsole.activationUrl") }}</p>
           <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.activation_url || "-" }}</p>
-          <button v-if="lastProvision.activation_url" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
+          <button v-if="lastProvision.activation_url" class="ui-press mt-3 text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline" @click="copyText(lastProvision.activation_url)">{{ t("common.copy") }}</button>
         </article>
-        <article class="ui-stat-tile">
+        <article class="ui-stat-tile ui-reveal" style="--ui-delay: 84ms">
           <p class="ui-stat-label">{{ t("adminConsole.activationToken") }}</p>
           <p class="mt-2 break-all text-sm font-semibold text-white">{{ lastProvision.activation_token || "-" }}</p>
-          <button v-if="lastProvision.activation_token" class="mt-3 text-xs text-brand-secondary hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
+          <button v-if="lastProvision.activation_token" class="ui-press mt-3 text-xs text-[var(--color-secondary)] underline-offset-2 hover:underline" @click="copyText(lastProvision.activation_token)">{{ t("common.copy") }}</button>
         </article>
       </div>
 
@@ -1154,12 +1167,12 @@
           </div>
           <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
             <button
-              class="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:border-slate-500 transition-colors"
+              class="ui-btn-outline ui-press px-4 py-2 text-sm disabled:opacity-50"
               :disabled="applyingImport"
               @click="cancelDryRun"
             >{{ t('common.cancel') }}</button>
             <button
-              class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50 transition-colors"
+              class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
               :disabled="applyingImport"
               @click="applyTenantImport"
             >{{ applyingImport ? '…' : t('adminConsole.applyImport') }}</button>
