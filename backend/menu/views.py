@@ -62,6 +62,7 @@ from .serializers import (
     TableLinkSerializer,
 )
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
+from accounts.throttles import ReservationAvailabilityThrottle, WaitlistJoinThrottle
 
 
 # ── Menu cache helpers ────────────────────────────────────────────────────────
@@ -5380,6 +5381,7 @@ class SlotAvailabilityView(APIView):
     Only meaningful when max_covers_per_slot > 0 on the restaurant profile.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ReservationAvailabilityThrottle]
 
     def get(self, request):
         from datetime import date as date_cls
@@ -5465,6 +5467,7 @@ class WaitlistJoinView(APIView):
     Body: { name, phone, email, booked_for (ISO datetime), party_size, notes, hp }
     """
     permission_classes = [AllowAny]
+    throttle_classes = [WaitlistJoinThrottle]
 
     def post(self, request):
         from django.utils.dateparse import parse_datetime

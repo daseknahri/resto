@@ -601,63 +601,37 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
         if tenant is not None and getattr(tenant, "schema_name", None) != get_public_schema_name():
             tenant_for_lead = tenant
 
-        # ── Capacity check ────────────────────────────────────────────────────
+        # ── Capacity guard + persist (serialized per-tenant) ──────────────────
         # When capacity management is enabled (max_covers_per_slot > 0) and the
-        # incoming reservation has a booked_for time and a party_size, verify
-        # there is room in that time slot before persisting the lead.
+        # incoming reservation has a booked_for time + party_size, verify there is
+        # room in that slot BEFORE persisting — under a per-tenant row lock so two
+        # simultaneous bookings can't both pass the check and oversell (TOCTOU).
         incoming_booked_for = serializer.validated_data.get("booked_for")
         incoming_party_size = int(serializer.validated_data.get("party_size") or 0)
         incoming_source = serializer.validated_data.get("source", "")
-        if (
+        _is_reservation = (
             tenant_for_lead is not None
             and incoming_source in RESERVATION_SOURCES
             and incoming_booked_for is not None
             and incoming_party_size > 0
-        ):
-            try:
-                from django_tenants.utils import schema_context as _schema_ctx
-                with _schema_ctx(tenant_for_lead.schema_name):
-                    from tenancy.models import Profile as _Profile
-                    _profile = _Profile.objects.filter(tenant=tenant_for_lead).first()
-                _max_covers = int(getattr(_profile, "max_covers_per_slot", 0) or 0)
-                _slot_minutes = int(getattr(_profile, "slot_duration_minutes", 60) or 60)
-                if _max_covers > 0:
-                    from django.db.models import Sum as _Sum
-                    _bf = incoming_booked_for
-                    _total = _bf.hour * 60 + _bf.minute
-                    _start_mins = (_total // _slot_minutes) * _slot_minutes
-                    _slot_start = _bf.replace(
-                        hour=_start_mins // 60,
-                        minute=_start_mins % 60,
-                        second=0,
-                        microsecond=0,
-                    )
-                    _slot_end = _slot_start + timedelta(minutes=_slot_minutes)
-                    _active = {Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON}
-                    _used = (
-                        Lead.objects
-                        .filter(
-                            tenant_id=tenant_for_lead.id,
-                            booked_for__gte=_slot_start,
-                            booked_for__lt=_slot_end,
-                            status__in=_active,
-                        )
-                        .aggregate(total=_Sum("party_size"))
-                    )["total"] or 0
-                    if _used + incoming_party_size > _max_covers:
-                        return Response(
-                            {
-                                "detail": "fully_booked",
-                                "booked_for": _slot_start.isoformat(),
-                                "used": _used,
-                                "max": _max_covers,
-                            },
-                            status=status.HTTP_409_CONFLICT,
-                        )
-            except Exception:  # noqa: BLE001
-                pass  # Capacity check failure is non-fatal; allow reservation through
+        )
 
-        lead = serializer.save(status=Lead.Status.NEW, tenant=tenant_for_lead)
+        from django.db import transaction as _txn
+        with _txn.atomic():
+            if _is_reservation:
+                # Serialize concurrent bookings for this tenant on the public Tenant row,
+                # so the capacity check + insert below are effectively atomic.
+                try:
+                    from tenancy.models import Tenant as _T
+                    list(_T.objects.select_for_update().filter(pk=tenant_for_lead.id))
+                except Exception:  # noqa: BLE001
+                    pass
+                _oversell = self._slot_would_oversell(
+                    tenant_for_lead, incoming_booked_for, incoming_party_size
+                )
+                if _oversell is not None:
+                    return Response(_oversell, status=status.HTTP_409_CONFLICT)
+            lead = serializer.save(status=Lead.Status.NEW, tenant=tenant_for_lead)
         headers = self.get_success_headers(serializer.data)
 
         if tenant_for_lead is not None and lead.source in RESERVATION_SOURCES:
@@ -684,10 +658,27 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
             except Exception:  # noqa: BLE001
                 pass
 
-            # Notify tenant owner of new reservation request.
+            # Notify tenant owner of new reservation request — email + web push, so a
+            # booking isn't missed if email lands in spam.
             try:
                 from menu.views import _send_owner_new_reservation_email
                 _send_owner_new_reservation_email(tenant_for_lead, lead)
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                from accounts.tasks import enqueue, web_push_tenant
+                _when = ""
+                if lead.booked_for:
+                    try:
+                        _when = lead.booked_for.strftime(" %d %b %H:%M")
+                    except Exception:  # noqa: BLE001
+                        _when = ""
+                enqueue(
+                    web_push_tenant, tenant_for_lead.schema_name,
+                    "New reservation",
+                    f"{lead.name or 'A guest'} · party of {lead.party_size or 1}{_when}",
+                    "/owner/reservations",
+                )
             except Exception:  # noqa: BLE001
                 pass
 
@@ -706,6 +697,57 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
                 metadata={"lead_status": lead.status},
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _slot_would_oversell(self, tenant_for_lead, booked_for, party_size):
+        """Return a 409 payload dict if this booking would exceed the slot's capacity,
+        else None. Best-effort: any error → None (allow the reservation through). The slot
+        boundary is floored in the RESTAURANT's local timezone to match SlotAvailabilityView.
+        """
+        try:
+            from django.db.models import Sum as _Sum
+            from django.utils import timezone as _tz
+            from django_tenants.utils import schema_context as _schema_ctx
+
+            with _schema_ctx(tenant_for_lead.schema_name):
+                from tenancy.models import Profile as _Profile
+                _profile = _Profile.objects.filter(tenant=tenant_for_lead).first()
+                _tzname = (getattr(_profile, "timezone", "") or "").strip()
+                _max_covers = int(getattr(_profile, "max_covers_per_slot", 0) or 0)
+                _slot_minutes = int(getattr(_profile, "slot_duration_minutes", 60) or 60) or 60
+            if _max_covers <= 0:
+                return None
+
+            try:
+                import zoneinfo
+                _local = zoneinfo.ZoneInfo(_tzname) if _tzname else _tz.get_default_timezone()
+            except Exception:  # noqa: BLE001
+                _local = _tz.get_default_timezone()
+
+            _bf = booked_for.astimezone(_local)
+            _mins = _bf.hour * 60 + _bf.minute
+            _start = (_mins // _slot_minutes) * _slot_minutes
+            _slot_start = _bf.replace(hour=_start // 60, minute=_start % 60, second=0, microsecond=0)
+            _slot_end = _slot_start + timedelta(minutes=_slot_minutes)
+
+            _active = {Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON}
+            _used = (
+                Lead.objects.filter(
+                    tenant_id=tenant_for_lead.id,
+                    booked_for__gte=_slot_start,
+                    booked_for__lt=_slot_end,
+                    status__in=_active,
+                ).aggregate(total=_Sum("party_size"))["total"]
+            ) or 0
+            if _used + party_size > _max_covers:
+                return {
+                    "detail": "fully_booked",
+                    "booked_for": _slot_start.isoformat(),
+                    "used": _used,
+                    "max": _max_covers,
+                }
+            return None
+        except Exception:  # noqa: BLE001
+            return None  # never block a booking on a capacity-check error
 
 
 class ProvisionLeadViewSet(mixins.UpdateModelMixin, viewsets.GenericViewSet):

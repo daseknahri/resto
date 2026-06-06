@@ -86,6 +86,16 @@ class DeliveryTrackingThrottle(_CustomerThrottle):
     scope = "delivery_tracking"
 
 
+class ReservationAvailabilityThrottle(_IPThrottle):
+    """Rate-limit public slot-availability polling (a DB-querying AllowAny endpoint)."""
+    scope = "reservation_availability"
+
+
+class WaitlistJoinThrottle(_IPThrottle):
+    """Rate-limit public waitlist joins — prevents spam entries."""
+    scope = "waitlist_join"
+
+
 class MarketplaceOrderThrottle(_IPThrottle):
     """Rate-limit marketplace order placement — prevents order flooding and inventory races."""
     scope = "marketplace_order"

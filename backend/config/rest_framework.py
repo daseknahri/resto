@@ -55,6 +55,8 @@ REST_FRAMEWORK = {
         "driver_status": "30/min",
         "driver_accept": "30/min",
         "delivery_tracking": "120/min",
+        "reservation_availability": "240/hour",
+        "waitlist_join": "20/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

@@ -106,6 +106,21 @@ class LeadSerializer(ReservationSlaSerializerMixin, ReservationReminderStatsSeri
         ]
         read_only_fields = ("status", "archived_at", "onboarded_at", "created_at")
 
+    def validate_booked_for(self, value):
+        """Reservation time sanity (only runs when a booking time is supplied — plain
+        acquisition leads have no booked_for). Stops past-dated and absurd-horizon bookings
+        that would pollute the reservation list + reminder queue."""
+        if value is None:
+            return value
+        from datetime import timedelta as _td
+        from django.utils import timezone as _tz
+        now = _tz.now()
+        if value < now - _td(minutes=2):  # small grace for client/clock skew
+            raise serializers.ValidationError("Please choose a time in the future.")
+        if value > now + _td(days=180):
+            raise serializers.ValidationError("Reservations can be made up to 180 days ahead.")
+        return value
+
     def validate(self, attrs):
         if attrs.get("hp"):
             raise serializers.ValidationError("Invalid submission")
