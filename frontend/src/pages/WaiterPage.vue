@@ -19,14 +19,22 @@
       >✕</button>
     </div>
 
-    <!-- Status tabs + New Order button -->
-    <div class="min-w-0">
-      <div class="ui-scroll-row" role="tablist">
+    <!-- Status tabs + action buttons -->
+    <div class="min-w-0 flex items-center gap-2">
+      <div
+        class="ui-scroll-row flex-1 min-w-0"
+        role="tablist"
+        :aria-label="t('waiterPage.tablistLabel')"
+        @keydown.left.prevent="focusPrevTab"
+        @keydown.right.prevent="focusNextTab"
+      >
         <button
           v-for="tab in tabs"
+          :id="`waiter-tab-${tab.key}`"
           :key="tab.key"
           role="tab"
           :aria-selected="activeTab === tab.key"
+          :aria-controls="`waiter-panel-${tab.key}`"
           class="ui-state-chip ui-press ui-touch-target shrink-0"
           :data-active="activeTab === tab.key"
           @click="activeTab = tab.key"
@@ -40,8 +48,10 @@
         </button>
         <!-- Recent / past orders tab -->
         <button
+          id="waiter-tab-recent"
           role="tab"
           :aria-selected="activeTab === 'recent'"
+          aria-controls="waiter-panel-recent"
           class="ui-state-chip ui-press ui-touch-target shrink-0"
           :data-active="activeTab === 'recent'"
           @click="activeTab = 'recent'"
@@ -50,23 +60,26 @@
         </button>
         <!-- Shift summary tab -->
         <button
+          id="waiter-tab-shift"
           role="tab"
           :aria-selected="activeTab === 'shift'"
+          aria-controls="waiter-panel-shift"
           class="ui-state-chip ui-press ui-touch-target shrink-0"
           :data-active="activeTab === 'shift'"
           @click="openShiftSummary"
         >
           {{ t('waiterPage.tabShift') }}
         </button>
-        <!-- Charge wallet -->
+      </div>
+      <!-- Action buttons — live outside the tablist per ARIA spec -->
+      <div class="flex shrink-0 items-center gap-1.5">
         <button
           v-if="canManageOrders"
-          class="ui-state-chip ui-press ui-touch-target ms-auto shrink-0 border-[var(--color-secondary)]/40 text-[var(--color-secondary)]"
+          class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 text-[var(--color-secondary)]"
           @click="openCharge()"
         >
           {{ t('waiterPage.chargeWalletBtn') }}
         </button>
-        <!-- New Order -->
         <button
           v-if="canManageOrders"
           class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/40 text-emerald-300"
@@ -94,7 +107,16 @@
     />
 
     <!-- Loading skeleton (orders only) -->
-    <div v-if="activeTab !== 'shift' && (activeTab === 'recent' ? waiter.recentLoading : waiter.loading)" class="space-y-3" aria-busy="true" :aria-label="t('common.loading')">
+    <div
+      v-if="activeTab !== 'shift' && (activeTab === 'recent' ? waiter.recentLoading : waiter.loading)"
+      :id="`waiter-panel-${activeTab}`"
+      class="space-y-3"
+      role="tabpanel"
+      :aria-labelledby="`waiter-tab-${activeTab}`"
+      aria-live="polite"
+      aria-busy="true"
+      :aria-label="t('common.loading')"
+    >
       <div
         v-for="i in 3"
         :key="i"
@@ -103,15 +125,25 @@
     </div>
 
     <!-- Error (orders only) -->
-    <div v-else-if="activeTab !== 'shift' && waiter.error" role="alert" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
-      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-      <p class="flex-1 text-sm text-red-300">{{ waiter.error }}</p>
-      <button class="ui-press shrink-0 text-xs text-slate-400 underline hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60" @click="reload">{{ t('waiterPage.retry') }}</button>
+    <div
+      v-else-if="activeTab !== 'shift' && waiter.error"
+      :id="`waiter-panel-${activeTab}`"
+      role="tabpanel"
+      :aria-labelledby="`waiter-tab-${activeTab}`"
+    >
+      <div role="alert" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-sm text-red-300">{{ waiter.error }}</p>
+        <button class="ui-press shrink-0 text-xs text-slate-400 underline hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60" @click="reload">{{ t('waiterPage.retry') }}</button>
+      </div>
     </div>
 
     <!-- Empty state (orders only) -->
     <div
       v-else-if="activeTab !== 'shift' && visibleOrders.length === 0"
+      :id="`waiter-panel-${activeTab}`"
+      role="tabpanel"
+      :aria-labelledby="`waiter-tab-${activeTab}`"
       class="ui-empty-state text-center"
     >
       <p class="text-2xl" aria-hidden="true">{{ activeTab === 'recent' ? '🗒️' : '✓' }}</p>
@@ -120,7 +152,13 @@
     </div>
 
     <!-- Shift summary panel -->
-    <div v-else-if="activeTab === 'shift'" class="space-y-4 ui-reveal">
+    <div
+      v-else-if="activeTab === 'shift'"
+      id="waiter-panel-shift"
+      role="tabpanel"
+      aria-labelledby="waiter-tab-shift"
+      class="space-y-4 ui-reveal"
+    >
       <!-- Shift start picker -->
       <div class="flex flex-wrap items-end gap-3">
         <div class="min-w-0 flex-1 space-y-1 sm:flex-none">
@@ -178,7 +216,13 @@
     </div>
 
     <!-- Order cards -->
-    <div v-else-if="activeTab !== 'shift'" class="space-y-3">
+    <div
+      v-else-if="activeTab !== 'shift'"
+      :id="`waiter-panel-${activeTab}`"
+      role="tabpanel"
+      :aria-labelledby="`waiter-tab-${activeTab}`"
+      class="space-y-3"
+    >
       <article
         v-for="(order, index) in visibleOrders"
         :key="order.id"
@@ -299,6 +343,7 @@
         @keydown.esc="ratingOrder = null"
       >
         <div
+          ref="ratingDialogRef"
           class="ui-panel w-full max-w-sm space-y-3 p-4"
           role="dialog"
           aria-modal="true"
@@ -328,7 +373,7 @@
             :placeholder="t('ownerOrders.customerRatingNote')"
           />
           <div class="flex items-center justify-end gap-2 pt-1">
-            <button class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none" @click="ratingOrder = null">
+            <button class="ui-press ui-touch-target px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/60" @click="ratingOrder = null">
               {{ t('common.cancel') }}
             </button>
             <button
@@ -357,6 +402,7 @@
         @keydown.esc="settleChooser = null"
       >
         <div
+          ref="settleDialogRef"
           class="ui-panel w-full max-w-sm space-y-3 p-4"
           role="dialog"
           aria-modal="true"
@@ -596,6 +642,61 @@ watch(billOrder, async (val) => {
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapBillFocus));
+
+// ── Customer rating dialog focus trap ──────────────────────────────────────────
+const ratingDialogRef = ref(null);
+
+const trapRatingFocus = (e) => {
+  if (!ratingDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(ratingDialogRef.value.querySelectorAll(FOCUSABLE_BILL));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(ratingOrder, async (val) => {
+  if (val) {
+    await nextTick();
+    ratingDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
+    document.addEventListener('keydown', trapRatingFocus);
+  } else {
+    document.removeEventListener('keydown', trapRatingFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapRatingFocus));
+
+// ── Settle chooser dialog focus trap ───────────────────────────────────────────
+const settleDialogRef = ref(null);
+
+const trapSettleFocus = (e) => {
+  if (!settleDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(settleDialogRef.value.querySelectorAll(FOCUSABLE_BILL));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(settleChooser, async (val) => {
+  if (val) {
+    await nextTick();
+    settleDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
+    document.addEventListener('keydown', trapSettleFocus);
+  } else {
+    document.removeEventListener('keydown', trapSettleFocus);
+  }
+});
+onBeforeUnmount(() => document.removeEventListener('keydown', trapSettleFocus));
+
 const printBill = () => { window.print(); };
 const billDateTime = (iso) => {
   try {
@@ -690,6 +791,24 @@ const visibleOrders = computed(() => {
 watch(activeTab, (tab) => {
   if (tab === "recent") waiter.fetchRecent();
 });
+
+// Arrow-key navigation within the tablist (ARIA APG tab pattern).
+// Only moves focus — activation stays on click/Enter to match existing behavior.
+const _allTabKeys = ["all", "pending", "confirmed", "preparing", "ready", "recent", "shift"];
+const _focusTabByKey = (key) => {
+  const el = document.getElementById(`waiter-tab-${key}`);
+  el?.focus();
+};
+const focusPrevTab = () => {
+  const idx = _allTabKeys.indexOf(activeTab.value);
+  const prev = _allTabKeys[(idx - 1 + _allTabKeys.length) % _allTabKeys.length];
+  _focusTabByKey(prev);
+};
+const focusNextTab = () => {
+  const idx = _allTabKeys.indexOf(activeTab.value);
+  const next = _allTabKeys[(idx + 1) % _allTabKeys.length];
+  _focusTabByKey(next);
+};
 
 // ── Polling ────────────────────────────────────────────────────────────────────
 let pollTimer = null;

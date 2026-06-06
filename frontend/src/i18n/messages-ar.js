@@ -243,7 +243,11 @@ const arabicMessages = {
     "failed": "تعذر إعادة تعيين كلمة المرور",
     "successFallback": "تمت إعادة تعيين كلمة المرور. يمكنك الآن تسجيل الدخول.",
     "tokenRequired": "رمز إعادة التعيين مطلوب",
-    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل"
+    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
+    "spotlightSecureTitle": "رمز أحادي الاستخدام",
+    "spotlightSecureBody": "يحتوي رابط إعادة التعيين على رمز آمن مرتبط بحسابك.",
+    "spotlightSimpleTitle": "اختر كلمة مرور جديدة",
+    "spotlightSimpleBody": "اختر كلمة مرور قوية. يمكنك تسجيل الدخول فور اكتمال العملية."
   },
   "activateAccount": {
     "kicker": "تفعيل الحساب",
@@ -1079,6 +1083,7 @@ const arabicMessages = {
     "guestCount": "{count} ضيوف",
     "preferredDate": "التاريخ المفضل",
     "preferredTime": "الوقت المفضل",
+    "quickTimesKicker": "أوقات سريعة",
     "notesPlaceholder": "طلب خاص، تفضيل مقاعد...",
     "sending": "جارٍ الإرسال...",
     "requestSent": "تم إرسال الطلب",
@@ -1759,7 +1764,8 @@ const arabicMessages = {
     "goToAdminConsole": "الانتقال إلى لوحة الإدارة",
     "goToOnboarding": "الانتقال إلى التهيئة",
     "switchAccount": "تبديل الحساب",
-    "backToHome": "العودة إلى الرئيسية"
+    "backToHome": "العودة إلى الرئيسية",
+    "navLabel": "إجراءات الصفحة"
   },
   "contactPage": {
     "kicker": "الدعم",

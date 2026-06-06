@@ -1,5 +1,5 @@
 ﻿<template>
-  <section aria-labelledby="tos-title" class="mx-auto max-w-6xl space-y-5 px-4 py-6 text-slate-200 md:space-y-6 md:py-8">
+  <section aria-labelledby="tos-title" class="ui-page-shell space-y-5 text-slate-200 md:space-y-6 md:py-8">
     <header class="ui-hero-ribbon ui-reveal overflow-hidden p-0">
       <div class="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr),260px] md:p-6">
         <div>
@@ -10,44 +10,44 @@
           <p class="mt-2 max-w-2xl text-sm text-slate-400">{{ t("termsOfService.lastUpdated") }}</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
-          <article class="ui-admin-subcard">
+          <div class="ui-admin-subcard">
             <p class="ui-stat-label">01</p>
             <p class="mt-2 text-sm font-semibold text-white">{{ t("termsOfService.kicker") }}</p>
-          </article>
-          <article class="ui-admin-subcard">
+          </div>
+          <div class="ui-admin-subcard">
             <p class="ui-stat-label">02</p>
             <p class="mt-2 text-sm font-semibold text-white">{{ t("common.terms") }}</p>
-          </article>
-          <article class="ui-admin-subcard">
+          </div>
+          <div class="ui-admin-subcard">
             <p class="ui-stat-label">03</p>
             <p class="mt-2 text-sm font-semibold text-white">{{ t("common.contact") }}</p>
-          </article>
+          </div>
         </div>
       </div>
     </header>
     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr),280px]">
       <div class="space-y-4">
-        <article
+        <section
           v-for="(section, index) in sections"
           :key="section"
-          class="ui-command-deck ui-reveal p-5 text-sm leading-8 text-slate-300 md:text-base"
+          class="ui-panel ui-surface-lift ui-reveal p-5 text-sm leading-8 text-slate-300 md:text-base"
           :style="{ '--ui-delay': `${index * 60}ms` }"
         >
           <div class="mb-3 flex items-center justify-between gap-3">
-            <span class="ui-kicker">{{ String(index + 1).padStart(2, "0") }}</span>
-            <span class="ui-chip">{{ t("common.terms") }}</span>
+            <h3 class="ui-kicker">{{ String(index + 1).padStart(2, "0") }}</h3>
+            <span class="ui-chip" aria-hidden="true">{{ t("common.terms") }}</span>
           </div>
           <p>{{ section }}</p>
-        </article>
+        </section>
       </div>
       <aside
-        class="ui-workspace-stage ui-reveal h-fit space-y-4 p-5 lg:sticky lg:top-24"
+        class="ui-panel ui-reveal h-fit space-y-4 p-5 lg:sticky lg:top-24"
         :style="{ '--ui-delay': '180ms' }"
       >
         <div>
           <p class="ui-kicker">{{ t("common.contact") }}</p>
           <p class="mt-2 text-xl font-semibold text-white">{{ t("termsOfService.title") }}</p>
-          <p class="mt-2 text-sm text-slate-400">{{ supportEmail }}</p>
+          <a :href="'mailto:' + supportEmail" class="mt-2 block text-sm text-slate-400 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">{{ supportEmail }}</a>
         </div>
         <RouterLink to="/get-started" class="ui-btn-primary w-full justify-center">
           {{ t("common.getStarted") }}

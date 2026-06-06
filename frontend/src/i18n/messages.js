@@ -250,7 +250,8 @@ export const messages = {
       goToAdminConsole: "Go to admin console",
       goToOnboarding: "Go to onboarding",
       switchAccount: "Switch account",
-      backToHome: "Back to home"
+      backToHome: "Back to home",
+      navLabel: "Page actions"
     },
     notFound: {
       kicker: "404",
@@ -588,7 +589,11 @@ export const messages = {
       failed: "Unable to reset password",
       successFallback: "Password reset successful. You can now sign in.",
       tokenRequired: "Reset token is required",
-      passwordTooShort: "Password must be at least 8 characters"
+      passwordTooShort: "Password must be at least 8 characters",
+      spotlightSecureTitle: "One-time token",
+      spotlightSecureBody: "Your reset link contains a secure single-use token tied to your account.",
+      spotlightSimpleTitle: "Choose a new password",
+      spotlightSimpleBody: "Pick something strong. You can sign in immediately once it is set."
     },
     activateAccount: {
       kicker: "Account activation",
@@ -1300,6 +1305,7 @@ export const messages = {
       noRecentOrders: "No recent orders",
       noRecentOrdersBody: "Orders finished in the last 24 hours show here.",
       retry: "Retry",
+      tablistLabel: "Order status",
       tabAll: "All",
       tabPending: "Pending",
       tabConfirmed: "Confirmed",
@@ -2276,6 +2282,7 @@ export const messages = {
       guestCount: "{count} guests",
       preferredDate: "Preferred date",
       preferredTime: "Preferred time",
+      quickTimesKicker: "Quick slots",
       notesPlaceholder: "Special request, seating preference...",
       sending: "Sending...",
       requestSent: "Request sent",
@@ -3956,7 +3963,8 @@ export const messages = {
       goToAdminConsole: "Aller a la console admin",
       goToOnboarding: "Aller a l onboarding",
       switchAccount: "Changer de compte",
-      backToHome: "Retour a l accueil"
+      backToHome: "Retour a l accueil",
+      navLabel: "Actions de la page"
     },
     notFound: {
       kicker: "404",
@@ -4294,7 +4302,11 @@ export const messages = {
       failed: "Impossible de reinitialiser le mot de passe",
       successFallback: "Mot de passe reinitialise. Vous pouvez maintenant vous connecter.",
       tokenRequired: "Token de reinitialisation requis",
-      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres"
+      passwordTooShort: "Le mot de passe doit contenir au moins 8 caracteres",
+      spotlightSecureTitle: "Jeton a usage unique",
+      spotlightSecureBody: "Votre lien de reinitialisation contient un jeton securise a usage unique lie a votre compte.",
+      spotlightSimpleTitle: "Choisissez un nouveau mot de passe",
+      spotlightSimpleBody: "Choisissez quelque chose de robuste. Vous pouvez vous connecter des que c'est fait."
     },
     activateAccount: {
       kicker: "Activation du compte",
@@ -5006,6 +5018,7 @@ export const messages = {
       noRecentOrders: "Aucune commande recente",
       noRecentOrdersBody: "Les commandes terminees ces dernieres 24 h apparaissent ici.",
       retry: "Reessayer",
+      tablistLabel: "Statut des commandes",
       tabAll: "Tout",
       tabPending: "En attente",
       tabConfirmed: "Confirmee",
@@ -5951,6 +5964,7 @@ export const messages = {
       guestCount: "{count} convives",
       preferredDate: "Date souhaitee",
       preferredTime: "Heure souhaitee",
+      quickTimesKicker: "Creneaux rapides",
       notesPlaceholder: "Demande speciale, preference de place...",
       sending: "Envoi...",
       requestSent: "Demande envoyee",

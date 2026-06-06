@@ -40,7 +40,7 @@
                 aria-required="true"
                 @input="clearError('name')"
               />
-              <p v-if="errors.name" id="res-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
+              <p v-if="errors.name" id="res-name-error" role="alert" class="text-xs text-red-300">{{ errors.name }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.phone") }}
@@ -57,7 +57,7 @@
                 aria-required="true"
                 @input="clearError('phone')"
               />
-              <p v-if="errors.phone" id="res-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
+              <p v-if="errors.phone" id="res-phone-error" role="alert" class="text-xs text-red-300">{{ errors.phone }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("common.email") }}
@@ -73,7 +73,7 @@
                 aria-describedby="res-email-error"
                 @input="clearError('email')"
               />
-              <p v-if="errors.email" id="res-email-error" class="text-xs text-red-300">{{ errors.email }}</p>
+              <p v-if="errors.email" id="res-email-error" role="alert" class="text-xs text-red-300">{{ errors.email }}</p>
             </label>
             <label class="space-y-1 text-sm text-slate-200">
               {{ t("reservationPage.partySize") }}
@@ -89,7 +89,7 @@
                 aria-required="true"
                 @input="clearError('party_size')"
               />
-              <p v-if="errors.party_size" id="res-party-error" class="text-xs text-red-300">{{ errors.party_size }}</p>
+              <p v-if="errors.party_size" id="res-party-error" role="alert" class="text-xs text-red-300">{{ errors.party_size }}</p>
             </label>
           </div>
 
@@ -123,7 +123,7 @@
 
             <div class="ui-panel p-3">
               <div class="flex items-center justify-between gap-2">
-                <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
+                <p class="ui-kicker">{{ t("reservationPage.quickTimesKicker") }}</p>
                 <span
                   v-if="availabilityLoading"
                   role="status"
@@ -139,6 +139,7 @@
                   :class="slotButtonClass(slot)"
                   :aria-pressed="form.time === slot"
                   :disabled="isSlotFull(slot)"
+                  :aria-disabled="isSlotFull(slot) || undefined"
                   @click="!isSlotFull(slot) && (form.time = slot)"
                 >
                   <span class="font-medium">{{ slot }}</span>
@@ -189,10 +190,10 @@
             <div v-else class="space-y-3">
               <p class="text-xs font-medium text-amber-100">{{ t("reservationPage.waitlistFormHint") }}</p>
               <div class="grid gap-2 sm:grid-cols-2">
-                <input v-model.trim="waitlistForm.name" type="text" autocomplete="name" :placeholder="t('common.name')" class="ui-input text-sm" />
-                <input v-model.trim="waitlistForm.phone" type="tel" inputmode="tel" autocomplete="tel" :placeholder="t('common.phone')" class="ui-input text-sm" />
+                <input v-model.trim="waitlistForm.name" type="text" autocomplete="name" :placeholder="t('common.name')" :aria-label="t('common.name')" class="ui-input text-sm" />
+                <input v-model.trim="waitlistForm.phone" type="tel" inputmode="tel" autocomplete="tel" :placeholder="t('common.phone')" :aria-label="t('common.phone')" class="ui-input text-sm" />
               </div>
-              <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" spellcheck="false" :placeholder="t('common.email')" class="ui-input text-sm" />
+              <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" spellcheck="false" :placeholder="t('common.email')" :aria-label="t('common.email')" class="ui-input text-sm" />
               <div class="flex flex-wrap gap-2">
                 <button
                   class="ui-press inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-60 ui-touch-target"
@@ -276,6 +277,7 @@
               <a
                 v-if="phoneHref"
                 :href="phoneHref"
+                :aria-label="t('reservationPage.callNow') + (phoneRaw ? ' ' + phoneRaw : '')"
                 class="ui-orbit-card ui-surface-lift block p-3 transition hover:border-[var(--color-secondary)]/70"
                 @click="trackContactClick('phone_call')"
               >
@@ -288,6 +290,7 @@
                 :href="whatsappHref"
                 target="_blank"
                 rel="noopener noreferrer"
+                :aria-label="t('reservationPage.whatsappMessage') + (whatsappRaw ? ' ' + whatsappRaw : '')"
                 class="ui-orbit-card ui-surface-lift block p-3 transition hover:border-[var(--color-secondary)]/70"
                 @click="trackContactClick('whatsapp_contact')"
               >
