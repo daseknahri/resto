@@ -1,43 +1,43 @@
 ﻿<template>
   <section class="space-y-4 ui-safe-bottom pb-24 sm:space-y-5 sm:pb-6">
-    <header class="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3 sm:p-4 md:p-4">
-      <div class="flex flex-wrap items-end justify-between gap-4">
-        <div class="space-y-1.5">
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0 space-y-1.5">
           <p class="ui-kicker">{{ t("ownerReservations.kicker") }}</p>
-          <h2 class="ui-display text-xl font-semibold tracking-tight text-white sm:text-2xl">{{ t("ownerReservations.title") }}</h2>
-          <div class="ui-scroll-row">
-            <span class="ui-data-strip">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
-            <span class="ui-data-strip">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>
-            <span class="ui-data-strip">{{ t("ownerReservations.contacted") }}: {{ statusCounts.contacted }}</span>
-            <span class="ui-data-strip">{{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}</span>
-            <span class="ui-data-strip">{{ t("ownerReservations.overdue") }}: {{ statusCounts.overdue }}</span>
+          <h1 class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerReservations.title") }}</h1>
+          <div class="ui-scroll-row min-w-0">
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.total") }}: {{ statusCounts.total }}</span>
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.new") }}: {{ statusCounts.new }}</span>
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.contacted") }}: {{ statusCounts.contacted }}</span>
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.confirmed") }}: {{ statusCounts.won }}</span>
+            <span class="ui-data-strip tabular-nums">{{ t("ownerReservations.overdue") }}: {{ statusCounts.overdue }}</span>
           </div>
         </div>
-        <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
           <!-- View toggle -->
-          <div class="col-span-2 flex rounded-xl border border-slate-700 overflow-hidden sm:col-span-1">
+          <div class="ui-segmented col-span-2 sm:col-span-1" role="group" :aria-label="t('ownerReservations.viewToggleLabel')">
             <button
-              class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              class="ui-segmented-button"
+              :data-active="viewMode === 'list' ? 'true' : 'false'"
               :aria-pressed="viewMode === 'list'"
-              :class="viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
               @click="viewMode = 'list'"
             >{{ t("ownerReservations.viewList") }}</button>
             <button
-              class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors"
+              class="ui-segmented-button"
+              :data-active="viewMode === 'calendar' ? 'true' : 'false'"
               :aria-pressed="viewMode === 'calendar'"
-              :class="viewMode === 'calendar' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
               @click="viewMode = 'calendar'"
             >{{ t("ownerReservations.viewCalendar") }}</button>
           </div>
-          <button class="ui-btn-primary w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="loading" @click="fetchReservations">
+          <button class="ui-btn-primary ui-press justify-center px-4 py-2 text-sm" :disabled="loading" @click="fetchReservations">
             <AppIcon name="refresh" class="owner-res-icon" />
             {{ loading ? t("common.loading") : t("common.refresh") }}
           </button>
-          <button class="ui-btn-outline w-full justify-center px-4 py-2 text-sm sm:w-auto" :disabled="exporting" @click="exportCsv">
+          <button class="ui-btn-outline ui-press justify-center px-4 py-2 text-sm" :disabled="exporting" @click="exportCsv">
             <AppIcon name="download" class="owner-res-icon" />
             {{ exporting ? t("ownerReservations.exporting") : t("ownerReservations.exportCsv") }}
           </button>
-          <button class="ui-btn-outline hidden justify-center px-4 py-2 text-sm sm:inline-flex" :disabled="loading" @click="applyFilters">
+          <button class="ui-btn-outline ui-press hidden justify-center px-4 py-2 text-sm sm:inline-flex" :disabled="loading" @click="applyFilters">
             <AppIcon name="filter" class="owner-res-icon" />
             {{ t("common.apply") }}
           </button>
@@ -94,7 +94,7 @@
 
       <details class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
         <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
-          {{ t("ownerReservations.reminders") }} / Date
+          {{ t("ownerReservations.reminderDateFilter") }}
         </summary>
         <div class="mt-3 grid gap-3 md:grid-cols-[220px_150px_150px_auto]">
           <label class="text-xs text-slate-400">
@@ -239,14 +239,20 @@
       <!-- Selected calendar reservation detail (quick panel) -->
       <div
         v-if="viewMode === 'calendar' && selectedCalendarRes"
-        class="ui-panel p-4 space-y-2 text-sm"
+        class="ui-panel ui-reveal p-4 space-y-2 text-sm"
       >
         <div class="flex items-start justify-between gap-3">
-          <div>
-            <p class="font-semibold text-white">{{ selectedCalendarRes.name }}</p>
-            <p class="text-xs text-slate-400">{{ selectedCalendarRes.phone }} · {{ selectedCalendarRes.email }}</p>
+          <div class="min-w-0">
+            <p class="truncate font-semibold text-white">{{ selectedCalendarRes.name }}</p>
+            <p class="truncate text-xs text-slate-400">{{ selectedCalendarRes.phone }} · {{ selectedCalendarRes.email }}</p>
           </div>
-          <button class="text-xs text-slate-500 hover:text-slate-300" :aria-label="t('common.close')" @click="selectedCalendarRes = null">✕</button>
+          <button
+            class="ui-press shrink-0 rounded-lg p-1 text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+            :aria-label="t('common.close')"
+            @click="selectedCalendarRes = null"
+          >
+            <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
         <p v-if="selectedCalendarRes.booked_for" class="text-xs text-slate-300">
           {{ t("ownerReservations.bookedFor") }}: {{ formatDateTime(selectedCalendarRes.booked_for) }}
@@ -256,20 +262,20 @@
       </div>
 
       <template v-if="viewMode === 'list'">
-      <div v-if="error" role="alert" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <div v-if="error" role="alert" class="ui-reveal flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
         </svg>
         <p class="flex-1 text-sm text-red-300">{{ error }}</p>
         <button
-          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
           @click="fetchReservations"
         >{{ t('common.retry') }}</button>
       </div>
-      <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite">
-        <article v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]"></article>
+      <div v-else-if="loading" class="grid gap-3 lg:grid-cols-2" role="status" aria-live="polite" :aria-label="t('common.loading')">
+        <div v-for="n in 4" :key="`reservation-skeleton-${n}`" class="ui-skeleton h-72 rounded-[1.5rem]" aria-hidden="true"></div>
       </div>
-      <article v-else-if="!reservations.length" class="ui-empty-state space-y-3 text-center text-sm">
+      <article v-else-if="!reservations.length" class="ui-empty-state ui-reveal space-y-3 text-center text-sm">
         <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
           <AppIcon name="calendar" class="h-5 w-5" />
         </div>
@@ -279,12 +285,12 @@
           <p class="text-slate-400">{{ t("ownerReservations.pageSummary", { page: pagination.page, pages: pagination.pages, total: pagination.total }) }}</p>
         </div>
         <div class="flex flex-wrap justify-center gap-2">
-          <button class="ui-btn-outline px-4 py-2 text-sm" @click="clearFilters">
-            <AppIcon name="close" class="owner-res-icon" />
+          <button class="ui-btn-outline ui-press px-4 py-2 text-sm" @click="clearFilters">
+            <AppIcon name="close" class="owner-res-icon" aria-hidden="true" />
             {{ t("common.clear") }}
           </button>
-          <button class="ui-btn-outline px-4 py-2 text-sm" @click="fetchReservations">
-            <AppIcon name="refresh" class="owner-res-icon" />
+          <button class="ui-btn-outline ui-press px-4 py-2 text-sm" @click="fetchReservations">
+            <AppIcon name="refresh" class="owner-res-icon" aria-hidden="true" />
             {{ t("common.refresh") }}
           </button>
         </div>
@@ -292,11 +298,11 @@
 
       <div class="grid gap-3 lg:grid-cols-2">
         <article
-          v-for="reservation in reservations"
+          v-for="(reservation, index) in reservations"
           :key="reservation.id"
-          class="ui-reservation-card ui-surface-lift space-y-3 sm:space-y-3.5"
+          class="ui-reservation-card ui-surface-lift ui-reveal space-y-3 sm:space-y-3.5"
           :class="reservationCardClass(reservation)"
-          style="content-visibility: auto; contain-intrinsic-size: auto 240px;"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 240px' }"
         >
           <div class="flex items-start justify-between gap-3">
             <label class="inline-flex items-center gap-2">
@@ -338,24 +344,24 @@
             {{ reservation.notes || t("ownerReservations.noCustomerNote") }}
           </p>
 
-          <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-300">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="ui-data-strip tabular-nums">
               {{ t("ownerReservations.reminders") }} {{ reservation.reminder_count || 0 }}
             </span>
-            <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-400">
+            <span class="ui-data-strip tabular-nums">
               {{ t("ownerReservations.opened") }} {{ reservation.reminder_opened_count || 0 }}
             </span>
-            <span class="rounded-full border border-slate-700 px-2 py-1 text-slate-400">
+            <span class="ui-data-strip tabular-nums">
               {{ t("ownerReservations.failed") }} {{ reservation.reminder_failed_count || 0 }}
             </span>
             <span
               v-if="reservation.last_reminder_status"
-              class="rounded-full px-2 py-1 font-semibold"
+              class="inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold"
               :class="reminderStatusClass(reservation.last_reminder_status)"
             >
               {{ t("ownerReservations.last") }} {{ reminderStatusLabel(reservation.last_reminder_status) }}
             </span>
-            <span v-if="reservation.last_reminder_at" class="text-slate-500">
+            <span v-if="reservation.last_reminder_at" class="text-[11px] text-slate-500">
               {{ formatDate(reservation.last_reminder_at) }}
             </span>
           </div>
@@ -491,7 +497,9 @@
 
           <div v-if="isTimelineOpen(reservation.id)" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
             <p class="text-xs uppercase tracking-[0.18em] text-slate-400">{{ t("ownerReservations.timelineTitle") }}</p>
-            <p v-if="isTimelineLoading(reservation.id)" class="text-xs text-slate-500">{{ t("ownerReservations.loadingTimeline") }}</p>
+            <div v-if="isTimelineLoading(reservation.id)" class="space-y-2" role="status" :aria-label="t('ownerReservations.loadingTimeline')">
+              <div v-for="s in 2" :key="s" class="h-10 animate-pulse rounded-lg bg-slate-800/50" />
+            </div>
             <ul v-else class="space-y-2 text-xs">
               <li
                 v-for="entry in timelineFor(reservation.id)"
@@ -555,20 +563,24 @@
     </section>
 
     <!-- ── Waitlist ─────────────────────────────────────────────────────────── -->
-    <section class="ui-command-deck space-y-3 sm:space-y-4">
+    <section class="ui-command-deck ui-reveal space-y-3 sm:space-y-4">
       <!-- Header -->
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-0.5">
+          <p class="ui-kicker">{{ t("ownerReservations.waitlistKicker") }}</p>
           <h2 class="text-base font-bold text-white">{{ t("ownerReservations.waitlistTitle") }}</h2>
           <p class="text-xs text-slate-400">{{ t("ownerReservations.waitlistSubtitle") }}</p>
         </div>
-        <input
-          v-model="waitlistDate"
-          type="date"
-          class="ui-input text-sm"
-          :aria-label="t('ownerReservations.waitlistDate')"
-          @change="fetchWaitlist"
-        />
+        <label class="shrink-0 text-xs text-slate-400">
+          <span class="sr-only">{{ t("ownerReservations.waitlistDate") }}</span>
+          <input
+            v-model="waitlistDate"
+            type="date"
+            class="ui-input mt-0.5 text-sm"
+            :aria-label="t('ownerReservations.waitlistDate')"
+            @change="fetchWaitlist"
+          />
+        </label>
       </div>
 
       <!-- Loading -->
@@ -583,26 +595,29 @@
         </svg>
         <p class="flex-1 text-sm text-red-300">{{ t("ownerReservations.waitlistLoadError") }}</p>
         <button
-          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
           @click="fetchWaitlist"
         >{{ t('common.retry') }}</button>
       </div>
 
       <!-- Empty -->
-      <div v-else-if="!waitlistEntries.length" class="py-8 text-center text-sm text-slate-500">
-        {{ waitlistDate ? t("ownerReservations.waitlistEmpty") : t("ownerReservations.waitlistEmptyAll") }}
+      <div v-else-if="!waitlistEntries.length" class="ui-empty-state space-y-2 py-6 text-center">
+        <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-950/70 text-slate-400">
+          <AppIcon name="calendar" class="h-5 w-5" aria-hidden="true" />
+        </div>
+        <p class="text-sm text-slate-400">{{ waitlistDate ? t("ownerReservations.waitlistEmpty") : t("ownerReservations.waitlistEmptyAll") }}</p>
       </div>
 
       <!-- Table -->
-      <div v-else class="overflow-x-auto rounded-xl border border-slate-700/50">
+      <div v-else class="ui-table-wrap rounded-xl border border-slate-700/50">
         <table class="w-full min-w-[560px] text-sm">
           <thead>
             <tr class="border-b border-slate-700/50 bg-slate-900/60 text-xs text-slate-400">
-              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.bookedFor") }}</th>
-              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("common.name") }}</th>
-              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.guests") }}</th>
-              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("common.status") }}</th>
-              <th scope="col" class="px-4 py-2.5 text-left font-medium">{{ t("ownerReservations.notes") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-start font-medium">{{ t("ownerReservations.bookedFor") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-start font-medium">{{ t("common.name") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-start font-medium">{{ t("ownerReservations.guests") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-start font-medium">{{ t("common.status") }}</th>
+              <th scope="col" class="px-4 py-2.5 text-start font-medium">{{ t("ownerReservations.notes") }}</th>
             </tr>
           </thead>
           <tbody>

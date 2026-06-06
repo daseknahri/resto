@@ -4,7 +4,7 @@
     <div class="flex items-start justify-between gap-3">
       <div>
         <p class="ui-kicker">{{ t("ownerStaff.kicker") }}</p>
-        <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerStaff.title") }}</h2>
+        <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t("ownerStaff.title") }}</h2>
         <p class="mt-1 text-sm text-slate-400">{{ t("ownerStaff.subtitle") }}</p>
       </div>
       <svg v-if="updatingStaff" class="mt-1 h-4 w-4 shrink-0 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -14,7 +14,7 @@
 
     <!-- Create form -->
     <div class="ui-panel p-4 space-y-4">
-      <p class="text-sm font-semibold text-slate-200">{{ t("ownerStaff.inviteSection") }}</p>
+      <p class="ui-kicker">{{ t("ownerStaff.inviteSection") }}</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <input
           v-model="form.name"
@@ -43,7 +43,7 @@
         <p class="flex-1 text-sm text-red-300">{{ formError }}</p>
       </div>
       <button
-        class="ui-btn-primary"
+        class="ui-btn-primary ui-touch-target"
         :disabled="creating || !form.name.trim() || !form.email.trim()"
         @click="createStaff"
       >
@@ -61,23 +61,23 @@
       <p class="text-xs text-slate-400">{{ t("ownerStaff.credentialsHint") }}</p>
       <div class="rounded-xl border border-slate-700/50 bg-slate-900/60 p-4 space-y-2 font-mono text-sm">
         <div class="flex items-center justify-between gap-3">
-          <span class="text-slate-400">{{ t("common.email") }}:</span>
-          <span class="text-slate-100 truncate">{{ newCredentials.email }}</span>
+          <span class="shrink-0 text-slate-400">{{ t("common.email") }}:</span>
+          <span class="min-w-0 truncate text-slate-100">{{ newCredentials.email }}</span>
         </div>
         <div class="flex items-center justify-between gap-3">
-          <span class="text-slate-400">{{ t("ownerStaff.credentialsPasswordLabel") }}:</span>
-          <span class="text-emerald-300 font-bold tracking-wider">{{ newCredentials.temp_password }}</span>
+          <span class="shrink-0 text-slate-400">{{ t("ownerStaff.credentialsPasswordLabel") }}:</span>
+          <span class="text-emerald-300 font-bold tracking-wider tabular-nums">{{ newCredentials.temp_password }}</span>
         </div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <button
-          class="ui-btn-primary px-4 py-2 text-xs font-semibold"
+          class="ui-btn-primary px-4 py-2 text-xs font-semibold ui-press"
           @click="copyCredentials"
         >
           {{ copied ? t("ownerStaff.credentialsCopied") : t("ownerStaff.credentialsCopy") }}
         </button>
         <button
-          class="ui-btn-outline px-4 py-2 text-xs font-semibold"
+          class="ui-btn-outline px-4 py-2 text-xs font-semibold ui-press"
           @click="newCredentials = null; copied = false"
         >
           {{ t("ownerStaff.credentialsDone") }}
@@ -87,21 +87,26 @@
 
     <!-- Staff list -->
     <div class="space-y-3">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-sm font-semibold text-slate-300">{{ t("ownerStaff.teamSection") }}</p>
-        <div class="flex items-center gap-0.5 rounded-xl border border-slate-700/50 bg-slate-800/40 p-0.5">
+      <div class="flex items-center justify-between gap-2 min-w-0">
+        <p class="text-sm font-semibold text-slate-300 truncate">{{ t("ownerStaff.teamSection") }}</p>
+        <div
+          role="group"
+          :aria-label="t('ownerStaff.periodLabel')"
+          class="flex shrink-0 items-center gap-0.5 rounded-xl border border-slate-700/50 bg-slate-800/40 p-0.5"
+        >
           <button
             v-for="opt in periodOptions"
             :key="opt.days"
-            class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors"
+            class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ui-press"
             :class="selectedDays === opt.days ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
+            :aria-pressed="selectedDays === opt.days"
             @click="changePeriod(opt.days)"
           >{{ t(opt.labelKey) }}</button>
         </div>
       </div>
 
-      <div v-if="loadingStaff" class="space-y-2">
-        <div v-for="i in 2" :key="i" class="h-14 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
+      <div v-if="loadingStaff" class="space-y-2" aria-busy="true">
+        <div v-for="i in 3" :key="i" class="ui-skeleton h-16" />
       </div>
 
       <div
@@ -114,36 +119,38 @@
         </svg>
         <p class="flex-1 text-sm text-red-300">{{ t("ownerStaff.fetchError") }}</p>
         <button
-          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+          class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 ui-touch-target ui-press"
           @click="fetchStaff"
         >{{ t("common.retry") }}</button>
       </div>
 
       <div
         v-else-if="staffList.length === 0"
-        class="rounded-2xl border border-slate-700/30 bg-slate-800/20 px-6 py-8 text-center"
+        class="ui-empty-state text-center p-5 space-y-1"
       >
-        <p class="text-sm text-slate-500">{{ t("ownerStaff.noStaff") }}</p>
+        <p class="text-sm font-semibold text-slate-100">{{ t("ownerStaff.noStaff") }}</p>
+        <p class="text-xs text-slate-400">{{ t("ownerStaff.noStaffHint") }}</p>
       </div>
 
       <div
-        v-for="member in staffList"
+        v-for="(member, index) in staffList"
         :key="member.id"
-        class="rounded-2xl border border-slate-700/40 bg-slate-800/30 overflow-hidden transition-all"
+        class="ui-panel ui-surface-lift ui-reveal overflow-hidden"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
         <!-- Staff card header -->
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-100 truncate">{{ member.name }}</p>
             <p class="text-xs text-slate-500 truncate">{{ member.email }}</p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
-              <span>{{ t('ownerStaff.statOrders', { n: member.stats?.orders_handled || 0 }) }}</span>
-              <span class="font-semibold text-emerald-400/90">{{ fmtMoney(member.stats?.revenue) }}</span>
+            <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
+              <span class="tabular-nums">{{ t('ownerStaff.statOrders', { n: member.stats?.orders_handled || 0 }) }}</span>
+              <span class="font-semibold text-emerald-400/90 tabular-nums">{{ fmtMoney(member.stats?.revenue) }}</span>
               <span class="text-slate-600">{{ t('ownerStaff.statsPeriod', { days: statsDays }) }}</span>
             </p>
           </div>
           <button
-            class="shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
+            class="shrink-0 flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors ui-press ui-touch-target"
             :aria-expanded="expandedIds.has(member.id)"
             @click="toggleExpanded(member.id)"
           >
@@ -167,24 +174,24 @@
           >
             <!-- Work stats -->
             <div>
-              <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t('ownerStaff.statsTitle', { days: statsDays }) }}</p>
-              <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+              <p class="ui-kicker mb-2">{{ t('ownerStaff.statsTitle', { days: statsDays }) }}</p>
+              <div class="grid grid-cols-3 gap-2 text-center">
                 <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
-                  <p class="text-lg font-bold text-white">{{ member.stats?.orders_handled || 0 }}</p>
-                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statOrdersLabel') }}</p>
+                  <p class="text-lg font-bold text-white tabular-nums">{{ member.stats?.orders_handled || 0 }}</p>
+                  <p class="ui-stat-label mt-0.5">{{ t('ownerStaff.statOrdersLabel') }}</p>
                 </div>
                 <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
-                  <p class="text-lg font-bold text-emerald-300">{{ fmtMoney(member.stats?.revenue) }}</p>
-                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statRevenueLabel') }}</p>
+                  <p class="text-lg font-bold text-emerald-300 tabular-nums">{{ fmtMoney(member.stats?.revenue) }}</p>
+                  <p class="ui-stat-label mt-0.5">{{ t('ownerStaff.statRevenueLabel') }}</p>
                 </div>
                 <div class="rounded-xl border border-slate-700/50 bg-slate-800/40 p-2.5">
                   <p class="text-sm font-semibold text-sky-300">{{ member.stats?.last_active ? fmtRelative(member.stats.last_active) : '—' }}</p>
-                  <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t('ownerStaff.statLastActiveLabel') }}</p>
+                  <p class="ui-stat-label mt-0.5">{{ t('ownerStaff.statLastActiveLabel') }}</p>
                 </div>
               </div>
             </div>
 
-            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerStaff.permissionsTitle") }}</p>
+            <p class="ui-kicker">{{ t("ownerStaff.permissionsTitle") }}</p>
 
             <!-- Permission toggles -->
             <div class="space-y-3">
@@ -211,18 +218,25 @@
               </div>
             </div>
 
-            <!-- Saving indicator -->
+            <!-- Saving / save-error indicators -->
             <p v-if="savingId === member.id" class="text-xs text-slate-500 italic">
               {{ t("ownerStaff.saving") }}
             </p>
-            <p v-if="saveError[member.id]" class="text-xs text-red-400">
-              {{ saveError[member.id] }}
-            </p>
+            <div
+              v-if="saveError[member.id]"
+              role="alert"
+              class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2"
+            >
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+              </svg>
+              <p class="flex-1 text-xs text-red-300">{{ saveError[member.id] }}</p>
+            </div>
 
             <!-- Remove -->
             <div class="flex items-center justify-end gap-2 border-t border-slate-800/60 pt-3">
               <button
-                class="rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/60 hover:text-red-300 transition-colors disabled:opacity-50"
+                class="rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/60 hover:text-red-300 transition-colors disabled:opacity-50 ui-touch-target ui-press"
                 :disabled="removingId === member.id"
                 @click="removeStaff(member)"
               >{{ removingId === member.id ? t("ownerStaff.removing") : t("ownerStaff.remove") }}</button>
@@ -234,7 +248,7 @@
 
     <!-- Permissions legend -->
     <div class="rounded-xl border border-slate-800/60 bg-slate-900/30 p-4 space-y-1.5">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t("ownerStaff.legendTitle") }}</p>
+      <p class="ui-kicker">{{ t("ownerStaff.legendTitle") }}</p>
       <p class="text-xs text-slate-500">{{ t("ownerStaff.legendOwner") }}</p>
       <p class="text-xs text-slate-500">{{ t("ownerStaff.legendStaff") }}</p>
     </div>
@@ -522,12 +536,25 @@ const copyCredentials = async () => {
 .staff-expand-enter-active,
 .staff-expand-leave-active {
   transition: max-height 0.22s ease, opacity 0.18s ease;
-  max-height: 400px;
+  max-height: 600px;
   overflow: hidden;
 }
 .staff-expand-enter-from,
 .staff-expand-leave-to {
   max-height: 0;
   opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff-expand-enter-active,
+  .staff-expand-leave-active {
+    transition: none;
+  }
+}
+/* ── Toggle switch — reduced-motion: disable thumb slide ────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .staff-toggle,
+  .staff-toggle-thumb {
+    transition: none;
+  }
 }
 </style>

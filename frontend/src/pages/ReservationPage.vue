@@ -1,7 +1,7 @@
 ﻿<template>
-  <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
+  <div class="min-w-0 space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-8 ui-safe-bottom">
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr),340px]">
-      <div class="space-y-3 sm:space-y-4">
+      <div class="min-w-0 space-y-3 sm:space-y-4">
         <header class="ui-hero-stage ui-reveal overflow-hidden p-0">
           <div class="relative min-h-[188px] overflow-hidden md:min-h-[224px]">
             <div class="absolute inset-0 bg-gradient-to-br from-amber-500/12 via-slate-950/60 to-teal-500/14"></div>
@@ -94,7 +94,7 @@
           </div>
 
           <div class="mt-4 space-y-2">
-            <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("reservationPage.quickSize") }}</p>
+            <p class="ui-kicker">{{ t("reservationPage.quickSize") }}</p>
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="size in [2, 4, 6, 8]"
@@ -121,16 +121,21 @@
               </label>
             </div>
 
-            <div class="rounded-[1.35rem] border border-slate-800/80 bg-slate-950/45 p-3">
+            <div class="ui-panel p-3">
               <div class="flex items-center justify-between gap-2">
                 <p class="ui-kicker">{{ t("reservationPage.preferredTime") }}</p>
-                <span v-if="availabilityLoading" class="text-[10px] text-slate-500 animate-pulse">…</span>
+                <span
+                  v-if="availabilityLoading"
+                  role="status"
+                  :aria-label="t('reservationPage.slotAvailabilityTitle')"
+                  class="animate-pulse text-[10px] text-slate-500"
+                >…</span>
               </div>
               <div class="mt-3 flex flex-wrap gap-2">
                 <button
                   v-for="slot in quickTimes"
                   :key="slot"
-                  class="relative flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-xs transition-colors focus:outline-none"
+                  class="ui-press relative flex flex-col items-center rounded-xl border px-2.5 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 disabled:cursor-not-allowed"
                   :class="slotButtonClass(slot)"
                   :aria-pressed="form.time === slot"
                   :disabled="isSlotFull(slot)"
@@ -158,16 +163,26 @@
           <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
 
           <!-- Fully-booked state with waitlist offer -->
-          <div v-if="lead.fullyBooked && !waitlistSubmitted" class="mt-4 space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4">
+          <div
+            v-if="lead.fullyBooked && !waitlistSubmitted"
+            class="ui-reveal mt-4 space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4"
+            style="--ui-delay: 60ms"
+          >
             <div class="space-y-1">
               <p class="text-sm font-semibold text-amber-200">{{ t("reservationPage.fullyBookedTitle") }}</p>
               <p class="text-xs text-amber-300/80">{{ t("reservationPage.fullyBookedHint") }}</p>
             </div>
             <div v-if="!showWaitlistForm" class="flex flex-wrap gap-2">
-              <button class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25" @click="showWaitlistForm = true">
+              <button
+                class="ui-press inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 ui-touch-target"
+                @click="showWaitlistForm = true"
+              >
                 {{ t("reservationPage.joinWaitlist") }}
               </button>
-              <button class="rounded-full border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors" @click="lead.$patch({ fullyBooked: false })">
+              <button
+                class="ui-btn-outline ui-press px-4 py-2 text-xs"
+                @click="lead.$patch({ fullyBooked: false })"
+              >
                 {{ t("reservationPage.backToForm") }}
               </button>
             </div>
@@ -180,13 +195,13 @@
               <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" spellcheck="false" :placeholder="t('common.email')" class="ui-input text-sm" />
               <div class="flex flex-wrap gap-2">
                 <button
-                  class="rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 disabled:opacity-60 transition-colors hover:bg-amber-500/25"
+                  class="ui-press inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-60 ui-touch-target"
                   :disabled="joiningWaitlist"
                   @click="joinWaitlist"
                 >
                   {{ joiningWaitlist ? t("reservationPage.waitlistSubmitting") : t("reservationPage.waitlistSubmit") }}
                 </button>
-                <button class="rounded-full border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors" @click="showWaitlistForm = false">
+                <button class="ui-btn-outline ui-press px-4 py-2 text-xs" @click="showWaitlistForm = false">
                   {{ t("common.cancel") }}
                 </button>
               </div>
@@ -194,8 +209,13 @@
           </div>
 
           <!-- Waitlist success -->
-          <div v-if="waitlistSubmitted" role="status" class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-            {{ t("reservationPage.waitlistSuccess") }}
+          <div
+            v-if="waitlistSubmitted"
+            role="status"
+            class="ui-reveal mt-4 flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+          >
+            <AppIcon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+            <span>{{ t("reservationPage.waitlistSuccess") }}</span>
           </div>
 
           <div v-if="!lead.fullyBooked" class="mt-4 flex flex-wrap items-center gap-3">
@@ -209,7 +229,7 @@
               {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
             </button>
             <div v-if="lead.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
               <p class="flex-1 text-sm text-red-300">{{ lead.error }}</p>
             </div>
           </div>
@@ -217,31 +237,32 @@
           <div
             v-if="submitted"
             role="status"
-            class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+            class="ui-reveal mt-4 flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100"
           >
-            {{ t("reservationPage.reservationReceived") }}
+            <AppIcon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+            <span>{{ t("reservationPage.reservationReceived") }}</span>
           </div>
         </section>
       </div>
 
-      <aside class="space-y-3 sm:space-y-4">
-        <section class="ui-command-deck ui-reveal p-3 lg:sticky lg:top-24 lg:p-4 space-y-4" style="--ui-delay: 80ms">
+      <aside class="min-w-0 space-y-3 sm:space-y-4">
+        <section class="ui-command-deck ui-reveal space-y-4 p-3 lg:sticky lg:top-24 lg:p-4" style="--ui-delay: 80ms">
 
           <!-- Live booking summary -->
           <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("reservationPage.bookingSummary") }}</p>
             <div class="mt-2 space-y-1.5 text-sm">
               <div class="flex items-center gap-2 text-slate-300">
-                <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                <span class="truncate">{{ form.name || '—' }}</span>
+                <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                <span class="min-w-0 truncate">{{ form.name || '—' }}</span>
               </div>
               <div class="flex items-center gap-2 text-slate-300">
-                <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
                 <span>{{ form.party_size ? t("reservationPage.guestCount", { count: form.party_size }) : '—' }}</span>
               </div>
               <div class="flex items-center gap-2 text-slate-300">
-                <AppIcon name="calendar" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                <span class="tabular-nums">{{ form.date || '—' }}{{ form.time ? ' · ' + form.time : '' }}</span>
+                <AppIcon name="calendar" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                <span class="min-w-0 truncate tabular-nums">{{ form.date || '—' }}{{ form.time ? ' · ' + form.time : '' }}</span>
               </div>
             </div>
           </div>
@@ -255,10 +276,10 @@
               <a
                 v-if="phoneHref"
                 :href="phoneHref"
-                class="ui-orbit-card ui-surface-lift p-3 transition hover:border-[var(--color-secondary)]/70"
+                class="ui-orbit-card ui-surface-lift block p-3 transition hover:border-[var(--color-secondary)]/70"
                 @click="trackContactClick('phone_call')"
               >
-                <AppIcon name="phone" class="h-4 w-4 text-slate-200" />
+                <AppIcon name="phone" class="h-4 w-4 text-slate-200" aria-hidden="true" />
                 <p class="ui-kicker mt-1">{{ t("reservationPage.phoneSupport") }}</p>
                 <p class="text-sm font-semibold text-white">{{ t("reservationPage.callNow") }}</p>
               </a>
@@ -267,10 +288,10 @@
                 :href="whatsappHref"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="ui-orbit-card ui-surface-lift p-3 transition hover:border-[var(--color-secondary)]/70"
+                class="ui-orbit-card ui-surface-lift block p-3 transition hover:border-[var(--color-secondary)]/70"
                 @click="trackContactClick('whatsapp_contact')"
               >
-                <AppIcon name="chat" class="h-4 w-4 text-slate-200" />
+                <AppIcon name="chat" class="h-4 w-4 text-slate-200" aria-hidden="true" />
                 <p class="ui-kicker mt-1">{{ t("reservationPage.quickConfirm") }}</p>
                 <p class="text-sm font-semibold text-white">{{ t("reservationPage.whatsappMessage") }}</p>
               </a>
@@ -278,7 +299,7 @@
           </div>
 
           <!-- External booking platform (shown once, only when set) -->
-          <div v-if="reservationUrl" class="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3 space-y-2">
+          <div v-if="reservationUrl" class="ui-panel space-y-2 p-3">
             <p class="text-xs text-slate-400">{{ t("reservationPage.directBookingHint") }}</p>
             <a
               :href="reservationUrl"

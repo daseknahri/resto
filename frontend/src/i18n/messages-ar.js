@@ -586,7 +586,8 @@ const arabicMessages = {
     "htmlDownloaded": "تم تحميل حزمة HTML",
     "qrUnavailable": "QR غير متاح",
     "scanHintPlain": "امسح لفتح القائمة",
-    "statusFilter": "تصفية الحالة"
+    "statusFilter": "تصفية الحالة",
+    "noFilterResults": "لا توجد طاولات تطابق البحث أو الفلتر الحالي."
   },
   "ownerLaunchSuccess": {
     "launch": "إطلاق القائمة",
@@ -895,10 +896,12 @@ const arabicMessages = {
     "byActor": "بواسطة {actor}",
     "viewList": "قائمة",
     "viewCalendar": "تقويم",
+    "viewToggleLabel": "وضع العرض",
     "rescheduled": "تمت إعادة جدولة الحجز",
     "bookedFor": "محجوز في",
     "guests": "ضيوف",
     "notes": "ملاحظات",
+    "reminderDateFilter": "التذكيرات / التاريخ",
     "waitlistTitle": "قائمة الانتظار",
     "waitlistSubtitle": "عملاء ينتظرون تحرّر مقعد في وقت محجوز بالكامل.",
     "waitlistDate": "تصفية حسب التاريخ",
@@ -2316,9 +2319,11 @@ Object.assign(arabicMessages, {
     restaurantKicker: "\u0645\u0637\u0639\u0645",
   },
   reservationManage: {
+    kicker: "\u062d\u062c\u0632",
     title: "\u062d\u062c\u0632\u0643",
     loading: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026",
     notFound: "\u062a\u0639\u0630\u0651\u0631 \u0627\u0644\u0639\u062b\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u062d\u062c\u0632. \u0642\u062f \u064a\u0643\u0648\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u063a\u064a\u0631 \u0635\u0627\u0644\u062d \u0623\u0648 \u0645\u064f\u0633\u062a\u062e\u062f\u0645\u0627\u064b \u0645\u0646 \u0642\u0628\u0644.",
+    notFoundTitle: "\u0627\u0644\u062d\u062c\u0632 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f",
     restaurant: "\u0627\u0644\u0645\u0637\u0639\u0645",
     when: "\u0627\u0644\u0645\u0648\u0639\u062f",
     partySize: "\u0639\u062f\u062f \u0627\u0644\u0623\u0634\u062e\u0627\u0635",
@@ -2827,6 +2832,8 @@ Object.assign(arabicMessages, {
     inviting: "\u062c\u0627\u0631\u064d \u0627\u0644\u0625\u0646\u0634\u0627\u0621\u2026",
     teamSection: "\u0641\u0631\u064a\u0642\u0643",
     noStaff: "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0633\u0627\u0628\u0627\u062a \u0645\u0648\u0638\u0641\u064a\u0646 \u0628\u0639\u062f.",
+    noStaffHint: "\u0627\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0646\u0645\u0648\u0630\u062c \u0623\u0639\u0644\u0627\u0647 \u0644\u062f\u0639\u0648\u0629 \u0639\u0636\u0648 \u0641\u064a \u0627\u0644\u0641\u0631\u064a\u0642.",
+    periodLabel: "\u0641\u062a\u0631\u0629 \u0627\u0644\u0625\u062d\u0635\u0627\u0621\u064a\u0627\u062a",
     manage: "\u0625\u062f\u0627\u0631\u0629",
     remove: "\u062d\u0630\u0641",
     removing: "\u062c\u0627\u0631\u064d \u0627\u0644\u062d\u0630\u0641\u2026",
