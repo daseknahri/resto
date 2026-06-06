@@ -1,13 +1,13 @@
 <template>
   <!-- Readiness skeleton while loading -->
-  <article v-if="loading" class="ui-section-band animate-pulse space-y-3 p-3 sm:space-y-4 sm:p-4">
+  <article v-if="loading" class="ui-section-band animate-pulse space-y-3 p-3 sm:space-y-4 sm:p-4" aria-busy="true" :aria-label="t('ownerHome.launchProgress')">
     <div class="flex items-center justify-between gap-3">
       <div class="h-3.5 w-28 rounded bg-slate-700/60" />
       <div class="h-3.5 w-10 rounded bg-slate-700/60" />
     </div>
     <div class="h-2 rounded-full bg-slate-800" />
     <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-      <div v-for="i in 5" :key="i" class="ui-checklist-card flex items-center justify-between gap-3">
+      <div v-for="i in 5" :key="i" class="ui-readiness-item flex items-center justify-between gap-3">
         <div class="h-3 flex-1 rounded bg-slate-700/50" />
         <div class="h-5 w-14 shrink-0 rounded-full bg-slate-700/40" />
       </div>
@@ -16,14 +16,18 @@
 
   <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
        cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
-  <article v-else-if="readinessScore < 100" class="ui-section-band space-y-3 p-3 sm:space-y-4 sm:p-4">
+  <article v-else-if="readinessScore < 100" class="ui-section-band ui-reveal space-y-3 p-3 sm:space-y-4 sm:p-4">
     <div class="flex items-center justify-between gap-3">
-      <p class="text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
+      <div class="min-w-0">
+        <p class="ui-kicker">{{ t("ownerHome.launchChecklist") }}</p>
+        <p class="mt-0.5 text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</p>
+      </div>
       <span
-        class="text-sm font-semibold"
+        class="tabular-nums text-sm font-semibold"
         :class="readinessScore === 100 ? 'text-emerald-400' : 'text-[var(--color-secondary)]'"
+        aria-hidden="true"
       >
-        {{ readinessScore === 100 ? "✓ " : "" }}{{ readinessScore }}%
+        {{ readinessScore }}%
       </span>
     </div>
 
@@ -36,7 +40,7 @@
       :aria-label="t('ownerHome.launchProgress')"
     >
       <div
-        class="h-full rounded-full transition-all duration-300"
+        class="h-full rounded-full transition-all duration-[var(--motion-slow)]"
         :class="readinessScore === 100 ? 'bg-emerald-500' : 'bg-[var(--color-secondary)]'"
         :style="{ width: `${readinessScore}%` }"
       />
@@ -48,20 +52,22 @@
 
     <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
       <article
-        v-for="item in readinessItems"
+        v-for="(item, index) in readinessItems"
         :key="item.label"
-        class="ui-checklist-card flex items-start justify-between gap-3"
+        class="ui-readiness-item ui-reveal flex items-start justify-between gap-3"
         :data-complete="item.ready"
         :data-warning="!item.ready"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
         <div class="flex min-w-0 items-start gap-3">
-          <span class="ui-readiness-dot mt-1 shrink-0" />
+          <span class="ui-readiness-dot mt-1 shrink-0" aria-hidden="true" />
           <div class="min-w-0">
             <p class="text-[13px] font-medium text-slate-100 sm:text-sm">{{ item.label }}</p>
             <RouterLink
               v-if="item.to"
               :to="item.to"
-              class="mt-1.5 inline-flex text-[11px] text-brand-secondary hover:underline sm:text-xs"
+              class="mt-1.5 inline-flex text-[11px] text-brand-secondary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)] sm:text-xs"
+              :aria-label="item.actionLabel"
             >
               {{ item.actionLabel }}
             </RouterLink>
@@ -70,6 +76,7 @@
         <span
           class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold"
           :class="item.ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+          :aria-label="item.ready ? t('ownerHome.ready') : t('ownerHome.missing')"
         >
           {{ item.ready ? t("ownerHome.ready") : t("ownerHome.missing") }}
         </span>

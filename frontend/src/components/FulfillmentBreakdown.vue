@@ -10,17 +10,17 @@
       currency   String   — ISO 4217 currency code for revenue formatting
   -->
   <div class="space-y-3">
-    <p class="text-xs uppercase tracking-[0.18em] text-slate-500">
+    <p class="ui-kicker">
       {{ t("ownerHome.fulfillmentTitle") }}
     </p>
 
     <!-- Skeleton -->
     <template v-if="loading">
-      <div class="h-4 animate-pulse rounded-full bg-slate-800" />
-      <div class="space-y-2">
+      <div class="ui-skeleton h-3 w-full" aria-hidden="true" />
+      <div class="space-y-2 pt-0.5">
         <div v-for="i in 3" :key="i" class="flex items-center justify-between gap-3">
-          <div class="h-3 w-16 rounded bg-slate-800/60" />
-          <div class="h-3 w-10 rounded bg-slate-700/60" />
+          <div class="h-2.5 w-16 animate-pulse rounded bg-slate-800/60" :style="{ animationDelay: `${i * 60}ms` }" />
+          <div class="h-2.5 w-10 animate-pulse rounded bg-slate-700/60" :style="{ animationDelay: `${i * 60 + 30}ms` }" />
         </div>
       </div>
     </template>
@@ -28,9 +28,9 @@
     <!-- No data yet -->
     <div
       v-else-if="!rows.length"
-      class="rounded-xl border border-slate-800/60 bg-slate-900/30 px-4 py-4 text-center"
+      class="ui-empty-state p-4 text-center"
     >
-      <p class="text-xs text-slate-500">{{ t("ownerHome.noOrdersYet") }}</p>
+      <p class="text-xs font-medium text-slate-300">{{ t("ownerHome.noOrdersYet") }}</p>
     </div>
 
     <template v-else>
@@ -44,7 +44,7 @@
           v-for="row in rows"
           :key="row.key"
           :class="row.barClass"
-          :style="{ width: `${row.pct}%` }"
+          :style="{ width: `${row.pct}%`, transition: 'width var(--motion-slow) var(--ease-fluid)' }"
           :title="`${row.label}: ${row.pct}%`"
         />
       </div>
@@ -52,23 +52,24 @@
       <!-- Legend rows -->
       <div class="space-y-1.5">
         <div
-          v-for="row in rows"
+          v-for="(row, index) in rows"
           :key="row.key"
-          class="flex items-center gap-2 text-xs"
+          class="ui-reveal flex min-h-[1.75rem] items-center gap-2 text-xs"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <!-- Color dot -->
-          <span class="h-2 w-2 shrink-0 rounded-full" :class="row.dotClass" />
+          <span class="h-2 w-2 shrink-0 rounded-full" :class="row.dotClass" aria-hidden="true" />
 
           <!-- Label -->
-          <span class="flex-1 font-medium text-slate-200">{{ row.label }}</span>
+          <span class="min-w-0 flex-1 truncate font-medium text-slate-200">{{ row.label }}</span>
 
           <!-- Count + pct -->
-          <span class="tabular-nums text-slate-400">
+          <span class="shrink-0 tabular-nums text-slate-400">
             {{ row.count }} <span class="text-slate-600">({{ row.pct }}%)</span>
           </span>
 
           <!-- Revenue -->
-          <span class="w-20 text-right tabular-nums text-[var(--color-secondary)]">
+          <span class="w-20 shrink-0 text-end tabular-nums text-[var(--color-secondary)]">
             {{ fmtRevenue(row.revenue) }}
           </span>
         </div>

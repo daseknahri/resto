@@ -2,29 +2,32 @@
   <article class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4">
     <!-- Section header -->
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
-        <AppIcon name="chart" class="owner-insights-icon" />
-        <span>{{ t("ownerHome.analyticsTitle", { days: internalPeriod }) }}</span>
-        <svg
-          v-if="updating"
-          aria-hidden="true"
-          class="h-3.5 w-3.5 animate-spin text-slate-500"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-        >
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
-        </svg>
-      </h3>
+      <div class="min-w-0">
+        <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
+        <h3 class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-slate-100 sm:text-lg">
+          <AppIcon name="chart" class="owner-insights-icon shrink-0" aria-hidden="true" />
+          <span class="truncate">{{ t("ownerHome.analyticsTitle", { days: internalPeriod }) }}</span>
+          <svg
+            v-if="updating"
+            aria-hidden="true"
+            class="h-3.5 w-3.5 shrink-0 animate-spin text-slate-500"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
+          </svg>
+        </h3>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         <!-- Period selector -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1" role="group" :aria-label="t('ownerHome.periodSelectorLabel')">
           <button
             v-for="d in PERIOD_OPTIONS"
             :key="d"
-            class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+            class="ui-press ui-touch-target rounded-full border px-2.5 text-[11px] font-semibold transition-colors"
             :class="
               internalPeriod === d
                 ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -38,14 +41,14 @@
           </button>
         </div>
         <button
-          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
+          class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :disabled="exporting"
           @click="exportCsv"
         >
-          <svg v-if="!exporting" aria-hidden="true" class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg v-if="!exporting" aria-hidden="true" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 2v8M5 7l3 3 3-3" />
           </svg>
-          <svg v-else aria-hidden="true" class="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+          <svg v-else aria-hidden="true" class="h-3.5 w-3.5 shrink-0 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="10" />
           </svg>
           {{ t("ownerHome.exportCsv") }}
@@ -62,37 +65,37 @@
         </div>
       </template>
       <template v-else>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '0ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.menuViews") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ counts.menu_view || 0 }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ counts.menu_view || 0 }}</p>
           <PeriodBadge :pct="menuViewsChange" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '28ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.dishViews") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ counts.dish_view || 0 }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ counts.dish_view || 0 }}</p>
           <PeriodBadge :pct="dishViewsChange" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '56ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.orderActions") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ orderActionsCount }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ orderActionsCount }}</p>
           <PeriodBadge :pct="orderActionsChange" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '84ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.interactionRate") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
+          <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ interactionRateLabel }}</p>
           <PeriodBadge :pct="interactionRateChange" />
         </div>
       </template>
     </div>
 
     <!-- Low-stock alert -->
-    <div v-if="lowStock.length" class="rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
+    <div v-if="lowStock.length" class="rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3" role="alert">
       <p class="text-xs font-semibold text-amber-300">{{ t("ownerHome.lowStockTitle", { count: lowStock.length }) }}</p>
       <ul class="mt-2 flex flex-wrap gap-1.5">
         <li
           v-for="d in lowStock"
           :key="d.slug"
-          class="rounded-full border px-2.5 py-0.5 text-[11px]"
+          class="ui-chip shrink-0"
           :class="Number(d.stock_qty) <= 0 ? 'border-red-400/40 text-red-300' : 'border-amber-500/40 text-amber-200'"
         >
           {{ d.name }} · {{ Number(d.stock_qty) <= 0 ? t("ownerHome.lowStockSoldOut") : t("ownerHome.lowStockLeft", { n: d.stock_qty }) }}
@@ -101,26 +104,26 @@
     </div>
 
     <!-- Loyalty & promotions performance -->
-    <div v-if="loyaltyPromo" class="rounded-xl border border-slate-700/50 bg-slate-900/40 px-4 py-3">
-      <p class="text-xs font-semibold text-slate-300">{{ t("ownerHome.loyaltyPromoTitle") }}</p>
-      <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div v-if="loyaltyPromo" class="ui-admin-subcard space-y-2">
+      <p class="ui-kicker">{{ t("ownerHome.loyaltyPromoTitle") }}</p>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
           <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.promoDiscountGiven") }}</p>
-          <p class="text-sm font-bold text-white">{{ fmtMoney(loyaltyPromo.promo_discount_total) }}</p>
+          <p class="tabular-nums text-sm font-bold text-white">{{ fmtMoney(loyaltyPromo.promo_discount_total) }}</p>
           <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.promo_order_count }) }}</p>
         </div>
         <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
           <p class="text-[10px] uppercase tracking-wide text-amber-400/80">{{ t("ownerHome.loyaltyDiscountGiven") }}</p>
-          <p class="text-sm font-bold text-amber-200">{{ fmtMoney(loyaltyPromo.loyalty_discount_total) }}</p>
+          <p class="tabular-nums text-sm font-bold text-amber-200">{{ fmtMoney(loyaltyPromo.loyalty_discount_total) }}</p>
           <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.loyalty_order_count }) }}</p>
         </div>
         <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
           <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsIssued") }}</p>
-          <p class="text-sm font-bold text-emerald-300">+{{ formatNumber(loyaltyPromo.points_earned_total) }}</p>
+          <p class="tabular-nums text-sm font-bold text-emerald-300">+{{ formatNumber(loyaltyPromo.points_earned_total) }}</p>
         </div>
         <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
           <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsRedeemed") }}</p>
-          <p class="text-sm font-bold text-violet-300">−{{ formatNumber(loyaltyPromo.points_redeemed_total) }}</p>
+          <p class="tabular-nums text-sm font-bold text-violet-300">−{{ formatNumber(loyaltyPromo.points_redeemed_total) }}</p>
         </div>
       </div>
     </div>
@@ -129,14 +132,14 @@
     <div
       v-if="hasError && !loading"
       role="alert"
-      class="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3"
+      class="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3"
     >
-      <svg aria-hidden="true" viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-red-400/70" fill="currentColor">
+      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-10.5a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 7a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
       </svg>
-      <p class="flex-1 text-xs text-slate-400">{{ t("ownerHome.analyticsLoadError") }}</p>
+      <p class="flex-1 text-sm text-red-300">{{ t("ownerHome.analyticsLoadError") }}</p>
       <button
-        class="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-slate-600"
+        class="ui-press ui-btn-outline shrink-0 px-2.5 py-1 text-[11px] font-semibold"
         @click="hydrate(true)"
       >
         {{ t("common.retry") }}
@@ -146,23 +149,23 @@
     <!-- Empty state — new restaurant -->
     <div
       v-else-if="!hasError && !loading && !hasFunnelData && !topCategories.length"
-      class="rounded-xl border border-slate-800/60 bg-slate-900/30 px-4 py-5 text-center space-y-1"
+      class="ui-empty-state space-y-1 px-4 py-5 text-center"
     >
-      <AppIcon name="chart" class="mx-auto h-6 w-6 text-slate-600" />
-      <p class="text-sm font-medium text-slate-400">{{ t("ownerHome.noAnalyticsData") }}</p>
-      <p class="text-xs text-slate-600">{{ t("ownerHome.noAnalyticsDataHint") }}</p>
+      <AppIcon name="chart" class="mx-auto h-6 w-6 text-slate-500" aria-hidden="true" />
+      <p class="text-sm font-medium text-slate-300">{{ t("ownerHome.noAnalyticsData") }}</p>
+      <p class="text-xs text-slate-500">{{ t("ownerHome.noAnalyticsDataHint") }}</p>
     </div>
 
     <!-- Conversion funnel -->
     <div v-if="hasFunnelData" class="ui-admin-subcard space-y-3">
-      <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.funnelTitle") }}</p>
+      <p class="ui-kicker">{{ t("ownerHome.funnelTitle") }}</p>
       <div class="space-y-2">
         <div v-for="(step, i) in funnelSteps" :key="step.key" class="funnel-step">
           <div class="flex items-center justify-between gap-2 text-sm">
-            <span class="text-slate-300">{{ step.label }}</span>
-            <div class="flex items-center gap-2 shrink-0">
-              <span v-if="step.dropPct !== null" class="funnel-drop-badge">−{{ step.dropPct }}%</span>
-              <span class="w-14 text-right tabular-nums font-semibold text-slate-100">{{ formatNumber(step.value) }}</span>
+            <span class="min-w-0 truncate text-slate-300">{{ step.label }}</span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span v-if="step.dropPct !== null" class="funnel-drop-badge" aria-label="drop">−{{ step.dropPct }}%</span>
+              <span class="w-14 text-end tabular-nums font-semibold text-slate-100">{{ formatNumber(step.value) }}</span>
             </div>
           </div>
           <div class="mt-1.5 h-2 w-full rounded-full bg-slate-800">
@@ -172,41 +175,51 @@
               :style="{ width: step.widthPct + '%' }"
             />
           </div>
-          <p v-if="i < funnelSteps.length - 1 && step.convRate !== null" class="mt-0.5 text-right text-[10px] text-slate-500">
+          <p v-if="i < funnelSteps.length - 1 && step.convRate !== null" class="mt-0.5 text-end text-[10px] tabular-nums text-slate-500">
             {{ step.convRate }}% {{ t("ownerHome.funnelConvert") }}
           </p>
         </div>
       </div>
-      <p v-if="funnelOverall !== null" class="border-t border-slate-800/60 pt-2 text-xs text-slate-500">
+      <p v-if="funnelOverall !== null" class="border-t border-slate-800/60 pt-2 text-xs tabular-nums text-slate-500">
         {{ t("ownerHome.funnelOverall", { pct: funnelOverall }) }}
       </p>
     </div>
 
     <!-- Top categories + dishes -->
     <div class="grid gap-2 sm:grid-cols-2 sm:gap-3">
-      <div class="ui-admin-subcard">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topCategories") }}</p>
-        <ul v-if="topCategories.length" class="mt-3 space-y-2 text-sm text-slate-200">
-          <li v-for="item in topCategories" :key="item.category_slug" class="flex items-center justify-between gap-3">
-            <span class="truncate">{{ resolveCategory(item.category_slug) }}</span>
-            <span class="shrink-0 text-slate-400">{{ item.count }}</span>
+      <div class="ui-admin-subcard space-y-2">
+        <p class="ui-kicker">{{ t("ownerHome.topCategories") }}</p>
+        <ul v-if="topCategories.length" class="space-y-2 text-sm text-slate-200">
+          <li
+            v-for="(item, idx) in topCategories"
+            :key="item.category_slug"
+            class="ui-reveal flex items-center justify-between gap-3"
+            :style="{ '--ui-delay': `${Math.min(idx, 9) * 28}ms` }"
+          >
+            <span class="min-w-0 truncate">{{ resolveCategory(item.category_slug) }}</span>
+            <span class="shrink-0 tabular-nums text-slate-400">{{ item.count }}</span>
           </li>
         </ul>
-        <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
-          <AppIcon name="chart" class="mx-auto h-5 w-5 text-slate-500" />
+        <div v-else class="ui-empty-state px-4 py-4 text-center">
+          <AppIcon name="chart" class="mx-auto h-5 w-5 text-slate-500" aria-hidden="true" />
           <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noDataYet") }}</p>
         </div>
       </div>
-      <div class="ui-admin-subcard">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ t("ownerHome.topDishes") }}</p>
-        <ul v-if="topDishes.length" class="mt-3 space-y-2 text-sm text-slate-200">
-          <li v-for="item in topDishes" :key="item.dish_slug" class="flex items-center justify-between gap-3">
-            <span class="truncate">{{ resolveDish(item.dish_slug) }}</span>
-            <span class="shrink-0 text-slate-400">{{ item.count }}</span>
+      <div class="ui-admin-subcard space-y-2">
+        <p class="ui-kicker">{{ t("ownerHome.topDishes") }}</p>
+        <ul v-if="topDishes.length" class="space-y-2 text-sm text-slate-200">
+          <li
+            v-for="(item, idx) in topDishes"
+            :key="item.dish_slug"
+            class="ui-reveal flex items-center justify-between gap-3"
+            :style="{ '--ui-delay': `${Math.min(idx, 9) * 28}ms` }"
+          >
+            <span class="min-w-0 truncate">{{ resolveDish(item.dish_slug) }}</span>
+            <span class="shrink-0 tabular-nums text-slate-400">{{ item.count }}</span>
           </li>
         </ul>
-        <div v-else class="ui-empty-state mt-3 px-4 py-4 text-center">
-          <AppIcon name="menu" class="mx-auto h-5 w-5 text-slate-500" />
+        <div v-else class="ui-empty-state px-4 py-4 text-center">
+          <AppIcon name="menu" class="mx-auto h-5 w-5 text-slate-500" aria-hidden="true" />
           <p class="mt-2 text-sm text-slate-400">{{ t("ownerHome.noDataYet") }}</p>
         </div>
       </div>

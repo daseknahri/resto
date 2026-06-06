@@ -1,17 +1,22 @@
 <template>
-  <details class="group rounded-xl border border-slate-800 bg-slate-950/30" :open="open">
+  <details
+    class="group rounded-xl border border-slate-800 bg-slate-950/30"
+    :open="open"
+    :aria-label="t('ownerHome.dishAvailability')"
+  >
     <summary
-      class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-200 [&::-webkit-details-marker]:hidden"
+      class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 [&::-webkit-details-marker]:hidden"
+      :aria-expanded="open"
       @click.prevent="toggle"
     >
       <span class="flex items-center gap-2">
-        <AppIcon name="menu" class="h-3.5 w-3.5 text-slate-400" />
+        <AppIcon name="menu" class="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
         {{ t("ownerHome.dishAvailability") }}
       </span>
       <span class="flex items-center gap-2 text-xs font-normal text-slate-400">
         <span
           v-if="soldOutCount > 0"
-          class="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 font-semibold text-red-300"
+          class="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 font-semibold tabular-nums text-red-300"
         >
           {{ soldOutCount }} {{ t("ownerHome.soldOut") }}
         </span>
@@ -28,7 +33,11 @@
         >
           <circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="10" />
         </svg>
-        <span aria-hidden="true">{{ open ? "▲" : "▼" }}</span>
+        <AppIcon
+          :name="open ? 'chevronUp' : 'chevronDown'"
+          class="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform duration-200 rtl:scale-x-[-1]"
+          aria-hidden="true"
+        />
       </span>
     </summary>
 
@@ -45,9 +54,10 @@
         />
         <button
           v-if="soldOutCount > 0"
-          class="shrink-0 rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+          class="ui-press shrink-0 rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
           :disabled="resetting"
           :title="t('ownerHome.resetAvailabilityHint')"
+          :aria-label="t('ownerHome.resetAvailabilityHint')"
           @click="resetAll"
         >
           {{ resetting ? "…" : t("ownerHome.resetAllAvailable") }}
@@ -65,26 +75,31 @@
         </div>
       </template>
 
-      <div v-else-if="!dishes.length" class="py-2 text-center text-xs text-slate-500">
-        {{ t("ownerHome.noDishesLoaded") }}
+      <div v-else-if="!dishes.length" class="ui-empty-state text-center">
+        <p class="text-xs font-medium text-slate-300">{{ t("ownerHome.noDishesLoaded") }}</p>
       </div>
 
       <div
-        v-for="dish in filtered"
+        v-for="(dish, index) in filtered"
         :key="dish.id"
-        class="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
-        :class="!dish.is_available ? 'opacity-70' : ''"
+        class="ui-reveal flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
+        :class="!dish.is_available ? 'opacity-60' : ''"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
       >
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <p class="truncate text-xs font-medium text-slate-100">{{ dish.name }}</p>
-          <p class="text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
+          <p class="truncate text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
         </div>
 
         <div class="flex shrink-0 items-center gap-1.5">
           <!-- Stock quantity input -->
           <div class="flex flex-col items-center gap-0.5">
-            <label class="text-[8px] uppercase tracking-wider text-slate-600">{{ t("ownerHome.stockLabel") }}</label>
+            <label
+              :for="`stock-${dish.id}`"
+              class="text-[8px] uppercase tracking-wider text-slate-600"
+            >{{ t("ownerHome.stockLabel") }}</label>
             <input
+              :id="`stock-${dish.id}`"
               type="number"
               min="0"
               step="1"
@@ -92,7 +107,7 @@
               :placeholder="t('ownerHome.stockUnlimited')"
               :disabled="settingStockId === dish.id"
               :aria-label="t('ownerHome.stockLabel')"
-              class="w-14 rounded-lg border border-slate-700 bg-slate-900/80 px-1.5 py-0.5 text-center text-[10px] text-slate-200 placeholder-slate-600 focus:border-slate-500 focus:outline-none disabled:opacity-40"
+              class="w-14 rounded-lg border border-slate-700 bg-slate-900/80 px-1.5 py-0.5 text-center text-[10px] tabular-nums text-slate-200 placeholder-slate-600 focus:border-amber-500/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40 disabled:opacity-40"
               :class="
                 dish.stock_qty === 0
                   ? 'border-red-500/50 text-red-300'
@@ -107,13 +122,18 @@
 
           <!-- Available toggle -->
           <button
-            class="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-50"
+            class="ui-press ui-touch-target shrink-0 rounded-full border px-2.5 text-[10px] font-semibold transition-colors disabled:opacity-50"
             :class="
               dish.is_available
                 ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
                 : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'
             "
             :disabled="togglingId === dish.id"
+            :aria-label="
+              dish.is_available
+                ? `${dish.name} — ${t('ownerHome.dishAvailable')}`
+                : `${dish.name} — ${t('ownerHome.dish86d')}`
+            "
             @click="toggleAvailability(dish)"
           >
             {{ togglingId === dish.id ? "…" : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}

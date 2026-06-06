@@ -3,17 +3,18 @@
   <div v-if="alerts.length" class="space-y-2" role="region" :aria-label="t('ownerHome.alertsRegion')">
     <TransitionGroup name="alert-slide" tag="div" class="space-y-2">
       <div
-        v-for="alert in alerts"
+        v-for="(alert, index) in alerts"
         :key="alert.id"
-        class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm"
+        class="ui-reveal flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm"
         :class="alert.borderClass"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         role="alert"
       >
         <!-- Icon -->
-        <span class="text-base leading-none" aria-hidden="true">{{ alert.icon }}</span>
+        <span class="mt-0.5 shrink-0 text-base leading-none" aria-hidden="true">{{ alert.icon }}</span>
 
         <!-- Message -->
-        <p class="flex-1 text-xs font-medium" :class="alert.textClass">
+        <p class="min-w-0 flex-1 text-xs font-medium leading-relaxed" :class="alert.textClass">
           {{ alert.message }}
         </p>
 
@@ -21,16 +22,18 @@
         <RouterLink
           v-if="alert.to"
           :to="alert.to"
-          class="shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+          class="ui-press ui-touch-target shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
           :class="alert.actionClass"
+          :aria-label="alert.actionLabel"
         >
           {{ alert.actionLabel }}
         </RouterLink>
         <button
           v-else-if="alert.action"
           :disabled="alert.loading"
-          class="shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
+          class="ui-press ui-touch-target shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current disabled:opacity-50"
           :class="alert.actionClass"
+          :aria-busy="alert.loading || undefined"
           @click="alert.action()"
         >
           {{ alert.loading ? "…" : alert.actionLabel }}
@@ -174,11 +177,17 @@ const alerts = computed(() => {
 <style scoped>
 .alert-slide-enter-active,
 .alert-slide-leave-active {
-  transition: all 220ms ease;
+  transition:
+    opacity var(--motion-base) var(--ease-fluid),
+    transform var(--motion-base) var(--ease-fluid);
 }
 .alert-slide-enter-from,
 .alert-slide-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
+}
+.alert-slide-leave-active {
+  position: absolute;
+  width: 100%;
 }
 </style>
