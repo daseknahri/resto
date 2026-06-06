@@ -6,7 +6,7 @@
         <img
           v-if="heroImage"
           :src="heroImage"
-          :alt="`${tenantName} cover`"
+          :alt="t('menuSelect.heroCoverAlt', { name: tenantName })"
           class="absolute inset-0 h-full w-full object-cover"
           loading="eager"
           fetchpriority="high"
@@ -20,7 +20,7 @@
             <img
               v-if="logoImage"
               :src="logoImage"
-              :alt="`${tenantName} logo`"
+              :alt="t('menuSelect.logoAlt', { name: tenantName })"
               class="h-16 w-16 shrink-0 rounded-2xl border-2 border-white/20 object-cover shadow-2xl shadow-black/50 sm:h-20 sm:w-20"
               loading="eager"
               decoding="async"
@@ -34,15 +34,16 @@
           </div>
           <div class="flex flex-wrap gap-2">
             <span
-              class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-sm"
-              :style="isRestaurantOpen
-                ? 'border-color:rgba(52,211,153,0.40); background:rgba(16,185,129,0.12); color:rgb(110,231,183)'
-                : 'border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.10); color:rgb(252,165,165)'"
+              class="ui-status-pill"
+              :class="isRestaurantOpen
+                ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-300'
+                : 'border-red-500/35 bg-red-500/10 text-red-300'"
             >
-              <span class="relative inline-flex shrink-0" aria-hidden="true">
-                <span v-if="isRestaurantOpen" class="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span class="relative inline-block h-1.5 w-1.5 rounded-full" :style="isRestaurantOpen ? 'background:rgb(52,211,153)' : 'background:rgb(239,68,68)'" />
-              </span>
+              <span
+                class="ui-live-dot"
+                :class="isRestaurantOpen ? 'bg-emerald-400' : 'bg-red-500'"
+                aria-hidden="true"
+              />
               {{ statusLabel }}
             </span>
           </div>
@@ -73,21 +74,22 @@
         <p class="ui-subtle">{{ t('menuSelect.subtitle', { count: publishedMenus.length }) }}</p>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul class="grid list-none gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <li v-for="(sc, i) in publishedMenus" :key="sc.slug">
         <RouterLink
-          v-for="(sc, i) in publishedMenus"
-          :key="sc.slug"
           :to="{ name: 'menu-browse', params: { menuSlug: sc.slug } }"
-          class="ui-surface-lift ui-reveal group relative overflow-hidden rounded-[1.8rem] border border-slate-800/80 bg-slate-950/82 shadow-[0_16px_42px_rgba(2,6,23,0.36)] hover:border-[var(--color-secondary)]/40 hover:shadow-[0_20px_56px_rgba(2,6,23,0.52)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]"
+          class="ui-surface-lift ui-reveal group relative block overflow-hidden rounded-[1.8rem] border border-slate-800/80 bg-slate-950/82 shadow-[0_16px_42px_rgba(2,6,23,0.36)] hover:border-[var(--color-secondary)]/40 hover:shadow-[0_20px_56px_rgba(2,6,23,0.52)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]"
           :style="{ '--ui-delay': `${Math.min(i, 6) * 50}ms` }"
-          :aria-label="sc.is_temporarily_disabled ? `${sc.name} — ${t('menuSelect.unavailable')}` : sc.name"
+          :aria-label="sc.is_temporarily_disabled
+            ? `${sc.name} — ${t('menuSelect.unavailable')}`
+            : t('menuSelect.browseLinkLabel', { name: sc.name }) + ', ' + t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug) })"
         >
           <!-- Card image area -->
           <div class="relative h-40 w-full overflow-hidden bg-slate-900 sm:h-44">
             <img
               v-if="menuCoverImage(sc)"
               :src="menuCoverImage(sc)"
-              :alt="sc.name"
+              alt=""
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
               loading="lazy"
               decoding="async"
@@ -153,7 +155,8 @@
           <!-- Bottom accent line on hover -->
           <div class="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] origin-center scale-x-0 transition-transform duration-300 group-hover:scale-x-100" style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.6), transparent)" aria-hidden="true" />
         </RouterLink>
-      </div>
+        </li>
+      </ul>
     </div>
 
     <!-- Error -->

@@ -67,7 +67,9 @@ const arabicMessages = {
     "closed": "مغلق",
     "more": "المزيد",
     "change": "تغيير",
-    "opensInNewTab": "(يفتح في تبويب جديد)"
+    "opensInNewTab": "(يفتح في تبويب جديد)",
+    "included": "مضمّن",
+    "notIncluded": "غير مضمّن"
   },
   "toast": {
     "type": {
@@ -338,7 +340,12 @@ const arabicMessages = {
   },
   "ownerAnalytics": {
     "kicker": "الأداء",
-    "title": "التحليلات"
+    "title": "التحليلات",
+    "daysSuffix": "أيام",
+    "deltaLabel": "التغيير مقارنة بالأمس: {delta}",
+    "sparklineOrders": "اتجاه الطلبات خلال الأيام السبعة الماضية",
+    "sparklineRevenue": "اتجاه الإيرادات خلال الأيام السبعة الماضية",
+    "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية"
   },
   "ownerHome": {
     "platformFeeNote": "عمولة المنصة 10%",
@@ -1029,6 +1036,9 @@ const arabicMessages = {
     "searchResultsKicker": "نتائج البحث",
     "searchResultsTitle": "نتائج البحث",
     "allCategories": "جميع التصنيفات",
+    "categoryNav": "التنقل بين التصنيفات",
+    "allergenFilter": "تصفية حسب مسبب الحساسية",
+    "ratingLabel": "{avg} من 5 ({count} تقييم)",
     "callWaiter": "نادِ النادل",
     "callingWaiter": "جارٍ الاتصال…",
     "waiterCalled": "النادل في الطريق إليك 🛎️",
@@ -2218,6 +2228,7 @@ Object.assign(arabicMessages, {
     visibility: "\u0627\u0644\u0638\u0647\u0648\u0631"
   },
   notFound: {
+    kicker: "404",
     title: "\u0627\u0644\u0635\u0641\u062d\u0629 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629",
     message: "\u0627\u0644\u0635\u0641\u062d\u0629 \u0627\u0644\u062a\u064a \u062a\u0628\u062d\u062b \u0639\u0646\u0647\u0627 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629 \u0623\u0648 \u0631\u0628\u0645\u0627 \u062a\u0645 \u0646\u0642\u0644\u0647\u0627.",
     goDashboard: "\u0627\u0644\u0630\u0647\u0627\u0628 \u0625\u0644\u0649 \u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645",
@@ -2447,6 +2458,8 @@ Object.assign(arabicMessages, {
     submitRating: "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
     ratingThanks: "\u0634\u0643\u0631\u0627\u064b \u0639\u0644\u0649 \u0645\u0644\u0627\u062d\u0638\u0627\u062a\u0643!",
     statusStepperLabel: "\u062e\u0637\u0648\u0627\u062a \u062a\u0642\u062f\u0651\u0645 \u0627\u0644\u0637\u0644\u0628",
+    currentStep: "\u0627\u0644\u062e\u0637\u0648\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629",
+    stepDone: "\u0645\u0646\u062c\u0632",
   },
   ownerMenuBuilder: {
     importCsv: "\u0627\u0633\u062a\u064a\u0631\u0627\u062f CSV",
@@ -3041,6 +3054,9 @@ Object.assign(arabicMessages, {
     temporarilyUnavailable: "\u063a\u064a\u0631 \u0645\u062a\u0627\u062d \u0645\u0624\u0642\u062a\u0627\u064b",
     switchMenu: "\u062a\u063a\u064a\u064a\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629",
     backToMenus: "\u062c\u0645\u064a\u0639 \u0627\u0644\u0642\u0648\u0627\u0626\u0645",
+    heroCoverAlt: "\u0635\u0648\u0631\u0629 \u063a\u0644\u0627\u0641 {name}",
+    logoAlt: "\u0634\u0639\u0627\u0631 {name}",
+    browseLinkLabel: "\u062a\u0635\u0641\u062d {name}",
   },
   revenueChart: {
     title: "\u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",

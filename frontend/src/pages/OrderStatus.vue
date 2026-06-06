@@ -58,7 +58,7 @@
         <!-- background glow -->
         <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.18),transparent_60%)]" />
         <div class="relative space-y-2">
-          <p class="text-3xl">🎉</p>
+          <p class="text-3xl" aria-hidden="true">🎉</p>
           <p class="text-2xl font-bold text-emerald-200">{{ t("orderStatus.orderReadyTitle") }}</p>
           <p class="text-sm text-emerald-100/75">
             {{ fulfillmentLabel(orderData) === t("orderStatus.fulfillmentDelivery") ? t("orderStatus.readyBodyDelivery") : t("orderStatus.readyBodyPickup") }}
@@ -71,7 +71,7 @@
         v-if="orderData.status === 'scheduled' && orderData.scheduled_for"
         class="ui-reveal rounded-2xl border border-violet-400/50 bg-violet-500/12 p-4 text-center shadow-lg shadow-violet-900/20 sm:p-5"
       >
-        <p class="text-2xl">🗓️</p>
+        <p class="text-2xl" aria-hidden="true">🗓️</p>
         <p class="mt-1 text-lg font-bold text-violet-100">{{ t("orderStatus.scheduledTitle") }}</p>
         <p class="mt-1 text-sm text-violet-100/80">
           {{ t("orderStatus.scheduledBody", { time: formatScheduledFor(orderData.scheduled_for) }) }}
@@ -100,7 +100,7 @@
               {{ t("orderStatus.orderNumber", { number: orderData.order_number }) }}
             </h1>
             <div class="flex flex-wrap items-center gap-2 mt-1">
-              <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusClass(orderData.status)">
+              <span class="ui-status-pill" :class="statusClass(orderData.status)">
                 {{ statusLabel(orderData.status) }}
               </span>
               <span v-if="orderData.fulfillment_type" class="ui-chip">{{ fulfillmentLabel(orderData) }}</span>
@@ -150,8 +150,9 @@
           rel="noopener noreferrer"
           class="mt-2 inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
         >
-          <AppIcon name="location" class="h-3.5 w-3.5" />
+          <AppIcon name="location" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("orderStatus.openMap") }}
+          <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
         </a>
       </div>
 
@@ -170,8 +171,8 @@
 
       <!-- Status timeline -->
       <div class="ui-panel p-4 sm:p-5">
-        <div class="flex items-center justify-between gap-1">
-          <div
+        <ol class="flex items-center justify-between gap-1">
+          <li
             v-for="(step, idx) in statusSteps"
             :key="step.value"
             class="flex flex-1 flex-col items-center gap-1.5"
@@ -186,18 +187,20 @@
               <div
                 class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all duration-500"
                 :class="stepClass(step.value)"
+                :aria-current="idx === currentStepIndex ? 'step' : undefined"
               >
                 <span v-if="isStepDone(step.value) && idx !== currentStepIndex">✓</span>
                 <span v-else-if="idx === currentStepIndex">
                   <!-- spinning dot for current step -->
-                  <span class="block h-2.5 w-2.5 rounded-full bg-current" />
+                  <span class="block h-2.5 w-2.5 rounded-full bg-current" aria-hidden="true" />
+                  <span class="sr-only">{{ step.label }}</span>
                 </span>
                 <span v-else>{{ idx + 1 }}</span>
               </div>
             </div>
             <p class="text-center text-[10px] leading-tight text-slate-400 sm:text-xs">{{ step.label }}</p>
-          </div>
-        </div>
+          </li>
+        </ol>
         <!-- Progress bar -->
         <div
           class="mt-3 h-1.5 w-full rounded-full bg-slate-800"
@@ -206,6 +209,7 @@
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-label="statusLabel(orderData?.status)"
+          :aria-valuetext="statusLabel(orderData?.status)"
         >
           <div
             class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-500"
@@ -328,7 +332,7 @@
             :disabled="payingWallet"
             @click="payWithWallet"
           >
-            <AppIcon name="wallet" class="h-4 w-4" />
+            <AppIcon name="wallet" class="h-4 w-4" aria-hidden="true" />
             {{ payingWallet ? t('orderStatus.payingWallet') : t('orderStatus.payWithWallet', { amount: formatCurrency(orderData.amount_due, orderData.currency) }) }}
           </button>
           <p class="text-center text-[11px] text-slate-500">
@@ -341,7 +345,7 @@
           v-if="orderData.fulfillment_type === 'table' && orderData.payment_status !== 'paid' && orderData.status !== 'cancelled'"
           class="flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500"
         >
-          <AppIcon name="info" class="h-3 w-3 shrink-0" />
+          <AppIcon name="info" class="h-3 w-3 shrink-0" aria-hidden="true" />
           {{ t('orderStatus.payCashHint') }}
         </p>
 
@@ -379,14 +383,15 @@
           <p class="text-xs text-slate-400">{{ t("orderStatus.rateSubtitle") }}</p>
         </div>
         <!-- Star picker -->
-        <div class="flex gap-1" role="group" :aria-label="t('orderStatus.rateTitle')">
+        <div class="flex gap-1" role="radiogroup" :aria-label="t('orderStatus.rateTitle')">
           <button
             v-for="star in 5"
             :key="star"
             type="button"
+            role="radio"
             class="ui-touch-target ui-press flex items-center justify-center text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60 focus-visible:rounded-lg"
             :aria-label="t('orderStatus.ratingLabel', { score: star })"
-            :aria-pressed="star <= ratingScore"
+            :aria-checked="star <= ratingScore"
             @click="ratingScore = star"
           >
             <span :class="star <= ratingScore ? 'text-amber-400' : 'text-slate-700'">★</span>
@@ -443,7 +448,7 @@
           <p class="text-xs text-slate-400">{{ t("orderStatus.tableSignInNudgeBody") }}</p>
         </div>
         <button class="ui-btn-primary inline-flex w-full justify-center py-2 text-sm" @click="showAuthModal = true">
-          <AppIcon name="user" class="h-3.5 w-3.5" />
+          <AppIcon name="user" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("orderStatus.tableSignInNudgeButton") }}
         </button>
       </div>

@@ -1,8 +1,10 @@
 ﻿<template>
   <div class="min-h-screen bg-slate-950 pb-32 ui-safe-bottom">
+    <!-- Single max-width shell — all content lives inside this wrapper -->
+    <div class="mx-auto max-w-3xl px-4">
 
     <!-- Back link -->
-    <div class="mx-auto max-w-3xl px-4 pt-5">
+    <div class="pt-5">
       <router-link
         to="/order"
         class="inline-flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 rounded"
@@ -15,7 +17,7 @@
     </div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading" class="mx-auto max-w-3xl px-4 py-5 space-y-5" aria-busy="true" :aria-label="t('common.loading')">
+    <div v-if="loading" class="py-5 space-y-5" aria-busy="true" :aria-label="t('common.loading')">
       <!-- Restaurant header skeleton -->
       <div class="ui-hero-ribbon animate-pulse flex items-start gap-4 p-4">
         <div class="h-16 w-16 shrink-0 rounded-xl bg-slate-800/70" />
@@ -43,7 +45,7 @@
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError" role="alert" class="mx-auto max-w-sm px-4 py-8">
+    <div v-else-if="fetchError" role="alert" class="py-8">
       <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -58,7 +60,7 @@
 
     <template v-else-if="restaurant">
       <!-- Restaurant header -->
-      <div class="mx-auto max-w-3xl px-4 pt-4 pb-2">
+      <div class="pt-4 pb-2">
         <header class="ui-hero-ribbon ui-reveal px-4 py-4">
           <div class="flex items-start gap-4">
             <!-- Logo -->
@@ -104,7 +106,7 @@
       </div>
 
       <!-- Menu -->
-      <main class="mx-auto max-w-3xl px-4 space-y-8">
+      <main class="space-y-8">
         <!-- Empty menu state -->
         <div
           v-if="!restaurant.super_categories?.length"
@@ -152,7 +154,7 @@
                       @click="addToCart(dish)"
                     >
                       {{ t('mktMenu.addToCart') }}
-                      <span v-if="cartQty(dish.slug)" class="ms-1 opacity-70 tabular-nums" aria-live="polite">+{{ cartQty(dish.slug) }}</span>
+                      <span v-if="cartQty(dish.slug)" class="ms-1 opacity-70 tabular-nums" aria-hidden="true">+{{ cartQty(dish.slug) }}</span>
                     </button>
                   </div>
                 </div>
@@ -163,22 +165,21 @@
       </main>
     </template>
 
+    </div><!-- /max-w-3xl shell -->
+
     <!-- Cart bottom bar (visible when cart has items) -->
-    <div
+    <button
       v-if="cart.length && !checkoutOpen"
-      class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4"
-      style="padding-bottom: calc(var(--safe-bottom) + 1rem)"
+      ref="checkoutTriggerRef"
+      class="ui-cart-bar ui-press fixed bottom-0 inset-x-3 z-30 mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-2xl px-6 py-3.5 text-sm font-bold text-white flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+      style="margin-bottom: calc(var(--safe-bottom) + 1rem)"
+      :aria-label="`${t('mktMenu.checkout')} · ${fmtPrice(cartTotal)}`"
+      @click="checkoutOpen = true"
     >
-      <button
-        class="ui-press w-full max-w-md rounded-2xl bg-[var(--color-secondary)] px-6 py-3.5 text-sm font-bold text-slate-950 shadow-xl transition-opacity hover:opacity-90 flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-        :aria-label="`${t('mktMenu.checkout')} · ${fmtPrice(cartTotal)}`"
-        @click="checkoutOpen = true"
-      >
-        <span class="rounded-full bg-slate-950/20 px-2 py-0.5 text-xs tabular-nums" aria-live="polite">{{ cartTotalQty }}</span>
-        <span>{{ t('mktMenu.checkout') }}</span>
-        <span class="tabular-nums">{{ fmtPrice(cartTotal) }}</span>
-      </button>
-    </div>
+      <span class="rounded-full bg-[var(--color-secondary)]/20 px-2 py-0.5 text-xs tabular-nums text-[var(--color-secondary)]" aria-hidden="true">{{ cartTotalQty }}</span>
+      <span>{{ t('mktMenu.checkout') }}</span>
+      <span class="tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(cartTotal) }}</span>
+    </button>
 
     <!-- Checkout drawer -->
     <Transition name="slide-up">
@@ -220,7 +221,7 @@
               <div class="flex items-center gap-1.5">
                 <button
                   class="ui-press h-7 w-7 rounded-full border border-slate-700 text-slate-300 text-sm hover:border-slate-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                  :aria-label="t('dishPage.decreaseQuantity')"
+                  :aria-label="`${t('dishPage.decreaseQuantity')} ${item.name}`"
                   @click="removeFromCart(item.slug)"
                 >
                   <span aria-hidden="true">−</span>
@@ -228,7 +229,7 @@
                 <span class="text-sm text-white w-5 text-center tabular-nums" aria-live="polite">{{ item.qty }}</span>
                 <button
                   class="ui-press h-7 w-7 rounded-full border border-slate-700 text-slate-300 text-sm hover:border-slate-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-                  :aria-label="t('dishPage.increaseQuantity')"
+                  :aria-label="`${t('dishPage.increaseQuantity')} ${item.name}`"
                   @click="addToCartBySlug(item.slug)"
                 >
                   <span aria-hidden="true">+</span>
@@ -264,10 +265,11 @@
           <!-- Customer info -->
           <div class="space-y-3">
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">
+              <label for="mkt-name" class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.customerName') }}
               </label>
               <input
+                id="mkt-name"
                 v-model="form.customer_name"
                 type="text"
                 autocomplete="name"
@@ -276,10 +278,11 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">
+              <label for="mkt-phone" class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.customerPhone') }}
               </label>
               <input
+                id="mkt-phone"
                 v-model="form.customer_phone"
                 type="tel"
                 inputmode="tel"
@@ -289,10 +292,11 @@
             </div>
             <div v-if="form.fulfillment_type === 'delivery'" class="space-y-2">
               <div>
-                <label class="block text-xs font-medium text-slate-400 mb-1">
+                <label for="mkt-address" class="block text-xs font-medium text-slate-400 mb-1">
                   {{ t('mktMenu.deliveryAddress') }}
                 </label>
                 <textarea
+                  id="mkt-address"
                   v-model="form.delivery_address"
                   rows="2"
                   class="ui-textarea resize-none"
@@ -323,10 +327,11 @@
               </p>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">
+              <label for="mkt-note" class="block text-xs font-medium text-slate-400 mb-1">
                 {{ t('mktMenu.note') }}
               </label>
               <input
+                id="mkt-note"
                 v-model="form.customer_note"
                 type="text"
                 class="ui-input"
@@ -340,12 +345,14 @@
                   type="button"
                   class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   :class="!scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                  :aria-pressed="!scheduleEnabled"
                   @click="scheduleEnabled = false"
                 >{{ t('mktMenu.scheduleAsap') }}</button>
                 <button
                   type="button"
                   class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   :class="scheduleEnabled ? 'border-emerald-500/55 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'"
+                  :aria-pressed="scheduleEnabled"
                   @click="scheduleEnabled = true"
                 >{{ t('mktMenu.scheduleLater') }}</button>
               </div>
@@ -457,6 +464,8 @@ const fetchError = ref(false);
 const restaurant = ref(null);
 const checkoutOpen = ref(false);
 const checkoutDialogRef = ref(null);
+// Ref to the element that opened the checkout drawer — used to restore focus on close.
+const checkoutTriggerRef = ref(null);
 
 const FOCUSABLE_CO = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -484,6 +493,9 @@ watch(checkoutOpen, async (open) => {
     document.addEventListener('keydown', trapCheckoutFocus);
   } else {
     document.removeEventListener('keydown', trapCheckoutFocus);
+    // Restore focus to the trigger element so keyboard users are not stranded on <body>.
+    await nextTick();
+    checkoutTriggerRef.value?.focus();
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapCheckoutFocus));

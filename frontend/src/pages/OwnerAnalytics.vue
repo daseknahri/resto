@@ -1,11 +1,11 @@
 <template>
-  <section class="space-y-3 pb-24 sm:pb-6">
+  <section class="space-y-3 pb-24 sm:pb-6" aria-labelledby="analytics-heading">
     <article class="ui-workspace-stage ui-reveal space-y-3 p-3 sm:p-4">
       <!-- Header + period selector -->
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1.5">
           <p class="ui-kicker">{{ t("ownerAnalytics.kicker") }}</p>
-          <h2 class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerAnalytics.title") }}</h2>
+          <h2 id="analytics-heading" class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerAnalytics.title") }}</h2>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
           <button
@@ -16,6 +16,7 @@
               ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
               : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
             :aria-pressed="insightsPeriod === d"
+            :aria-label="d + ' ' + t('ownerAnalytics.daysSuffix')"
             @click="insightsPeriod = d"
           >{{ d }}d</button>
         </div>
@@ -28,7 +29,7 @@
 
       <!-- KPI cards: today stats + 7-day sparklines -->
       <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-        <article
+        <div
           class="ui-admin-subcard ui-reveal space-y-1.5"
           :style="{ '--ui-delay': '0ms' }"
         >
@@ -39,38 +40,42 @@
               v-if="yesterdayStats.count > 0"
               class="mb-0.5 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
+              :aria-label="t('ownerAnalytics.deltaLabel', { delta: todayStats.count - yesterdayStats.count })"
             >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
           </div>
-          <SparklineChart :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" />
-        </article>
+          <SparklineChart :values="sparklineOrders" :color="trend(sparklineOrders) === 'up' ? 'emerald' : 'slate'" :height="28" :label="t('ownerAnalytics.sparklineOrders')" />
+        </div>
 
-        <article
+        <div
           class="ui-admin-subcard ui-reveal space-y-1.5"
           :style="{ '--ui-delay': '28ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
           <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
-          <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" />
-        </article>
+          <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" :label="t('ownerAnalytics.sparklineRevenue')" />
+        </div>
 
-        <article
+        <div
           class="ui-admin-subcard ui-reveal space-y-1.5"
           :style="{ '--ui-delay': '56ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
           <p class="ui-stat-value tabular-nums text-slate-100">{{ avgTicketLabel }}</p>
-          <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" />
-        </article>
+          <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" :label="t('ownerAnalytics.sparklineAvgTicket')" />
+        </div>
 
-        <article
+        <div
           class="ui-admin-subcard ui-reveal space-y-1.5"
           :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
           :style="{ '--ui-delay': '84ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
-          <p class="ui-stat-value tabular-nums" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
+          <div class="flex items-center gap-1.5">
+            <p class="ui-stat-value tabular-nums" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
+            <AppIcon v-if="todayStats.pending > 0" name="info" class="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
+          </div>
           <div class="h-7" />
-        </article>
+        </div>
 
         <RouterLink
           :to="{ name: 'owner-reservations' }"
@@ -127,6 +132,7 @@
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 
+import AppIcon from "../components/AppIcon.vue";
 import BestSellersWidget from "../components/BestSellersWidget.vue";
 import RevenueBarChart from "../components/RevenueBarChart.vue";
 import OwnerDashboardInsights from "../components/OwnerDashboardInsights.vue";

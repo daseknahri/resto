@@ -37,7 +37,7 @@ const sign = computed(() => (props.pct > 0 ? "+" : props.pct < 0 ? "−" : ""));
 
 const colorClass = computed(() => {
   if (props.pct === null || props.pct === undefined) return "";
-  if (Math.abs(props.pct) < props.threshold) return "text-slate-400";
+  if (Math.abs(props.pct) < props.threshold) return "text-slate-500";
   return props.pct > 0 ? "text-emerald-400" : "text-red-400";
 });
 

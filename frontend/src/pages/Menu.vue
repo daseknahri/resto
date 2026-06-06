@@ -39,6 +39,7 @@
             :style="isRestaurantOpen
               ? 'border-color:rgba(52,211,153,0.40);background:rgba(16,185,129,0.14);color:rgb(110,231,183)'
               : 'border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.12);color:rgb(252,165,165)'"
+            :aria-label="statusLabel || (isRestaurantOpen ? t('customerLeadPage.openNow') : t('customerLeadPage.closedNow'))"
           >
             <span class="relative inline-flex shrink-0" aria-hidden="true">
               <span v-if="isRestaurantOpen" class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 opacity-60" />
@@ -60,6 +61,7 @@
           <span
             v-if="ratingSummary && ratingSummary.count > 0"
             class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs backdrop-blur-sm"
+            :aria-label="t('menu.ratingLabel', { avg: ratingSummary.average?.toFixed(1), count: ratingSummary.count })"
           >
             <span class="text-amber-400" aria-hidden="true">★</span>
             <span class="font-semibold text-amber-200">{{ ratingSummary.average !== null ? ratingSummary.average.toFixed(1) : '' }}</span>
@@ -86,7 +88,7 @@
     </div>
 
     <!-- ══ Sticky categories bar ══ -->
-    <div v-if="visibleCategories.length > 0" class="ui-menu-category-nav sticky top-0 z-20 md:top-16">
+    <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav')" class="ui-menu-category-nav sticky top-0 z-20 md:top-16">
       <div class="relative">
         <div
           ref="pillRowEl"
@@ -98,12 +100,13 @@
             :data-cat-pill="cat.slug"
             class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
             :data-active="activeCategorySlug === cat.slug"
-            :aria-current="activeCategorySlug === cat.slug ? 'true' : undefined"
+            :aria-current="activeCategorySlug === cat.slug ? 'page' : undefined"
             @click="scrollToSection(cat.slug)"
           >{{ cat.name }}</button>
           <template v-if="isOverflowing">
             <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" />
             <button
+              ref="catSheetTriggerEl"
               class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-wider"
               :data-active="catSheetOpen"
               :aria-expanded="catSheetOpen"
@@ -117,7 +120,9 @@
         <Transition name="cat-sheet">
           <div
             v-if="catSheetOpen"
+            ref="catSheetEl"
             class="absolute left-0 right-0 top-full z-30 border-b border-slate-800/80 bg-slate-950/98 px-3 py-3 backdrop-blur-xl"
+            @keydown.escape="catSheetOpen = false; $nextTick(() => catSheetTriggerEl?.focus())"
           >
             <div class="flex flex-wrap gap-2">
               <button
@@ -133,7 +138,7 @@
       </div>
 
       <!-- Allergen strip -->
-      <div v-if="availableAllergens.length" class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div v-if="availableAllergens.length" role="group" :aria-label="t('menu.allergenFilter')" class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ t('menu.freeFrom') }}</span>
         <button
           v-for="allergen in availableAllergens"
@@ -146,7 +151,7 @@
           @click="toggleAllergenFilter(allergen)"
         >{{ t(`menu.allergen_${allergen}`) }}</button>
       </div>
-    </div>
+    </nav>
 
     <!-- ══ Sections ══ -->
     <div class="px-3 sm:px-4 mt-3 space-y-4 sm:space-y-5">
@@ -201,7 +206,7 @@
       <div v-if="menu.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
-        <button class="shrink-0 text-xs text-slate-400 underline hover:text-slate-200" @click="menu.fetchCategories(true)">{{ t('common.retry') }}</button>
+        <button class="shrink-0 text-xs text-slate-400 underline hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400" @click="menu.fetchCategories(true)">{{ t('common.retry') }}</button>
       </div>
 
       <!-- Recent orders -->
@@ -315,7 +320,13 @@ const selectedAllergenFilter = ref([])   // allergens to EXCLUDE
 const selectedSuperCategorySlug = ref('')
 
 // ── Categories sheet ─────────────────────────────────────────────────────────
-const catSheetOpen = ref(false)
+const catSheetOpen      = ref(false)
+const catSheetEl        = ref(null)
+const catSheetTriggerEl = ref(null)
+
+watch(catSheetOpen, (open) => {
+  if (open) nextTick(() => catSheetEl.value?.querySelector('button')?.focus())
+})
 
 // ── Tenant / profile data ────────────────────────────────────────────────────
 const meta             = computed(() => tenant.resolvedMeta || null)

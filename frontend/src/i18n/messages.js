@@ -78,7 +78,9 @@ export const messages = {
       skipToMain: "Skip to main content",
       offlineBanner: "No internet connection — changes may not save",
       offlineBackOnline: "Back online",
-      opensInNewTab: "(opens in new tab)"
+      opensInNewTab: "(opens in new tab)",
+      included: "Included",
+      notIncluded: "Not included"
     },
     confirmModal: {
       defaultTitle: "Are you sure?",
@@ -250,6 +252,8 @@ export const messages = {
       backToHome: "Back to home"
     },
     notFound: {
+      kicker: "404",
+      recovery: "Page recovery",
       title: "Page not found",
       message: "The page you're looking for doesn't exist or may have been moved.",
       goDashboard: "Go to dashboard",
@@ -482,6 +486,8 @@ export const messages = {
       submitRating: "Submit rating",
       ratingThanks: "Thanks for your feedback!",
       statusStepperLabel: "Order progress steps",
+      currentStep: "current step",
+      stepDone: "completed",
     },
     contactPage: {
       kicker: "Support",
@@ -1820,6 +1826,9 @@ export const messages = {
       backToMenus: "All menus",
       emptyTitle: "No menus available",
       emptyBody: "Check back soon — menus will appear here once published.",
+      heroCoverAlt: "{name} cover photo",
+      logoAlt: "{name} logo",
+      browseLinkLabel: "Browse {name}",
     },
     customerLeadPage: {
       openNow: "Open now",
@@ -2187,6 +2196,9 @@ export const messages = {
       allergen_lupin: "Lupin",
       allergen_molluscs: "Molluscs",
       allCategories: "All categories",
+      categoryNav: "Category navigation",
+      allergenFilter: "Filter by allergen",
+      ratingLabel: "{avg} out of 5 ({count} ratings)",
       callWaiter: "Call waiter",
       callingWaiter: "Calling…",
       waiterCalled: "A staff member is on the way 🛎️",
@@ -2292,6 +2304,11 @@ export const messages = {
     ownerAnalytics: {
       kicker: "Performance",
       title: "Analytics",
+      daysSuffix: "days",
+      deltaLabel: "Change vs yesterday: {delta}",
+      sparklineOrders: "Orders trend over the last 7 days",
+      sparklineRevenue: "Revenue trend over the last 7 days",
+      sparklineAvgTicket: "Average ticket trend over the last 7 days",
     },
     ownerHome: {
       kicker: "Owner dashboard",
@@ -3745,7 +3762,9 @@ export const messages = {
       skipToMain: "Aller au contenu principal",
       offlineBanner: "Pas de connexion — les modifications peuvent ne pas etre enregistrees",
       offlineBackOnline: "Connexion retablie",
-      opensInNewTab: "(ouvre dans un nouvel onglet)"
+      opensInNewTab: "(ouvre dans un nouvel onglet)",
+      included: "Inclus",
+      notIncluded: "Non inclus"
     },
     confirmModal: {
       defaultTitle: "Etes-vous sur ?",
@@ -3917,6 +3936,8 @@ export const messages = {
       backToHome: "Retour a l accueil"
     },
     notFound: {
+      kicker: "404",
+      recovery: "Recuperation",
       title: "Page introuvable",
       message: "La page que vous recherchez n'existe pas ou a peut-etre ete deplacee.",
       goDashboard: "Aller au tableau de bord",
@@ -4149,6 +4170,8 @@ export const messages = {
       submitRating: "Envoyer l'evaluation",
       ratingThanks: "Merci pour votre retour !",
       statusStepperLabel: "Etapes de la commande",
+      currentStep: "etape en cours",
+      stepDone: "termine",
     },
     contactPage: {
       kicker: "Support",
@@ -5456,6 +5479,9 @@ export const messages = {
       backToMenus: "Tous les menus",
       emptyTitle: "Aucun menu disponible",
       emptyBody: "Revenez bientot — les menus apparaitront ici une fois publies.",
+      heroCoverAlt: "Photo de couverture de {name}",
+      logoAlt: "Logo de {name}",
+      browseLinkLabel: "Parcourir {name}",
     },
     customerLeadPage: {
       openNow: "Ouvert",
@@ -5823,11 +5849,14 @@ export const messages = {
       allergen_lupin: "Lupin",
       allergen_molluscs: "Mollusques",
       allCategories: "Toutes les categories",
+      categoryNav: "Navigation par categorie",
+      allergenFilter: "Filtrer par allergene",
+      ratingLabel: "{avg} sur 5 ({count} avis)",
       callWaiter: "Appeler un serveur",
       callingWaiter: "Appel…",
       waiterCalled: "Un serveur arrive 🛎️",
       waiterCallThrottled: "Veuillez patienter avant de rappeler.",
-      waiterCallFailed: "Impossible d'appeler un serveur. Réessayez.",
+      waiterCallFailed: "Impossible d'appeler un serveur. Reessayez.",
     },
     category: {
       kicker: "Categorie",
@@ -5928,6 +5957,11 @@ export const messages = {
     ownerAnalytics: {
       kicker: "Performance",
       title: "Analytique",
+      daysSuffix: "jours",
+      deltaLabel: "Evolution par rapport a hier : {delta}",
+      sparklineOrders: "Tendance des commandes sur les 7 derniers jours",
+      sparklineRevenue: "Tendance du chiffre d affaires sur les 7 derniers jours",
+      sparklineAvgTicket: "Tendance du panier moyen sur les 7 derniers jours",
     },
     ownerHome: {
       readinessDone: "Tout est prêt ! Votre menu est en ligne et prêt pour vos clients.",

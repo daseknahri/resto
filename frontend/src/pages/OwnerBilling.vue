@@ -5,17 +5,17 @@
     <section class="ui-panel ui-reveal space-y-4 p-4">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.currentPlanSection') }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.yourPlan') }}</h3>
+        <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.yourPlan') }}</h2>
       </div>
 
-      <div class="rounded-2xl border border-[var(--color-secondary)]/30 bg-gradient-to-br from-[var(--color-secondary)]/8 to-transparent p-4">
+      <div class="ui-glass p-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="space-y-3">
             <div class="flex flex-wrap items-center gap-3">
-              <span class="rounded-full border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-[var(--color-secondary)]">
+              <span class="ui-chip-strong">
                 {{ currentTierName }}
               </span>
-              <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+              <span class="ui-status-pill">
                 {{ t('ownerBilling.active') }}
               </span>
             </div>
@@ -32,6 +32,7 @@
                   <path d="M4 12l8-8M12 12L4 4"/>
                 </svg>
                 <span :class="f.ok ? 'text-slate-200' : 'text-slate-500'">{{ f.label }}</span>
+                <span class="sr-only">{{ f.ok ? t('common.included') : t('common.notIncluded') }}</span>
               </li>
             </ul>
           </div>
@@ -105,7 +106,7 @@
     <section v-else-if="targets.length" class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 56ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.upgradeSection') }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.upgradeTitle') }}</h3>
+        <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.upgradeTitle') }}</h2>
         <p class="ui-subtle">{{ t('ownerBilling.upgradeHint') }}</p>
       </div>
 
@@ -164,6 +165,7 @@
                   <path d="M4 12l8-8M12 12L4 4"/>
                 </svg>
                 <span :class="f.ok ? 'text-slate-200' : 'text-slate-600'">{{ f.label }}</span>
+                <span class="sr-only">{{ f.ok ? t('common.included') : t('common.notIncluded') }}</span>
               </li>
             </ul>
           </div>
@@ -223,13 +225,14 @@
       <div class="flex items-center justify-between gap-3">
         <div class="space-y-0.5">
           <p class="ui-section-kicker">{{ t('ownerBilling.historySection') }}</p>
-          <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.historyTitle') }}</h3>
+          <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.historyTitle') }}</h2>
         </div>
         <button
           type="button"
           class="ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
           :disabled="loading || updating"
           :aria-label="t('common.refresh')"
+          :aria-busy="loading || updating"
           @click="fetchAll(true)"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" :class="(loading || updating) ? 'animate-spin' : ''">
@@ -287,9 +290,9 @@
             </span>
           </div>
           <!-- Customer note -->
-          <div v-if="req.customer_note" class="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
+          <blockquote v-if="req.customer_note" class="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
             "{{ req.customer_note }}"
-          </div>
+          </blockquote>
           <!-- Admin note -->
           <div v-if="req.admin_note" class="mt-2 flex items-start gap-2 rounded-lg border border-slate-700/60 bg-slate-950/50 px-3 py-2 text-xs">
             <svg aria-hidden="true" viewBox="0 0 16 16" class="mt-0.5 h-3 w-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -326,7 +329,7 @@
     <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 112ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.dataExportSection') }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.dataExportTitle') }}</h3>
+        <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.dataExportTitle') }}</h2>
         <p class="ui-subtle">{{ t('ownerBilling.dataExportHint') }}</p>
       </div>
 
@@ -351,7 +354,7 @@
     <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 140ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.commissionSection') }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.commissionTitle') }}</h3>
+        <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.commissionTitle') }}</h2>
         <p class="ui-subtle">{{ t('ownerBilling.commissionHint') }}</p>
       </div>
       <div class="flex flex-wrap items-end gap-3">
@@ -389,7 +392,7 @@
     <section class="ui-panel ui-reveal space-y-4 p-4" style="--ui-delay: 168ms">
       <div class="space-y-0.5">
         <p class="ui-section-kicker">{{ t('ownerBilling.deletionSection') }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t('ownerBilling.deletionTitle') }}</h3>
+        <h2 class="ui-display text-lg font-semibold text-white">{{ t('ownerBilling.deletionTitle') }}</h2>
         <p class="ui-subtle">{{ t('ownerBilling.deletionHint') }}</p>
       </div>
 
@@ -417,7 +420,7 @@
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
-                class="rounded-full border border-red-500/50 bg-red-500/15 px-4 py-2 text-sm text-red-200 transition-colors hover:bg-red-500/25 disabled:opacity-60"
+                class="rounded-full border border-red-500/50 bg-red-500/15 px-4 py-2 text-sm text-red-200 transition-colors hover:bg-red-500/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 disabled:opacity-60"
                 :disabled="requestingDeletion"
                 @click="submitDeletionRequest"
               >
@@ -438,7 +441,7 @@
         <button
           v-if="!showDeletionConfirm"
           type="button"
-          class="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-300 transition-colors hover:border-red-400/70 hover:text-red-200"
+          class="rounded-full border border-red-500/40 px-4 py-2 text-sm text-red-300 transition-colors hover:border-red-400/70 hover:text-red-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
           @click="showDeletionConfirm = true"
         >
           {{ t('ownerBilling.deletionButton') }}

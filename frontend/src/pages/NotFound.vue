@@ -16,6 +16,7 @@
         <div class="not-found-plate">
           <svg
             aria-hidden="true"
+            focusable="false"
             viewBox="0 0 80 80"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -37,9 +38,10 @@
         class="ui-reveal space-y-2"
         style="--ui-delay: 60ms"
       >
+        <p class="ui-kicker">{{ t('notFound.kicker') }}</p>
         <h1
           id="not-found-heading"
-          class="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl"
+          class="ui-page-title"
         >
           {{ t('notFound.title') }}
         </h1>
@@ -49,9 +51,10 @@
       </div>
 
       <!-- CTAs -->
-      <div
+      <nav
         class="ui-reveal flex flex-wrap justify-center gap-3"
         style="--ui-delay: 120ms"
+        :aria-label="t('notFound.recovery')"
       >
         <RouterLink
           v-if="isOwnerHost"
@@ -81,7 +84,7 @@
         >
           {{ t('notFound.goBack') }}
         </button>
-      </div>
+      </nav>
 
       <!-- Subtle path indicator -->
       <p

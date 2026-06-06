@@ -1,7 +1,8 @@
 <template>
-  <div class="ui-shell min-h-screen px-4 py-6 pb-16 sm:py-8">
+  <div class="ui-shell">
 
     <!-- Screen-reader live region: announces order status changes -->
+    <!-- TODO: requires logic change — deduplicate live-region announcements on polling updates -->
     <div
       v-if="order"
       role="status"
@@ -10,7 +11,7 @@
       class="sr-only"
     >{{ t(`mktOrderStatus.${order.status}`) }}</div>
 
-    <div class="mx-auto max-w-md space-y-4">
+    <main class="mx-auto max-w-md space-y-4 px-4 py-6 pb-16 sm:py-8">
       <!-- Back -->
       <router-link to="/order" class="ui-top-link inline-flex items-center gap-1 text-xs">
         <svg aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -44,24 +45,26 @@
       </div>
 
       <!-- Error -->
-      <div v-else-if="fetchError && !order" role="alert">
-        <div class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
-          <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-          </svg>
-          <p class="flex-1 text-sm text-red-300">{{ t('mktOrderStatus.loadError') }}</p>
-          <button
-            class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
-            @click="fetchStatus"
-          >{{ t('common.retry') }}</button>
-        </div>
+      <div
+        v-else-if="fetchError && !order"
+        role="alert"
+        class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="flex-1 text-sm text-red-300">{{ t('mktOrderStatus.loadError') }}</p>
+        <button
+          class="ui-press shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+          @click="fetchStatus"
+        >{{ t('common.retry') }}</button>
       </div>
 
       <template v-else-if="order">
         <!-- Header -->
         <header class="ui-hero-ribbon ui-reveal px-4 py-4 text-center">
           <p class="ui-kicker">{{ t('mktOrderStatus.restaurant', { name: order.restaurant_name }) }}</p>
-          <h1 class="mt-1 text-xl font-bold text-white">{{ t('mktOrderStatus.title', { number: order.order_number }) }}</h1>
+          <h1 class="ui-display mt-1 text-xl text-white">{{ t('mktOrderStatus.title', { number: order.order_number }) }}</h1>
           <p class="mt-1 text-xs text-slate-400">{{ t('mktOrderStatus.trackingHint') }}</p>
         </header>
 
@@ -90,11 +93,12 @@
         <div class="ui-panel ui-reveal p-5" :style="{ '--ui-delay': '84ms' }">
           <div class="flex items-center justify-between gap-1" role="list" :aria-label="t('mktOrderStatus.statusStepperLabel')">
             <template v-for="(step, idx) in statusSteps" :key="step.key">
-              <div class="flex flex-1 flex-col items-center gap-1" role="listitem">
+              <div class="relative flex flex-1 flex-col items-center gap-1" role="listitem">
                 <div
                   class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors"
                   :class="stepClass(step.key)"
                   :aria-current="isCurrentStep(step.key) ? 'step' : undefined"
+                  :aria-label="t(`mktOrderStatus.${step.key}`) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
                 >
                   <span v-if="isStepDone(step.key)" aria-hidden="true">✓</span>
                   <span v-else-if="isCurrentStep(step.key)" aria-hidden="true">●</span>
@@ -103,14 +107,14 @@
                 <span class="text-center text-[10px] leading-tight" :class="isCurrentStep(step.key) ? 'font-semibold text-white' : 'text-slate-500'">
                   {{ t(`mktOrderStatus.${step.key}`) }}
                 </span>
+                <!-- Connector line — sits inside the listitem, bridging to the next step -->
+                <div
+                  v-if="idx < statusSteps.length - 1"
+                  class="absolute top-4 start-1/2 h-0.5 w-full rounded transition-colors"
+                  :class="isStepDone(statusSteps[idx + 1].key) || isCurrentStep(statusSteps[idx + 1].key) ? 'bg-emerald-500/60' : 'bg-slate-700'"
+                  aria-hidden="true"
+                />
               </div>
-              <!-- Connector -->
-              <div
-                v-if="idx < statusSteps.length - 1"
-                class="mb-4 h-0.5 flex-1 rounded transition-colors"
-                :class="isStepDone(statusSteps[idx + 1].key) || isCurrentStep(statusSteps[idx + 1].key) ? 'bg-emerald-500/60' : 'bg-slate-700'"
-                aria-hidden="true"
-              />
             </template>
           </div>
 
@@ -179,7 +183,7 @@
           </div>
         </div>
       </template>
-    </div>
+    </main>
   </div>
 </template>
 
