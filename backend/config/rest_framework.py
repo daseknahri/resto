@@ -48,6 +48,7 @@ REST_FRAMEWORK = {
         "staff_order_list": "300/min",
         "marketplace_order": "60/hour",
         "marketplace_order_status": "300/hour",
+        "marketplace_browse": "120/min",
         "translate": "30/hour",
         "waiter_call": "10/min",
         "wallet_transfer": "20/hour",

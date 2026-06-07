@@ -325,5 +325,16 @@ class Profile(models.Model):
     is_menu_published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            # The marketplace/directory list filters on these two flags on every
+            # public request; without an index it's a full Profile seq-scan that
+            # degrades linearly with tenant count.
+            models.Index(
+                fields=["directory_opt_in", "is_menu_published"],
+                name="profile_marketplace_idx",
+            ),
+        ]
+
     def __str__(self) -> str:
         return f"Profile for {self.tenant.slug}"

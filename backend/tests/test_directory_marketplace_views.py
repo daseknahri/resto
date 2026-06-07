@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -78,8 +79,19 @@ def _sc_mock():
 
 # ── DirectoryView ─────────────────────────────────────────────────────────────
 
+def _make_sliceable_qs(rows):
+    """Return a MagicMock queryset whose __getitem__ yields *rows* when sliced."""
+    qs = MagicMock()
+    # list() calls __iter__ (via __getitem__ with a slice); MagicMock's default
+    # __iter__ raises TypeError, so we override __getitem__ to return the list
+    # regardless of the key/slice used (the view always slices with [:N]).
+    qs.__getitem__ = lambda s, k: rows
+    return qs
+
+
 class DirectoryViewTests(SimpleTestCase):
     def setUp(self):
+        cache.clear()  # responses are cached by query params — isolate each test
         self.factory = APIRequestFactory()
         self.view = DirectoryView.as_view()
 
@@ -90,9 +102,8 @@ class DirectoryViewTests(SimpleTestCase):
 
     def test_returns_200_with_empty_qs(self):
         with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value.__getitem__ = \
-                lambda s, k: []
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([])
             resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("restaurants", resp.data)
@@ -101,10 +112,8 @@ class DirectoryViewTests(SimpleTestCase):
     def test_returns_restaurant_list(self):
         profile = _make_profile()
         with patch("tenancy.models.Profile") as mock_p:
-            qs_mock = MagicMock()
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs_mock
-            qs_mock.__getitem__ = lambda s, k: [profile]
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([profile])
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Rating") as mock_rating:
                     mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
@@ -118,20 +127,31 @@ class DirectoryViewTests(SimpleTestCase):
 
     def test_filters_structure_has_cities_and_cuisines(self):
         with patch("tenancy.models.Profile") as mock_p:
-            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value.__getitem__ = \
-                lambda s, k: []
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([])
             resp = self._get()
         self.assertIn("cities", resp.data["filters"])
         self.assertIn("cuisines", resp.data["filters"])
+
+    def test_filters_derived_from_fetched_rows(self):
+        """Cities/cuisines come from the profiles in the queryset page (no extra DB call)."""
+        profile = _make_profile(city="Casablanca", cuisine_type="Moroccan")
+        with patch("tenancy.models.Profile") as mock_p:
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = \
+                _make_sliceable_qs([profile])
+            with patch("django_tenants.utils.schema_context", _sc_mock()):
+                with patch("menu.models.Rating") as mock_rating:
+                    mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
+                    resp = self._get()
+        self.assertIn("Casablanca", resp.data["filters"]["cities"])
+        self.assertIn("Moroccan", resp.data["filters"]["cuisines"])
 
     def test_city_filter_applied(self):
         with patch("tenancy.models.Profile") as mock_p:
             qs = MagicMock()
             mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
-            qs.filter.return_value.__getitem__ = lambda s, k: []
+            qs.filter.return_value = _make_sliceable_qs([])
             qs.__getitem__ = lambda s, k: []
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
             resp = self._get(params={"city": "Paris"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
@@ -139,17 +159,46 @@ class DirectoryViewTests(SimpleTestCase):
         with patch("tenancy.models.Profile") as mock_p:
             qs = MagicMock()
             mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
-            qs.filter.return_value.__getitem__ = lambda s, k: []
+            qs.filter.return_value = _make_sliceable_qs([])
             qs.__getitem__ = lambda s, k: []
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
             resp = self._get(params={"cuisine": "Italian"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
 # ── MarketplaceView ───────────────────────────────────────────────────────────
 
+# Patch targets for the batch flash-sale lookups (imported inside the view
+# as `from .models import PlatformFlashSale, PlatformFlashSaleOptIn`).
+_OPTIN_PATCH = "accounts.models.PlatformFlashSaleOptIn"
+_FS_PATCH = "accounts.models.PlatformFlashSale"
+# The view accesses them via `from .models import ...` inside accounts.views, so
+# we patch at the accounts.views module level using the actual import path.
+_OPTIN_VIEW_PATCH = "accounts.views.PlatformFlashSaleOptIn"
+_FS_VIEW_PATCH = "accounts.views.PlatformFlashSale"
+
+
+def _patch_flash_sales(opted_rows=None, live_fs_objs=None):
+    """
+    Return a context manager pair that patches PlatformFlashSaleOptIn.objects.values()
+    and PlatformFlashSale.objects.filter() used by the batch pre-fetch in MarketplaceView.
+    opted_rows: list of dicts like [{"tenant_id": 1, "flash_sale_id": 10}]
+    live_fs_objs: list of mock PlatformFlashSale instances (each with .id, .is_active, .is_live())
+    """
+    from contextlib import ExitStack
+    from unittest.mock import patch, MagicMock
+
+    optin_mock = MagicMock()
+    optin_mock.objects.values.return_value = opted_rows or []
+
+    fs_mock = MagicMock()
+    fs_mock.objects.filter.return_value = live_fs_objs or []
+
+    return optin_mock, fs_mock
+
+
 class MarketplaceViewTests(SimpleTestCase):
     def setUp(self):
+        cache.clear()  # responses are cached by query params — isolate each test
         self.factory = APIRequestFactory()
         self.view = MarketplaceView.as_view()
 
@@ -159,17 +208,31 @@ class MarketplaceViewTests(SimpleTestCase):
         return self.view(req)
 
     def _empty_qs_mock(self, mock_p):
+        """Configure mock Profile so the view sees an empty queryset page."""
         qs = MagicMock()
         mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
         qs.filter.return_value = qs
+        # list(qs[:200]) — __getitem__ with a slice must return an iterable.
         qs.__getitem__ = lambda s, k: []
-        mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
-        mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
+
+    def _with_flash_patches(self, fn, *args, **kwargs):
+        """Run fn with the flash-sale batch queries patched to return nothing.
+
+        The view does `from .models import PlatformFlashSale, PlatformFlashSaleOptIn`
+        inside a local try block, so we must patch at accounts.models (the source).
+        """
+        optin_m = MagicMock()
+        optin_m.objects.values.return_value = []
+        fs_m = MagicMock()
+        fs_m.objects.filter.return_value = []
+        with patch("accounts.models.PlatformFlashSaleOptIn", optin_m):
+            with patch("accounts.models.PlatformFlashSale", fs_m):
+                return fn(*args, **kwargs)
 
     def test_returns_200_empty_results(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get()
+            resp = self._with_flash_patches(self._get)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("restaurants", resp.data)
         self.assertIn("filters", resp.data)
@@ -177,51 +240,137 @@ class MarketplaceViewTests(SimpleTestCase):
     def test_filters_structure_includes_tags(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            mock_p.objects.filter.return_value.exclude.return_value.values_list.return_value = []
-            resp = self._get()
+            resp = self._with_flash_patches(self._get)
         self.assertIn("tags", resp.data["filters"])
+
+    def test_filters_derived_from_fetched_rows(self):
+        """cities/cuisines/tags come from in-memory profile rows, not extra DB queries."""
+        profile = _make_profile(city="Marrakech", cuisine_type="Moroccan", tags=["halal"])
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: [profile]
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                with patch("django_tenants.utils.schema_context", _sc_mock()):
+                    with patch("menu.models.Rating") as mock_rating:
+                        mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
+                        with patch("menu.models.Promotion") as mock_promo:
+                            mock_promo.objects.filter.return_value.order_by.return_value.__getitem__ = \
+                                lambda s, k: []
+                            optin_m = MagicMock()
+                            optin_m.objects.values.return_value = []
+                            fs_m = MagicMock()
+                            fs_m.objects.filter.return_value = []
+                            with patch("accounts.models.PlatformFlashSaleOptIn", optin_m):
+                                with patch("accounts.models.PlatformFlashSale", fs_m):
+                                    resp = self._get()
+        self.assertIn("Marrakech", resp.data["filters"]["cities"])
+        self.assertIn("Moroccan", resp.data["filters"]["cuisines"])
+        self.assertIn("halal", resp.data["filters"]["tags"])
+
+    def test_flash_sale_active_set_when_opted_in_and_live(self):
+        """flash_sale_active=True when tenant is opted-in to a live flash sale."""
+        profile = _make_profile()
+        profile.tenant.id = 42
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: [profile]
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                with patch("django_tenants.utils.schema_context", _sc_mock()):
+                    with patch("menu.models.Rating") as mock_rating:
+                        mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
+                        with patch("menu.models.Promotion") as mock_promo:
+                            mock_promo.objects.filter.return_value.order_by.return_value.__getitem__ = \
+                                lambda s, k: []
+                            # Opt-in: tenant 42 → flash_sale 7
+                            optin_m = MagicMock()
+                            optin_m.objects.values.return_value = [
+                                {"tenant_id": 42, "flash_sale_id": 7}
+                            ]
+                            # Live flash sale with id=7
+                            live_fs = MagicMock()
+                            live_fs.id = 7
+                            live_fs.is_active = True
+                            live_fs.is_live.return_value = True
+                            fs_m = MagicMock()
+                            fs_m.objects.filter.return_value = [live_fs]
+                            with patch("accounts.models.PlatformFlashSaleOptIn", optin_m):
+                                with patch("accounts.models.PlatformFlashSale", fs_m):
+                                    resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data["restaurants"][0]["flash_sale_active"])
+
+    def test_flash_sale_inactive_when_not_opted_in(self):
+        """flash_sale_active=False when tenant has no opt-in."""
+        profile = _make_profile()
+        profile.tenant.id = 99
+        with patch("tenancy.models.Profile") as mock_p:
+            qs = MagicMock()
+            mock_p.objects.filter.return_value.select_related.return_value.order_by.return_value = qs
+            qs.filter.return_value = qs
+            qs.__getitem__ = lambda s, k: [profile]
+            with patch("accounts.views._compute_is_open_now", return_value=True):
+                with patch("django_tenants.utils.schema_context", _sc_mock()):
+                    with patch("menu.models.Rating") as mock_rating:
+                        mock_rating.objects.aggregate.return_value = {"avg": None, "cnt": 0}
+                        with patch("menu.models.Promotion") as mock_promo:
+                            mock_promo.objects.filter.return_value.order_by.return_value.__getitem__ = \
+                                lambda s, k: []
+                            # No opt-ins for this tenant
+                            optin_m = MagicMock()
+                            optin_m.objects.values.return_value = []
+                            fs_m = MagicMock()
+                            fs_m.objects.filter.return_value = []
+                            with patch("accounts.models.PlatformFlashSaleOptIn", optin_m):
+                                with patch("accounts.models.PlatformFlashSale", fs_m):
+                                    resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data["restaurants"][0]["flash_sale_active"])
 
     def test_open_filter_param(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"open": "1"})
+            resp = self._with_flash_patches(self._get, params={"open": "1"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_fulfillment_delivery_filter(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"fulfillment": "delivery"})
+            resp = self._with_flash_patches(self._get, params={"fulfillment": "delivery"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_lat_lng_sort(self):
         """lat/lng params are accepted without error."""
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"lat": "48.8566", "lng": "2.3522"})
+            resp = self._with_flash_patches(self._get, params={"lat": "48.8566", "lng": "2.3522"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_invalid_lat_lng_ignored(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"lat": "not-a-float", "lng": "also-not"})
+            resp = self._with_flash_patches(self._get, params={"lat": "not-a-float", "lng": "also-not"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_min_rating_filter_no_crash(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"min_rating": "4.0"})
+            resp = self._with_flash_patches(self._get, params={"min_rating": "4.0"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_price_tier_filter(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"price_tier": "2"})
+            resp = self._with_flash_patches(self._get, params={"price_tier": "2"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_tags_filter(self):
         with patch("tenancy.models.Profile") as mock_p:
             self._empty_qs_mock(mock_p)
-            resp = self._get(params={"tags": "halal,vegetarian"})
+            resp = self._with_flash_patches(self._get, params={"tags": "halal,vegetarian"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 

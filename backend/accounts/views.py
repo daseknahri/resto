@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import math
@@ -35,6 +36,7 @@ from .throttles import (
     DriverJobAcceptThrottle,
     DriverPositionThrottle,
     DriverStatusUpdateThrottle,
+    MarketplaceBrowseThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     MarketplaceOrderStatusThrottle,
@@ -1752,15 +1754,13 @@ class AdminCustomerCreditView(APIView):
 class AdminCustomerOrdersView(APIView):
     """GET /api/admin/customers/<id>/orders/ — the customer's orders across ALL restaurants.
 
-    Orders live in each tenant's own schema, so this scans active tenant schemas and
-    merges the most recent orders into one marketplace-wide history. On-demand (lazy-
-    loaded in the admin) because it touches many schemas; a broken/migrating schema is
-    skipped rather than failing the whole view.
+    Reads the public-schema CustomerOrderRef index (one indexed query) instead of
+    scanning every tenant schema — the same source the customer's own cross-restaurant
+    history uses (CustomerMarketplaceOrdersView), so it's consistent and O(1) in the
+    number of tenants.
     """
 
     permission_classes = [IsAuthenticated]
-    MAX_TENANTS = 500
-    PER_TENANT = 20
     RESULT_LIMIT = 50
 
     def get(self, request, customer_id, *args, **kwargs):
@@ -1770,40 +1770,28 @@ class AdminCustomerOrdersView(APIView):
         if not Customer.objects.filter(pk=customer_id).exists():
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        from django_tenants.utils import schema_context
-        from tenancy.models import Tenant
-        from menu.models import Order
+        from .models import CustomerOrderRef
 
-        tenants = list(
-            Tenant.objects.filter(lifecycle_status="active")
-            .values_list("schema_name", "name")[: self.MAX_TENANTS]
-        )
-        orders = []
-        for schema_name, tenant_name in tenants:
-            try:
-                with schema_context(schema_name):
-                    rows = list(
-                        Order.objects.filter(customer_id=customer_id)
-                        .order_by("-created_at")[: self.PER_TENANT]
-                    )
-            except Exception:
-                continue  # never let one broken schema break the merged history
-            for o in rows:
-                orders.append({
-                    "order_number": o.order_number,
-                    "restaurant": tenant_name,
-                    "status": o.status,
-                    "fulfillment_type": o.fulfillment_type or "",
-                    "total": str(o.total),
-                    "currency": o.currency,
-                    "created_at": o.created_at.isoformat(),
-                })
-
-        orders.sort(key=lambda x: x["created_at"], reverse=True)
+        # Cross-restaurant history from the public-schema index — one indexed query
+        # instead of up to 500 per-schema scans. Same source the customer sees.
+        base = CustomerOrderRef.objects.filter(customer_id=customer_id)
+        refs = list(base.order_by("-order_created_at")[: self.RESULT_LIMIT])
+        orders = [
+            {
+                "order_number": r.order_number,
+                "restaurant": r.restaurant_name,
+                "status": r.status,
+                "fulfillment_type": r.fulfillment_type or "",
+                "total": str(r.total),
+                "currency": r.currency,
+                "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+            }
+            for r in refs
+        ]
         return Response({
-            "results": orders[: self.RESULT_LIMIT],
-            "count": len(orders),
-            "scanned_restaurants": len(tenants),
+            "results": orders,
+            "count": base.count(),
+            "scanned_restaurants": len({r.restaurant_slug for r in refs}),
         })
 
 
@@ -2066,6 +2054,20 @@ def _is_promo_active_now(promo) -> bool:
     return True
 
 
+# ── Public listing response cache ─────────────────────────────────────────────
+# The marketplace + directory endpoints are public, param-only, cross-tenant reads
+# (no per-user/per-tenant data in the response), so the whole computed response can
+# be cached by query-param hash — turning the O(N_tenants) per-request work into a
+# single cache GET for everyone with the same params. A short TTL keeps it fresh
+# without explicit invalidation (opt-in/out or a new rating shows within the window).
+_PUBLIC_LIST_TTL = 90  # seconds
+
+
+def _public_list_cache_key(prefix, request):
+    parts = sorted(request.query_params.urlencode().split("&"))
+    return f"{prefix}:v1:{hashlib.md5('&'.join(parts).encode()).hexdigest()}"
+
+
 class DirectoryView(APIView):
     """GET /api/directory/ — public list of restaurants that opted in.
 
@@ -2076,6 +2078,7 @@ class DirectoryView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MarketplaceBrowseThrottle]
 
     def get(self, request, *args, **kwargs):
         from tenancy.models import Profile
@@ -2096,8 +2099,20 @@ class DirectoryView(APIView):
         if cuisine_q:
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
 
+        _ck = _public_list_cache_key("directory", request)
+        _hit = cache.get(_ck)
+        if _hit is not None:
+            return Response(_hit)
+
+        # Materialise the (up-to-100) profile rows once so we can build filter
+        # lists from the same data without a second full-table scan.
+        profiles_page = list(qs[:100])
+
         results = []
-        for profile in qs[:100]:
+        cities_set: set = set()
+        cuisines_set: set = set()
+
+        for profile in profiles_page:
             tenant = profile.tenant
             is_currently_open = bool(profile.is_open) and not getattr(profile, "is_menu_temporarily_disabled", False)
 
@@ -2115,6 +2130,11 @@ class DirectoryView(APIView):
             except Exception:
                 pass
 
+            if profile.city:
+                cities_set.add(profile.city)
+            if profile.cuisine_type:
+                cuisines_set.add(profile.cuisine_type)
+
             results.append({
                 "slug": tenant.slug,
                 "name": tenant.name,
@@ -2128,11 +2148,12 @@ class DirectoryView(APIView):
                 "delivery_enabled": bool(profile.delivery_enabled),
             })
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-        cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
-        cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
+        cities = sorted(cities_set)
+        cuisines = sorted(cuisines_set)
 
-        return Response({"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}})
+        _payload = {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
+        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+        return Response(_payload)
 
 
 class MarketplaceView(APIView):
@@ -2152,6 +2173,7 @@ class MarketplaceView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MarketplaceBrowseThrottle]
 
     def get(self, request, *args, **kwargs):
         from tenancy.models import Profile
@@ -2161,6 +2183,11 @@ class MarketplaceView(APIView):
         cuisine_q = (request.query_params.get("cuisine") or "").strip()
         fulfillment = (request.query_params.get("fulfillment") or "any").strip().lower()
         open_only = request.query_params.get("open") == "1"
+        _ck = _public_list_cache_key("marketplace", request)
+        _hit = cache.get(_ck)
+        if _hit is not None:
+            return Response(_hit)
+
         min_rating_raw = (request.query_params.get("min_rating") or "").strip()
         price_tier_raw = (request.query_params.get("price_tier") or "").strip()
         tags_raw = (request.query_params.get("tags") or "").strip()
@@ -2209,9 +2236,41 @@ class MarketplaceView(APIView):
         if price_tier_filter:
             qs = qs.filter(price_tier=price_tier_filter)
 
+        # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
+        # Build a mapping: tenant_id → set of flash_sale_ids they opted into.
+        # Then fetch all currently-active+live flash sales once, as a set of ids.
+        opted_map: dict = {}   # tenant_id → set[flash_sale_id]
+        live_flash_sale_ids: set = set()
+        try:
+            from .models import PlatformFlashSale, PlatformFlashSaleOptIn
+            for row in PlatformFlashSaleOptIn.objects.values("tenant_id", "flash_sale_id"):
+                opted_map.setdefault(row["tenant_id"], set()).add(row["flash_sale_id"])
+            # Only keep flash sales that are is_active=True AND pass the is_live() check.
+            for _fs in PlatformFlashSale.objects.filter(is_active=True):
+                if _fs.is_live():
+                    live_flash_sale_ids.add(_fs.id)
+        except Exception:
+            pass
+
+        # Materialise the page so we can derive filter lists without an extra query.
+        profiles_page = list(qs[:200])
+
         results = []
-        for profile in qs[:200]:
+        cities_set: set = set()
+        cuisines_set: set = set()
+        all_tags: set = set()
+
+        for profile in profiles_page:
             tenant = profile.tenant
+
+            # Accumulate filter values from rows already in memory.
+            if profile.city:
+                cities_set.add(profile.city)
+            if profile.cuisine_type:
+                cuisines_set.add(profile.cuisine_type)
+            if isinstance(profile.tags, list):
+                all_tags.update(str(t).lower() for t in profile.tags)
+
             is_currently_open = _compute_is_open_now(profile)
 
             if open_only and not is_currently_open:
@@ -2234,7 +2293,6 @@ class MarketplaceView(APIView):
             rating_avg = None
             rating_count = 0
             promo_badge = None
-            flash_sale_active = False
             try:
                 from django_tenants.utils import schema_context as _sc
                 from django.db.models import Avg, Count
@@ -2256,19 +2314,9 @@ class MarketplaceView(APIView):
             except Exception:
                 pass
 
-            # Check if this restaurant is opted into any live platform flash sale
-            try:
-                from .models import PlatformFlashSale, PlatformFlashSaleOptIn
-                opted_ids = set(
-                    PlatformFlashSaleOptIn.objects.filter(tenant_id=tenant.id).values_list("flash_sale_id", flat=True)
-                )
-                if opted_ids:
-                    for _fs in PlatformFlashSale.objects.filter(id__in=opted_ids, is_active=True):
-                        if _fs.is_live():
-                            flash_sale_active = True
-                            break
-            except Exception:
-                pass
+            # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
+            tenant_opted_ids = opted_map.get(tenant.id, set())
+            flash_sale_active = bool(tenant_opted_ids & live_flash_sale_ids)
 
             if min_rating is not None and (rating_avg is None or rating_avg < min_rating):
                 continue
@@ -2305,22 +2353,16 @@ class MarketplaceView(APIView):
         else:
             results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-        cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
-        cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
-        all_tags: set = set()
-        for tlist in all_opted.exclude(tags=[]).values_list("tags", flat=True):
-            if isinstance(tlist, list):
-                all_tags.update(str(t).lower() for t in tlist)
-
-        return Response({
+        _payload = {
             "restaurants": results[:100],
             "filters": {
-                "cities": cities,
-                "cuisines": cuisines,
+                "cities": sorted(cities_set),
+                "cuisines": sorted(cuisines_set),
                 "tags": sorted(all_tags),
             },
-        })
+        }
+        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+        return Response(_payload)
 
 
 class MarketplaceMenuView(APIView):
@@ -3488,18 +3530,38 @@ def _job_distance_km(job):
     return None
 
 
-def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -> dict:
-    """Best-effort cross-schema fetch of the order behind a delivery job.
-
-    Returns the bits a driver needs on the job card: how big the order is
-    (``items_count`` + a short ``items`` list), the order ``total``/``currency``,
-    and crucially whether the driver must **collect cash** (``collect_cash`` —
-    True when the order isn't already paid). When ``include_contact`` is set
-    (only for the driver's OWN active job) it also returns the customer
-    name/phone so the driver can call on arrival. Pending/unclaimed jobs never
-    expose contact details.
-    """
+def _order_summary_dict(o, include_contact: bool = False) -> dict:
+    """Build the driver-facing order summary from an Order object (no schema switch)."""
     out = {}
+    items = list(o.items.all())
+    out["items_count"] = sum(int(getattr(i, "qty", 1) or 1) for i in items)
+    out["items"] = [
+        {"name": i.dish_name, "qty": int(getattr(i, "qty", 1) or 1)}
+        for i in items[:25]
+    ]
+    out["order_total"] = str(o.total)
+    out["currency"] = getattr(o, "currency", "") or ""
+    _pay = getattr(o, "payment_status", "") or ""
+    out["payment_status"] = _pay
+    # COD: the driver collects the order total in cash unless it's prepaid.
+    out["collect_cash"] = _pay != "paid"
+    out["fulfillment_type"] = getattr(o, "fulfillment_type", "") or ""
+    _note = getattr(o, "delivery_address", "") or ""
+    if _note:
+        out["delivery_address"] = _note
+    if include_contact:
+        out["customer_name"] = o.customer_name or ""
+        out["customer_phone"] = o.customer_phone or ""
+    return out
+
+
+def _job_order_summaries(tenant_id, order_numbers, include_contact: bool = False) -> dict:
+    """Batched order summaries — ONE schema switch per tenant, all orders fetched at
+    once. Returns {order_number: summary_dict}. Best-effort (errors -> {})."""
+    out = {}
+    nums = [n for n in order_numbers if n]
+    if not nums:
+        return out
     try:
         from tenancy.models import Tenant as _T
 
@@ -3511,35 +3573,25 @@ def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -
         with schema_context(tnt.schema_name):
             from menu.models import Order as _O
 
-            o = (
-                _O.objects.filter(order_number=order_number)
-                .prefetch_related("items")
-                .first()
-            )
-            if not o:
-                return out
-            items = list(o.items.all())
-            out["items_count"] = sum(int(getattr(i, "qty", 1) or 1) for i in items)
-            out["items"] = [
-                {"name": i.dish_name, "qty": int(getattr(i, "qty", 1) or 1)}
-                for i in items[:25]
-            ]
-            out["order_total"] = str(o.total)
-            out["currency"] = getattr(o, "currency", "") or ""
-            _pay = getattr(o, "payment_status", "") or ""
-            out["payment_status"] = _pay
-            # COD: the driver collects the order total in cash unless it's prepaid.
-            out["collect_cash"] = _pay != "paid"
-            out["fulfillment_type"] = getattr(o, "fulfillment_type", "") or ""
-            _note = getattr(o, "delivery_address", "") or ""
-            if _note:
-                out["delivery_address"] = _note
-            if include_contact:
-                out["customer_name"] = o.customer_name or ""
-                out["customer_phone"] = o.customer_phone or ""
+            for o in (
+                _O.objects.filter(order_number__in=nums).prefetch_related("items")
+            ):
+                out[o.order_number] = _order_summary_dict(o, include_contact)
     except Exception:
         pass
     return out
+
+
+def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -> dict:
+    """Single-order driver summary — thin wrapper over the batched helper.
+
+    Returns the bits a driver needs on the job card: order size (``items_count`` +
+    a short ``items`` list), ``total``/``currency``, and whether the driver must
+    **collect cash** (``collect_cash`` — True unless the order is already paid).
+    With ``include_contact`` (only the driver's OWN active job) it also returns the
+    customer name/phone. Pending/unclaimed jobs never expose contact details.
+    """
+    return _job_order_summaries(tenant_id, [order_number], include_contact).get(order_number, {})
 
 
 def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
@@ -3820,20 +3872,34 @@ class DriverJobListView(APIView):
             ).select_related("driver")[:20]
         )
 
-        # Enrich the driver's ACTIVE job(s) with the full order summary + customer
-        # contact so they can call on arrival. Only the assigned driver sees contact.
+        # Enrich jobs with the order summary, BATCHED by tenant — one schema switch
+        # per tenant instead of one per job (a driver poll can carry ~20 pending jobs
+        # spread across several restaurants). Output order is preserved.
+        def _summaries_by_tenant(jobs, include_contact):
+            by_tenant = {}
+            for _j in jobs:
+                by_tenant.setdefault(_j.tenant_id, []).append(_j.order_number)
+            merged = {}  # (tenant_id, order_number) -> summary dict
+            for _tid, _nums in by_tenant.items():
+                for _onum, _summ in _job_order_summaries(_tid, _nums, include_contact).items():
+                    merged[(_tid, _onum)] = _summ
+            return merged
+
+        # Active job(s): include customer contact (the driver's own job).
+        _active_sum = _summaries_by_tenant(active_jobs, True)
         active_serialized = []
         for j in active_jobs:
             d = _serialize_delivery_job(j)
-            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=True))
+            d.update(_active_sum.get((j.tenant_id, j.order_number), {}))
             active_serialized.append(d)
 
-        # PENDING jobs show enough to decide (size, total, cash-or-prepaid, distance)
-        # but never the customer's name/phone until the driver accepts.
+        # PENDING jobs: enough to decide (size, total, cash-or-prepaid, distance) but
+        # never the customer's name/phone until the driver accepts.
+        _pending_sum = _summaries_by_tenant(pending_jobs, False)
         pending_serialized = []
         for j in pending_jobs:
             d = _serialize_delivery_job(j)
-            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=False))
+            d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
             pending_serialized.append(d)
 
         return Response({
