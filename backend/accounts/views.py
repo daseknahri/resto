@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import math
@@ -2052,6 +2053,20 @@ def _is_promo_active_now(promo) -> bool:
     return True
 
 
+# ── Public listing response cache ─────────────────────────────────────────────
+# The marketplace + directory endpoints are public, param-only, cross-tenant reads
+# (no per-user/per-tenant data in the response), so the whole computed response can
+# be cached by query-param hash — turning the O(N_tenants) per-request work into a
+# single cache GET for everyone with the same params. A short TTL keeps it fresh
+# without explicit invalidation (opt-in/out or a new rating shows within the window).
+_PUBLIC_LIST_TTL = 90  # seconds
+
+
+def _public_list_cache_key(prefix, request):
+    parts = sorted(request.query_params.urlencode().split("&"))
+    return f"{prefix}:v1:{hashlib.md5('&'.join(parts).encode()).hexdigest()}"
+
+
 class DirectoryView(APIView):
     """GET /api/directory/ — public list of restaurants that opted in.
 
@@ -2081,6 +2096,11 @@ class DirectoryView(APIView):
             qs = qs.filter(city__icontains=city_q)
         if cuisine_q:
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
+
+        _ck = _public_list_cache_key("directory", request)
+        _hit = cache.get(_ck)
+        if _hit is not None:
+            return Response(_hit)
 
         # Materialise the (up-to-100) profile rows once so we can build filter
         # lists from the same data without a second full-table scan.
@@ -2129,7 +2149,9 @@ class DirectoryView(APIView):
         cities = sorted(cities_set)
         cuisines = sorted(cuisines_set)
 
-        return Response({"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}})
+        _payload = {"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}}
+        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+        return Response(_payload)
 
 
 class MarketplaceView(APIView):
@@ -2158,6 +2180,11 @@ class MarketplaceView(APIView):
         cuisine_q = (request.query_params.get("cuisine") or "").strip()
         fulfillment = (request.query_params.get("fulfillment") or "any").strip().lower()
         open_only = request.query_params.get("open") == "1"
+        _ck = _public_list_cache_key("marketplace", request)
+        _hit = cache.get(_ck)
+        if _hit is not None:
+            return Response(_hit)
+
         min_rating_raw = (request.query_params.get("min_rating") or "").strip()
         price_tier_raw = (request.query_params.get("price_tier") or "").strip()
         tags_raw = (request.query_params.get("tags") or "").strip()
@@ -2323,14 +2350,16 @@ class MarketplaceView(APIView):
         else:
             results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
-        return Response({
+        _payload = {
             "restaurants": results[:100],
             "filters": {
                 "cities": sorted(cities_set),
                 "cuisines": sorted(cuisines_set),
                 "tags": sorted(all_tags),
             },
-        })
+        }
+        cache.set(_ck, _payload, _PUBLIC_LIST_TTL)
+        return Response(_payload)
 
 
 class MarketplaceMenuView(APIView):

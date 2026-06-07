@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -90,6 +91,7 @@ def _make_sliceable_qs(rows):
 
 class DirectoryViewTests(SimpleTestCase):
     def setUp(self):
+        cache.clear()  # responses are cached by query params — isolate each test
         self.factory = APIRequestFactory()
         self.view = DirectoryView.as_view()
 
@@ -196,6 +198,7 @@ def _patch_flash_sales(opted_rows=None, live_fs_objs=None):
 
 class MarketplaceViewTests(SimpleTestCase):
     def setUp(self):
+        cache.clear()  # responses are cached by query params — isolate each test
         self.factory = APIRequestFactory()
         self.view = MarketplaceView.as_view()
 
