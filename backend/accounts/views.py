@@ -1752,15 +1752,13 @@ class AdminCustomerCreditView(APIView):
 class AdminCustomerOrdersView(APIView):
     """GET /api/admin/customers/<id>/orders/ — the customer's orders across ALL restaurants.
 
-    Orders live in each tenant's own schema, so this scans active tenant schemas and
-    merges the most recent orders into one marketplace-wide history. On-demand (lazy-
-    loaded in the admin) because it touches many schemas; a broken/migrating schema is
-    skipped rather than failing the whole view.
+    Reads the public-schema CustomerOrderRef index (one indexed query) instead of
+    scanning every tenant schema — the same source the customer's own cross-restaurant
+    history uses (CustomerMarketplaceOrdersView), so it's consistent and O(1) in the
+    number of tenants.
     """
 
     permission_classes = [IsAuthenticated]
-    MAX_TENANTS = 500
-    PER_TENANT = 20
     RESULT_LIMIT = 50
 
     def get(self, request, customer_id, *args, **kwargs):
@@ -1770,40 +1768,28 @@ class AdminCustomerOrdersView(APIView):
         if not Customer.objects.filter(pk=customer_id).exists():
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        from django_tenants.utils import schema_context
-        from tenancy.models import Tenant
-        from menu.models import Order
+        from .models import CustomerOrderRef
 
-        tenants = list(
-            Tenant.objects.filter(lifecycle_status="active")
-            .values_list("schema_name", "name")[: self.MAX_TENANTS]
-        )
-        orders = []
-        for schema_name, tenant_name in tenants:
-            try:
-                with schema_context(schema_name):
-                    rows = list(
-                        Order.objects.filter(customer_id=customer_id)
-                        .order_by("-created_at")[: self.PER_TENANT]
-                    )
-            except Exception:
-                continue  # never let one broken schema break the merged history
-            for o in rows:
-                orders.append({
-                    "order_number": o.order_number,
-                    "restaurant": tenant_name,
-                    "status": o.status,
-                    "fulfillment_type": o.fulfillment_type or "",
-                    "total": str(o.total),
-                    "currency": o.currency,
-                    "created_at": o.created_at.isoformat(),
-                })
-
-        orders.sort(key=lambda x: x["created_at"], reverse=True)
+        # Cross-restaurant history from the public-schema index — one indexed query
+        # instead of up to 500 per-schema scans. Same source the customer sees.
+        base = CustomerOrderRef.objects.filter(customer_id=customer_id)
+        refs = list(base.order_by("-order_created_at")[: self.RESULT_LIMIT])
+        orders = [
+            {
+                "order_number": r.order_number,
+                "restaurant": r.restaurant_name,
+                "status": r.status,
+                "fulfillment_type": r.fulfillment_type or "",
+                "total": str(r.total),
+                "currency": r.currency,
+                "created_at": r.order_created_at.isoformat() if r.order_created_at else None,
+            }
+            for r in refs
+        ]
         return Response({
-            "results": orders[: self.RESULT_LIMIT],
-            "count": len(orders),
-            "scanned_restaurants": len(tenants),
+            "results": orders,
+            "count": base.count(),
+            "scanned_restaurants": len({r.restaurant_slug for r in refs}),
         })
 
 
