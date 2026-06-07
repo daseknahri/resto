@@ -190,6 +190,7 @@ DATABASES = {
     )
 }
 DATABASES["default"]["ENGINE"] = "django_tenants.postgresql_backend"
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 DATABASE_ROUTERS = (
     "django_tenants.routers.TenantSyncRouter",
