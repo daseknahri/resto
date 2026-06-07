@@ -13,6 +13,7 @@
     :viewBox="`-${PAD} 0 ${W + PAD * 2} ${height}`"
     preserveAspectRatio="none"
     :aria-hidden="label ? undefined : 'true'"
+    :role="label ? 'img' : undefined"
     class="w-full overflow-visible"
     :style="{ height: `${height}px` }"
   >

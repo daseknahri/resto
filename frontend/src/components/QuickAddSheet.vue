@@ -25,15 +25,24 @@
       <!-- Options (scrollable) -->
       <div class="flex-1 space-y-4 overflow-y-auto p-4">
         <!-- Option groups -->
-        <div v-for="group in (dish.option_groups || [])" :key="group.id" class="space-y-2">
+        <div
+          v-for="group in (dish.option_groups || [])"
+          :key="group.id"
+          role="group"
+          :aria-labelledby="`qa-group-label-${group.id}`"
+          class="space-y-2"
+        >
           <div class="flex items-center justify-between gap-2">
             <div class="flex min-w-0 flex-1 items-center gap-1.5">
-              <p class="truncate text-sm font-semibold text-slate-200">{{ group.name }}</p>
+              <p :id="`qa-group-label-${group.id}`" class="truncate text-sm font-semibold text-slate-200">{{ group.name }}</p>
               <span v-if="group.min_select > 0" class="ui-chip-strong shrink-0">{{ t('dishPage.required') }}</span>
             </div>
-            <span class="shrink-0 text-[11px] text-slate-500">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
+            <span class="ui-stat-label shrink-0">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
           </div>
-          <ul class="grid gap-2 text-sm">
+          <ul
+            class="grid gap-2 text-sm"
+            :aria-describedby="group.min_select > 0 ? `qa-group-err-${group.id}` : undefined"
+          >
             <li
               v-for="opt in group.options" :key="opt.id"
               class="ui-selection-card"
@@ -61,10 +70,18 @@
               </label>
             </li>
           </ul>
+          <span
+            v-if="group.min_select > 0"
+            :id="`qa-group-err-${group.id}`"
+            role="alert"
+            aria-live="assertive"
+            class="sr-only"
+          >{{ groupSelectedCount(group.id) < group.min_select ? t('dishPage.selectRequiredOptions') : '' }}</span>
         </div>
 
         <!-- Flat (legacy) options -->
         <div v-if="dish.options?.length" class="space-y-2">
+          <p class="ui-kicker">{{ t('dishPage.optionsKicker') }}</p>
           <p class="text-sm font-semibold text-slate-200">{{ t('dishPage.options') }}</p>
           <ul class="grid gap-2 text-sm">
             <li
@@ -77,8 +94,8 @@
                 <input v-model="selectedOptionIds" type="checkbox" :value="opt.id" class="h-4 w-4 rounded accent-[var(--color-secondary)]" />
                 <div class="min-w-0 flex-1">
                   <p class="font-medium text-slate-100">{{ opt.name }}</p>
-                  <p v-if="opt.is_required" class="text-[10px] text-amber-300">{{ t('dishPage.required') }}</p>
                 </div>
+                <span v-if="opt.is_required" class="ui-chip-strong shrink-0">{{ t('dishPage.required') }}</span>
                 <span v-if="Number(opt.price_delta) > 0" class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">+{{ formatPrice(opt.price_delta) }}</span>
               </label>
             </li>
@@ -101,7 +118,7 @@
           >
             <AppIcon name="minus" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite" :aria-label="t('dishPage.qty') + ': ' + qty">{{ qty }}</span>
+          <span class="w-7 text-center text-sm font-bold tabular-nums text-slate-100" aria-live="polite" :aria-label="`${t('dishPage.qty')}: ${qty}`">{{ qty }}</span>
           <button
             class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-slate-800"
             :aria-label="t('dishPage.increaseQuantity')"

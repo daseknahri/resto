@@ -92,6 +92,7 @@ export const messages = {
     },
     toast: {
       type: {
+        info: "Notice:",
         success: "Success:",
         error: "Error:",
         warning: "Notice:"
@@ -751,6 +752,8 @@ export const messages = {
       sending: "Sending message…",
       sendFailed: "Couldn't send. Try again.",
       someone: "Staff",
+      unreadCap: "99+",
+      inputLabel: "Message",
     },
     ownerLayout: {
       kicker: "Owner workspace",
@@ -1351,6 +1354,7 @@ export const messages = {
       shiftHint: "Choose a shift start time and tap Load.",
       newOrderBtn: "New order",
       chargeWalletBtn: "Charge wallet",
+      newOrderKicker: "Waiter",
       newOrderTitle: "New order",
       newOrderTable: "Table / label",
       newOrderTablePlaceholder: "e.g. Table 3",
@@ -2175,6 +2179,7 @@ export const messages = {
       tag_halal: "Halal",
       tag_kosher: "Kosher",
       cartWithCount: "Cart, {count} items",
+      optionsKicker: "Customise",
     },
     menu: {
       kicker: "Menu browsing",
@@ -2542,6 +2547,7 @@ export const messages = {
       peakHoursAxisHour23: "23h",
     },
     revenueChart: {
+      kicker: "Analytics",
       title: "Revenue",
       totalRevenue: "Total revenue",
       totalOrders: "Orders",
@@ -2952,6 +2958,9 @@ export const messages = {
       emptyDay: "—",
       weekGrid: "Reservation week view",
       dropSuccess: "{name} moved to {day}",
+      dragStart: "Picked up {name} — drag to a day column to reschedule",
+      dropError: "Could not reschedule {name} — please try again",
+      weekNav: "Week navigation",
       status: {
         new: "New",
         contacted: "Contacted",
@@ -3821,6 +3830,7 @@ export const messages = {
     },
     toast: {
       type: {
+        info: "Avis :",
         success: "Succes :",
         error: "Erreur :",
         warning: "Avis :"
@@ -4480,6 +4490,8 @@ export const messages = {
       sending: "Envoi en cours…",
       sendFailed: "Echec de l'envoi. Reessayez.",
       someone: "Equipe",
+      unreadCap: "99+",
+      inputLabel: "Message",
     },
     ownerLayout: {
       kicker: "Espace proprietaire",
@@ -5080,6 +5092,7 @@ export const messages = {
       shiftHint: "Choisissez une heure de debut et appuyez sur Charger.",
       newOrderBtn: "Nouvelle commande",
       chargeWalletBtn: "Debiter portefeuille",
+      newOrderKicker: "Serveur",
       newOrderTitle: "Nouvelle commande",
       newOrderTable: "Table / label",
       newOrderTablePlaceholder: "ex. Table 3",
@@ -5873,6 +5886,7 @@ export const messages = {
       tag_halal: "Halal",
       tag_kosher: "Casher",
       cartWithCount: "Panier, {count} articles",
+      optionsKicker: "Personnaliser",
     },
     menu: {
       kicker: "Navigation menu",
@@ -6240,6 +6254,7 @@ export const messages = {
       peakHoursAxisHour23: "23h",
     },
     revenueChart: {
+      kicker: "Analytique",
       title: "Chiffre d affaires",
       totalRevenue: "CA total",
       totalOrders: "Commandes",
@@ -6650,6 +6665,9 @@ export const messages = {
       emptyDay: "—",
       weekGrid: "Vue semaine des reservations",
       dropSuccess: "{name} deplace vers {day}",
+      dragStart: "{name} saisi — faites glisser vers une colonne pour replanifier",
+      dropError: "Impossible de replanifier {name} — veuillez reessayer",
+      weekNav: "Navigation par semaine",
       status: {
         new: "Nouveau",
         contacted: "Contacte",

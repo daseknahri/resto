@@ -14,7 +14,7 @@
         v-if="unread > 0"
         class="absolute -end-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[11px] font-bold tabular-nums text-slate-950"
         aria-hidden="true"
-      >{{ unread > 99 ? "99+" : unread }}</span>
+      >{{ unread > 99 ? t('staffChat.unreadCap') : unread }}</span>
     </button>
 
     <!-- Panel -->
@@ -29,7 +29,7 @@
         <!-- Panel header -->
         <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
           <div class="flex items-center gap-2 min-w-0">
-            <span class="ui-live-dot bg-emerald-400 shrink-0" aria-hidden="true" />
+            <span class="ui-live-dot bg-[var(--color-secondary)] shrink-0" aria-hidden="true" />
             <h2 id="staff-chat-title" class="truncate text-sm font-semibold text-white">{{ t("staffChat.title") }}</h2>
           </div>
           <button
@@ -45,7 +45,7 @@
 
         <!-- Message list -->
         <!-- TODO: requires logic change — add loading skeleton and error state once useStaffChat exposes loading/error -->
-        <div ref="listEl" role="log" class="flex-1 overflow-y-auto px-3 py-3">
+        <div ref="listEl" role="log" aria-labelledby="staff-chat-title" class="flex-1 overflow-y-auto px-3 py-3">
           <div v-if="!messages.length" class="ui-empty-state text-center p-5 space-y-1">
             <p class="text-sm font-semibold text-slate-100">{{ t("staffChat.emptyTitle") }}</p>
             <p class="text-xs text-slate-400">{{ t("staffChat.empty") }}</p>
@@ -68,14 +68,15 @@
 
         <!-- Compose form -->
         <form class="flex items-center gap-2 border-t border-slate-800 px-3 py-2.5" @submit.prevent="onSend">
+          <label for="staff-chat-input" class="sr-only">{{ t('staffChat.inputLabel') }}</label>
           <input
+            id="staff-chat-input"
             v-model="draft"
             type="text"
             maxlength="1000"
             :placeholder="t('staffChat.placeholder')"
-            :aria-label="t('staffChat.placeholder')"
             :disabled="sending"
-            class="ui-input flex-1 py-2 text-sm"
+            class="ui-input ui-touch-target flex-1 text-sm"
           />
           <p class="sr-only" aria-live="polite" aria-atomic="true">{{ sending ? t("staffChat.sending") : "" }}</p>
           <button type="submit" class="ui-btn-primary ui-press shrink-0 text-sm" :disabled="sending || !draft.trim()">

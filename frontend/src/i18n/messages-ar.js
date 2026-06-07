@@ -74,6 +74,7 @@ const arabicMessages = {
   },
   "toast": {
     "type": {
+      "info": "تنبيه:",
       "success": "نجاح:",
       "error": "خطأ:",
       "warning": "تنبيه:"
@@ -297,7 +298,9 @@ const arabicMessages = {
     "send": "إرسال",
     "sending": "جارٍ الإرسال…",
     "sendFailed": "تعذّر الإرسال. حاول مرة أخرى.",
-    "someone": "الموظفون"
+    "someone": "الموظفون",
+    "unreadCap": "99+",
+    "inputLabel": "رسالة"
   },
   "ownerLayout": {
     "kicker": "مساحة المالك",
@@ -1863,7 +1866,8 @@ const arabicMessages = {
     "shareDish": "مشاركة",
     "shareDishCopied": "تم نسخ الرابط إلى الحافظة",
     "shareDishFailed": "تعذّر نسخ الرابط",
-    "cartWithCount": "السلة، {count} عناصر"
+    "cartWithCount": "السلة، {count} عناصر",
+    "optionsKicker": "تخصيص"
   },
   "waiterInstall": {
     "prompt": "ثبّت التطبيق لاستخدام يومي أسرع.",
@@ -3017,6 +3021,7 @@ Object.assign(arabicMessages, {
     shiftHint: "\u0627\u062e\u062a\u0631 \u0648\u0642\u062a \u0628\u062f\u0621 \u0627\u0644\u0648\u0631\u062f\u064a\u0629 \u0648\u0627\u0636\u063a\u0637 \u062a\u062d\u0645\u064a\u0644.",
     newOrderBtn: "\u0637\u0644\u0628 \u062c\u062f\u064a\u062f",
     chargeWalletBtn: "\u062e\u0635\u0645 \u0645\u0646 \u0627\u0644\u0645\u062d\u0641\u0638\u0629",
+    newOrderKicker: "\u0646\u0627\u062f\u0644",
     newOrderTitle: "\u0637\u0644\u0628 \u062c\u062f\u064a\u062f",
     newOrderTable: "\u0627\u0644\u0637\u0627\u0648\u0644\u0629 / \u0627\u0644\u062a\u0633\u0645\u064a\u0629",
     newOrderTablePlaceholder: "\u0645\u062b\u0627\u0644: \u0637\u0627\u0648\u0644\u0629 3",
@@ -3085,6 +3090,7 @@ Object.assign(arabicMessages, {
     browseLinkLabel: "\u062a\u0635\u0641\u062d {name}",
   },
   revenueChart: {
+    kicker: "\u0627\u0644\u062a\u062d\u0644\u064a\u0644\u0627\u062a",
     title: "\u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     totalRevenue: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     totalOrders: "\u0627\u0644\u0637\u0644\u0628\u0627\u062a",

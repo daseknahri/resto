@@ -11,7 +11,10 @@
     >
       <!-- Header bar -->
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
-        <h2 id="waiter-new-order-title" class="text-sm font-semibold text-slate-100">{{ t('waiterPage.newOrderTitle') }}</h2>
+        <div class="min-w-0">
+          <p class="ui-kicker">{{ t('waiterPage.newOrderKicker') }}</p>
+          <h2 id="waiter-new-order-title" class="text-base font-bold text-white leading-tight">{{ t('waiterPage.newOrderTitle') }}</h2>
+        </div>
         <button
           class="ui-press ui-touch-target flex items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :aria-label="t('common.close')"
@@ -21,9 +24,9 @@
         </button>
       </div>
 
-      <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
+      <div class="flex flex-1 overflow-hidden flex-col md:flex-row" :inert="customizingDish != null">
         <!-- ── Left panel: dish search ───────────────────────────────── -->
-        <div class="flex flex-1 flex-col overflow-hidden border-b border-slate-800 md:border-b-0 md:border-r">
+        <div class="flex flex-1 min-w-0 flex-col overflow-hidden border-b border-slate-800 md:border-b-0 md:border-r">
           <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
             <!-- Fulfillment type toggle -->
@@ -32,14 +35,14 @@
                 class="ui-segmented-button flex-1"
                 :data-active="fulfillmentType === 'table'"
                 role="radio"
-                :aria-checked="fulfillmentType === 'table'"
+                :aria-checked="String(fulfillmentType === 'table')"
                 @click="fulfillmentType = 'table'"
               >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
               <button
                 class="ui-segmented-button flex-1"
                 :data-active="fulfillmentType === 'pickup'"
                 role="radio"
-                :aria-checked="fulfillmentType === 'pickup'"
+                :aria-checked="String(fulfillmentType === 'pickup')"
                 @click="fulfillmentType = 'pickup'"
               >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
             </div>
@@ -135,7 +138,7 @@
         </div>
 
         <!-- ── Right panel: cart + submit ────────────────────────────── -->
-        <div class="flex flex-col md:w-72 shrink-0">
+        <div class="flex w-full flex-col md:w-72 shrink-0">
           <p class="border-b border-slate-800 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
             {{ t('waiterPage.newOrderCart') }}
             <span v-if="cartItems.length" class="ms-1 tabular-nums font-bold text-slate-200">({{ cartItems.length }})</span>
@@ -166,7 +169,7 @@
                     :aria-label="t('dishPage.decreaseQuantity')"
                     @click="decrement(item.line_key)"
                   >−</button>
-                  <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100" aria-live="polite">{{ item.qty }}</span>
+                  <span class="w-5 tabular-nums text-center text-xs font-semibold text-slate-100" aria-live="polite" :aria-label="`${item.dish_name} — ${t('waiterPage.newOrderQtyLabel')}: ${item.qty}`">{{ item.qty }}</span>
                   <button
                     class="ui-press flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                     :aria-label="t('dishPage.increaseQuantity')"
@@ -174,7 +177,7 @@
                   >+</button>
                 </div>
                 <button
-                  class="ui-press shrink-0 rounded p-0.5 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
+                  class="ui-press ui-touch-target shrink-0 rounded p-2 text-slate-600 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/60"
                   :aria-label="t('common.remove')"
                   @click="removeItem(item.line_key)"
                 >

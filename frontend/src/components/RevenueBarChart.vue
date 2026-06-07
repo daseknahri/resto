@@ -1,8 +1,18 @@
 <template>
   <div>
+    <!-- Accessible live region: persists across all chart states so AT picks up tooltip announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only">
+      <template v-if="tooltip">
+        {{ fmtDateLong(tooltip.date) }} — {{ fmtMoney(tooltip.revenue) }} — {{ t('revenueChart.orders', { count: tooltip.order_count }) }}
+      </template>
+    </div>
+
     <!-- Period selector — hidden when parent supplies data -->
-    <div class="mb-3 flex items-center justify-between gap-2">
-      <p class="ui-kicker">{{ t('revenueChart.title') }}</p>
+    <div class="mb-3 flex items-start justify-between gap-2">
+      <div>
+        <p class="ui-kicker">{{ t('revenueChart.kicker') }}</p>
+        <h2 class="text-sm font-semibold text-white leading-tight">{{ t('revenueChart.title') }}</h2>
+      </div>
       <div v-if="!externalDays" class="flex items-center gap-1.5">
         <nav class="ui-segmented max-w-fit p-0.5" :aria-label="t('revenueChart.periodNav')">
           <button
@@ -30,29 +40,22 @@
 
     <!-- Summary row -->
     <dl class="mb-3 grid grid-cols-3 gap-2 text-center">
-      <div>
-        <dd class="text-base font-semibold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</dd>
-        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.totalRevenue') }}</dt>
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.totalRevenue') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</dd>
       </div>
-      <div>
-        <dd class="text-base font-semibold tabular-nums text-white">{{ totalOrders }}</dd>
-        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.totalOrders') }}</dt>
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.totalOrders') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-white">{{ totalOrders }}</dd>
       </div>
-      <div>
-        <dd class="text-base font-semibold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</dd>
-        <dt class="ui-stat-label mt-0.5">{{ t('revenueChart.avgOrder') }}</dt>
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.avgOrder') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</dd>
       </div>
     </dl>
 
     <!-- SVG bar chart -->
-    <div v-if="!loading && !parentLoading && days.length" class="ui-reveal relative">
-      <!-- Accessible live region: mirrors active tooltip for screen readers -->
-      <div aria-live="polite" aria-atomic="true" class="sr-only">
-        <template v-if="tooltip">
-          {{ fmtDateLong(tooltip.date) }} — {{ fmtMoney(tooltip.revenue) }} — {{ t('revenueChart.orders', { count: tooltip.order_count }) }}
-        </template>
-      </div>
-
+    <div v-if="!loading && !parentLoading && days.length" class="ui-reveal relative min-w-0">
       <!-- Visually-hidden data table for screen readers -->
       <table class="sr-only">
         <caption>{{ t('revenueChart.title') }}</caption>
@@ -75,10 +78,12 @@
       <svg
         :viewBox="`0 0 ${SVG_W} ${SVG_H}`"
         class="w-full overflow-visible"
-        role="img"
+        role="group"
         :aria-label="t('revenueChart.title')"
         @mouseleave="tooltip = null"
+        @keydown.esc="tooltip = null"
       >
+        <title>{{ t('revenueChart.title') }}</title>
         <!-- Y-axis guide lines -->
         <line
           v-for="(line, i) in yLines"
@@ -107,6 +112,8 @@
             @mouseenter="onBarHover(day, barX(i), barY(day.revenue))"
             @keydown.enter="onBarHover(day, barX(i), barY(day.revenue))"
             @keydown.space.prevent="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.esc="tooltip = null"
+            @blur="tooltip = null"
           />
           <!-- Bar fill -->
           <rect

@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-3">
     <!-- Week navigation -->
-    <div class="flex items-center justify-between gap-3">
+    <nav :aria-label="t('reservationCalendar.weekNav')" class="flex items-center justify-between gap-3">
       <button
         class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 text-xs"
         :aria-label="t('reservationCalendar.prevWeek')"
@@ -19,7 +19,7 @@
         {{ t("reservationCalendar.nextWeek") }}
         <span class="rtl:scale-x-[-1] inline-block" aria-hidden="true">&#8250;</span>
       </button>
-    </div>
+    </nav>
 
     <!-- Live region for drag-and-drop announcements -->
     <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">{{ dropAnnouncement }}</div>
@@ -51,13 +51,13 @@
         ]"
         role="group"
         :aria-label="day.dayName"
-        :aria-dropeffect="dragging ? 'move' : undefined"
         @dragover.prevent="dragOverDay = day.iso"
         @dragleave="dragOverDay = null"
         @drop.prevent="onDrop(day.iso)"
       >
         <!-- Day header -->
         <div
+          :id="'cal-day-' + day.iso"
           class="rounded-t-2xl px-2 py-1.5 text-center"
           :class="isToday(day.iso) ? 'bg-[var(--color-primary)]/20' : 'bg-slate-800/40'"
         >
@@ -71,18 +71,19 @@
         </div>
 
         <!-- Reservation chips -->
-        <ul class="space-y-1 p-1.5">
+        <ul :aria-labelledby="'cal-day-' + day.iso" class="space-y-1 p-1.5">
           <li
             v-for="(res, resIndex) in reservationsByDay[day.iso] || []"
             :key="res.id"
           >
+            <!-- TODO: requires logic change — add keyboard reschedule path (WCAG 2.1 SC 2.1.1) -->
             <button
               type="button"
               class="w-full text-left ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
               :style="{ '--ui-delay': `${Math.min(resIndex, 5) * 20}ms` }"
               :class="statusChipClass(res.status)"
               :aria-label="[res.name, res.booked_for ? timeLabel(res.booked_for) : '', res.party_size ? t('reservationCalendar.guests', { n: res.party_size }) : ''].filter(Boolean).join(', ')"
-              :aria-grabbed="dragging && dragging.id === res.id ? 'true' : undefined"
+              aria-roledescription="draggable"
               draggable="true"
               @dragstart="onDragStart(res)"
               @click="$emit('select', res)"
@@ -102,7 +103,7 @@
           <!-- Empty day hint -->
           <li
             v-if="!(reservationsByDay[day.iso] || []).length"
-            aria-hidden="true"
+            role="note"
           >
             <p class="px-1 py-2 text-center text-[10px] text-slate-600">
               {{ t("reservationCalendar.emptyDay") }}
@@ -226,6 +227,7 @@ const dropAnnouncement = ref("");
 
 const onDragStart = (res) => {
   dragging.value = res;
+  dropAnnouncement.value = t("reservationCalendar.dragStart", { name: res.name });
 };
 
 const onDrop = async (targetDayIso) => {
@@ -251,7 +253,7 @@ const onDrop = async (targetDayIso) => {
     dropAnnouncement.value = t("reservationCalendar.dropSuccess", { name: res.name, day: targetDayIso });
     emit("rescheduled", updated.data);
   } catch {
-    // Silently fail — the list will refresh on next fetch
+    dropAnnouncement.value = t("reservationCalendar.dropError", { name: res.name });
   }
 };
 
