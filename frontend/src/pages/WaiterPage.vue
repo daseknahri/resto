@@ -644,6 +644,10 @@ watch(billOrder, async (val) => {
 onBeforeUnmount(() => document.removeEventListener('keydown', trapBillFocus));
 
 // ── Customer rating dialog focus trap ──────────────────────────────────────────
+// Held as the full order object (not just an id) so it survives the order being
+// removed from the active list after a "settle & close". Declared here, above its
+// watcher below, to avoid a temporal-dead-zone crash during setup().
+const ratingOrder = ref(null);
 const ratingDialogRef = ref(null);
 
 const trapRatingFocus = (e) => {
@@ -870,9 +874,7 @@ const reload = () => waiter.fetchOrders();
 const advance = (orderId) => waiter.advanceStatus(orderId);
 
 // Customer trust rating — only the server who handled the order may submit it.
-// Held as the full order object (not just an id) so it survives the order being
-// removed from the active list after a "settle & close".
-const ratingOrder = ref(null);
+// (ratingOrder is declared above, next to its focus-trap watcher.)
 const custRatingScore = ref(0);
 const custRatingNote = ref("");
 const submittingCustRating = ref(false);
