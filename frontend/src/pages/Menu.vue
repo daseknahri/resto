@@ -88,7 +88,7 @@
     </div>
 
     <!-- ══ Sticky categories bar ══ -->
-    <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav')" class="ui-menu-category-nav sticky top-0 z-20 md:top-16">
+    <nav v-if="visibleCategories.length > 0" :aria-label="t('menu.categoryNav')" class="ui-menu-category-nav sticky z-20" :style="{ top: headerOffset + 'px' }">
       <div class="relative">
         <div
           ref="pillRowEl"
@@ -427,6 +427,15 @@ const sectionDishes = (slug) => {
 }
 
 // ── Sticky category nav ──────────────────────────────────────────────────────
+// The customer layout renders a sticky header (.ui-header, top:0) whose height
+// differs by breakpoint. The category nav must stick directly BELOW it (not at a
+// hardcoded offset, where it hides behind the header) and the scroll-to math must
+// clear it — so we measure the header height at runtime.
+const headerOffset = ref(0)
+const measureHeaderOffset = () => {
+  const h = document.querySelector('.ui-header')
+  headerOffset.value = h ? Math.round(h.getBoundingClientRect().height) : 0
+}
 const activeCategorySlug = ref('')
 const pillRowEl          = ref(null)
 const isOverflowing      = ref(false)
@@ -453,7 +462,8 @@ watch(activeCategorySlug, syncPillScroll)
 /** Scroll listener — updates activeCategorySlug as the user scrolls */
 const updateActiveCategory = () => {
   const cats = visibleCategories.value
-  const OFFSET = 130  // px — approx header + sticky nav height
+  const navEl = document.querySelector('.ui-menu-category-nav')
+  const OFFSET = headerOffset.value + (navEl ? navEl.offsetHeight : 0) + 12
   for (let i = cats.length - 1; i >= 0; i--) {
     const el = document.getElementById(`section-${cats[i].slug}`)
     if (!el) continue
@@ -475,7 +485,8 @@ const scrollToSection = (slug) => {
   nextTick(() => {
     const el = document.getElementById(`section-${slug}`)
     if (!el) return
-    const OFFSET = 115
+    const navEl = document.querySelector('.ui-menu-category-nav')
+    const OFFSET = headerOffset.value + (navEl ? navEl.offsetHeight : 0) + 8
     const top = el.getBoundingClientRect().top + window.scrollY - OFFSET
     window.scrollTo({ top, behavior: 'smooth' })
   })
@@ -573,6 +584,9 @@ onMounted(async () => {
 
   // ③ Scroll listener for active pill tracking
   window.addEventListener('scroll', updateActiveCategory, { passive: true })
+  measureHeaderOffset()
+  nextTick(measureHeaderOffset)  // re-measure after the layout settles
+  window.addEventListener('resize', measureHeaderOffset, { passive: true })
 
   // ④ Pill-row overflow detector
   await nextTick()
@@ -587,6 +601,7 @@ onUnmounted(() => {
   loadObserver?.disconnect()
   _pillObserver?.disconnect()
   window.removeEventListener('scroll', updateActiveCategory)
+  window.removeEventListener('resize', measureHeaderOffset)
   // NOTE: do NOT remove data-menu-theme here.
   // CustomerLayout's route watcher fires before this hook runs, so removing
   // the attribute here would undo the theme already re-applied by applyColorScheme().
