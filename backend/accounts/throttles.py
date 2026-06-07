@@ -106,6 +106,13 @@ class MarketplaceOrderStatusThrottle(_IPThrottle):
     scope = "marketplace_order_status"
 
 
+class MarketplaceBrowseThrottle(_IPThrottle):
+    """Rate-limit the public marketplace/directory LISTING endpoints (AllowAny,
+    DB-querying) against scraping / amplification. Generous so real browsing is
+    never blocked; the response cache makes throttled hits cheap anyway."""
+    scope = "marketplace_browse"
+
+
 class WalletTransferThrottle(SimpleRateThrottle):
     """Rate-limit peer-to-peer wallet transfers, per customer (fallback: IP).
 

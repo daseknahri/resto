@@ -36,6 +36,7 @@ from .throttles import (
     DriverJobAcceptThrottle,
     DriverPositionThrottle,
     DriverStatusUpdateThrottle,
+    MarketplaceBrowseThrottle,
     LoginBurstThrottle,
     LoginSustainedThrottle,
     MarketplaceOrderStatusThrottle,
@@ -2077,6 +2078,7 @@ class DirectoryView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MarketplaceBrowseThrottle]
 
     def get(self, request, *args, **kwargs):
         from tenancy.models import Profile
@@ -2171,6 +2173,7 @@ class MarketplaceView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [MarketplaceBrowseThrottle]
 
     def get(self, request, *args, **kwargs):
         from tenancy.models import Profile
