@@ -1,21 +1,31 @@
 <template>
-  <div class="p-6 space-y-6">
+  <div class="ui-page-shell space-y-5">
     <!-- Header -->
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-white">{{ t('adminFlashSales.title') }}</h1>
-        <p class="mt-0.5 text-sm text-slate-400">{{ t('adminFlashSales.subtitle') }}</p>
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="ui-kicker">{{ t('adminFlashSales.kicker') }}</p>
+          <h1 class="ui-page-title text-xl leading-tight md:text-2xl">{{ t('adminFlashSales.title') }}</h1>
+          <p class="mt-0.5 ui-subtle hidden text-xs sm:block">{{ t('adminFlashSales.subtitle') }}</p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            class="ui-btn-outline ui-press ui-touch-target px-4 py-2 text-sm disabled:opacity-50"
+            :disabled="loading"
+            :aria-busy="loading"
+            :aria-label="loading ? t('adminFlashSales.refreshing') : t('adminFlashSales.refresh')"
+            @click="fetchSales"
+          >{{ loading ? '…' : t('adminFlashSales.refresh') }}</button>
+        </div>
       </div>
-      <button
-        class="rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-400 disabled:opacity-50"
-        :disabled="loading"
-        @click="fetchSales"
-      >{{ loading ? '…' : t('adminFlashSales.refresh') }}</button>
-    </div>
+    </header>
 
     <!-- Create form -->
-    <div class="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-5 space-y-4">
-      <h2 class="text-sm font-bold text-white">{{ t('adminFlashSales.createTitle') }}</h2>
+    <div class="ui-panel p-5 space-y-4">
+      <div class="space-y-0.5">
+        <p class="ui-kicker">{{ t('adminFlashSales.createKicker') }}</p>
+        <h2 class="ui-display text-base font-semibold text-white">{{ t('adminFlashSales.createTitle') }}</h2>
+      </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label class="block text-xs text-slate-400">
           {{ t('adminFlashSales.name') }}
@@ -43,10 +53,11 @@
         </label>
       </div>
       <div v-if="createError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ createError }}</p>
       </div>
       <button
-        class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+        class="ui-btn-primary ui-press ui-touch-target px-5 py-2 text-sm disabled:opacity-50"
         :disabled="creating"
         @click="createSale"
       >{{ creating ? t('adminFlashSales.creating') : t('adminFlashSales.create') }}</button>
@@ -54,46 +65,62 @@
 
     <!-- Loading -->
     <div v-if="loading" class="space-y-2">
-      <div v-for="i in 3" :key="i" class="h-20 animate-pulse rounded-2xl bg-slate-800/50" />
+      <div v-for="i in 3" :key="i" class="ui-skeleton h-20 rounded-2xl" />
     </div>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+    <div v-else-if="fetchError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ t('adminFlashSales.fetchError') }}</p>
-      <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10" @click="fetchSales">{{ t('common.retry') }}</button>
+      <button
+        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/10 ui-press"
+        @click="fetchSales"
+      >{{ t('common.retry') }}</button>
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!sales.length" class="py-10 text-center text-sm text-slate-400">{{ t('adminFlashSales.empty') }}</div>
+    <div v-else-if="!sales.length" class="ui-empty-state p-8 text-center space-y-1">
+      <p class="text-sm font-semibold text-slate-100">{{ t('adminFlashSales.empty') }}</p>
+    </div>
 
     <!-- List -->
     <ul v-else class="space-y-3">
-      <li v-for="fs in sales" :key="fs.id" class="rounded-2xl border border-slate-700/60 bg-slate-900/50 p-4">
+      <li
+        v-for="(fs, index) in sales"
+        :key="fs.id"
+        class="ui-panel ui-surface-lift ui-reveal p-4"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+      >
         <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="min-w-0 space-y-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-semibold text-slate-100">{{ fs.name }}</span>
-              <span class="rounded-full bg-[var(--color-secondary,#f59e0b)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--color-secondary,#f59e0b)]">−{{ fs.discount_value }}%</span>
-              <span v-if="fs.is_live" class="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">{{ t('adminFlashSales.live') }}</span>
-              <span v-else-if="!fs.is_active" class="rounded-full bg-slate-700/60 px-2 py-0.5 text-[10px] font-semibold text-slate-400">{{ t('adminFlashSales.paused') }}</span>
-              <span v-else class="rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-semibold text-sky-300">{{ t('adminFlashSales.scheduled') }}</span>
+          <div class="min-w-0 space-y-1.5">
+            <div class="flex flex-wrap items-center gap-2 min-w-0">
+              <span class="truncate text-sm font-semibold text-slate-100">{{ fs.name }}</span>
+              <span class="ui-chip tabular-nums text-[var(--color-secondary)]">−{{ fs.discount_value }}%</span>
+              <span v-if="fs.is_live" class="ui-status-pill border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+                <span class="ui-live-dot bg-emerald-400" aria-hidden="true" />
+                {{ t('adminFlashSales.live') }}
+              </span>
+              <span v-else-if="!fs.is_active" class="ui-status-pill text-slate-400">{{ t('adminFlashSales.paused') }}</span>
+              <span v-else class="ui-status-pill border-sky-500/30 bg-sky-500/10 text-sky-300">{{ t('adminFlashSales.scheduled') }}</span>
             </div>
-            <p v-if="fs.description" class="text-xs text-slate-400">{{ fs.description }}</p>
-            <p class="text-[11px] text-slate-500">
-              {{ fmtDate(fs.active_from) }} → {{ fmtDate(fs.active_until) }}
+            <p v-if="fs.description" class="truncate text-xs text-slate-400">{{ fs.description }}</p>
+            <p class="text-[11px] tabular-nums text-slate-500">
+              {{ fmtDate(fs.active_from) }}<span aria-hidden="true"> → </span><span class="sr-only"> {{ t('adminFlashSales.to') }} </span>{{ fmtDate(fs.active_until) }}
               · {{ t('adminFlashSales.redemptions', { count: fs.redemption_count, max: fs.max_redemptions || '∞' }) }}
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button
-              class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-50"
-              :class="fs.is_active ? 'border-slate-600 text-slate-300 hover:border-amber-400/50 hover:text-amber-300' : 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400/70'"
+              class="ui-btn-outline ui-press ui-touch-target px-3 py-1 text-xs font-semibold disabled:opacity-50"
+              :class="fs.is_active ? 'text-slate-300 hover:border-amber-400/50 hover:text-amber-300' : 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400/70'"
               :disabled="busyId === fs.id"
+              :aria-label="(fs.is_active ? t('adminFlashSales.pause') : t('adminFlashSales.activate')) + ' ' + fs.name"
               @click="toggleActive(fs)"
             >{{ fs.is_active ? t('adminFlashSales.pause') : t('adminFlashSales.activate') }}</button>
             <button
-              class="rounded-full border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+              class="ui-btn-outline ui-press ui-touch-target border-red-500/40 px-3 py-1 text-xs text-red-300 hover:border-red-400/60 hover:bg-red-500/10 disabled:opacity-50"
               :disabled="busyId === fs.id"
+              :aria-label="t('adminFlashSales.delete') + ' ' + fs.name"
               @click="deleteSale(fs)"
             >{{ t('adminFlashSales.delete') }}</button>
           </div>
@@ -108,6 +135,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import AppIcon from '../components/AppIcon.vue';
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();

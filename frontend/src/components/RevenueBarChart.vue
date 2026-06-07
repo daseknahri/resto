@@ -1,26 +1,37 @@
 <template>
-  <div class="revenue-chart-wrap">
+  <div>
+    <!-- Accessible live region: persists across all chart states so AT picks up tooltip announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only">
+      <template v-if="tooltip">
+        {{ fmtDateLong(tooltip.date) }} — {{ fmtMoney(tooltip.revenue) }} — {{ t('revenueChart.orders', { count: tooltip.order_count }) }}
+      </template>
+    </div>
+
     <!-- Period selector — hidden when parent supplies data -->
-    <div class="mb-3 flex items-center justify-between gap-2">
-      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('revenueChart.title') }}</p>
-      <div v-if="!externalDays" class="flex items-center gap-1">
+    <div class="mb-3 flex items-start justify-between gap-2">
+      <div>
+        <p class="ui-kicker">{{ t('revenueChart.kicker') }}</p>
+        <h2 class="text-sm font-semibold text-white leading-tight">{{ t('revenueChart.title') }}</h2>
+      </div>
+      <div v-if="!externalDays" class="flex items-center gap-1.5">
+        <nav class="ui-segmented max-w-fit p-0.5" :aria-label="t('revenueChart.periodNav')">
+          <button
+            v-for="p in periods"
+            :key="p"
+            class="ui-segmented-button px-2.5 py-1 text-[11px]"
+            :data-active="period === p"
+            :aria-pressed="period === p"
+            :aria-label="t('revenueChart.periodDays', { n: p })"
+            @click="setPeriod(p)"
+          >{{ p }}d</button>
+        </nav>
         <button
-          v-for="p in periods"
-          :key="p"
-          class="rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors"
-          :class="period === p
-            ? 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'
-            : 'text-slate-500 hover:text-slate-300'"
-          :aria-pressed="period === p"
-          @click="setPeriod(p)"
-        >{{ p }}d</button>
-        <button
-          class="ml-1 text-slate-500 hover:text-slate-300 transition-colors"
+          class="ui-touch-target ms-0.5 inline-flex items-center justify-center text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
           :aria-label="t('common.refresh')"
           :disabled="loading"
           @click="load"
         >
-          <svg aria-hidden="true" class="h-3 w-3" :class="loading ? 'animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg aria-hidden="true" class="h-3.5 w-3.5" :class="loading ? 'motion-safe:animate-spin' : ''" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
         </button>
@@ -28,30 +39,51 @@
     </div>
 
     <!-- Summary row -->
-    <div class="mb-3 grid grid-cols-3 gap-2 text-center">
-      <div>
-        <p class="text-base font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</p>
-        <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t('revenueChart.totalRevenue') }}</p>
+    <dl class="mb-3 grid grid-cols-3 gap-2 text-center">
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.totalRevenue') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-[var(--color-secondary)]">{{ fmtMoney(totalRevenue) }}</dd>
       </div>
-      <div>
-        <p class="text-base font-bold tabular-nums text-white">{{ totalOrders }}</p>
-        <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t('revenueChart.totalOrders') }}</p>
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.totalOrders') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-white">{{ totalOrders }}</dd>
       </div>
-      <div>
-        <p class="text-base font-bold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</p>
-        <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t('revenueChart.avgOrder') }}</p>
+      <div class="min-w-0 overflow-hidden">
+        <dt class="ui-stat-label">{{ t('revenueChart.avgOrder') }}</dt>
+        <dd class="truncate text-base font-semibold tabular-nums text-slate-200">{{ totalOrders ? fmtMoney(totalRevenue / totalOrders) : '—' }}</dd>
       </div>
-    </div>
+    </dl>
 
     <!-- SVG bar chart -->
-    <div v-if="!loading && !parentLoading && days.length" class="relative">
+    <div v-if="!loading && !parentLoading && days.length" class="ui-reveal relative min-w-0">
+      <!-- Visually-hidden data table for screen readers -->
+      <table class="sr-only">
+        <caption>{{ t('revenueChart.title') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ t('revenueChart.tableDate') }}</th>
+            <th scope="col">{{ t('revenueChart.totalRevenue') }}</th>
+            <th scope="col">{{ t('revenueChart.totalOrders') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="day in days" :key="day.date">
+            <td>{{ fmtDateLong(day.date) }}</td>
+            <td>{{ fmtMoney(day.revenue) }}</td>
+            <td>{{ day.order_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+
       <svg
         :viewBox="`0 0 ${SVG_W} ${SVG_H}`"
         class="w-full overflow-visible"
-        role="img"
+        role="group"
         :aria-label="t('revenueChart.title')"
         @mouseleave="tooltip = null"
+        @keydown.esc="tooltip = null"
       >
+        <title>{{ t('revenueChart.title') }}</title>
         <!-- Y-axis guide lines -->
         <line
           v-for="(line, i) in yLines"
@@ -66,7 +98,7 @@
 
         <!-- Bars -->
         <g v-for="(day, i) in days" :key="day.date">
-          <!-- Hover hit area -->
+          <!-- Hover hit area (keyboard-accessible) -->
           <rect
             :x="barX(i) - barGap / 2"
             :y="CHART_T"
@@ -74,7 +106,14 @@
             :height="CHART_H"
             fill="transparent"
             class="cursor-pointer"
+            tabindex="0"
+            role="button"
+            :aria-label="t('revenueChart.barLabel', { date: fmtDateLong(day.date), revenue: fmtMoney(day.revenue), orders: day.order_count })"
             @mouseenter="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.enter="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.space.prevent="onBarHover(day, barX(i), barY(day.revenue))"
+            @keydown.esc="tooltip = null"
+            @blur="tooltip = null"
           />
           <!-- Bar fill -->
           <rect
@@ -148,11 +187,23 @@
     </div>
 
     <!-- Loading skeleton (own fetch or parent still fetching) -->
-    <div v-else-if="loading || parentLoading" class="h-28 animate-pulse rounded-xl bg-slate-800/50" />
+    <div v-else-if="loading || parentLoading" class="ui-skeleton h-28" />
 
-    <!-- Error / empty -->
-    <div v-else class="py-8 text-center text-xs text-slate-500">
-      {{ error ? t('revenueChart.loadError') : t('revenueChart.noData') }}
+    <!-- Error state -->
+    <div
+      v-else-if="error"
+      class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+      role="alert"
+    >
+      <svg aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4.5zm0 6.5a.875.875 0 1 1 0-1.75A.875.875 0 0 1 8 11z"/>
+      </svg>
+      <p class="flex-1 text-sm text-red-300">{{ t('revenueChart.loadError') }}</p>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else class="ui-empty-state text-center">
+      <p class="text-sm font-semibold text-slate-100">{{ t('revenueChart.noData') }}</p>
     </div>
   </div>
 </template>

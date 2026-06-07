@@ -1,28 +1,38 @@
 ﻿<template>
-  <div class="space-y-4">
+  <div class="ui-page-shell space-y-4">
     <!-- Header -->
-    <div class="ui-panel space-y-3 p-4 sm:p-4">
+    <header class="ui-hero-ribbon ui-reveal space-y-3 px-4 py-4 sm:px-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-1">
+        <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("ownerOrders.kicker") }}</p>
           <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerOrders.title") }}</h1>
-          <p class="text-sm text-slate-400">{{ t("ownerOrders.description") }}</p>
+          <p class="ui-subtle">{{ t("ownerOrders.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
-            class="ui-btn-outline px-3 py-1.5 text-sm"
+            class="ui-btn-outline ui-press ui-touch-target px-3 py-1.5 text-sm"
             :class="soundEnabled ? '' : 'opacity-50'"
             :aria-label="soundEnabled ? t('ownerOrders.muteAlerts') : t('ownerOrders.unmuteAlerts')"
             @click="soundEnabled = !soundEnabled"
           >
-            {{ soundEnabled ? "🔔" : "🔕" }}
+            <span aria-hidden="true">{{ soundEnabled ? "🔔" : "🔕" }}</span>
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="exporting || !order.orders.length" @click="exportCsv">
-            <AppIcon name="download" class="h-3.5 w-3.5" />
+          <button
+            class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            :disabled="exporting || !order.orders.length"
+            :aria-label="exporting ? t('ownerOrders.exporting') : t('ownerOrders.exportCsv')"
+            @click="exportCsv"
+          >
+            <AppIcon name="download" class="h-3.5 w-3.5" aria-hidden="true" />
             {{ exporting ? t("ownerOrders.exporting") : t("ownerOrders.exportCsv") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-sm" :disabled="order.ordersLoading" @click="refresh">
-            <AppIcon name="refresh" class="h-3.5 w-3.5" />
+          <button
+            class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            :disabled="order.ordersLoading"
+            :aria-label="t('ownerOrders.refreshOrders')"
+            @click="refresh"
+          >
+            <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
             {{ t("ownerOrders.refreshOrders") }}
           </button>
         </div>
@@ -80,10 +90,8 @@
             :key="d.value"
             type="button"
             :aria-pressed="activeDateFilter === d.value"
-            class="rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
-            :class="activeDateFilter === d.value
-              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-              : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+            class="ui-state-chip ui-press"
+            :data-active="activeDateFilter === d.value || undefined"
             @click="activeDateFilter = d.value"
           >
             {{ d.label }}
@@ -91,7 +99,7 @@
         </div>
         <button
           v-if="searchQuery || activeDateFilter !== 'all'"
-          class="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+          class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
           :aria-label="t('ownerOrders.clearFilters')"
           @click="searchQuery = ''; activeDateFilter = 'all'"
         >✕</button>
@@ -99,20 +107,18 @@
 
       <!-- Status filter tabs: horizontal scroll on mobile (keeps the order list in view),
            wraps on larger screens where there's room. -->
-      <div class="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-x-visible sm:pb-0">
+      <div class="ui-scroll-row gap-1.5 sm:flex-wrap sm:overflow-x-visible sm:pb-0">
         <button
           v-for="tab in statusTabs"
           :key="tab.value"
           type="button"
           :aria-pressed="activeStatus === tab.value"
-          class="shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
-          :class="activeStatus === tab.value
-            ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-            : 'border-slate-700 text-slate-300 hover:border-slate-600'"
+          class="ui-state-chip ui-press shrink-0 whitespace-nowrap"
+          :data-active="activeStatus === tab.value || undefined"
           @click="setFilter(tab.value)"
         >
           {{ tab.label }}
-          <span v-if="tab.count > 0" class="ml-1 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px]">{{ tab.count }}</span>
+          <span v-if="tab.count > 0" class="ms-1 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px] tabular-nums">{{ tab.count }}</span>
         </button>
       </div>
 
@@ -126,18 +132,18 @@
       </p>
 
       <!-- Batch action: confirm all pending (hidden when search/date filters are narrowing the view) -->
-      <div v-if="pendingOrdersList.length > 1 && !activeStatus && !searchQuery && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-        <span class="h-2 w-2 animate-pulse rounded-full bg-amber-400"></span>
-        <span class="flex-1 text-xs text-amber-200">{{ pendingOrdersList.length }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
+      <div v-if="pendingOrdersList.length > 1 && !activeStatus && !searchQuery && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5" role="status">
+        <span class="ui-live-dot shrink-0" aria-hidden="true"></span>
+        <span class="min-w-0 flex-1 text-xs text-amber-200 tabular-nums">{{ pendingOrdersList.length }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
         <button
-          class="rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+          class="ui-press shrink-0 rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
           :disabled="confirmingAll"
           @click="confirmAllPending"
         >
           {{ confirmingAll ? t("ownerOrders.confirmingAll") : t("ownerOrders.confirmAllPending", { n: pendingOrdersList.length }) }}
         </button>
       </div>
-    </div>
+    </header>
 
     <!-- Loading: skeleton order cards -->
     <div v-if="order.ordersLoading && !order.orders.length" class="space-y-3">
@@ -180,29 +186,31 @@
     </div>
 
     <!-- Empty: filters active but no matches -->
-    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-panel p-8 text-center space-y-3">
-      <p class="text-sm text-slate-400">{{ t("ownerOrders.noOrders") }}</p>
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-empty-state space-y-3 p-8 text-center">
+      <p class="text-sm font-semibold text-slate-100">{{ t("ownerOrders.noOrders") }}</p>
       <button
-        class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
+        class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
         @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'"
       >
-        ✕ {{ t("ownerOrders.clearFilters") }}
+        <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
+        {{ t("ownerOrders.clearFilters") }}
       </button>
     </div>
 
     <!-- Empty: no orders at all -->
-    <div v-else-if="!filteredOrders.length" class="ui-panel p-8 text-center">
-      <p class="text-sm text-slate-400">{{ t("ownerOrders.noOrdersYet") }}</p>
+    <div v-else-if="!filteredOrders.length" class="ui-empty-state p-10 text-center">
+      <p class="text-sm font-semibold text-slate-100">{{ t("ownerOrders.noOrdersYet") }}</p>
     </div>
 
     <!-- Order list -->
     <div v-else class="space-y-2.5">
       <article
-        v-for="o in filteredOrders"
+        v-for="(o, index) in filteredOrders"
         :key="o.id"
-        class="ui-panel space-y-3 p-3.5 transition-colors"
+        class="ui-panel ui-surface-lift ui-reveal space-y-3 p-3.5 transition-colors"
         :class="orderCardClass(o)"
-        style="content-visibility: auto; contain-intrinsic-size: auto 220px;"
+        :aria-label="o.order_number"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 220px' }"
       >
         <!-- Order header -->
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -218,7 +226,7 @@
                 v-if="o.scheduled_for"
                 class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
               >
-                🗓️ {{ formatScheduledFor(o.scheduled_for) }}
+                <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(o.scheduled_for) }}
               </span>
               <!-- Payment badge -->
               <span
@@ -233,7 +241,7 @@
                 v-if="o.source === 'marketplace'"
                 class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
               >
-                🛒 {{ t('ownerOrders.sourceMarketplace') }}
+                <span aria-hidden="true">🛒</span> {{ t('ownerOrders.sourceMarketplace') }}
               </span>
               <!-- Age warning badge -->
               <span
@@ -243,7 +251,7 @@
                   ? 'bg-red-500/25 text-red-300'
                   : 'bg-amber-500/25 text-amber-300'"
               >
-                ⏱ {{ orderAgeMin(o) }}m
+                <span aria-hidden="true">⏱</span> {{ orderAgeMin(o) }}m
               </span>
             </div>
             <p class="text-xs text-slate-400">{{ formatTime(o.created_at) }}</p>
@@ -265,7 +273,7 @@
               {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}
             </p>
             <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] text-emerald-300">
-              💰 {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
+              <span aria-hidden="true">💰</span> {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
             </p>
             <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
@@ -276,7 +284,7 @@
           <div v-if="o.customer_name" class="flex flex-wrap items-center gap-2">
             <div>
               <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
-              <span class="ml-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
+              <span class="ms-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
             </div>
             <!-- Customer trust badge -->
             <template v-if="o.customer_trust?.rating_count">
@@ -288,7 +296,7 @@
                     ? 'bg-amber-500/15 text-amber-300'
                     : 'bg-red-500/15 text-red-300'"
               >
-                ★ {{ o.customer_trust.avg_score }}
+                <span aria-hidden="true">★</span> {{ o.customer_trust.avg_score }}
                 <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
               </span>
             </template>
@@ -305,7 +313,7 @@
                     ? 'bg-amber-500/15 text-amber-300'
                     : 'bg-red-500/15 text-red-300'"
               >
-                ★ {{ o.customer_trust.avg_score }}
+                <span aria-hidden="true">★</span> {{ o.customer_trust.avg_score }}
                 <span class="opacity-70">({{ o.customer_trust.rating_count }})</span>
               </span>
             </div>
@@ -318,7 +326,7 @@
               rel="noopener noreferrer"
               class="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 hover:border-emerald-400/60 hover:bg-emerald-500/20"
             >
-              💬 {{ t("ownerOrders.whatsapp") }}
+              <span aria-hidden="true">💬</span> {{ t("ownerOrders.whatsapp") }}
             </a>
           </div>
           <div v-if="o.customer_email">
@@ -326,34 +334,34 @@
           </div>
           <div v-if="o.delivery_fee && Number(o.delivery_fee) > 0" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.deliveryFee") }}</span>
-            <span class="ml-1.5 font-medium text-slate-200">{{ formatCurrency(o.delivery_fee, o.currency) }}</span>
+            <span class="ms-1.5 font-medium text-slate-200">{{ formatCurrency(o.delivery_fee, o.currency) }}</span>
           </div>
           <div v-if="o.tip_amount && Number(o.tip_amount) > 0" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.tip") }}</span>
-            <span class="ml-1.5 font-medium text-emerald-300">{{ formatCurrency(o.tip_amount, o.currency) }}</span>
+            <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.tip_amount, o.currency) }}</span>
           </div>
           <div v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="sm:col-span-2">
             <span class="text-slate-500">💰 {{ t("ownerOrders.walletPaid") }}</span>
-            <span class="ml-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
+            <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
-            <span class="ml-1.5 text-slate-200">{{ o.delivery_address }}</span>
+            <span class="ms-1.5 text-slate-200">{{ o.delivery_address }}</span>
             <a
               v-if="orderMapUrl(o)"
               :href="orderMapUrl(o)"
               target="_blank"
               rel="noopener noreferrer"
-              class="ml-2 inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
+              class="ms-2 inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
             >
-              📍 {{ t("ownerOrders.openMap") }}
+              <span aria-hidden="true">📍</span> {{ t("ownerOrders.openMap") }}
             </a>
           </div>
 
           <!-- Delivery job panel -->
           <div v-if="o.delivery_job" class="sm:col-span-2 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 space-y-2 text-xs">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-slate-300">🛵 {{ t('ownerOrders.deliveryJobTitle') }}</span>
+              <span class="font-semibold text-slate-300"><span aria-hidden="true">🛵</span> {{ t('ownerOrders.deliveryJobTitle') }}</span>
               <span
                 class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 :class="{
@@ -404,27 +412,29 @@
                 >{{ t('ownerOrders.djPayNoshow') }}</button>
               </div>
               <p v-if="o.delivery_job.resolution" class="text-[11px] text-emerald-400">
-                ✓ {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
+                <span aria-hidden="true">✓</span> {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
               </p>
             </div>
 
             <!-- Rate driver button (only when delivered and not yet rated) -->
             <div v-if="o.delivery_job.status === 'delivered' && !o.delivery_job.restaurant_driver_rating">
               <div v-if="ratingJobId === o.id" class="space-y-1.5">
-                <div class="flex gap-1">
-                  <button
-                    v-for="n in 5"
-                    :key="n"
-                    class="text-lg transition-transform hover:scale-110"
-                    :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
-                    :aria-label="t('ownerOrders.djRateStar', { n })"
-                    @click="ratingScore = n"
-                  >★</button>
+                <div role="group" :aria-label="t('ownerOrders.djRateDriver')">
+                  <div class="flex gap-1">
+                    <button
+                      v-for="n in 5"
+                      :key="n"
+                      class="text-lg transition-transform hover:scale-110"
+                      :class="ratingScore >= n ? 'text-amber-400' : 'text-slate-600'"
+                      :aria-label="t('ownerOrders.djRateStar', { n })"
+                      @click="ratingScore = n"
+                    ><span aria-hidden="true">★</span></button>
+                  </div>
                 </div>
                 <input
                   v-model="ratingNote"
                   type="text"
-                  class="w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 placeholder-slate-500 focus:outline-none text-[11px]"
+                  class="ui-input text-xs"
                   :aria-label="t('ownerOrders.djRatingNotePlaceholder')"
                   :placeholder="t('ownerOrders.djRatingNotePlaceholder')"
                 />
@@ -441,7 +451,7 @@
                 v-else
                 class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20"
                 @click="ratingJobId = o.id; ratingScore = 0; ratingNote = ''"
-              >★ {{ t('ownerOrders.djRateDriver') }}</button>
+              ><span aria-hidden="true">★</span> {{ t('ownerOrders.djRateDriver') }}</button>
             </div>
             <div v-else-if="o.delivery_job.restaurant_driver_rating" class="text-slate-500">
               {{ t('ownerOrders.djRated', { score: o.delivery_job.restaurant_driver_rating }) }}
@@ -491,6 +501,7 @@
                 v-for="preset in [10, 15, 20, 25, 30, 45]"
                 :key="preset"
                 type="button"
+                :aria-pressed="editMinutes === preset"
                 class="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
                 :class="editMinutes === preset
                   ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
@@ -528,31 +539,31 @@
         <!-- Action buttons -->
         <div class="flex flex-wrap items-center gap-2">
           <template v-if="o.status === 'scheduled'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
+            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
               {{ t("ownerOrders.releaseNow") }}
             </button>
-            <button class="ui-btn-outline border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
+            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
               {{ t("ownerOrders.cancel") }}
             </button>
           </template>
           <template v-else-if="o.status === 'pending'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
+            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
               {{ t("ownerOrders.confirm") }}
             </button>
-            <button class="ui-btn-outline border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
+            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
               {{ t("ownerOrders.cancel") }}
             </button>
           </template>
           <template v-else-if="o.status === 'confirmed'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'preparing')">
+            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'preparing')">
               {{ t("ownerOrders.startPreparing") }}
             </button>
-            <button class="ui-btn-outline border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
+            <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
               {{ t("ownerOrders.cancel") }}
             </button>
           </template>
           <template v-else-if="o.status === 'preparing'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'ready')">
+            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'ready')">
               {{ t("ownerOrders.markReady") }}
             </button>
           </template>
@@ -561,28 +572,28 @@
                  is finished by the Settle & close button (the pay step). -->
             <button
               v-if="o.fulfillment_type === 'delivery'"
-              class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
               @click="updateStatus(o, 'out_for_delivery')"
             >
               {{ t("ownerOrders.outForDelivery") }}
             </button>
             <button
               v-else-if="o.fulfillment_type !== 'table' || o.payment_status === 'paid'"
-              class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
               @click="updateStatus(o, 'completed')"
             >
               {{ t("ownerOrders.complete") }}
             </button>
           </template>
           <template v-else-if="o.status === 'out_for_delivery'">
-            <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
+            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
               {{ t("ownerOrders.markDelivered") }}
             </button>
           </template>
 
           <button
             v-if="['pending','confirmed','preparing','ready','out_for_delivery'].includes(o.status)"
-            class="ui-btn-outline px-3 py-1.5 text-xs"
+            class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
             @click="openEdit(o)"
           >
             {{ t("ownerOrders.noteEtaBtn") }}
@@ -590,21 +601,21 @@
 
           <!-- Print ticket -->
           <button
-            class="ui-btn-outline px-3 py-1.5 text-xs"
+            class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
             @click="printTicket(o)"
           >
-            🖨 {{ t("ownerOrders.printTicket") }}
+            <span aria-hidden="true">🖨</span> {{ t("ownerOrders.printTicket") }}
           </button>
 
           <!-- Settle / Mark paid — record payment collected (cash/card); on a
                ready dine-in order this also closes the open tab. -->
           <button
             v-if="o.payment_status !== 'paid' && o.status !== 'cancelled'"
-            class="ui-btn-outline border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
+            class="ui-btn-outline ui-press border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
             :disabled="settlingOrderId === o.id"
             @click="settleOrder(o)"
           >
-            💵 {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
+            <span aria-hidden="true">💵</span> {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
           </button>
         </div>
       </article>

@@ -1,12 +1,13 @@
-﻿<template>
-  <section class="space-y-6 px-4 py-6 md:space-y-8 md:py-8">
-    <header class="ui-hero-ribbon ui-fade-up overflow-hidden p-0">
+<template>
+  <div class="ui-page-shell">
+  <section class="space-y-6 py-6 md:space-y-8 md:py-8">
+    <header class="ui-hero-ribbon ui-reveal overflow-hidden p-0">
       <div class="grid gap-6 p-5 md:grid-cols-[1.15fr,0.85fr] md:p-6">
         <div class="space-y-4">
           <span class="ui-chip-strong w-fit">{{ t("leadCapture.kicker") }}</span>
           <div class="space-y-2">
-            <h2 class="ui-display max-w-3xl text-3xl font-semibold text-white md:text-4xl">{{ t("leadCapture.title") }}</h2>
-            <p class="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">{{ t("leadCapture.description") }}</p>
+            <h1 class="ui-display max-w-3xl text-3xl font-semibold text-white md:text-4xl">{{ t("leadCapture.title") }}</h1>
+            <p class="ui-subtle max-w-2xl leading-7 md:text-base">{{ t("leadCapture.description") }}</p>
           </div>
           <div class="flex flex-wrap gap-2 text-xs text-slate-300">
             <span class="ui-data-strip">{{ t("leadCapture.planBasic") }}</span>
@@ -51,56 +52,53 @@
             <input
               v-model.trim="form.name"
               type="text"
-              class="ui-input"
+              class="ui-input mt-1"
               :class="errors.name ? 'border-red-400' : 'border-slate-700'"
               required
               autocomplete="name"
               :aria-invalid="errors.name ? 'true' : undefined"
-              aria-describedby="lead-capture-name-error"
               @input="clearError('name')"
             />
-            <p v-if="errors.name" id="lead-capture-name-error" class="text-xs text-red-300">{{ errors.name }}</p>
+            <p v-if="errors.name" id="lead-capture-name-error" class="text-xs text-red-300" role="alert">{{ errors.name }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("common.email") }}
             <input
               v-model.trim="form.email"
               type="email"
-              class="ui-input"
+              class="ui-input mt-1"
               :class="errors.email ? 'border-red-400' : 'border-slate-700'"
               autocomplete="email"
               inputmode="email"
               spellcheck="false"
               :aria-invalid="errors.email ? 'true' : undefined"
-              aria-describedby="lead-capture-email-error"
               @input="clearError('email')"
             />
-            <p v-if="errors.email" id="lead-capture-email-error" class="text-xs text-red-300">{{ errors.email }}</p>
+            <p v-if="errors.email" id="lead-capture-email-error" class="text-xs text-red-300" role="alert">{{ errors.email }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("leadCapture.phoneWhatsapp") }}
             <input
               v-model.trim="form.phone"
               type="tel"
-              class="ui-input"
+              class="ui-input mt-1"
               :class="errors.phone ? 'border-red-400' : 'border-slate-700'"
               placeholder="+212..."
               autocomplete="tel"
               inputmode="tel"
               :aria-invalid="errors.phone ? 'true' : undefined"
-              aria-describedby="lead-capture-phone-error"
               @input="clearError('phone')"
             />
-            <p v-if="errors.phone" id="lead-capture-phone-error" class="text-xs text-red-300">{{ errors.phone }}</p>
+            <p v-if="errors.phone" id="lead-capture-phone-error" class="text-xs text-red-300" role="alert">{{ errors.phone }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("common.plan") }}
             <select
               v-model="form.plan_code"
-              class="ui-input"
+              class="ui-input mt-1"
               :class="errors.plan_code ? 'border-red-400' : 'border-slate-700'"
+              required
               :aria-invalid="errors.plan_code ? 'true' : undefined"
-              aria-describedby="lead-capture-plan-error"
               aria-required="true"
               @change="clearError('plan_code')"
             >
@@ -108,7 +106,7 @@
               <option value="growth">{{ t("leadCapture.growthOption") }}</option>
               <option value="pro">{{ t("leadCapture.proOption") }}</option>
             </select>
-            <p v-if="errors.plan_code" id="lead-capture-plan-error" class="text-xs text-red-300">{{ errors.plan_code }}</p>
+            <p v-if="errors.plan_code" id="lead-capture-plan-error" class="text-xs text-red-300" role="alert">{{ errors.plan_code }}</p>
           </label>
         </div>
 
@@ -117,14 +115,13 @@
           <textarea
             v-model.trim="form.notes"
             rows="4"
-            class="ui-textarea"
+            class="ui-textarea mt-1"
             :class="errors.notes ? 'border-red-400' : 'border-slate-700'"
             :placeholder="t('leadCapture.notesPlaceholder')"
             :aria-invalid="errors.notes ? 'true' : undefined"
-            aria-describedby="lead-capture-notes-error"
             @input="clearError('notes')"
           ></textarea>
-          <p v-if="errors.notes" id="lead-capture-notes-error" class="text-xs text-red-300">{{ errors.notes }}</p>
+          <p v-if="errors.notes" id="lead-capture-notes-error" class="text-xs text-red-300" role="alert">{{ errors.notes }}</p>
         </label>
 
         <input v-model="form.hp" type="text" class="hidden" autocomplete="off" tabindex="-1" aria-hidden="true" />
@@ -144,65 +141,77 @@
       </form>
 
       <aside class="space-y-4">
-        <article class="ui-command-deck p-5">
+        <article class="ui-command-deck ui-reveal p-5" :style="{ '--ui-delay': '60ms' }">
           <p class="ui-kicker">{{ t("common.plan") }}</p>
           <div class="mt-4 grid gap-3">
             <button
               type="button"
-              class="rounded-[1.35rem] border p-4 text-left transition"
-              :class="form.plan_code === 'basic' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              class="ui-selection-card p-4 text-start"
+              :data-active="form.plan_code === 'basic'"
               :aria-pressed="form.plan_code === 'basic'"
               @click="form.plan_code = 'basic'"
             >
-              <p class="text-sm font-semibold text-white">Basic</p>
+              <p class="text-sm font-semibold text-white">{{ t("leadCapture.planNameBasic") }}</p>
               <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planBasic") }}</p>
             </button>
             <button
               type="button"
-              class="rounded-[1.35rem] border p-4 text-left transition"
-              :class="form.plan_code === 'growth' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              class="ui-selection-card p-4 text-start"
+              :data-active="form.plan_code === 'growth'"
               :aria-pressed="form.plan_code === 'growth'"
               @click="form.plan_code = 'growth'"
             >
-              <p class="text-sm font-semibold text-white">Growth</p>
+              <p class="text-sm font-semibold text-white">{{ t("leadCapture.planNameGrowth") }}</p>
               <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
             </button>
             <button
               type="button"
-              class="rounded-[1.35rem] border p-4 text-left transition"
-              :class="form.plan_code === 'pro' ? 'border-[var(--color-secondary)] bg-[rgba(245,158,11,0.12)]' : 'border-slate-800/80 bg-slate-950/45'"
+              class="ui-selection-card p-4 text-start"
+              :data-active="form.plan_code === 'pro'"
               :aria-pressed="form.plan_code === 'pro'"
               @click="form.plan_code = 'pro'"
             >
-              <p class="text-sm font-semibold text-white">Pro</p>
+              <p class="text-sm font-semibold text-white">{{ t("leadCapture.planNamePro") }}</p>
               <p class="mt-1 text-xs text-slate-400">{{ t("leadCapture.planPro") }}</p>
             </button>
           </div>
         </article>
 
-        <article class="ui-spotlight-card p-5">
+        <article class="ui-spotlight-card ui-reveal p-5" :style="{ '--ui-delay': '120ms' }">
           <p class="ui-kicker">{{ t("leadCapture.whatHappensNext") }}</p>
           <ol class="mt-4 space-y-3 text-sm text-slate-200">
-            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">1</span><span>{{ t("leadCapture.step1") }}</span></li>
-            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">2</span><span>{{ t("leadCapture.step2") }}</span></li>
-            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">3</span><span>{{ t("leadCapture.step3") }}</span></li>
-            <li class="flex gap-3"><span class="ui-chip-strong min-w-[2rem] justify-center">4</span><span>{{ t("leadCapture.step4") }}</span></li>
+            <li class="flex items-start gap-3"><span class="ui-step-badge shrink-0">1</span><span>{{ t("leadCapture.step1") }}</span></li>
+            <li class="flex items-start gap-3"><span class="ui-step-badge shrink-0">2</span><span>{{ t("leadCapture.step2") }}</span></li>
+            <li class="flex items-start gap-3"><span class="ui-step-badge shrink-0">3</span><span>{{ t("leadCapture.step3") }}</span></li>
+            <li class="flex items-start gap-3"><span class="ui-step-badge shrink-0">4</span><span>{{ t("leadCapture.step4") }}</span></li>
           </ol>
         </article>
 
-        <article class="ui-panel-soft p-5">
+        <article class="ui-panel-soft ui-reveal p-5" :style="{ '--ui-delay': '180ms' }">
           <p class="ui-kicker">{{ t("leadCapture.planGuidance") }}</p>
           <div class="mt-4 space-y-3 text-sm text-slate-200">
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'basic' ? 'border-[var(--color-secondary)]/50' : ''">
-              <p class="font-semibold text-white">Basic</p>
+            <div
+              class="ui-selection-card p-3"
+              :data-active="form.plan_code === 'basic'"
+              role="presentation"
+            >
+              <p class="font-semibold text-white">{{ t("leadCapture.planNameBasic") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planBasic") }}</p>
             </div>
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'growth' ? 'border-[var(--color-secondary)]/50' : ''">
-              <p class="font-semibold text-white">Growth</p>
+            <div
+              class="ui-selection-card p-3"
+              :data-active="form.plan_code === 'growth'"
+              role="presentation"
+            >
+              <p class="font-semibold text-white">{{ t("leadCapture.planNameGrowth") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planGrowth") }}</p>
             </div>
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3" :class="form.plan_code === 'pro' ? 'border-[var(--color-secondary)]/50' : ''">
-              <p class="font-semibold text-white">Pro</p>
+            <div
+              class="ui-selection-card p-3"
+              :data-active="form.plan_code === 'pro'"
+              role="presentation"
+            >
+              <p class="font-semibold text-white">{{ t("leadCapture.planNamePro") }}</p>
               <p class="mt-1 text-slate-400">{{ t("leadCapture.planPro") }}</p>
             </div>
           </div>
@@ -210,6 +219,7 @@
       </aside>
     </div>
   </section>
+  </div>
 </template>
 
 <script setup>

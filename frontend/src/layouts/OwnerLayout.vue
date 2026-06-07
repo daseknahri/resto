@@ -48,7 +48,7 @@
                   <span
                     v-if="pendingOrdersCount > 0"
                     class="owner-orders-badge"
-                    :aria-label="t('ownerLayout.orders') + ': ' + pendingOrdersCount"
+                    aria-hidden="true"
                   >{{ pendingOrdersCount }}</span>
                 </span>
                 <span>{{ t("ownerLayout.orders") }}</span>
@@ -102,20 +102,19 @@
               </RouterLink>
             </nav>
 
-            <!-- Waiter view shortcut (desktop) -->
-            <RouterLink
-              to="/waiter"
-              class="hidden md:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition-colors"
-            >
-              <AppIcon name="user" class="h-3.5 w-3.5" />
-              {{ t("ownerLayout.waiterView") }}
-            </RouterLink>
-
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <!-- Waiter view shortcut (desktop) -->
+              <RouterLink
+                to="/waiter"
+                class="ui-chip hidden md:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              >
+                <AppIcon name="user" class="h-3.5 w-3.5" />
+                {{ t("ownerLayout.waiterView") }}
+              </RouterLink>
               <LanguageSwitcher compact dropdown />
               <!-- Dark / light mode toggle -->
               <button
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                 type="button"
                 :aria-label="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
                 :title="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
@@ -131,17 +130,18 @@
               <!-- PWA install button -->
               <button
                 v-if="canInstall"
-                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors"
+                class="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-teal-500/40 hover:text-teal-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                 type="button"
+                :aria-label="t('ownerLayout.installApp')"
                 :title="t('ownerLayout.installApp')"
                 @click="pwaInstall"
               >
-                ⬇ {{ t('ownerLayout.installApp') }}
+                <span aria-hidden="true">⬇</span> {{ t('ownerLayout.installApp') }}
               </button>
               <!-- Web Push bell (only when VAPID is configured) -->
               <button
                 v-if="pushSupported && pushEnabled"
-                class="relative flex h-8 w-8 items-center justify-center rounded-xl border transition-colors"
+                class="relative flex h-8 w-8 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ui-touch-target"
                 :class="pushSubscribed
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
                   : 'border-slate-700/50 bg-slate-800/50 text-slate-400 hover:border-slate-600'"
@@ -150,14 +150,15 @@
                 type="button"
                 @click="pushSubscribed ? pushUnsubscribe() : pushSubscribe()"
               >
-                <span class="text-sm leading-none" :class="pushLoading ? 'animate-pulse' : ''">
+                <span class="text-sm leading-none" :class="pushLoading ? 'animate-pulse' : ''" aria-hidden="true">
                   {{ pushSubscribed ? '🔔' : '🔕' }}
                 </span>
               </button>
               <div ref="settingsMenuRef" class="relative" @keydown.escape.stop="closeSettingsMenuByKey">
+                <!-- TODO: requires logic change — focus first menuitem on open, arrow-key navigation inside menu -->
                 <button
                   ref="settingsTriggerRef"
-                  class="owner-settings-trigger"
+                  class="owner-settings-trigger ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                   type="button"
                   :aria-expanded="settingsOpen ? 'true' : 'false'"
                   :aria-label="t('common.profile')"
@@ -169,57 +170,65 @@
                 <transition name="ui-fade">
                   <div v-if="settingsOpen" class="owner-settings-menu" role="menu" :aria-label="t('common.profile')">
                     <!-- Reports: in the top nav on desktop; shown here on mobile only -->
-                    <p class="owner-settings-section md:hidden">{{ t("ownerLayout.groupReports") }}</p>
-                    <RouterLink class="owner-settings-item md:hidden" role="menuitem" :to="{ name: 'owner-analytics' }" @click="closeSettingsMenu">
-                      <AppIcon name="chart" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerAnalytics.title") }}</span>
-                    </RouterLink>
+                    <div role="group" :aria-label="t('ownerLayout.groupReports')" class="md:hidden">
+                      <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupReports") }}</p>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-analytics' }" @click="closeSettingsMenu">
+                        <AppIcon name="chart" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerAnalytics.title") }}</span>
+                      </RouterLink>
+                    </div>
 
-                    <p class="owner-settings-section">{{ t("ownerLayout.groupMarketing") }}</p>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-promotions' }" @click="closeSettingsMenu">
-                      <AppIcon name="tag" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.promotions") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
-                      <AppIcon name="star" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.loyalty") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-ratings' }" @click="closeSettingsMenu">
-                      <AppIcon name="star" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.ratings") }}</span>
-                    </RouterLink>
+                    <div role="group" :aria-label="t('ownerLayout.groupMarketing')">
+                      <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupMarketing") }}</p>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-promotions' }" @click="closeSettingsMenu">
+                        <AppIcon name="tag" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.promotions") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-loyalty' }" @click="closeSettingsMenu">
+                        <AppIcon name="star" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.loyalty") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-ratings' }" @click="closeSettingsMenu">
+                        <AppIcon name="star" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.ratings") }}</span>
+                      </RouterLink>
+                    </div>
 
-                    <p class="owner-settings-section">{{ t("ownerLayout.groupOperations") }}</p>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
-                      <AppIcon name="menu" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.kitchen") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-wallet' }" @click="closeSettingsMenu">
-                      <AppIcon name="wallet" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.wallet") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-notifications' }" @click="closeSettingsMenu">
-                      <AppIcon name="info" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.notifications") }}</span>
-                    </RouterLink>
+                    <div role="group" :aria-label="t('ownerLayout.groupOperations')">
+                      <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupOperations") }}</p>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
+                        <AppIcon name="menu" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.kitchen") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-wallet' }" @click="closeSettingsMenu">
+                        <AppIcon name="wallet" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.wallet") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-notifications' }" @click="closeSettingsMenu">
+                        <AppIcon name="info" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.notifications") }}</span>
+                      </RouterLink>
+                    </div>
 
-                    <p class="owner-settings-section">{{ t("ownerLayout.groupAccount") }}</p>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">
-                      <AppIcon name="user" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerLayout.staff") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile' }" @click="closeSettingsMenu">
-                      <AppIcon name="settings" class="owner-settings-item-icon" />
-                      <span>{{ t("common.profile") }}</span>
-                    </RouterLink>
-                    <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile', query: { tab: 'billing' } }" @click="closeSettingsMenu">
-                      <AppIcon name="card" class="owner-settings-item-icon" />
-                      <span>{{ t("ownerBilling.tabLabel") }}</span>
-                    </RouterLink>
-                    <button class="owner-settings-item owner-settings-item-danger" role="menuitem" type="button" @click="handleSignOut">
-                      <AppIcon name="logout" class="owner-settings-item-icon" />
-                      <span>{{ t("common.signOut") }}</span>
-                    </button>
+                    <div role="group" :aria-label="t('ownerLayout.groupAccount')">
+                      <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupAccount") }}</p>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-staff' }" @click="closeSettingsMenu">
+                        <AppIcon name="user" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.staff") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile' }" @click="closeSettingsMenu">
+                        <AppIcon name="settings" class="owner-settings-item-icon" />
+                        <span>{{ t("common.profile") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-profile', query: { tab: 'billing' } }" @click="closeSettingsMenu">
+                        <AppIcon name="card" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerBilling.tabLabel") }}</span>
+                      </RouterLink>
+                      <button class="owner-settings-item owner-settings-item-danger" role="menuitem" type="button" @click="handleSignOut">
+                        <AppIcon name="logout" class="owner-settings-item-icon" />
+                        <span>{{ t("common.signOut") }}</span>
+                      </button>
+                    </div>
                   </div>
                 </transition>
               </div>
@@ -233,6 +242,7 @@
     <Transition name="ui-fade">
       <div
         v-if="tenant.isInGracePeriod || tenant.graceExpired"
+        role="alert"
         class="sticky top-0 z-[1900] w-full border-b px-4 py-2.5 text-center text-xs font-semibold"
         :class="tenant.graceExpired
           ? 'border-red-500/40 bg-red-500/15 text-red-200'
@@ -245,14 +255,14 @@
         <span v-else>{{ t('ownerLayout.gracePeriodWarning', { days: tenant.graceDaysRemaining }) }}</span>
         <RouterLink
           :to="{ name: 'owner-profile', query: { tab: 'billing' } }"
-          class="ml-2 underline opacity-80 hover:opacity-100"
+          class="ms-2 underline opacity-80 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1 focus-visible:ring-offset-transparent rounded"
         >{{ t('ownerLayout.gracePeriodCta') }}</RouterLink>
       </div>
     </Transition>
 
     <!-- Waiter-call alerts — live via WebSocket, persistent until acknowledged -->
     <div v-if="waiterCallsPending.length" class="mx-auto w-full max-w-7xl px-3 pt-2 sm:px-4">
-      <div class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+      <div role="alert" class="ui-panel border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
         <div class="flex items-center gap-2 text-sm font-semibold text-amber-300">
           <span class="relative flex h-2.5 w-2.5">
             <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
@@ -272,7 +282,7 @@
             </div>
             <button
               type="button"
-              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15"
+              class="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/15 ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               @click="acknowledgeWaiterCall(call.id)"
             >
               {{ t("ownerLayout.waiterCallAcknowledge") }}
@@ -281,6 +291,9 @@
         </ul>
       </div>
     </div>
+
+    <!-- Visually-hidden live region: announces pending-order count changes to screen readers -->
+    <span class="sr-only" aria-live="polite" aria-atomic="true">{{ pendingOrdersCount > 0 ? t('ownerLayout.ordersBadgeLabel', { count: pendingOrdersCount }) : '' }}</span>
 
     <main id="main-content" class="mx-auto w-full max-w-7xl px-3 py-3 pb-24 sm:px-4 md:py-5 md:pb-10">
       <RouterView v-slot="{ Component }">
@@ -712,7 +725,7 @@ watch(
 
 .owner-settings-menu {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   top: calc(100% + 0.5rem);
   z-index: 2200;
   min-width: 11rem;
@@ -754,6 +767,11 @@ watch(
   color: var(--color-secondary);
 }
 
+.owner-settings-item:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.55);
+}
+
 .owner-settings-item-danger:hover {
   color: rgb(252, 165, 165);
 }
@@ -792,6 +810,11 @@ watch(
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 
+.owner-main-nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.6);
+}
+
 .owner-nav-icon {
   width: 0.88rem;
   height: 0.88rem;
@@ -818,7 +841,7 @@ watch(
 .owner-orders-badge {
   position: absolute;
   top: -0.45rem;
-  right: -0.55rem;
+  inset-inline-end: -0.55rem;
   min-width: 1.1rem;
   height: 1.1rem;
   border-radius: 9999px;
@@ -836,7 +859,7 @@ watch(
 .owner-orders-badge-dock {
   position: absolute;
   top: -0.3rem;
-  right: -0.35rem;
+  inset-inline-end: -0.35rem;
   min-width: 0.95rem;
   height: 0.95rem;
   border-radius: 9999px;

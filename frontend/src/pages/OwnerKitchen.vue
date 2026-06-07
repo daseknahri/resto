@@ -4,52 +4,63 @@
     :class="{ 'kitchen-fullscreen': isFullscreen }"
   >
     <!-- Top bar -->
-    <div class="kitchen-topbar">
-      <div class="flex items-center gap-3">
-        <span class="text-xs font-semibold uppercase tracking-widest text-slate-400">
-          {{ t("kitchen.title") }}
-        </span>
+    <div class="kitchen-topbar" role="region" :aria-label="t('kitchen.displayHeader')">
+      <div class="flex items-center gap-2.5">
+        <span class="ui-kicker">{{ t("kitchen.title") }}</span>
         <!-- Offline / syncing indicator -->
         <span
           v-if="!waiter.isOnline"
           class="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-400"
+          role="status"
+          aria-live="polite"
         >{{ t("kitchen.offline") }}</span>
         <span
           v-else-if="waiter.isSyncing || waiter.queueLength > 0"
           class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400"
+          role="status"
+          aria-live="polite"
         >{{ t("kitchen.syncing") }}</span>
       </div>
 
       <div class="flex items-center gap-3">
         <!-- Active order count -->
-        <span class="text-sm font-bold text-white tabular-nums">
+        <span class="text-sm font-bold text-white tabular-nums" aria-live="polite" aria-atomic="true">
           {{ t("kitchen.activeCount", { n: activeOrders.length }) }}
         </span>
         <!-- Clock -->
-        <span class="font-mono text-sm tabular-nums text-slate-400">{{ clockDisplay }}</span>
+        <span class="font-mono text-sm tabular-nums text-slate-400" aria-hidden="true">{{ clockDisplay }}</span>
         <!-- Fullscreen toggle -->
         <button
-          class="rounded-xl border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 hover:border-slate-600 hover:text-slate-200 transition-colors"
+          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
           :aria-label="isFullscreen ? t('kitchen.exitFullscreen') : t('kitchen.enterFullscreen')"
+          :aria-pressed="isFullscreen"
           @click="toggleFullscreen"
-        >{{ isFullscreen ? "⤓" : "⤢" }}</button>
+        >
+          <svg v-if="isFullscreen" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+            <path fill-rule="evenodd" d="M5 10a.75.75 0 01.75-.75h8.5a.75.75 0 010 1.5h-8.5A.75.75 0 015 10z" clip-rule="evenodd"/>
+            <path d="M3 3.75A.75.75 0 013.75 3h3.5a.75.75 0 010 1.5h-2v2a.75.75 0 01-1.5 0v-2.75zm10 0a.75.75 0 01.75-.75h3.5a.75.75 0 01.75.75v2.75a.75.75 0 01-1.5 0v-2h-2a.75.75 0 01-.75-.75zM3 16.25A.75.75 0 013.75 17h3.5a.75.75 0 000-1.5h-2v-2a.75.75 0 00-1.5 0v2.75zm10.75.75a.75.75 0 01-.75-.75v-2.75a.75.75 0 011.5 0v2h2a.75.75 0 010 1.5h-2.75z"/>
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+            <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75zM12.22 13.28l3.22 3.22h-2.69a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75v-4.5a.75.75 0 00-1.5 0v2.69l-3.22-3.22a.75.75 0 10-1.06 1.06zM3.5 4.56l3.22 3.22a.75.75 0 001.06-1.06L4.56 3.5h2.69a.75.75 0 000-1.5h-4.5a.75.75 0 00-.75.75v4.5a.75.75 0 001.5 0V4.56z"/>
+          </svg>
+        </button>
       </div>
     </div>
 
     <!-- Station filter bar -->
-    <div class="kitchen-filter-bar">
+    <nav class="kitchen-filter-bar" :aria-label="t('kitchen.stationFilterNav')">
       <button
         v-for="f in stationFilters"
         :key="f.value"
-        class="kitchen-filter-btn"
+        class="kitchen-filter-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
         :class="stationFilter === f.value ? 'kitchen-filter-btn--active' : ''"
         :aria-pressed="stationFilter === f.value"
         @click="stationFilter = f.value"
       >
         {{ f.label }}
-        <span v-if="f.count > 0" class="kitchen-filter-count">{{ f.count }}</span>
+        <span v-if="f.count > 0" class="kitchen-filter-count" aria-hidden="true">{{ f.count }}</span>
       </button>
-    </div>
+    </nav>
 
     <!-- Loading: skeleton cards matching the kitchen-grid layout -->
     <div v-if="waiter.loading" class="kitchen-grid">
@@ -76,19 +87,24 @@
     </div>
 
     <!-- All-clear -->
-    <div v-else-if="!activeOrders.length" class="kitchen-empty">
-      <p class="text-5xl">✓</p>
-      <p class="mt-3 text-xl font-semibold text-slate-300">{{ t("kitchen.allClear") }}</p>
+    <div v-else-if="!activeOrders.length" class="kitchen-empty" role="status" aria-live="polite">
+      <!-- Checkmark icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-16 w-16 text-emerald-400/70" aria-hidden="true">
+        <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+      </svg>
+      <p class="mt-3 text-xl font-semibold text-slate-200">{{ t("kitchen.allClear") }}</p>
       <p class="mt-1 text-sm text-slate-500">{{ t("kitchen.allClearBody") }}</p>
     </div>
 
     <!-- Order grid -->
-    <div v-else class="kitchen-grid">
-      <div
-        v-for="order in activeOrders"
+    <div v-else class="kitchen-grid" role="list" :aria-label="t('kitchen.activeCount', { n: activeOrders.length })">
+      <article
+        v-for="(order, index) in activeOrders"
         :key="order.id"
-        class="kitchen-card"
+        class="kitchen-card ui-reveal"
         :class="cardClass(order.status)"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        role="listitem"
       >
         <!-- Status strip at top -->
         <div class="kitchen-strip" :class="stripClass(order.status)" />
@@ -103,11 +119,12 @@
               #{{ order.order_number }} · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span>
             </p>
           </div>
-          <div class="flex flex-col items-end gap-1.5 shrink-0">
+          <div class="flex shrink-0 flex-col items-end gap-1.5">
             <!-- Elapsed timer badge -->
             <span
               class="rounded-full border px-2 py-0.5 text-[11px] font-bold tabular-nums"
               :class="elapsedBadgeClass(elapsedMinutes(order))"
+              :aria-label="`${elapsedMinutes(order)}${t('kitchen.elapsedMin')} ${t('kitchen.elapsed')}`"
             >{{ elapsedMinutes(order) }}{{ t('kitchen.elapsedMin') }}</span>
             <!-- Status chip -->
             <span
@@ -118,24 +135,42 @@
         </div>
 
         <!-- Items -->
-        <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4">
+        <p class="sr-only">{{ t('kitchen.tapItemReady') }}</p>
+        <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
           <li
             v-for="(item, idx) in order.items"
             :key="item.id ?? idx"
             class="kitchen-item select-none"
-            :class="[item.id != null ? 'cursor-pointer' : '', item.is_ready ? 'opacity-45 line-through' : '']"
-            :title="item.id != null ? t('kitchen.tapItemReady') : ''"
-            @click="toggleItem(order, item)"
           >
-            <span class="kitchen-qty" :class="headlineColorClass(order.status)">{{ item.qty }}×</span>
-            <span class="kitchen-name">{{ item.dish_name }}</span>
-            <span v-if="item.note" class="ml-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
-            <span v-if="item.is_ready" class="ml-auto shrink-0 text-emerald-400">✓</span>
+            <button
+              v-if="item.id != null"
+              type="button"
+              class="flex w-full items-baseline gap-2 cursor-pointer ui-press text-start"
+              :class="item.is_ready ? 'opacity-45 line-through' : ''"
+              :title="t('kitchen.tapItemReady')"
+              :aria-pressed="item.is_ready"
+              @click="toggleItem(order, item)"
+            >
+              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
+              <span v-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
+                <!-- Checkmark icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
+                </svg>
+              </span>
+            </button>
+            <template v-else>
+              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
+            </template>
           </li>
         </ul>
 
         <!-- Notes -->
-        <div v-if="order.customer_note || order.owner_note" class="mt-2 space-y-1 px-4 text-xs">
+        <div v-if="order.customer_note || order.owner_note" class="mt-2 space-y-1 border-t border-slate-700/40 px-4 pt-2 text-xs">
           <p v-if="order.customer_note" class="text-slate-400">
             <span class="font-semibold text-slate-300">{{ t("kitchen.noteCustomer") }}: </span>{{ order.customer_note }}
           </p>
@@ -145,24 +180,32 @@
         </div>
 
         <!-- Action button -->
-        <div class="mt-auto px-4 pb-4 pt-3 space-y-2">
+        <div class="mt-auto space-y-2 px-4 pb-4 pt-3">
           <button
             v-if="waiter.nextStatus(order)"
-            class="kitchen-action-btn"
+            class="ui-btn-primary ui-touch-target w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
+            :aria-busy="waiter.updatingOrderIds.has(order.id)"
+            :aria-label="`${actionLabel(order)} — #${order.order_number}`"
             @click="advance(order.id)"
           >
-            <span v-if="waiter.updatingOrderIds.has(order.id)" class="animate-pulse">…</span>
+            <span v-if="waiter.updatingOrderIds.has(order.id)" class="animate-pulse" aria-hidden="true">…</span>
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
-          <p v-else class="text-center text-xs text-slate-500 italic">{{ t("kitchen.handedOff") }}</p>
+          <p v-else class="text-center text-xs italic text-slate-500">{{ t("kitchen.handedOff") }}</p>
           <button
-            class="w-full rounded-lg border border-slate-600/70 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-400 hover:text-white"
+            class="ui-btn-outline ui-press w-full gap-1.5"
+            :aria-label="`${t('ownerOrders.printTicket')} — #${order.order_number}`"
             @click="printTicket(order)"
-          >🖨 {{ t("ownerOrders.printTicket") }}</button>
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+              <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v2.879a2.25 2.25 0 0 0-.659 1.591v3.158A2.25 2.25 0 0 0 4.09 13.5H4.5v.5A1.5 1.5 0 0 0 6 15.5h4a1.5 1.5 0 0 0 1.5-1.5v-.5h.41a2.25 2.25 0 0 0 2.249-2.372l-.21-3.158A2.25 2.25 0 0 0 13.5 6.379V3.5A1.5 1.5 0 0 0 12 2H4Zm8.5 4.379-.097-.172A.75.75 0 0 0 11.75 6h-7.5a.75.75 0 0 0-.653.207L3.5 6.379V3.5a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2.879ZM10 8.5a.5.5 0 0 1 .5.5v4.5a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V9a.5.5 0 0 1 .5-.5h4Z" clip-rule="evenodd"/>
+            </svg>
+            {{ t("ownerOrders.printTicket") }}
+          </button>
         </div>
-      </div>
+      </article>
     </div>
   </div>
 </template>
@@ -488,16 +531,6 @@ const actionBtnClass = (s) => ({
   word-break: break-word;
 }
 
-.kitchen-action-btn {
-  width: 100%;
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  font-size: 1rem;
-  font-weight: 700;
-  text-align: center;
-  transition: opacity 0.15s;
-}
-
 /* Station filter bar */
 .kitchen-filter-bar {
   display: flex;
@@ -531,6 +564,25 @@ const actionBtnClass = (s) => ({
   border-color: rgba(245, 158, 11, 0.5);
   background: rgba(245, 158, 11, 0.12);
   color: rgb(251, 191, 36);
+}
+
+.kitchen-fs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  background: rgba(30, 41, 59, 0.55);
+  padding: 0.4rem 0.5rem;
+  color: rgb(148, 163, 184);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.kitchen-fs-btn:hover {
+  border-color: rgba(100, 116, 139, 0.8);
+  color: rgb(203, 213, 225);
+  background: rgba(30, 41, 59, 0.8);
 }
 
 .kitchen-filter-count {

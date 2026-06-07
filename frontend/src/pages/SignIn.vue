@@ -1,46 +1,46 @@
 <template>
   <div class="ui-auth-page flex items-center">
     <div class="ui-auth-stage">
-      <section class="ui-auth-spotlight relative space-y-6">
+      <div class="ui-auth-spotlight relative space-y-6" aria-hidden="true">
         <div class="relative space-y-3">
           <span class="ui-chip-strong w-fit">{{ t("signIn.kicker") }}</span>
-          <h1 class="ui-display max-w-lg text-4xl font-semibold text-white">{{ t("signIn.title") }}</h1>
+          <p class="ui-display max-w-lg text-4xl font-semibold text-white">{{ t("signIn.title") }}</p>
           <p class="max-w-md text-sm text-slate-300">{{ t("signIn.description") }}</p>
         </div>
 
         <div class="relative grid gap-3">
-          <article class="ui-orbit-card">
+          <div class="ui-orbit-card ui-reveal" :style="{ '--ui-delay': '0ms' }">
             <p class="ui-kicker">{{ t("common.workspace") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.identifier") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("signIn.firstTime") }}</p>
-          </article>
-          <article class="ui-orbit-card">
+          </div>
+          <div class="ui-orbit-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
             <p class="ui-kicker">{{ t("common.reserve") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("signIn.password") }}</p>
             <p class="mt-1 text-sm text-slate-400">{{ t("signIn.forgotPassword") }}</p>
-          </article>
+          </div>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-3">
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.workspace") }}</p>
+          <div class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '28ms' }">
+            <p class="ui-kicker">{{ t("common.workspace") }}</p>
             <p class="mt-1 text-xl font-semibold text-white">{{ t("common.owner") }}</p>
-          </article>
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.available") }}</p>
-            <p class="mt-1 text-xl font-semibold text-white">24/7</p>
-          </article>
-          <article class="ui-metric-card">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">{{ t("common.refresh") }}</p>
+          </div>
+          <div class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
+            <p class="ui-kicker">{{ t("common.available") }}</p>
+            <p class="mt-1 text-xl tabular-nums font-semibold text-white">{{ t("signIn.alwaysOn") }}</p>
+          </div>
+          <div class="ui-metric-card ui-reveal" :style="{ '--ui-delay': '84ms' }">
+            <p class="ui-kicker">{{ t("common.refresh") }}</p>
             <p class="mt-1 text-xl font-semibold text-white">{{ t("signIn.kicker") }}</p>
-          </article>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <div class="ui-auth-card space-y-6">
-        <div class="ui-hero-ribbon space-y-3 text-center">
+      <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
+        <div class="space-y-3 text-center">
           <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
-          <h2 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h2>
+          <h1 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h1>
           <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
         </div>
 
@@ -55,7 +55,7 @@
         </div>
 
         <form class="space-y-4" novalidate @submit.prevent="submit">
-          <label class="space-y-1 text-sm text-slate-200">
+          <label class="block space-y-1 text-sm text-slate-200">
             {{ t("signIn.identifier") }}
             <input
               v-model="identifier"
@@ -64,13 +64,13 @@
               class="ui-input"
               :class="fieldErrors.identifier ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.identifier ? 'true' : undefined"
-              aria-describedby="signin-identifier-error"
+              :aria-describedby="fieldErrors.identifier ? 'signin-identifier-error' : undefined"
               aria-required="true"
               @input="fieldErrors.identifier = ''"
             />
-            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300">{{ fieldErrors.identifier }}</p>
+            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.identifier }}</p>
           </label>
-          <label class="space-y-1 text-sm text-slate-200">
+          <label class="block space-y-1 text-sm text-slate-200">
             {{ t("signIn.password") }}
             <input
               v-model="password"
@@ -79,16 +79,16 @@
               class="ui-input"
               :class="fieldErrors.password ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.password ? 'true' : undefined"
-              aria-describedby="signin-password-error"
+              :aria-describedby="fieldErrors.password ? 'signin-password-error' : undefined"
               aria-required="true"
               @input="fieldErrors.password = ''"
             />
-            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300">{{ fieldErrors.password }}</p>
+            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.password }}</p>
           </label>
           <button
             type="submit"
             :disabled="session.loading"
-            class="ui-btn-primary w-full justify-center disabled:opacity-60"
+            class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
           >
             {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
           </button>
@@ -102,11 +102,11 @@
           <p class="font-medium text-slate-100">{{ t("signIn.firstTime") }}</p>
           <p>
             {{ t("signIn.firstTime") }}
-            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.activationLink") }}</RouterLink>
+            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:rounded-sm focus-visible:underline">{{ t("signIn.activationLink") }}</RouterLink>
           </p>
           <p>
             {{ t("signIn.forgotPassword") }}
-            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] hover:underline">{{ t("signIn.resetHere") }}</RouterLink>
+            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:rounded-sm focus-visible:underline">{{ t("signIn.resetHere") }}</RouterLink>
           </p>
         </div>
       </div>

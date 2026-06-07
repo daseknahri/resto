@@ -1,9 +1,8 @@
 <template>
   <div class="ui-shell">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
-    <header class="ui-header relative z-[100] static md:sticky md:top-0 md:z-[100]">
-      <div class="mx-auto w-full max-w-5xl px-3 py-1.5 sm:px-4 sm:py-2">
-        <div class="ui-workspace-stage overflow-visible px-2.5 py-2 sm:px-3.5 sm:py-2.5">
+    <header class="ui-header ui-reveal">
+      <div class="mx-auto w-full max-w-6xl px-4 py-3.5 sm:px-5 sm:py-4">
           <div class="flex items-center justify-between gap-3">
             <RouterLink :to="{ name: 'customer-home' }" class="flex min-w-0 items-center gap-3">
               <img
@@ -26,9 +25,10 @@
               <CurrencySelector />
               <!-- Color scheme toggle -->
               <button
-                class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                class="ui-touch-target ui-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/60 bg-slate-900/70 text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                 type="button"
                 :aria-label="t('customerLayout.toggleColorScheme')"
+                :aria-pressed="colorScheme === 'system'"
                 @click="toggleColorScheme"
               >
                 <svg v-if="colorScheme === 'dark'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
@@ -41,10 +41,14 @@
               <!-- PWA install -->
               <button
                 v-if="pwaCanInstall"
-                class="hidden sm:inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] transition-colors"
+                class="ui-press hidden items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 sm:inline-flex"
                 type="button"
+                :aria-label="t('customerLayout.installApp')"
                 @click="pwaInstall"
-              >⬇ {{ t('customerLayout.installApp') }}</button>
+              >
+                <AppIcon name="download" class="h-3 w-3" aria-hidden="true" />
+                {{ t('customerLayout.installApp') }}
+              </button>
               <!-- sr-only live region announces cart count changes to screen readers -->
               <span class="sr-only" aria-live="polite" aria-atomic="true">
                 {{ cart.count ? t('customerLayout.cartItems', { count: cart.count }) : '' }}
@@ -52,19 +56,18 @@
               <RouterLink
                 to="/cart"
                 :aria-label="cart.count ? `${t('customerLayout.viewCart')} (${t('customerLayout.cartItems', { count: cart.count })})` : t('customerLayout.viewCart')"
-                class="relative inline-flex min-h-[2.1rem] min-w-[2.1rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] sm:min-h-[2.3rem] sm:min-w-[2.3rem] sm:px-3 sm:text-sm"
+                class="ui-touch-target ui-press relative inline-flex min-h-[2.75rem] min-w-[2.75rem] items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2 text-xs font-semibold text-slate-100 transition-colors hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
               >
                 <AppIcon name="cart" class="h-4 w-4 sm:hidden" aria-hidden="true" />
                 <span class="hidden sm:inline" aria-hidden="true">{{ t("common.cart") }}</span>
                 <span
                   v-show="cart.count"
                   aria-hidden="true"
-                  class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold text-slate-950"
+                  class="absolute -end-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-semibold tabular-nums text-slate-950"
                 >
                   {{ cart.count }}
                 </span>
               </RouterLink>
-            </div>
             </div>
           </div>
 
@@ -74,42 +77,41 @@
               v-for="item in navItems"
               :key="`desktop-${item.key}`"
               :to="item.to"
-              class="ui-segmented-button min-w-[7rem]"
+              class="ui-segmented-button min-w-[7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
               :data-active="activeCustomerSection === item.key"
               :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
             >
-              <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
+              <AppIcon :name="item.icon" class="h-3.5 w-3.5" aria-hidden="true" />
               <span>{{ item.label }}</span>
-              <span v-if="item.badge" class="ml-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
-                {{ item.badge }}
-              </span>
+              <span v-if="item.badge" aria-hidden="true" class="ms-2 rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">{{ item.badge }}</span>
+              <span v-if="item.badge" class="sr-only">{{ t('customerLayout.signedIn') }}</span>
             </RouterLink>
           </nav>
         </div>
       </div>
     </header>
 
-    <div v-if="tenantNotice" class="mx-auto w-full max-w-5xl px-4 pt-3">
-      <div class="rounded-2xl border px-4 py-3 text-sm shadow-lg shadow-black/20" :class="tenantNotice.className">
+    <div v-if="tenantNotice" class="mx-auto w-full max-w-6xl px-4 pt-3">
+      <div :role="tenantNotice.isError ? 'alert' : 'status'" class="ui-state-strip px-4 py-3 text-sm" :class="tenantNotice.className">
         {{ tenantNotice.text }}
       </div>
     </div>
 
     <!-- Track-order banner: shown when a recent in-app order exists and user is not on the order-status page -->
-    <div v-if="trackBannerOrder" class="mx-auto w-full max-w-5xl px-4 pt-2">
-      <div class="flex items-center justify-between rounded-2xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5 shadow-lg shadow-black/20">
+    <div v-if="trackBannerOrder" class="mx-auto w-full max-w-6xl px-4 pt-2">
+      <div class="ui-panel-soft ui-reveal flex items-center justify-between border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-2.5">
         <RouterLink
           :to="{ name: 'order-status', params: { orderNumber: trackBannerOrder } }"
           class="flex min-w-0 items-center gap-2.5 text-sm font-semibold text-[var(--color-secondary)] hover:opacity-80"
         >
-          <span class="relative flex h-2.5 w-2.5 shrink-0">
+          <span aria-hidden="true" class="relative flex h-2.5 w-2.5 shrink-0">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-secondary)] opacity-50" />
             <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-secondary)]" />
           </span>
           <span class="truncate">{{ t("customerLayout.trackOrderBanner", { number: trackBannerOrder }) }}</span>
         </RouterLink>
         <button
-          class="ml-3 shrink-0 rounded-full p-1 text-slate-400 hover:text-slate-200"
+          class="ui-touch-target ui-press ms-3 shrink-0 rounded-full p-1 text-slate-400 transition-colors hover:text-slate-200"
           :aria-label="t('customerLayout.trackOrderDismiss')"
           @click="dismissTrackBanner"
         >
@@ -118,7 +120,7 @@
       </div>
     </div>
 
-    <main id="main-content" class="mx-auto w-full max-w-5xl pb-24 md:pb-8">
+    <main id="main-content" class="mx-auto w-full max-w-6xl pb-24 md:pb-8">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="ui-route" mode="out-in">
           <div :key="viewRoute.fullPath" class="ui-route-frame">
@@ -134,18 +136,18 @@
           v-for="item in navItems"
           :key="item.key"
           :to="item.to"
-          class="ui-press flex min-h-[2.8rem] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center transition"
+          class="ui-touch-target ui-press flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
           :class="navItemClass(item.key)"
           :aria-current="activeCustomerSection === item.key ? 'page' : undefined"
         >
-          <AppIcon :name="item.icon" class="h-3.5 w-3.5" />
+          <AppIcon :name="item.icon" class="h-3.5 w-3.5" aria-hidden="true" />
           <span class="text-[11px] font-semibold leading-none">{{ item.label }}</span>
           <span
             v-if="item.badge"
-            class="rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950"
-          >
-            {{ item.badge }}
-          </span>
+            aria-hidden="true"
+            class="tabular-nums rounded-full bg-[var(--color-secondary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-slate-950"
+          >{{ item.badge }}</span>
+          <span v-if="item.badge" class="sr-only">{{ t('customerLayout.signedIn') }}</span>
         </RouterLink>
       </div>
     </nav>
@@ -211,6 +213,7 @@ const tenantNotice = computed(() => {
   if (!profile) return null;
   if (profile.is_menu_temporarily_disabled) {
     return {
+      isError: true,
       className: "border-red-500/40 bg-red-500/10 text-red-200",
       text: profile.menu_disabled_note || t("customerLayout.menuDisabledFallback"),
     };

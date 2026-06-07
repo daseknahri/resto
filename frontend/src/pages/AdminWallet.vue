@@ -1,46 +1,51 @@
 ﻿<template>
-  <div class="p-6 space-y-6">
+  <div class="ui-page-shell space-y-5">
     <!-- Header -->
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-white">{{ t('adminWallet.title') }}</h1>
-        <p class="text-sm text-slate-400 mt-0.5">{{ t('adminWallet.subtitle') }}</p>
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="ui-kicker">{{ t('adminWallet.kicker') }}</p>
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl">{{ t('adminWallet.title') }}</h1>
+          <p class="ui-subtle mt-0.5 text-xs">{{ t('adminWallet.subtitle') }}</p>
+        </div>
       </div>
-    </div>
+    </header>
 
     <!-- Search + filter bar -->
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="relative flex-1 min-w-[200px]">
-        <AppIcon name="search" class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-        <input
-          v-model="search"
-          type="text"
-          class="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-          :aria-label="t('adminWallet.searchPlaceholder')"
-          :placeholder="t('adminWallet.searchPlaceholder')"
-          @input="onSearch"
-        />
+    <div class="ui-toolbar-band">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative min-w-[180px] flex-1">
+          <AppIcon name="search" class="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <input
+            v-model="search"
+            type="text"
+            class="ui-input ps-9"
+            :aria-label="t('adminWallet.searchPlaceholder')"
+            :placeholder="t('adminWallet.searchPlaceholder')"
+            @input="onSearch"
+          />
+        </div>
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-400">
+          <input v-model="showZero" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" @change="fetch" />
+          {{ t('adminWallet.showZero') }}
+        </label>
+        <button
+          class="ui-btn-outline ui-press px-4 py-2"
+          @click="fetch"
+        >{{ t('adminWallet.refresh') }}</button>
       </div>
-      <label class="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
-        <input v-model="showZero" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" @change="fetch" />
-        {{ t('adminWallet.showZero') }}
-      </label>
-      <button
-        class="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-2.5 text-sm text-slate-300 hover:border-slate-500 transition-colors"
-        @click="fetch"
-      >{{ t('adminWallet.refresh') }}</button>
     </div>
 
     <!-- Loading: skeleton table -->
-    <div v-if="loading" class="overflow-x-auto rounded-2xl border border-slate-700/60">
-      <table class="w-full text-sm">
+    <div v-if="loading" class="ui-table-wrap">
+      <table class="w-full min-w-[36rem] text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left">#</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">#</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminWallet.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminWallet.colContact') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminWallet.colBalance') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminWallet.colActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">
@@ -48,8 +53,8 @@
             <td class="px-4 py-3"><div class="h-2.5 w-4 rounded bg-slate-700/60" /></td>
             <td class="px-4 py-3"><div class="h-3 w-24 rounded bg-slate-700/60" /></td>
             <td class="px-4 py-3"><div class="h-2.5 w-28 rounded bg-slate-800/60" /></td>
-            <td class="px-4 py-3"><div class="ml-auto h-3 w-14 rounded bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="ml-auto h-3 w-16 rounded bg-slate-800/40" /></td>
+            <td class="px-4 py-3"><div class="ms-auto h-3 w-14 rounded bg-slate-800/50" /></td>
+            <td class="px-4 py-3"><div class="ms-auto h-3 w-16 rounded bg-slate-800/40" /></td>
           </tr>
         </tbody>
       </table>
@@ -57,44 +62,50 @@
 
     <!-- Error -->
     <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
-      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-      </svg>
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ t('adminWallet.fetchError') }}</p>
       <button
-        class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10"
+        class="ui-btn-outline ui-press shrink-0 px-3 py-1 text-xs text-red-300 hover:border-red-500/40"
         @click="fetch"
       >{{ t('common.retry') }}</button>
     </div>
 
-    <div v-else-if="!customers.length" class="py-10 text-center text-sm text-slate-400">{{ t('adminWallet.empty') }}</div>
+    <!-- Empty -->
+    <div v-else-if="!customers.length" class="ui-empty-state text-center p-6 space-y-1">
+      <p class="text-sm font-semibold text-slate-100">{{ t('adminWallet.emptyTitle') }}</p>
+      <p class="text-xs text-slate-400">{{ t('adminWallet.empty') }}</p>
+    </div>
 
     <!-- Table -->
-    <div v-else class="overflow-x-auto rounded-2xl border border-slate-700/60">
-      <table class="w-full text-sm">
+    <div v-else class="ui-table-wrap ui-reveal">
+      <table class="w-full min-w-[36rem] text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left">#</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colName') }}</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminWallet.colContact') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colBalance') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminWallet.colActions') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">#</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminWallet.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminWallet.colContact') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminWallet.colBalance') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminWallet.colActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">
-          <tr v-for="c in customers" :key="c.id" class="hover:bg-slate-800/30 transition-colors">
-            <td class="px-4 py-3 text-slate-500 text-xs">{{ c.id }}</td>
-            <td class="px-4 py-3 text-slate-200 font-medium">{{ c.name }}</td>
-            <td class="px-4 py-3 text-slate-400 text-xs">{{ c.phone || c.email || '—' }}</td>
-            <td class="px-4 py-3 text-right">
+          <tr
+            v-for="c in customers"
+            :key="c.id"
+            class="transition-colors hover:bg-slate-800/30"
+          >
+            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">{{ c.id }}</td>
+            <td class="px-4 py-3 font-medium text-slate-200">{{ c.name }}</td>
+            <td class="px-4 py-3 text-xs text-slate-400">{{ c.phone || c.email || '—' }}</td>
+            <td class="px-4 py-3 text-end">
               <span
-                class="font-semibold tabular-nums"
+                class="tabular-nums font-semibold"
                 :class="parseFloat(c.wallet_balance) > 0 ? 'text-emerald-400' : 'text-slate-500'"
-              >{{ fmtBalance(c.wallet_balance) }}</span>
+              ><span v-if="parseFloat(c.wallet_balance) > 0" aria-hidden="true">+</span>{{ fmtBalance(c.wallet_balance) }}</span>
             </td>
-            <td class="px-4 py-3 text-right">
+            <td class="px-4 py-3 text-end">
               <button
-                class="text-xs text-sky-400 hover:text-sky-300"
+                class="ui-press rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--color-primary)] hover:text-teal-300 ui-touch-target"
                 @click="openBonus(c)"
               >{{ t('adminWallet.bonus') }}</button>
             </td>
@@ -105,118 +116,116 @@
 
     <!-- Pagination -->
     <div v-if="total > pageSize" class="flex items-center justify-between text-xs text-slate-400">
-      <span>{{ t('adminWallet.showing', { from: (page - 1) * pageSize + 1, to: Math.min(page * pageSize, total), total }) }}</span>
+      <span class="tabular-nums">{{ t('adminWallet.showing', { from: (page - 1) * pageSize + 1, to: Math.min(page * pageSize, total), total }) }}</span>
       <div class="flex gap-2">
         <button
-          class="rounded-lg border border-slate-700 px-3 py-1.5 hover:border-slate-500 disabled:opacity-40"
+          class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-40"
           :disabled="page <= 1"
           @click="changePage(page - 1)"
-        >← {{ t('adminWallet.prev') }}</button>
+        ><span class="ltr:me-1 rtl:ms-1" aria-hidden="true">&#8592;</span>{{ t('adminWallet.prev') }}</button>
         <button
-          class="rounded-lg border border-slate-700 px-3 py-1.5 hover:border-slate-500 disabled:opacity-40"
+          class="ui-btn-outline ui-press px-3 py-1.5 text-xs disabled:opacity-40"
           :disabled="page * pageSize >= total"
           @click="changePage(page + 1)"
-        >{{ t('adminWallet.next') }} →</button>
+        >{{ t('adminWallet.next') }}<span class="ltr:ms-1 rtl:me-1" aria-hidden="true">&#8594;</span></button>
       </div>
     </div>
 
     <!-- Create Vouchers section -->
-    <div class="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-5 space-y-4">
+    <section class="ui-section-band ui-reveal p-5 space-y-4" :style="{ '--ui-delay': '60ms' }" aria-labelledby="voucher-section-title">
       <div>
-        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.voucherSectionTitle') }}</h2>
+        <p class="ui-kicker">{{ t('adminWallet.voucherKicker') }}</p>
+        <h2 id="voucher-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.voucherSectionTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.voucherSectionSubtitle') }}</p>
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <!-- Quantity -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.voucherQtyLabel') }}
-            <input
-              v-model="voucherQty"
-              type="number"
-              min="1"
-              max="50"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="voucher-qty" class="block text-xs text-slate-400">{{ t('adminWallet.voucherQtyLabel') }}</label>
+          <input
+            id="voucher-qty"
+            v-model="voucherQty"
+            type="number"
+            min="1"
+            max="50"
+            class="ui-input"
+          />
         </div>
         <!-- Amount -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.voucherAmountLabel') }}
-            <input
-              v-model="voucherAmount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-              :placeholder="t('adminWallet.voucherAmountPlaceholder')"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="voucher-amount" class="block text-xs text-slate-400">{{ t('adminWallet.voucherAmountLabel') }}</label>
+          <input
+            id="voucher-amount"
+            v-model="voucherAmount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            class="ui-input"
+            :placeholder="t('adminWallet.voucherAmountPlaceholder')"
+          />
         </div>
         <!-- Expiry -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.voucherExpiryLabel') }}
-            <input
-              v-model="voucherExpiry"
-              type="datetime-local"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="voucher-expiry" class="block text-xs text-slate-400">{{ t('adminWallet.voucherExpiryLabel') }}</label>
+          <input
+            id="voucher-expiry"
+            v-model="voucherExpiry"
+            type="datetime-local"
+            class="ui-input"
+          />
         </div>
         <!-- Note -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.voucherNoteLabel') }}
-            <input
-              v-model="voucherNote"
-              type="text"
-              maxlength="200"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-              :placeholder="t('adminWallet.voucherNotePlaceholder')"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="voucher-note" class="block text-xs text-slate-400">{{ t('adminWallet.voucherNoteLabel') }}</label>
+          <input
+            id="voucher-note"
+            v-model="voucherNote"
+            type="text"
+            maxlength="200"
+            class="ui-input"
+            :placeholder="t('adminWallet.voucherNotePlaceholder')"
+          />
         </div>
       </div>
       <div v-if="voucherGenError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ voucherGenError }}</p>
       </div>
       <button
-        class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-5 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+        class="ui-btn-primary disabled:opacity-50"
         :disabled="voucherGenerating"
         @click="generateVouchers"
       >{{ voucherGenerating ? t('adminWallet.voucherGenerating') : t('adminWallet.voucherGenerate') }}</button>
 
       <!-- Generated codes display -->
       <div v-if="generatedCodes.length" class="rounded-xl border border-emerald-700/40 bg-emerald-950/20 p-4 space-y-2">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-2">
           <p class="text-xs font-semibold text-emerald-400">{{ t('adminWallet.voucherCreatedTitle') }} ({{ generatedCodes.length }})</p>
           <button
-            class="text-xs text-sky-400 hover:text-sky-300"
+            class="ui-press text-xs font-medium text-slate-300 hover:text-slate-100 ui-touch-target"
             @click="copyAllCodes"
           >{{ copiedAll ? t('adminWallet.voucherCopied') : t('adminWallet.voucherCopyAll') }}</button>
+          <span role="status" aria-live="polite" class="sr-only">{{ copiedAll ? t('adminWallet.voucherCopied') : '' }}</span>
         </div>
         <div class="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
           <span
             v-for="code in generatedCodes"
             :key="code"
-            class="rounded-lg border border-emerald-700/40 bg-emerald-900/30 px-2.5 py-1 font-mono text-xs text-emerald-300 select-all cursor-text"
+            class="cursor-text select-all rounded-lg border border-emerald-700/40 bg-emerald-900/30 px-2.5 py-1 font-mono text-xs text-emerald-300"
           >{{ code }}</span>
         </div>
       </div>
 
       <!-- Recent vouchers (audit created / redeemed) -->
       <div class="border-t border-slate-700/60 pt-4 space-y-2">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ t('adminWallet.voucherListTitle') }}</p>
+        <p class="ui-kicker">{{ t('adminWallet.voucherListTitle') }}</p>
         <div v-if="loadingVouchers" class="space-y-1.5">
           <div v-for="i in 3" :key="i" class="h-9 animate-pulse rounded-lg bg-slate-800/50" />
         </div>
-        <p v-else-if="!vouchers.length" class="py-3 text-center text-xs text-slate-600 italic">{{ t('adminWallet.voucherListEmpty') }}</p>
+        <div v-else-if="!vouchers.length" class="py-3 text-center text-xs text-slate-500 italic">{{ t('adminWallet.voucherListEmpty') }}</div>
         <ul v-else class="divide-y divide-slate-800/70 overflow-hidden rounded-xl border border-slate-700/60">
           <li v-for="v in vouchers" :key="v.code" class="flex items-center justify-between gap-3 bg-slate-900/40 px-3 py-2 text-xs">
-            <div class="flex items-center gap-2.5 min-w-0">
+            <div class="flex min-w-0 items-center gap-2.5">
               <span class="font-mono text-slate-200">{{ v.code }}</span>
               <span class="tabular-nums text-emerald-300">{{ fmtBalance(v.amount) }}</span>
             </div>
@@ -227,154 +236,157 @@
           </li>
         </ul>
       </div>
-    </div>
+    </section>
 
     <!-- Fund a restaurant float -->
-    <div class="rounded-2xl border border-emerald-700/40 bg-emerald-950/15 p-5 space-y-4">
+    <section class="ui-panel p-5 space-y-4 ui-reveal" :style="{ '--ui-delay': '90ms' }" aria-labelledby="fund-section-title">
       <div>
-        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.fundTitle') }}</h2>
+        <p class="ui-kicker">{{ t('adminWallet.fundKicker') }}</p>
+        <h2 id="fund-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.fundTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.fundSubtitle') }}</p>
       </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <!-- Restaurant -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.fundRestaurantLabel') }}
-            <select
-              v-model="fundTenantId"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-            >
-              <option value="">{{ t('adminWallet.fundSelectPlaceholder') }}</option>
-              <option v-for="ten in fundTenants" :key="ten.id" :value="ten.id">
-                {{ ten.name }} — {{ fmtBalance(ten.float_balance) }}
-              </option>
-            </select>
-          </label>
+        <div class="space-y-1">
+          <label for="fund-restaurant" class="block text-xs text-slate-400">{{ t('adminWallet.fundRestaurantLabel') }}</label>
+          <select
+            id="fund-restaurant"
+            v-model="fundTenantId"
+            class="ui-input"
+          >
+            <option value="">{{ t('adminWallet.fundSelectPlaceholder') }}</option>
+            <option v-for="ten in fundTenants" :key="ten.id" :value="ten.id">
+              {{ ten.name }} — {{ fmtBalance(ten.float_balance) }}
+            </option>
+          </select>
         </div>
         <!-- Amount -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.fundAmountLabel') }}
-            <input
-              v-model="fundAmount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-              :placeholder="t('adminWallet.fundAmountPlaceholder')"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="fund-amount" class="block text-xs text-slate-400">{{ t('adminWallet.fundAmountLabel') }}</label>
+          <input
+            id="fund-amount"
+            v-model="fundAmount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            class="ui-input"
+            :placeholder="t('adminWallet.fundAmountPlaceholder')"
+          />
         </div>
         <!-- Note -->
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">
-            {{ t('adminWallet.fundNoteLabel') }}
-            <input
-              v-model="fundNote"
-              type="text"
-              maxlength="200"
-              class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-              :placeholder="t('adminWallet.fundNotePlaceholder')"
-            />
-          </label>
+        <div class="space-y-1">
+          <label for="fund-note" class="block text-xs text-slate-400">{{ t('adminWallet.fundNoteLabel') }}</label>
+          <input
+            id="fund-note"
+            v-model="fundNote"
+            type="text"
+            maxlength="200"
+            class="ui-input"
+            :placeholder="t('adminWallet.fundNotePlaceholder')"
+          />
         </div>
       </div>
       <div v-if="fundError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ fundError }}</p>
       </div>
       <button
-        class="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+        class="ui-btn-primary disabled:opacity-50"
         :disabled="fundSaving || !fundTenantId || !fundAmount"
         @click="fundFloat"
       >{{ fundSaving ? t('adminWallet.fundSaving') : t('adminWallet.fundBtn') }}</button>
-    </div>
+    </section>
 
     <!-- Platform settings: wallet charge approval threshold -->
-    <div class="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-5 space-y-3">
+    <section class="ui-panel p-5 space-y-3 ui-reveal" :style="{ '--ui-delay': '120ms' }" aria-labelledby="settings-section-title">
       <div>
-        <h2 class="text-sm font-bold text-white">{{ t('adminWallet.settingsTitle') }}</h2>
+        <p class="ui-kicker">{{ t('adminWallet.settingsKicker') }}</p>
+        <h2 id="settings-section-title" class="text-sm font-semibold text-white">{{ t('adminWallet.settingsTitle') }}</h2>
         <p class="text-xs text-slate-400 mt-0.5">{{ t('adminWallet.settingsSubtitle') }}</p>
       </div>
       <div class="flex flex-wrap items-end gap-3">
-        <label class="block text-xs text-slate-400">
-          {{ t('adminWallet.thresholdLabel') }}
+        <div class="space-y-1">
+          <label for="threshold-input" class="block text-xs text-slate-400">{{ t('adminWallet.thresholdLabel') }}</label>
           <input
+            id="threshold-input"
             v-model="threshold"
             type="number"
             step="0.01"
             min="0"
-            class="mt-1 w-40 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
+            class="ui-input w-40"
             :placeholder="t('adminWallet.thresholdPlaceholder')"
           />
-        </label>
+        </div>
         <button
-          class="rounded-full bg-slate-700 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition-colors"
+          class="ui-btn-outline ui-press disabled:opacity-50"
           :disabled="settingsSaving || threshold === ''"
           @click="saveSettings"
         >{{ settingsSaving ? t('adminWallet.thresholdSaving') : t('adminWallet.thresholdSave') }}</button>
       </div>
       <p class="text-[11px] text-slate-500">{{ t('adminWallet.thresholdHint') }}</p>
-      <p v-if="settingsError" class="text-xs text-red-300" role="alert">{{ settingsError }}</p>
-    </div>
+      <div v-if="settingsError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <p class="flex-1 text-sm text-red-300">{{ settingsError }}</p>
+      </div>
+    </section>
 
     <!-- Bonus modal -->
     <Teleport to="body">
-      <Transition
-        enter-active-class="transition-all duration-200"
-        enter-from-class="opacity-0 translate-y-4"
-        leave-active-class="transition-all duration-150"
-        leave-to-class="opacity-0 translate-y-4"
-      >
+      <Transition name="ui-fade">
         <div
           v-if="bonusTarget"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           @click.self="bonusTarget = null"
-          @keydown.esc="bonusTarget = null"
         >
-          <div ref="bonusDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-wallet-bonus-dialog-title" class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h2 id="admin-wallet-bonus-dialog-title" class="text-sm font-bold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
+          <div
+            ref="bonusDialogRef"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-wallet-bonus-dialog-title"
+            tabindex="-1"
+            class="ui-panel w-full max-w-sm p-6 space-y-4"
+            @keydown.esc="bonusTarget = null"
+          >
+            <h2 id="admin-wallet-bonus-dialog-title" class="text-sm font-semibold text-white">{{ t('adminWallet.bonusTitle') }}</h2>
             <p class="text-xs text-slate-400">
               {{ bonusTarget.name }}
-              <span class="ml-2 text-slate-500">{{ t('adminWallet.currentBalance') }}: {{ fmtBalance(bonusTarget.wallet_balance) }}</span>
+              <span class="ms-2 text-slate-500 tabular-nums">{{ t('adminWallet.currentBalance') }}: {{ fmtBalance(bonusTarget.wallet_balance) }}</span>
             </p>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">
-                {{ t('adminWallet.bonusAmount') }}
-                <input
-                  v-model="bonusAmount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-                  :placeholder="t('adminWallet.bonusAmountPlaceholder')"
-                />
-              </label>
+            <div class="space-y-1">
+              <label for="bonus-amount" class="block text-xs text-slate-400">{{ t('adminWallet.bonusAmount') }}</label>
+              <input
+                id="bonus-amount"
+                v-model="bonusAmount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                class="ui-input"
+                :placeholder="t('adminWallet.bonusAmountPlaceholder')"
+              />
             </div>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">
-                {{ t('adminWallet.bonusNote') }}
-                <input
-                  v-model="bonusNote"
-                  type="text"
-                  maxlength="200"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none"
-                  :placeholder="t('adminWallet.bonusNotePlaceholder')"
-                />
-              </label>
+            <div class="space-y-1">
+              <label for="bonus-note" class="block text-xs text-slate-400">{{ t('adminWallet.bonusNote') }}</label>
+              <input
+                id="bonus-note"
+                v-model="bonusNote"
+                type="text"
+                maxlength="200"
+                class="ui-input"
+                :placeholder="t('adminWallet.bonusNotePlaceholder')"
+              />
             </div>
             <div v-if="bonusError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
               <p class="flex-1 text-sm text-red-300">{{ bonusError }}</p>
             </div>
             <div class="flex gap-3">
               <button
-                class="flex-1 rounded-full bg-[var(--color-secondary,#f59e0b)] py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                class="ui-btn-primary flex-1 disabled:opacity-50"
                 :disabled="bonusSaving || !bonusAmount"
                 @click="issueBonus"
-              >{{ bonusSaving ? '…' : t('adminWallet.bonusIssue') }}</button>
+              >{{ bonusSaving ? t('adminWallet.bonusSaving') : t('adminWallet.bonusIssue') }}</button>
               <button
-                class="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-slate-400"
+                class="ui-btn-outline ui-press px-4"
                 @click="bonusTarget = null"
               >{{ t('adminWallet.cancel') }}</button>
             </div>

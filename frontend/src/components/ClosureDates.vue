@@ -1,48 +1,54 @@
-﻿<template>
-  <div class="space-y-4">
+<template>
+  <div class="space-y-3">
     <!-- Add new closure date -->
-    <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
-      <p class="text-sm font-medium text-slate-200">{{ t('closureDates.addDate') }}</p>
+    <section class="ui-panel p-4 space-y-3 ui-reveal" aria-labelledby="closure-add-heading">
+      <p class="ui-kicker">{{ t('closureDates.addDate') }}</p>
+      <h2 id="closure-add-heading" class="text-lg font-semibold text-white leading-tight">{{ t('closureDates.addDateTitle') }}</h2>
       <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
-        <div class="flex-1 space-y-1">
-          <label class="text-xs text-slate-400">{{ t('closureDates.date') }}</label>
+        <div class="min-w-0 flex-1 space-y-1">
+          <label for="closure-date" class="text-xs text-slate-400">{{ t('closureDates.date') }}</label>
           <input
+            id="closure-date"
             v-model="newDate"
             type="date"
             :min="todayStr"
-            :aria-label="t('closureDates.date')"
-            class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 focus:border-[var(--color-secondary)] focus:outline-none"
+            class="ui-input"
+            required
+            aria-required="true"
+            :aria-describedby="addError ? 'closure-add-error' : undefined"
           />
         </div>
-        <div class="flex-1 space-y-1">
-          <label class="text-xs text-slate-400">{{ t('closureDates.labelOptional') }}</label>
+        <div class="min-w-0 flex-1 space-y-1">
+          <label for="closure-label" class="text-xs text-slate-400">{{ t('closureDates.labelOptional') }}</label>
           <input
+            id="closure-label"
             v-model="newLabel"
             type="text"
             maxlength="100"
             :placeholder="t('closureDates.labelPlaceholder')"
-            :aria-label="t('closureDates.labelOptional')"
-            class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:border-[var(--color-secondary)] focus:outline-none"
+            class="ui-input"
             @keyup.enter="addDate"
           />
         </div>
         <button
-          class="rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 sm:flex-none"
+          class="ui-btn-primary ui-press ui-touch-target shrink-0 gap-1.5 disabled:opacity-50"
           :disabled="!newDate || saving"
+          :aria-busy="saving"
           @click="addDate"
         >
           {{ saving ? t('common.saving') : t('closureDates.add') }}
         </button>
       </div>
-      <div v-if="addError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <div v-if="addError" id="closure-add-error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ addError }}</p>
       </div>
-    </div>
+    </section>
 
     <!-- Existing closure dates list -->
-    <div v-if="loading" class="space-y-2">
-      <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+    <p class="ui-kicker">{{ t('closureDates.scheduledKicker') }}</p>
+    <div v-if="loading" class="space-y-2" role="status" :aria-label="t('common.loading')">
+      <div v-for="i in 2" :key="i" class="flex animate-pulse items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3" aria-hidden="true">
         <div class="space-y-1.5">
           <div class="h-3.5 w-24 rounded bg-slate-700/60" />
           <div class="h-3 w-32 rounded bg-slate-800/50" />
@@ -51,43 +57,47 @@
       </div>
     </div>
 
-    <div v-else-if="dates.length === 0" class="rounded-2xl border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">
-      {{ t('closureDates.empty') }}
+    <div v-else-if="dates.length === 0" class="ui-empty-state text-center space-y-1">
+      <p class="text-sm font-semibold text-slate-100">{{ t('closureDates.emptyTitle') }}</p>
+      <p class="text-xs text-slate-400">{{ t('closureDates.emptyBody') }}</p>
     </div>
 
     <ul v-else class="space-y-2">
       <li
-        v-for="closure in sortedDates"
+        v-for="(closure, index) in sortedDates"
         :key="closure.id"
-        class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
+        class="ui-reveal"
         :class="isPast(closure.date) ? 'opacity-50' : ''"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-slate-200">{{ formatDate(closure.date) }}</p>
-          <p v-if="closure.label" class="mt-0.5 truncate text-xs text-slate-500">{{ closure.label }}</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <span
-            v-if="isPast(closure.date)"
-            class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-500"
-          >
-            {{ t('closureDates.past') }}
-          </span>
-          <span
-            v-else-if="isToday(closure.date)"
-            class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300"
-          >
-            {{ t('closureDates.today') }}
-          </span>
-          <button
-            class="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
-            :aria-label="t('common.remove')"
-            @click="removeDate(closure.id)"
-          >
-            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
-              <path d="M3 3l10 10M13 3L3 13" />
-            </svg>
-          </button>
+        <div class="ui-panel flex items-center justify-between gap-3 px-4 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium text-slate-200">{{ formatDate(closure.date) }}</p>
+            <p v-if="closure.label" class="mt-0.5 truncate text-xs text-slate-500">{{ closure.label }}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <span
+              v-if="isPast(closure.date)"
+              class="ui-chip text-[10px]"
+            >
+              {{ t('closureDates.past') }}
+            </span>
+            <span
+              v-else-if="isToday(closure.date)"
+              class="ui-chip-strong text-[10px]"
+            >
+              {{ t('closureDates.today') }}
+            </span>
+            <button
+              class="ui-btn-outline ui-press ui-touch-target p-2 shrink-0 hover:border-red-500/50 hover:text-red-400"
+              :aria-label="`${t('common.remove')} ${formatDate(closure.date)}`"
+              @click="removeDate(closure.id)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+                <path d="M3 3l10 10M13 3L3 13" />
+              </svg>
+            </button>
+          </div>
         </div>
       </li>
     </ul>

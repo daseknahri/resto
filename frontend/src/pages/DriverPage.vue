@@ -1,18 +1,17 @@
 <template>
-  <div class="mx-auto w-full max-w-md px-4 py-5 space-y-4">
+  <main class="ui-page-shell space-y-4">
     <!-- Header -->
-    <div class="space-y-0.5">
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5">
       <p class="ui-kicker">{{ t('driver.kicker') }}</p>
-      <h1 class="ui-display text-2xl font-semibold text-white">{{ t('driver.title') }}</h1>
-    </div>
+      <h1 class="ui-display text-2xl font-semibold leading-tight text-white">{{ t('driver.title') }}</h1>
+    </header>
 
     <!-- Loading -->
-    <div v-if="!customerStore.loaded" class="ui-panel p-6">
-      <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-emerald-400" />
-    </div>
+    <div v-if="!customerStore.loaded" class="ui-skeleton h-28" aria-busy="true" :aria-label="t('common.loading')" />
 
     <!-- Not signed in -->
-    <div v-else-if="!customerStore.isAuthenticated" class="ui-panel p-5 space-y-3 text-center">
+    <div v-else-if="!customerStore.isAuthenticated" class="ui-empty-state text-center space-y-3 ui-reveal">
+      <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
       <p class="text-sm text-slate-300">{{ t('driver.signInPrompt') }}</p>
       <RouterLink :to="{ name: 'customer-account' }" class="ui-btn-primary inline-flex px-5 py-2 text-sm">
         {{ t('driver.signInCta') }}
@@ -20,54 +19,66 @@
     </div>
 
     <!-- Signed in but not yet a driver -->
-    <div v-else-if="!isDriver" class="ui-panel p-5 space-y-3">
+    <div v-else-if="!isDriver" class="ui-panel p-5 space-y-3 ui-reveal">
       <div class="flex items-center gap-2.5">
-        <div class="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
-          <AppIcon name="truck" class="h-4.5 w-4.5 text-emerald-300" />
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+          <AppIcon name="truck" class="h-4.5 w-4.5 text-emerald-300" aria-hidden="true" />
         </div>
         <p class="text-base font-semibold text-slate-100">{{ t('driver.becomeTitle') }}</p>
       </div>
-      <p class="text-sm text-slate-400">{{ t('driver.becomeDesc') }}</p>
+      <p class="ui-subtle">{{ t('driver.becomeDesc') }}</p>
 
       <!-- Install the app first (drivers work from the installed app) -->
       <div v-if="!isStandalone && !continueInBrowser" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
         <p class="text-sm font-semibold text-emerald-200">{{ t('driver.installTitle') }}</p>
         <p class="text-xs text-slate-300">{{ t('driver.installDesc') }}</p>
-        <button v-if="canInstall" class="ui-btn-primary w-full py-2 text-sm" @click="promptInstall">
+        <button v-if="canInstall" class="ui-btn-primary ui-touch-target w-full py-2 text-sm" @click="promptInstall">
           {{ t('driver.installCta') }}
         </button>
         <p v-else class="text-xs text-slate-400">{{ t('driver.installManual') }}</p>
-        <button class="text-[11px] text-slate-500 underline hover:text-slate-300" @click="continueInBrowser = true">
+        <button class="ui-touch-target text-[11px] text-slate-500 underline hover:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400" @click="continueInBrowser = true">
           {{ t('driver.continueInBrowser') }}
         </button>
       </div>
 
       <!-- Apply (after install, or after explicitly continuing in the browser) -->
       <template v-else>
-        <div class="space-y-1">
-          <label class="text-xs font-medium text-slate-400">{{ t('driver.vehicleLabel') }}</label>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-slate-400" for="driver-vehicle">{{ t('driver.vehicleLabel') }}</label>
           <input
+            id="driver-vehicle"
             v-model.trim="vehicle"
             type="text"
-            class="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+            class="ui-input"
             :placeholder="t('driver.vehiclePlaceholder')"
           />
         </div>
-        <p v-if="errorMsg" class="text-xs text-red-300">{{ errorMsg }}</p>
-        <button class="ui-btn-primary w-full px-5 py-2.5 text-sm" :disabled="busy" @click="becomeDriver">
-          {{ busy ? '…' : t('driver.becomeCta') }}
-        </button>
+        <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
+        </div>
+        <button
+          class="ui-btn-primary ui-touch-target w-full px-5 py-2.5 text-sm"
+          :disabled="busy"
+          :aria-busy="busy"
+          :aria-label="busy ? t('common.loading') : undefined"
+          @click="becomeDriver"
+        >{{ busy ? '…' : t('driver.becomeCta') }}</button>
       </template>
     </div>
 
     <!-- Applied, awaiting admin approval -->
-    <div v-else-if="!approved" class="ui-panel p-5 space-y-3 text-center">
+    <div v-else-if="!approved" class="ui-panel p-5 space-y-3 text-center ui-reveal">
       <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
-        <AppIcon name="info" class="h-5 w-5 text-amber-300" />
+        <AppIcon name="info" class="h-5 w-5 text-amber-300" aria-hidden="true" />
       </div>
       <p class="text-base font-semibold text-slate-100">{{ t('driver.pendingTitle2') }}</p>
-      <p class="text-sm text-slate-400">{{ t('driver.pendingDesc') }}</p>
-      <button class="text-xs text-slate-400 hover:text-slate-200" :disabled="busy" @click="fetchStatus">
+      <p class="ui-subtle">{{ t('driver.pendingDesc') }}</p>
+      <button
+        class="ui-btn-outline ui-press px-4 py-2 text-xs"
+        :disabled="busy"
+        @click="fetchStatus"
+      >
         {{ t('driver.refresh') }}
       </button>
     </div>
@@ -75,57 +86,65 @@
     <!-- Driver dashboard (approved) -->
     <template v-else>
       <!-- Online toggle -->
-      <div class="ui-panel flex items-center justify-between gap-3 p-4">
+      <div class="ui-panel flex items-center justify-between gap-3 p-4 ui-reveal">
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <span class="h-2.5 w-2.5 rounded-full" :class="online ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'" />
+            <span
+              class="ui-live-dot"
+              :class="online ? 'bg-emerald-400' : 'bg-slate-600'"
+              aria-hidden="true"
+            />
             <p class="text-sm font-semibold" :class="online ? 'text-emerald-300' : 'text-slate-400'">
               {{ online ? t('driver.online') : t('driver.offline') }}
             </p>
           </div>
           <p class="mt-0.5 text-xs text-slate-500">{{ online ? t('driver.onlineHint') : t('driver.offlineHint') }}</p>
-          <p v-if="geoError" class="mt-1 text-xs text-amber-300">{{ geoError }}</p>
+          <p v-if="geoError" class="mt-1 text-xs text-amber-300" role="status">{{ geoError }}</p>
         </div>
         <button
-          class="shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-          :class="online ? 'border border-slate-600 text-slate-300 hover:border-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-500'"
+          class="ui-press shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          :class="online ? 'border border-slate-600 text-slate-300 hover:border-slate-400 focus-visible:outline-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-500 focus-visible:outline-emerald-400'"
           :disabled="busy"
+          role="switch"
+          :aria-checked="online"
+          :aria-label="online ? t('driver.online') : t('driver.offline')"
           @click="toggleOnline"
         >
           {{ online ? t('driver.goOffline') : t('driver.goOnline') }}
         </button>
       </div>
 
-      <p v-if="errorMsg" class="rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2 text-sm text-red-300" role="alert">
-        {{ errorMsg }}
-      </p>
+      <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+        <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+        <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
+      </div>
 
       <!-- Earnings summary -->
-      <div v-if="earnings" class="ui-panel grid grid-cols-3 gap-2 p-4">
-        <div class="text-center">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.earned') }}</p>
+      <div v-if="earnings" class="ui-panel grid grid-cols-3 gap-px overflow-hidden p-0 ui-reveal">
+        <div class="flex flex-col items-center justify-center px-3 py-3 text-center">
+          <p class="ui-stat-label">{{ t('driver.earned') }}</p>
           <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-200">{{ fmtMoney(earnings.earned) }}</p>
         </div>
-        <div class="text-center">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.paidOut') }}</p>
+        <div class="flex flex-col items-center justify-center border-x border-slate-700/40 px-3 py-3 text-center">
+          <p class="ui-stat-label">{{ t('driver.paidOut') }}</p>
           <p class="mt-0.5 text-sm font-bold tabular-nums text-slate-400">{{ fmtMoney(earnings.paid) }}</p>
         </div>
-        <div class="text-center">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.owed') }}</p>
+        <div class="flex flex-col items-center justify-center px-3 py-3 text-center">
+          <p class="ui-stat-label">{{ t('driver.owed') }}</p>
           <p class="mt-0.5 text-sm font-bold tabular-nums text-emerald-400">{{ fmtMoney(earnings.owed) }}</p>
         </div>
       </div>
 
       <!-- Cash-out: available wallet balance + redeem at a restaurant -->
-      <div v-if="earnings" class="ui-panel p-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('driver.available') }}</p>
+      <div v-if="earnings" class="ui-panel p-4 space-y-3 ui-reveal">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="ui-stat-label">{{ t('driver.available') }}</p>
             <p class="text-lg font-bold tabular-nums text-white">{{ fmtMoney(earnings.available) }}</p>
           </div>
           <button
             v-if="!cashout"
-            class="ui-btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+            class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-xs disabled:opacity-50"
             :disabled="!earnings.can_cash_out || busy"
             @click="requestCashout"
           >{{ t('driver.cashOut') }}</button>
@@ -134,20 +153,26 @@
           {{ t('driver.cashOutMin', { amount: fmtMoney(earnings.cashout_min) }) }}
         </p>
         <!-- Active cash-out request: show the code to read to a restaurant -->
-        <div v-if="cashout" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 text-center">
-          <p class="text-[11px] text-emerald-200">{{ t('driver.cashOutShowCode', { amount: fmtMoney(cashout.amount) }) }}</p>
-          <p class="my-1 text-3xl font-bold tracking-[0.3em] text-white">{{ cashout.code }}</p>
-          <button class="text-[11px] text-slate-400 underline hover:text-slate-200" :disabled="busy" @click="cancelCashout">
+        <div v-if="cashout" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4 text-center space-y-2">
+          <p class="text-xs font-medium text-emerald-200">{{ t('driver.cashOutShowCode', { amount: fmtMoney(cashout.amount) }) }}</p>
+          <p class="my-1 text-3xl font-bold tracking-[0.3em] text-white tabular-nums">
+            <span class="sr-only">{{ t('driver.cashOutCode') }}: </span>{{ cashout.code }}
+          </p>
+          <button
+            class="ui-btn-outline ui-press px-4 py-1.5 text-xs"
+            :disabled="busy"
+            @click="cancelCashout"
+          >
             {{ t('driver.cashOutCancel') }}
           </button>
         </div>
       </div>
 
       <!-- Active job -->
-      <div v-if="activeJob" class="ui-panel p-4 space-y-3">
-        <div class="flex items-center justify-between">
+      <div v-if="activeJob" class="ui-panel p-4 space-y-3 ui-reveal">
+        <div class="flex items-center justify-between gap-2">
           <p class="text-sm font-semibold text-slate-200">{{ t('driver.activeTitle') }}</p>
-          <span class="rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+          <span class="ui-status-pill">
             {{ statusLabel(activeJob.status) }}
           </span>
         </div>
@@ -157,7 +182,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
           <span v-if="activeJob.distance_km != null" class="inline-flex items-center gap-1">
-            <AppIcon name="location" class="h-3 w-3" />{{ t('driver.distanceKm', { km: activeJob.distance_km }) }}
+            <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: activeJob.distance_km }) }}
           </span>
           <span v-if="activeJob.items_count">{{ t('driver.itemsCount', { n: activeJob.items_count }) }}</span>
         </div>
@@ -174,7 +199,7 @@
           v-else-if="activeJob.order_total"
           class="flex items-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-900/15 px-3 py-2 text-xs font-semibold text-emerald-300"
         >
-          <AppIcon name="check" class="h-3.5 w-3.5" />{{ t('driver.prepaid', { amount: fmtMoney(activeJob.order_total) }) }}
+          <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />{{ t('driver.prepaid', { amount: fmtMoney(activeJob.order_total) }) }}
         </div>
 
         <div class="space-y-2">
@@ -182,47 +207,50 @@
             v-if="activeJob.pickup_address || activeJob.pickup_lat"
             :href="mapsLink(activeJob.pickup_lat, activeJob.pickup_lng, activeJob.pickup_address)"
             target="_blank" rel="noopener"
-            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
+            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            :aria-label="t('driver.pickup')"
           >
-            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
             <div class="min-w-0 flex-1">
               <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.pickup') }}</p>
               <p class="truncate text-sm text-slate-200">{{ activeJob.pickup_address || t('driver.openMaps') }}</p>
             </div>
-            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600" />
+            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
           </a>
           <a
             v-if="activeJob.delivery_address || activeJob.delivery_lat"
             :href="mapsLink(activeJob.delivery_lat, activeJob.delivery_lng, activeJob.delivery_address)"
             target="_blank" rel="noopener"
-            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5"
+            class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            :aria-label="t('driver.dropoff')"
           >
-            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+            <AppIcon name="location" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
             <div class="min-w-0 flex-1">
               <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.dropoff') }}</p>
               <p class="truncate text-sm text-slate-200">{{ activeJob.delivery_address || t('driver.openMaps') }}</p>
             </div>
-            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600" />
+            <AppIcon name="chevronRight" class="mt-1 h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
           </a>
 
           <!-- Call the customer (only the assigned driver sees the phone) -->
           <a
             v-if="activeJob.customer_phone"
             :href="`tel:${activeJob.customer_phone}`"
-            class="flex items-center gap-2.5 rounded-xl border border-sky-700/50 bg-sky-900/20 px-3 py-2.5"
+            class="flex items-center gap-2.5 rounded-xl border border-sky-700/50 bg-sky-900/20 px-3 py-2.5 transition-colors hover:border-sky-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+            :aria-label="`${t('driver.callCustomer')}: ${activeJob.customer_name || activeJob.customer_phone}`"
           >
-            <AppIcon name="phone" class="h-4 w-4 shrink-0 text-sky-300" />
+            <AppIcon name="phone" class="h-4 w-4 shrink-0 text-sky-300" aria-hidden="true" />
             <div class="min-w-0 flex-1">
               <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.callCustomer') }}</p>
               <p class="truncate text-sm text-slate-200">{{ activeJob.customer_name || activeJob.customer_phone }}</p>
             </div>
-            <span class="text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
+            <span class="shrink-0 text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
           </a>
         </div>
 
         <!-- What's in the order -->
         <div v-if="activeJob.items && activeJob.items.length" class="rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2">
-          <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.itemsTitle') }}</p>
+          <p class="mb-1.5 text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.itemsTitle') }}</p>
           <ul class="space-y-0.5">
             <li v-for="(it, idx) in activeJob.items" :key="idx" class="flex justify-between gap-2 text-sm text-slate-300">
               <span class="truncate">{{ it.name }}</span>
@@ -237,25 +265,29 @@
         </div>
 
         <!-- Reminder: confirm delivery with the customer's code -->
-        <p
+        <div
           v-if="nextAction && nextAction.to === 'delivered'"
-          class="flex items-start gap-1.5 rounded-lg bg-sky-900/15 px-2.5 py-1.5 text-[11px] text-sky-300"
+          class="flex items-start gap-1.5 rounded-lg bg-sky-900/15 px-2.5 py-2 text-[11px] text-sky-300"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
         >
-          <AppIcon name="info" class="mt-px h-3 w-3 shrink-0" />{{ t('driver.codeReminder') }}
-        </p>
+          <AppIcon name="info" class="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
+          <span>{{ t('driver.codeReminder') }}</span>
+        </div>
 
         <!-- Advance status -->
         <button
           v-if="nextAction"
-          class="ui-btn-primary w-full px-5 py-2.5 text-sm"
+          class="ui-btn-primary ui-touch-target w-full px-5 py-2.5 text-sm"
           :disabled="busy"
+          :aria-busy="busy"
+          :aria-label="busy ? t('common.loading') : undefined"
           @click="advance(nextAction.to)"
-        >
-          {{ busy ? '…' : nextAction.label }}
-        </button>
+        >{{ busy ? '…' : nextAction.label }}</button>
         <button
           v-if="!failingOpen"
-          class="w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50"
+          class="ui-touch-target w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
           :disabled="busy"
           @click="openFail"
         >
@@ -267,7 +299,7 @@
           <button
             v-for="r in FAIL_REASONS"
             :key="r"
-            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-slate-200 hover:border-slate-500 disabled:opacity-50"
+            class="ui-touch-target w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-start text-sm text-slate-200 hover:border-slate-500 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
             :disabled="busy"
             @click="submitFail(r)"
           >
@@ -276,28 +308,44 @@
           <input
             v-model="failNote"
             :placeholder="t('driver.failNotePlaceholder')"
-            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder-slate-600"
+            :aria-label="t('driver.failNotePlaceholder')"
+            class="ui-input"
           />
-          <button class="w-full py-1 text-xs text-slate-400 hover:text-slate-200" :disabled="busy" @click="failingOpen = false">
+          <button
+            class="ui-touch-target w-full py-1 text-xs text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            :disabled="busy"
+            @click="failingOpen = false"
+          >
             {{ t('driver.failCancel') }}
           </button>
         </div>
       </div>
 
       <!-- Pending jobs (only when online and free) -->
-      <div v-else-if="online" class="ui-panel p-4 space-y-3">
-        <div class="flex items-center justify-between">
+      <div v-else-if="online" class="ui-panel p-4 space-y-3 ui-reveal">
+        <div class="flex items-center justify-between gap-2">
           <p class="text-sm font-semibold text-slate-200">{{ t('driver.pendingTitle') }}</p>
-          <button class="text-xs text-slate-400 hover:text-slate-200" :disabled="loadingJobs" @click="fetchJobs">
+          <button
+            class="ui-press text-xs text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+            :disabled="loadingJobs"
+            @click="fetchJobs"
+          >
             {{ t('driver.refresh') }}
           </button>
         </div>
-        <div v-if="loadingJobs && !pendingJobs.length" class="space-y-2">
-          <div v-for="i in 2" :key="i" class="h-20 animate-pulse rounded-xl bg-slate-800/50" />
+        <div v-if="loadingJobs && !pendingJobs.length" class="space-y-2" aria-busy="true">
+          <div v-for="i in 2" :key="i" class="ui-skeleton h-20" />
         </div>
-        <p v-else-if="!pendingJobs.length" class="py-6 text-center text-sm text-slate-500">{{ t('driver.noPending') }}</p>
+        <div v-else-if="!pendingJobs.length" class="ui-empty-state text-center py-6 space-y-1">
+          <p class="text-sm font-semibold text-slate-100">{{ t('driver.noPending') }}</p>
+        </div>
         <ul v-else class="space-y-2">
-          <li v-for="job in pendingJobs" :key="job.id" class="rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2">
+          <li
+            v-for="(job, index) in pendingJobs"
+            :key="job.id"
+            class="ui-reveal rounded-xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2"
+            :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+          >
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <p class="truncate text-sm font-medium text-slate-200">{{ job.restaurant_name || ('#' + job.order_number) }}</p>
@@ -307,7 +355,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
               <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
-                <AppIcon name="location" class="h-3 w-3" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
+                <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
               </span>
               <span v-if="job.items_count">{{ t('driver.itemsCount', { n: job.items_count }) }}</span>
               <span v-if="job.collect_cash" class="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">
@@ -318,9 +366,9 @@
               </span>
             </div>
             <p v-if="job.delivery_address" class="truncate text-sm text-slate-300">
-              <AppIcon name="location" class="mr-1 inline h-3.5 w-3.5 text-emerald-300" />{{ job.delivery_address }}
+              <AppIcon name="location" class="me-1 inline h-3.5 w-3.5 text-emerald-300" aria-hidden="true" />{{ job.delivery_address }}
             </p>
-            <button class="ui-btn-primary w-full px-4 py-2 text-sm" :disabled="busy" @click="accept(job.id)">
+            <button class="ui-btn-primary ui-touch-target w-full px-4 py-2 text-sm" :disabled="busy" @click="accept(job.id)">
               {{ t('driver.accept') }}
             </button>
           </li>
@@ -328,35 +376,49 @@
       </div>
 
       <!-- Offline + no job -->
-      <div v-else class="ui-panel p-6 text-center">
-        <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-700" />
-        <p class="mt-2 text-sm text-slate-500">{{ t('driver.offlineEmpty') }}</p>
+      <div v-else class="ui-empty-state text-center space-y-2 ui-reveal">
+        <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
+        <p class="text-sm text-slate-400">{{ t('driver.offlineEmpty') }}</p>
       </div>
 
       <!-- Recent deliveries (history) -->
-      <div class="ui-panel p-4 space-y-3">
-        <button class="flex w-full items-center justify-between" :aria-expanded="showHistory" @click="toggleHistory">
+      <div class="ui-panel p-4 space-y-3 ui-reveal">
+        <button
+          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          :aria-expanded="showHistory"
+          aria-controls="driver-history-panel"
+          @click="toggleHistory"
+        >
           <p class="text-sm font-semibold text-slate-200">{{ t('driver.historyTitle') }}</p>
-          <AppIcon :name="showHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 text-slate-500" />
+          <AppIcon :name="showHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
         </button>
-        <template v-if="showHistory">
-          <div v-if="loadingHistory && !history.length" class="space-y-2">
-            <div v-for="i in 3" :key="i" class="h-12 animate-pulse rounded-xl bg-slate-800/50" />
-          </div>
-          <p v-else-if="!history.length" class="py-4 text-center text-sm text-slate-500">{{ t('driver.historyEmpty') }}</p>
-          <ul v-else class="space-y-2">
-            <li v-for="d in history" :key="d.id" class="flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2">
-              <div class="min-w-0">
-                <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
-                <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
-              </div>
-              <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
-            </li>
-          </ul>
-        </template>
+        <div id="driver-history-panel">
+          <template v-if="showHistory">
+            <div v-if="loadingHistory && !history.length" class="space-y-2" aria-busy="true">
+              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
+            </div>
+            <div v-else-if="!history.length" class="ui-empty-state text-center py-4 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('driver.historyEmpty') }}</p>
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="(d, index) in history"
+                :key="d.id"
+                class="ui-reveal flex items-center justify-between gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2"
+                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
+                  <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
+                </div>
+                <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>
+              </li>
+            </ul>
+          </template>
+        </div>
       </div>
     </template>
-  </div>
+  </main>
 
   <!-- Rate the customer after delivery (driver → customer, private) -->
   <Teleport to="body">
@@ -366,16 +428,16 @@
       @click.self="ratingJob = null"
       @keydown.esc="ratingJob = null"
     >
-      <div class="w-full max-w-sm space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+      <div ref="ratingDialogFirstFocus" class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl" role="dialog" aria-modal="true" :aria-label="t('driver.rateCustomerTitle')" tabindex="-1">
         <div>
           <p class="text-sm font-semibold text-white">{{ t('driver.rateCustomerTitle') }}</p>
           <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.order') }} #{{ ratingJob.order_number }}</p>
           <p class="mt-1 text-[11px] text-slate-500">{{ t('driver.rateCustomerHint') }}</p>
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-2" role="group" :aria-label="t('driver.rateCustomerTitle')">
           <button
             v-for="n in 5" :key="n" type="button"
-            class="text-3xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
             :class="n <= custRatingScore ? 'text-amber-400' : 'text-slate-600'"
             :aria-label="t('common.rateNStars', { n })"
             @click="custRatingScore = n"
@@ -383,17 +445,19 @@
         </div>
         <input
           v-model="custRatingNote" type="text" maxlength="200"
-          class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
+          class="ui-input"
           :aria-label="t('driver.rateCustomerNote')"
           :placeholder="t('driver.rateCustomerNote')"
         />
         <div class="flex items-center justify-end gap-2 pt-1">
-          <button class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200" @click="ratingJob = null">
+          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="ratingJob = null">
             {{ t('driver.rateSkip') }}
           </button>
           <button
-            class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
             :disabled="!custRatingScore || submittingRating"
+            :aria-busy="submittingRating"
+            :aria-label="submittingRating ? t('common.loading') : undefined"
             @click="submitCustomerRating"
           >{{ submittingRating ? '…' : t('driver.rateSubmit') }}</button>
         </div>
@@ -403,7 +467,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
@@ -713,6 +777,18 @@ const ratingJob = ref(null);
 const custRatingScore = ref(0);
 const custRatingNote = ref('');
 const submittingRating = ref(false);
+const ratingDialogFirstFocus = ref(null);
+let ratingTriggerEl = null;
+
+watch(ratingJob, (val) => {
+  if (val) {
+    ratingTriggerEl = typeof document !== 'undefined' ? document.activeElement : null;
+    nextTick(() => { ratingDialogFirstFocus.value?.focus(); });
+  } else if (ratingTriggerEl) {
+    ratingTriggerEl.focus();
+    ratingTriggerEl = null;
+  }
+});
 
 const openCustomerRating = (job) => {
   ratingJob.value = job;

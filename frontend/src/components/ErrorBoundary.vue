@@ -2,43 +2,59 @@
   <slot v-if="!hasError" />
   <div
     v-else
-    class="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-950 px-4 text-center"
+    class="flex min-h-screen flex-col items-center justify-center px-4 py-10"
     role="alert"
+    aria-labelledby="eb-title"
   >
-    <!-- Icon -->
-    <div class="flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
-      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-8 w-8 text-red-400">
-        <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-      </svg>
-    </div>
+    <!-- Centered glass card -->
+    <div class="ui-glass ui-reveal w-full max-w-md p-8 text-center">
+      <!-- Icon -->
+      <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="h-8 w-8 text-red-400"
+        >
+          <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+      </div>
 
-    <!-- Message -->
-    <div class="space-y-2">
-      <h1 class="text-xl font-semibold text-white">{{ t("errorBoundary.title") }}</h1>
-      <p class="max-w-sm text-sm text-slate-400">{{ t("errorBoundary.body") }}</p>
-    </div>
+      <!-- Message -->
+      <div class="space-y-2">
+        <p class="ui-kicker">{{ t("errorBoundary.kicker") }}</p>
+        <h1 id="eb-title" class="ui-display text-xl font-semibold text-white">{{ t("errorBoundary.title") }}</h1>
+        <p class="ui-subtle mx-auto max-w-xs">{{ t("errorBoundary.body") }}</p>
+      </div>
 
-    <!-- Actions -->
-    <div class="flex flex-wrap items-center justify-center gap-3">
-      <button
-        class="ui-btn-primary px-5 py-2 text-sm"
-        @click="reload"
-      >
-        {{ t("errorBoundary.reload") }}
-      </button>
-      <RouterLink
-        to="/"
-        class="ui-btn-outline px-5 py-2 text-sm"
-      >
-        {{ t("errorBoundary.goHome") }}
-      </RouterLink>
-    </div>
+      <!-- Actions -->
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <button
+          class="ui-btn-primary ui-touch-target px-5 text-sm"
+          @click="reload"
+        >
+          {{ t("errorBoundary.reload") }}
+        </button>
+        <RouterLink
+          to="/"
+          class="ui-btn-outline ui-touch-target px-5 text-sm"
+        >
+          {{ t("errorBoundary.goHome") }}
+        </RouterLink>
+      </div>
 
-    <!-- Dev details (hidden in production) -->
-    <details v-if="isDev && errorMessage" class="max-w-lg text-left">
-      <summary class="cursor-pointer text-xs text-slate-500 hover:text-slate-400">Error details</summary>
-      <pre class="mt-2 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-red-300">{{ errorMessage }}</pre>
-    </details>
+      <!-- Dev details (hidden in production) -->
+      <details v-if="isDev && errorMessage" class="mt-6 text-start">
+        <summary class="cursor-pointer rounded text-xs text-slate-500 transition hover:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900">
+          {{ t("errorBoundary.details") }}
+        </summary>
+        <pre class="mt-2 overflow-auto rounded-xl border border-red-500/20 bg-slate-950/70 p-3 text-start text-xs text-red-300">{{ errorMessage }}</pre>
+      </details>
+    </div>
   </div>
 </template>
 

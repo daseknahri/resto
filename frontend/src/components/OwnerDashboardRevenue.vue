@@ -5,24 +5,28 @@
     class="ui-command-deck space-y-3 p-3 sm:space-y-4 sm:p-4"
   >
     <!-- Header -->
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h3 class="inline-flex items-center gap-2 text-lg font-semibold">
-        <AppIcon name="download" class="owner-revenue-icon" />
-        <span>{{ t("ownerHome.revenueTitle") }}</span>
-        <svg
-          v-if="updating"
-          aria-hidden="true"
-          class="h-3.5 w-3.5 animate-spin text-slate-500"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-        >
-          <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
-        </svg>
-      </h3>
-      <p class="text-xs text-slate-400">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
+        <h3 class="inline-flex items-center gap-2 text-lg font-semibold text-white">
+          <AppIcon name="download" class="owner-revenue-icon" aria-hidden="true" />
+          <span>{{ t("ownerHome.revenueTitle") }}</span>
+          <svg
+            v-if="updating"
+            aria-hidden="true"
+            class="h-3.5 w-3.5 animate-spin text-slate-500"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
+          </svg>
+        </h3>
+        <span role="status" aria-live="polite" class="sr-only">{{ updating ? t('ownerHome.updating') : '' }}</span>
+      </div>
+      <p class="ui-chip shrink-0">
         {{ data ? t("ownerHome.revenuePeriod", { days: data.days }) : `${period}d` }}
       </p>
     </div>
@@ -36,27 +40,27 @@
         </div>
       </template>
       <template v-else-if="data">
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '0ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
+          <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
           <PeriodBadge :pct="data.prev_period?.revenue_change_pct" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '28ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ data.order_count }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ data.order_count }}</p>
           <PeriodBadge :pct="data.prev_period?.order_change_pct" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '56ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.revenueAvg") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ fmt(data.avg_order_value) }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ fmt(data.avg_order_value) }}</p>
           <PeriodBadge :pct="data.prev_period?.avg_change_pct" />
         </div>
-        <div class="ui-stat-tile">
+        <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '84ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.customerReturnRate") }}</p>
-          <p class="ui-stat-value" :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'">
+          <p class="ui-stat-value tabular-nums" :class="returnRate !== null ? 'text-slate-100' : 'text-slate-600'">
             {{ returnRateLabel }}
           </p>
-          <p v-if="returnRate !== null" class="mt-0.5 text-[10px] text-slate-500">
+          <p v-if="returnRate !== null" class="ui-stat-note">
             {{ t("ownerHome.customerReturnRateHint", { count: data.customer_return?.total_customers }) }}
           </p>
         </div>
@@ -64,22 +68,27 @@
     </div>
 
     <!-- Daily revenue mini-chart -->
-    <div v-if="data && chartDays.length > 1" class="space-y-1">
-      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.revenueDailyChart") }}</p>
-      <div class="flex items-end gap-0.5 h-20 overflow-x-auto pb-1">
+    <div v-if="data && chartDays.length > 1" class="max-w-full space-y-1">
+      <p class="ui-kicker">{{ t("ownerHome.dailyRevenueKicker") }}</p>
+      <h4 class="text-sm font-medium text-slate-100">{{ t("ownerHome.revenueDailyChart") }}</h4>
+      <div
+        class="ui-scroll-row h-20 items-end gap-0.5"
+        role="img"
+        :aria-label="t('ownerHome.revenueDailyChartAriaLabel')"
+      >
         <div
           v-for="day in chartDays"
           :key="day.date"
-          class="flex flex-1 min-w-[0.5rem] flex-col items-center gap-0.5"
-          :title="`${day.date}: ${fmt(day.revenue)} (${day.orders} orders)`"
+          class="flex flex-1 shrink-0 min-w-[0.5rem] flex-col items-center gap-0.5"
+          :title="`${day.date}: ${fmt(day.revenue)} (${day.orders})`"
         >
           <div
-            class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+            class="w-full rounded-sm bg-[var(--color-secondary)]/70 transition-colors hover:bg-[var(--color-secondary)]"
             :style="{ height: `${day.heightPct}%`, minHeight: day.revenue > 0 ? '2px' : '0' }"
           />
         </div>
       </div>
-      <div class="flex justify-between text-[10px] text-slate-600">
+      <div class="flex justify-between text-[10px] tabular-nums text-slate-500" aria-hidden="true">
         <span>{{ chartDays[0]?.shortDate }}</span>
         <span>{{ chartDays[chartDays.length - 1]?.shortDate }}</span>
       </div>
@@ -88,14 +97,19 @@
     <!-- Peak hours -->
     <div
       v-if="data && data.order_count > 0 && peakHoursBars.length"
-      class="space-y-3 pt-2 border-t border-slate-800/60"
+      class="space-y-3 border-t border-slate-800/60 pt-2"
     >
-      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.peakHoursTitle") }}</p>
-      <div class="grid sm:grid-cols-2 gap-4">
+      <p class="ui-kicker">{{ t("ownerHome.peakHoursKicker") }}</p>
+      <h4 class="text-sm font-medium text-slate-100">{{ t("ownerHome.peakHoursTitle") }}</h4>
+      <div class="grid gap-4 sm:grid-cols-2">
         <!-- By hour of day -->
         <div class="space-y-1.5">
-          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByHour") }}</p>
-          <div class="flex items-end gap-px h-16 overflow-hidden">
+          <h4 class="ui-stat-label">{{ t("ownerHome.peakHoursByHour") }}</h4>
+          <div
+            class="flex h-16 items-end gap-px overflow-hidden"
+            role="img"
+            :aria-label="t('ownerHome.peakHoursByHourAriaLabel')"
+          >
             <div
               v-for="bar in peakHoursBars"
               :key="bar.hour"
@@ -105,14 +119,18 @@
               :title="`${bar.hour}:00 — ${bar.count}`"
             />
           </div>
-          <div class="flex justify-between text-[9px] text-slate-600">
-            <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+          <div class="flex justify-between text-[9px] tabular-nums text-slate-500" aria-hidden="true">
+            <span>{{ t("ownerHome.peakHoursAxisHour0") }}</span><span>{{ t("ownerHome.peakHoursAxisHour6") }}</span><span>{{ t("ownerHome.peakHoursAxisHour12") }}</span><span>{{ t("ownerHome.peakHoursAxisHour18") }}</span><span>{{ t("ownerHome.peakHoursAxisHour23") }}</span>
           </div>
         </div>
         <!-- By day of week -->
         <div class="space-y-1.5">
-          <p class="text-[10px] font-medium text-slate-400">{{ t("ownerHome.peakHoursByDay") }}</p>
-          <div class="flex items-end gap-1 h-16">
+          <h4 class="ui-stat-label">{{ t("ownerHome.peakHoursByDay") }}</h4>
+          <div
+            class="flex h-16 items-end gap-1"
+            role="img"
+            :aria-label="t('ownerHome.peakHoursByDayAriaLabel')"
+          >
             <div
               v-for="bar in peakWeekdayBars"
               :key="bar.label"
@@ -120,12 +138,12 @@
               :title="`${bar.label} — ${bar.count}`"
             >
               <div
-                class="w-full rounded-sm bg-[var(--color-secondary)]/70 hover:bg-[var(--color-secondary)] transition-colors"
+                class="w-full rounded-sm bg-[var(--color-secondary)]/70 transition-colors hover:bg-[var(--color-secondary)]"
                 :style="{ height: `${bar.heightPct}%`, minHeight: bar.count > 0 ? '2px' : '0' }"
               />
             </div>
           </div>
-          <div class="flex justify-between text-[9px] text-slate-600">
+          <div class="flex justify-between text-[9px] text-slate-500" aria-hidden="true">
             <span v-for="bar in peakWeekdayBars" :key="bar.label">{{ bar.label }}</span>
           </div>
         </div>
@@ -133,19 +151,19 @@
     </div>
 
     <!-- Popular dishes -->
-    <div v-if="data && popularDishes.length" class="space-y-2 pt-2 border-t border-slate-800/60">
-      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.popularDishesTitle") }}</p>
+    <div v-if="data && popularDishes.length" class="space-y-2 border-t border-slate-800/60 pt-2">
+      <p class="ui-kicker">{{ t("ownerHome.popularDishesTitle") }}</p>
       <ol class="space-y-1.5">
         <li v-for="(dish, idx) in popularDishes" :key="dish.dish_slug" class="flex items-center gap-2 text-sm">
-          <span class="w-4 shrink-0 text-right text-xs font-bold text-slate-600">{{ idx + 1 }}</span>
-          <div class="relative flex-1 overflow-hidden rounded-sm bg-slate-800/50 h-6">
+          <span class="w-4 shrink-0 text-end text-xs font-bold tabular-nums text-slate-600">{{ idx + 1 }}</span>
+          <div class="relative h-6 flex-1 overflow-hidden rounded-sm bg-slate-800/50">
             <div
-              class="absolute inset-y-0 left-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
+              class="absolute inset-y-0 start-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
               :style="{ width: dish.barPct + '%' }"
             />
             <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
           </div>
-          <span class="shrink-0 text-xs text-slate-400 tabular-nums">×{{ dish.order_count }}</span>
+          <span class="shrink-0 tabular-nums text-xs text-slate-400">×{{ dish.order_count }}</span>
         </li>
       </ol>
     </div>
@@ -153,22 +171,22 @@
     <!-- Marketplace commission summary — only when restaurant has marketplace orders -->
     <div
       v-if="data && marketplaceStats.order_count > 0"
-      class="space-y-2 pt-2 border-t border-slate-800/60"
+      class="space-y-2 border-t border-slate-800/60 pt-2"
     >
-      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{{ t("ownerHome.marketplaceTitle") }}</p>
+      <p class="ui-kicker">{{ t("ownerHome.marketplaceTitle") }}</p>
       <div class="grid grid-cols-3 gap-2">
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.marketplaceOrders") }}</p>
-          <p class="ui-stat-value text-slate-100">{{ marketplaceStats.order_count }}</p>
+          <p class="ui-stat-value tabular-nums text-slate-100">{{ marketplaceStats.order_count }}</p>
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.marketplaceRevenue") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ fmt(marketplaceStats.revenue) }}</p>
+          <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ fmt(marketplaceStats.revenue) }}</p>
         </div>
         <div class="ui-stat-tile">
           <p class="ui-stat-label">{{ t("ownerHome.marketplaceCommission") }}</p>
-          <p class="ui-stat-value text-rose-400">{{ fmt(marketplaceStats.commission_total) }}</p>
-          <p class="mt-0.5 text-[10px] text-slate-600">{{ t("ownerHome.platformFeeNote") }}</p>
+          <p class="ui-stat-value tabular-nums text-rose-400">{{ fmt(marketplaceStats.commission_total) }}</p>
+          <p class="ui-stat-note">{{ t("ownerHome.platformFeeNote") }}</p>
         </div>
       </div>
     </div>

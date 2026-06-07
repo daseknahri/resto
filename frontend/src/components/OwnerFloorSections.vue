@@ -1,96 +1,212 @@
 <template>
-  <section class="ui-panel space-y-3 p-3 sm:p-4">
-    <div class="flex items-center justify-between gap-2">
+  <section class="ui-panel space-y-3 p-3 sm:p-4" aria-labelledby="owner-sections-title">
+    <!-- Header -->
+    <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
-        <p class="text-sm font-semibold text-slate-200">{{ t('ownerSections.title') }}</p>
-        <p class="text-xs text-slate-500">{{ t('ownerSections.subtitle') }}</p>
+        <p class="ui-kicker">{{ t('ownerSections.kicker') }}</p>
+        <h2 id="owner-sections-title" class="text-base font-semibold text-white leading-tight">{{ t('ownerSections.title') }}</h2>
+        <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerSections.subtitle') }}</p>
       </div>
-      <button class="ui-btn-outline shrink-0 px-3 py-1.5 text-xs" @click="startCreate">
-        + {{ t('ownerSections.add') }}
+      <button
+        class="ui-btn-outline ui-press ui-touch-target shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+        :aria-label="t('ownerSections.add')"
+        @click="startCreate"
+      >
+        <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
+        {{ t('ownerSections.add') }}
       </button>
     </div>
 
     <!-- Inline create -->
-    <div v-if="creating" class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-2">
-      <input
-        v-model="newName"
-        class="ui-input min-w-0 flex-1 text-sm"
-        :placeholder="t('ownerSections.namePlaceholder')"
-        :aria-label="t('ownerSections.namePlaceholder')"
-        @keyup.enter="createSection"
-      />
-      <input v-model="newColor" type="color" class="h-8 w-10 shrink-0 rounded border border-slate-700 bg-transparent" :aria-label="t('ownerSections.color')" />
-      <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="!newName.trim() || busy" @click="createSection">{{ t('common.save') }}</button>
-      <button class="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200" @click="creating = false">{{ t('common.cancel') }}</button>
+    <Transition name="ui-fade">
+      <div
+        v-if="creating"
+        class="space-y-2 rounded-2xl border border-slate-700/70 bg-slate-950/60 p-3"
+        role="group"
+        :aria-label="t('ownerSections.add')"
+      >
+        <!-- TODO: requires logic change — focus should move to newName input when this form opens (startCreate) -->
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="newName"
+            class="ui-input min-w-0 flex-1 text-sm"
+            :placeholder="t('ownerSections.namePlaceholder')"
+            :aria-label="t('ownerSections.namePlaceholder')"
+            @keyup.enter="createSection"
+          />
+          <input
+            v-model="newColor"
+            type="color"
+            class="h-9 w-10 shrink-0 cursor-pointer rounded-xl border border-slate-700 bg-transparent"
+            :aria-label="t('ownerSections.color')"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
+            :disabled="!newName.trim() || busy"
+            @click="createSection"
+          >
+            <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
+            {{ t('common.save') }}
+          </button>
+          <button
+            class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1.5 text-xs"
+            @click="creating = false"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Empty state -->
+    <div
+      v-if="!sections.length && !creating"
+      class="ui-empty-state text-center"
+    >
+      <AppIcon name="table" class="mx-auto mb-2 h-8 w-8 text-slate-500" aria-hidden="true" />
+      <p class="text-sm font-semibold text-slate-100">{{ t('ownerSections.emptyTitle') }}</p>
+      <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerSections.empty') }}</p>
+      <button
+        class="ui-btn-outline ui-press mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs"
+        @click="startCreate"
+      >
+        <AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />
+        {{ t('ownerSections.add') }}
+      </button>
     </div>
 
-    <p v-if="!sections.length && !creating" class="py-3 text-center text-xs text-slate-500">{{ t('ownerSections.empty') }}</p>
-
+    <!-- TODO: requires logic change — add a `loading` ref, set true before fetchSections/fetchStaff, false after; render <div v-if="loading" class="ui-skeleton h-14 rounded-xl" /> x2 before the <ul> per §2.4 -->
     <!-- Section list -->
-    <div v-for="s in sections" :key="s.id" class="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50">
+    <ul class="space-y-2">
+    <li
+      v-for="(s, index) in sections"
+      :key="s.id"
+      class="ui-surface-lift ui-reveal overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50"
+      :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+    >
       <div class="flex items-center justify-between gap-2 p-3">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="h-3 w-3 shrink-0 rounded-full" :style="{ background: s.color || '#64748b' }" />
+        <div class="flex min-w-0 items-center gap-2.5">
+          <span
+            class="h-3.5 w-3.5 shrink-0 rounded-full shadow-sm"
+            :style="{ background: s.color || '#64748b' }"
+            aria-hidden="true"
+          />
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-100">{{ s.name }}</p>
             <p class="truncate text-xs text-slate-500">
-              {{ t('ownerSections.tableCount', { n: s.tables.length }) }} ·
+              <span class="tabular-nums">{{ t('ownerSections.tableCount', { n: s.tables.length }) }}</span>
+              <span class="mx-1 text-slate-700" aria-hidden="true">·</span>
               <span v-if="s.servers.length" class="text-emerald-400/90">{{ s.servers.map((x) => x.name || x.email).join(', ') }}</span>
               <span v-else class="text-amber-400">{{ t('ownerSections.noWaiter') }}</span>
             </p>
           </div>
         </div>
-        <div class="flex shrink-0 items-center gap-1.5">
-          <button class="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-500" @click="toggleEdit(s)">{{ t('common.edit') }}</button>
-          <button class="rounded-lg border border-red-400/25 px-2.5 py-1 text-xs text-red-300 hover:border-red-400/50" @click="removeSection(s)">{{ t('common.delete') }}</button>
+        <div class="flex shrink-0 items-center gap-1">
+          <button
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-2.5 py-1 text-xs"
+            :aria-label="editId === s.id ? `${t('common.close')} ${s.name}` : `${t('common.edit')} ${s.name}`"
+            :aria-expanded="editId === s.id"
+            :aria-controls="`section-edit-${s.id}`"
+            @click="toggleEdit(s)"
+          >
+            <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t('common.edit') }}</span>
+          </button>
+          <button
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-2.5 py-1 text-xs text-red-300 border-[var(--color-danger)]/25 hover:border-[var(--color-danger)]/50"
+            :aria-label="`${t('common.delete')} ${s.name}`"
+            @click="removeSection(s)"
+          >
+            <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t('common.delete') }}</span>
+          </button>
         </div>
       </div>
 
       <!-- Edit panel -->
-      <div v-if="editId === s.id" class="space-y-3 border-t border-slate-800 p-3">
-        <div class="flex items-center gap-2">
-          <input v-model="editName" class="ui-input min-w-0 flex-1 text-sm" :aria-label="t('ownerSections.namePlaceholder')" />
-          <input v-model="editColor" type="color" class="h-8 w-10 shrink-0 rounded border border-slate-700 bg-transparent" :aria-label="t('ownerSections.color')" />
-        </div>
+      <Transition name="ui-fade">
+        <div v-if="editId === s.id" :id="`section-edit-${s.id}`" class="space-y-3 border-t border-slate-800/80 bg-slate-950/30 p-3">
+          <div class="flex items-center gap-2">
+            <input
+              v-model="editName"
+              class="ui-input min-w-0 flex-1 text-sm"
+              :aria-label="t('ownerSections.namePlaceholder')"
+            />
+            <input
+              v-model="editColor"
+              type="color"
+              class="h-9 w-10 shrink-0 cursor-pointer rounded-xl border border-slate-700 bg-transparent"
+              :aria-label="t('ownerSections.color')"
+            />
+          </div>
 
-        <div>
-          <p class="mb-1.5 text-xs font-semibold text-slate-400">{{ t('ownerSections.waiters') }}</p>
-          <div class="flex flex-wrap gap-1.5">
-            <label
-              v-for="w in staff"
-              :key="w.id"
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
-              :class="editServers.includes(w.id) ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+          <fieldset>
+            <legend class="mb-1.5 text-xs font-semibold text-slate-400">{{ t('ownerSections.waiters') }}</legend>
+            <div class="flex flex-wrap gap-1.5">
+              <label
+                v-for="w in staff"
+                :key="w.id"
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-within:ring-1 focus-within:ring-emerald-500/60"
+                :class="editServers.includes(w.id) ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+              >
+                <input v-model="editServers" type="checkbox" :value="w.id" class="sr-only" />
+                <AppIcon
+                  v-if="editServers.includes(w.id)"
+                  name="check"
+                  class="h-3 w-3 shrink-0"
+                  aria-hidden="true"
+                />
+                {{ w.name || w.email }}
+              </label>
+              <span v-if="!staff.length" class="text-xs text-slate-500">{{ t('ownerSections.noStaff') }}</span>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="mb-1.5 text-xs font-semibold text-slate-400">{{ t('ownerSections.tables') }}</legend>
+            <div class="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto" tabindex="0" :aria-label="t('ownerSections.tables')" role="group">
+              <label
+                v-for="tb in tables"
+                :key="tb.id"
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-within:ring-1 focus-within:ring-[var(--color-secondary)]/60"
+                :class="editTables.includes(tb.id) ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+              >
+                <input v-model="editTables" type="checkbox" :value="tb.id" class="sr-only" />
+                <AppIcon
+                  v-if="editTables.includes(tb.id)"
+                  name="check"
+                  class="h-3 w-3 shrink-0"
+                  aria-hidden="true"
+                />
+                {{ tb.label }}
+              </label>
+              <span v-if="!tables.length" class="text-xs text-slate-500">{{ t('ownerSections.noTables') }}</span>
+            </div>
+          </fieldset>
+
+          <!-- TODO: requires logic change — focus should return to the edit toggle button when editId is cleared (cancel or save) -->
+          <div class="flex items-center gap-2 pt-0.5">
+            <button
+              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
+              :disabled="busy || !editName.trim()"
+              @click="saveSection(s)"
             >
-              <input v-model="editServers" type="checkbox" :value="w.id" class="sr-only" />
-              {{ w.name || w.email }}
-            </label>
-            <span v-if="!staff.length" class="text-xs text-slate-500">{{ t('ownerSections.noStaff') }}</span>
+              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
+              {{ t('common.save') }}
+            </button>
+            <button
+              class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1.5 text-xs"
+              @click="editId = null"
+            >
+              {{ t('common.cancel') }}
+            </button>
           </div>
         </div>
-
-        <div>
-          <p class="mb-1.5 text-xs font-semibold text-slate-400">{{ t('ownerSections.tables') }}</p>
-          <div class="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-            <label
-              v-for="tb in tables"
-              :key="tb.id"
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
-              :class="editTables.includes(tb.id) ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
-            >
-              <input v-model="editTables" type="checkbox" :value="tb.id" class="sr-only" />
-              {{ tb.label }}
-            </label>
-            <span v-if="!tables.length" class="text-xs text-slate-500">{{ t('ownerSections.noTables') }}</span>
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-          <button class="ui-btn-primary px-3 py-1.5 text-xs" :disabled="busy || !editName.trim()" @click="saveSection(s)">{{ t('common.save') }}</button>
-          <button class="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200" @click="editId = null">{{ t('common.cancel') }}</button>
-        </div>
-      </div>
-    </div>
+      </Transition>
+    </li>
+    </ul>
   </section>
 </template>
 
@@ -99,6 +215,7 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
+import AppIcon from './AppIcon.vue';
 
 defineProps({ tables: { type: Array, default: () => [] } });
 

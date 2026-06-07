@@ -66,7 +66,19 @@ const arabicMessages = {
     "open": "مفتوح",
     "closed": "مغلق",
     "more": "المزيد",
-    "change": "تغيير"
+    "change": "تغيير",
+    "opensInNewTab": "(يفتح في تبويب جديد)",
+    "included": "مضمّن",
+    "notIncluded": "غير مضمّن",
+    "legal": "قانوني"
+  },
+  "toast": {
+    "type": {
+      "info": "تنبيه:",
+      "success": "نجاح:",
+      "error": "خطأ:",
+      "warning": "تنبيه:"
+    }
   },
   "landingLayout": {
     "kicker": "منصة القوائم",
@@ -78,6 +90,8 @@ const arabicMessages = {
   "home": {
     "leadSuccess": "تم استلام طلبك. سنتواصل معك قريباً.",
     "dismiss": "إغلاق",
+    "dismissAriaLabel": "إغلاق رسالة التأكيد",
+    "recommended": "موصى به",
     "heroBadge": "منصة SaaS للمطاعم",
     "heroLive": "مباشر",
     "heroTitle": "أنشئ وبِع قوائم مطاعم احترافية عبر منصة SaaS قوية واحدة.",
@@ -169,7 +183,8 @@ const arabicMessages = {
     "toggleColorScheme": "تغيير المظهر",
     "viewCart": "عرض السلة",
     "cartItems": "{count} عناصر",
-    "findMyOrder": "ابحث عن طلبي"
+    "findMyOrder": "ابحث عن طلبي",
+    "signedIn": "تم تسجيل الدخول"
   },
   "customerFlow": {
     "title": "رحلة الضيف",
@@ -200,7 +215,8 @@ const arabicMessages = {
     "failed": "فشل تسجيل الدخول",
     "identifierRequired": "اسم المستخدم أو البريد مطلوب",
     "passwordRequired": "كلمة المرور مطلوبة",
-    "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة"
+    "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة",
+    "alwaysOn": "24/7"
   },
   "forgotPassword": {
     "kicker": "استعادة الحساب",
@@ -229,7 +245,11 @@ const arabicMessages = {
     "failed": "تعذر إعادة تعيين كلمة المرور",
     "successFallback": "تمت إعادة تعيين كلمة المرور. يمكنك الآن تسجيل الدخول.",
     "tokenRequired": "رمز إعادة التعيين مطلوب",
-    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل"
+    "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
+    "spotlightSecureTitle": "رمز أحادي الاستخدام",
+    "spotlightSecureBody": "يحتوي رابط إعادة التعيين على رمز آمن مرتبط بحسابك.",
+    "spotlightSimpleTitle": "اختر كلمة مرور جديدة",
+    "spotlightSimpleBody": "اختر كلمة مرور قوية. يمكنك تسجيل الدخول فور اكتمال العملية."
   },
   "activateAccount": {
     "kicker": "تفعيل الحساب",
@@ -271,11 +291,16 @@ const arabicMessages = {
   },
   "staffChat": {
     "title": "دردشة الفريق",
+    "titleWithUnread": "دردشة الفريق ({count} غير مقروء)",
+    "emptyTitle": "لا توجد رسائل بعد",
     "empty": "لا توجد رسائل بعد. ابدأ المحادثة 👋",
     "placeholder": "راسل الفريق…",
     "send": "إرسال",
+    "sending": "جارٍ الإرسال…",
     "sendFailed": "تعذّر الإرسال. حاول مرة أخرى.",
-    "someone": "الموظفون"
+    "someone": "الموظفون",
+    "unreadCap": "99+",
+    "inputLabel": "رسالة"
   },
   "ownerLayout": {
     "kicker": "مساحة المالك",
@@ -318,11 +343,20 @@ const arabicMessages = {
     "profile": "الملف الشخصي",
     "billing": "الفوترة",
     "navDesktop": "تنقل المالك",
-    "navMobile": "تنقل المالك"
+    "navMobile": "تنقل المالك",
+    "ordersBadgeLabel": "الطلبات: {count} في الانتظار"
+  },
+  "ownerProfile": {
+    "sectionsNav": "أقسام الملف الشخصي"
   },
   "ownerAnalytics": {
     "kicker": "الأداء",
-    "title": "التحليلات"
+    "title": "التحليلات",
+    "daysSuffix": "أيام",
+    "deltaLabel": "التغيير مقارنة بالأمس: {delta}",
+    "sparklineOrders": "اتجاه الطلبات خلال الأيام السبعة الماضية",
+    "sparklineRevenue": "اتجاه الإيرادات خلال الأيام السبعة الماضية",
+    "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية"
   },
   "ownerHome": {
     "platformFeeNote": "عمولة المنصة 10%",
@@ -345,7 +379,10 @@ const arabicMessages = {
     "viewAllOrders": "عرض جميع الطلبات",
     "inProgress": "قيد التنفيذ",
     "recentOrdersList": "الطلبات الأخيرة",
-    "noOrdersYet": "لا توجد طلبات بعد. ستظهر هنا عند بدء العملاء بالطلب.",
+    "noOrdersYet": "لا توجد طلبات بعد.",
+    "noOrdersYetBody": "ستظهر الطلبات هنا عند بدء العملاء بالطلب.",
+    "analyticsKicker": "رؤى الأداء",
+    "periodSelectorLabel": "فترة التحليلات",
     "analyticsTitle": "تحليلات {days} يوم",
     "analyticsSubtitle": "تُجمع تلقائياً من تفاعلات العملاء",
     "analyticsPeriod7": "7ي",
@@ -459,7 +496,11 @@ const arabicMessages = {
     "readinessActionDishes": "إضافة أطباق",
     "readinessActionPublish": "نشر الآن",
     "exportCsv": "تصدير CSV",
+    "exportingCsv": "جارٍ تصدير CSV...",
     "exportFailed": "فشل تصدير التحليلات. يرجى المحاولة مجدداً.",
+    "periodDaysLabel": "آخر {days} يوم",
+    "updatingLabel": "جارٍ تحديث بيانات التحليلات",
+    "funnelDropPct": "انخفاض بنسبة {pct}% عن الخطوة السابقة",
     "funnelTitle": "قمع التحويل",
     "funnelMenuViews": "مشاهدات القائمة",
     "funnelCartViews": "مشاهدات السلة",
@@ -479,15 +520,22 @@ const arabicMessages = {
     "popularDishesTitle": "الأطباق الأكثر طلباً",
     "customerReturnRate": "معدل العودة",
     "customerReturnRateHint": "{count} عميل فريد",
-    "customerReturnRateNA": "بيانات غير كافية"
+    "customerReturnRateNA": "بيانات غير كافية",
+    "updating": "جارٍ تحديث بيانات الإيرادات",
+    "ariaIncrease": "ارتفاع",
+    "ariaDecrease": "انخفاض",
+    "ariaNoChange": "لا تغيير",
+    "ariaChangeLabel": "{pct}% {dir} مقارنة بالفترة السابقة"
   },
   "ownerSections": {
+    "kicker": "إدارة القاعة",
     "title": "أقسام القاعة",
     "subtitle": "اجمع الطاولات في مناطق وعيّن نادلًا لكل منطقة — فيظهر طلب الطاولة لذلك النادل فقط.",
     "add": "إضافة قسم",
     "namePlaceholder": "اسم القسم (مثال: الشرفة)",
     "color": "اللون",
-    "empty": "لا أقسام بعد. أضف قسمًا لتوجيه طلبات الطاولات إلى النوادل.",
+    "emptyTitle": "لا أقسام بعد",
+    "empty": "أضف قسمًا لتوجيه طلبات الطاولات إلى النادل المناسب.",
     "tableCount": "{n} طاولات",
     "noWaiter": "لا نادل معيّن",
     "waiters": "النوادل",
@@ -581,7 +629,9 @@ const arabicMessages = {
     "htmlDownloaded": "تم تحميل حزمة HTML",
     "qrUnavailable": "QR غير متاح",
     "scanHintPlain": "امسح لفتح القائمة",
-    "statusFilter": "تصفية الحالة"
+    "statusFilter": "تصفية الحالة",
+    "noFilterResults": "لا توجد طاولات تطابق البحث أو الفلتر الحالي.",
+    "moreActions": "المزيد من الإجراءات"
   },
   "ownerLaunchSuccess": {
     "launch": "إطلاق القائمة",
@@ -601,7 +651,10 @@ const arabicMessages = {
     "shareTemplate": "مرحباً! أصبح {name} الآن متاحاً على الإنترنت.\nتصفح قائمتنا هنا: {url}\nشكراً لك.",
     "menuUrlCopied": "تم نسخ رابط القائمة",
     "shareCopied": "تم نسخ رسالة المشاركة",
-    "copyFailed": "فشل النسخ"
+    "copyFailed": "فشل النسخ",
+    "pageRegionLabel": "نظرة عامة على إطلاق المطعم",
+    "statActions": "الإجراءات المقترحة",
+    "statSteps": "الخطوات المتاحة"
   },
   "adminConsole": {
     "loadJobsFailed": "تعذر تحميل المهام (سجّل الدخول كمسؤول)",
@@ -828,6 +881,7 @@ const arabicMessages = {
     "markFailed": "تحديد كفاشل",
     "clearPending": "مسح المعلقة",
     "saving": "جارٍ الحفظ...",
+    "loadingList": "جارٍ تحميل قائمة الحجوزات",
     "loadingReservations": "جارٍ تحميل الحجوزات...",
     "noReservations": "لا توجد طلبات حجز ضمن هذا الفلتر.",
     "fallbackReservationName": "حجز #{id}",
@@ -863,6 +917,7 @@ const arabicMessages = {
     "statusOverdue": "متأخر",
     "noSla": "لا توجد SLA",
     "unknown": "غير معروف",
+    "statusTransitionTo": "إلى",
     "timelineActionStatusChange": "تغيير حالة",
     "timelineActionNote": "إضافة ملاحظة",
     "timelineActionReminder": "نشاط تذكير",
@@ -890,10 +945,12 @@ const arabicMessages = {
     "byActor": "بواسطة {actor}",
     "viewList": "قائمة",
     "viewCalendar": "تقويم",
+    "viewToggleLabel": "وضع العرض",
     "rescheduled": "تمت إعادة جدولة الحجز",
     "bookedFor": "محجوز في",
     "guests": "ضيوف",
     "notes": "ملاحظات",
+    "reminderDateFilter": "التذكيرات / التاريخ",
     "waitlistTitle": "قائمة الانتظار",
     "waitlistSubtitle": "عملاء ينتظرون تحرّر مقعد في وقت محجوز بالكامل.",
     "waitlistDate": "تصفية حسب التاريخ",
@@ -996,6 +1053,9 @@ const arabicMessages = {
     "searchResultsKicker": "نتائج البحث",
     "searchResultsTitle": "نتائج البحث",
     "allCategories": "جميع التصنيفات",
+    "categoryNav": "التنقل بين التصنيفات",
+    "allergenFilter": "تصفية حسب مسبب الحساسية",
+    "ratingLabel": "{avg} من 5 ({count} تقييم)",
     "callWaiter": "نادِ النادل",
     "callingWaiter": "جارٍ الاتصال…",
     "waiterCalled": "النادل في الطريق إليك 🛎️",
@@ -1027,6 +1087,7 @@ const arabicMessages = {
     "guestCount": "{count} ضيوف",
     "preferredDate": "التاريخ المفضل",
     "preferredTime": "الوقت المفضل",
+    "quickTimesKicker": "أوقات سريعة",
     "notesPlaceholder": "طلب خاص، تفضيل مقاعد...",
     "sending": "جارٍ الإرسال...",
     "requestSent": "تم إرسال الطلب",
@@ -1129,6 +1190,7 @@ const arabicMessages = {
     "logoPreviewAlt": "معاينة الشعار",
     "logoDropHint": "أفلت الصورة هنا أو استخدم الرفع. سيتم تحسين الشعار لمقاس مربع 1:1.",
     "acceptedFormats": "الامتدادات المدعومة: JPG وPNG وWEBP حتى 8MB.",
+    "heroPreviewAlt": "معاينة بانر الغلاف",
     "heroImageUrl": "رابط صورة الغلاف",
     "uploadHeroImage": "رفع صورة الغلاف",
     "removeHero": "حذف الغلاف",
@@ -1222,8 +1284,12 @@ const arabicMessages = {
     "tagsHint": "اختر كل ما ينطبق على قائمتك.",
     "priceTierLabel": "نطاق السعر",
     "priceTierHint": "كيف تصف مستوى الأسعار لديك؟",
+    "priceTier1": "مستوى السعر 1 - اقتصادي",
+    "priceTier2": "مستوى السعر 2 - معتدل",
+    "priceTier3": "مستوى السعر 3 - مميز",
     "cuisineType": "نوع المطبخ",
     "cuisineTypePlaceholder": "مثال: إيطالي، مغربي، ياباني",
+    "directoryControls": "ضوابط الدليل",
     "directoryTitle": "الدليل العام للمنصة",
     "directoryOptIn": "اعرض في الدليل",
     "directoryHint": "أدرج مطعمك في الدليل العام لاكتشافه في صفحة المنصة الرئيسية.",
@@ -1685,6 +1751,9 @@ const arabicMessages = {
     "planBasic": "قائمة رقمية + تحويل واتساب",
     "planGrowth": "إدارة تشغيلية أوسع داخل المنصة",
     "planPro": "مزايا احترافية وتحليلات متقدمة",
+    "planNameBasic": "Basic",
+    "planNameGrowth": "Growth",
+    "planNamePro": "Pro",
     "basicOption": "الباقة الأساسية",
     "growthOption": "باقة النمو",
     "proOption": "الباقة الاحترافية",
@@ -1702,7 +1771,8 @@ const arabicMessages = {
     "goToAdminConsole": "الانتقال إلى لوحة الإدارة",
     "goToOnboarding": "الانتقال إلى التهيئة",
     "switchAccount": "تبديل الحساب",
-    "backToHome": "العودة إلى الرئيسية"
+    "backToHome": "العودة إلى الرئيسية",
+    "navLabel": "إجراءات الصفحة"
   },
   "contactPage": {
     "kicker": "الدعم",
@@ -1715,7 +1785,8 @@ const arabicMessages = {
     "fasterSupport": "لتسريع المساعدة، أرفق:",
     "itemTenantSlug": "معرّف المستأجر",
     "itemAccountEmail": "بريد الحساب",
-    "itemIssueSummary": "ملخص قصير للمشكلة"
+    "itemIssueSummary": "ملخص قصير للمشكلة",
+    "notConfigured": "غير مُهيَّأ"
   },
   "privacyPolicy": {
     "kicker": "قانوني",
@@ -1797,7 +1868,9 @@ const arabicMessages = {
     "customisable": "قابل للتخصيص",
     "shareDish": "مشاركة",
     "shareDishCopied": "تم نسخ الرابط إلى الحافظة",
-    "shareDishFailed": "تعذّر نسخ الرابط"
+    "shareDishFailed": "تعذّر نسخ الرابط",
+    "cartWithCount": "السلة، {count} عناصر",
+    "optionsKicker": "تخصيص"
   },
   "waiterInstall": {
     "prompt": "ثبّت التطبيق لاستخدام يومي أسرع.",
@@ -1806,10 +1879,12 @@ const arabicMessages = {
     "dismiss": "إغلاق"
   },
   "ownerNotifications": {
+    "kicker": "سجل الإشعارات",
     "title": "سجل الإشعارات",
     "subtitle": "الإشعارات الصادرة عبر الدفع والرسائل والبريد وواتساب — وهل تم تسليمها.",
     "refresh": "تحديث",
     "empty": "لا توجد إشعارات مسجلة بعد.",
+    "emptyHint": "ستظهر الإشعارات هنا بعد أول طلب أو حدث دفع.",
     "loadError": "تعذّر تحميل سجل الإشعارات.",
     "allChannels": "كل القنوات",
     "allStatuses": "كل الحالات",
@@ -1819,7 +1894,8 @@ const arabicMessages = {
     "channelWhatsapp": "واتساب",
     "statusSent": "أُرسل",
     "statusFailed": "فشل",
-    "statusSkipped": "متخطّى"
+    "statusSkipped": "متخطّى",
+    "recipient": "إلى"
   },
   "ownerOrders": {
     "kicker": "إدارة الطلبات",
@@ -2037,6 +2113,8 @@ const arabicMessages = {
     "findMyOrderRateLimit": "محاولات كثيرة. يرجى الانتظار قليلاً ثم المحاولة مجدداً.",
     "findMyOrderPhoneTooShort": "يرجى إدخال 6 أرقام على الأقل.",
     "findMyOrderItems": "{count} عنصر",
+    "findMyOrderPhonePlaceholder": "+966 5x xxx xxxx",
+    "findMyOrderCardLabel": "طلب #{number} — {status}",
     "receiptMessage": "رسالة من المطعم",
     "walletPaid": "رصيد مُطبَّق: {amount}",
     "loyaltyDiscount": "خصم الولاء"
@@ -2073,13 +2151,16 @@ Object.assign(arabicMessages, {
   confirmModal: {
     defaultTitle: "\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f\u061f",
     defaultBody: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621.",
-    confirmBtn: "\u062d\u0630\u0641"
+    confirmBtn: "\u062d\u0630\u0641",
+    dangerHint: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621."
   },
   errorBoundary: {
+    kicker: "\u062e\u0637\u0623",
     title: "\u062d\u062f\u062b \u062e\u0637\u0623 \u063a\u064a\u0631 \u0645\u062a\u0648\u0642\u0639",
     body: "\u062d\u062f\u062b \u062e\u0637\u0623 \u063a\u064a\u0631 \u0645\u062a\u0648\u0642\u0639. \u0623\u0639\u062f \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629 \u2014 \u0628\u064a\u0627\u0646\u0627\u062a\u0643 \u0641\u064a \u0623\u0645\u0627\u0646.",
     reload: "\u0625\u0639\u0627\u062f\u0629 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0635\u0641\u062d\u0629",
-    goHome: "\u0627\u0644\u0635\u0641\u062d\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629"
+    goHome: "\u0627\u0644\u0635\u0641\u062d\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
+    details: "\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u062e\u0637\u0623"
   },
   ownerProfileSections: {
     brandContact: "\u0627\u0644\u0647\u0648\u064a\u0629 \u0648\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
@@ -2172,6 +2253,7 @@ Object.assign(arabicMessages, {
     visibility: "\u0627\u0644\u0638\u0647\u0648\u0631"
   },
   notFound: {
+    kicker: "404",
     title: "\u0627\u0644\u0635\u0641\u062d\u0629 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629",
     message: "\u0627\u0644\u0635\u0641\u062d\u0629 \u0627\u0644\u062a\u064a \u062a\u0628\u062d\u062b \u0639\u0646\u0647\u0627 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f\u0629 \u0623\u0648 \u0631\u0628\u0645\u0627 \u062a\u0645 \u0646\u0642\u0644\u0647\u0627.",
     goDashboard: "\u0627\u0644\u0630\u0647\u0627\u0628 \u0625\u0644\u0649 \u0644\u0648\u062d\u0629 \u0627\u0644\u062a\u062d\u0643\u0645",
@@ -2187,12 +2269,15 @@ Object.assign(arabicMessages, {
     filterCity: "\u0627\u0644\u0645\u062f\u064a\u0646\u0629",
     filterCuisine: "\u0646\u0648\u0639 \u0627\u0644\u0645\u0637\u0628\u062e",
     filterAll: "\u0627\u0644\u0643\u0644",
+    filtersLabel: "\u062a\u0635\u0641\u064a\u0629 \u0627\u0644\u0645\u0637\u0627\u0639\u0645",
     open: "\u0645\u0641\u062a\u0648\u062d \u0627\u0644\u0622\u0646",
     closed: "\u0645\u063a\u0644\u0642",
     delivery: "\u062a\u0648\u0635\u064a\u0644",
     noResults: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0637\u0627\u0639\u0645.",
     noResultsHint: "\u062d\u0627\u0648\u0644 \u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0641\u0644\u0627\u062a\u0631.",
     ratingCount: "{count} \u062a\u0642\u064a\u064a\u0645",
+    ratingLabel: "\u0646\u062c\u0648\u0645",
+    reviewsLabel: "\u062a\u0642\u064a\u064a\u0645\u0627\u062a",
     viewMenu: "\u0639\u0631\u0636 \u0627\u0644\u0642\u0627\u0626\u0645\u0629",
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645\u2026",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0637\u0627\u0639\u0645.",
@@ -2242,6 +2327,10 @@ Object.assign(arabicMessages, {
     ratingCount_other: "{count} \u062a\u0642\u064a\u064a\u0645\u0627\u062a",
     promo: "\ud83c\udff7 {badge}",
     flashSale: "\u062a\u062e\u0641\u064a\u0636 \u0645\u0624\u0642\u062a",
+    minRating3: "\u2605 3+",
+    minRating35: "\u2605 3.5+",
+    minRating4: "\u2605 4+",
+    minRating45: "\u2605 4.5+",
   },
   mktMenu: {
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0642\u0627\u0626\u0645\u0629\u2026",
@@ -2302,11 +2391,14 @@ Object.assign(arabicMessages, {
     remove: "\u062d\u0630\u0641",
     qty: "\u0627\u0644\u0643\u0645\u064a\u0629",
     options: "\u0627\u0644\u062e\u064a\u0627\u0631\u0627\u062a",
+    restaurantKicker: "\u0645\u0637\u0639\u0645",
   },
   reservationManage: {
+    kicker: "\u062d\u062c\u0632",
     title: "\u062d\u062c\u0632\u0643",
     loading: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026",
     notFound: "\u062a\u0639\u0630\u0651\u0631 \u0627\u0644\u0639\u062b\u0648\u0631 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u062d\u062c\u0632. \u0642\u062f \u064a\u0643\u0648\u0646 \u0627\u0644\u0631\u0627\u0628\u0637 \u063a\u064a\u0631 \u0635\u0627\u0644\u062d \u0623\u0648 \u0645\u064f\u0633\u062a\u062e\u062f\u0645\u0627\u064b \u0645\u0646 \u0642\u0628\u0644.",
+    notFoundTitle: "\u0627\u0644\u062d\u062c\u0632 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f",
     restaurant: "\u0627\u0644\u0645\u0637\u0639\u0645",
     when: "\u0627\u0644\u0645\u0648\u0639\u062f",
     partySize: "\u0639\u062f\u062f \u0627\u0644\u0623\u0634\u062e\u0627\u0635",
@@ -2319,6 +2411,7 @@ Object.assign(arabicMessages, {
     notCancellable: "\u0644\u0645 \u064a\u0639\u062f \u0628\u0627\u0644\u0625\u0645\u0643\u0627\u0646 \u0625\u0644\u063a\u0627\u0621 \u0647\u0630\u0627 \u0627\u0644\u062d\u062c\u0632 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a.",
   },
   deliveryTracker: {
+    kicker: "\u062a\u0648\u0635\u064a\u0644 \u0645\u0628\u0627\u0634\u0631",
     title: "\u062a\u062a\u0628\u0651\u0639 \u0627\u0644\u0633\u0627\u0626\u0642",
     driverUnnamed: "\u0633\u0627\u0626\u0642\u0643",
     online: "\u0645\u062a\u0635\u0644 \u0627\u0644\u0622\u0646",
@@ -2327,7 +2420,9 @@ Object.assign(arabicMessages, {
     to: "\u0625\u0644\u0649",
     call: "\u0627\u062a\u0635\u0644 \u0628\u0627\u0644\u0633\u0627\u0626\u0642",
     viewMap: "\u0639\u0631\u0636 \u0639\u0644\u0649 \u0627\u0644\u062e\u0631\u064a\u0637\u0629",
+    mapAriaLabel: "\u062e\u0631\u064a\u0637\u0629 \u0645\u0648\u0642\u0639 \u0627\u0644\u0633\u0627\u0626\u0642",
     eta: "~{min} \u062f\u0642\u064a\u0642\u0629",
+    rateKicker: "\u062a\u0642\u064a\u064a\u0645\u0643",
     rateDriver: "\u0642\u064a\u0651\u0645 \u0633\u0627\u0626\u0642\u0643",
     ratingNote: "\u0623\u0636\u0641 \u0645\u0644\u0627\u062d\u0638\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
     submitRating: "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
@@ -2341,6 +2436,9 @@ Object.assign(arabicMessages, {
     status_cancelled: "\u0645\u0644\u063a\u0627\u0629",
     updatedJustNow: "\u062d\u064f\u062f\u0651\u062b \u0627\u0644\u0622\u0646",
     updatedAgo: "\u062d\u064f\u062f\u0651\u062b \u0642\u0628\u0644 {min} \u062f\u0642\u064a\u0642\u0629",
+    statusAriaLabel: "\u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0648\u0635\u064a\u0644: {status}",
+    driverSection: "\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0633\u0627\u0626\u0642",
+    ratingHint: "\u0627\u062e\u062a\u0631 \u062a\u0642\u064a\u064a\u0645\u0627\u064b \u0623\u0648\u0644\u0627\u064b",
   },
   mktOrderStatus: {
     title: "\u0637\u0644\u0628 {number}",
@@ -2387,6 +2485,9 @@ Object.assign(arabicMessages, {
     ratingNotePlaceholder: "\u062a\u0639\u0644\u064a\u0642 \u0627\u062e\u062a\u064a\u0627\u0631\u064a\u2026",
     submitRating: "\u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u062a\u0642\u064a\u064a\u0645",
     ratingThanks: "\u0634\u0643\u0631\u0627\u064b \u0639\u0644\u0649 \u0645\u0644\u0627\u062d\u0638\u0627\u062a\u0643!",
+    statusStepperLabel: "\u062e\u0637\u0648\u0627\u062a \u062a\u0642\u062f\u0651\u0645 \u0627\u0644\u0637\u0644\u0628",
+    currentStep: "\u0627\u0644\u062e\u0637\u0648\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629",
+    stepDone: "\u0645\u0646\u062c\u0632",
   },
   ownerMenuBuilder: {
     importCsv: "\u0627\u0633\u062a\u064a\u0631\u0627\u062f CSV",
@@ -2432,6 +2533,8 @@ Object.assign(arabicMessages, {
     how2: "\u0627\u0644\u0646\u0642\u0627\u0637 \u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u062d\u0633\u0627\u0628 \u0627\u0644\u0639\u0645\u064a\u0644 \u0641\u064a \u0627\u0644\u0645\u0646\u0635\u0629 \u2014 \u062a\u0628\u0642\u0649 \u0639\u0628\u0631 \u0627\u0644\u062c\u0644\u0633\u0627\u062a.",
     how3: "\u0639\u0646\u062f\u0645\u0627 \u064a\u0645\u062a\u0644\u0643\u0648\u0646 \u0646\u0642\u0627\u0637\u0627\u064b \u0643\u0627\u0641\u064a\u0629\u060c \u064a\u0645\u0643\u0646\u0647\u0645 \u0627\u0633\u062a\u0628\u062f\u0627\u0644\u0647\u0627 \u0628\u0631\u0635\u064a\u062f \u0645\u062d\u0641\u0638\u0629 \u0641\u064a \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062d\u0629.",
     how4: "\u064a\u0645\u0643\u0646 \u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0631\u0635\u064a\u062f \u0627\u0644\u0645\u062d\u0641\u0638\u0629 \u0644\u062f\u0641\u0639 \u062b\u0645\u0646 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644\u064a\u0629 \u0641\u064a \u0645\u0637\u0639\u0645\u0643.",
+    settingsKicker: "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a",
+    settingsTitle: "\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c",
     saved: "\u062a\u0645 \u062d\u0641\u0638 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
     saveFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0641\u0638 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0648\u0644\u0627\u0621.",
@@ -2518,6 +2621,7 @@ Object.assign(arabicMessages, {
     available: "المتاح",
     cashOut: "سحب نقدي",
     cashOutMin: "تحتاج إلى {amount} للسحب.",
+    cashOutCode: "رمز الاسترداد",
     cashOutShowCode: "أظهر هذا الرمز في أي مطعم لاستلام {amount} نقداً:",
     cashOutCancel: "إلغاء",
     cashOutAmountPrompt: "المبلغ المراد سحبه (حتى {max}):",
@@ -2526,12 +2630,16 @@ Object.assign(arabicMessages, {
     errorGeneric: "حدث خطأ. يرجى المحاولة مجدداً.",
   },
   walletCharge: {
+    kicker: "المحفظة",
     title: "خصم من المحفظة",
     scanHint: "امسح رمز الدفع الخاص بالعميل أو الصقه لخصم المبلغ من محفظته.",
     scan: "مسح",
+    manualLabel: "رمز الدفع",
     manualPlaceholder: "أو الصق رمز الدفع",
     find: "بحث",
     balance: "الرصيد",
+    balanceLabel: "الرصيد: {amount}",
+    cameraActive: "الكاميرا نشطة — وجّه نحو رمز QR",
     amount: "المبلغ المراد خصمه",
     amountPlaceholder: "0.00",
     back: "رجوع",
@@ -2548,6 +2656,7 @@ Object.assign(arabicMessages, {
     awaitingHint: "اطلب من {name} الموافقة على الخصم من هاتفه.",
     declined: "رفض العميل الخصم.",
     requestExpired: "انتهت صلاحية طلب الخصم. حاول مرة أخرى.",
+    cancelRequest: "إلغاء طلب الخصم",
   },
   chargeRequest: {
     title: "الموافقة على الخصم؟",
@@ -2604,9 +2713,12 @@ Object.assign(arabicMessages, {
     historyEmpty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0639\u0627\u0645\u0644\u0627\u062a \u0628\u0639\u062f.",
   },
   adminFlashSales: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     title: "\u0639\u0631\u0648\u0636 \u0633\u0631\u064a\u0639\u0629",
     subtitle: "\u062d\u0645\u0644\u0627\u062a \u062e\u0635\u0645 \u062a\u0631\u0639\u0627\u0647\u0627 \u0627\u0644\u0645\u0646\u0635\u0629 \u0648\u062a\u0646\u0636\u0645 \u0625\u0644\u064a\u0647\u0627 \u0627\u0644\u0645\u0637\u0627\u0639\u0645.",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
+    refreshing: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u062f\u064a\u062b\u2026",
+    createKicker: "\u062d\u0645\u0644\u0629 \u062c\u062f\u064a\u062f\u0629",
     createTitle: "\u0639\u0631\u0636 \u0633\u0631\u064a\u0639 \u062c\u062f\u064a\u062f",
     name: "\u0627\u0644\u0627\u0633\u0645",
     namePlaceholder: "\u0645\u062b\u0627\u0644: \u062e\u0635\u0645 15% \u0641\u064a \u0639\u0637\u0644\u0629 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
@@ -2630,12 +2742,14 @@ Object.assign(arabicMessages, {
     pause: "\u0625\u064a\u0642\u0627\u0641",
     activate: "\u062a\u0641\u0639\u064a\u0644",
     delete: "\u062d\u0630\u0641",
+    to: "\u0625\u0644\u0649",
     deleteConfirm: "\u062d\u0630\u0641 \u0627\u0644\u0639\u0631\u0636 \"{name}\"\u061f",
     deleted: "\u062a\u0645 \u062d\u0630\u0641 \u0627\u0644\u0639\u0631\u0636.",
     deleteFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0630\u0641 \u0627\u0644\u0639\u0631\u0636.",
     updateFailed: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0639\u0631\u0636.",
   },
   adminDeliveryJobs: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     title: "\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u062a\u0648\u0635\u064a\u0644",
     subtitle: "\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u062a\u0648\u0635\u064a\u0644 \u0627\u0644\u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0628\u0631 \u0634\u0628\u0643\u0629 \u0633\u0627\u0626\u0642\u064a \u0627\u0644\u0645\u0646\u0635\u0629.",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
@@ -2657,6 +2771,7 @@ Object.assign(arabicMessages, {
     statusFailed: "\u0641\u0634\u0644",
   },
   adminCustomers: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     title: "\u0627\u0644\u0639\u0645\u0644\u0627\u0621",
     subtitle: "\u0643\u0644 \u0639\u0645\u0644\u0627\u0621 \u0627\u0644\u0645\u0646\u0635\u0629 \u2014 \u064a\u0646\u062a\u0645\u0648\u0646 \u0625\u0644\u0649 \u0627\u0644\u0633\u0648\u0642 \u0648\u0644\u064a\u0633 \u0625\u0644\u0649 \u0645\u0637\u0639\u0645 \u0648\u0627\u062d\u062f.",
     totalLabel: "{count} \u0639\u0645\u064a\u0644",
@@ -2666,6 +2781,8 @@ Object.assign(arabicMessages, {
     refresh: "\u062a\u062d\u062f\u064a\u062b",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0639\u0645\u0644\u0627\u0621.",
     empty: "\u0644\u0627 \u064a\u0648\u062c\u062f \u0639\u0645\u0644\u0627\u0621.",
+    emptyHint: "\u062c\u0631\u0651\u0628 \u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0628\u062d\u062b \u0623\u0648 \u0627\u0644\u062a\u0635\u0641\u064a\u0629.",
+    detailKicker: "\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0639\u0645\u064a\u0644",
     colCustomer: "\u0627\u0644\u0639\u0645\u064a\u0644",
     colContact: "\u0627\u0644\u062a\u0648\u0627\u0635\u0644",
     colWallet: "\u0627\u0644\u0645\u062d\u0641\u0638\u0629",
@@ -2741,6 +2858,7 @@ Object.assign(arabicMessages, {
     bonusNote: "\u0645\u0644\u0627\u062d\u0638\u0629",
     bonusNotePlaceholder: "\u0645\u062b\u0627\u0644: \u0645\u0643\u0627\u0641\u0623\u0629 \u062a\u0631\u062d\u064a\u0628\u064a\u0629",
     defaultNote: "\u0645\u0643\u0627\u0641\u0623\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
+    bonusSaving: "\u062c\u0627\u0631\u064d \u0627\u0644\u0645\u0646\u062d\u2026",
     bonusIssue: "\u0645\u0646\u062d",
     cancel: "\u0625\u0644\u063a\u0627\u0621",
     bonusSuccess: "\u062a\u0645 \u0645\u0646\u062d \u0627\u0644\u0645\u0643\u0627\u0641\u0623\u0629 \u0628\u0646\u062c\u0627\u062d.",
@@ -2807,6 +2925,8 @@ Object.assign(arabicMessages, {
     inviting: "\u062c\u0627\u0631\u064d \u0627\u0644\u0625\u0646\u0634\u0627\u0621\u2026",
     teamSection: "\u0641\u0631\u064a\u0642\u0643",
     noStaff: "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0633\u0627\u0628\u0627\u062a \u0645\u0648\u0638\u0641\u064a\u0646 \u0628\u0639\u062f.",
+    noStaffHint: "\u0627\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0646\u0645\u0648\u0630\u062c \u0623\u0639\u0644\u0627\u0647 \u0644\u062f\u0639\u0648\u0629 \u0639\u0636\u0648 \u0641\u064a \u0627\u0644\u0641\u0631\u064a\u0642.",
+    periodLabel: "\u0641\u062a\u0631\u0629 \u0627\u0644\u0625\u062d\u0635\u0627\u0621\u064a\u0627\u062a",
     manage: "\u0625\u062f\u0627\u0631\u0629",
     remove: "\u062d\u0630\u0641",
     removing: "\u062c\u0627\u0631\u064d \u0627\u0644\u062d\u0630\u0641\u2026",
@@ -2849,6 +2969,8 @@ Object.assign(arabicMessages, {
     legendOwner: "\u0623\u0635\u062d\u0627\u0628 \u0627\u0644\u0645\u0637\u0627\u0639\u0645 \u064a\u062a\u0645\u062a\u0639\u0648\u0646 \u062f\u0627\u0626\u0645\u0627\u064b \u0628\u0635\u0644\u0627\u062d\u064a\u0627\u062a \u0643\u0627\u0645\u0644\u0629 \u0628\u063a\u0636 \u0627\u0644\u0646\u0638\u0631 \u0639\u0646 \u0647\u0630\u0647 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a.",
     legendStaff: "\u064a\u0631\u0649 \u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646 \u0641\u0642\u0637 \u0645\u0627 \u062a\u0633\u0645\u062d \u0628\u0647 \u0635\u0644\u0627\u062d\u064a\u0627\u062a\u0647\u0645.",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u062c\u062f\u062f\u0627\u064b.",
+    updating: "\u062c\u0627\u0631\u064d \u062a\u062d\u062f\u064a\u062b \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646\u2026",
+    loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646\u2026",
   },
   waiterLayout: {
     role: "\u0646\u0627\u062f\u0644",
@@ -2904,6 +3026,7 @@ Object.assign(arabicMessages, {
     shiftHint: "\u0627\u062e\u062a\u0631 \u0648\u0642\u062a \u0628\u062f\u0621 \u0627\u0644\u0648\u0631\u062f\u064a\u0629 \u0648\u0627\u0636\u063a\u0637 \u062a\u062d\u0645\u064a\u0644.",
     newOrderBtn: "\u0637\u0644\u0628 \u062c\u062f\u064a\u062f",
     chargeWalletBtn: "\u062e\u0635\u0645 \u0645\u0646 \u0627\u0644\u0645\u062d\u0641\u0638\u0629",
+    newOrderKicker: "\u0646\u0627\u062f\u0644",
     newOrderTitle: "\u0637\u0644\u0628 \u062c\u062f\u064a\u062f",
     newOrderTable: "\u0627\u0644\u0637\u0627\u0648\u0644\u0629 / \u0627\u0644\u062a\u0633\u0645\u064a\u0629",
     newOrderTablePlaceholder: "\u0645\u062b\u0627\u0644: \u0637\u0627\u0648\u0644\u0629 3",
@@ -2939,11 +3062,14 @@ Object.assign(arabicMessages, {
   },
   closureDates: {
     addDate: "\u0625\u0636\u0627\u0641\u0629 \u062a\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642",
+    addDateTitle: "\u062a\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642 \u062c\u062f\u064a\u062f",
     date: "\u0627\u0644\u062a\u0627\u0631\u064a\u062e",
     labelOptional: "\u0627\u0644\u062a\u0633\u0645\u064a\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
     labelPlaceholder: "\u0645\u062b\u0627\u0644: \u064a\u0648\u0645 \u0639\u064a\u062f \u0627\u0644\u0645\u064a\u0644\u0627\u062f",
     add: "\u0625\u0636\u0627\u0641\u0629",
     empty: "\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u0648\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642 \u2014 \u064a\u062a\u0628\u0639 \u0645\u0637\u0639\u0645\u0643 \u0627\u0644\u062c\u062f\u0648\u0644 \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064a \u0641\u0642\u0637.",
+    emptyTitle: "\u0644\u0627 \u062a\u0648\u062c\u062f \u062a\u0648\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642",
+    emptyBody: "\u064a\u062a\u0628\u0639 \u0645\u0637\u0639\u0645\u0643 \u0627\u0644\u062c\u062f\u0648\u0644 \u0627\u0644\u0623\u0633\u0628\u0648\u0639\u064a \u0641\u0642\u0637.",
     past: "\u0645\u0636\u0649",
     today: "\u0627\u0644\u064a\u0648\u0645",
     loadFailed: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u062a\u0648\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
@@ -2951,6 +3077,7 @@ Object.assign(arabicMessages, {
     addFailed: "\u062a\u0639\u0630\u0651\u0631 \u0625\u0636\u0627\u0641\u0629 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
     removed: "\u062a\u0645 \u062d\u0630\u0641 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
     removeFailed: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0630\u0641 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
+    scheduledKicker: "\u0627\u0644\u0625\u063a\u0644\u0627\u0642\u0627\u062a \u0627\u0644\u0645\u062c\u062f\u0648\u0644\u0629",
   },
   menuSelect: {
     kicker: "\u0627\u062e\u062a\u0631 \u0642\u0627\u0626\u0645\u0629",
@@ -2963,8 +3090,12 @@ Object.assign(arabicMessages, {
     temporarilyUnavailable: "\u063a\u064a\u0631 \u0645\u062a\u0627\u062d \u0645\u0624\u0642\u062a\u0627\u064b",
     switchMenu: "\u062a\u063a\u064a\u064a\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629",
     backToMenus: "\u062c\u0645\u064a\u0639 \u0627\u0644\u0642\u0648\u0627\u0626\u0645",
+    heroCoverAlt: "\u0635\u0648\u0631\u0629 \u063a\u0644\u0627\u0641 {name}",
+    logoAlt: "\u0634\u0639\u0627\u0631 {name}",
+    browseLinkLabel: "\u062a\u0635\u0641\u062d {name}",
   },
   revenueChart: {
+    kicker: "\u0627\u0644\u062a\u062d\u0644\u064a\u0644\u0627\u062a",
     title: "\u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     totalRevenue: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     totalOrders: "\u0627\u0644\u0637\u0644\u0628\u0627\u062a",
@@ -2972,9 +3103,15 @@ Object.assign(arabicMessages, {
     orders: "{count} \u0637\u0644\u0628",
     noData: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0625\u064a\u0631\u0627\u062f\u0627\u062a \u0628\u0639\u062f.",
     loadError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0631\u0633\u0645 \u0627\u0644\u0628\u064a\u0627\u0646\u064a.",
+    periodNav: "\u0645\u062d\u062f\u062f \u0627\u0644\u0641\u062a\u0631\u0629",
+    periodDays: "\u0622\u062e\u0631 {n} \u0623\u064a\u0627\u0645",
+    barLabel: "{date}: {revenue}\u060c {orders} \u0637\u0644\u0628\u0627\u062a",
+    tableDate: "\u0627\u0644\u062a\u0627\u0631\u064a\u062e",
   },
   bestSellers: {
     title: "\u0627\u0644\u0623\u0643\u062b\u0631 \u0645\u0628\u064a\u0639\u0627\u064b",
+    heading: "\u0623\u0628\u0631\u0632 \u0627\u0644\u0623\u0637\u0628\u0627\u0642",
+    updating: "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u062f\u064a\u062b...",
     byOrders: "\u062d\u0633\u0628 \u0627\u0644\u0637\u0644\u0628\u0627\u062a",
     byRevenue: "\u062d\u0633\u0628 \u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a",
     qty: "\u062a\u0645 \u0628\u064a\u0639 {n}",
@@ -3050,6 +3187,15 @@ Object.assign(arabicMessages, {
     nextWeek: "\u0627\u0644\u062a\u0627\u0644\u064a",
     guests: "{n} \u0636\u064a\u0648\u0641",
     undatedNote: "{count} \u062d\u062c\u0632(\u062d\u062c\u0648\u0632\u0627\u062a) \u0628\u062f\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u2014 \u062a\u0638\u0647\u0631 \u0641\u064a \u0639\u0631\u0636 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0641\u0642\u0637.",
+    emptyDay: "\u2014",
+    weekGrid: "\u0639\u0631\u0636 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+    dropSuccess: "\u062a\u0645 \u0646\u0642\u0644 {name} \u0625\u0644\u0649 {day}",
+    status: {
+      new: "\u062c\u062f\u064a\u062f",
+      contacted: "\u062a\u0645 \u0627\u0644\u062a\u0648\u0627\u0635\u0644",
+      won: "\u0645\u0624\u0643\u062f",
+      lost: "\u0645\u0641\u0642\u0648\u062f",
+    },
   },
   ownerPromotions: {
     kicker: "\u0627\u0644\u0639\u0631\u0648\u0636",
@@ -3104,6 +3250,8 @@ Object.assign(arabicMessages, {
     nameRequired: "\u0627\u0644\u0627\u0633\u0645 \u0645\u0637\u0644\u0648\u0628.",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0639\u0631\u0648\u0636 \u0627\u0644\u062a\u0631\u0648\u064a\u062c\u064a\u0629.",
     retry: "\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629",
+    editAriaLabel: "\u062a\u0639\u062f\u064a\u0644 {name}",
+    deleteAriaLabel: "\u062d\u0630\u0641 {name}",
   },
   ownerFlashSales: {
     kicker: "\u062d\u0645\u0644\u0627\u062a \u0627\u0644\u0645\u0646\u0635\u0629",
@@ -3156,8 +3304,11 @@ Object.assign(arabicMessages, {
     radiusFailed: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062b \u0646\u0637\u0627\u0642 \u0627\u0644\u062a\u0648\u0635\u064a\u0644. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u062c\u062f\u062f\u0627\u064b.",
   },
   adminZones: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     title: "\u0645\u0646\u0627\u0637\u0642 \u0627\u0644\u062a\u0648\u0635\u064a\u0644",
     subtitle: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0627\u0637\u0642 \u0627\u0644\u062c\u063a\u0631\u0627\u0641\u064a\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629 \u0644\u062a\u0648\u0635\u064a\u0644 \u0627\u0644\u0633\u0648\u0642.",
+    emptyTitle: "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0646\u0627\u0637\u0642 \u062a\u0648\u0635\u064a\u0644 \u0628\u0639\u062f",
+    emptyBody: "\u0623\u0646\u0634\u0626 \u0645\u0646\u0637\u0642\u0629 \u0644\u062a\u0641\u0639\u064a\u0644 \u062a\u0648\u0635\u064a\u0644 \u0627\u0644\u0633\u0648\u0642 \u0641\u064a \u0645\u0646\u0637\u0642\u0629 \u0645\u0639\u064a\u0646\u0629.",
     newZone: "\u0645\u0646\u0637\u0642\u0629 \u062c\u062f\u064a\u062f\u0629",
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0646\u0627\u0637\u0642\u2026",
     fetchError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0645\u0646\u0627\u0637\u0642 \u0627\u0644\u062a\u0648\u0635\u064a\u0644.",
@@ -3197,8 +3348,11 @@ Object.assign(arabicMessages, {
     feeTiersHint: "\u0627\u062a\u0631\u0643\u0647 \u0641\u0627\u0631\u063a\u0627\u064b \u0644\u0644\u0631\u0633\u0648\u0645 \u0627\u0644\u062b\u0627\u0628\u062a\u0629. km_up_to: null \u062a\u0639\u0646\u064a \u0634\u0627\u0645\u0644\u0629 \u0627\u0644\u0643\u0644.",
     feeTiersError: "\u064a\u062c\u0628 \u0623\u0646 \u062a\u0643\u0648\u0646 \u0634\u0631\u0627\u0626\u062d \u0627\u0644\u0631\u0633\u0648\u0645 \u0645\u0635\u0641\u0648\u0641\u0629 JSON \u0635\u0627\u0644\u062d\u0629.",
     polygonPts: "{count} \u0646\u0642\u0627\u0637",
+    radiusKm: "{value} \u0643\u0645",
   },
   adminDrivers: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
+    detailKicker: "\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0633\u0627\u0626\u0642",
     title: "\u0627\u0644\u0633\u0627\u0626\u0642\u0648\u0646",
     subtitle: "\u062c\u0645\u064a\u0639 \u0633\u0627\u0626\u0642\u064a \u0627\u0644\u062a\u0648\u0635\u064a\u0644 \u0627\u0644\u0645\u0633\u062c\u0644\u064a\u0646 \u0648\u0625\u062d\u0635\u0627\u0626\u064a\u0627\u062a \u0623\u062f\u0627\u0626\u0647\u0645.",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
@@ -3241,8 +3395,12 @@ Object.assign(arabicMessages, {
     statusOnline: "\u0645\u062a\u0635\u0644",
     statusOffline: "\u063a\u064a\u0631 \u0645\u062a\u0635\u0644",
     unnamed: "\u0633\u0627\u0626\u0642 \u0628\u062f\u0648\u0646 \u0627\u0633\u0645",
+    colActions: "\u0625\u062c\u0631\u0627\u0621\u0627\u062a",
+    payMethod: "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639",
+    ratingLabel: "\u0627\u0644\u062a\u0642\u064a\u064a\u0645: {value}",
   },
   adminAnalytics: {
+    kicker: "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0646\u0635\u0629",
     title: "\u062a\u062d\u0644\u064a\u0644\u0627\u062a \u0627\u0644\u0645\u0646\u0635\u0629",
     subtitle: "\u0625\u062d\u0635\u0627\u0626\u064a\u0627\u062a \u0645\u062c\u0645\u0651\u0639\u0629 \u0645\u0628\u0627\u0634\u0631\u0629 \u0639\u0628\u0631 \u062c\u0645\u064a\u0639 \u0627\u0644\u0645\u0637\u0627\u0639\u0645 \u0648\u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0648\u0639\u0645\u0644\u064a\u0627\u062a \u0627\u0644\u062a\u0648\u0635\u064a\u0644.",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
@@ -3283,6 +3441,7 @@ Object.assign(arabicMessages, {
     totalTxns: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0639\u0627\u0645\u0644\u0627\u062a",
     bonusIssued: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0643\u0627\u0641\u0622\u062a \u0627\u0644\u0635\u0627\u062f\u0631\u0629",
     payments: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a",
+    loaded: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u062d\u0644\u064a\u0644.",
   },
   ownerRatings: {
     kicker: "\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
@@ -3301,6 +3460,8 @@ Object.assign(arabicMessages, {
     exporting: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631\u2026",
     exportError: "\u0641\u0634\u0644 \u0627\u0644\u062a\u0635\u062f\u064a\u0631. \u064a\u0631\u062c\u0649 \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629 \u0645\u062c\u062f\u062f\u0627\u064b.",
     refresh: "\u062a\u062d\u062f\u064a\u062b",
+    starLabel: "{n} \u0646\u062c\u0648\u0645",
+    starsLabel: "{n} \u0646\u062c\u0648\u0645",
   },
   kitchen: {
     title: "\u0634\u0627\u0634\u0629 \u0627\u0644\u0645\u0637\u0628\u062e",
@@ -3334,6 +3495,9 @@ Object.assign(arabicMessages, {
     filterAll: "\u0627\u0644\u0643\u0644",
     filterTables: "\u0627\u0644\u0637\u0627\u0648\u0644\u0627\u062a",
     elapsedMin: "\u062f",
+    displayHeader: "\u0631\u0623\u0633 \u0634\u0627\u0634\u0629 \u0627\u0644\u0645\u0637\u0628\u062e",
+    stationFilterNav: "\u0641\u0644\u0627\u062a\u0631 \u0627\u0644\u0645\u062d\u0637\u0629",
+    orderItems: "\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0637\u0644\u0628",
   },
   customerAuth: {
     kicker: "\u062a\u0633\u062c\u064a\u0644 \u062f\u062e\u0648\u0644 \u0633\u0631\u064a\u0639",

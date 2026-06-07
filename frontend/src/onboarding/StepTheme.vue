@@ -1,27 +1,29 @@
 ﻿<template>
   <div class="space-y-4">
-    <section v-if="!standalone" class="ui-panel space-y-4 p-5">
-      <h2 class="text-xl font-semibold">{{ t("stepTheme.title") }}</h2>
-      <p class="text-sm text-slate-400">{{ t("stepTheme.description") }}</p>
+    <section v-if="!standalone" class="ui-panel space-y-3 p-5 ui-reveal">
+      <h2 class="text-xl font-semibold text-white">{{ t("stepTheme.title") }}</h2>
+      <p class="ui-subtle">{{ t("stepTheme.description") }}</p>
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '28ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepTheme.title") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepTheme.appearanceSection") }}</h3>
+        <component :is="standalone ? 'h2' : 'h3'" class="text-lg font-semibold text-white">{{ t("stepTheme.appearanceSection") }}</component>
       </div>
 
-      <div class="flex flex-wrap gap-2">
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
-          {{ t("stepTheme.primaryColor") }} {{ form.primary_color }}
+      <div class="flex flex-wrap gap-1.5">
+        <span class="ui-chip">
+          <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/10" :style="{ background: form.primary_color }" aria-hidden="true"></span>
+          {{ t("stepTheme.primaryColor") }}
         </span>
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
-          {{ t("stepTheme.secondaryColor") }} {{ form.secondary_color }}
+        <span class="ui-chip">
+          <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/10" :style="{ background: form.secondary_color }" aria-hidden="true"></span>
+          {{ t("stepTheme.secondaryColor") }}
         </span>
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
+        <span class="ui-chip">
           {{ form.logo_url ? t("stepTheme.logoUploaded") : t("stepTheme.uploadLogo") }}
         </span>
-        <span class="rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1 text-[11px] font-medium text-slate-300">
+        <span class="ui-chip">
           {{ form.hero_url ? t("stepTheme.heroUploaded") : t("stepTheme.uploadHeroImage") }}
         </span>
       </div>
@@ -35,14 +37,14 @@
                 <input
                   v-model="form.primary_color"
                   type="color"
-                  class="h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
+                  class="ui-touch-target h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
                   :aria-invalid="errors.primary_color ? 'true' : undefined"
                   aria-describedby="step-theme-primary-error"
                   @input="clearField('primary_color')"
                 />
-                <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{{ form.primary_color }}</span>
+                <span class="text-xs font-semibold uppercase tracking-[0.2em] tabular-nums text-slate-400">{{ form.primary_color }}</span>
               </div>
-              <p v-if="errors.primary_color" id="step-theme-primary-error" class="text-xs text-red-300">{{ errors.primary_color }}</p>
+              <p v-if="errors.primary_color" id="step-theme-primary-error" role="alert" class="text-xs text-red-300">{{ errors.primary_color }}</p>
             </label>
 
             <label class="space-y-2 text-sm text-slate-200">
@@ -51,14 +53,14 @@
                 <input
                   v-model="form.secondary_color"
                   type="color"
-                  class="h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
+                  class="ui-touch-target h-10 w-12 rounded-lg border border-slate-700 bg-slate-900 p-1"
                   :aria-invalid="errors.secondary_color ? 'true' : undefined"
                   aria-describedby="step-theme-secondary-error"
                   @input="clearField('secondary_color')"
                 />
-                <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{{ form.secondary_color }}</span>
+                <span class="text-xs font-semibold uppercase tracking-[0.2em] tabular-nums text-slate-400">{{ form.secondary_color }}</span>
               </div>
-              <p v-if="errors.secondary_color" id="step-theme-secondary-error" class="text-xs text-red-300">{{ errors.secondary_color }}</p>
+              <p v-if="errors.secondary_color" id="step-theme-secondary-error" role="alert" class="text-xs text-red-300">{{ errors.secondary_color }}</p>
             </label>
           </div>
 
@@ -72,11 +74,13 @@
                 v-for="preset in themePresets"
                 :key="preset.id"
                 type="button"
-                class="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                class="ui-touch-target ui-press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]"
                 :class="isPresetActive(preset) ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
                 :aria-pressed="isPresetActive(preset)"
                 @click="applyThemePreset(preset)"
               >
+                <span class="inline-block h-2 w-2 shrink-0 rounded-full border border-white/10" :style="{ background: preset.primary }" aria-hidden="true"></span>
+                <span class="inline-block h-2 w-2 shrink-0 rounded-full border border-white/10" :style="{ background: preset.secondary }" aria-hidden="true"></span>
                 {{ preset.label }}
               </button>
             </div>
@@ -90,7 +94,7 @@
               <h4 class="text-xl font-semibold text-white">{{ previewTitle }}</h4>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2">
               <img
                 v-if="form.logo_url"
                 :src="form.logo_url"
@@ -100,43 +104,54 @@
                 class="h-14 w-14 rounded-2xl border border-white/10 object-cover shadow-lg"
                 @error="$event.target.style.display='none'"
               />
-              <div class="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-xs font-medium text-slate-200">
-                {{ t("stepTheme.primaryColor") }} � {{ form.primary_color }}
-              </div>
-              <div class="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-xs font-medium text-slate-200">
-                {{ t("stepTheme.secondaryColor") }} � {{ form.secondary_color }}
-              </div>
+              <span class="ui-chip inline-flex items-center gap-1.5">
+                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/10" :style="{ background: form.primary_color }" aria-hidden="true"></span>
+                <span class="tabular-nums">{{ form.primary_color }}</span>
+              </span>
+              <span class="ui-chip inline-flex items-center gap-1.5">
+                <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/10" :style="{ background: form.secondary_color }" aria-hidden="true"></span>
+                <span class="tabular-nums">{{ form.secondary_color }}</span>
+              </span>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '56ms' }">
       <div class="space-y-1">
         <p class="ui-section-kicker">{{ t("stepTheme.mediaSection") }}</p>
-        <h3 class="text-lg font-semibold text-white">{{ t("stepTheme.mediaSectionTitle") }}</h3>
+        <component :is="standalone ? 'h2' : 'h3'" class="text-lg font-semibold text-white">{{ t("stepTheme.mediaSectionTitle") }}</component>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-2">
-        <label class="space-y-2 text-sm text-slate-200">
+        <div class="space-y-2 text-sm text-slate-200">
           <span>{{ t("stepTheme.logoUrl") }}</span>
           <div
             class="space-y-3 rounded-2xl border border-dashed p-4 transition-colors"
             :class="draggingLogo ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+            aria-describedby="step-theme-logo-hint"
             @dragenter="draggingLogo = true"
             @dragleave="draggingLogo = false"
             @dragover="preventDropDefaults"
             @drop="dropLogo"
           >
-            <div class="flex flex-wrap items-center gap-3">
-              <label class="cursor-pointer rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="ui-touch-target cursor-pointer rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 transition-colors hover:border-brand-secondary focus-within:border-brand-secondary focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--color-secondary)]">
                 {{ uploadingLogo ? t("stepTheme.uploadingProgress", { progress: logoProgress }) : t("stepTheme.uploadLogo") }}
-                <input type="file" accept="image/*" class="hidden" :disabled="uploadingLogo" @change="uploadLogo" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  :disabled="uploadingLogo"
+                  :aria-invalid="errors.logo_url ? 'true' : undefined"
+                  aria-describedby="step-theme-logo-error"
+                  @change="uploadLogo"
+                />
               </label>
               <button
                 v-if="form.logo_url"
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                class="ui-touch-target ui-press rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 transition-colors hover:border-red-400 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
                 type="button"
                 @click="clearLogo"
               >
@@ -155,36 +170,53 @@
                 @error="$event.target.style.display='none'"
               />
               <div class="space-y-1">
-                <p class="text-xs text-slate-300">{{ t("stepTheme.logoDropHint") }}</p>
+                <p id="step-theme-logo-hint" class="text-xs text-slate-300">{{ t("stepTheme.logoDropHint") }}</p>
                 <p class="text-[11px] text-slate-500">{{ t("stepTheme.acceptedFormats") }}</p>
               </div>
             </div>
 
-            <div v-if="uploadingLogo" class="h-1.5 w-full overflow-hidden rounded bg-slate-800">
+            <div
+              v-if="uploadingLogo"
+              class="h-1.5 w-full overflow-hidden rounded bg-slate-800"
+              role="progressbar"
+              :aria-valuenow="logoProgress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="t('stepTheme.uploadingProgress', { progress: logoProgress })"
+            >
               <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${logoProgress}%` }"></div>
             </div>
           </div>
-          <p v-if="errors.logo_url" id="step-theme-logo-error" class="text-xs text-red-300">{{ errors.logo_url }}</p>
-        </label>
+          <p v-if="errors.logo_url" id="step-theme-logo-error" role="alert" class="text-xs text-red-300">{{ errors.logo_url }}</p>
+        </div>
 
-        <label class="space-y-2 text-sm text-slate-200">
+        <div class="space-y-2 text-sm text-slate-200">
           <span>{{ t("stepTheme.heroImageUrl") }}</span>
           <div
             class="space-y-3 rounded-2xl border border-dashed p-4 transition-colors"
             :class="draggingHero ? 'border-brand-secondary bg-brand-secondary/10' : 'border-slate-700 bg-slate-900/40'"
+            aria-describedby="step-theme-hero-hint"
             @dragenter="draggingHero = true"
             @dragleave="draggingHero = false"
             @dragover="preventDropDefaults"
             @drop="dropHero"
           >
-            <div class="flex flex-wrap items-center gap-3">
-              <label class="cursor-pointer rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-brand-secondary">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="ui-touch-target cursor-pointer rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 transition-colors hover:border-brand-secondary focus-within:border-brand-secondary focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--color-secondary)]">
                 {{ uploadingHero ? t("stepTheme.uploadingProgress", { progress: heroProgress }) : t("stepTheme.uploadHeroImage") }}
-                <input type="file" accept="image/*" class="hidden" :disabled="uploadingHero" @change="uploadHero" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  :disabled="uploadingHero"
+                  :aria-invalid="errors.hero_url ? 'true' : undefined"
+                  aria-describedby="step-theme-hero-error"
+                  @change="uploadHero"
+                />
               </label>
               <button
                 v-if="form.hero_url"
-                class="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 hover:border-red-400 hover:text-red-300"
+                class="ui-touch-target ui-press rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-100 transition-colors hover:border-red-400 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
                 type="button"
                 @click="clearHero"
               >
@@ -194,32 +226,40 @@
 
             <div class="space-y-2">
               <div v-if="form.hero_url" class="overflow-hidden rounded-2xl border border-slate-700">
-                <img :src="form.hero_url" :alt="t('stepTheme.previewTitle')" loading="lazy" decoding="async" class="h-40 w-full object-cover" @error="$event.target.style.display='none'" />
+                <img :src="form.hero_url" :alt="t('stepTheme.heroPreviewAlt')" loading="lazy" decoding="async" class="h-40 w-full object-cover" @error="$event.target.style.display='none'" />
               </div>
-              <p class="text-xs text-slate-300">{{ t("stepTheme.heroDropHint") }}</p>
+              <p id="step-theme-hero-hint" class="text-xs text-slate-300">{{ t("stepTheme.heroDropHint") }}</p>
               <p class="text-[11px] text-slate-500">{{ t("stepTheme.acceptedFormats") }}</p>
             </div>
 
-            <div v-if="uploadingHero" class="h-1.5 w-full overflow-hidden rounded bg-slate-800">
+            <div
+              v-if="uploadingHero"
+              class="h-1.5 w-full overflow-hidden rounded bg-slate-800"
+              role="progressbar"
+              :aria-valuenow="heroProgress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="t('stepTheme.uploadingProgress', { progress: heroProgress })"
+            >
               <div class="h-full bg-emerald-400 transition-all duration-150" :style="{ width: `${heroProgress}%` }"></div>
             </div>
           </div>
-          <p v-if="errors.hero_url" id="step-theme-hero-error" class="text-xs text-red-300">{{ errors.hero_url }}</p>
-        </label>
+          <p v-if="errors.hero_url" id="step-theme-hero-error" role="alert" class="text-xs text-red-300">{{ errors.hero_url }}</p>
+        </div>
       </div>
     </section>
 
-    <section :class="sectionPanelClass">
+    <section :class="sectionPanelClass" class="ui-reveal" :style="{ '--ui-delay': '84ms' }">
       <div v-if="errors.non_field_errors" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ errors.non_field_errors }}</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <button class="ui-btn-primary px-4 py-2" :disabled="saving || uploadingHero || uploadingLogo" @click="saveAndNext">
+        <button class="ui-btn-primary ui-touch-target px-5 py-2.5 text-sm" :disabled="saving || uploadingHero || uploadingLogo" @click="saveAndNext">
           {{ saving ? t("common.saving") : standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
-        <button v-if="!standalone" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
+        <button v-if="!standalone" class="ui-btn-outline ui-touch-target px-5 py-2.5 text-sm" @click="$emit('back')">{{ t("common.previous") }}</button>
         <p class="text-sm text-slate-400">{{ status }}</p>
       </div>
     </section>

@@ -1,52 +1,58 @@
 <template>
   <div class="ui-shell">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <!-- Sticky top bar -->
-    <header class="sticky top-0 z-[2000] border-b border-slate-700/60 bg-slate-900/95 backdrop-blur-sm">
-      <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-3 py-2.5">
+    <header class="ui-header z-[2000]">
+      <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-3 py-2.5 ui-fade-up">
         <!-- Left: restaurant name + waiter badge -->
         <div class="flex min-w-0 items-center gap-2.5">
           <img
             v-if="tenantLogo"
             :src="tenantLogo"
             :alt="`${tenantName} logo`"
-            class="h-7 w-7 shrink-0 rounded-lg border border-slate-700/70 object-cover"
+            class="h-7 w-7 shrink-0 rounded-xl border border-slate-700/70 object-cover"
             loading="eager"
             decoding="async"
             @error="$event.target.style.display='none'"
           />
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-100">{{ tenantName }}</p>
-            <p class="text-[10px] font-medium uppercase tracking-widest text-slate-400">{{ t('waiterLayout.role') }}</p>
+            <p class="ui-kicker text-[10px]">{{ t('waiterLayout.role') }}</p>
           </div>
         </div>
 
         <!-- Right: connectivity dot + pending badge + sign-out -->
         <div class="flex shrink-0 items-center gap-2">
-          <!-- Offline queue indicator -->
-          <span
-            v-if="waiter.queueLength > 0"
-            class="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300"
-          >
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-            {{ t('waiterLayout.queued', { count: waiter.queueLength }) }}
-          </span>
-          <!-- Live / offline dot -->
-          <span class="flex items-center gap-1 text-[10px] font-medium" :class="waiter.isOnline ? 'text-emerald-400' : 'text-slate-500'">
+          <!-- Connectivity status (single live region for queue + online state) -->
+          <span class="flex items-center gap-2" role="status" aria-live="polite">
+            <!-- Offline queue indicator -->
             <span
-              class="h-2 w-2 rounded-full"
-              :class="waiter.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'"
-            />
-            {{ waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline') }}
+              v-show="waiter.queueLength > 0"
+              class="ui-chip-strong inline-flex items-center gap-1 px-2 py-0.5 text-[10px]"
+            >
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
+              {{ t('waiterLayout.queued', { count: waiter.queueLength }) }}
+            </span>
+            <!-- Live / offline dot -->
+            <span
+              class="flex items-center gap-1 text-[10px] font-medium"
+              :class="waiter.isOnline ? 'text-emerald-400' : 'text-slate-500'"
+            >
+              <span
+                :class="waiter.isOnline ? 'ui-live-dot bg-emerald-400' : 'h-2 w-2 rounded-full bg-slate-600'"
+                aria-hidden="true"
+              />
+              <span>{{ waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline') }}</span>
+            </span>
           </span>
           <!-- Language switcher -->
           <LanguageSwitcher compact dropdown />
           <!-- Dark / light toggle -->
           <button
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700/60 bg-slate-800/60 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+            class="ui-touch-target flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800/60 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ui-press"
             type="button"
-            :aria-label="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
-            :title="ownerTheme === 'dark' ? t('ownerLayout.themeLight') : t('ownerLayout.themeDark')"
+            :aria-label="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
+            :title="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
             @click="toggleTheme"
           >
             <svg v-if="ownerTheme === 'dark'" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5">
@@ -60,13 +66,14 @@
           <RouterLink
             v-if="session.isTenantOwner"
             to="/owner"
-            class="rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
+            class="ui-pill-nav ui-press ui-touch-target inline-flex items-center text-xs px-2.5 py-1.5"
           >
             {{ t('waiterLayout.ownerView') }}
           </RouterLink>
           <!-- Sign out -->
           <button
-            class="rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-400 hover:border-red-500/40 hover:text-red-300 transition-colors"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center text-xs px-2.5 py-1.5 hover:border-red-500/40 hover:text-red-300"
+            type="button"
             @click="handleSignOut"
           >
             {{ t('waiterLayout.signOut') }}
@@ -76,7 +83,7 @@
     </header>
 
     <!-- Page content -->
-    <main id="main-content" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
+    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-2xl px-3 pb-24 pt-4">
       <RouterView />
     </main>
   </div>

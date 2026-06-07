@@ -1,52 +1,104 @@
 <template>
-  <div class="mx-auto max-w-md px-4 py-10">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h1 class="text-lg font-semibold text-slate-100">{{ t('reservationManage.title') }}</h1>
-
-      <p v-if="loading" class="mt-4 text-sm text-slate-400">{{ t('reservationManage.loading') }}</p>
-
-      <p v-else-if="notFound" class="mt-4 text-sm text-rose-300">{{ t('reservationManage.notFound') }}</p>
-
-      <div v-else class="mt-4 space-y-4">
-        <dl class="space-y-2 text-sm">
-          <div class="flex justify-between gap-3">
-            <dt class="text-slate-500">{{ t('reservationManage.restaurant') }}</dt>
-            <dd class="font-medium text-slate-200">{{ data.restaurant || '—' }}</dd>
-          </div>
-          <div v-if="data.booked_for" class="flex justify-between gap-3">
-            <dt class="text-slate-500">{{ t('reservationManage.when') }}</dt>
-            <dd class="font-medium text-slate-200">{{ formatWhen(data.booked_for) }}</dd>
-          </div>
-          <div v-if="data.party_size" class="flex justify-between gap-3">
-            <dt class="text-slate-500">{{ t('reservationManage.partySize') }}</dt>
-            <dd class="font-medium text-slate-200">{{ data.party_size }}</dd>
-          </div>
-        </dl>
-
-        <!-- Cancelled state -->
-        <div v-if="data.cancelled" class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3 text-center text-sm text-slate-300">
-          ✓ {{ t('reservationManage.cancelledState') }}
-        </div>
-
-        <!-- Cancellable -->
-        <div v-else-if="data.can_cancel" class="space-y-2">
-          <p v-if="errorMsg" class="text-sm text-rose-300">{{ errorMsg }}</p>
-          <button
-            class="w-full rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
-            :disabled="cancelling"
-            @click="cancel"
-          >
-            {{ cancelling ? t('reservationManage.cancelling') : t('reservationManage.cancelButton') }}
-          </button>
-        </div>
-
-        <!-- Past / not cancellable -->
-        <p v-else class="rounded-xl border border-slate-700/60 bg-slate-800/40 p-3 text-center text-sm text-slate-400">
-          {{ data.is_past ? t('reservationManage.tooLate') : t('reservationManage.notCancellable') }}
-        </p>
+  <main class="mx-auto max-w-md px-4 py-10">
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="ui-panel space-y-4 p-6" aria-busy="true" :aria-label="t('reservationManage.loading')">
+      <div class="space-y-1.5">
+        <div class="h-2.5 w-20 animate-pulse rounded bg-slate-700/60" />
+        <div class="h-5 w-36 animate-pulse rounded bg-slate-700/40" />
       </div>
+      <div class="space-y-3 pt-2">
+        <div v-for="i in 3" :key="i" class="flex justify-between gap-3">
+          <div class="h-3.5 w-20 animate-pulse rounded bg-slate-700/50" />
+          <div class="h-3.5 w-28 animate-pulse rounded bg-slate-700/35" />
+        </div>
+      </div>
+      <div class="h-10 animate-pulse rounded-xl bg-slate-700/40" />
     </div>
-  </div>
+
+    <!-- Not-found / error state -->
+    <div
+      v-else-if="notFound"
+      class="ui-empty-state space-y-2 p-6 text-center"
+      role="alert"
+    >
+      <p class="text-sm font-semibold text-slate-100">{{ t('reservationManage.notFoundTitle') }}</p>
+      <p class="text-xs text-slate-400">{{ t('reservationManage.notFound') }}</p>
+    </div>
+
+    <!-- Main card -->
+    <div v-else class="ui-glass ui-reveal p-6 space-y-5">
+      <!-- Header -->
+      <div class="space-y-0.5">
+        <p class="ui-kicker">{{ t('reservationManage.kicker') }}</p>
+        <h1 class="ui-page-title">{{ t('reservationManage.title') }}</h1>
+      </div>
+
+      <!-- Details -->
+      <dl class="space-y-2.5 text-sm">
+        <div class="flex items-start justify-between gap-3">
+          <dt class="shrink-0 text-slate-400">{{ t('reservationManage.restaurant') }}</dt>
+          <dd class="min-w-0 text-end font-medium text-slate-100 truncate">{{ data.restaurant || '—' }}</dd>
+        </div>
+        <div v-if="data.booked_for" class="flex items-start justify-between gap-3">
+          <dt class="text-slate-400 shrink-0">{{ t('reservationManage.when') }}</dt>
+          <dd class="min-w-0 text-end font-medium text-slate-100 truncate">{{ formatWhen(data.booked_for) }}</dd>
+        </div>
+        <div v-if="data.party_size" class="flex items-start justify-between gap-3">
+          <dt class="text-slate-400">{{ t('reservationManage.partySize') }}</dt>
+          <dd class="font-medium tabular-nums text-slate-100">{{ data.party_size }}</dd>
+        </div>
+      </dl>
+
+      <div class="ui-divider" />
+
+      <!-- Cancelled state -->
+      <!-- TODO: requires logic change — after cancel success, move focus to this element (nextTick + ref) -->
+      <div
+        v-if="data.cancelled"
+        class="ui-state-strip flex items-center gap-2 px-3 py-3 text-sm text-[var(--color-primary)]"
+        role="status"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+        </svg>
+        <span>{{ t('reservationManage.cancelledState') }}</span>
+      </div>
+
+      <!-- Cancellable -->
+      <div v-else-if="data.can_cancel" class="space-y-3">
+        <div
+          v-if="errorMsg"
+          id="cancel-error"
+          class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+          role="alert"
+        >
+          <svg class="mt-0.5 h-4 w-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" />
+          </svg>
+          <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
+        </div>
+        <button
+          type="button"
+          class="ui-btn-outline ui-touch-target ui-press w-full border-rose-500/50 text-rose-200 hover:bg-rose-500/20 hover:border-rose-500/50 hover:text-rose-200"
+          :aria-describedby="errorMsg ? 'cancel-error' : undefined"
+          :disabled="cancelling"
+          @click="cancel"
+        >
+          <span aria-live="polite" aria-atomic="true">
+            {{ cancelling ? t('reservationManage.cancelling') : t('reservationManage.cancelButton') }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Past / not cancellable -->
+      <p
+        v-else
+        class="rounded-xl border border-slate-700/50 bg-slate-800/35 px-3 py-3 text-center text-sm text-slate-400"
+      >
+        {{ data.is_past ? t('reservationManage.tooLate') : t('reservationManage.notCancellable') }}
+      </p>
+    </div>
+  </main>
 </template>
 
 <script setup>

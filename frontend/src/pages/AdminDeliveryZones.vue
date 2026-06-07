@@ -1,48 +1,74 @@
-﻿<template>
-  <div class="p-6 space-y-6">
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-bold text-white">{{ t('adminZones.title') }}</h1>
-        <p class="text-sm text-slate-400 mt-0.5">{{ t('adminZones.subtitle') }}</p>
+<template>
+  <div class="ui-page-shell space-y-5">
+    <!-- Page header -->
+    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="ui-kicker">{{ t('adminZones.kicker') }}</p>
+          <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">
+            {{ t('adminZones.title') }}
+          </h1>
+          <p class="ui-subtle mt-0.5 text-xs">{{ t('adminZones.subtitle') }}</p>
+        </div>
+        <button
+          class="ui-btn-primary ui-press shrink-0 gap-1.5 px-4 py-2 text-xs"
+          @click="openCreate"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" class="h-3.5 w-3.5" fill="currentColor">
+            <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" />
+          </svg>
+          {{ t('adminZones.newZone') }}
+        </button>
       </div>
-      <button
-        class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-4 py-2 text-xs font-semibold text-slate-950 hover:opacity-90"
-        @click="openCreate"
-      >
-        + {{ t('adminZones.newZone') }}
-      </button>
-    </div>
+    </header>
 
-    <!-- Loading: skeleton table -->
-    <div v-if="loading" class="overflow-x-auto rounded-2xl border border-slate-700/60">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-800/60 text-xs text-slate-400">
-          <tr>
-            <th scope="col" class="px-4 py-3 text-left">#</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminZones.colName') }}</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminZones.colCity') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminZones.colRadius') }}</th>
-            <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
-            <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminZones.colActions') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-700/40">
-          <tr v-for="i in 4" :key="i" class="animate-pulse">
-            <td class="px-4 py-3"><div class="h-3 w-4 rounded bg-slate-700/60" /></td>
-            <td class="px-4 py-3"><div class="h-3 w-28 rounded bg-slate-700/60" /></td>
-            <td class="px-4 py-3"><div class="h-3 w-20 rounded bg-slate-800/60" /></td>
-            <td class="px-4 py-3"><div class="ml-auto h-3 w-10 rounded bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="mx-auto h-3 w-10 rounded bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="mx-auto h-4 w-14 rounded-full bg-slate-800/50" /></td>
-            <td class="px-4 py-3"><div class="ml-auto h-3 w-16 rounded bg-slate-800/40" /></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- Loading: skeleton (mobile cards + desktop table) -->
+    <template v-if="loading">
+      <div class="block md:hidden space-y-2">
+        <div v-for="i in 4" :key="i" class="animate-pulse ui-panel px-4 py-3 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="h-3 w-28 rounded bg-slate-700/60" />
+            <div class="h-4 w-14 rounded-full bg-slate-800/50" />
+          </div>
+          <div class="h-3 w-20 rounded bg-slate-800/60" />
+          <div class="h-3 w-10 rounded bg-slate-800/50" />
+        </div>
+      </div>
+
+      <div class="ui-table-wrap hidden md:block">
+        <table class="w-full min-w-[640px] text-sm">
+          <thead class="bg-slate-800/60 text-xs text-slate-400">
+            <tr>
+              <th scope="col" class="px-4 py-3 text-start">#</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colName') }}</th>
+              <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colCity') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colRadius') }}</th>
+              <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
+              <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
+              <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colActions') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/40">
+            <tr v-for="i in 4" :key="i" class="animate-pulse">
+              <td class="px-4 py-3"><div class="h-3 w-4 rounded bg-slate-700/60" /></td>
+              <td class="px-4 py-3"><div class="h-3 w-28 rounded bg-slate-700/60" /></td>
+              <td class="px-4 py-3"><div class="h-3 w-20 rounded bg-slate-800/60" /></td>
+              <td class="px-4 py-3"><div class="ms-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="mx-auto h-3 w-10 rounded bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="mx-auto h-4 w-14 rounded-full bg-slate-800/50" /></td>
+              <td class="px-4 py-3"><div class="ms-auto h-3 w-16 rounded bg-slate-800/40" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
 
     <!-- Error -->
-    <div v-else-if="fetchError" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+    <div
+      v-else-if="fetchError"
+      class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3"
+      role="alert"
+    >
       <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
       </svg>
@@ -53,48 +79,112 @@
       >{{ t('common.retry') }}</button>
     </div>
 
-    <div v-else-if="!zones.length" class="py-12 text-center text-sm text-slate-400">{{ t('adminZones.empty') }}</div>
+    <!-- Empty state -->
+    <div v-else-if="!zones.length" class="ui-empty-state text-center p-6 space-y-1.5">
+      <svg aria-hidden="true" viewBox="0 0 24 24" class="mx-auto mb-2 h-8 w-8 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+      </svg>
+      <p class="text-sm font-semibold text-slate-100">{{ t('adminZones.emptyTitle') }}</p>
+      <p class="text-xs text-slate-400">{{ t('adminZones.emptyBody') }}</p>
+      <button
+        class="ui-btn-primary mt-3 inline-flex gap-1.5 px-5 py-2 text-sm"
+        @click="openCreate"
+      >{{ t('adminZones.newZone') }}</button>
+    </div>
 
-    <!-- Zones table -->
-    <div v-else class="overflow-x-auto rounded-2xl border border-slate-700/60">
-      <table class="w-full text-sm">
+    <!-- Zones: mobile cards + desktop table -->
+    <template v-else>
+      <!-- Mobile cards -->
+      <div class="block md:hidden space-y-2">
+        <div
+          v-for="(zone, index) in zones"
+          :key="zone.id"
+          class="ui-panel ui-reveal px-4 py-3 space-y-1.5"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-medium text-slate-200 truncate">{{ zone.name }}</span>
+            <span
+              class="ui-status-pill shrink-0"
+              :class="zone.is_active ? 'border-emerald-500/30 text-emerald-300' : 'text-slate-400'"
+            >
+              {{ zone.is_active ? t('adminZones.active') : t('adminZones.inactive') }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">{{ zone.city }}</p>
+          <p class="text-xs text-slate-500 tabular-nums">
+            {{ t('adminZones.radiusKm', { value: zone.approx_radius_km }) }}
+            · {{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}
+          </p>
+          <div class="flex items-center gap-1 pt-0.5">
+            <button
+              class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-sky-400 transition hover:bg-sky-400/10 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400/60"
+              :aria-label="`${t('adminZones.edit')} ${zone.name}`"
+              @click="openEdit(zone)"
+            >{{ t('adminZones.edit') }}</button>
+            <button
+              class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
+              :disabled="deletingId === zone.id"
+              :aria-label="`${t('adminZones.delete')} ${zone.name}`"
+              :aria-busy="deletingId === zone.id ? 'true' : undefined"
+              @click="deleteZone(zone)"
+            >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop table -->
+      <div class="ui-table-wrap hidden md:block">
+      <table class="w-full min-w-[640px] text-sm">
         <thead class="bg-slate-800/60 text-xs text-slate-400">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left">#</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminZones.colName') }}</th>
-            <th scope="col" class="px-4 py-3 text-left">{{ t('adminZones.colCity') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminZones.colRadius') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">#</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colName') }}</th>
+            <th scope="col" class="px-4 py-3 text-start">{{ t('adminZones.colCity') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colRadius') }}</th>
             <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colPolygon') }}</th>
             <th scope="col" class="px-4 py-3 text-center">{{ t('adminZones.colStatus') }}</th>
-            <th scope="col" class="px-4 py-3 text-right">{{ t('adminZones.colActions') }}</th>
+            <th scope="col" class="px-4 py-3 text-end">{{ t('adminZones.colActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-700/40">
-          <tr v-for="zone in zones" :key="zone.id" class="hover:bg-slate-800/30 transition-colors">
-            <td class="px-4 py-3 text-slate-500 text-xs">{{ zone.id }}</td>
-            <td class="px-4 py-3 text-slate-200 font-medium">{{ zone.name }}</td>
+          <tr
+            v-for="(zone, index) in zones"
+            :key="zone.id"
+            class="ui-reveal transition-colors hover:bg-slate-800/30"
+            :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+          >
+            <td class="px-4 py-3 text-xs text-slate-500 tabular-nums">{{ zone.id }}</td>
+            <td class="max-w-[180px] px-4 py-3 font-medium text-slate-200">
+              <span class="block truncate">{{ zone.name }}</span>
+            </td>
             <td class="px-4 py-3 text-slate-400">{{ zone.city }}</td>
-            <td class="px-4 py-3 text-right text-slate-400">{{ zone.approx_radius_km }} km</td>
-            <td class="px-4 py-3 text-center text-slate-400 text-xs">{{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}</td>
+            <td class="px-4 py-3 text-end text-slate-400 tabular-nums">{{ t('adminZones.radiusKm', { value: zone.approx_radius_km }) }}</td>
+            <td class="px-4 py-3 text-center text-xs text-slate-400 tabular-nums">
+              {{ t('adminZones.polygonPts', { count: zone.polygon.length }) }}
+            </td>
             <td class="px-4 py-3 text-center">
               <span
-                class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                class="ui-status-pill"
                 :class="zone.is_active
-                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-                  : 'bg-slate-700/50 border border-slate-600 text-slate-400'"
+                  ? 'border-emerald-500/30 text-emerald-300'
+                  : 'text-slate-400'"
               >
                 {{ zone.is_active ? t('adminZones.active') : t('adminZones.inactive') }}
               </span>
             </td>
-            <td class="px-4 py-3 text-right">
-              <div class="flex justify-end items-center gap-2">
+            <td class="px-4 py-3 text-end">
+              <div class="flex items-center justify-end gap-1">
                 <button
-                  class="text-xs text-sky-400 hover:text-sky-300"
+                  class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-sky-400 transition hover:bg-sky-400/10 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400/60"
+                  :aria-label="`${t('adminZones.edit')} ${zone.name}`"
                   @click="openEdit(zone)"
                 >{{ t('adminZones.edit') }}</button>
                 <button
-                  class="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                  class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
                   :disabled="deletingId === zone.id"
+                  :aria-label="`${t('adminZones.delete')} ${zone.name}`"
+                  :aria-busy="deletingId === zone.id ? 'true' : undefined"
                   @click="deleteZone(zone)"
                 >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
               </div>
@@ -103,6 +193,7 @@
         </tbody>
       </table>
     </div>
+    </template>
 
     <!-- Zone form drawer -->
     <Teleport to="body">
@@ -114,101 +205,166 @@
       >
         <div
           v-if="showForm"
-          class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60"
+          class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
           @click.self="closeForm"
           @keydown.esc="closeForm"
         >
-          <div ref="formDialogRef" role="dialog" aria-modal="true" aria-labelledby="admin-delivery-zones-form-dialog-title" class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 id="admin-delivery-zones-form-dialog-title" class="text-base font-bold text-white">
+          <div
+            ref="formDialogRef"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-delivery-zones-form-dialog-title"
+            class="ui-panel w-full max-w-lg overflow-y-auto p-6"
+            style="max-height: 90dvh"
+          >
+            <h2
+              id="admin-delivery-zones-form-dialog-title"
+              class="text-base font-semibold text-white"
+            >
               {{ editing ? t('adminZones.editTitle') : t('adminZones.createTitle') }}
             </h2>
 
-            <div class="space-y-3">
+            <div class="mt-4 space-y-3">
               <!-- Name -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">
+                <label class="block text-xs font-medium text-slate-400 mb-1" for="az-name">
                   {{ t('adminZones.fieldName') }}
-                  <input v-model="form.name" type="text" class="admin-input" :placeholder="t('adminZones.namePlaceholder')" />
                 </label>
+                <input
+                  id="az-name"
+                  v-model="form.name"
+                  type="text"
+                  class="ui-input"
+                  :placeholder="t('adminZones.namePlaceholder')"
+                />
               </div>
               <!-- City -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">
+                <label class="block text-xs font-medium text-slate-400 mb-1" for="az-city">
                   {{ t('adminZones.fieldCity') }}
-                  <input v-model="form.city" type="text" class="admin-input" :placeholder="t('adminZones.cityPlaceholder')" />
                 </label>
+                <input
+                  id="az-city"
+                  v-model="form.city"
+                  type="text"
+                  class="ui-input"
+                  :placeholder="t('adminZones.cityPlaceholder')"
+                />
               </div>
               <!-- Centre coordinates -->
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-slate-400 mb-1">
+                  <label class="block text-xs font-medium text-slate-400 mb-1" for="az-lat">
                     {{ t('adminZones.fieldCenterLat') }}
-                    <input v-model.number="form.center_lat" type="number" step="0.0001" class="admin-input" placeholder="48.8566" />
                   </label>
+                  <input
+                    id="az-lat"
+                    v-model.number="form.center_lat"
+                    type="number"
+                    step="0.0001"
+                    class="ui-input"
+                    placeholder="48.8566"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-400 mb-1">
+                  <label class="block text-xs font-medium text-slate-400 mb-1" for="az-lng">
                     {{ t('adminZones.fieldCenterLng') }}
-                    <input v-model.number="form.center_lng" type="number" step="0.0001" class="admin-input" placeholder="2.3522" />
                   </label>
+                  <input
+                    id="az-lng"
+                    v-model.number="form.center_lng"
+                    type="number"
+                    step="0.0001"
+                    class="ui-input"
+                    placeholder="2.3522"
+                  />
                 </div>
               </div>
               <!-- Approx radius -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">
+                <label class="block text-xs font-medium text-slate-400 mb-1" for="az-radius">
                   {{ t('adminZones.fieldRadius') }}
-                  <input v-model.number="form.approx_radius_km" type="number" step="0.5" min="0.5" class="admin-input" placeholder="5" />
                 </label>
+                <input
+                  id="az-radius"
+                  v-model.number="form.approx_radius_km"
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  class="ui-input"
+                  placeholder="5"
+                />
               </div>
               <!-- Polygon JSON -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">
+                <label class="block text-xs font-medium text-slate-400 mb-1" for="az-polygon">
                   {{ t('adminZones.fieldPolygon') }}
-                  <span class="text-slate-600"> — JSON array of &#123;lat, lng&#125;</span>
-                  <textarea
-                    v-model="polygonJson"
-                    rows="5"
-                    class="admin-input font-mono text-[11px] resize-y"
-                    :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
-                    :aria-invalid="polygonError ? 'true' : undefined"
-                    aria-describedby="admin-zones-polygon-error"
-                  />
+                  <span class="ms-1 text-slate-600">{{ t('adminZones.polygonHint') }}</span>
                 </label>
-                <p v-if="polygonError" id="admin-zones-polygon-error" class="text-xs text-red-400 mt-1">{{ polygonError }}</p>
+                <textarea
+                  id="az-polygon"
+                  v-model="polygonJson"
+                  rows="5"
+                  class="ui-textarea font-mono text-[11px] resize-y"
+                  :placeholder='`[{"lat":48.86,"lng":2.34},{"lat":48.87,"lng":2.35},{"lat":48.85,"lng":2.36}]`'
+                  :aria-invalid="polygonError ? 'true' : undefined"
+                  aria-describedby="admin-zones-polygon-error"
+                />
+                <p
+                  v-if="polygonError"
+                  id="admin-zones-polygon-error"
+                  class="mt-1 text-xs text-red-400"
+                  role="alert"
+                >{{ polygonError }}</p>
               </div>
               <!-- Fee tiers JSON -->
               <div>
-                <label class="block text-xs text-slate-400 mb-1">
+                <label class="block text-xs font-medium text-slate-400 mb-1" for="az-fee-tiers">
                   {{ t('adminZones.fieldFeeTiers') }}
-                  <span class="text-slate-600"> — JSON array of &#123;km_up_to, fee&#125;</span>
-                  <textarea
-                    v-model="feeTiersJson"
-                    rows="3"
-                    class="admin-input font-mono text-[11px] resize-y"
-                    :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
-                    :aria-invalid="feeTiersError ? 'true' : undefined"
-                    aria-describedby="admin-zones-fee-tiers-error"
-                  />
+                  <span class="ms-1 text-slate-600">{{ t('adminZones.feeTiersLabelHint') }}</span>
                 </label>
-                <p v-if="feeTiersError" id="admin-zones-fee-tiers-error" class="text-xs text-red-400 mt-1">{{ feeTiersError }}</p>
-                <p class="text-[10px] text-slate-600 mt-0.5">{{ t('adminZones.feeTiersHint') }}</p>
+                <textarea
+                  id="az-fee-tiers"
+                  v-model="feeTiersJson"
+                  rows="3"
+                  class="ui-textarea font-mono text-[11px] resize-y"
+                  :placeholder='`[{"km_up_to":3,"fee":2.5},{"km_up_to":null,"fee":5.0}]`'
+                  :aria-invalid="feeTiersError ? 'true' : undefined"
+                  aria-describedby="admin-zones-fee-tiers-error"
+                />
+                <p
+                  v-if="feeTiersError"
+                  id="admin-zones-fee-tiers-error"
+                  class="mt-1 text-xs text-red-400"
+                  role="alert"
+                >{{ feeTiersError }}</p>
+                <p class="mt-0.5 text-[10px] text-slate-600">{{ t('adminZones.feeTiersHint') }}</p>
               </div>
-              <!-- Active -->
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input v-model="form.is_active" type="checkbox" class="accent-[var(--color-secondary,#f59e0b)]" />
+              <!-- Active toggle -->
+              <label class="flex cursor-pointer items-center gap-2.5 py-1">
+                <input
+                  v-model="form.is_active"
+                  type="checkbox"
+                  role="switch"
+                  :aria-checked="form.is_active ? 'true' : 'false'"
+                  class="h-4 w-4 accent-[var(--color-secondary,#f59e0b)]"
+                />
                 <span class="text-sm text-slate-300">{{ t('adminZones.fieldActive') }}</span>
               </label>
             </div>
 
-            <div class="flex gap-3 pt-2">
+            <div class="mt-5 flex gap-3">
               <button
-                class="flex-1 rounded-full bg-[var(--color-secondary,#f59e0b)] py-2 text-sm font-semibold text-slate-950 disabled:opacity-50"
+                class="ui-btn-primary flex-1 py-2 text-sm disabled:opacity-50"
                 :disabled="saving"
                 @click="save"
               >
                 {{ saving ? '…' : (editing ? t('adminZones.saveBtn') : t('adminZones.createBtn')) }}
               </button>
-              <button class="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-slate-400" @click="closeForm">
+              <button
+                class="ui-btn-outline px-5 py-2 text-sm"
+                @click="closeForm"
+              >
                 {{ t('adminZones.cancelBtn') }}
               </button>
             </div>
@@ -216,7 +372,6 @@
         </div>
       </Transition>
     </Teleport>
-
   </div>
 </template>
 
@@ -235,6 +390,7 @@ const fetchError = ref(false);
 const zones = ref([]);
 const showForm = ref(false);
 const formDialogRef = ref(null);
+const _returnFocus = ref(null);
 
 const FOCUSABLE_DZ = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -262,6 +418,8 @@ watch(showForm, async (open) => {
     document.addEventListener('keydown', trapFormFocus);
   } else {
     document.removeEventListener('keydown', trapFormFocus);
+    _returnFocus.value?.focus();
+    _returnFocus.value = null;
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapFormFocus));
@@ -299,6 +457,7 @@ const fetchZones = async () => {
 };
 
 const openCreate = () => {
+  _returnFocus.value = document.activeElement;
   editing.value = null;
   form.value = defaultForm();
   polygonJson.value = '[]';
@@ -309,6 +468,7 @@ const openCreate = () => {
 };
 
 const openEdit = (zone) => {
+  _returnFocus.value = document.activeElement;
   editing.value = zone;
   form.value = {
     name: zone.name,
@@ -394,9 +554,3 @@ const deleteZone = async (zone) => {
 
 onMounted(fetchZones);
 </script>
-
-<style scoped>
-.admin-input {
-  @apply w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-slate-500 focus:outline-none;
-}
-</style>

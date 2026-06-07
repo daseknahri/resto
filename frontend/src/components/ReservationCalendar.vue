@@ -1,84 +1,120 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <!-- Week navigation -->
-    <div class="flex items-center justify-between gap-3">
+    <nav :aria-label="t('reservationCalendar.weekNav')" class="flex items-center justify-between gap-3">
       <button
-        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 text-xs"
+        :aria-label="t('reservationCalendar.prevWeek')"
         @click="prevWeek"
       >
-        ← {{ t("reservationCalendar.prevWeek") }}
+        <span class="rtl:scale-x-[-1] inline-block" aria-hidden="true">&#8249;</span>
+        {{ t("reservationCalendar.prevWeek") }}
       </button>
-      <p class="text-sm font-semibold text-slate-100">{{ weekLabel }}</p>
+      <p class="text-sm font-semibold tabular-nums text-slate-100">{{ weekLabel }}</p>
       <button
-        class="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+        class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 text-xs"
+        :aria-label="t('reservationCalendar.nextWeek')"
         @click="nextWeek"
       >
-        {{ t("reservationCalendar.nextWeek") }} →
+        {{ t("reservationCalendar.nextWeek") }}
+        <span class="rtl:scale-x-[-1] inline-block" aria-hidden="true">&#8250;</span>
       </button>
-    </div>
+    </nav>
+
+    <!-- Live region for drag-and-drop announcements -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">{{ dropAnnouncement }}</div>
 
     <!-- Loading -->
-    <div v-if="loading" class="grid grid-cols-7 gap-2">
-      <div v-for="i in 7" :key="i" class="h-40 animate-pulse rounded-2xl border border-slate-700/40 bg-slate-800/40" />
+    <div v-if="loading" class="flex gap-2 overflow-x-auto pb-1">
+      <div
+        v-for="i in 7"
+        :key="i"
+        class="ui-skeleton h-40 shrink-0 w-[90px] sm:w-[calc((100%-6*0.375rem)/7)]"
+      />
     </div>
 
     <!-- Week grid -->
-    <div v-else class="grid grid-cols-7 gap-1.5 overflow-x-auto">
+    <div
+      v-else
+      class="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5"
+      role="region"
+      :aria-label="t('reservationCalendar.weekGrid')"
+    >
       <div
-        v-for="day in weekDays"
+        v-for="(day, dayIndex) in weekDays"
         :key="day.iso"
-        class="min-h-[140px] rounded-2xl border transition-colors"
+        class="shrink-0 w-[90px] sm:w-[calc((100%-6*0.375rem)/7)] min-h-[140px] rounded-2xl border transition-colors ui-reveal"
+        :style="{ '--ui-delay': `${Math.min(dayIndex, 6) * 30}ms` }"
         :class="[
-          isToday(day.iso) ? 'border-violet-500/40 bg-violet-500/5' : 'border-slate-700/40 bg-slate-800/20',
-          dragOverDay === day.iso ? 'ring-2 ring-violet-400/50' : '',
+          isToday(day.iso) ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary)]/10' : 'border-slate-700/40 bg-slate-800/20',
+          dragOverDay === day.iso ? 'ring-2 ring-[var(--color-primary)]/50' : '',
         ]"
+        role="group"
+        :aria-label="day.dayName"
         @dragover.prevent="dragOverDay = day.iso"
         @dragleave="dragOverDay = null"
         @drop.prevent="onDrop(day.iso)"
       >
         <!-- Day header -->
         <div
+          :id="'cal-day-' + day.iso"
           class="rounded-t-2xl px-2 py-1.5 text-center"
-          :class="isToday(day.iso) ? 'bg-violet-500/20' : 'bg-slate-800/40'"
+          :class="isToday(day.iso) ? 'bg-[var(--color-primary)]/20' : 'bg-slate-800/40'"
         >
           <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{{ day.dayName }}</p>
-          <p class="text-lg font-bold" :class="isToday(day.iso) ? 'text-violet-300' : 'text-slate-100'">
+          <p
+            class="text-lg font-bold tabular-nums"
+            :class="isToday(day.iso) ? 'text-[var(--color-primary)]' : 'text-slate-100'"
+          >
             {{ day.dayNum }}
           </p>
         </div>
 
         <!-- Reservation chips -->
-        <div class="space-y-1 p-1.5">
-          <div
-            v-for="res in reservationsByDay[day.iso] || []"
+        <ul :aria-labelledby="'cal-day-' + day.iso" class="space-y-1 p-1.5">
+          <li
+            v-for="(res, resIndex) in reservationsByDay[day.iso] || []"
             :key="res.id"
-            role="button"
-            tabindex="0"
-            class="group cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing"
-            :class="statusChipClass(res.status)"
-            draggable="true"
-            @dragstart="onDragStart(res)"
-            @click="$emit('select', res)"
-            @keydown.enter.space.prevent="$emit('select', res)"
           >
-            <p class="font-semibold text-slate-100 truncate">{{ res.name }}</p>
-            <p v-if="res.booked_for" class="text-slate-400">{{ timeLabel(res.booked_for) }}</p>
-            <p v-if="res.party_size" class="text-slate-500">{{ t("reservationCalendar.guests", { n: res.party_size }) }}</p>
-            <span class="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide" :class="statusBadgeClass(res.status)">
-              {{ statusLabelShort(res.status) }}
-            </span>
-          </div>
+            <!-- TODO: requires logic change — add keyboard reschedule path (WCAG 2.1 SC 2.1.1) -->
+            <button
+              type="button"
+              class="w-full text-left ui-press cursor-grab rounded-xl border px-2 py-1.5 text-[11px] transition-all active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)] focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ui-reveal"
+              :style="{ '--ui-delay': `${Math.min(resIndex, 5) * 20}ms` }"
+              :class="statusChipClass(res.status)"
+              :aria-label="[res.name, res.booked_for ? timeLabel(res.booked_for) : '', res.party_size ? t('reservationCalendar.guests', { n: res.party_size }) : ''].filter(Boolean).join(', ')"
+              aria-roledescription="draggable"
+              draggable="true"
+              @dragstart="onDragStart(res)"
+              @click="$emit('select', res)"
+            >
+              <p class="min-w-0 truncate font-semibold text-slate-100">{{ res.name }}</p>
+              <p v-if="res.booked_for" class="tabular-nums text-slate-400">{{ timeLabel(res.booked_for) }}</p>
+              <p v-if="res.party_size" class="text-slate-500">{{ t("reservationCalendar.guests", { n: res.party_size }) }}</p>
+              <span
+                class="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                :class="statusBadgeClass(res.status)"
+              >
+                {{ statusLabelShort(res.status) }}
+              </span>
+            </button>
+          </li>
 
-          <!-- Empty hint -->
-          <p v-if="!(reservationsByDay[day.iso] || []).length" class="px-1 py-2 text-center text-[10px] text-slate-600">
-            —
-          </p>
-        </div>
+          <!-- Empty day hint -->
+          <li
+            v-if="!(reservationsByDay[day.iso] || []).length"
+            role="note"
+          >
+            <p class="px-1 py-2 text-center text-[10px] text-slate-600">
+              {{ t("reservationCalendar.emptyDay") }}
+            </p>
+          </li>
+        </ul>
       </div>
     </div>
 
     <!-- No-date reservations note -->
-    <p v-if="undatedCount > 0" class="text-center text-xs text-slate-500">
+    <p v-if="undatedCount > 0" class="ui-subtle text-center text-xs tabular-nums">
       {{ t("reservationCalendar.undatedNote", { count: undatedCount }) }}
     </p>
   </div>
@@ -108,13 +144,13 @@ const mondayOfWeek = computed(() => {
 
 const weekDays = computed(() => {
   const days = [];
-  const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const fmt = new Intl.DateTimeFormat(currentLocale.value, { weekday: "short" });
   for (let i = 0; i < 7; i++) {
     const d = new Date(mondayOfWeek.value);
     d.setDate(d.getDate() + i);
     days.push({
       iso: d.toISOString().slice(0, 10),
-      dayName: DAY_NAMES[i],
+      dayName: fmt.format(d),
       dayNum: d.getDate(),
       date: d,
     });
@@ -187,9 +223,11 @@ const timeLabel = (iso) => {
 // ── Drag and drop ──────────────────────────────────────────────────────────────
 const dragging = ref(null);
 const dragOverDay = ref(null);
+const dropAnnouncement = ref("");
 
 const onDragStart = (res) => {
   dragging.value = res;
+  dropAnnouncement.value = t("reservationCalendar.dragStart", { name: res.name });
 };
 
 const onDrop = async (targetDayIso) => {
@@ -212,9 +250,10 @@ const onDrop = async (targetDayIso) => {
     // Update local state
     const idx = reservations.value.findIndex((r) => r.id === res.id);
     if (idx !== -1) reservations.value[idx] = { ...reservations.value[idx], booked_for: newBookedFor };
+    dropAnnouncement.value = t("reservationCalendar.dropSuccess", { name: res.name, day: targetDayIso });
     emit("rescheduled", updated.data);
   } catch {
-    // Silently fail — the list will refresh on next fetch
+    dropAnnouncement.value = t("reservationCalendar.dropError", { name: res.name });
   }
 };
 
@@ -233,5 +272,8 @@ const statusBadgeClass = (s) => ({
   lost: "bg-slate-700 text-slate-400",
 }[s] ?? "bg-slate-700 text-slate-400");
 
-const statusLabelShort = (s) => ({ new: "new", contacted: "contacted", won: "confirmed", lost: "lost" }[s] ?? s);
+const statusLabelShort = (s) => {
+  const key = `reservationCalendar.status.${s}`;
+  return t(key);
+};
 </script>

@@ -7,6 +7,8 @@
     stroke-linejoin="round"
     :stroke-width="strokeWidth"
     aria-hidden="true"
+    focusable="false"
+    :class="{ 'rtl:scale-x-[-1]': DIRECTIONAL_ICONS.has(name) }"
   >
     <path v-for="(path, index) in icon.paths" :key="`${name}-${index}`" :d="path" />
   </svg>
@@ -14,6 +16,20 @@
 
 <script setup>
 import { computed } from "vue";
+
+// NOTE: The SVG is aria-hidden="true". Callers that use this icon alone inside a
+// <button> or <a> (icon-only, no visible text) MUST supply aria-label on that
+// wrapping interactive element so screen readers can announce the action.
+
+// Icons whose paths have physical directional meaning (left/right arrows, chevrons,
+// logout arrow). These are automatically mirrored in RTL via rtl:scale-x-[-1].
+// When adding new icons, list any directional ones here.
+const DIRECTIONAL_ICONS = new Set([
+  "arrowLeft",
+  "arrowRight",
+  "chevronRight",
+  "logout",
+]);
 
 const props = defineProps({
   name: {
@@ -218,5 +234,10 @@ const ICONS = {
 };
 
 const fallbackIcon = ICONS.menu;
-const icon = computed(() => ICONS[props.name] || fallbackIcon);
+const icon = computed(() => {
+  if (import.meta.env.DEV && !ICONS[props.name]) {
+    console.warn(`[AppIcon] unknown icon: "${props.name}"`);
+  }
+  return ICONS[props.name] || fallbackIcon;
+});
 </script>

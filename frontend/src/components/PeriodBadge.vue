@@ -8,14 +8,14 @@
       pct        number | null  — signed percentage change (positive = better)
       threshold  number         — changes below this % are shown in slate (neutral)
   -->
-  <p
+  <span
     v-if="pct !== null && pct !== undefined"
-    class="mt-0.5 text-[10px] font-semibold tabular-nums"
+    class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
     :class="colorClass"
     :aria-label="ariaLabel"
   >
     {{ sign }}{{ Math.abs(pct) }}% {{ label }}
-  </p>
+  </span>
 </template>
 
 <script setup>
@@ -36,15 +36,22 @@ const sign = computed(() => (props.pct > 0 ? "+" : props.pct < 0 ? "−" : ""));
 
 const colorClass = computed(() => {
   if (props.pct === null || props.pct === undefined) return "";
-  if (Math.abs(props.pct) < props.threshold) return "text-slate-500";
-  return props.pct > 0 ? "text-emerald-400" : "text-red-400";
+  if (Math.abs(props.pct) < props.threshold) return "text-slate-400 bg-slate-500/10";
+  return props.pct > 0
+    ? "text-[var(--color-success)] bg-emerald-500/12"
+    : "text-[var(--color-danger-soft)] bg-red-500/10";
 });
 
 const label = computed(() => t("ownerHome.vsPrevPeriod"));
 
 const ariaLabel = computed(() => {
   if (props.pct === null) return "";
-  const dir = props.pct > 0 ? "increase" : props.pct < 0 ? "decrease" : "no change";
-  return `${Math.abs(props.pct)}% ${dir} vs previous period`;
+  const dir =
+    props.pct > 0
+      ? t("ownerHome.ariaIncrease")
+      : props.pct < 0
+        ? t("ownerHome.ariaDecrease")
+        : t("ownerHome.ariaNoChange");
+  return t("ownerHome.ariaChangeLabel", { pct: Math.abs(props.pct), dir });
 });
 </script>

@@ -22,7 +22,7 @@
           class="shrink-0 ui-btn-outline px-2.5 py-1.5 text-xs text-red-200 hover:border-red-400/50"
           @click="clearCart"
         >
-          <AppIcon name="close" class="h-3.5 w-3.5" />
+          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t('common.clear') }}
         </button>
       </div>
@@ -40,7 +40,7 @@
     <!-- ── Empty state ──────────────────────────────────────────────────────── -->
     <div
       v-else-if="!cart.items.length"
-      class="ui-section-band border-dashed border-slate-700 px-5 py-8 text-center space-y-1"
+      class="ui-empty-state ui-reveal text-center space-y-1"
     >
       <p class="text-sm font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
       <p class="text-xs text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
@@ -65,7 +65,7 @@
         >
           <!-- left accent bar -->
           <div
-            class="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-l-xl"
+            class="pointer-events-none absolute inset-y-0 start-0 w-[3px] ltr:rounded-l-xl rtl:rounded-r-xl"
             style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
           />
           <div class="flex items-center gap-3">
@@ -79,26 +79,27 @@
             <!-- Stepper pill -->
             <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
               <button
-                class="h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none"
+                class="ui-press h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.decreaseQuantity')"
                 @click="cart.decrement(item.key)"
               >
-                <span class="text-base leading-none">−</span>
+                <span class="text-base leading-none" aria-hidden="true">−</span>
               </button>
-              <span class="w-6 text-center text-xs font-semibold text-slate-100 select-none tabular-nums">{{ item.qty }}</span>
+              <span class="w-6 text-center text-xs font-semibold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
               <button
-                class="h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none"
+                class="ui-press h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.increaseQuantity')"
                 @click="cart.increment(item.key)"
               >
-                <span class="text-base leading-none">+</span>
+                <span class="text-base leading-none" aria-hidden="true">+</span>
               </button>
             </div>
             <!-- Subtotal + remove -->
             <div class="shrink-0 min-w-[4rem] text-right">
               <p class="text-sm font-semibold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
               <button
-                class="mt-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors"
+                class="mt-0.5 px-1 py-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded"
+                :aria-label="`${t('cartPage.remove')} ${item.name}`"
                 @click="cart.remove(item.key)"
               >{{ t('cartPage.remove') }}</button>
             </div>
@@ -108,11 +109,12 @@
         <!-- Unavailable items warning -->
         <div
           v-if="unavailableSlugs.length"
+          role="alert"
           class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100"
         >
           <p class="min-w-0 flex-1">{{ t('cartPage.unavailableItemsDetected', { items: unavailableNames.join(', ') }) }}</p>
           <button class="shrink-0 ui-btn-outline px-2.5 py-1 text-xs" @click="removeUnavailable">
-            <AppIcon name="close" class="h-3 w-3" />
+            <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
             {{ t('cartPage.removeUnavailableItems') }}
           </button>
         </div>
@@ -121,7 +123,8 @@
       <!-- ── Right: order panel ──────────────────────────────────────────── -->
       <aside
         v-if="!isBrowseOnlyPlan"
-        class="xl:sticky xl:top-[calc(var(--safe-top)+5.75rem)] xl:self-start"
+        class="ui-reveal xl:sticky xl:top-[calc(var(--safe-top)+5.75rem)] xl:self-start"
+        :style="{ '--ui-delay': '84ms' }"
       >
         <section class="ui-glass p-4 sm:p-5 space-y-4">
 
@@ -174,7 +177,7 @@
             <div :class="['grid gap-2', deliveryEnabled ? 'grid-cols-2' : 'grid-cols-1']">
               <!-- Pickup pill -->
               <button
-                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-pressed="fulfillmentType === 'pickup'"
                 :class="fulfillmentType === 'pickup'
                   ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -183,12 +186,12 @@
               >
                 <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0" />
                 {{ t('cartPage.pickup') }}
-                <span v-if="fulfillmentType === 'pickup'" class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
+                <span v-if="fulfillmentType === 'pickup'" class="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
               <!-- Delivery pill -->
               <button
                 v-if="deliveryEnabled"
-                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                class="relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-pressed="fulfillmentType === 'delivery'"
                 :class="fulfillmentType === 'delivery'
                   ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -197,10 +200,10 @@
               >
                 <AppIcon name="table" class="h-3.5 w-3.5 shrink-0" />
                 {{ t('cartPage.delivery') }}
-                <span v-if="fulfillmentType === 'delivery'" class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
+                <span v-if="fulfillmentType === 'delivery'" class="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]" />
               </button>
             </div>
-            <p v-if="fieldErrors.fulfillment_type" id="cart-fulfillment-error" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
+            <p v-if="fieldErrors.fulfillment_type" id="cart-fulfillment-error" role="alert" class="text-xs text-red-300">{{ fieldErrors.fulfillment_type }}</p>
 
             <!-- ── When: ASAP vs scheduled (pickup/delivery only) ── -->
             <div v-if="canSchedule" class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
@@ -208,7 +211,7 @@
               <div class="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                   :aria-pressed="!scheduleEnabled"
                   :class="!scheduleEnabled
                     ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -219,7 +222,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                  class="rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                   :aria-pressed="scheduleEnabled"
                   :class="scheduleEnabled
                     ? 'border-[var(--color-secondary)]/55 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
@@ -234,6 +237,7 @@
                   v-model="scheduledFor"
                   type="datetime-local"
                   :min="minScheduleDatetime"
+                  :aria-label="t('cartPage.scheduleLater')"
                   class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
                 />
                 <p class="text-[11px] text-slate-500">{{ t('cartPage.scheduleHint') }}</p>
@@ -253,8 +257,8 @@
                     :key="addr.id"
                     class="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-xs"
                   >
-                    <button class="min-w-0 flex-1 text-left hover:text-indigo-300 transition-colors" @click="applySavedAddress(addr)">
-                      <span v-if="addr.label" class="font-medium text-slate-200 mr-1.5">{{ addr.label }}</span>
+                    <button class="min-w-0 flex-1 text-start hover:text-indigo-300 transition-colors focus-visible:underline focus:outline-none" @click="applySavedAddress(addr)">
+                      <span v-if="addr.label" class="font-medium text-slate-200 me-1.5">{{ addr.label }}</span>
                       <span class="text-slate-400 truncate">{{ addr.address }}</span>
                     </button>
                     <button class="shrink-0 text-slate-600 hover:text-red-400 transition-colors" :aria-label="t('common.remove')" @click="deleteSavedAddress(addr.id)">
@@ -317,6 +321,7 @@
                 <button
                   class="ui-btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-50"
                   :disabled="locating"
+                  aria-describedby="cart-location-error"
                   @click="useCurrentLocation"
                 >
                   <AppIcon name="location" class="h-4 w-4" />
@@ -334,6 +339,7 @@
                   </button>
                   <button
                     class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors"
+                    :aria-expanded="showMoreLocationOptions || !!deliveryLocationUrl"
                     @click="showMoreLocationOptions = !showMoreLocationOptions"
                   >
                     {{ t('cartPage.moreLocationOptions') }}
@@ -355,7 +361,7 @@
                     ? t('cartPage.locationReady', { lat: formatCoordinate(deliveryLat), lng: formatCoordinate(deliveryLng) })
                     : t('cartPage.noCoordinatesYet') }}
                 </p>
-                <p v-if="locationError" id="cart-location-error" class="text-xs text-red-300">{{ locationError }}</p>
+                <p v-if="locationError" id="cart-location-error" role="alert" class="text-xs text-red-300">{{ locationError }}</p>
 
                 <!-- More options: paste a map link (collapsed by default) -->
                 <div v-show="showMoreLocationOptions || deliveryLocationUrl" class="space-y-1 pt-1">
@@ -385,7 +391,7 @@
                     />
                     <button
                       type="button"
-                      class="shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus:outline-none"
+                      class="shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                       :class="waitingForPaste
                         ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
                         : 'border-slate-600 bg-slate-800/60 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
@@ -437,6 +443,7 @@
                 <button
                   type="button"
                   class="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                  :aria-expanded="locationAdvancedOpen"
                   @click="locationAdvancedOpen = !locationAdvancedOpen"
                 >
                   <span aria-hidden="true">{{ locationAdvancedOpen ? '▾' : '▸' }}</span>
@@ -500,10 +507,11 @@
                   v-for="opt in TIP_OPTIONS"
                   :key="opt.value"
                   type="button"
-                  class="flex-1 rounded-lg border py-1 text-[11px] font-semibold transition-colors"
+                  class="ui-press flex-1 rounded-lg border py-1 text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                   :class="tipPercent === opt.value
                     ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
                     : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+                  :aria-pressed="tipPercent === opt.value"
                   @click="setTipPercent(opt.value)"
                 >{{ opt.label }}</button>
               </div>
@@ -554,9 +562,10 @@
               <button
                 type="button"
                 class="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-[var(--color-secondary)] transition-colors"
+                :aria-expanded="promoOpen"
                 @click="promoOpen = !promoOpen"
               >
-                <AppIcon name="tag" class="h-3.5 w-3.5" />
+                <AppIcon name="tag" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.promoCodeCta') }}
                 <span aria-hidden="true" class="text-slate-600 text-[11px]">{{ promoOpen ? '▾' : '▸' }}</span>
               </button>
@@ -577,6 +586,7 @@
                 <button
                   class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
                   :disabled="promoChecking || !promoCode.trim()"
+                  :aria-label="promoChecking ? t('common.loading') : t('cartPage.promoApply')"
                   @click="applyPromoCode"
                 >{{ promoChecking ? '…' : t('cartPage.promoApply') }}</button>
               </div>
@@ -590,14 +600,14 @@
             <div v-if="codEligible" class="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :class="paymentMethod === 'wallet' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
                 :aria-pressed="paymentMethod === 'wallet'"
                 @click="paymentMethod = 'wallet'"
               >{{ t('cartPage.payMethodWallet') }}</button>
               <button
                 type="button"
-                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors"
+                class="rounded-xl border px-3 py-2 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :class="paymentMethod === 'cash' ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-300 hover:border-slate-500'"
                 :aria-pressed="paymentMethod === 'cash'"
                 @click="paymentMethod = 'cash'"
@@ -639,7 +649,7 @@
               ? 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/8'
               : 'border-slate-700/60 bg-slate-900/30'"
           >
-            <label class="flex cursor-pointer items-center justify-between gap-3">
+            <div class="flex cursor-pointer items-center justify-between gap-3">
               <div>
                 <p class="text-xs font-semibold" :class="useWallet ? 'text-[var(--color-secondary)]' : 'text-slate-300'">
                   {{ t('cartPage.payWithCredits') }}
@@ -660,7 +670,7 @@
                   :class="useWallet ? 'translate-x-4 bg-[var(--color-secondary)]' : 'translate-x-0.5 bg-slate-500'"
                 />
               </button>
-            </label>
+            </div>
             <p v-if="useWallet" class="mt-1 text-[11px] text-emerald-300">
               {{ t('cartPage.creditsApplied', { amount: formatPrice(walletDeduction) }) }}
             </p>
@@ -674,7 +684,7 @@
             <div class="flex items-start justify-between gap-2">
               <p class="text-xs font-semibold text-slate-200">{{ t('cartPage.tableNudgeTitle') }}</p>
               <button class="shrink-0 text-slate-500 hover:text-slate-300 transition" :aria-label="t('common.close')" @click="tableNudgeDismissed = true">
-                <AppIcon name="close" class="h-3.5 w-3.5" />
+                <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
             <ul class="space-y-1">
@@ -806,23 +816,24 @@
             </button>
             <button
               v-if="isBrowseOnlyPlan"
-              class="w-full inline-flex items-center justify-center rounded-full border border-slate-700 px-5 py-3 text-slate-50 opacity-60 cursor-not-allowed"
+              class="ui-btn-outline w-full justify-center opacity-50 cursor-not-allowed"
               disabled
+              aria-disabled="true"
             >{{ t('cartPage.orderingDisabledPlan') }}</button>
             <p v-if="isBrowseOnlyPlan" class="text-[11px] text-slate-500 text-center">{{ t('cartPage.orderingDisabledCurrentPlan') }}</p>
           </div>
 
           <!-- Errors -->
           <div v-if="placeOrderError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
             <p class="flex-1 text-sm text-red-300">{{ placeOrderError }}</p>
           </div>
           <div v-if="checkoutError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
             <p class="flex-1 text-sm text-red-300">{{ checkoutError }}</p>
           </div>
           <div v-if="handoffError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <AppIcon name="info" aria-hidden="true" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
             <p class="flex-1 text-sm text-red-300">{{ handoffError }}</p>
           </div>
 
@@ -851,7 +862,7 @@
               <h2 id="cart-map-dialog-title" class="text-base font-semibold text-slate-100">{{ t('cartPage.tapMapToChoosePin') }}</h2>
             </div>
             <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
-              <AppIcon name="close" class="h-3.5 w-3.5" />
+              <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
               {{ t('common.close') }}
             </button>
           </header>
@@ -870,7 +881,7 @@
             ></div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <button class="ui-btn-outline px-3 py-1.5 text-xs" @click="closeMapModal">
-                <AppIcon name="close" class="h-3.5 w-3.5" />
+                <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.cancel') }}
               </button>
               <button
@@ -878,7 +889,7 @@
                 :disabled="!hasTemporaryMapSelection"
                 @click="applyMapSelection"
               >
-                <AppIcon name="check" class="h-3.5 w-3.5" />
+                <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ t('cartPage.useSelectedPin') }}
               </button>
             </div>

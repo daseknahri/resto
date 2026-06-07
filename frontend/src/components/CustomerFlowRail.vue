@@ -1,28 +1,39 @@
 <template>
-  <section class="mx-auto hidden w-full max-w-5xl px-4 pt-3 md:block">
-    <div class="ui-journey-rail space-y-4">
+  <section class="mx-auto hidden w-full max-w-6xl px-4 pt-3 md:block" :aria-label="t('customerFlow.title')">
+    <div class="ui-journey-rail ui-reveal space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-1">
-          <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
-          <p class="text-sm text-slate-300">{{ currentStepLabel }}</p>
+        <div class="min-w-0 space-y-1">
+          <h2 class="ui-kicker">{{ t("customerFlow.title") }}</h2>
+          <p class="truncate text-sm font-semibold leading-tight text-white">{{ currentStepLabel }}</p>
         </div>
-        <span class="ui-status-pill">
+        <span
+          class="ui-status-pill tabular-nums"
+          :aria-label="`${t('customerFlow.title')} — ${steps.length ? activeStep + 1 : 0} / ${steps.length}`"
+        >
           {{ steps.length ? activeStep + 1 : 0 }}/{{ steps.length }}
         </span>
       </div>
 
-      <div class="ui-journey-progress">
+      <div
+        class="ui-journey-progress"
+        role="progressbar"
+        :aria-label="t('customerFlow.title')"
+        :aria-valuenow="activeStep"
+        :aria-valuemin="0"
+        :aria-valuemax="steps.length - 1"
+        :aria-valuetext="`${activeStep + 1} / ${steps.length}`"
+      >
+        <!-- aria-valuenow is intentionally 0-indexed (0–4); aria-valuetext overrides for AT, announcing "1 / 5" etc. -->
         <span :style="{ width: progressWidth }"></span>
       </div>
 
       <div class="ui-state-strip">
         <div class="relative z-[1] grid gap-2 md:grid-cols-[minmax(0,1fr),auto,auto] md:items-center">
           <div class="min-w-0">
-            <p class="ui-kicker">{{ t("customerFlow.title") }}</p>
             <p class="truncate text-sm font-medium text-white">{{ currentStepLabel }}</p>
-            <p class="mt-1 text-xs text-slate-400">{{ currentStepHint }}</p>
+            <p class="ui-subtle mt-1 text-xs">{{ currentStepHint }}</p>
           </div>
-          <span class="ui-state-chip" data-active="true">
+          <span class="ui-state-chip tabular-nums" data-active="true">
             {{ completionLabel }}
           </span>
           <span class="ui-state-chip" :data-active="Boolean(cart.count)">
@@ -31,30 +42,29 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-5 gap-3">
+      <div class="grid min-w-0 grid-cols-5 gap-3">
         <RouterLink
-          v-for="step in steps"
+          v-for="(step, index) in steps"
           :key="step.name"
           :to="step.to"
-          class="ui-journey-step md:px-3"
+          class="ui-journey-step ui-surface-lift ui-press ui-reveal"
           :data-active="step.isActive"
           :data-complete="step.isCompleted"
           :aria-current="step.isActive ? 'page' : undefined"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <div class="flex items-start justify-between gap-3">
             <div
-              class="flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold"
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums"
               :class="stepDotClass(step)"
+              aria-hidden="true"
             >
               {{ step.index + 1 }}
             </div>
-            <span class="ui-chip text-[10px]">
-              {{ String(step.index + 1).padStart(2, "0") }}
-            </span>
           </div>
-          <div class="mt-3 space-y-1">
-            <p class="text-sm font-semibold leading-tight">{{ step.label }}</p>
-            <p class="text-[11px] leading-tight" :class="stepHintClass(step)">{{ step.hint }}</p>
+          <div class="mt-3 min-w-0 space-y-1">
+            <p class="truncate text-start text-sm font-semibold leading-tight">{{ step.label }}</p>
+            <p class="text-start text-[11px] leading-tight" :class="stepHintClass(step)">{{ step.hint }}</p>
           </div>
         </RouterLink>
       </div>

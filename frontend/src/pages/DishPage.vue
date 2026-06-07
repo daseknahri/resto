@@ -48,25 +48,26 @@
 
         <!-- Back -->
         <button
-          class="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65 active:scale-95"
+          class="ui-touch-target absolute start-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65 active:scale-95"
           :aria-label="t('common.goBack')"
           @click="router.back()"
         >
-          <AppIcon name="arrowLeft" class="h-4 w-4" />
+          <AppIcon name="arrowLeft" class="h-4 w-4 rtl:scale-x-[-1]" />
         </button>
 
         <!-- Cart badge -->
         <RouterLink
           v-if="cart.count"
           :to="{ name: 'cart' }"
-          class="absolute right-3 top-3 flex h-9 items-center gap-1.5 rounded-full border border-white/20 bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur-md"
+          :aria-label="t('dishPage.cartWithCount', { count: cart.count })"
+          class="absolute end-3 top-3 flex h-11 items-center gap-1.5 rounded-full border border-white/20 bg-black/45 px-3 text-xs font-semibold text-white backdrop-blur-md"
         >
           <AppIcon name="cart" class="h-3.5 w-3.5" />
           {{ cart.count }}
         </RouterLink>
 
         <!-- Zoom hint -->
-        <div class="pointer-events-none absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white/55 backdrop-blur-sm">
+        <div class="pointer-events-none absolute bottom-3 end-3 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-white/55 backdrop-blur-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
             <path d="M8 6a.75.75 0 01.75.75V7.5h.75a.75.75 0 010 1.5H8.75v.75a.75.75 0 01-1.5 0V9H6.5a.75.75 0 010-1.5h.75V6.75A.75.75 0 018 6z"/>
@@ -75,7 +76,7 @@
       </div>
 
       <!-- ── Content ──────────────────────────────────────────── -->
-      <div class="px-4 pt-5 space-y-5">
+      <div class="px-4 pt-5 space-y-5 ui-reveal">
 
         <!-- Chips / status badges -->
         <div class="flex flex-wrap gap-1.5">
@@ -99,15 +100,15 @@
 
         <!-- Option groups -->
         <div v-if="dish.option_groups?.length" class="ui-section-band space-y-4">
-          <div v-for="group in dish.option_groups" :key="group.id" class="space-y-2.5">
+          <fieldset v-for="group in dish.option_groups" :key="group.id" class="space-y-2.5 border-0 m-0 p-0">
             <div class="flex items-center justify-between gap-2">
-              <p class="text-sm font-semibold text-slate-200">
+              <legend class="float-left text-sm font-semibold text-slate-200">
                 {{ group.name }}
-                <span v-if="group.min_select > 0" class="ml-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
-              </p>
+                <span v-if="group.min_select > 0" class="ms-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">{{ t('dishPage.required') }}</span>
+              </legend>
               <span class="ui-data-strip text-[11px]">{{ group.max_select > 1 ? t('dishPage.pickUpTo', { n: group.max_select }) : t('dishPage.pickOne') }}</span>
             </div>
-            <ul class="grid gap-2 text-sm sm:grid-cols-2">
+            <ul class="grid gap-2 text-sm sm:grid-cols-2 clear-both">
               <li
                 v-for="opt in group.options" :key="opt.id"
                 class="ui-selection-card"
@@ -139,13 +140,13 @@
                 </label>
               </li>
             </ul>
-          </div>
-          <p v-if="hasGroupMissing" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
+          </fieldset>
+          <p v-if="hasGroupMissing" role="alert" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
         </div>
 
         <!-- Flat options (legacy) -->
-        <div v-if="dish.options?.length" class="ui-section-band space-y-3">
-          <p class="text-sm font-semibold text-slate-200">{{ t('dishPage.options') }}</p>
+        <fieldset v-if="dish.options?.length" class="ui-section-band space-y-3 border-0 m-0 p-0">
+          <legend class="text-sm font-semibold text-slate-200">{{ t('dishPage.options') }}</legend>
           <ul class="grid gap-2 text-sm sm:grid-cols-2">
             <li
               v-for="opt in dish.options" :key="opt.id"
@@ -168,8 +169,8 @@
               </label>
             </li>
           </ul>
-          <p v-if="hasUngroupedRequiredMissing" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
-        </div>
+          <p v-if="hasUngroupedRequiredMissing" role="alert" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
+        </fieldset>
 
         <!-- Desktop add-to-cart (sm+) -->
         <div class="hidden sm:block rounded-2xl border border-slate-700/60 bg-slate-900/50 p-4 space-y-3">
@@ -187,7 +188,7 @@
           <div class="flex items-center gap-3">
             <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
-              <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" :aria-label="t('dishPage.qty')" />
+              <input v-model.number="qty" type="number" min="1" max="99" aria-valuemin="1" aria-valuemax="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" :aria-label="t('dishPage.qty')" />
               <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
             </span>
             <div class="min-w-0">
@@ -195,7 +196,7 @@
               <p v-if="qty > 1" class="text-[11px] text-slate-500 tabular-nums">{{ qty }} × {{ formatPrice(unitPriceWithOptions) }}</p>
             </div>
             <button
-              class="ui-btn-primary ml-auto px-6 py-2.5 text-sm font-semibold"
+              class="ui-btn-primary ms-auto px-6 py-2.5 text-sm font-semibold"
               :disabled="orderingDisabled"
               :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
               @click="addToCart"
@@ -211,28 +212,29 @@
               <AppIcon name="share" class="h-4 w-4" />
             </button>
           </div>
-          <p v-if="hasRequiredMissing" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
+          <p v-if="hasRequiredMissing" role="alert" class="text-xs text-amber-300">{{ t('dishPage.selectRequiredOptions') }}</p>
           <p v-if="!isRestaurantOpen" class="text-xs text-amber-300">{{ t('dishPage.restaurantClosedNotice') }}</p>
         </div>
 
         <!-- Similar dishes -->
         <div v-if="similarDishes.length" :ref="similarVis.target" class="space-y-3 pb-2">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ t('dishPage.similarDishes') }}</p>
+          <p class="ui-kicker">{{ t('dishPage.similarDishes') }}</p>
           <div class="grid gap-3 sm:grid-cols-2">
             <template v-if="showSimilarSkeletons">
               <div v-for="n in 2" :key="'sk-' + n" class="h-28 ui-skeleton rounded-2xl"></div>
             </template>
             <RouterLink
-              v-for="item in visibleSimilarDishes" :key="item.slug"
+              v-for="(item, index) in visibleSimilarDishes" :key="item.slug"
               :to="{ name: 'dish', params: { category: props.category, dish: item.slug } }"
-              class="group ui-surface-lift overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/55 hover:border-[var(--color-secondary)]/50"
+              class="group ui-panel ui-surface-lift ui-reveal overflow-hidden"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
-              <div class="relative h-24 overflow-hidden">
+              <div class="relative h-24 overflow-hidden rounded-t-2xl">
                 <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" loading="lazy" decoding="async" @error="handleDishImageError" />
               </div>
               <div class="space-y-0.5 p-3">
                 <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
-                <p class="text-sm font-bold text-[var(--color-secondary)]">{{ formatPrice(item.price) }}</p>
+                <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price) }}</p>
               </div>
             </RouterLink>
           </div>
@@ -252,7 +254,6 @@
           aria-labelledby="dish-lightbox-dialog-title"
           class="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/96 backdrop-blur-sm"
           @click="lightboxOpen = false"
-          @keydown.esc="lightboxOpen = false"
         >
           <h2 id="dish-lightbox-dialog-title" class="sr-only">{{ dish.name }}</h2>
           <img
@@ -264,9 +265,10 @@
             @click.stop
           />
           <button
-            class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white transition-colors hover:bg-black/80"
+            class="absolute end-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white transition-colors hover:bg-black/80"
             :aria-label="t('common.close')"
             @click="lightboxOpen = false"
+            @keydown.esc="lightboxOpen = false"
           >
             <AppIcon name="close" class="h-5 w-5" />
           </button>
@@ -277,7 +279,7 @@
     <!-- ══ Mobile sticky bottom bar ══ -->
     <div
       v-if="dish"
-      class="ui-dish-bar fixed bottom-[5.15rem] left-3 right-3 z-20 overflow-hidden rounded-2xl px-3.5 py-3 backdrop-blur-xl sm:hidden"
+      class="ui-dish-bar fixed bottom-[5.15rem] start-3 end-3 z-20 overflow-hidden rounded-2xl px-3.5 py-3 backdrop-blur-xl sm:hidden"
       :class="hasRequiredMissing ? 'ring-1 ring-amber-500/40' : ''"
     >
       <!-- top shimmer line — amber when options missing, secondary otherwise -->
@@ -303,8 +305,9 @@
             </span>
           </div>
           <!-- required-options warning -->
-          <p v-if="hasRequiredMissing" class="mt-1 text-[11px] font-medium text-amber-400">
-            ⚠ {{ t('dishPage.selectRequiredOptions') }}
+          <p v-if="hasRequiredMissing" role="alert" class="mt-1 flex items-center gap-1 text-[11px] font-medium text-amber-400">
+            <AppIcon name="info" class="h-3 w-3 shrink-0" aria-hidden="true" />
+            {{ t('dishPage.selectRequiredOptions') }}
           </p>
         </div>
         <!-- price block -->
@@ -318,7 +321,7 @@
       <div class="mt-2.5 flex items-center gap-2">
         <span class="ui-qty-control inline-flex items-center rounded-full border p-1">
           <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.decreaseQuantity')" @click="decrementQty">−</button>
-          <input v-model.number="qty" type="number" min="1" max="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" />
+          <input v-model.number="qty" type="number" min="1" max="99" aria-valuemin="1" aria-valuemax="99" class="w-10 border-0 bg-transparent text-center text-sm text-slate-100 focus:outline-none" :aria-label="t('dishPage.qty')" />
           <button class="ui-press h-8 w-8 rounded-full text-sm text-slate-200" :aria-label="t('dishPage.increaseQuantity')" @click="incrementQty">+</button>
         </span>
         <button
@@ -329,7 +332,7 @@
           <AppIcon name="share" class="h-4 w-4" />
         </button>
         <button
-          class="ui-btn-primary ml-auto flex-1 py-2.5 text-sm font-semibold"
+          class="ui-btn-primary ms-auto flex-1 py-2.5 text-sm font-semibold"
           :disabled="orderingDisabled"
           :class="orderingDisabled ? 'cursor-not-allowed opacity-60' : ''"
           @click="addToCart"

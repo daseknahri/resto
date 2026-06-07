@@ -2,7 +2,7 @@
   <div class="ui-safe-bottom min-h-screen bg-slate-950">
 
     <!-- ══════════════════════════ LOADING ══════════════════════════ -->
-    <div v-if="!customerStore.loaded" class="flex min-h-[65vh] flex-col items-center justify-center gap-5 px-4">
+    <div v-if="!customerStore.loaded" class="flex min-h-[65vh] flex-col items-center justify-center gap-5 px-4" aria-busy="true" :aria-label="t('common.loading')">
       <div class="h-16 w-16 animate-pulse rounded-3xl border border-slate-700/60 bg-slate-900/60" />
       <div class="space-y-2 text-center">
         <div class="mx-auto h-4 w-32 animate-pulse rounded-lg bg-slate-800" />
@@ -15,18 +15,18 @@
     <template v-else-if="!customerStore.isAuthenticated">
 
       <!-- Sign-in hero -->
-      <div class="relative overflow-hidden bg-slate-950">
+      <div class="relative overflow-hidden bg-slate-950 ui-reveal">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_-10%,rgba(245,158,11,0.13),transparent_65%)]" />
         <div class="relative px-4 pb-8 pt-10 text-center space-y-5">
           <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-[22px] border border-slate-700/60 bg-gradient-to-br from-slate-800/80 to-slate-900/80 shadow-xl">
-            <AppIcon name="user" class="h-9 w-9 text-slate-400" />
+            <AppIcon name="user" class="h-9 w-9 text-slate-400" aria-hidden="true" />
           </div>
           <div class="space-y-2">
-            <h1 class="text-xl font-bold text-white">{{ t('customerAccount.title') }}</h1>
-            <p class="mx-auto max-w-xs text-sm leading-relaxed text-slate-400">{{ t('customerAccount.crossRestaurantNote') }}</p>
+            <h1 class="ui-page-title">{{ t('customerAccount.title') }}</h1>
+            <p class="ui-subtle mx-auto max-w-xs leading-relaxed">{{ t('customerAccount.crossRestaurantNote') }}</p>
           </div>
-          <button class="ui-btn-primary mx-auto gap-2 px-6" @click="showAuthModal = true">
-            <AppIcon name="user" class="h-3.5 w-3.5" />
+          <button class="ui-btn-primary ui-touch-target mx-auto gap-2 px-6" @click="showAuthModal = true">
+            <AppIcon name="user" class="h-3.5 w-3.5" aria-hidden="true" />
             {{ t('customerAccount.signIn') }}
           </button>
         </div>
@@ -35,9 +35,14 @@
       <!-- Benefits grid -->
       <div class="px-3 pb-28 space-y-3">
         <div class="grid grid-cols-2 gap-2">
-          <div v-for="b in benefits" :key="b.key" class="ui-panel flex items-start gap-2.5 p-3">
+          <div
+            v-for="(b, idx) in benefits"
+            :key="b.key"
+            class="ui-panel ui-reveal flex items-start gap-2.5 p-3"
+            :style="{ '--ui-delay': `${idx * 40}ms` }"
+          >
             <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/8">
-              <AppIcon :name="b.icon" class="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+              <AppIcon :name="b.icon" class="h-3.5 w-3.5 text-[var(--color-secondary)]" aria-hidden="true" />
             </div>
             <p class="mt-0.5 text-[11px] leading-snug text-slate-400">{{ b.label }}</p>
           </div>
@@ -67,10 +72,10 @@
           class="flex items-center justify-between rounded-2xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300 hover:border-slate-600 hover:text-white transition-colors"
         >
           <span class="flex items-center gap-2.5">
-            <AppIcon name="search" class="h-4 w-4 text-slate-400" />
+            <AppIcon name="search" class="h-4 w-4 text-slate-400" aria-hidden="true" />
             {{ t('customerLayout.findMyOrder') }}
           </span>
-          <AppIcon name="arrowRight" class="h-3.5 w-3.5 text-slate-500" />
+          <AppIcon name="arrowRight" class="h-3.5 w-3.5 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
         </RouterLink>
       </div>
     </template>
@@ -79,10 +84,10 @@
     <template v-else>
 
       <!-- ──────────────── Account hero header ──────────────── -->
-      <header class="relative overflow-hidden bg-slate-950 pb-4 pt-5">
+      <header class="relative overflow-hidden bg-slate-950 pb-4 pt-5 ui-reveal">
         <!-- Ambient glow -->
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-[var(--color-secondary)]/7 via-transparent to-transparent" />
-        <div class="pointer-events-none absolute -top-10 -left-10 h-48 w-48 rounded-full bg-[var(--color-secondary)]/5 blur-3xl" />
+        <div class="pointer-events-none absolute -top-10 start-[-2.5rem] h-48 w-48 rounded-full bg-[var(--color-secondary)]/5 blur-3xl" />
 
         <div class="relative px-4">
           <!-- Avatar + name row -->
@@ -96,7 +101,7 @@
                 <span class="text-lg font-black tracking-tight text-[var(--color-secondary)] select-none">{{ initials }}</span>
               </div>
               <!-- Online dot -->
-              <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-400" />
+              <span class="absolute -bottom-0.5 end-[-2px] h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-400" aria-hidden="true" />
             </div>
 
             <!-- Name + contact + badges -->
@@ -129,7 +134,7 @@
               :aria-label="t('common.signOut')"
               @click="handleLogout"
             >
-              <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" />
+              <AppIcon name="logout" class="inline h-3.5 w-3.5 -mt-0.5" aria-hidden="true" />
             </button>
           </div>
 
@@ -137,46 +142,51 @@
           <div class="mt-4 grid grid-cols-2 gap-2">
             <!-- Wallet -->
             <button
-              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5"
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-[var(--color-secondary)]/30 hover:bg-[var(--color-secondary)]/5 ui-touch-target"
+              :aria-label="t('customerAccount.walletTitle')"
               @click="activeTab = 'wallet'"
             >
               <p class="text-sm font-bold tabular-nums leading-tight" :class="walletBalance > 0 ? 'text-[var(--color-secondary)]' : 'text-slate-500'">
                 {{ formatPrice(walletBalance) }}
               </p>
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.walletTitle') }}</p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.walletTitle') }}</p>
             </button>
 
             <!-- Loyalty -->
             <button
-              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-indigo-500/30 hover:bg-indigo-500/5"
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-indigo-500/30 hover:bg-indigo-500/5 ui-touch-target"
+              :aria-label="t('customerAccount.loyaltyTitle')"
               @click="activeTab = 'wallet'"
             >
               <p class="text-sm font-bold tabular-nums leading-tight" :class="loyaltyPoints > 0 ? 'text-indigo-300' : 'text-slate-500'">
                 {{ loyaltyPoints }}
               </p>
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.loyaltyPts') }}</p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.loyaltyPts') }}</p>
             </button>
 
             <!-- Orders -->
             <button
-              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-sky-500/30 hover:bg-sky-500/5"
+              class="group flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-sky-500/30 hover:bg-sky-500/5 ui-touch-target"
+              :aria-label="t('customerAccount.ordersTitle')"
               @click="activeTab = 'orders'"
             >
               <p class="text-sm font-bold tabular-nums leading-tight" :class="apiOrders.length > 0 ? 'text-sky-300' : 'text-slate-500'">
                 {{ loadingOrders ? '…' : apiOrders.length }}
               </p>
-              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('customerAccount.ordersTitle') }}</p>
+              <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.ordersTitle') }}</p>
             </button>
 
             <!-- Reviews -->
             <button
-              class="group relative flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-amber-500/30 hover:bg-amber-500/5"
+              class="group relative flex flex-col items-center gap-0.5 rounded-2xl border border-slate-800/70 bg-slate-900/50 px-2 py-3 transition-colors active:scale-[0.97] hover:border-amber-500/30 hover:bg-amber-500/5 ui-touch-target"
+              :aria-label="t('customerAccount.reviewsTabLabel')"
               @click="activeTab = 'reviews'"
             >
               <!-- Pending dot -->
               <span
                 v-if="!loadingOrders && pendingReviews.length"
-                class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-400"
+                class="absolute end-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-400"
+                aria-hidden="true"
               />
               <p
                 class="text-sm font-bold leading-tight"
@@ -194,16 +204,16 @@
       </header>
 
       <!-- ──────────────── Live order banner (always visible) ──────────────── -->
-      <div v-if="!loadingOrders && activeOrders.length" class="px-3 pb-2 space-y-2 bg-slate-950">
+      <div v-if="!loadingOrders && activeOrders.length" class="px-3 pb-2 space-y-2 bg-slate-950" aria-live="polite" aria-atomic="false">
         <div
           v-for="order in activeOrders"
           :key="order.order_number"
-          class="relative overflow-hidden rounded-2xl border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/7 p-3"
+          class="ui-reveal relative overflow-hidden rounded-2xl border border-[var(--color-secondary)]/35 bg-[var(--color-secondary)]/7 p-3"
         >
-          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-[var(--color-secondary)]/12 animate-pulse" />
+          <div class="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-[var(--color-secondary)]/12 motion-safe:animate-pulse" aria-hidden="true" />
           <div class="relative flex items-center gap-3">
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/12">
-              <span class="block h-2 w-2 animate-ping rounded-full bg-[var(--color-secondary)]" />
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/12" aria-hidden="true">
+              <span class="block h-2 w-2 motion-safe:animate-ping rounded-full bg-[var(--color-secondary)]" />
             </span>
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-semibold text-[var(--color-secondary)]">
@@ -213,10 +223,10 @@
             </div>
             <RouterLink
               :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/20"
+              class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/20 ui-touch-target"
             >
               {{ t('customerAccount.trackOrder') }}
-              <AppIcon name="arrowRight" class="h-3 w-3" />
+              <AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
             </RouterLink>
           </div>
         </div>
@@ -227,9 +237,11 @@
         <nav class="flex" role="tablist" :aria-label="t('customerAccount.tabNav')">
           <button
             v-for="tab in TABS"
+            :id="'tab-' + tab.id"
             :key="tab.id"
             role="tab"
             :aria-selected="activeTab === tab.id"
+            aria-controls="customer-account-tabpanel"
             class="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 transition-colors"
             :class="activeTab === tab.id ? 'text-[var(--color-secondary)]' : 'text-slate-500 hover:text-slate-300'"
             @click="activeTab = tab.id"
@@ -239,24 +251,27 @@
             <!-- Active underline -->
             <span
               v-if="activeTab === tab.id"
-              class="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-[var(--color-secondary)]"
+              class="absolute bottom-0 start-3 end-3 h-[2px] rounded-full bg-[var(--color-secondary)]"
+              aria-hidden="true"
             />
             <!-- Live order dot on Orders tab -->
             <span
               v-if="tab.id === 'orders' && activeOrders.length && activeTab !== 'orders'"
-              class="absolute right-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"
+              class="absolute end-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--color-secondary)]"
+              aria-hidden="true"
             />
             <!-- Pending reviews dot on Reviews tab -->
             <span
               v-if="tab.id === 'reviews' && pendingReviews.length && activeTab !== 'reviews'"
-              class="absolute right-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
+              class="absolute end-[calc(50%-10px)] top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
+              aria-hidden="true"
             />
           </button>
         </nav>
       </div>
 
       <!-- ──────────────── Tab content ──────────────── -->
-      <div class="px-3 py-3 pb-28 space-y-3">
+      <div id="customer-account-tabpanel" class="px-3 py-3 pb-28 space-y-3" role="tabpanel" :aria-labelledby="'tab-' + activeTab">
 
         <!-- ════════════ OVERVIEW TAB ════════════ -->
         <template v-if="activeTab === 'overview'">
@@ -265,26 +280,28 @@
           <div class="grid grid-cols-2 gap-2">
             <!-- Orders tile -->
             <button
-              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-sky-500/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-sky-500/30"
+              style="--ui-delay: 0ms"
               @click="activeTab = 'orders'"
             >
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-sky-500/25 bg-sky-500/8 transition group-hover:bg-sky-500/15">
-                <AppIcon name="calendar" class="h-4 w-4 text-sky-400" />
+                <AppIcon name="calendar" class="h-4 w-4 text-sky-400" aria-hidden="true" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.ordersTitle') }}</p>
                 <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.ordersCount', { count: apiOrders.length }) }}</p>
               </div>
-              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-sky-400" />
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-sky-400 rtl:scale-x-[-1]" aria-hidden="true" />
             </button>
 
             <!-- Wallet tile -->
             <button
-              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-[var(--color-secondary)]/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-[var(--color-secondary)]/30"
+              style="--ui-delay: 40ms"
               @click="activeTab = 'wallet'"
             >
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/8 transition group-hover:bg-[var(--color-secondary)]/15">
-                <AppIcon name="tag" class="h-4 w-4 text-[var(--color-secondary)]" />
+                <AppIcon name="tag" class="h-4 w-4 text-[var(--color-secondary)]" aria-hidden="true" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.walletTitle') }}</p>
@@ -292,16 +309,17 @@
                   {{ formatPrice(walletBalance) }}
                 </p>
               </div>
-              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-[var(--color-secondary)]" />
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-[var(--color-secondary)] rtl:scale-x-[-1]" aria-hidden="true" />
             </button>
 
             <!-- Rewards tile -->
             <button
-              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-indigo-500/30"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-indigo-500/30"
+              style="--ui-delay: 80ms"
               @click="activeTab = 'wallet'"
             >
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/25 bg-indigo-500/8 transition group-hover:bg-indigo-500/15">
-                <AppIcon name="star" class="h-4 w-4 text-indigo-400" />
+                <AppIcon name="star" class="h-4 w-4 text-indigo-400" aria-hidden="true" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.loyaltyTitle') }}</p>
@@ -309,33 +327,35 @@
                   {{ loyaltyPoints }} {{ t('customerAccount.loyaltyPts') }}
                 </p>
               </div>
-              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-400" />
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-400 rtl:scale-x-[-1]" aria-hidden="true" />
             </button>
 
             <!-- Profile tile -->
             <button
-              class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-slate-600/60"
+              class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-slate-600/60"
+              style="--ui-delay: 120ms"
               @click="activeTab = 'profile'"
             >
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-700/50 bg-slate-800/50 transition group-hover:bg-slate-700/60">
-                <AppIcon name="settings" class="h-4 w-4 text-slate-400 transition group-hover:text-slate-200" />
+                <AppIcon name="settings" class="h-4 w-4 text-slate-400 transition group-hover:text-slate-200" aria-hidden="true" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.profileTitle') }}</p>
                 <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.overviewProfileSubtitle') }}</p>
               </div>
-              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" />
+              <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300 rtl:scale-x-[-1]" aria-hidden="true" />
             </button>
           </div>
 
           <!-- Reviews tile (full-width) -->
           <button
-            class="group ui-panel flex items-center gap-3 p-3.5 text-left transition hover:border-amber-500/30"
+            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-amber-500/30"
+            style="--ui-delay: 160ms"
             @click="activeTab = 'reviews'"
           >
             <div class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/8 transition group-hover:bg-amber-500/15">
-              <AppIcon name="chat" class="h-4 w-4 text-amber-400" />
-              <span v-if="pendingReviews.length" class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">{{ pendingReviews.length }}</span>
+              <AppIcon name="chat" class="h-4 w-4 text-amber-400" aria-hidden="true" />
+              <span v-if="pendingReviews.length" class="absolute -end-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white" aria-hidden="true">{{ pendingReviews.length }}</span>
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('customerAccount.reviewsTabLabel') }}</p>
@@ -343,19 +363,20 @@
                 <span v-if="loadingOrders">{{ t('customerAccount.loading') }}</span>
                 <template v-else>
                   <span>{{ t('customerAccount.reviewsSubmittedCount', { count: submittedReviews.length }) }}</span>
-                  <span v-if="pendingReviews.length" class="ml-1.5 font-semibold">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
+                  <span v-if="pendingReviews.length" class="ms-1.5 font-semibold">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
                 </template>
               </p>
             </div>
-            <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-400" />
+            <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-400 rtl:scale-x-[-1]" aria-hidden="true" />
           </button>
 
           <!-- Most recent order -->
-          <div v-if="apiOrders.length" class="ui-panel p-4 space-y-3">
+          <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 200ms">
             <div class="flex items-center justify-between gap-2">
               <p class="ui-kicker">{{ t('customerAccount.overviewLastOrder') }}</p>
-              <button class="text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">
-                {{ t('customerAccount.overviewViewAll') }} →
+              <button class="ui-press inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">
+                {{ t('customerAccount.overviewViewAll') }}
+                <AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
               </button>
             </div>
             <div class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs">
@@ -383,10 +404,10 @@
               </div>
               <button
                 v-if="apiOrders[0].items?.length"
-                class="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
+                class="ui-press shrink-0 inline-flex items-center gap-1 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
                 @click="reorder(apiOrders[0])"
               >
-                <AppIcon name="refresh" class="h-3 w-3" />
+                <AppIcon name="refresh" class="h-3 w-3" aria-hidden="true" />
                 {{ t('customerAccount.reorder') }}
               </button>
             </div>
@@ -415,7 +436,7 @@
         <!-- ════════════ ORDERS TAB ════════════ -->
         <template v-else-if="activeTab === 'orders'">
           <!-- Order history across all restaurants (marketplace index) -->
-          <div v-if="marketplaceOrders.length" class="ui-panel overflow-hidden p-0">
+          <div v-if="marketplaceOrders.length" class="ui-panel ui-reveal overflow-hidden p-0">
             <div class="border-b border-slate-800/70 px-4 py-3">
               <p class="ui-kicker">{{ t('customerAccount.allOrdersTitle') }}</p>
               <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.allOrdersHint') }}</p>
@@ -478,17 +499,18 @@
 
               <div
                 v-else-if="!apiOrders.length && !cart.recentOrders.length"
-                class="rounded-xl border border-dashed border-slate-700/50 px-4 py-8 text-center space-y-2"
+                class="ui-empty-state text-center p-6 space-y-2"
               >
-                <AppIcon name="calendar" class="mx-auto h-8 w-8 text-slate-700" />
-                <p class="text-xs text-slate-500">{{ t('customerAccount.ordersEmpty') }}</p>
+                <AppIcon name="calendar" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
+                <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.ordersEmpty') }}</p>
               </div>
 
               <ul v-else-if="apiOrders.length" class="space-y-2">
                 <li
-                  v-for="order in apiOrders"
+                  v-for="(order, idx) in apiOrders"
                   :key="order.order_number"
-                  class="rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs overflow-hidden"
+                  class="ui-reveal rounded-xl border border-slate-700/60 bg-slate-900/40 text-xs overflow-hidden"
+                  :style="{ '--ui-delay': `${Math.min(idx, 9) * 28}ms` }"
                 >
                   <div class="flex items-start gap-2.5 px-3 py-2.5">
                     <span
@@ -541,19 +563,19 @@
                       class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
                     >
                       <ul class="space-y-1">
-                        <li v-for="(item, idx) in order.items" :key="idx" class="flex items-start justify-between gap-2 text-slate-300">
+                        <li v-for="(item, itemIdx) in order.items" :key="itemIdx" class="flex items-start justify-between gap-2 text-slate-300">
                           <span class="min-w-0 flex-1">
                             <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
-                            <span v-if="item.options?.length" class="ml-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
+                            <span v-if="item.options?.length" class="ms-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
                           </span>
                           <span class="shrink-0 tabular-nums text-slate-400">{{ formatPrice(item.subtotal) }}</span>
                         </li>
                       </ul>
                       <button
-                        class="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
+                        class="ui-press mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 px-3 py-1.5 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/18"
                         @click="reorder(order)"
                       >
-                        <AppIcon name="refresh" class="h-3 w-3" />
+                        <AppIcon name="refresh" class="h-3 w-3" aria-hidden="true" />
                         {{ t('customerAccount.reorder') }}
                       </button>
                     </div>
@@ -586,7 +608,7 @@
         <template v-else-if="activeTab === 'wallet'">
 
           <!-- Verify-phone gate: no verified phone → no usable wallet -->
-          <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4">
+          <div v-if="!walletVerified" class="ui-panel flex items-start gap-3 border-amber-500/30 bg-amber-500/8 p-4" role="status">
             <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10">
               <AppIcon name="wallet" class="h-4 w-4 text-amber-300" />
             </div>
@@ -626,8 +648,8 @@
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
             <div class="rounded-2xl bg-white p-3">
               <img v-if="payCodeImg" :src="payCodeImg" :alt="t('customerAccount.payCodeTitle')" class="h-44 w-44" />
-              <div v-else class="flex h-44 w-44 items-center justify-center">
-                <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+              <div v-else class="flex h-44 w-44 items-center justify-center" role="status" :aria-label="t('common.loading')">
+                <div class="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
               </div>
             </div>
             <p class="text-center text-[11px] text-slate-500">{{ t('customerAccount.payCodeHint') }}</p>
@@ -635,11 +657,11 @@
             <div v-if="pushSupported && pushEnabled" class="w-full border-t border-slate-700/50 pt-3 text-center">
               <button
                 v-if="!pushSubscribed"
-                class="text-xs font-semibold text-[var(--color-secondary)] hover:underline disabled:opacity-50"
+                class="ui-press text-xs font-semibold text-[var(--color-secondary)] hover:underline disabled:opacity-50"
                 :disabled="pushLoading"
                 @click="pushSubscribe"
-              >🔔 {{ t('customerAccount.notifyEnable') }}</button>
-              <p v-else class="text-[11px] text-emerald-400">🔔 {{ t('customerAccount.notifyOn') }}</p>
+              >{{ t('customerAccount.notifyEnable') }}</button>
+              <p v-else class="text-[11px] text-emerald-400">{{ t('customerAccount.notifyOn') }}</p>
             </div>
           </div>
 
@@ -732,9 +754,9 @@
               <div v-if="loadingWallet" class="space-y-2">
                 <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-xl bg-slate-800/50" />
               </div>
-              <div v-else-if="!walletTransactions.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-6 text-center space-y-2">
-                <AppIcon name="tag" class="mx-auto h-7 w-7 text-slate-700" />
-                <p class="text-xs text-slate-500">{{ t('customerAccount.walletNoTransactions') }}</p>
+              <div v-else-if="!walletTransactions.length" class="ui-empty-state text-center p-5 space-y-2">
+                <AppIcon name="tag" class="mx-auto h-7 w-7 text-slate-600" aria-hidden="true" />
+                <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.walletNoTransactions') }}</p>
               </div>
               <ul v-else class="space-y-1.5">
                 <li
@@ -750,7 +772,7 @@
                     <div class="min-w-0 space-y-0.5">
                       <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
                       <p class="text-[11px] text-slate-500">
-                        <span v-if="tx.note" class="mr-1 text-slate-400">{{ tx.note }} ·</span>{{ formatDate(tx.created_at) }}
+                        <span v-if="tx.note" class="me-1 text-slate-400">{{ tx.note }} ·</span>{{ formatDate(tx.created_at) }}
                       </p>
                     </div>
                   </div>
@@ -835,8 +857,8 @@
           </div>
 
           <!-- No completed orders at all -->
-          <div v-else-if="!completedOrders.length" class="ui-panel p-8 text-center space-y-3">
-            <p class="text-4xl leading-none">⭐</p>
+          <div v-else-if="!completedOrders.length" class="ui-empty-state text-center p-8 space-y-2">
+            <AppIcon name="star" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
             <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.reviewsEmpty') }}</p>
             <p class="text-xs text-slate-500">{{ t('customerAccount.reviewsEmptyHint') }}</p>
           </div>
@@ -862,7 +884,7 @@
                   </div>
                   <p class="text-[11px] text-slate-400">
                     {{ t('customerAccount.reviewsSubmittedCount', { count: submittedReviews.length }) }}
-                    <span v-if="pendingReviews.length" class="ml-1.5 text-amber-400">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
+                    <span v-if="pendingReviews.length" class="ms-1.5 text-amber-400">{{ t('customerAccount.reviewsPending', { count: pendingReviews.length }) }}</span>
                   </p>
                 </div>
               </div>
@@ -879,9 +901,10 @@
               </div>
               <div class="p-4 space-y-4">
                 <div
-                  v-for="order in pendingReviews"
+                  v-for="(order, idx) in pendingReviews"
                   :key="order.order_number"
-                  class="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3.5 space-y-3"
+                  class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3.5 space-y-3"
+                  :style="{ '--ui-delay': `${Math.min(idx, 9) * 40}ms` }"
                 >
                   <!-- Order info -->
                   <div class="flex items-center gap-2 text-[11px]">
@@ -891,7 +914,7 @@
                     >#{{ order.order_number }}</RouterLink>
                     <span class="text-slate-600">·</span>
                     <span class="text-slate-500">{{ formatDate(order.created_at) }}</span>
-                    <span v-if="order.total" class="ml-auto tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
+                    <span v-if="order.total" class="ms-auto tabular-nums text-slate-400">{{ formatPrice(order.total) }}</span>
                   </div>
 
                   <!-- Interactive star selector -->
@@ -907,14 +930,17 @@
                           ? 'text-amber-400'
                           : 'text-slate-700 hover:text-slate-500'"
                         :aria-label="t('common.rateNStars', { n: s })"
+                        :aria-pressed="s <= getDraft(order.order_number).score"
                         @mouseenter="setHover(order.order_number, s)"
                         @mouseleave="setHover(order.order_number, 0)"
                         @click="setDraftScore(order.order_number, s)"
                       >★</button>
                       <span
                         v-if="getDraft(order.order_number).score || reviewHover[order.order_number]"
-                        class="ml-2.5 text-xs font-semibold"
+                        class="ms-2.5 text-xs font-semibold"
                         :class="getDraft(order.order_number).score ? 'text-amber-400' : 'text-slate-500'"
+                        aria-live="polite"
+                        role="status"
                       >{{ reviewScoreLabels[reviewHover[order.order_number] || getDraft(order.order_number).score] }}</span>
                     </div>
                   </div>
@@ -1000,7 +1026,8 @@
           <!-- Driver mode entry -->
           <RouterLink
             :to="{ name: 'driver' }"
-            class="ui-panel flex items-center justify-between gap-3 p-4 transition-colors hover:border-emerald-500/40"
+            class="ui-panel ui-surface-lift ui-reveal flex items-center justify-between gap-3 p-4 hover:border-emerald-500/40"
+            style="--ui-delay: 0ms"
           >
             <div class="flex items-center gap-3">
               <div class="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
@@ -1013,11 +1040,11 @@
                 </p>
               </div>
             </div>
-            <AppIcon name="chevronRight" class="h-4 w-4 text-slate-600" />
+            <AppIcon name="chevronRight" class="h-4 w-4 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
           </RouterLink>
 
           <!-- Personal info panel (grouped rows) -->
-          <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
+          <div class="ui-panel ui-reveal divide-y divide-slate-800/70 overflow-hidden p-0" style="--ui-delay: 40ms">
             <div class="px-4 py-3">
               <p class="ui-kicker">{{ t('customerAccount.profilePersonalInfo') }}</p>
             </div>
@@ -1117,7 +1144,7 @@
           </div>
 
           <!-- Saved addresses -->
-          <div class="ui-panel overflow-hidden p-0">
+          <div class="ui-panel ui-reveal overflow-hidden p-0" style="--ui-delay: 80ms">
             <div class="flex items-center justify-between gap-2 border-b border-slate-800/70 px-4 py-3">
               <div>
                 <p class="ui-kicker">{{ t('customerAccount.savedAddressesTitle') }}</p>
@@ -1143,8 +1170,8 @@
                     <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
                     <p class="text-slate-400">{{ addr.address }}</p>
                   </div>
-                  <button class="mt-0.5 shrink-0 text-slate-500 transition hover:text-red-400" :aria-label="t('common.remove')" @click="deleteAddress(addr.id)">
-                    <AppIcon name="close" class="h-3.5 w-3.5" />
+                  <button class="ui-touch-target ui-press shrink-0 flex items-center justify-center text-slate-500 transition hover:text-red-400" :aria-label="t('common.remove')" @click="deleteAddress(addr.id)">
+                    <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </li>
               </ul>
@@ -1152,7 +1179,7 @@
           </div>
 
           <!-- Preferences panel -->
-          <div class="ui-panel divide-y divide-slate-800/70 overflow-hidden p-0">
+          <div class="ui-panel ui-reveal divide-y divide-slate-800/70 overflow-hidden p-0" style="--ui-delay: 120ms">
             <div class="px-4 py-3">
               <p class="ui-kicker">{{ t('customerAccount.preferencesTitle') }}</p>
             </div>
@@ -1834,5 +1861,11 @@ onMounted(async () => {
 .ui-expand-leave-to {
   opacity: 0;
   max-height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-expand-enter-active,
+  .ui-expand-leave-active {
+    transition: none;
+  }
 }
 </style>

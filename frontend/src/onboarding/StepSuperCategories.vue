@@ -1,61 +1,38 @@
 ﻿<template>
   <div class="ui-panel space-y-5 p-5">
-    <section class="ui-command-deck space-y-4 rounded-[26px] p-4 sm:p-5">
+    <section class="ui-section-band ui-reveal space-y-4 rounded-[26px] p-4 sm:p-5">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div class="space-y-2">
           <p class="ui-kicker">{{ t("stepSuperCategories.title") }}</p>
-          <div class="space-y-2">
+          <div class="space-y-1">
             <h2 class="text-xl font-semibold text-white sm:text-2xl">{{ t("stepSuperCategories.heading") }}</h2>
             <p class="max-w-2xl text-sm text-slate-300">{{ t("stepSuperCategories.description") }}</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <span class="ui-status-pill">
-              <AppIcon name="filter" class="h-3.5 w-3.5" />
-              {{ rows.length }} {{ t("stepSuperCategories.heading") }}
+              <AppIcon name="filter" class="h-3.5 w-3.5" aria-hidden="true" />
+              <span class="tabular-nums">{{ rows.length }}</span> {{ t("stepSuperCategories.heading") }}
             </span>
             <span class="ui-status-pill">
-              <AppIcon name="check" class="h-3.5 w-3.5" />
-              {{ enabledCount }} {{ t("stepSuperCategories.enabledSummary") }}
+              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
+              <span class="tabular-nums">{{ enabledCount }}</span> {{ t("stepSuperCategories.enabledSummary") }}
             </span>
             <span class="ui-status-pill">
-              <AppIcon name="close" class="h-3.5 w-3.5" />
-              {{ disabledCount }} {{ t("stepSuperCategories.disabled") }}
+              <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+              <span class="tabular-nums">{{ disabledCount }}</span> {{ t("stepSuperCategories.disabled") }}
             </span>
           </div>
         </div>
 
         <div class="flex flex-wrap gap-2 lg:justify-end">
-          <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" :disabled="saving" @click="saveAll">
-            <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" />
+          <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" type="button" :disabled="saving" @click="saveAll">
+            <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
             {{ saving ? t("common.saving") : t("common.save") }}
           </button>
-          <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
-            <AppIcon name="plus" class="h-4 w-4" />
+          <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
+            <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
             {{ t("stepSuperCategories.add") }}
           </button>
-        </div>
-      </div>
-
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="ui-metric-card pl-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.title") }}</p>
-          <p class="ui-stat-value text-2xl">{{ rows.length }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.heading") }}</p>
-        </div>
-        <div class="ui-metric-card pl-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.enabled") }}</p>
-          <p class="ui-stat-value text-2xl">{{ enabledCount }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.enabledSummary") }}</p>
-        </div>
-        <div class="ui-metric-card pl-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.disabled") }}</p>
-          <p class="ui-stat-value text-2xl">{{ disabledCount }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.disableToggle") }}</p>
-        </div>
-        <div class="ui-metric-card pl-5">
-          <p class="ui-stat-label">{{ t("common.categories") }}</p>
-          <p class="ui-stat-value text-2xl">{{ categoriesTotal }}</p>
-          <p class="ui-stat-note">{{ t("common.categories") }} {{ t("common.available") }}</p>
         </div>
       </div>
 
@@ -63,26 +40,27 @@
         <label class="space-y-1 text-sm text-slate-300">
           <span class="sr-only">{{ t("common.search") }}</span>
           <div class="relative">
-            <AppIcon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input v-model.trim="search" type="search" class="ui-input pl-10" enterkeyhint="search" :placeholder="t('common.search')" />
+            <AppIcon name="search" class="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+            <input v-model.trim="search" type="search" class="ui-input ps-10" enterkeyhint="search" :placeholder="t('common.search')" :aria-label="t('common.search')" />
           </div>
         </label>
-        <div class="ui-scroll-row">
-          <span class="ui-data-strip">{{ filteredRows.length }} / {{ rows.length }}</span>
-          <span class="ui-data-strip">{{ enabledCount }} {{ t("stepSuperCategories.enabledSummary") }}</span>
-          <span class="ui-data-strip">{{ categoriesTotal }} {{ t("common.categories") }}</span>
+        <div class="min-w-0">
+          <div class="ui-scroll-row">
+            <span class="ui-data-strip tabular-nums">{{ filteredRows.length }} / {{ rows.length }}</span>
+            <span class="ui-data-strip"><span class="tabular-nums">{{ enabledCount }}</span> {{ t("stepSuperCategories.enabledSummary") }}</span>
+            <span class="ui-data-strip tabular-nums">{{ categoriesTotal }} {{ t("common.categories") }}</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <div class="space-y-3">
-      <div
-        v-if="!filteredRows.length"
+    <ul class="space-y-3 list-none p-0">
+      <li v-if="!filteredRows.length" class="list-none"><div
         class="ui-empty-state flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="relative z-10 flex items-start gap-3">
-          <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/75 text-brand-secondary shadow-lg shadow-black/25">
-            <AppIcon :name="search ? 'search' : 'filter'" class="h-5 w-5" />
+          <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-700/70 bg-slate-900/75 text-[var(--color-secondary)] shadow-lg shadow-black/25">
+            <AppIcon :name="search ? 'search' : 'filter'" class="h-5 w-5" aria-hidden="true" />
           </span>
           <div class="space-y-1">
             <p class="ui-kicker">{{ t("stepSuperCategories.title") }}</p>
@@ -93,33 +71,35 @@
           </div>
         </div>
         <button v-if="!search" class="ui-btn-primary relative z-10 gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
-          <AppIcon name="plus" class="h-4 w-4" />
+          <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
           {{ t("stepSuperCategories.add") }}
         </button>
-      </div>
+      </div></li>
 
-      <article
-        v-for="row in filteredRows"
+      <li
+        v-for="(row, index) in filteredRows"
         :key="row.local_id"
-        class="ui-selection-card flex items-center gap-2.5 p-2.5 sm:gap-3"
+        class="list-none"
+      ><article
+        class="ui-selection-card ui-surface-lift ui-reveal flex items-center gap-2.5 p-2.5 sm:gap-3"
         :data-warning="row.is_temporarily_disabled"
-        style="content-visibility: auto; contain-intrinsic-size: auto 64px;"
+        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 64px' }"
       >
         <!-- Reorder: stacked chevrons -->
-        <div class="flex shrink-0 flex-col">
+        <div class="flex shrink-0 flex-col gap-0.5">
           <button
-            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
             type="button" :disabled="!canMoveUp(row.local_id)" :aria-label="t('common.moveUp')"
             @click="moveRow(row.local_id, -1)"
           >
-            <AppIcon name="chevronUp" class="h-4 w-4" />
+            <AppIcon name="chevronUp" class="h-4 w-4" aria-hidden="true" />
           </button>
           <button
-            class="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:text-white disabled:opacity-20"
+            class="ui-press ui-touch-target flex items-center justify-center rounded text-slate-500 transition hover:text-white disabled:pointer-events-none disabled:opacity-20"
             type="button" :disabled="!canMoveDown(row.local_id)" :aria-label="t('common.moveDown')"
             @click="moveRow(row.local_id, 1)"
           >
-            <AppIcon name="chevronDown" class="h-4 w-4" />
+            <AppIcon name="chevronDown" class="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -127,48 +107,53 @@
         <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" :aria-label="t('stepSuperCategories.openCategories')" @click="drillIn(row)">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="(row.is_published && !row.is_temporarily_disabled) ? 'bg-emerald-400' : 'bg-slate-600'" />
+              <span
+                class="h-1.5 w-1.5 shrink-0 rounded-full"
+                :class="(row.is_published && !row.is_temporarily_disabled) ? 'bg-emerald-400' : 'bg-slate-600'"
+                aria-hidden="true"
+              />
               <h3 class="truncate text-sm font-semibold text-white">{{ row.name || t("stepSuperCategories.namePlaceholder") }}</h3>
               <span class="ui-route-badge shrink-0">{{ row.slug || 'draft' }}</span>
             </div>
-            <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+            <div class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
               <span :class="row.is_temporarily_disabled ? 'text-amber-300' : ''">
                 {{ row.is_temporarily_disabled ? t("stepSuperCategories.disabled") : (row.is_published ? t("stepSuperCategories.enabled") : t("common.soon")) }}
               </span>
-              <span>· {{ Number(row.category_count || 0) }} {{ t("common.categories") }}</span>
+              <span aria-hidden="true">·</span>
+              <span class="tabular-nums">{{ Number(row.category_count || 0) }}</span>
+              <span>{{ t("common.categories") }}</span>
             </div>
           </div>
-          <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-500" />
+          <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-500 rtl:scale-x-[-1]" aria-hidden="true" />
         </button>
 
         <!-- Actions: edit · delete (delete blocked while it still holds categories) -->
         <div class="flex shrink-0 items-center gap-1.5">
           <button
-            class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
+            class="ui-press flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
             type="button" :aria-label="t('common.edit')" @click="openEditor(row.local_id)"
           >
-            <AppIcon name="pencil" class="h-3.5 w-3.5" />
+            <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
           <button
-            class="flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            class="ui-press flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
             :disabled="Number(row.category_count || 0) > 0"
-            :title="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
-            :aria-label="t('common.remove')"
+            :title="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
+            :aria-label="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
             @click="removeByLocalId(row.local_id)"
           >
-            <AppIcon name="trash" class="h-3.5 w-3.5" />
+            <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
-      </article>
-    </div>
+      </article></li>
+    </ul>
 
     <Teleport to="body">
       <div
         v-if="editorOpen && editingRow"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeEditor"
-        @keydown.esc="closeEditor"
       >
         <div ref="editorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-super-categories-editor-dialog-title" class="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
@@ -176,7 +161,10 @@
               <p class="ui-kicker">{{ t("stepSuperCategories.title") }}</p>
               <h3 id="step-super-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepSuperCategories.edit") }}</h3>
             </div>
-            <button type="button" class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" @click="closeEditor"><AppIcon name="close" class="h-3.5 w-3.5" />{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" @click="closeEditor">
+              <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+              {{ t("common.close") }}
+            </button>
           </div>
 
           <div class="space-y-4 px-4 pt-4 pb-5 sm:px-5 sm:pt-5">
@@ -197,7 +185,7 @@
                       type="button"
                       :aria-pressed="fieldLocales.name === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="fieldLocales.name === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="fieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -211,10 +199,10 @@
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
                   :aria-label="t('stepSuperCategories.namePlaceholder')"
                   :aria-invalid="rowError(editingRow, 'name') ? 'true' : undefined"
-                  :aria-describedby="`step-supcat-name-error-${editingRow.local_id}`"
+                  :aria-describedby="rowError(editingRow, 'name') ? `step-supcat-name-error-${editingRow.local_id}` : undefined"
                   @input="setLocalizedFieldValue(editingRow, 'name', fieldLocales.name, $event.target.value)"
                 />
-                <p v-if="rowError(editingRow, 'name')" :id="`step-supcat-name-error-${editingRow.local_id}`" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
+                <p v-if="rowError(editingRow, 'name')" :id="`step-supcat-name-error-${editingRow.local_id}`" role="alert" class="text-xs text-red-300">{{ rowError(editingRow, 'name') }}</p>
               </div>
 
               <!-- Description (tagline for menu-selector card) -->
@@ -228,7 +216,7 @@
                       type="button"
                       :aria-pressed="fieldLocales.description === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="fieldLocales.description === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="fieldLocales.description = locale.code"
                     >{{ locale.nativeLabel }}</button>
                   </div>
@@ -274,7 +262,7 @@
 
               <div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4 space-y-3">
                 <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input v-model="editingRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                  <input v-model="editingRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 accent-[var(--color-secondary)]" />
                   {{ t("stepSuperCategories.disableToggle") }}
                 </label>
                 <label class="space-y-1 text-sm text-slate-300">
@@ -291,7 +279,10 @@
           </div>
 
           <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
-            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor"><AppIcon name="check" class="h-4 w-4" />{{ t("common.done") }}</button>
+            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor">
+              <AppIcon name="check" class="h-4 w-4" aria-hidden="true" />
+              {{ t("common.close") }}
+            </button>
           </div>
         </div>
       </div>
@@ -302,7 +293,6 @@
         v-if="quickModalOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickModal"
-        @keydown.esc="closeQuickModal"
       >
         <div ref="quickDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-super-categories-quick-dialog-title" class="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
@@ -310,11 +300,14 @@
               <p class="ui-kicker">{{ t("stepSuperCategories.title") }}</p>
               <h3 id="step-super-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepSuperCategories.add") }}</h3>
             </div>
-            <button type="button" class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" @click="closeQuickModal"><AppIcon name="close" class="h-3.5 w-3.5" />{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-outline gap-2 px-3 py-1.5 text-xs" @click="closeQuickModal">
+              <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+              {{ t("common.close") }}
+            </button>
           </div>
           <div class="space-y-4 p-4">
             <div class="ui-scroll-row">
-              <span class="ui-data-strip"><AppIcon name="plus" class="h-3.5 w-3.5" />{{ t("stepSuperCategories.heading") }}</span>
+              <span class="ui-data-strip"><AppIcon name="plus" class="h-3.5 w-3.5" aria-hidden="true" />{{ t("stepSuperCategories.heading") }}</span>
               <span class="ui-data-strip">{{ t("stepSuperCategories.visibility") }}</span>
             </div>
             <div class="rounded-2xl border border-slate-800 bg-slate-900/45 p-4 space-y-3">
@@ -328,7 +321,7 @@
                       type="button"
                       :aria-pressed="quickFieldLocales.name === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="quickFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="quickFieldLocales.name === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="quickFieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -344,22 +337,28 @@
                   :placeholder="t('stepSuperCategories.namePlaceholder')"
                   :aria-label="t('stepSuperCategories.namePlaceholder')"
                   :aria-invalid="quickAddError ? 'true' : undefined"
-                  aria-describedby="step-supcat-quick-name-error"
+                  :aria-describedby="quickAddError ? 'step-supcat-quick-name-error' : undefined"
                   @input="setLocalizedQuickFieldValue('name', quickFieldLocales.name, $event.target.value); quickAddError = ''"
                 />
-                <p v-if="quickAddError" id="step-supcat-quick-name-error" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
+                <p v-if="quickAddError" id="step-supcat-quick-name-error" role="alert" class="text-xs text-red-300 mt-1">{{ quickAddError }}</p>
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
-                <input v-model.number="quickRow.position" type="number" min="0" class="ui-input" :placeholder="t('stepSuperCategories.position')" />
-                <select v-model="quickRow.is_published" :aria-label="t('stepSuperCategories.visibility')" class="ui-input">
-                  <option :value="true">{{ t("common.available") }}</option>
-                  <option :value="false">{{ t("common.soon") }}</option>
-                </select>
+                <label class="space-y-1 text-sm text-slate-300">
+                  <span class="text-xs text-slate-400">{{ t("stepSuperCategories.position") }}</span>
+                  <input v-model.number="quickRow.position" type="number" min="0" class="ui-input" :placeholder="t('stepSuperCategories.position')" />
+                </label>
+                <label class="space-y-1 text-sm text-slate-300">
+                  <span class="text-xs text-slate-400">{{ t("stepSuperCategories.visibility") }}</span>
+                  <select v-model="quickRow.is_published" class="ui-input">
+                    <option :value="true">{{ t("common.available") }}</option>
+                    <option :value="false">{{ t("common.soon") }}</option>
+                  </select>
+                </label>
               </div>
 
               <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                <input v-model="quickRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                <input v-model="quickRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 accent-[var(--color-secondary)]" />
                 {{ t("stepSuperCategories.disableToggle") }}
               </label>
 
@@ -373,27 +372,33 @@
             </div>
           </div>
           <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
-            <button type="button" class="ui-btn-outline gap-2 px-4 py-2 text-sm" @click="closeQuickModal"><AppIcon name="close" class="h-4 w-4" />{{ t("common.close") }}</button>
-            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="quickAdd"><AppIcon name="plus" class="h-4 w-4" />{{ t("stepSuperCategories.add") }}</button>
+            <button type="button" class="ui-btn-outline gap-2 px-4 py-2 text-sm" @click="closeQuickModal">
+              <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
+              {{ t("common.close") }}
+            </button>
+            <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="quickAdd">
+              <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
+              {{ t("stepSuperCategories.add") }}
+            </button>
           </div>
         </div>
       </div>
     </Teleport>
 
     <div v-if="globalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-      <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+      <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
       <p class="flex-1 text-sm text-red-300">{{ globalError }}</p>
     </div>
 
     <div class="ui-toolbar-band flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-3">
       <div class="flex flex-wrap gap-2 text-xs text-slate-400">
-        <span class="ui-data-strip">{{ rows.length }} {{ t("stepSuperCategories.heading") }}</span>
-        <span class="ui-data-strip">{{ enabledCount }} {{ t("stepSuperCategories.enabledSummary") }}</span>
+        <span class="ui-data-strip tabular-nums">{{ rows.length }} {{ t("stepSuperCategories.heading") }}</span>
+        <span class="ui-data-strip tabular-nums">{{ enabledCount }} {{ t("stepSuperCategories.enabledSummary") }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-3">
-        <p class="text-sm text-slate-400">{{ status }}</p>
-        <button class="ui-btn-primary gap-2 px-4 py-2" :disabled="saving" @click="saveAll">
-          <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" />
+        <p class="text-sm text-slate-400" aria-live="polite">{{ status }}</p>
+        <button type="button" class="ui-btn-outline gap-2 px-4 py-2 text-sm" :disabled="saving" @click="saveAll">
+          <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
           {{ saving ? t("common.saving") : t("common.save") }}
         </button>
       </div>
