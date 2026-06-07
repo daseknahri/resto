@@ -429,7 +429,6 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import { useFocusTrap } from "../composables/useFocusTrap";
-import QRCode from "qrcode";
 import AppIcon from "../components/AppIcon.vue";
 import OwnerFloorSections from "../components/OwnerFloorSections.vue";
 import api from "../lib/api";
@@ -524,6 +523,7 @@ const tableQrSrc = (table) => qrDataUrls.value[table.id] || "";
 const generateQrForTable = async (table) => {
   if (!table?.id) return;
   const url = tableShortUrl(table);
+  const QRCode = (await import("qrcode")).default;  // lazy — load the QR lib on demand
   const dataUrl = await QRCode.toDataURL(url, {
     width: 240,
     margin: 1,
@@ -542,6 +542,7 @@ const generateQrForTable = async (table) => {
 const generateQrBatch = async () => {
   const rows = Array.isArray(tables.value) ? tables.value : [];
   const nextQrs = {};
+  const QRCode = (await import("qrcode")).default;  // lazy — load the QR lib once per batch
   for (const table of rows) {
     try {
       const dataUrl = await QRCode.toDataURL(tableShortUrl(table), {

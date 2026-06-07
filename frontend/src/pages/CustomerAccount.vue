@@ -1273,7 +1273,6 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useCustomerPush } from '../composables/useCustomerPush';
-import QRCode from 'qrcode';
 
 const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -1625,6 +1624,7 @@ const refreshPayCode = async () => {
   payCodeImg.value = '';
   try {
     const { data } = await api.get('/customer/wallet/pay-token/');
+    const QRCode = (await import('qrcode')).default;  // lazy — keeps ~60KB out of the page chunk
     payCodeImg.value = await QRCode.toDataURL(data.token, { width: 320, margin: 1 });
   } catch {
     payCodeImg.value = '';
