@@ -292,6 +292,22 @@ CELERY_BEAT_SCHEDULE = {
         "args": ("enforce_subscriptions",),
         "kwargs": {"apply": True},
     },
+    # ── Daily maintenance — bound table growth + keep FX rates fresh ──────────────
+    "fetch-currency-rates": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — refresh MAD exchange rates
+        "args": ("fetch_currency_rates",),
+    },
+    "prune-analytics-events": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — delete analytics events older than 90 days
+        "args": ("prune_analytics_events",),
+    },
+    "prune-admin-audit-logs": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — honour ADMIN_AUDIT_RETENTION_DAYS (default 180)
+        "args": ("prune_admin_audit_logs",),
+    },
 }
 
 # ── Session store ──────────────────────────────────────────────────────────────

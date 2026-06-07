@@ -51,6 +51,13 @@ or advance/scheduled orders never reach the kitchen.
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
 | `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (drop out of the marketplace). |
+| `python manage.py fetch_currency_rates` | daily | Refresh MAD exchange rates used for multi-currency display. |
+| `python manage.py prune_analytics_events` | daily | Delete analytics events older than 90 days — bounds tenant table growth. |
+| `python manage.py prune_admin_audit_logs` | daily | Delete admin audit logs past `ADMIN_AUDIT_RETENTION_DAYS` (default 180) — bounds growth. |
+
+> `sweep_unverified_wallets` is a **manual one-off**, not a recurring cron — new unverified
+> credits are already blocked at the service layer, so run it once with `--apply` only if you
+> need to clear legacy balances.
 
 ### Mode A — Simple (no Celery). Good for launch / first test.
 - Leave `CELERY_BROKER_URL` **unset**. Notifications send in-process (works fine, no worker).
