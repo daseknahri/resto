@@ -3527,18 +3527,38 @@ def _job_distance_km(job):
     return None
 
 
-def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -> dict:
-    """Best-effort cross-schema fetch of the order behind a delivery job.
-
-    Returns the bits a driver needs on the job card: how big the order is
-    (``items_count`` + a short ``items`` list), the order ``total``/``currency``,
-    and crucially whether the driver must **collect cash** (``collect_cash`` —
-    True when the order isn't already paid). When ``include_contact`` is set
-    (only for the driver's OWN active job) it also returns the customer
-    name/phone so the driver can call on arrival. Pending/unclaimed jobs never
-    expose contact details.
-    """
+def _order_summary_dict(o, include_contact: bool = False) -> dict:
+    """Build the driver-facing order summary from an Order object (no schema switch)."""
     out = {}
+    items = list(o.items.all())
+    out["items_count"] = sum(int(getattr(i, "qty", 1) or 1) for i in items)
+    out["items"] = [
+        {"name": i.dish_name, "qty": int(getattr(i, "qty", 1) or 1)}
+        for i in items[:25]
+    ]
+    out["order_total"] = str(o.total)
+    out["currency"] = getattr(o, "currency", "") or ""
+    _pay = getattr(o, "payment_status", "") or ""
+    out["payment_status"] = _pay
+    # COD: the driver collects the order total in cash unless it's prepaid.
+    out["collect_cash"] = _pay != "paid"
+    out["fulfillment_type"] = getattr(o, "fulfillment_type", "") or ""
+    _note = getattr(o, "delivery_address", "") or ""
+    if _note:
+        out["delivery_address"] = _note
+    if include_contact:
+        out["customer_name"] = o.customer_name or ""
+        out["customer_phone"] = o.customer_phone or ""
+    return out
+
+
+def _job_order_summaries(tenant_id, order_numbers, include_contact: bool = False) -> dict:
+    """Batched order summaries — ONE schema switch per tenant, all orders fetched at
+    once. Returns {order_number: summary_dict}. Best-effort (errors -> {})."""
+    out = {}
+    nums = [n for n in order_numbers if n]
+    if not nums:
+        return out
     try:
         from tenancy.models import Tenant as _T
 
@@ -3550,35 +3570,25 @@ def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -
         with schema_context(tnt.schema_name):
             from menu.models import Order as _O
 
-            o = (
-                _O.objects.filter(order_number=order_number)
-                .prefetch_related("items")
-                .first()
-            )
-            if not o:
-                return out
-            items = list(o.items.all())
-            out["items_count"] = sum(int(getattr(i, "qty", 1) or 1) for i in items)
-            out["items"] = [
-                {"name": i.dish_name, "qty": int(getattr(i, "qty", 1) or 1)}
-                for i in items[:25]
-            ]
-            out["order_total"] = str(o.total)
-            out["currency"] = getattr(o, "currency", "") or ""
-            _pay = getattr(o, "payment_status", "") or ""
-            out["payment_status"] = _pay
-            # COD: the driver collects the order total in cash unless it's prepaid.
-            out["collect_cash"] = _pay != "paid"
-            out["fulfillment_type"] = getattr(o, "fulfillment_type", "") or ""
-            _note = getattr(o, "delivery_address", "") or ""
-            if _note:
-                out["delivery_address"] = _note
-            if include_contact:
-                out["customer_name"] = o.customer_name or ""
-                out["customer_phone"] = o.customer_phone or ""
+            for o in (
+                _O.objects.filter(order_number__in=nums).prefetch_related("items")
+            ):
+                out[o.order_number] = _order_summary_dict(o, include_contact)
     except Exception:
         pass
     return out
+
+
+def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -> dict:
+    """Single-order driver summary — thin wrapper over the batched helper.
+
+    Returns the bits a driver needs on the job card: order size (``items_count`` +
+    a short ``items`` list), ``total``/``currency``, and whether the driver must
+    **collect cash** (``collect_cash`` — True unless the order is already paid).
+    With ``include_contact`` (only the driver's OWN active job) it also returns the
+    customer name/phone. Pending/unclaimed jobs never expose contact details.
+    """
+    return _job_order_summaries(tenant_id, [order_number], include_contact).get(order_number, {})
 
 
 def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
@@ -3859,20 +3869,34 @@ class DriverJobListView(APIView):
             ).select_related("driver")[:20]
         )
 
-        # Enrich the driver's ACTIVE job(s) with the full order summary + customer
-        # contact so they can call on arrival. Only the assigned driver sees contact.
+        # Enrich jobs with the order summary, BATCHED by tenant — one schema switch
+        # per tenant instead of one per job (a driver poll can carry ~20 pending jobs
+        # spread across several restaurants). Output order is preserved.
+        def _summaries_by_tenant(jobs, include_contact):
+            by_tenant = {}
+            for _j in jobs:
+                by_tenant.setdefault(_j.tenant_id, []).append(_j.order_number)
+            merged = {}  # (tenant_id, order_number) -> summary dict
+            for _tid, _nums in by_tenant.items():
+                for _onum, _summ in _job_order_summaries(_tid, _nums, include_contact).items():
+                    merged[(_tid, _onum)] = _summ
+            return merged
+
+        # Active job(s): include customer contact (the driver's own job).
+        _active_sum = _summaries_by_tenant(active_jobs, True)
         active_serialized = []
         for j in active_jobs:
             d = _serialize_delivery_job(j)
-            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=True))
+            d.update(_active_sum.get((j.tenant_id, j.order_number), {}))
             active_serialized.append(d)
 
-        # PENDING jobs show enough to decide (size, total, cash-or-prepaid, distance)
-        # but never the customer's name/phone until the driver accepts.
+        # PENDING jobs: enough to decide (size, total, cash-or-prepaid, distance) but
+        # never the customer's name/phone until the driver accepts.
+        _pending_sum = _summaries_by_tenant(pending_jobs, False)
         pending_serialized = []
         for j in pending_jobs:
             d = _serialize_delivery_job(j)
-            d.update(_job_order_summary(j.tenant_id, j.order_number, include_contact=False))
+            d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
             pending_serialized.append(d)
 
         return Response({
