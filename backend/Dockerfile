@@ -6,13 +6,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+COPY requirements.txt ./
+# Install the build toolchain, compile deps, then PURGE the toolchain in the SAME
+# layer so ~200 MB of build-essential never persists in the runtime image. libpq-dev
+# is kept (explicit, small) so psycopg2 retains its runtime libpq.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential \
     && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt ./
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
 
 COPY . .
 

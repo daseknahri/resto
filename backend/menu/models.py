@@ -440,6 +440,9 @@ class Order(models.Model):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=("status", "created_at")),
+            # Staff "?since=" delta-poll filters status + orders by updated_at (~300 req/min);
+            # without this it scans all active rows every tick.
+            models.Index(fields=("status", "updated_at")),
         ]
 
     def __str__(self) -> str:

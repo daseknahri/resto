@@ -2096,8 +2096,15 @@ class DirectoryView(APIView):
         if cuisine_q:
             qs = qs.filter(cuisine_type__icontains=cuisine_q)
 
+        # Materialise the (up-to-100) profile rows once so we can build filter
+        # lists from the same data without a second full-table scan.
+        profiles_page = list(qs[:100])
+
         results = []
-        for profile in qs[:100]:
+        cities_set: set = set()
+        cuisines_set: set = set()
+
+        for profile in profiles_page:
             tenant = profile.tenant
             is_currently_open = bool(profile.is_open) and not getattr(profile, "is_menu_temporarily_disabled", False)
 
@@ -2115,6 +2122,11 @@ class DirectoryView(APIView):
             except Exception:
                 pass
 
+            if profile.city:
+                cities_set.add(profile.city)
+            if profile.cuisine_type:
+                cuisines_set.add(profile.cuisine_type)
+
             results.append({
                 "slug": tenant.slug,
                 "name": tenant.name,
@@ -2128,9 +2140,8 @@ class DirectoryView(APIView):
                 "delivery_enabled": bool(profile.delivery_enabled),
             })
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-        cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
-        cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
+        cities = sorted(cities_set)
+        cuisines = sorted(cuisines_set)
 
         return Response({"restaurants": results, "filters": {"cities": cities, "cuisines": cuisines}})
 
@@ -2209,9 +2220,41 @@ class MarketplaceView(APIView):
         if price_tier_filter:
             qs = qs.filter(price_tier=price_tier_filter)
 
+        # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
+        # Build a mapping: tenant_id → set of flash_sale_ids they opted into.
+        # Then fetch all currently-active+live flash sales once, as a set of ids.
+        opted_map: dict = {}   # tenant_id → set[flash_sale_id]
+        live_flash_sale_ids: set = set()
+        try:
+            from .models import PlatformFlashSale, PlatformFlashSaleOptIn
+            for row in PlatformFlashSaleOptIn.objects.values("tenant_id", "flash_sale_id"):
+                opted_map.setdefault(row["tenant_id"], set()).add(row["flash_sale_id"])
+            # Only keep flash sales that are is_active=True AND pass the is_live() check.
+            for _fs in PlatformFlashSale.objects.filter(is_active=True):
+                if _fs.is_live():
+                    live_flash_sale_ids.add(_fs.id)
+        except Exception:
+            pass
+
+        # Materialise the page so we can derive filter lists without an extra query.
+        profiles_page = list(qs[:200])
+
         results = []
-        for profile in qs[:200]:
+        cities_set: set = set()
+        cuisines_set: set = set()
+        all_tags: set = set()
+
+        for profile in profiles_page:
             tenant = profile.tenant
+
+            # Accumulate filter values from rows already in memory.
+            if profile.city:
+                cities_set.add(profile.city)
+            if profile.cuisine_type:
+                cuisines_set.add(profile.cuisine_type)
+            if isinstance(profile.tags, list):
+                all_tags.update(str(t).lower() for t in profile.tags)
+
             is_currently_open = _compute_is_open_now(profile)
 
             if open_only and not is_currently_open:
@@ -2234,7 +2277,6 @@ class MarketplaceView(APIView):
             rating_avg = None
             rating_count = 0
             promo_badge = None
-            flash_sale_active = False
             try:
                 from django_tenants.utils import schema_context as _sc
                 from django.db.models import Avg, Count
@@ -2256,19 +2298,9 @@ class MarketplaceView(APIView):
             except Exception:
                 pass
 
-            # Check if this restaurant is opted into any live platform flash sale
-            try:
-                from .models import PlatformFlashSale, PlatformFlashSaleOptIn
-                opted_ids = set(
-                    PlatformFlashSaleOptIn.objects.filter(tenant_id=tenant.id).values_list("flash_sale_id", flat=True)
-                )
-                if opted_ids:
-                    for _fs in PlatformFlashSale.objects.filter(id__in=opted_ids, is_active=True):
-                        if _fs.is_live():
-                            flash_sale_active = True
-                            break
-            except Exception:
-                pass
+            # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
+            tenant_opted_ids = opted_map.get(tenant.id, set())
+            flash_sale_active = bool(tenant_opted_ids & live_flash_sale_ids)
 
             if min_rating is not None and (rating_avg is None or rating_avg < min_rating):
                 continue
@@ -2305,19 +2337,11 @@ class MarketplaceView(APIView):
         else:
             results.sort(key=lambda r: (not r["is_open"], r["name"].lower()))
 
-        all_opted = Profile.objects.filter(directory_opt_in=True, is_menu_published=True, tenant__lifecycle_status="active")
-        cities = sorted({p for p in all_opted.exclude(city="").values_list("city", flat=True)})
-        cuisines = sorted({p for p in all_opted.exclude(cuisine_type="").values_list("cuisine_type", flat=True)})
-        all_tags: set = set()
-        for tlist in all_opted.exclude(tags=[]).values_list("tags", flat=True):
-            if isinstance(tlist, list):
-                all_tags.update(str(t).lower() for t in tlist)
-
         return Response({
             "restaurants": results[:100],
             "filters": {
-                "cities": cities,
-                "cuisines": cuisines,
+                "cities": sorted(cities_set),
+                "cuisines": sorted(cuisines_set),
                 "tags": sorted(all_tags),
             },
         })
