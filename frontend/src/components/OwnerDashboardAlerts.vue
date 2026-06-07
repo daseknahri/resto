@@ -1,45 +1,53 @@
 <template>
-  <!-- Only rendered when there is at least one actionable alert -->
-  <div v-if="alerts.length" class="space-y-2" role="region" :aria-label="t('ownerHome.alertsRegion')">
-    <TransitionGroup name="alert-slide" tag="div" class="space-y-2">
-      <div
-        v-for="(alert, index) in alerts"
-        :key="alert.id"
-        class="ui-section-band ui-reveal flex items-start gap-3 px-3 py-2.5 text-sm"
-        :class="alert.borderClass"
-        :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-        :role="index === 0 ? 'alert' : 'status'"
-      >
-        <!-- Icon -->
-        <span class="mt-0.5 shrink-0 text-base leading-none" aria-hidden="true">{{ alert.icon }}</span>
-
-        <!-- Message -->
-        <p class="min-w-0 flex-1 text-xs font-medium leading-relaxed" :class="alert.textClass">
-          {{ alert.message }}
-        </p>
-
-        <!-- Action button (optional) -->
-        <RouterLink
-          v-if="alert.to"
-          :to="alert.to"
-          class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px] focus-visible:ring-2"
-          :class="alert.actionClass"
+  <!-- Persistent live-region wrapper is always in the DOM so screen readers register
+       it before content is injected. The v-if sits on the inner region landmark only. -->
+  <div aria-live="assertive" aria-atomic="false">
+    <div v-if="alerts.length" class="space-y-2" role="region" :aria-label="t('ownerHome.alertsRegion')">
+      <TransitionGroup name="alert-slide" tag="ul" class="relative space-y-2 list-none" role="list">
+        <li
+          v-for="(alert, index) in alerts"
+          :key="alert.id"
+          class="rounded-xl border ui-reveal flex items-start gap-3 px-3 py-2.5 text-sm"
+          :class="alert.borderClass"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          {{ alert.actionLabel }}
-        </RouterLink>
-        <button
-          v-else-if="alert.action"
-          :disabled="alert.loading"
-          class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px] disabled:opacity-50 focus-visible:ring-2"
-          :class="alert.actionClass"
-          :aria-busy="alert.loading || undefined"
-          @click="alert.action()"
-        >
-          <span v-if="alert.loading" aria-hidden="true">…</span>
-          <span :class="{ 'sr-only': alert.loading }">{{ alert.actionLabel }}</span>
-        </button>
-      </div>
-    </TransitionGroup>
+          <!-- Icon -->
+          <span class="mt-0.5 shrink-0 text-base leading-none" aria-hidden="true">{{ alert.icon }}</span>
+
+          <!-- Message -->
+          <p
+            :id="'alert-msg-' + alert.id"
+            class="min-w-0 flex-1 text-xs font-medium leading-relaxed"
+            :class="alert.textClass"
+          >
+            {{ alert.message }}
+          </p>
+
+          <!-- Action button (optional) -->
+          <RouterLink
+            v-if="alert.to"
+            :to="alert.to"
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px]"
+            :class="alert.actionClass"
+            :aria-describedby="'alert-msg-' + alert.id"
+          >
+            {{ alert.actionLabel }}
+          </RouterLink>
+          <button
+            v-else-if="alert.action"
+            :disabled="alert.loading"
+            class="ui-btn-outline ui-press ui-touch-target shrink-0 text-[11px] disabled:opacity-50"
+            :class="alert.actionClass"
+            :aria-busy="alert.loading || undefined"
+            :aria-describedby="'alert-msg-' + alert.id"
+            @click="alert.action()"
+          >
+            <span v-if="alert.loading" aria-hidden="true">…</span>
+            <span :class="{ 'sr-only': alert.loading }">{{ alert.actionLabel }}</span>
+          </button>
+        </li>
+      </TransitionGroup>
+    </div>
   </div>
 </template>
 

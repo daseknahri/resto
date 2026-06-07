@@ -6,7 +6,7 @@
       <div class="h-3.5 w-10 rounded bg-slate-700/60" />
     </div>
     <div class="h-2 rounded-full bg-slate-800" />
-    <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <div v-for="i in 5" :key="i" class="ui-readiness-item flex items-center justify-between gap-3">
         <div class="h-3 flex-1 rounded bg-slate-700/50" />
         <div class="h-5 w-14 shrink-0 rounded-full bg-slate-700/40" />
@@ -16,11 +16,19 @@
 
   <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
        cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
-  <article v-else-if="readinessScore < 100" class="ui-section-band ui-reveal space-y-3 p-3 sm:space-y-4 sm:p-4">
+  <!-- TODO: requires logic change — readinessScore === 100 is unreachable here (outer condition is < 100);
+       the completion message (line ~49) and emerald colour state are permanently dead.
+       Fix: change outer condition to v-else-if="readinessScore <= 100" or restructure. -->
+  <article
+    v-else-if="readinessScore < 100"
+    class="ui-section-band ui-reveal space-y-3 p-3 sm:space-y-4 sm:p-4"
+    aria-labelledby="readiness-heading"
+    aria-live="polite"
+  >
     <div class="flex items-center justify-between gap-3">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t("ownerHome.launchChecklist") }}</p>
-        <h2 class="mt-0.5 text-sm font-medium text-slate-200">{{ t("ownerHome.launchProgress") }}</h2>
+        <h2 id="readiness-heading" class="mt-0.5 text-base font-semibold text-white">{{ t("ownerHome.launchProgress") }}</h2>
       </div>
       <span
         class="tabular-nums text-sm font-semibold"
@@ -50,7 +58,7 @@
       {{ t("ownerHome.readinessDone") }}
     </p>
 
-    <ul class="grid list-none gap-2 p-0 sm:grid-cols-2 xl:grid-cols-5">
+    <ul role="list" class="grid list-none gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <li
         v-for="(item, index) in readinessItems"
         :key="item.label"
@@ -66,6 +74,7 @@
             <RouterLink
               v-if="item.to"
               :to="item.to"
+              :aria-label="`${item.actionLabel} — ${item.label}`"
               class="mt-1.5 inline-flex text-[11px] text-brand-secondary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)] sm:text-xs"
             >
               {{ item.actionLabel }}
@@ -73,8 +82,8 @@
           </div>
         </div>
         <span
-          class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold"
-          :class="item.ready ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+          class="ui-status-pill shrink-0"
+          :class="item.ready ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' : 'border-amber-500/30 bg-amber-500/15 text-amber-300'"
         >
           {{ item.ready ? t("ownerHome.ready") : t("ownerHome.missing") }}
         </span>

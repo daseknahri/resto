@@ -68,13 +68,13 @@
     </div>
 
     <!-- Daily revenue mini-chart -->
-    <div v-if="data && chartDays.length > 1" class="space-y-1">
-      <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
-      <h3 class="text-sm font-semibold text-slate-200 leading-tight">{{ t("ownerHome.revenueDailyChart") }}</h3>
+    <div v-if="data && chartDays.length > 1" class="max-w-full space-y-1">
+      <p class="ui-kicker">{{ t("ownerHome.dailyRevenueKicker") }}</p>
+      <h4 class="text-sm font-medium text-slate-100">{{ t("ownerHome.revenueDailyChart") }}</h4>
       <div
-        class="flex min-w-0 items-end gap-0.5 h-20 overflow-x-auto owner-chart-scroll pb-1"
+        class="ui-scroll-row h-20 items-end gap-0.5"
         role="img"
-        :aria-label="t('ownerHome.revenueDailyChart')"
+        :aria-label="t('ownerHome.revenueDailyChartAriaLabel')"
       >
         <div
           v-for="day in chartDays"
@@ -99,8 +99,8 @@
       v-if="data && data.order_count > 0 && peakHoursBars.length"
       class="space-y-3 border-t border-slate-800/60 pt-2"
     >
-      <p class="ui-kicker">{{ t("ownerHome.analyticsKicker") }}</p>
-      <h3 class="text-sm font-semibold text-slate-200 leading-tight">{{ t("ownerHome.peakHoursTitle") }}</h3>
+      <p class="ui-kicker">{{ t("ownerHome.peakHoursKicker") }}</p>
+      <h4 class="text-sm font-medium text-slate-100">{{ t("ownerHome.peakHoursTitle") }}</h4>
       <div class="grid gap-4 sm:grid-cols-2">
         <!-- By hour of day -->
         <div class="space-y-1.5">
@@ -120,7 +120,7 @@
             />
           </div>
           <div class="flex justify-between text-[9px] tabular-nums text-slate-500" aria-hidden="true">
-            <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+            <span>{{ t("ownerHome.peakHoursAxisHour0") }}</span><span>{{ t("ownerHome.peakHoursAxisHour6") }}</span><span>{{ t("ownerHome.peakHoursAxisHour12") }}</span><span>{{ t("ownerHome.peakHoursAxisHour18") }}</span><span>{{ t("ownerHome.peakHoursAxisHour23") }}</span>
           </div>
         </div>
         <!-- By day of week -->
@@ -129,7 +129,7 @@
           <div
             class="flex h-16 items-end gap-1"
             role="img"
-            :aria-label="t('ownerHome.peakHoursByDay')"
+            :aria-label="t('ownerHome.peakHoursByDayAriaLabel')"
           >
             <div
               v-for="bar in peakWeekdayBars"
@@ -301,5 +301,4 @@ const returnRateLabel = computed(() =>
 
 <style scoped>
 .owner-revenue-icon { width: 1rem; height: 1rem; color: var(--color-secondary); }
-.owner-chart-scroll { scrollbar-width: thin; }
 </style>

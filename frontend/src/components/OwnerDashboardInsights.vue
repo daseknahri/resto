@@ -20,7 +20,7 @@
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10" />
           </svg>
         </h2>
-        <span role="status" aria-live="polite" class="sr-only">{{ updating ? t('ownerHome.updatingLabel') : '' }}</span>
+        <span v-if="updating" role="status" aria-live="polite" class="sr-only">{{ t('ownerHome.updatingLabel') }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <!-- Period selector -->
@@ -46,7 +46,6 @@
           class="ui-press inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :disabled="exporting"
           :aria-busy="exporting"
-          :aria-label="exporting ? t('ownerHome.exportingCsv') : t('ownerHome.exportCsv')"
           @click="exportCsv"
         >
           <svg v-if="!exporting" aria-hidden="true" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -55,7 +54,7 @@
           <svg v-else aria-hidden="true" class="h-3.5 w-3.5 shrink-0 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="10" />
           </svg>
-          {{ t("ownerHome.exportCsv") }}
+          {{ exporting ? t("ownerHome.exportingCsv") : t("ownerHome.exportCsv") }}
         </button>
       </div>
     </div>
@@ -109,25 +108,25 @@
 
     <!-- Loyalty & promotions performance -->
     <div v-if="loyaltyPromo" class="ui-admin-subcard space-y-2">
-      <p class="ui-kicker">{{ t("ownerHome.loyaltyPromoTitle") }}</p>
+      <h3 class="ui-kicker">{{ t("ownerHome.loyaltyPromoTitle") }}</h3>
       <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
-          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.promoDiscountGiven") }}</p>
-          <p class="tabular-nums text-sm font-bold text-white">{{ fmtMoney(loyaltyPromo.promo_discount_total) }}</p>
-          <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.promo_order_count }) }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.promoDiscountGiven") }}</p>
+          <p class="ui-stat-value tabular-nums">{{ fmtMoney(loyaltyPromo.promo_discount_total) }}</p>
+          <p class="ui-stat-note">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.promo_order_count }) }}</p>
         </div>
-        <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-          <p class="text-[10px] uppercase tracking-wide text-amber-400/80">{{ t("ownerHome.loyaltyDiscountGiven") }}</p>
-          <p class="tabular-nums text-sm font-bold text-amber-200">{{ fmtMoney(loyaltyPromo.loyalty_discount_total) }}</p>
-          <p class="text-[10px] text-slate-500">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.loyalty_order_count }) }}</p>
+        <div class="ui-stat-tile border-amber-500/30 bg-amber-500/5">
+          <p class="ui-stat-label text-amber-400/80">{{ t("ownerHome.loyaltyDiscountGiven") }}</p>
+          <p class="ui-stat-value tabular-nums text-amber-200">{{ fmtMoney(loyaltyPromo.loyalty_discount_total) }}</p>
+          <p class="ui-stat-note">{{ t("ownerHome.acrossOrders", { n: loyaltyPromo.loyalty_order_count }) }}</p>
         </div>
-        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
-          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsIssued") }}</p>
-          <p class="tabular-nums text-sm font-bold text-emerald-300">+{{ formatNumber(loyaltyPromo.points_earned_total) }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.pointsIssued") }}</p>
+          <p class="ui-stat-value tabular-nums text-emerald-300">+{{ formatNumber(loyaltyPromo.points_earned_total) }}</p>
         </div>
-        <div class="rounded-lg border border-slate-700/40 bg-slate-950/30 px-3 py-2">
-          <p class="text-[10px] uppercase tracking-wide text-slate-500">{{ t("ownerHome.pointsRedeemed") }}</p>
-          <p class="tabular-nums text-sm font-bold text-violet-300">−{{ formatNumber(loyaltyPromo.points_redeemed_total) }}</p>
+        <div class="ui-stat-tile">
+          <p class="ui-stat-label">{{ t("ownerHome.pointsRedeemed") }}</p>
+          <p class="ui-stat-value tabular-nums text-violet-300">−{{ formatNumber(loyaltyPromo.points_redeemed_total) }}</p>
         </div>
       </div>
     </div>
@@ -143,7 +142,7 @@
       </svg>
       <p class="flex-1 text-sm text-red-300">{{ t("ownerHome.analyticsLoadError") }}</p>
       <button
-        class="ui-press ui-btn-outline shrink-0 px-2.5 py-1 text-[11px] font-semibold"
+        class="ui-press ui-touch-target ui-btn-outline shrink-0 px-2.5 text-[11px] font-semibold"
         @click="hydrate(true)"
       >
         {{ t("common.retry") }}
@@ -162,7 +161,7 @@
 
     <!-- Conversion funnel -->
     <div v-if="hasFunnelData" class="ui-admin-subcard space-y-3">
-      <p class="ui-kicker">{{ t("ownerHome.funnelTitle") }}</p>
+      <h3 class="ui-kicker">{{ t("ownerHome.funnelTitle") }}</h3>
       <div class="space-y-2">
         <div v-for="(step, i) in funnelSteps" :key="step.key" class="funnel-step">
           <div class="flex items-center justify-between gap-2 text-sm">
@@ -179,6 +178,7 @@
               aria-valuemin="0"
               aria-valuemax="100"
               :aria-label="step.label"
+              :aria-valuetext="formatNumber(step.value)"
               class="h-2 rounded-full transition-all duration-500"
               :class="step.barClass"
               :style="{ width: step.widthPct + '%' }"
@@ -197,7 +197,7 @@
     <!-- Top categories + dishes -->
     <div class="grid gap-2 sm:grid-cols-2 sm:gap-3">
       <div class="ui-admin-subcard space-y-2">
-        <p class="ui-kicker">{{ t("ownerHome.topCategories") }}</p>
+        <h3 class="ui-kicker">{{ t("ownerHome.topCategories") }}</h3>
         <ul v-if="topCategories.length" class="space-y-2 text-sm text-slate-200">
           <li
             v-for="(item, idx) in topCategories"
@@ -215,7 +215,7 @@
         </div>
       </div>
       <div class="ui-admin-subcard space-y-2">
-        <p class="ui-kicker">{{ t("ownerHome.topDishes") }}</p>
+        <h3 class="ui-kicker">{{ t("ownerHome.topDishes") }}</h3>
         <ul v-if="topDishes.length" class="space-y-2 text-sm text-slate-200">
           <li
             v-for="(item, idx) in topDishes"

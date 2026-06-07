@@ -4,7 +4,7 @@
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <p class="ui-kicker">{{ t('ownerSections.kicker') }}</p>
-        <h2 id="owner-sections-title" class="text-sm font-semibold text-slate-100">{{ t('ownerSections.title') }}</h2>
+        <h2 id="owner-sections-title" class="text-base font-semibold text-white leading-tight">{{ t('ownerSections.title') }}</h2>
         <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerSections.subtitle') }}</p>
       </div>
       <button
@@ -51,7 +51,7 @@
             {{ t('common.save') }}
           </button>
           <button
-            class="ui-press inline-flex items-center gap-1 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 rounded-lg"
+            class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1.5 text-xs"
             @click="creating = false"
           >
             {{ t('common.cancel') }}
@@ -77,8 +77,9 @@
       </button>
     </div>
 
+    <!-- TODO: requires logic change — add a `loading` ref, set true before fetchSections/fetchStaff, false after; render <div v-if="loading" class="ui-skeleton h-14 rounded-xl" /> x2 before the <ul> per §2.4 -->
     <!-- Section list -->
-    <ul class="space-y-0">
+    <ul class="space-y-2">
     <li
       v-for="(s, index) in sections"
       :key="s.id"
@@ -92,7 +93,6 @@
             :style="{ background: s.color || '#64748b' }"
             aria-hidden="true"
           />
-          <span class="sr-only">{{ s.color || '#64748b' }}</span>
           <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-slate-100">{{ s.name }}</p>
             <p class="truncate text-xs text-slate-500">
@@ -105,8 +105,8 @@
         </div>
         <div class="flex shrink-0 items-center gap-1">
           <button
-            class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 transition-colors"
-            :aria-label="`${t('common.edit')} ${s.name}`"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-2.5 py-1 text-xs"
+            :aria-label="editId === s.id ? `${t('common.close')} ${s.name}` : `${t('common.edit')} ${s.name}`"
             :aria-expanded="editId === s.id"
             :aria-controls="`section-edit-${s.id}`"
             @click="toggleEdit(s)"
@@ -115,7 +115,7 @@
             <span class="hidden sm:inline">{{ t('common.edit') }}</span>
           </button>
           <button
-            class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg border border-red-400/25 px-2.5 py-1 text-xs text-red-300 hover:border-red-400/50 hover:text-red-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/50 transition-colors"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-2.5 py-1 text-xs text-red-300 border-[var(--color-danger)]/25 hover:border-[var(--color-danger)]/50"
             :aria-label="`${t('common.delete')} ${s.name}`"
             @click="removeSection(s)"
           >
@@ -166,7 +166,7 @@
 
           <fieldset>
             <legend class="mb-1.5 text-xs font-semibold text-slate-400">{{ t('ownerSections.tables') }}</legend>
-            <div class="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
+            <div class="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto" tabindex="0" :aria-label="t('ownerSections.tables')" role="group">
               <label
                 v-for="tb in tables"
                 :key="tb.id"
@@ -197,7 +197,7 @@
               {{ t('common.save') }}
             </button>
             <button
-              class="ui-press inline-flex items-center gap-1 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 rounded-lg"
+              class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1.5 text-xs"
               @click="editId = null"
             >
               {{ t('common.cancel') }}

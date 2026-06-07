@@ -22,7 +22,7 @@
         <svg
           v-if="fetching"
           aria-hidden="true"
-          class="h-3 w-3 animate-spin text-slate-500"
+          class="h-3 w-3 animate-spin motion-reduce:animate-none text-slate-500"
           viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"
@@ -52,7 +52,7 @@
         />
         <button
           v-if="soldOutCount > 0"
-          class="ui-press shrink-0 rounded-full border border-emerald-500/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+          class="ui-press ui-touch-target shrink-0 truncate rounded-full border border-emerald-500/40 px-2.5 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 max-w-[10rem]"
           :disabled="resetting"
           :aria-busy="resetting"
           :title="t('ownerHome.resetAvailabilityHint')"
@@ -78,73 +78,74 @@
         <p class="text-xs font-medium text-slate-300">{{ t("ownerHome.noDishesLoaded") }}</p>
       </div>
 
-      <div
-        v-for="(dish, index) in filtered"
-        :key="dish.id"
-        class="ui-reveal flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
-        :class="!dish.is_available ? 'opacity-60' : ''"
-        :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
-      >
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-xs font-medium text-slate-100">{{ dish.name }}</p>
-          <p class="truncate text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
-        </div>
-
-        <div class="flex shrink-0 items-center gap-1.5">
-          <!-- Stock quantity input -->
-          <div class="flex flex-col items-center gap-0.5">
-            <label
-              :for="`stock-${dish.id}`"
-              class="text-[8px] uppercase tracking-wider text-slate-600"
-            >{{ t("ownerHome.stockLabel") }}</label>
-            <input
-              :id="`stock-${dish.id}`"
-              type="number"
-              min="0"
-              step="1"
-              :value="dish.stock_qty ?? ''"
-              :placeholder="t('ownerHome.stockUnlimited')"
-              :disabled="settingStockId === dish.id"
-              :aria-label="t('ownerHome.stockLabel')"
-              class="w-14 rounded-lg border border-slate-700 bg-slate-900/80 px-1.5 py-0.5 text-center text-[10px] tabular-nums text-slate-200 placeholder-slate-600 focus:border-amber-500/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40 disabled:opacity-40"
-              :class="
-                dish.stock_qty === 0
-                  ? 'border-red-500/50 text-red-300'
-                  : dish.stock_qty !== null
-                  ? 'border-amber-500/30 text-amber-200'
-                  : ''
-              "
-              @change="setStock(dish, $event.target.value)"
-              @keydown.enter="$event.target.blur()"
-            />
-            <span v-if="dish.stock_qty === 0" class="sr-only">{{ t("ownerHome.lowStockSoldOut") }}</span>
+      <ul role="list" class="list-none space-y-1">
+        <li
+          v-for="(dish, index) in filtered"
+          :key="dish.id"
+          class="ui-reveal flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-900/60"
+          :class="!dish.is_available ? 'opacity-60' : ''"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-xs font-medium text-slate-100">{{ dish.name }}</p>
+            <p class="truncate text-[10px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
           </div>
 
-          <!-- Available toggle -->
-          <button
-            role="switch"
-            class="ui-press ui-touch-target shrink-0 rounded-full border px-2.5 text-[10px] font-semibold transition-colors disabled:opacity-50"
-            :class="
-              dish.is_available
-                ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
-                : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'
-            "
-            :disabled="togglingId === dish.id"
-            :aria-checked="dish.is_available"
-            :aria-busy="togglingId === dish.id"
-            :aria-label="
-              togglingId === dish.id
-                ? t('common.loading')
-                : dish.is_available
-                ? `${dish.name} — ${t('ownerHome.dishAvailable')}`
-                : `${dish.name} — ${t('ownerHome.dish86d')}`
-            "
-            @click="toggleAvailability(dish)"
-          >
-            {{ togglingId === dish.id ? t("common.loading") : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
-          </button>
-        </div>
-      </div>
+          <div class="flex shrink-0 items-center gap-1.5">
+            <!-- Stock quantity input -->
+            <div class="flex flex-col items-center gap-0.5">
+              <label
+                :for="`stock-${dish.id}`"
+                class="text-[10px] uppercase tracking-wider text-slate-400"
+              >{{ t("ownerHome.stockLabel") }}</label>
+              <input
+                :id="`stock-${dish.id}`"
+                type="number"
+                min="0"
+                step="1"
+                :value="dish.stock_qty ?? ''"
+                :placeholder="t('ownerHome.stockUnlimited')"
+                :disabled="settingStockId === dish.id"
+                class="ui-input w-14 py-0.5 text-center text-[10px] tabular-nums placeholder-slate-600 disabled:opacity-40"
+                :class="
+                  dish.stock_qty === 0
+                    ? 'border-red-500/50 text-red-300'
+                    : dish.stock_qty !== null
+                    ? 'border-amber-500/30 text-amber-200'
+                    : ''
+                "
+                @change="setStock(dish, $event.target.value)"
+                @keydown.enter="$event.target.blur()"
+              />
+              <span v-if="dish.stock_qty === 0" class="sr-only">{{ t("ownerHome.lowStockSoldOut") }}</span>
+            </div>
+
+            <!-- Available toggle -->
+            <button
+              role="switch"
+              class="ui-press ui-touch-target shrink-0 rounded-full border px-2.5 text-[10px] font-semibold transition-colors disabled:opacity-50"
+              :class="
+                dish.is_available
+                  ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
+                  : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'
+              "
+              :disabled="togglingId === dish.id"
+              :aria-checked="dish.is_available"
+              :aria-busy="togglingId === dish.id"
+              :aria-label="
+                togglingId === dish.id
+                  ? t('common.loading')
+                  : dish.is_available
+                  ? `${dish.name} — ${t('ownerHome.dishAvailable')}`
+                  : `${dish.name} — ${t('ownerHome.dish86d')}`
+              "
+              @click="toggleAvailability(dish)"
+            >
+              {{ togglingId === dish.id ? t("common.loading") : (dish.is_available ? t("ownerHome.dishAvailable") : t("ownerHome.dish86d")) }}
+            </button>
+          </div>
+        </li>
+      </ul>
     </div>
   </details>
 </template>

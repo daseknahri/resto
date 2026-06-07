@@ -10,13 +10,15 @@
       currency   String   — ISO 4217 currency code for revenue formatting
   -->
   <div class="space-y-3 sm:space-y-4" :aria-busy="loading">
-    <h2 class="ui-kicker">
+    <p class="ui-kicker">
       {{ t("ownerHome.fulfillmentTitle") }}
-    </h2>
+    </p>
+
+    <!-- Live region stays in DOM so AT receives update when loading ends -->
+    <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t("common.loading") : "" }}</span>
 
     <!-- Skeleton -->
     <template v-if="loading">
-      <span class="sr-only" aria-live="polite">{{ t("common.loading") }}</span>
       <div class="ui-skeleton h-3 w-full" aria-hidden="true" />
       <div class="space-y-2 pt-0.5">
         <div v-for="i in 3" :key="i" class="flex items-center justify-between gap-3">
@@ -32,7 +34,7 @@
       class="ui-empty-state text-center space-y-1"
     >
       <p class="text-sm font-semibold text-slate-100">{{ t("ownerHome.noOrdersYet") }}</p>
-      <p class="text-xs ui-subtle">{{ t("ownerHome.noOrdersYetBody") }}</p>
+      <p class="text-xs text-slate-400">{{ t("ownerHome.noOrdersYetBody") }}</p>
     </div>
 
     <template v-else>
@@ -47,16 +49,16 @@
           :key="row.key"
           :class="row.barClass"
           :style="{ width: `${row.pct}%`, transition: 'width var(--motion-slow) var(--ease-fluid)' }"
-          :title="`${row.label}: ${row.pct}%`"
+          aria-hidden="true"
         />
       </div>
 
       <!-- Legend rows -->
-      <ul class="space-y-1.5 list-none">
+      <ul class="space-y-1.5 list-none" role="list">
         <li
           v-for="(row, index) in rows"
           :key="row.key"
-          class="ui-reveal flex min-h-[1.75rem] items-center gap-2 text-xs"
+          class="ui-reveal flex items-center gap-2 text-xs"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <!-- Color dot -->
