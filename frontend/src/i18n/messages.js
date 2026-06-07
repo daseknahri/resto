@@ -955,6 +955,8 @@ export const messages = {
       manualPlaceholder: "Or paste the pay code",
       find: "Find",
       balance: "Balance",
+      balanceLabel: "Balance: {amount}",
+      cameraActive: "Camera is active — point at the QR code",
       amount: "Amount to charge",
       amountPlaceholder: "0.00",
       back: "Back",
@@ -1620,6 +1622,9 @@ export const messages = {
       lngLabel: "Longitude",
       priceTierLabel: "Price range",
       priceTierHint: "How would you describe your price level?",
+      priceTier1: "Price tier 1 - budget",
+      priceTier2: "Price tier 2 - moderate",
+      priceTier3: "Price tier 3 - premium",
       tagsLabel: "Dietary & feature tags",
       tagsHint: "Select all that apply to your menu.",
     },
@@ -1671,7 +1676,8 @@ export const messages = {
       imageUrlHint: "Optional. Displayed as the card background on the menu selection screen.",
       savedToast: "Menu groups saved",
       saveFailed: "Menu groups save failed",
-      fixValidation: "Fix validation errors"
+      fixValidation: "Fix validation errors",
+      deleteBlockedHasCategories: "Cannot delete: group still has categories"
     },
     stepCategories: {
       title: "Categories",
@@ -4693,6 +4699,8 @@ export const messages = {
       manualPlaceholder: "Ou collez le code de paiement",
       find: "Trouver",
       balance: "Solde",
+      balanceLabel: "Solde : {amount}",
+      cameraActive: "Camera active — pointez vers le QR code",
       amount: "Montant a debiter",
       amountPlaceholder: "0.00",
       back: "Retour",
@@ -5358,6 +5366,9 @@ export const messages = {
       lngLabel: "Longitude",
       priceTierLabel: "Gamme de prix",
       priceTierHint: "Comment decririez-vous votre niveau de prix ?",
+      priceTier1: "Niveau de prix 1 - economique",
+      priceTier2: "Niveau de prix 2 - modere",
+      priceTier3: "Niveau de prix 3 - premium",
       tagsLabel: "Tags alimentaires et caracteristiques",
       tagsHint: "Selectionnez tout ce qui s'applique a votre menu.",
     },
@@ -7225,7 +7236,8 @@ export const messages = {
       imageUrlHint: "Optionnel. Affiche en arriere-plan sur l'ecran de selection du menu.",
       savedToast: "Groupes de menu enregistres",
       saveFailed: "Echec de l'enregistrement des groupes de menu",
-      fixValidation: "Corrigez les erreurs de validation"
+      fixValidation: "Corrigez les erreurs de validation",
+      deleteBlockedHasCategories: "Suppression impossible : le groupe contient des categories"
     },
     orderStatus: {
       kicker: "Suivi de commande",

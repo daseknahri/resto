@@ -49,6 +49,7 @@
           :key="row.key"
           :class="row.barClass"
           :style="{ width: `${row.pct}%`, transition: 'width var(--motion-slow) var(--ease-fluid)' }"
+          :title="`${row.label} ${row.pct}%`"
           aria-hidden="true"
         />
       </div>

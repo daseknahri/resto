@@ -25,37 +25,14 @@
         </div>
 
         <div class="flex flex-wrap gap-2 lg:justify-end">
-          <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" :disabled="saving" @click="saveAll">
+          <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" type="button" :disabled="saving" @click="saveAll">
             <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
             {{ saving ? t("common.saving") : t("common.save") }}
           </button>
-          <button class="ui-btn-primary gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
+          <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" type="button" @click="openQuickModal">
             <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
             {{ t("stepSuperCategories.add") }}
           </button>
-        </div>
-      </div>
-
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="ui-metric-card ps-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.title") }}</p>
-          <p class="ui-stat-value tabular-nums text-2xl">{{ rows.length }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.heading") }}</p>
-        </div>
-        <div class="ui-metric-card ps-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.enabled") }}</p>
-          <p class="ui-stat-value tabular-nums text-2xl">{{ enabledCount }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.enabledSummary") }}</p>
-        </div>
-        <div class="ui-metric-card ps-5">
-          <p class="ui-stat-label">{{ t("stepSuperCategories.disabled") }}</p>
-          <p class="ui-stat-value tabular-nums text-2xl">{{ disabledCount }}</p>
-          <p class="ui-stat-note">{{ t("stepSuperCategories.disableToggle") }}</p>
-        </div>
-        <div class="ui-metric-card ps-5">
-          <p class="ui-stat-label">{{ t("common.categories") }}</p>
-          <p class="ui-stat-value tabular-nums text-2xl">{{ categoriesTotal }}</p>
-          <p class="ui-stat-note">{{ t("common.categories") }} {{ t("common.available") }}</p>
         </div>
       </div>
 
@@ -64,7 +41,7 @@
           <span class="sr-only">{{ t("common.search") }}</span>
           <div class="relative">
             <AppIcon name="search" class="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
-            <input v-model.trim="search" type="search" class="ui-input ps-10" enterkeyhint="search" :placeholder="t('common.search')" />
+            <input v-model.trim="search" type="search" class="ui-input ps-10" enterkeyhint="search" :placeholder="t('common.search')" :aria-label="t('common.search')" />
           </div>
         </label>
         <div class="min-w-0">
@@ -162,8 +139,8 @@
             class="ui-press flex h-8 w-8 items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
             type="button"
             :disabled="Number(row.category_count || 0) > 0"
-            :title="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
-            :aria-label="Number(row.category_count || 0) > 0 ? t('common.categories') : t('common.remove')"
+            :title="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
+            :aria-label="Number(row.category_count || 0) > 0 ? t('stepSuperCategories.deleteBlockedHasCategories') : t('common.remove')"
             @click="removeByLocalId(row.local_id)"
           >
             <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
@@ -208,7 +185,7 @@
                       type="button"
                       :aria-pressed="fieldLocales.name === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="fieldLocales.name === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="fieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -239,7 +216,7 @@
                       type="button"
                       :aria-pressed="fieldLocales.description === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="fieldLocales.description === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="fieldLocales.description === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="fieldLocales.description = locale.code"
                     >{{ locale.nativeLabel }}</button>
                   </div>
@@ -285,7 +262,7 @@
 
               <div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4 space-y-3">
                 <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input v-model="editingRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                  <input v-model="editingRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 accent-[var(--color-secondary)]" />
                   {{ t("stepSuperCategories.disableToggle") }}
                 </label>
                 <label class="space-y-1 text-sm text-slate-300">
@@ -304,7 +281,7 @@
           <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
             <button type="button" class="ui-btn-primary gap-2 px-4 py-2 text-sm" @click="closeEditor">
               <AppIcon name="check" class="h-4 w-4" aria-hidden="true" />
-              {{ t("common.done") }}
+              {{ t("common.close") }}
             </button>
           </div>
         </div>
@@ -344,7 +321,7 @@
                       type="button"
                       :aria-pressed="quickFieldLocales.name === locale.code"
                       class="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                      :class="quickFieldLocales.name === locale.code ? 'border-brand-secondary bg-brand-secondary/10 text-brand-secondary' : 'border-slate-700 text-slate-200 hover:border-brand-secondary'"
+                      :class="quickFieldLocales.name === locale.code ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]' : 'border-slate-700 text-slate-200 hover:border-[var(--color-secondary)]'"
                       @click="quickFieldLocales.name = locale.code"
                     >
                       {{ locale.nativeLabel }}
@@ -381,7 +358,7 @@
               </div>
 
               <label class="inline-flex items-center gap-2 text-sm text-slate-200">
-                <input v-model="quickRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+                <input v-model="quickRow.is_temporarily_disabled" type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-900 accent-[var(--color-secondary)]" />
                 {{ t("stepSuperCategories.disableToggle") }}
               </label>
 
@@ -419,8 +396,8 @@
         <span class="ui-data-strip tabular-nums">{{ enabledCount }} {{ t("stepSuperCategories.enabledSummary") }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-3">
-        <p class="text-sm text-slate-400">{{ status }}</p>
-        <button class="ui-btn-outline gap-2 px-4 py-2 text-sm" :disabled="saving" @click="saveAll">
+        <p class="text-sm text-slate-400" aria-live="polite">{{ status }}</p>
+        <button type="button" class="ui-btn-outline gap-2 px-4 py-2 text-sm" :disabled="saving" @click="saveAll">
           <AppIcon :name="saving ? 'refresh' : 'check'" class="h-4 w-4" aria-hidden="true" />
           {{ saving ? t("common.saving") : t("common.save") }}
         </button>

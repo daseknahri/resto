@@ -6,7 +6,6 @@
       <div
         v-if="isBrowseOnlyPlan"
         class="flex items-start gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-100"
-        role="note"
       >
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="mt-0.5 h-4 w-4 shrink-0 text-sky-400"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
         <span>{{ t("stepBrand.warning") }}</span>
@@ -58,7 +57,7 @@
             aria-describedby="step-brand-tagline-error"
             @input="onLocalizedFieldInput('tagline', fieldLocales.tagline, $event.target.value)"
           />
-          <p v-if="fieldError('tagline')" id="step-brand-tagline-error" role="alert" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
+          <p v-show="fieldError('tagline')" id="step-brand-tagline-error" role="alert" class="text-xs text-red-300">{{ fieldError("tagline") }}</p>
         </div>
 
         <label class="space-y-1 text-sm text-slate-200">
@@ -103,11 +102,14 @@
                 max="100"
                 step="0.01"
                 :class="inputClass('vat_rate') + ' pe-10'"
+                :aria-invalid="fieldError('vat_rate') ? 'true' : undefined"
+                aria-describedby="step-brand-vat-rate-error"
                 @input="clearField('vat_rate')"
               />
               <span class="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">%</span>
             </div>
             <p class="text-xs text-slate-500">{{ t("stepBrand.vatRateHint") }}</p>
+            <p v-if="fieldError('vat_rate')" id="step-brand-vat-rate-error" role="alert" class="text-xs text-red-300">{{ fieldError("vat_rate") }}</p>
           </label>
           <label class="space-y-1 text-sm text-slate-200">
             {{ t("stepBrand.vatLabel") }}
@@ -117,7 +119,10 @@
               maxlength="20"
               :placeholder="t('stepBrand.vatLabelPlaceholder')"
               :class="inputClass('vat_label') + ' w-24'"
+              :aria-invalid="fieldError('vat_label') ? 'true' : undefined"
+              aria-describedby="step-brand-vat-label-error"
             />
+            <p v-if="fieldError('vat_label')" id="step-brand-vat-label-error" role="alert" class="text-xs text-red-300">{{ fieldError("vat_label") }}</p>
           </label>
         </div>
 
@@ -159,7 +164,7 @@
             aria-describedby="step-brand-address-error"
             @input="onLocalizedFieldInput('address', fieldLocales.address, $event.target.value)"
           />
-          <p v-if="fieldError('address')" id="step-brand-address-error" role="alert" class="text-xs text-red-300">{{ fieldError("address") }}</p>
+          <p v-show="fieldError('address')" id="step-brand-address-error" role="alert" class="text-xs text-red-300">{{ fieldError("address") }}</p>
         </div>
       </div>
 
@@ -201,7 +206,7 @@
           aria-describedby="step-brand-description-error"
           @input="onLocalizedFieldInput('description', fieldLocales.description, $event.target.value)"
         ></textarea>
-        <p v-if="fieldError('description')" id="step-brand-description-error" role="alert" class="text-xs text-red-300">{{ fieldError("description") }}</p>
+        <p v-show="fieldError('description')" id="step-brand-description-error" role="alert" class="text-xs text-red-300">{{ fieldError("description") }}</p>
       </div>
     </section>
 
@@ -268,7 +273,8 @@
 
               <button
                 type="button"
-                :aria-pressed="form.business_hours_schedule[day.key].enabled"
+                role="switch"
+                :aria-checked="form.business_hours_schedule[day.key].enabled"
                 :aria-label="form.business_hours_schedule[day.key].enabled ? `${t('stepBrand.openLabel')} — ${day.label}` : `${t('common.closed')} — ${day.label}`"
                 class="ui-touch-target justify-self-start rounded-full border px-3 text-[11px] font-semibold transition-colors sm:justify-self-end"
                 :class="form.business_hours_schedule[day.key].enabled ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-300'"
@@ -361,7 +367,7 @@
         <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving" @click="saveAndNext">
           {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
         </button>
-        <p v-if="status" class="text-sm text-slate-400">{{ status }}</p>
+        <p aria-live="polite" aria-atomic="true" class="text-sm text-slate-400">{{ status }}</p>
       </div>
     </section>
   </div>

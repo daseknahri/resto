@@ -64,8 +64,8 @@
       </div>
 
       <div class="space-y-1.5 ui-reveal" :style="{ '--ui-delay': '56ms' }">
-        <template v-if="activeCategoryDishesFiltered.length">
-          <article
+        <ul v-if="activeCategoryDishesFiltered.length" class="space-y-1.5">
+          <li
             v-for="(dish, index) in activeCategoryDishesFiltered"
             :key="dish.local_id"
             class="ui-surface-lift ui-reveal group flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-950/70 p-2 transition hover:border-slate-700 sm:gap-3 sm:p-2.5"
@@ -143,8 +143,8 @@
                 <AppIcon name="trash" class="h-3.5 w-3.5" />
               </button>
             </div>
-          </article>
-        </template>
+          </li>
+        </ul>
 
         <div
           v-else
@@ -172,7 +172,6 @@
         v-if="dishEditorModalOpen && editingDish"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeDishEditor"
-        @keydown.esc="closeDishEditor"
       >
         <div ref="dishEditorDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-editor-dialog-title" tabindex="-1" class="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
@@ -577,7 +576,7 @@
               </div>
             </div>
             <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noVariants") }}</p>
-            <p v-if="rowError(editingDish, 'options')" :id="`step-dishes-options-error-${editingDish.local_id}`" class="text-xs text-red-300">{{ rowError(editingDish, "options") }}</p>
+            <p v-if="rowError(editingDish, 'options')" :id="`step-dishes-options-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "options") }}</p>
               </div>
 
               <div class="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3 space-y-3">
@@ -746,9 +745,8 @@
         v-if="quickDishModalOpen"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickDishModal"
-        @keydown.esc="closeQuickDishModal"
       >
-        <div ref="quickDishDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+        <div ref="quickDishDialogRef" role="dialog" aria-modal="true" aria-labelledby="step-dishes-quick-dialog-title" tabindex="-1" class="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-4">
             <div class="space-y-1">
               <p class="ui-kicker">{{ t("common.dishes") }}</p>

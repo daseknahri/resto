@@ -94,20 +94,21 @@
       </div>
 
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-is-open" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.restaurantOpen") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.restaurantOpenHint") }}</p>
           </div>
-          <input v-model="form.is_open" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-is-open" v-model="form.is_open" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-menu-disabled" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.disablePublicMenu") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.disablePublicMenuHint") }}</p>
           </div>
           <input
+            id="sp-menu-disabled"
             v-model="form.is_menu_temporarily_disabled"
             type="checkbox"
             class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary"
@@ -123,7 +124,6 @@
             rows="2"
             class="ui-textarea"
             :class="errors.menu_disabled_note ? 'border-red-400' : ''"
-            :aria-label="t('stepPublish.disableMessage')"
             :aria-invalid="errors.menu_disabled_note ? 'true' : undefined"
             aria-describedby="step-publish-disabled-note-error"
             :placeholder="t('stepPublish.disableMessagePlaceholder')"
@@ -144,28 +144,27 @@
             rows="2"
             maxlength="300"
             class="ui-textarea"
-            :aria-label="t('stepPublish.receiptMessage')"
             :placeholder="t('stepPublish.receiptMessagePlaceholder')"
           ></textarea>
           <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.receipt_message || "").length }}/300</p>
         </div>
 
         <!-- SMS notifications -->
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-sms-notifications" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.smsNotifications") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.smsNotificationsHint") }}</p>
           </div>
-          <input v-model="form.sms_notifications_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-sms-notifications" v-model="form.sms_notifications_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
         <!-- Cash on handover for trusted customers -->
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-cod-enabled" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.codEnabled") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.codEnabledHint") }}</p>
           </div>
-          <input v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-cod-enabled" v-model="form.cod_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
         <div v-if="form.cod_enabled" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
           <label for="sp-cod-min-orders" class="text-xs font-medium text-slate-300">{{ t("stepPublish.codMinOrders") }}</label>
@@ -176,7 +175,6 @@
               type="number"
               min="1"
               max="100"
-              :aria-label="t('stepPublish.codMinOrders')"
               class="w-24 ui-input tabular-nums"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.codMinOrdersUnit") }}</span>
@@ -184,12 +182,12 @@
         </div>
 
         <!-- Auto-confirm reservations -->
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-auto-confirm" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.autoConfirmReservations") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmReservationsHint") }}</p>
           </div>
-          <input v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-auto-confirm" v-model="form.auto_confirm_reservations" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
         <div v-if="form.auto_confirm_reservations" class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3">
           <label for="sp-auto-confirm-min-hours" class="text-xs font-medium text-slate-300">{{ t("stepPublish.autoConfirmMinHours") }}</label>
@@ -200,7 +198,6 @@
               type="number"
               min="0"
               max="168"
-              :aria-label="t('stepPublish.autoConfirmMinHours')"
               class="w-24 ui-input tabular-nums"
             />
             <span class="text-xs text-slate-500">{{ t("stepPublish.autoConfirmMinHoursUnit") }}</span>
@@ -209,12 +206,12 @@
         </div>
 
         <!-- Reservation reminders -->
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-reservation-reminders" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.reservationReminders") }}</span>
             <p class="text-xs text-slate-500">{{ t("stepPublish.reservationRemindersHint") }}</p>
           </div>
-          <input v-model="form.reservation_reminders_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-reservation-reminders" v-model="form.reservation_reminders_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
         <!-- Delivery settings -->
@@ -224,12 +221,12 @@
             <p class="text-xs text-slate-500">{{ t("stepPublish.deliverySettingsHint") }}</p>
           </div>
 
-          <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+          <label for="sp-delivery-enabled" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
             <div class="space-y-0.5 min-w-0">
               <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.deliveryEnabled") }}</span>
               <p class="text-xs text-slate-500">{{ t("stepPublish.deliveryEnabledHint") }}</p>
             </div>
-            <input v-model="form.delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+            <input id="sp-delivery-enabled" v-model="form.delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
           </label>
 
           <template v-if="form.delivery_enabled">
@@ -243,7 +240,6 @@
                   type="number"
                   min="0"
                   step="0.01"
-                  :aria-label="t('stepPublish.deliveryFee')"
                   class="w-28 ui-input tabular-nums"
                 />
               </div>
@@ -257,7 +253,6 @@
                   type="number"
                   min="0"
                   step="0.01"
-                  :aria-label="t('stepPublish.deliveryMinimumOrder')"
                   class="w-28 ui-input tabular-nums"
                 />
               </div>
@@ -276,7 +271,6 @@
                     id="sp-delivery-base-fee"
                     v-model.number="form.delivery_base_fee"
                     type="number" min="0" step="0.01"
-                    :aria-label="t('stepPublish.deliveryBaseFee')"
                     class="w-28 ui-input tabular-nums"
                   />
                 </div>
@@ -286,7 +280,6 @@
                     id="sp-delivery-per-km"
                     v-model.number="form.delivery_per_km"
                     type="number" min="0" step="0.01"
-                    :aria-label="t('stepPublish.deliveryPerKm')"
                     class="w-28 ui-input tabular-nums"
                   />
                 </div>
@@ -296,7 +289,6 @@
                     id="sp-delivery-radius-km"
                     v-model.number="form.delivery_radius_km"
                     type="number" min="0" step="0.5"
-                    :aria-label="t('stepPublish.deliveryRadiusKm')"
                     class="w-28 ui-input tabular-nums"
                   />
                 </div>
@@ -306,7 +298,6 @@
                     id="sp-delivery-free-over"
                     v-model.number="form.delivery_free_over"
                     type="number" min="0" step="0.01"
-                    :aria-label="t('stepPublish.deliveryFreeOver')"
                     class="w-28 ui-input tabular-nums"
                   />
                 </div>
@@ -326,19 +317,18 @@
                 v-model="form.delivery_zone_description"
                 type="text"
                 maxlength="200"
-                :aria-label="t('stepPublish.deliveryZoneDescription')"
                 :placeholder="t('stepPublish.deliveryZoneDescriptionPlaceholder')"
                 class="w-full ui-input"
               />
               <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.delivery_zone_description || "").length }}/200</p>
             </div>
 
-            <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border-t border-slate-800 px-0 pt-3">
+            <label for="sp-platform-delivery" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
               <div class="space-y-0.5 min-w-0">
                 <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.platformDelivery") }}</span>
                 <p class="text-xs text-slate-500">{{ t("stepPublish.platformDeliveryHint") }}</p>
               </div>
-              <input v-model="form.platform_delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+              <input id="sp-platform-delivery" v-model="form.platform_delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
             </label>
           </template>
         </div>
@@ -360,7 +350,6 @@
                 type="number"
                 min="0"
                 step="1"
-                :aria-label="t('stepPublish.maxCoversPerSlot')"
                 class="w-full ui-input tabular-nums"
               />
             </div>
@@ -370,7 +359,6 @@
               <select
                 id="sp-slot-duration"
                 v-model.number="form.slot_duration_minutes"
-                :aria-label="t('stepPublish.slotDuration')"
                 class="w-full ui-input"
               >
                 <option :value="30">30 {{ t("stepPublish.minuteUnit") }}</option>
@@ -403,11 +391,11 @@
       </div>
       <div class="space-y-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
         <!-- Opt-in toggle -->
-        <label class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
+        <label for="sp-directory-opt-in" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <p class="text-sm font-medium text-slate-100">{{ t("stepPublish.directoryOptIn") }}</p>
           </div>
-          <input v-model="form.directory_opt_in" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+          <input id="sp-directory-opt-in" v-model="form.directory_opt_in" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
         </label>
 
         <template v-if="form.directory_opt_in">
@@ -419,7 +407,6 @@
                 v-model="form.cuisine_type"
                 type="text"
                 maxlength="60"
-                :aria-label="t('stepPublish.cuisineType')"
                 :placeholder="t('stepPublish.cuisineTypePlaceholder')"
                 class="w-full ui-input"
               />
@@ -431,7 +418,6 @@
                 v-model="form.city"
                 type="text"
                 maxlength="80"
-                :aria-label="t('stepPublish.cityLabel')"
                 :placeholder="t('stepPublish.cityPlaceholder')"
                 class="w-full ui-input"
               />
@@ -452,6 +438,7 @@
                   ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-300 hover:border-slate-500'"
                 :aria-pressed="form.price_tier === tier"
+                :aria-label="t(`stepPublish.priceTier${tier}`)"
                 @click="form.price_tier = tier"
               >
                 {{ '€'.repeat(tier) }}
@@ -467,7 +454,7 @@
               <label
                 v-for="tag in MARKETPLACE_TAGS"
                 :key="tag"
-                class="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--color-secondary)]/60 has-[:focus-visible]:outline-none"
+                class="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--color-secondary)]/60 has-[:focus-visible]:outline-none"
                 :class="form.tags.includes(tag)
                   ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-500'"
@@ -504,7 +491,6 @@
                   v-model.number="form.lat"
                   type="number"
                   step="0.0001"
-                  :aria-label="t('stepPublish.latLabel')"
                   placeholder="e.g. 48.8566"
                   class="w-full ui-input tabular-nums"
                 />
@@ -516,7 +502,6 @@
                   v-model.number="form.lng"
                   type="number"
                   step="0.0001"
-                  :aria-label="t('stepPublish.lngLabel')"
                   placeholder="e.g. 2.3522"
                   class="w-full ui-input tabular-nums"
                 />
