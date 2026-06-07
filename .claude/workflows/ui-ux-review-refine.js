@@ -213,17 +213,22 @@ log(`🗂  ${files.length} files to review across ${LENSES.length} lenses (${fil
 const reviewFiles = async (fileList, roundLabel) => {
   const tasks = []
   for (const f of fileList) for (const lens of LENSES) tasks.push({ f, lens })
-  const raw = await parallel(
-    tasks.map((t) => () =>
-      agent(
-        `${APP_CONTEXT}\n\n--- REVIEW LENS: ${t.lens.title} ---\n${t.lens.focus}\n\n` +
-          `Read \`frontend/UI_UX_GUIDELINES.md\` and \`frontend/src/styles/UI_SYSTEM.md\` for the standard, then read the ENTIRE file \`${t.f}\` and review it ONLY through this lens. Be specific and concrete (name the element/line and the exact problem + a suggested fix). Do not report issues outside your lens. If the file is excellent on this lens, return verdict "pass" with an empty issues list. You are READ-ONLY — do not edit anything.`,
-        { model: 'sonnet', phase: 'Review', label: `${roundLabel}:${t.lens.key}:${short(t.f)}`, schema: REVIEW_SCHEMA },
-      )
-        .then((r) => ({ file: t.f, lens: t.lens.key, verdict: (r && r.verdict) || 'pass', issues: (r && r.issues) || [] }))
-        .catch(() => ({ file: t.f, lens: t.lens.key, verdict: 'pass', issues: [] })),
-    ),
-  )
+  // Concurrency-capped so a later run stays gentle on the machine (one freeze was enough).
+  const REVIEW_BATCH = (args && Number(args.batch)) || 4
+  const reviewOne = (t) =>
+    agent(
+      `${APP_CONTEXT}\n\n--- REVIEW LENS: ${t.lens.title} ---\n${t.lens.focus}\n\n` +
+        `Read \`frontend/UI_UX_GUIDELINES.md\` and \`frontend/src/styles/UI_SYSTEM.md\` for the standard, then read the ENTIRE file \`${t.f}\` and review it ONLY through this lens. Be specific and concrete (name the element/line and the exact problem + a suggested fix). Do not report issues outside your lens. If the file is excellent on this lens, return verdict "pass" with an empty issues list. You are READ-ONLY — do not edit anything.`,
+      { model: 'sonnet', phase: 'Review', label: `${roundLabel}:${t.lens.key}:${short(t.f)}`, schema: REVIEW_SCHEMA },
+    )
+      .then((r) => ({ file: t.f, lens: t.lens.key, verdict: (r && r.verdict) || 'pass', issues: (r && r.issues) || [] }))
+      .catch(() => ({ file: t.f, lens: t.lens.key, verdict: 'pass', issues: [] }))
+  const raw = []
+  for (let i = 0; i < tasks.length; i += REVIEW_BATCH) {
+    const part = await parallel(tasks.slice(i, i + REVIEW_BATCH).map((t) => () => reviewOne(t)))
+    raw.push(...part)
+    log(`   …reviewed ${Math.min(i + REVIEW_BATCH, tasks.length)}/${tasks.length} (batch ${REVIEW_BATCH})`)
+  }
   const byFile = {}
   raw.filter(Boolean).forEach((r) => {
     if (r.verdict === 'issues' && r.issues.length) {
