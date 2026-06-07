@@ -427,6 +427,20 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
                         )
                     }
                 )
+
+        # Normalise restaurant coordinates: drop an out-of-range or null-island (0,0)
+        # pair to None so a bad map-picker / failed-geolocation value never persists and
+        # later trips the delivery distance guard ("outside delivery area"). Stored as
+        # None → delivery falls back to the flat fee instead of a bogus far distance.
+        if "lat" in attrs or "lng" in attrs:
+            from .delivery_pricing import valid_coord
+            eff_lat = attrs.get("lat") if "lat" in attrs else getattr(self.instance, "lat", None)
+            eff_lng = attrs.get("lng") if "lng" in attrs else getattr(self.instance, "lng", None)
+            if not valid_coord(eff_lat, eff_lng):
+                if "lat" in attrs:
+                    attrs["lat"] = None
+                if "lng" in attrs:
+                    attrs["lng"] = None
         return attrs
 
     def update(self, instance, validated_data):

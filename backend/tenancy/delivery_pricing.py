@@ -52,6 +52,29 @@ def haversine_km(lat1, lng1, lat2, lng2) -> float:
     return _EARTH_KM * 2 * math.asin(min(1.0, math.sqrt(a)))
 
 
+def valid_coord(lat, lng) -> bool:
+    """True only for a plausible, real geographic point.
+
+    Rejects missing/unparseable coords, out-of-range values, AND the null-island
+    (0, 0) default that a failed geolocation or map-picker leaves behind. Used to
+    gate distance pricing so a bad restaurant or delivery coordinate falls back to
+    flat-fee pricing instead of computing a bogus thousands-of-km distance from
+    (0, 0) that would trip the out-of-range guard and falsely reject the order.
+    """
+    try:
+        lat = float(lat)
+        lng = float(lng)
+    except (TypeError, ValueError):
+        return False
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+        return False
+    # Exact (0, 0) is in the ocean off Africa — never a real restaurant/address;
+    # it's the value a failed locate leaves behind. Treat as "no coordinate".
+    if abs(lat) < 1e-6 and abs(lng) < 1e-6:
+        return False
+    return True
+
+
 def _dec(value) -> Decimal:
     """Best-effort Decimal coercion; treats junk as 0."""
     try:

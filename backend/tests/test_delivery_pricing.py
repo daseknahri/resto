@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from tenancy.delivery_pricing import compute_delivery_fee, haversine_km
+from tenancy.delivery_pricing import compute_delivery_fee, haversine_km, valid_coord
 
 
 def _profile(**kw):
@@ -168,3 +168,31 @@ class FallbackGuardTests(SimpleTestCase):
             _profile(delivery_per_km=Decimal("2")), distance_km=250, food_subtotal=Decimal("40"),
         )
         self.assertTrue(r["out_of_range"])
+
+
+class ValidCoordTests(SimpleTestCase):
+    """Guard that stops a bad restaurant/delivery coordinate from computing a bogus
+    far distance and falsely rejecting the order as 'outside delivery area'."""
+
+    def test_real_point_is_valid(self):
+        self.assertTrue(valid_coord(33.5731, -7.5898))  # Casablanca
+
+    def test_null_island_is_invalid(self):
+        # (0,0) is what a failed geolocation / map-picker leaves behind — the bug.
+        self.assertFalse(valid_coord(0, 0))
+        self.assertFalse(valid_coord(0.0, 0.0))
+
+    def test_missing_is_invalid(self):
+        self.assertFalse(valid_coord(None, -7.5))
+        self.assertFalse(valid_coord(33.5, None))
+        self.assertFalse(valid_coord("", ""))
+
+    def test_out_of_range_is_invalid(self):
+        self.assertFalse(valid_coord(91, 10))    # lat > 90
+        self.assertFalse(valid_coord(10, 200))   # lng > 180
+
+    def test_single_axis_zero_is_valid(self):
+        # 0 on ONE axis is a real place (equator / prime meridian); only the exact
+        # (0,0) pair is treated as 'unset'.
+        self.assertTrue(valid_coord(0, -7.6))
+        self.assertTrue(valid_coord(33.6, 0))

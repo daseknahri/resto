@@ -2012,15 +2012,15 @@ class PlaceOrderView(APIView):
         _delivery_fee = Decimal("0")
         _delivery_distance_km = None
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
-            from tenancy.delivery_pricing import compute_delivery_fee, haversine_km
+            from tenancy.delivery_pricing import compute_delivery_fee, haversine_km, valid_coord
             _dlat = validated.get("delivery_lat")
             _dlng = validated.get("delivery_lng")
             _plat = getattr(profile, "lat", None)
             _plng = getattr(profile, "lng", None)
-            if (
-                _plat is not None and _plng is not None
-                and _dlat is not None and _dlng is not None
-            ):
+            # Only compute distance when BOTH the restaurant and the delivery address
+            # have a valid, real coordinate. Missing / (0,0) / out-of-range coords →
+            # distance unknown → flat-fee fallback, never a false "outside area".
+            if valid_coord(_plat, _plng) and valid_coord(_dlat, _dlng):
                 _delivery_distance_km = haversine_km(_plat, _plng, _dlat, _dlng)
             _pricing = compute_delivery_fee(
                 profile, distance_km=_delivery_distance_km, food_subtotal=_food_subtotal
