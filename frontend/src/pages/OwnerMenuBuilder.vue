@@ -5,14 +5,24 @@
     <div class="ui-toolbar-band space-y-2.5">
       <div class="flex items-center justify-between gap-3">
         <h2 class="ui-display min-w-0 truncate text-base font-semibold text-white sm:text-lg">{{ activeTabTitle }}</h2>
-        <button
-          class="ui-btn-outline ui-press shrink-0 gap-1.5 px-3 py-1.5 text-xs"
-          @click="showImport = true"
-        >
-          <AppIcon name="upload" class="h-3.5 w-3.5" aria-hidden="true" />
-          <span class="hidden sm:inline">{{ t("ownerMenuBuilder.importCsv") }}</span>
-          <span class="sr-only sm:hidden">{{ t("ownerMenuBuilder.importCsv") }}</span>
-        </button>
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
+            @click="openTemplates"
+          >
+            <AppIcon name="sparkles" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t("ownerTemplates.button") }}</span>
+            <span class="sr-only sm:hidden">{{ t("ownerTemplates.button") }}</span>
+          </button>
+          <button
+            class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
+            @click="showImport = true"
+          >
+            <AppIcon name="upload" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t("ownerMenuBuilder.importCsv") }}</span>
+            <span class="sr-only sm:hidden">{{ t("ownerMenuBuilder.importCsv") }}</span>
+          </button>
+        </div>
       </div>
       <nav class="ui-segmented" role="tablist" :aria-label="t('common.sectionsNav')">
         <button
@@ -31,7 +41,7 @@
       </nav>
     </div>
 
-    <component :is="activeComponent" standalone />
+    <component :is="activeComponent" :key="reloadKey" standalone />
 
     <!-- CSV Import Modal -->
     <Teleport to="body">
@@ -173,6 +183,75 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Templates modal — start from a professionally themed sample menu -->
+    <Teleport to="body">
+      <Transition name="ui-fade">
+        <div
+          v-if="showTemplates"
+          class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
+          @click.self="showTemplates = false"
+          @keydown.esc="showTemplates = false"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="owner-templates-title"
+            class="ui-panel w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4 p-5 sm:p-6"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="ui-kicker">{{ t("ownerTemplates.kicker") }}</p>
+                <h2 id="owner-templates-title" class="text-base font-bold text-white leading-tight mt-0.5">{{ t("ownerTemplates.title") }}</h2>
+                <p class="ui-subtle mt-0.5 text-xs">{{ t("ownerTemplates.subtitle") }}</p>
+              </div>
+              <button
+                class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800/50 text-slate-400 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                :aria-label="t('common.close')"
+                @click="showTemplates = false"
+              >
+                <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+              <span class="text-xs text-slate-300">{{ t("ownerTemplates.withSample") }}</span>
+              <input v-model="withSampleContent" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
+            </label>
+
+            <div v-if="loadingTemplates" class="space-y-2" aria-busy="true">
+              <div v-for="i in 4" :key="i" class="ui-skeleton h-20" />
+            </div>
+            <ul v-else class="space-y-2.5">
+              <li
+                v-for="tpl in templates"
+                :key="tpl.key"
+                class="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="flex h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700/60" aria-hidden="true">
+                    <span class="h-full w-1/2" :style="{ background: tpl.theme.primary_color }" />
+                    <span class="h-full w-1/2" :style="{ background: tpl.theme.secondary_color }" />
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-slate-100">{{ t("ownerTemplates.kinds." + tpl.key) }}</p>
+                    <p class="text-[11px] text-slate-500 truncate">{{ tpl.categories.join(" · ") }}</p>
+                    <p class="text-[11px] text-slate-500">{{ t("ownerTemplates.itemCount", { n: tpl.dish_count }) }}</p>
+                  </div>
+                  <button
+                    class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-xs disabled:opacity-50"
+                    :disabled="!!applyingKey"
+                    @click="applyTemplate(tpl.key)"
+                  >
+                    {{ applyingKey === tpl.key ? "…" : t("ownerTemplates.apply") }}
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -183,6 +262,7 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import { useToastStore } from "../stores/toast";
+import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
 import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
@@ -197,6 +277,52 @@ const router = useRouter();
 const { t } = useI18n();
 const { itemPlural, groupPlural } = useVocabulary();
 const toast = useToastStore();
+const tenant = useTenantStore();
+
+// ── Starter templates ───────────────────────────────────────────────────────────
+const showTemplates = ref(false);
+const templates = ref([]);
+const loadingTemplates = ref(false);
+const applyingKey = ref("");
+const withSampleContent = ref(true);
+// Bumped after applying a template to remount the active tab so new menu shows.
+const reloadKey = ref(0);
+
+const openTemplates = async () => {
+  showTemplates.value = true;
+  if (templates.value.length) return;
+  loadingTemplates.value = true;
+  try {
+    const { data } = await api.get("/owner/apply-template/");
+    templates.value = Array.isArray(data.templates) ? data.templates : [];
+  } catch {
+    toast.show(t("ownerTemplates.loadFailed"), "error");
+  } finally {
+    loadingTemplates.value = false;
+  }
+};
+
+const applyTemplate = async (key) => {
+  if (applyingKey.value) return;
+  applyingKey.value = key;
+  try {
+    const { data } = await api.post("/owner/apply-template/", {
+      template: key,
+      with_sample_content: withSampleContent.value,
+    });
+    showTemplates.value = false;
+    await tenant.fetchMeta();   // pick up the new theme + business_type
+    reloadKey.value += 1;       // remount the active tab to show the new menu
+    toast.show(
+      t("ownerTemplates.applied", { dishes: data.created_dishes, categories: data.created_categories }),
+      "success",
+    );
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t("ownerTemplates.applyFailed"), "error");
+  } finally {
+    applyingKey.value = "";
+  }
+};
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 // Category/Dish tab labels flex by business_type (shops read "Sections"/"Products").
