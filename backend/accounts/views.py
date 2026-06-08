@@ -2702,13 +2702,16 @@ class MarketplacePlaceOrderView(APIView):
                 _delivery_fee = Decimal("0")
                 _delivery_distance_km = None
                 if fulfillment_type == "delivery":
-                    from tenancy.delivery_pricing import compute_delivery_fee, haversine_km, valid_coord
+                    from tenancy.delivery_pricing import compute_delivery_fee, valid_coord
+                    from tenancy.routing import road_distance_km
                     _plat = getattr(profile, "lat", None)
                     _plng = getattr(profile, "lng", None)
                     # Only compute distance when BOTH points are valid real coords;
                     # missing / (0,0) / out-of-range → flat fee, never a false reject.
                     if valid_coord(_plat, _plng) and valid_coord(delivery_lat, delivery_lng):
-                        _delivery_distance_km = haversine_km(
+                        # Road distance (haversine × factor, or a real OSRM route when
+                        # DELIVERY_OSRM_URL is set) — closer to what the driver drives.
+                        _delivery_distance_km = road_distance_km(
                             _plat, _plng, delivery_lat, delivery_lng
                         )
                     _pricing = compute_delivery_fee(

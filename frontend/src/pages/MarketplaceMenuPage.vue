@@ -599,6 +599,9 @@ const cartTotal = computed(() =>
 );
 
 // ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
+// Straight-line→road multiplier, mirrors backend tenancy/routing road factor
+// (DELIVERY_ROAD_FACTOR, default 1.3). Server figure is authoritative.
+const ROAD_FACTOR = 1.3;
 function haversineKm(lat1, lng1, lat2, lng2) {
   const toNum = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
   const a1 = toNum(lat1), o1 = toNum(lng1), a2 = toNum(lat2), o2 = toNum(lng2);
@@ -636,7 +639,9 @@ const deliveryDistanceKm = computed(() => {
   // area" — fall back to flat pricing instead.
   if (!validCoord(p.lat, p.lng) || !validCoord(form.delivery_lat, form.delivery_lng)) return null;
   const d = haversineKm(p.lat, p.lng, form.delivery_lat, form.delivery_lng);
-  return d == null ? null : Math.round(d * 10) / 10;
+  // Approximate the road distance the driver drives (× road factor), matching
+  // backend tenancy/routing.road_distance_km so the previewed fee lines up.
+  return d == null ? null : Math.round(d * ROAD_FACTOR * 10) / 10;
 });
 const deliveryOutOfRange = computed(() => {
   const p = deliveryPricing.value, d = deliveryDistanceKm.value;

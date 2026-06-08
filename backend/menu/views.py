@@ -2030,7 +2030,8 @@ class PlaceOrderView(APIView):
         _delivery_fee = Decimal("0")
         _delivery_distance_km = None
         if fulfillment_type == Order.FulfillmentType.DELIVERY:
-            from tenancy.delivery_pricing import compute_delivery_fee, haversine_km, valid_coord
+            from tenancy.delivery_pricing import compute_delivery_fee, valid_coord
+            from tenancy.routing import road_distance_km
             _dlat = validated.get("delivery_lat")
             _dlng = validated.get("delivery_lng")
             _plat = getattr(profile, "lat", None)
@@ -2039,7 +2040,9 @@ class PlaceOrderView(APIView):
             # have a valid, real coordinate. Missing / (0,0) / out-of-range coords →
             # distance unknown → flat-fee fallback, never a false "outside area".
             if valid_coord(_plat, _plng) and valid_coord(_dlat, _dlng):
-                _delivery_distance_km = haversine_km(_plat, _plng, _dlat, _dlng)
+                # Road distance (haversine × factor, or a real OSRM route when
+                # DELIVERY_OSRM_URL is set) — closer to what the driver drives.
+                _delivery_distance_km = road_distance_km(_plat, _plng, _dlat, _dlng)
             _pricing = compute_delivery_fee(
                 profile, distance_km=_delivery_distance_km, food_subtotal=_food_subtotal
             )

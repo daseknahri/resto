@@ -1081,6 +1081,10 @@ const deliveryEnabled = computed(() => meta.value?.profile?.delivery_enabled !==
 // ── Distance-based delivery pricing ─────────────────────────────────────────
 // Mirrors backend tenancy/delivery_pricing.compute_delivery_fee so the customer
 // sees the same fee before placing. The backend recomputes authoritatively.
+// Straight-line→road multiplier, mirrors backend tenancy/routing road factor
+// (DELIVERY_ROAD_FACTOR, default 1.3). When the server uses a real OSRM route
+// the preview is a close estimate; the server's figure is authoritative.
+const ROAD_FACTOR = 1.3;
 function haversineKm(lat1, lng1, lat2, lng2) {
   const toNum = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
   const a1 = toNum(lat1), o1 = toNum(lng1), a2 = toNum(lat2), o2 = toNum(lng2);
@@ -1125,7 +1129,9 @@ const deliveryDistanceKm = computed(() => {
   // area" — fall back to flat pricing instead.
   if (!validCoord(p.lat, p.lng) || !validCoord(deliveryLat.value, deliveryLng.value)) return null;
   const d = haversineKm(p.lat, p.lng, deliveryLat.value, deliveryLng.value);
-  return d == null ? null : Math.round(d * 10) / 10;
+  // Approximate the road distance the driver drives (× road factor), matching
+  // backend tenancy/routing.road_distance_km so the previewed fee lines up.
+  return d == null ? null : Math.round(d * ROAD_FACTOR * 10) / 10;
 });
 
 // True when the chosen address is beyond the restaurant's max delivery radius.
