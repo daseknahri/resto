@@ -192,9 +192,9 @@
             leave-active-class="transition-transform duration-150"
             leave-to-class="ltr:translate-x-full rtl:-translate-x-full"
           >
-            <!-- TODO: requires logic change — focus trap and focus restore on slide-over open/close (WCAG 2.1.2) -->
             <aside
               v-if="selected"
+              ref="slideOverRef"
               class="absolute end-0 top-0 h-full w-full max-w-md overflow-y-auto border-s border-slate-700 bg-slate-900 p-5 space-y-5"
               role="dialog"
               aria-modal="true"
@@ -317,9 +317,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
+import { useFocusTrap } from '../composables/useFocusTrap';
 import api from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 
@@ -389,6 +390,8 @@ const changePage = (p) => {
 
 // ── Detail slide-over + admin actions ───────────────────────────────────────
 const selected = ref(null);
+const slideOverRef = ref(null);
+useFocusTrap(slideOverRef, computed(() => !!selected.value));
 const detail = ref(null);
 const loadingDetail = ref(false);
 const creditAmount = ref('');

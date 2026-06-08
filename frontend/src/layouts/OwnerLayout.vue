@@ -155,8 +155,7 @@
                   {{ pushSubscribed ? '🔔' : '🔕' }}
                 </span>
               </button>
-              <div ref="settingsMenuRef" class="relative" @keydown.escape.stop="closeSettingsMenuByKey">
-                <!-- TODO: requires logic change — focus first menuitem on open, arrow-key navigation inside menu -->
+              <div ref="settingsMenuRef" class="relative" @keydown.escape.stop="closeSettingsMenuByKey" @keydown="navigateSettingsMenu">
                 <button
                   ref="settingsTriggerRef"
                   class="owner-settings-trigger ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -391,7 +390,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
@@ -482,6 +481,30 @@ const closeSettingsMenuByKey = () => {
 
 const toggleSettingsMenu = () => {
   settingsOpen.value = !settingsOpen.value;
+  if (settingsOpen.value) {
+    // Move focus to the first visible menuitem when the menu opens (ARIA menu pattern).
+    nextTick(() => {
+      const items = Array.from(
+        settingsMenuRef.value?.querySelectorAll('[role="menuitem"]:not([disabled])') || []
+      );
+      items[0]?.focus();
+    });
+  }
+};
+
+// Arrow-key navigation for the settings dropdown (ARIA 1.1 Menu pattern).
+const navigateSettingsMenu = (e) => {
+  if (!settingsOpen.value || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const items = Array.from(
+    settingsMenuRef.value?.querySelectorAll('[role="menuitem"]:not([disabled])') || []
+  );
+  if (!items.length) return;
+  const idx = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') items[(idx + 1) % items.length]?.focus();
+  else if (e.key === 'ArrowUp') items[(idx - 1 + items.length) % items.length]?.focus();
+  else if (e.key === 'Home') items[0]?.focus();
+  else if (e.key === 'End') items[items.length - 1]?.focus();
 };
 
 const handleSignOut = async () => {
