@@ -27,12 +27,14 @@
       <nav class="ui-segmented" role="tablist" :aria-label="t('common.sectionsNav')">
         <button
           v-for="tab in tabs"
+          :id="'owner-mb-tab-' + tab.key"
           :key="tab.key"
           type="button"
           class="ui-segmented-button flex-1"
           :data-active="activeTab === tab.key"
           role="tab"
           :aria-selected="activeTab === tab.key"
+          :aria-controls="'owner-mb-panel-' + tab.key"
           @click="setTab(tab.key)"
         >
           <AppIcon :name="tab.icon" class="me-1.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -41,7 +43,16 @@
       </nav>
     </div>
 
-    <component :is="activeComponent" :key="reloadKey" standalone />
+    <div
+      :id="'owner-mb-panel-' + activeTab"
+      ref="mbPanelRef"
+      role="tabpanel"
+      tabindex="-1"
+      :aria-labelledby="'owner-mb-tab-' + activeTab"
+      class="focus-visible:outline-none"
+    >
+      <component :is="activeComponent" :key="reloadKey" standalone />
+    </div>
 
     <!-- CSV Import Modal -->
     <Teleport to="body">
@@ -359,6 +370,10 @@ const activeTabConfig = computed(() => tabs.value.find((tab) => tab.key === acti
 const activeComponent = computed(() => activeTabConfig.value.component);
 const activeTabTitle = computed(() => activeTabConfig.value.label);
 
+const mbPanelRef = ref(null);
+// Move focus to the panel wrapper after each tab switch (WCAG 2.4.3).
+watch(activeTab, () => { nextTick(() => mbPanelRef.value?.focus()); });
+
 const setTab = (tab) => {
   if (tab === activeTab.value) return;
   router.replace({ name: "owner-menu-builder", query: { ...route.query, tab } });
@@ -398,13 +413,17 @@ const importResult = ref(null);
 // showImport must be declared above this watch: referencing it earlier hits the
 // temporal dead zone ("Cannot access 'showImport' before initialization") and
 // crashes setup() the moment the page loads.
+let _importReturnFocus = null;
 watch(showImport, async (open) => {
   if (open) {
+    _importReturnFocus = document.activeElement;
     await nextTick();
     importCloseBtnRef.value?.focus();
     document.addEventListener('keydown', trapImportFocus);
   } else {
     document.removeEventListener('keydown', trapImportFocus);
+    _importReturnFocus?.focus();
+    _importReturnFocus = null;
   }
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapImportFocus));
