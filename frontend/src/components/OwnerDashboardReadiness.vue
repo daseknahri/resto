@@ -16,9 +16,6 @@
 
   <!-- Setup progress: hidden once complete (100%) so an established restaurant gets a
        cleaner dashboard. The component stays mounted to keep feeding dish data upward. -->
-  <!-- TODO: requires logic change — readinessScore === 100 is unreachable here (outer condition is < 100);
-       the completion message (line ~49) and emerald colour state are permanently dead.
-       Fix: change outer condition to v-else-if="readinessScore <= 100" or restructure. -->
   <article
     v-else-if="readinessScore < 100"
     class="ui-section-band ui-reveal space-y-3 p-3 sm:space-y-4 sm:p-4"
@@ -31,8 +28,7 @@
         <h2 id="readiness-heading" class="mt-0.5 text-base font-semibold text-white">{{ t("ownerHome.launchProgress") }}</h2>
       </div>
       <span
-        class="tabular-nums text-sm font-semibold"
-        :class="readinessScore === 100 ? 'text-emerald-400' : 'text-[var(--color-secondary)]'"
+        class="tabular-nums text-sm font-semibold text-[var(--color-secondary)]"
         aria-hidden="true"
       >
         {{ readinessScore }}%
@@ -48,15 +44,10 @@
       :aria-label="t('ownerHome.launchProgress')"
     >
       <div
-        class="h-full rounded-full transition-all duration-[var(--motion-slow)]"
-        :class="readinessScore === 100 ? 'bg-emerald-500' : 'bg-[var(--color-secondary)]'"
+        class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-[var(--motion-slow)]"
         :style="{ width: `${readinessScore}%` }"
       />
     </div>
-
-    <p v-if="readinessScore === 100" class="text-xs text-emerald-400/80">
-      {{ t("ownerHome.readinessDone") }}
-    </p>
 
     <ul role="list" class="grid list-none gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <li
