@@ -32,16 +32,15 @@
         class="relative overflow-hidden bg-slate-950"
         style="height:min(70vw,400px)"
       >
-        <img
-          :src="dish.image_url || placeholder"
-          :alt="dish.name"
-          class="h-full w-full cursor-zoom-in object-cover transition-transform duration-500"
+        <DishImage
+          :src="dish.image_url"
+          :name="dish.name"
+          :seed="dish.slug"
+          img-class="h-full w-full object-cover transition-transform duration-500"
+          :class="dish.image_url ? 'cursor-zoom-in' : ''"
           loading="eager"
           fetchpriority="high"
-          decoding="async"
-          referrerpolicy="no-referrer"
-          @error="handleDishImageError"
-          @click="lightboxOpen = true"
+          @click="dish.image_url && (lightboxOpen = true)"
         />
         <!-- gradient from top so controls are always readable -->
         <div class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
@@ -230,7 +229,7 @@
               :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
             >
               <div class="relative h-24 overflow-hidden rounded-t-2xl">
-                <img :src="item.image_url || placeholder" :alt="item.name" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" loading="lazy" decoding="async" @error="handleDishImageError" />
+                <DishImage :src="item.image_url" :name="item.name" :seed="item.slug" img-class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" loading="lazy" />
               </div>
               <div class="space-y-0.5 p-3">
                 <p class="line-clamp-1 text-sm font-semibold text-slate-100">{{ item.name }}</p>
@@ -257,7 +256,7 @@
         >
           <h2 id="dish-lightbox-dialog-title" class="sr-only">{{ dish.name }}</h2>
           <img
-            :src="dish.image_url || placeholder"
+            :src="dish.image_url"
             :alt="dish.name"
             loading="lazy"
             decoding="async"
@@ -350,6 +349,7 @@
 import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIcon from '../components/AppIcon.vue';
+import DishImage from '../components/DishImage.vue';
 import { useI18n } from '../composables/useI18n';
 import { useFocusTrap } from '../composables/useFocusTrap';
 import { useMenuStore } from '../stores/menu';
@@ -358,7 +358,6 @@ import { useToastStore } from '../stores/toast';
 import { useTenantStore } from '../stores/tenant';
 import { useVisibility } from '../composables/useVisibility';
 import { trackEvent } from '../lib/analytics';
-import { withImageFallback } from '../lib/images';
 
 const props = defineProps({ category: String, dish: String });
 
@@ -380,8 +379,6 @@ useFocusTrap(lightboxDialogRef, lightboxOpen);
 const meta          = computed(() => tenant.resolvedMeta || null);
 const dishes        = computed(() => menu.dishes[props.category] || []);
 const dish          = computed(() => dishes.value.find((d) => d.slug === props.dish));
-const placeholder   = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
-const handleDishImageError = (event) => withImageFallback(event, placeholder);
 
 const menuCategories = computed(() => Array.isArray(menu.categories) ? menu.categories : []);
 const categoryName   = computed(() => menuCategories.value.find((c) => c.slug === props.category)?.name || props.category);

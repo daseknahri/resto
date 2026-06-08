@@ -70,14 +70,13 @@
         <!-- Image -->
         <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block" aria-hidden="true" tabindex="-1">
           <div class="relative aspect-[4/3] overflow-hidden bg-slate-900">
-            <img
-              :src="dish.image_url || placeholder"
-              :alt="dish.name"
-              class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+            <DishImage
+              :src="dish.image_url"
+              :name="dish.name"
+              :seed="dish.slug"
+              img-class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
               :loading="dishIndex < 2 ? 'eager' : 'lazy'"
               :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
-              decoding="async"
-              @error="handleDishImageError"
             />
             <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
             <!-- In-cart badge -->
@@ -173,6 +172,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import DishImage from "../components/DishImage.vue";
 import { useI18n } from "../composables/useI18n";
 import { withImageFallback } from "../lib/images";
 import { trackEvent } from "../lib/analytics";
@@ -220,9 +220,7 @@ const cartQty = (dish) =>
     .filter((i) => i.slug === dish.slug)
     .reduce((sum, i) => sum + i.qty, 0);
 
-const placeholder = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80";
 const handleCategoryImageError = (event) => withImageFallback(event);
-const handleDishImageError = (event) => withImageFallback(event, placeholder);
 
 const addDishQuick = (dish) => {
   if (isBrowseOnlyPlan.value) {
