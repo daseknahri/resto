@@ -1254,6 +1254,18 @@
                 class="ui-input w-full px-3 py-2 text-sm"
               />
             </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.commissionPct") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_commission_pct"
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+              <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.commissionHint") }}</span>
+            </label>
             <label class="flex cursor-pointer items-start gap-3">
               <input
                 v-model="deliveryForm.platform_delivery_enabled"
@@ -2466,6 +2478,7 @@ const deliveryForm = ref({
   delivery_minimum_order: 0,
   delivery_radius_km_raw: "",
   delivery_zone_description: "",
+  delivery_commission_pct: 0,
   platform_delivery_enabled: false,
 });
 
@@ -2508,6 +2521,7 @@ const openDeliveryModal = async (tenant) => {
     delivery_minimum_order: 0,
     delivery_radius_km_raw: "",
     delivery_zone_description: "",
+    delivery_commission_pct: 0,
     platform_delivery_enabled: false,
   };
   try {
@@ -2521,6 +2535,7 @@ const openDeliveryModal = async (tenant) => {
       delivery_minimum_order: Number(d.delivery_minimum_order ?? 0),
       delivery_radius_km_raw: d.delivery_radius_km != null ? String(d.delivery_radius_km) : "",
       delivery_zone_description: d.delivery_zone_description ?? "",
+      delivery_commission_pct: Number(d.delivery_commission_pct ?? 0),
       platform_delivery_enabled: !!d.platform_delivery_enabled,
     };
   } catch {
@@ -2551,6 +2566,7 @@ const saveDeliveryPricing = async () => {
       ? Number(f.delivery_radius_km_raw)
       : null,
     delivery_zone_description: f.delivery_zone_description,
+    delivery_commission_pct: f.delivery_commission_pct,
     platform_delivery_enabled: f.platform_delivery_enabled,
   };
   try {

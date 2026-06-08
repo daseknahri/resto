@@ -3017,6 +3017,10 @@ class MarketplacePlaceOrderView(APIView):
                 if not _is_scheduled and fulfillment_type == "delivery" and getattr(profile, "platform_delivery_enabled", False):
                     try:
                         from .models import DeliveryJob as _DJob
+                        from tenancy.delivery_pricing import split_delivery_fee as _split_fee
+                        # Split the fee into driver payout + platform cut (default 0% →
+                        # driver keeps 100%); snapshot both on the job for audit.
+                        _dsplit = _split_fee(profile, _delivery_fee)
                         _DJob.objects.create(
                             tenant_id=tenant.id,
                             order_number=order.order_number,
@@ -3028,7 +3032,8 @@ class MarketplacePlaceOrderView(APIView):
                             delivery_lat=delivery_lat,
                             delivery_lng=delivery_lng,
                             delivery_fee=_delivery_fee,
-                            driver_payout=_delivery_fee,
+                            driver_payout=_dsplit["driver_payout"],
+                            platform_commission=_dsplit["platform_commission"],
                         )
                         from accounts.push import push_new_job_to_drivers as _pnj
                         _pnj(getattr(tenant, "name", ""))

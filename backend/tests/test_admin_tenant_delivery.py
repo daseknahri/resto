@@ -47,6 +47,7 @@ def _profile(**kw):
         delivery_minimum_order=Decimal("0.00"),
         delivery_radius_km=None,
         delivery_zone_description="",
+        delivery_commission_pct=Decimal("0.00"),
         save=Mock(),
     )
     for k, v in kw.items():
@@ -58,7 +59,7 @@ class ProfileSerializerDeliveryReadOnlyTests(SimpleTestCase):
     READ_ONLY = (
         "delivery_fee", "delivery_base_fee", "delivery_per_km", "delivery_free_over",
         "delivery_minimum_order", "delivery_radius_km", "delivery_zone_description",
-        "platform_delivery_enabled",
+        "delivery_commission_pct", "platform_delivery_enabled",
     )
 
     def test_owner_cannot_write_delivery_pricing(self):
@@ -66,6 +67,7 @@ class ProfileSerializerDeliveryReadOnlyTests(SimpleTestCase):
             "delivery_per_km": "5.00",
             "delivery_base_fee": "10.00",
             "delivery_radius_km": 8,
+            "delivery_commission_pct": "20",
             "platform_delivery_enabled": True,
             "delivery_zone_description": "hacked",
             "delivery_enabled": False,  # operational toggle — must stay writable
@@ -132,6 +134,35 @@ class AdminTenantDeliveryViewTests(SimpleTestCase):
         mock_g404.return_value = _tenant()
         mock_profile.objects.filter.return_value.first.return_value = _profile()
         req = self.factory.patch("/api/admin-tenants/1/delivery/", {"delivery_per_km": "-3"}, format="json")
+        force_authenticate(req, user=_admin())
+        resp = self.view(req, tenant_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("tenancy.models.Profile")
+    @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())
+    @patch("sales.views.get_object_or_404")
+    def test_admin_patch_sets_commission(self, mock_g404, mock_profile):
+        mock_g404.return_value = _tenant()
+        prof = _profile()
+        mock_profile.objects.filter.return_value.first.return_value = prof
+        req = self.factory.patch(
+            "/api/admin-tenants/1/delivery/", {"delivery_commission_pct": "15"}, format="json"
+        )
+        force_authenticate(req, user=_admin())
+        resp = self.view(req, tenant_id=1)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(prof.delivery_commission_pct, Decimal("15.00"))
+        self.assertEqual(resp.data["delivery"]["delivery_commission_pct"], "15.00")
+
+    @patch("tenancy.models.Profile")
+    @patch("sales.views.schema_context", lambda *a, **k: _passthrough_cm())
+    @patch("sales.views.get_object_or_404")
+    def test_admin_patch_rejects_commission_over_100(self, mock_g404, mock_profile):
+        mock_g404.return_value = _tenant()
+        mock_profile.objects.filter.return_value.first.return_value = _profile()
+        req = self.factory.patch(
+            "/api/admin-tenants/1/delivery/", {"delivery_commission_pct": "150"}, format="json"
+        )
         force_authenticate(req, user=_admin())
         resp = self.view(req, tenant_id=1)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

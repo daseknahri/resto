@@ -8,7 +8,12 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from tenancy.delivery_pricing import compute_delivery_fee, haversine_km, valid_coord
+from tenancy.delivery_pricing import (
+    compute_delivery_fee,
+    haversine_km,
+    split_delivery_fee,
+    valid_coord,
+)
 
 
 def _profile(**kw):
@@ -196,3 +201,47 @@ class ValidCoordTests(SimpleTestCase):
         # (0,0) pair is treated as 'unset'.
         self.assertTrue(valid_coord(0, -7.6))
         self.assertTrue(valid_coord(33.6, 0))
+
+
+class SplitDeliveryFeeTests(SimpleTestCase):
+    """Platform commission split: driver_payout + platform_commission == fee."""
+
+    def test_default_zero_commission_driver_keeps_all(self):
+        # No commission configured → driver keeps 100%, platform takes nothing.
+        r = split_delivery_fee(SimpleNamespace(), Decimal("12.00"))
+        self.assertEqual(r["driver_payout"], Decimal("12.00"))
+        self.assertEqual(r["platform_commission"], Decimal("0.00"))
+        self.assertEqual(r["commission_pct"], Decimal("0"))
+
+    def test_fifteen_percent(self):
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("15")), Decimal("10.00"))
+        self.assertEqual(r["platform_commission"], Decimal("1.50"))
+        self.assertEqual(r["driver_payout"], Decimal("8.50"))
+
+    def test_hundred_percent_driver_gets_nothing(self):
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("100")), Decimal("9.00"))
+        self.assertEqual(r["platform_commission"], Decimal("9.00"))
+        self.assertEqual(r["driver_payout"], Decimal("0.00"))
+
+    def test_over_hundred_is_clamped(self):
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("250")), Decimal("9.00"))
+        self.assertEqual(r["commission_pct"], Decimal("100"))
+        self.assertEqual(r["platform_commission"], Decimal("9.00"))
+        self.assertEqual(r["driver_payout"], Decimal("0.00"))
+
+    def test_negative_is_clamped_to_zero(self):
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("-10")), Decimal("9.00"))
+        self.assertEqual(r["commission_pct"], Decimal("0"))
+        self.assertEqual(r["driver_payout"], Decimal("9.00"))
+
+    def test_rounds_to_cents_and_sums_to_fee(self):
+        # 33% of 10.00 = 3.30 → payout 6.70; split must reconstruct the fee exactly.
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("33")), Decimal("10.00"))
+        self.assertEqual(r["platform_commission"], Decimal("3.30"))
+        self.assertEqual(r["driver_payout"], Decimal("6.70"))
+        self.assertEqual(r["platform_commission"] + r["driver_payout"], Decimal("10.00"))
+
+    def test_zero_fee(self):
+        r = split_delivery_fee(_profile(delivery_commission_pct=Decimal("20")), Decimal("0"))
+        self.assertEqual(r["driver_payout"], Decimal("0.00"))
+        self.assertEqual(r["platform_commission"], Decimal("0.00"))

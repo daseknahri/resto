@@ -2394,6 +2394,10 @@ class PlaceOrderView(APIView):
         if not _is_scheduled and fulfillment_type == Order.FulfillmentType.DELIVERY and getattr(profile, "platform_delivery_enabled", False):
             try:
                 from accounts.models import DeliveryJob as _DJob
+                from tenancy.delivery_pricing import split_delivery_fee as _split_fee
+                # Split the fee into driver payout + platform cut (default 0% → driver
+                # keeps 100%); snapshot both on the job for auditable earnings.
+                _dsplit = _split_fee(profile, _delivery_fee)
                 _DJob.objects.create(
                     tenant_id=tenant.id,
                     order_number=order.order_number,
@@ -2405,7 +2409,8 @@ class PlaceOrderView(APIView):
                     delivery_lat=order.delivery_lat,
                     delivery_lng=order.delivery_lng,
                     delivery_fee=_delivery_fee,
-                    driver_payout=_delivery_fee,  # 100% of the delivery fee goes to the driver
+                    driver_payout=_dsplit["driver_payout"],
+                    platform_commission=_dsplit["platform_commission"],
                 )
                 # Real-time dispatch: nudge online/free drivers to claim it.
                 from accounts.push import push_new_job_to_drivers as _pnj

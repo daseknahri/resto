@@ -1147,6 +1147,7 @@ class AdminTenantDeliveryView(APIView):
             "delivery_minimum_order": _s(profile.delivery_minimum_order),
             "delivery_radius_km": profile.delivery_radius_km,
             "delivery_zone_description": profile.delivery_zone_description or "",
+            "delivery_commission_pct": _s(getattr(profile, "delivery_commission_pct", 0)),
         }
 
     def _resolve_tenant(self, tenant_id):
@@ -1202,6 +1203,17 @@ class AdminTenantDeliveryView(APIView):
                         return Response({"detail": "Invalid delivery_radius_km.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
                     profile.delivery_radius_km = rv
                 update_fields.append("delivery_radius_km")
+
+            if "delivery_commission_pct" in body:
+                # Platform's cut of the delivery fee, 0–100%. Default 0 → driver keeps 100%.
+                try:
+                    pct = _Dec(str(body["delivery_commission_pct"])).quantize(_Dec("0.01"))
+                    if pct < 0 or pct > 100:
+                        raise InvalidOperation
+                except (InvalidOperation, ValueError, TypeError):
+                    return Response({"detail": "Invalid delivery_commission_pct (0–100).", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+                profile.delivery_commission_pct = pct
+                update_fields.append("delivery_commission_pct")
 
             if "platform_delivery_enabled" in body:
                 profile.platform_delivery_enabled = bool(body["platform_delivery_enabled"])

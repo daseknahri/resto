@@ -366,6 +366,16 @@ class Profile(models.Model):
         null=True, blank=True,
         help_text="Maximum delivery distance in km from the restaurant's coordinates.",
     )
+    delivery_commission_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text=(
+            "Platform commission on each delivery fee, as a percentage (0–100). "
+            "Admin-controlled (owners can't edit it); the driver is paid the fee "
+            "minus this cut. Default 0 → the driver keeps 100% of the delivery fee."
+        ),
+    )
 
     is_open = models.BooleanField(default=True)
     is_menu_temporarily_disabled = models.BooleanField(default=False)

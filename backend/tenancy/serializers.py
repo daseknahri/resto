@@ -226,6 +226,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "delivery_radius_km",
             "delivery_minimum_order",
             "delivery_zone_description",
+            "delivery_commission_pct",
             "platform_delivery_enabled",
             "cod_enabled",
             "cod_min_paid_orders",
@@ -268,6 +269,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "delivery_minimum_order",
             "delivery_radius_km",
             "delivery_zone_description",
+            "delivery_commission_pct",
             "platform_delivery_enabled",
         ]
 

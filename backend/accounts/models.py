@@ -684,6 +684,9 @@ class DeliveryJob(models.Model):
     delivery_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     # Driver's share (platform keeps the rest)
     driver_payout = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    # Platform's cut of the delivery fee (delivery_fee = driver_payout + platform_commission).
+    # Snapshot at job creation from the restaurant's delivery_commission_pct; default 0.
+    platform_commission = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     # Delivery zone (optional — set if order is inside a managed zone)
     zone = models.ForeignKey(

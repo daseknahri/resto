@@ -11,7 +11,9 @@ restaurant's coordinates to the delivery address. When distance pricing is not
 configured (``delivery_per_km`` == 0) or coordinates are missing, the flat
 ``delivery_fee`` is used as a fallback so existing restaurants keep working.
 
-The driver keeps 100% of the delivery fee (``driver_payout = delivery_fee``).
+By default the driver keeps 100% of the delivery fee; an admin-set per-restaurant
+``delivery_commission_pct`` splits it into a driver payout + platform cut — see
+``split_delivery_fee``.
 
 This module has **no Django imports** beyond Decimal helpers so it stays cheap
 to import and trivial to unit-test.
@@ -167,4 +169,50 @@ def compute_delivery_fee(profile, *, distance_km=None, food_subtotal=Decimal("0"
         "out_of_range": False,
         "free": False,
         "mode": mode,
+    }
+
+
+def split_delivery_fee(profile, fee) -> dict:
+    """Split a customer-paid delivery fee into the driver payout and platform cut.
+
+    The platform takes ``delivery_commission_pct`` percent of the fee — an
+    admin-controlled, per-restaurant setting (owner can't edit it). The default
+    is ``0``, so the driver keeps 100% of the fee until the platform decides to
+    monetize delivery; flip the percentage and the split applies with no code
+    change. The customer still pays the same ``fee`` — only its distribution
+    changes.
+
+        platform_commission = round(fee × pct / 100)
+        driver_payout       = fee − platform_commission
+
+    Args:
+        profile: restaurant Profile (reads ``delivery_commission_pct``).
+        fee: the delivery fee charged to the customer (Decimal/str/number).
+
+    Returns a dict::
+
+        {
+          "driver_payout": Decimal,        # credited to the driver
+          "platform_commission": Decimal,  # kept by the platform
+          "commission_pct": Decimal,       # clamped rate actually applied
+        }
+    """
+    fee = _dec(fee)
+    if fee < 0:
+        fee = Decimal("0")
+    pct = _dec(getattr(profile, "delivery_commission_pct", 0))
+    if pct < 0:
+        pct = Decimal("0")
+    elif pct > 100:
+        pct = Decimal("100")
+    commission = (fee * pct / Decimal("100")).quantize(_CENT, rounding=ROUND_HALF_UP)
+    if commission > fee:
+        commission = fee
+    payout = (fee - commission).quantize(_CENT, rounding=ROUND_HALF_UP)
+    if payout < 0:
+        payout = Decimal("0.00")
+    return {
+        "driver_payout": payout,
+        "platform_commission": commission,
+        "commission_pct": pct,
     }
