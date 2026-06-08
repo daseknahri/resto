@@ -835,6 +835,9 @@ export const messages = {
       subtitle: "Pick the kind of place you run — we'll apply a matching theme and a sample menu you can edit.",
       withSample: "Also add a sample menu (categories & dishes)",
       apply: "Apply",
+      startScratch: "Prefer to build it yourself?",
+      startScratchHint: "Skip templates and start from an empty menu.",
+      startScratchCta: "Start from scratch",
       itemCount: "{n} sample items",
       applied: "Template applied — {categories} categories, {dishes} dishes added.",
       applyFailed: "Could not apply the template. Please try again.",
@@ -1990,6 +1993,10 @@ export const messages = {
       footerHint: "Use each step actions to continue. Validation runs before moving to next step.",
       leaveConfirm: "You have unsaved changes in the setup wizard. Leave anyway?",
       steps: {
+        start: {
+          title: "Quick start",
+          description: "Pick a template or start fresh"
+        },
         brandContact: {
           title: "Brand & Contact",
           description: "Basics, phone, WhatsApp, address"
@@ -4660,6 +4667,9 @@ export const messages = {
       subtitle: "Choisissez votre type d'établissement — nous appliquons un thème adapté et un menu d'exemple modifiable.",
       withSample: "Ajouter aussi un menu d'exemple (catégories et plats)",
       apply: "Appliquer",
+      startScratch: "Vous préférez le faire vous-même ?",
+      startScratchHint: "Ignorer les modèles et partir d'un menu vide.",
+      startScratchCta: "Partir de zéro",
       itemCount: "{n} articles d'exemple",
       applied: "Modèle appliqué — {categories} catégories, {dishes} plats ajoutés.",
       applyFailed: "Impossible d'appliquer le modèle. Réessayez.",
@@ -5783,6 +5793,10 @@ export const messages = {
       footerHint: "Utilisez les actions de chaque etape pour continuer. La validation s'execute avant de passer a l'etape suivante.",
       leaveConfirm: "Des modifications non enregistrees sont en cours dans le wizard. Quitter quand meme ?",
       steps: {
+        start: {
+          title: "Démarrage rapide",
+          description: "Choisissez un modèle ou partez de zéro"
+        },
         brandContact: {
           title: "Marque et contact",
           description: "Base, telephone, WhatsApp, adresse"

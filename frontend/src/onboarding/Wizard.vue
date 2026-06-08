@@ -96,6 +96,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { useI18n } from "../composables/useI18n";
 import { steps } from "../onboarding/steps";
+import StepStart from "./StepStart.vue";
 import StepBrand from "./StepBrand.vue";
 import StepCategories from "./StepCategories.vue";
 import StepDishes from "./StepDishes.vue";
@@ -109,17 +110,18 @@ const tenant = useTenantStore();
 const router = useRouter();
 const { t } = useI18n();
 const mapping = {
-  1: StepBrand,
-  2: StepCategories,
-  3: StepDishes,
-  4: StepTheme,
-  5: StepPublish,
+  1: StepStart,
+  2: StepBrand,
+  3: StepCategories,
+  4: StepDishes,
+  5: StepTheme,
+  6: StepPublish,
 };
 const currentComponent = computed(() => mapping[current.value]);
 const progressPct = computed(() => Math.round((current.value / steps.length) * 100));
 const stepStorageKey = computed(() => {
   const slug = tenant.meta?.slug || "tenant";
-  return `resto:onboarding-step:${slug}`;
+  return `resto:onboarding-step:v2:${slug}`;
 });
 
 const next = () => {
