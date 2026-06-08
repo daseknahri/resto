@@ -2398,7 +2398,7 @@ class PlaceOrderView(APIView):
                 # Split the fee into driver payout + platform cut (default 0% → driver
                 # keeps 100%); snapshot both on the job for auditable earnings.
                 _dsplit = _split_fee(profile, _delivery_fee)
-                _DJob.objects.create(
+                _job = _DJob.objects.create(
                     tenant_id=tenant.id,
                     order_number=order.order_number,
                     status=_DJob.Status.SEARCHING,
@@ -2412,9 +2412,10 @@ class PlaceOrderView(APIView):
                     driver_payout=_dsplit["driver_payout"],
                     platform_commission=_dsplit["platform_commission"],
                 )
-                # Real-time dispatch: nudge online/free drivers to claim it.
-                from accounts.push import push_new_job_to_drivers as _pnj
-                _pnj(getattr(tenant, "name", ""))
+                # Ranked dispatch: offer to the nearest free driver first, cascading
+                # to the next on decline/timeout, falling back to the open pool.
+                from accounts.dispatch import start_dispatch
+                start_dispatch(_job)
             except Exception:
                 pass  # never fail the order response if job creation hiccups
 
@@ -3345,10 +3346,17 @@ class OwnerDeliveryJobActionView(APIView):
                 job.code_locked_until = None
                 job.redispatch_count = (job.redispatch_count or 0) + 1
                 job.resolution = _DJob.Resolution.REDISPATCHED
+                # Fresh ranked-offer cascade (any driver eligible again).
+                job.offered_to = None
+                job.offer_expires_at = None
+                job.declined_by = []
+                job.offer_round = 0
+                job.is_open_pool = False
                 job.save(update_fields=[
                     "driver", "status", "assigned_at", "picked_up_at", "failed_at",
                     "failure_reason", "failure_note", "owner_alerted_at", "code_attempts",
                     "code_locked_until", "redispatch_count", "resolution",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
                 ])
 
             elif action == "confirm_noshow":
@@ -3369,8 +3377,9 @@ class OwnerDeliveryJobActionView(APIView):
 
         if action == "redispatch":
             try:
-                from accounts.push import push_new_job_to_drivers
-                push_new_job_to_drivers(getattr(tenant, "name", ""))
+                # Re-enter the ranked-offer cascade (nearest driver first, then pool).
+                from accounts.dispatch import offer_to_next_driver
+                offer_to_next_driver(job.id)
             except Exception:
                 pass
             # Keep the customer timeline coherent: a re-dispatched order isn't "out for delivery".

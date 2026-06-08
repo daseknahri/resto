@@ -2624,6 +2624,8 @@ Object.assign(arabicMessages, {
     itemsTitle: "عناصر الطلب",
     foodReady: "جاهز ~{time}",
     foodReadyIn: "خلال {minutes} د",
+    offeredToYou: "معروض عليك",
+    decline: "تخطّي",
     collectCash: "حصّل النقود عند التسليم",
     prepaid: "مدفوع مسبقاً ({amount}) — لا نقود للتحصيل",
     prepaidShort: "مدفوع مسبقاً",

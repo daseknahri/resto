@@ -725,6 +725,24 @@ class DeliveryJob(models.Model):
     code_attempts = models.PositiveSmallIntegerField(default=0)
     code_locked_until = models.DateTimeField(null=True, blank=True)
 
+    # ── Ranked-offer dispatch ───────────────────────────────────────────────────
+    # The job is offered to the nearest free driver first (exclusively) for a short
+    # window; on decline/timeout it cascades to the next nearest. When the cascade is
+    # exhausted (or nobody is rankable) it opens to the whole pool (broadcast). See
+    # accounts/dispatch.py.
+    offered_to = models.ForeignKey(
+        Customer, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="offered_delivery_jobs", limit_choices_to={"is_driver": True},
+        help_text="Driver currently holding the exclusive offer (None once open to the pool).",
+    )
+    offer_expires_at = models.DateTimeField(null=True, blank=True)
+    # Driver ids who declined or let the offer lapse — never re-offered this job.
+    declined_by = models.JSONField(default=list, blank=True)
+    # How many exclusive offers have been made (bounds the cascade; audit).
+    offer_round = models.PositiveSmallIntegerField(default=0)
+    # True once the job falls back to the open pool any free driver can claim.
+    is_open_pool = models.BooleanField(default=False)
+
     # ── Three-way ratings ──────────────────────────────────────────────────────
     # Customer rates the driver (speed, professionalism)
     customer_driver_rating = models.PositiveSmallIntegerField(null=True, blank=True)  # 1–5

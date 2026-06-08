@@ -128,7 +128,7 @@ class Command(BaseCommand):
                                 from tenancy.delivery_pricing import split_delivery_fee as _split_fee
                                 # Split fee into driver payout + platform cut (default 0%).
                                 _dsplit = _split_fee(profile, order.delivery_fee)
-                                _DJob.objects.create(
+                                _job = _DJob.objects.create(
                                     tenant_id=tenant.id,
                                     order_number=order.order_number,
                                     status=_DJob.Status.SEARCHING,
@@ -142,8 +142,8 @@ class Command(BaseCommand):
                                     driver_payout=_dsplit["driver_payout"],
                                     platform_commission=_dsplit["platform_commission"],
                                 )
-                                from accounts.push import push_new_job_to_drivers as _pnj
-                                _pnj(getattr(tenant, "name", ""))
+                                from accounts.dispatch import start_dispatch
+                                start_dispatch(_job)
                             except Exception:
                                 logger.exception("release: delivery job failed for %s", order.order_number)
 

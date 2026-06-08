@@ -85,6 +85,12 @@ def driver_job_cancelled(driver_id, order_number):
     notify_driver_job_cancelled_sync(driver_id, order_number)
 
 
+@shared_task(name="accounts.tasks.driver_job_offer", **_RETRY)
+def driver_job_offer(driver_id, restaurant_name=None):
+    from accounts.push import notify_driver_job_offer_sync
+    notify_driver_job_offer_sync(driver_id, restaurant_name)
+
+
 @shared_task(name="accounts.tasks.customer_order_milestone", **_RETRY)
 def customer_order_milestone(order_number, tenant_id, event):
     from accounts.push import notify_customer_order_milestone_sync

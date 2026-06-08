@@ -283,7 +283,8 @@ CELERY_BEAT_SCHEDULE = {
     },
     "sweep-delivery-jobs": {
         "task": "accounts.tasks.run_management_command",
-        "schedule": 180.0,  # every 3 min — re-dispatch / escalate / recover stuck jobs
+        # every 60s — advance ranked-offer cascades (60s offer window) + recover stuck jobs.
+        "schedule": 60.0,
         "args": ("sweep_delivery_jobs",),
     },
     "enforce-subscriptions": {

@@ -430,6 +430,9 @@
             </div>
             <!-- Meta: distance, items, payment type -->
             <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-slate-400">
+              <span v-if="job.offered_to_me" class="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-semibold text-sky-300">
+                {{ t('driver.offeredToYou') }}
+              </span>
               <span v-if="job.distance_km != null" class="inline-flex items-center gap-1">
                 <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: job.distance_km }) }}
               </span>
@@ -446,7 +449,15 @@
               <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
               <span class="truncate">{{ job.delivery_address }}</span>
             </p>
-            <button class="ui-btn-primary ui-touch-target w-full text-sm" :disabled="busy" @click="accept(job.id)">
+            <div v-if="job.offered_to_me" class="flex gap-2">
+              <button class="ui-btn-primary ui-touch-target flex-1 text-sm" :disabled="busy" @click="accept(job.id)">
+                {{ t('driver.accept') }}
+              </button>
+              <button class="ui-btn-outline ui-touch-target flex-1 text-sm" :disabled="busy" @click="decline(job.id)">
+                {{ t('driver.decline') }}
+              </button>
+            </div>
+            <button v-else class="ui-btn-primary ui-touch-target w-full text-sm" :disabled="busy" @click="accept(job.id)">
               {{ t('driver.accept') }}
             </button>
           </li>
@@ -811,6 +822,21 @@ const accept = async (jobId) => {
   } catch (err) {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
     await fetchJobs(); // someone else may have taken it
+  } finally {
+    busy.value = false;
+  }
+};
+
+// Pass on an exclusive offer → it cascades to the next-nearest driver immediately.
+const decline = async (jobId) => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    await api.post(`/driver/jobs/${jobId}/decline/`, {});
+    // Drop it from view right away; the next poll reflects the cascade.
+    pendingJobs.value = pendingJobs.value.filter((j) => j.id !== jobId);
+  } catch {
+    await fetchJobs();
   } finally {
     busy.value = false;
   }

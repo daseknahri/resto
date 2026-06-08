@@ -3021,7 +3021,7 @@ class MarketplacePlaceOrderView(APIView):
                         # Split the fee into driver payout + platform cut (default 0% →
                         # driver keeps 100%); snapshot both on the job for audit.
                         _dsplit = _split_fee(profile, _delivery_fee)
-                        _DJob.objects.create(
+                        _job = _DJob.objects.create(
                             tenant_id=tenant.id,
                             order_number=order.order_number,
                             status=_DJob.Status.SEARCHING,
@@ -3035,8 +3035,10 @@ class MarketplacePlaceOrderView(APIView):
                             driver_payout=_dsplit["driver_payout"],
                             platform_commission=_dsplit["platform_commission"],
                         )
-                        from accounts.push import push_new_job_to_drivers as _pnj
-                        _pnj(getattr(tenant, "name", ""))
+                        # Ranked dispatch: offer nearest free driver first, cascade,
+                        # then fall back to the open pool.
+                        from accounts.dispatch import start_dispatch
+                        start_dispatch(_job)
                     except Exception:
                         pass
 
@@ -3634,6 +3636,10 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
         # Owner-entered prep ETA (when the food is ready for pickup), so the driver
         # can time their arrival. Null until the owner confirms with an estimate.
         "food_ready_at": job.food_ready_at.isoformat() if job.food_ready_at else None,
+        # Ranked-offer dispatch state: an exclusive offer (with a deadline) vs the
+        # open pool. The list view adds a per-driver "offered_to_me" flag.
+        "is_open_pool": bool(getattr(job, "is_open_pool", False)),
+        "offer_expires_at": job.offer_expires_at.isoformat() if getattr(job, "offer_expires_at", None) else None,
         "created_at": job.created_at.isoformat(),
         "is_terminal": job.is_terminal,
         "failure_reason": job.failure_reason,
@@ -3933,11 +3939,22 @@ class DriverJobListView(APIView):
             ).select_related("driver")
         )
 
-        # Pending jobs (no driver yet)
+        # Pending jobs (no driver yet): with ranked dispatch a SEARCHING job is only
+        # visible to the driver it's exclusively offered to (until that offer lapses),
+        # or to everyone once it falls back to the open pool. Expired offers stay
+        # visible too (the sweep will cascade them) so a job is never hidden from all.
+        from django.db.models import Q
+        from django.utils import timezone as _tz
+        _now = _tz.now()
         pending_jobs = list(
             DeliveryJob.objects.filter(
                 driver__isnull=True,
                 status=DeliveryJob.Status.SEARCHING,
+            ).filter(
+                Q(is_open_pool=True)
+                | Q(offered_to=customer)
+                | Q(offered_to__isnull=True)
+                | Q(offer_expires_at__lte=_now)
             ).select_related("driver")[:20]
         )
 
@@ -3969,6 +3986,12 @@ class DriverJobListView(APIView):
         for j in pending_jobs:
             d = _serialize_delivery_job(j)
             d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
+            # Is this job exclusively offered to *this* driver right now? (drives the
+            # "offered to you" badge + the decline button in the app).
+            d["offered_to_me"] = bool(
+                j.offered_to_id == customer.id
+                and j.offer_expires_at and j.offer_expires_at > _now
+            )
             pending_serialized.append(d)
 
         return Response({
@@ -4016,14 +4039,57 @@ class DriverJobAcceptView(APIView):
             except DeliveryJob.DoesNotExist:
                 return Response({"detail": "Job not available."}, status=status.HTTP_404_NOT_FOUND)
 
+            # Ranked-offer gate: while a job is exclusively offered to another driver
+            # (offer still live), only that driver may claim it. Once it lapses or the
+            # job opens to the pool, anyone free may take it.
+            _now = _tz.now()
+            if (
+                not job.is_open_pool
+                and job.offered_to_id is not None
+                and job.offered_to_id != customer.id
+                and job.offer_expires_at is not None
+                and job.offer_expires_at > _now
+            ):
+                return Response(
+                    {"detail": "This delivery is currently offered to another driver.", "code": "offered_elsewhere"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
             job.driver = customer
             job.status = DeliveryJob.Status.ASSIGNED
-            job.assigned_at = _tz.now()
-            job.save(update_fields=["driver", "status", "assigned_at"])
+            job.assigned_at = _now
+            job.offered_to = None
+            job.offer_expires_at = None
+            job.save(update_fields=["driver", "status", "assigned_at", "offered_to", "offer_expires_at"])
 
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
         return Response(_serialize_delivery_job(job), status=status.HTTP_200_OK)
+
+
+class DriverJobDeclineView(APIView):
+    """POST /api/driver/jobs/<job_id>/decline/ — driver passes on an exclusive offer.
+
+    Records the decline and immediately cascades the job to the next-nearest driver
+    (or the open pool). Only the driver currently holding the offer can decline it;
+    for anyone else it's a harmless no-op success.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [DriverJobAcceptThrottle]
+
+    def post(self, request, job_id, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"detail": "Customer session required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            customer = Customer.objects.get(pk=customer_id, is_driver=True)
+        except Customer.DoesNotExist:
+            return Response({"detail": "Driver account not found."}, status=status.HTTP_404_NOT_FOUND)
+        from accounts.dispatch import decline_offer
+        decline_offer(job_id, customer.id)
+        return Response({"ok": True}, status=status.HTTP_200_OK)
 
 
 def _mark_order_out_for_delivery(job) -> None:

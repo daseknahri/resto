@@ -1,11 +1,13 @@
-"""Recover stuck delivery jobs — the safety net for the dispatch loop.
+"""Recover stuck delivery jobs — the safety net + heartbeat for the dispatch loop.
 
-Idempotent; safe to run every few minutes (Beat or a Coolify scheduled task):
+Idempotent; runs every ~60s (Beat or a Coolify scheduled task) so ranked-offer
+cascades stay live between driver polls:
 
     python manage.py sweep_delivery_jobs
 
-Three rules (policy: re-dispatch + alert restaurant; never auto-cancel/refund):
-  (a) Unclaimed SEARCHING > 3 min  → re-offer to online drivers (throttled per job).
+Rules (policy: re-dispatch + alert restaurant; never auto-cancel/refund):
+  (0) Exclusive offer window lapsed → cascade to the next-nearest driver / open pool.
+  (a) Unclaimed OPEN-POOL SEARCHING > 3 min  → re-broadcast to online drivers (throttled).
   (b) Unclaimed SEARCHING > 10 min → alert the restaurant ONCE (owner_alerted_at).
   (c) ASSIGNED/AT_RESTAURANT (not yet picked up) whose driver went offline / stale > 10 min
       → release back to the pool + re-offer + alert the restaurant.
@@ -29,12 +31,18 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from django.core.cache import cache
         from accounts.models import DeliveryJob
+        from accounts.dispatch import expire_and_cascade_stale_offers, offer_to_next_driver
         from accounts.push import push_new_job_to_drivers
         from accounts.tasks import enqueue, web_push_tenant
         from tenancy.models import Tenant
 
         now = timezone.now()
         _names: dict = {}
+
+        # (0) Advance ranked-offer cascades whose exclusive window lapsed — offer to
+        #     the next-nearest driver, or open to the pool. The cornerstone of the
+        #     dispatch loop's liveness between driver polls.
+        offers_advanced = expire_and_cascade_stale_offers()
 
         def tenant_info(tid):
             if tid not in _names:
@@ -56,9 +64,10 @@ class Command(BaseCommand):
 
         repushed = alerted = released = 0
 
-        # (a) Re-push unclaimed SEARCHING jobs (cache-throttled so we don't spam).
+        # (a) Re-push unclaimed OPEN-POOL SEARCHING jobs (cache-throttled). Exclusive
+        #     offers are advanced by the cascade above, not broadcast here.
         for job in DeliveryJob.objects.filter(
-            status=DeliveryJob.Status.SEARCHING, driver__isnull=True,
+            status=DeliveryJob.Status.SEARCHING, driver__isnull=True, is_open_pool=True,
             created_at__lte=now - REDISPATCH_AFTER,
         ):
             ckey = f"redispatch_push:{job.id}"
@@ -111,9 +120,17 @@ class Command(BaseCommand):
                 j.assigned_at = None
                 j.owner_alerted_at = None
                 j.redispatch_count = (j.redispatch_count or 0) + 1
-                j.save(update_fields=["driver", "status", "assigned_at", "owner_alerted_at", "redispatch_count"])
-            name, _ = tenant_info(job.tenant_id)
-            push_new_job_to_drivers(name)
+                # Fresh ranked-offer cascade for the re-opened job (any driver eligible again).
+                j.offered_to = None
+                j.offer_expires_at = None
+                j.declined_by = []
+                j.offer_round = 0
+                j.is_open_pool = False
+                j.save(update_fields=[
+                    "driver", "status", "assigned_at", "owner_alerted_at", "redispatch_count",
+                    "offered_to", "offer_expires_at", "declined_by", "offer_round", "is_open_pool",
+                ])
+            offer_to_next_driver(job.id)
             alert_owner(job.tenant_id, job.order_number, "Driver dropped — re-assigning",
                         f"Order #{job.order_number}'s driver went offline; finding another.")
             released += 1

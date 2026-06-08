@@ -142,6 +142,58 @@ def push_new_job_to_drivers(restaurant_name=None) -> None:
     enqueue(driver_dispatch, restaurant_name)
 
 
+# Exclusive-offer nudge to ONE nearest driver (ranked dispatch). {r} = restaurant.
+_JOB_OFFER_MESSAGES = {
+    "en": {"title": "Delivery offered to you", "body": "A delivery from {r} is yours to grab first — tap to accept."},
+    "fr": {"title": "Livraison proposee", "body": "Une livraison de {r} vous est proposee en priorite — touchez pour accepter."},
+    "ar": {"title": "عرض توصيل لك", "body": "توصيل من {r} معروض عليك أولاً — اضغط للقبول."},
+}
+
+
+def notify_driver_job_offer_sync(driver_id, restaurant_name=None) -> int:
+    """Web-push ONE driver that a delivery is offered to them first (deep-link /driver).
+    SYNCHRONOUS; returns the number of pushes delivered."""
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=driver_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=driver_id))
+    if not subs:
+        return 0
+    loc = (getattr(cust, "locale", "") or "en")
+    if loc not in _JOB_OFFER_MESSAGES:
+        loc = "en"
+    msg = _JOB_OFFER_MESSAGES[loc]
+    title = msg["title"]
+    body = msg["body"].format(r=restaurant_name or "a restaurant")
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, body, "/driver")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    try:
+        from .notifications import record_notification
+        record_notification(channel="push", event="driver.offer",
+                            status="sent" if sent else "failed",
+                            recipient=f"driver:{driver_id}", detail=(restaurant_name or ""))
+    except Exception:
+        pass
+    return sent
+
+
+def push_job_offer_to_driver(driver_id, restaurant_name=None) -> None:
+    """Enqueue the exclusive-offer nudge to one driver. Never raises/blocks."""
+    from accounts.tasks import enqueue, driver_job_offer
+    enqueue(driver_job_offer, driver_id, restaurant_name)
+
+
 # Driver "stand down" nudge when an order they're carrying is cancelled. {n} = order number.
 _JOB_CANCELLED_MESSAGES = {
     "en": {"title": "Delivery cancelled", "body": "Order {n} was cancelled — you can stop. Thanks!"},
