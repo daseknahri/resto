@@ -11,21 +11,33 @@
     <Transition name="ui-fade">
       <div
         v-if="toast.visible && toast.type !== 'error'"
-        class="ui-toast ui-panel pointer-events-auto flex max-w-xs items-center gap-3 px-4 py-3 text-sm text-slate-100 shadow-2xl shadow-black/40 sm:max-w-sm"
+        class="ui-toast pointer-events-auto relative flex max-w-xs items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-sm text-slate-100 shadow-2xl shadow-black/40 backdrop-blur-xl sm:max-w-sm"
+        :class="
+          toast.type === 'success'
+            ? 'border-emerald-500/40 bg-slate-900/95'
+            : 'border-amber-500/35 bg-slate-900/95'
+        "
       >
-        <!-- Type indicator dot — color conveys semantic type; aria-hidden because sr-only text below covers it -->
-        <!-- Intentional semantic color overrides: emerald=success, rose=error, amber=warn/info -->
+        <!-- Left accent bar -->
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-y-0 start-0 w-[3px] rounded-s-2xl"
+          :class="toast.type === 'success' ? 'bg-emerald-400' : 'bg-amber-400'"
+        />
+        <!-- Icon -->
+        <!-- success: check circle; info/warning: info circle -->
         <span
           aria-hidden="true"
-          class="h-2 w-2 shrink-0 rounded-full"
-          :class="
-            toast.type === 'success'
-              ? 'bg-emerald-400'
-              : toast.type === 'error'
-                ? 'bg-rose-400'
-                : 'bg-amber-300'
-          "
-        />
+          class="ms-1 shrink-0"
+          :class="toast.type === 'success' ? 'text-emerald-400' : 'text-amber-400'"
+        >
+          <svg v-if="toast.type === 'success'" viewBox="0 0 20 20" class="h-5 w-5 fill-current">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <svg v-else viewBox="0 0 20 20" class="h-5 w-5 fill-current">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+        </span>
         <span class="min-w-0 flex-1 break-words">
           <span class="sr-only">{{ t(`toast.type.${toast.type}`) }} </span>{{ toast.message }}</span>
         <button
@@ -51,13 +63,16 @@
     <Transition name="ui-fade">
       <div
         v-if="toast.visible && toast.type === 'error'"
-        class="ui-toast ui-panel pointer-events-auto flex max-w-xs items-center gap-3 px-4 py-3 text-sm text-slate-100 shadow-2xl shadow-black/40 sm:max-w-sm"
+        class="ui-toast pointer-events-auto relative flex max-w-xs items-center gap-3 overflow-hidden rounded-2xl border border-rose-500/40 bg-slate-900/95 px-4 py-3 text-sm text-slate-100 shadow-2xl shadow-black/40 backdrop-blur-xl sm:max-w-sm"
       >
-        <!-- Type indicator dot — intentional semantic color override: rose=error -->
-        <span
-          aria-hidden="true"
-          class="h-2 w-2 shrink-0 rounded-full bg-rose-400"
-        />
+        <!-- Left accent bar -->
+        <div aria-hidden="true" class="pointer-events-none absolute inset-y-0 start-0 w-[3px] rounded-s-2xl bg-rose-400" />
+        <!-- Error icon -->
+        <span aria-hidden="true" class="ms-1 shrink-0 text-rose-400">
+          <svg viewBox="0 0 20 20" class="h-5 w-5 fill-current">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </span>
         <span class="min-w-0 flex-1 break-words">
           <span class="sr-only">{{ t(`toast.type.${toast.type}`) }} </span>{{ toast.message }}</span>
         <button
