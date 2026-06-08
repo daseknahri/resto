@@ -105,6 +105,29 @@
         </header>
       </div>
 
+      <!-- Sticky horizontal category navigation -->
+      <nav
+        v-if="allCategories.length > 1"
+        class="sticky top-0 z-20 -mx-4 mb-2 mt-1 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-md"
+        aria-label="Menu categories"
+        style="scrollbar-width: none; -webkit-overflow-scrolling: touch;"
+      >
+        <div class="flex gap-1.5 overflow-x-auto px-4 py-2" style="scrollbar-width: none;">
+          <button
+            v-for="cat in allCategories"
+            :key="cat.id"
+            type="button"
+            class="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+            :class="activeCatId === cat.id
+              ? 'bg-[var(--color-secondary)] text-slate-950 shadow-sm shadow-[var(--color-secondary)]/30'
+              : 'border border-slate-700/70 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+            @click="scrollToCategory(cat.id)"
+          >
+            {{ cat.name }}
+          </button>
+        </div>
+      </nav>
+
       <!-- Menu -->
       <main class="space-y-8">
         <!-- Empty menu state -->
@@ -123,38 +146,50 @@
           <p class="ui-kicker mb-2">{{ sc.name }}</p>
           <div
             v-for="cat in sc.categories"
+            :id="`mkt-cat-${cat.id}`"
             :key="cat.id"
-            class="mb-6"
+            :data-mkt-cat="cat.id"
+            class="mb-6 scroll-mt-16"
           >
-            <h2 class="mb-2 text-sm font-semibold text-slate-300">{{ cat.name }}</h2>
-            <div class="space-y-2">
+            <h2 class="mb-2.5 text-sm font-semibold text-slate-300">{{ cat.name }}</h2>
+            <div class="space-y-2.5">
               <article
                 v-for="(dish, dishIndex) in cat.dishes"
                 :key="dish.slug"
-                class="ui-panel ui-surface-lift ui-reveal flex items-start gap-3 p-3"
+                class="ui-panel ui-surface-lift ui-reveal group flex items-start gap-3.5 p-3.5"
                 :class="{ 'opacity-50': !dish.is_available }"
                 :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
               >
-                <!-- Image -->
-                <div v-if="dish.image_url" class="h-14 w-14 shrink-0 rounded-xl overflow-hidden">
-                  <img :src="dish.image_url" :alt="dish.name" loading="lazy" decoding="async" class="h-full w-full object-cover" @error="$event.target.style.display='none'" />
+                <!-- Image (larger, with hover scale + emoji fallback) -->
+                <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center">
+                  <img
+                    v-if="dish.image_url"
+                    :src="dish.image_url"
+                    :alt="dish.name"
+                    loading="lazy"
+                    decoding="async"
+                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    @error="$event.target.style.display='none'"
+                  />
+                  <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                 </div>
                 <!-- Info -->
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-slate-100 leading-snug">{{ dish.name }}</p>
-                  <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2">{{ dish.description }}</p>
-                  <div class="mt-1.5 flex items-center justify-between gap-2">
-                    <span class="text-sm font-semibold tabular-nums text-[var(--color-secondary)]">
+                  <p class="text-sm font-semibold text-slate-100 leading-snug">{{ dish.name }}</p>
+                  <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ dish.description }}</p>
+                  <div class="mt-2 flex items-center justify-between gap-2">
+                    <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">
                       {{ fmtPrice(dish.price) }}
                     </span>
                     <button
                       v-if="dish.is_available"
-                      class="ui-press inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-3 py-1.5 text-xs font-semibold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
+                      class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                       :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                       @click="addToCart(dish)"
                     >
+                      <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                       {{ t('mktMenu.addToCart') }}
-                      <span v-if="cartQty(dish.slug)" class="ms-1 opacity-70 tabular-nums" aria-hidden="true">+{{ cartQty(dish.slug) }}</span>
+                      <span v-if="cartQty(dish.slug)" class="ms-0.5 rounded-full bg-slate-950/25 px-1.5 tabular-nums text-[10px]" aria-hidden="true">{{ cartQty(dish.slug) }}</span>
                     </button>
                   </div>
                 </div>
@@ -498,7 +533,10 @@ watch(checkoutOpen, async (open) => {
     checkoutTriggerRef.value?.focus();
   }
 });
-onBeforeUnmount(() => document.removeEventListener('keydown', trapCheckoutFocus));
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', trapCheckoutFocus);
+  if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
+});
 const placing = ref(false);
 const checkoutError = ref('');
 const showAuthModal = ref(false); // opens when delivery order requires sign-in
@@ -805,6 +843,47 @@ const placeOrder = async () => {
   }
 };
 
+// ── Category navigation (sticky nav + IntersectionObserver) ──────────────────
+const activeCatId = ref(null);
+
+const allCategories = computed(() => {
+  const cats = [];
+  for (const sc of restaurant.value?.super_categories || []) {
+    for (const cat of sc.categories || []) {
+      if (cat.dishes?.length) cats.push({ id: cat.id, name: cat.name });
+    }
+  }
+  return cats;
+});
+
+const scrollToCategory = (catId) => {
+  activeCatId.value = catId;
+  const el = document.getElementById(`mkt-cat-${catId}`);
+  if (!el) return;
+  // 56px: sticky nav height + a bit of breathing room
+  const offset = 56;
+  const top = el.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top, behavior: 'smooth' });
+};
+
+let _catObserver = null;
+const _setupCatObserver = () => {
+  if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
+  const sections = document.querySelectorAll('[data-mkt-cat]');
+  if (!sections.length) return;
+  _catObserver = new IntersectionObserver(
+    (entries) => {
+      // Pick the topmost intersecting section
+      const visible = entries.filter((e) => e.isIntersecting);
+      if (!visible.length) return;
+      visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      activeCatId.value = Number(visible[0].target.dataset.mktCat);
+    },
+    { rootMargin: '-15% 0px -70% 0px', threshold: 0 },
+  );
+  sections.forEach((el) => _catObserver.observe(el));
+};
+
 // Pre-fill the cart from a re-order navigation (items_snapshot from CustomerOrderRef).
 const applyReorderItems = () => {
   const items = history.state?.reorderItems;
@@ -824,7 +903,12 @@ const applyReorderItems = () => {
 onMounted(async () => {
   await customerStore.fetchCustomer();
   applyReorderItems(); // pre-fill cart before menu loads so the badge is ready
-  fetchMenu();
+  await fetchMenu();
+  // Set up category observer after the menu DOM is rendered
+  await nextTick();
+  _setupCatObserver();
+  // Highlight the first category by default
+  if (allCategories.value.length) activeCatId.value = allCategories.value[0].id;
 });
 </script>
 

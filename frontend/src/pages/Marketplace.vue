@@ -232,26 +232,44 @@
         <li
           v-for="(r, index) in displayedRestaurants"
           :key="r.slug"
-          class="ui-panel ui-surface-lift ui-reveal group relative flex flex-col overflow-hidden"
+          class="group relative flex flex-col overflow-hidden rounded-[1.35rem] border border-slate-800/60 bg-slate-900/60 shadow-md shadow-black/30 transition-all duration-300 hover:border-slate-700/60 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/40 ui-reveal"
+          :class="{ 'opacity-70': !r.is_open }"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <!-- Hero / logo strip -->
-          <div class="relative flex h-32 items-center justify-center overflow-hidden rounded-t-[1.35rem] bg-slate-800/60">
-            <img
-              v-if="r.logo_url"
-              :src="r.logo_url"
-              :alt="r.name"
-              loading="lazy"
-              decoding="async"
-              class="h-full w-full object-cover opacity-85 transition-opacity duration-300 group-hover:opacity-95"
-              @error="$event.target.style.display='none'"
-            />
-            <span v-else class="text-4xl text-slate-600" aria-hidden="true">🍽️</span>
+          <!-- Hero image with gradient overlay — name + rating live here -->
+          <div class="relative h-44 overflow-hidden rounded-t-[1.35rem]">
+            <!-- Background: image or gradient placeholder -->
+            <div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900">
+              <img
+                v-if="r.logo_url"
+                :src="r.logo_url"
+                :alt="r.name"
+                loading="lazy"
+                decoding="async"
+                class="h-full w-full object-cover opacity-80 transition-all duration-500 group-hover:scale-105 group-hover:opacity-90"
+                @error="$event.target.style.display='none'"
+              />
+              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">🍽️</span>
+            </div>
+            <!-- Bottom gradient: name + rating overlaid -->
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
+            <div class="absolute inset-x-0 bottom-0 z-10 px-3.5 pb-3">
+              <h2 class="text-sm font-bold leading-snug text-white drop-shadow-md">{{ r.name }}</h2>
+              <div class="mt-0.5 flex items-center gap-2 text-[11px]">
+                <span v-if="r.rating_average" class="flex items-center gap-0.5 text-amber-400">
+                  <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
+                  <span class="tabular-nums">{{ r.rating_average.toFixed(1) }}</span>
+                  <span class="text-slate-500 tabular-nums">({{ r.rating_count }})</span>
+                </span>
+                <span v-if="r.price_tier" class="text-slate-400">{{ '€'.repeat(r.price_tier) }}</span>
+                <span v-if="r.cuisine_type" class="text-slate-500">· {{ r.cuisine_type }}</span>
+              </div>
+            </div>
 
-            <!-- Favourite toggle -->
+            <!-- Favourite toggle (top-right) -->
             <button
-              class="ui-press absolute end-2 top-2 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
-              :class="isFavourite(r.slug) ? 'bg-red-500/20 text-red-400' : 'bg-slate-900/60 text-slate-500 hover:text-red-400'"
+              class="ui-press absolute end-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+              :class="isFavourite(r.slug) ? 'bg-red-500/25 text-red-400' : 'bg-slate-900/70 text-slate-500 hover:text-red-400'"
               :aria-label="isFavourite(r.slug) ? t('marketplace.unfavourite') : t('marketplace.favourite')"
               :aria-pressed="isFavourite(r.slug)"
               @click.prevent="toggleFavourite(r.slug)"
@@ -261,44 +279,37 @@
               </svg>
             </button>
 
-            <!-- Open/closed badge -->
+            <!-- Open/closed badge with live dot (top-left) -->
             <span
-              class="absolute bottom-2 end-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide backdrop-blur-sm"
+              class="absolute start-2 top-2 z-20 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide backdrop-blur-md"
               :class="r.is_open
-                ? 'bg-emerald-900/80 text-emerald-300'
-                : 'bg-slate-800/80 text-slate-400'"
+                ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/30'
+                : 'bg-slate-950/80 text-slate-500 border border-slate-700/40'"
             >
+              <span
+                v-if="r.is_open"
+                class="block h-1.5 w-1.5 rounded-full bg-emerald-400 motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
               {{ r.is_open ? t('marketplace.open') : t('marketplace.closed') }}
             </span>
 
-            <!-- Distance badge -->
+            <!-- Distance badge (sits above name overlay) -->
             <span
               v-if="r.distance_km != null"
-              class="absolute start-2 top-2 rounded-full bg-slate-900/80 px-2.5 py-0.5 text-[10px] tabular-nums text-slate-300 backdrop-blur-sm"
+              class="absolute bottom-14 end-2.5 z-20 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] tabular-nums text-slate-300 backdrop-blur-sm"
             >
-              <span aria-hidden="true">📍</span> {{ t('marketplace.kmAway', { km: r.distance_km }) }}
+              📍 {{ t('marketplace.kmAway', { km: r.distance_km }) }}
             </span>
           </div>
 
-          <!-- Card body -->
-          <div class="flex flex-1 flex-col gap-2 p-4">
-            <!-- Name + price tier + rating on same visual band -->
-            <div class="flex items-start justify-between gap-2 min-w-0">
-              <div class="min-w-0 flex-1">
-                <h2 class="truncate text-sm font-bold leading-snug text-slate-100">{{ r.name }}</h2>
-                <div v-if="r.rating_average" class="mt-0.5 flex items-center gap-1 text-[11px] text-amber-400">
-                  <span class="tabular-nums">★ {{ r.rating_average.toFixed(1) }}</span>
-                  <span class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
-                </div>
-              </div>
-              <span class="shrink-0 text-[11px] font-medium text-slate-500 pt-0.5">{{ '€'.repeat(r.price_tier || 2) }}</span>
-            </div>
-
+          <!-- Card body: tagline + chips + delivery info + CTA -->
+          <div class="flex flex-1 flex-col gap-2.5 p-4 pt-3">
             <!-- Tagline -->
-            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-2 leading-relaxed">{{ r.tagline }}</p>
+            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-1 leading-relaxed">{{ r.tagline }}</p>
 
-            <!-- Chips row -->
-            <div class="mt-auto flex flex-wrap items-center gap-1 pt-1">
+            <!-- Chips -->
+            <div class="flex flex-wrap items-center gap-1">
               <span v-if="isShopBusiness(r)" class="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
                 {{ t('marketplace.badgeShop') }}
               </span>
@@ -308,33 +319,25 @@
               <span v-if="r.promo_badge && !r.flash_sale_active" class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
                 {{ t('marketplace.promo', { badge: r.promo_badge }) }}
               </span>
-              <span v-if="r.cuisine_type" class="rounded-full border border-slate-700/70 px-2 py-0.5 text-[10px] text-slate-400">
-                {{ r.cuisine_type }}
-              </span>
-              <span v-if="r.city" class="rounded-full border border-slate-700/70 px-2 py-0.5 text-[10px] text-slate-400">
-                {{ r.city }}
-              </span>
               <span
                 v-if="r.delivery_enabled"
                 class="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300"
               >
-                {{ t('marketplace.delivery') }}
+                🚴 {{ t('marketplace.delivery') }}
               </span>
               <span
                 v-for="tag in (r.tags || []).slice(0, 2)"
                 :key="tag"
                 class="rounded-full border border-violet-500/25 bg-violet-500/8 px-2 py-0.5 text-[10px] text-violet-300"
-              >
-                {{ tag }}
-              </span>
+              >{{ tag }}</span>
             </div>
 
-            <!-- Delivery info row -->
+            <!-- Delivery fee info -->
             <div v-if="r.delivery_enabled" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
               <span v-if="Number(r.delivery_fee) > 0" class="tabular-nums">
                 {{ t('marketplace.deliveryFee') }}: {{ r.delivery_fee }}
               </span>
-              <span v-else class="text-emerald-400/80">{{ t('marketplace.freeDelivery') }}</span>
+              <span v-else class="font-medium text-emerald-400/80">{{ t('marketplace.freeDelivery') }}</span>
               <span v-if="Number(r.delivery_minimum_order) > 0" class="tabular-nums">
                 · {{ t('marketplace.minOrder', { amount: r.delivery_minimum_order }) }}
               </span>
@@ -343,7 +346,7 @@
             <!-- CTA -->
             <router-link
               :to="{ name: 'marketplace-menu', params: { slug: r.slug } }"
-              class="ui-btn-primary mt-2 w-full text-xs"
+              class="mt-auto block w-full rounded-xl bg-[var(--color-secondary)] py-2.5 text-center text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
             >
               {{ t('marketplace.viewMenu') }}
             </router-link>
