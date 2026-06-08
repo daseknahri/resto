@@ -3,18 +3,18 @@
     <div class="ui-page-shell max-w-4xl space-y-5">
 
       <!-- Header -->
-      <header class="ui-hero-ribbon ui-reveal px-4 py-4 md:px-5 md:py-5">
-        <div class="space-y-1 text-center">
+      <header class="ui-hero-ribbon ui-reveal px-5 py-6 md:px-6 md:py-7">
+        <div class="space-y-2 text-center">
           <p class="ui-kicker">{{ t('marketplace.kicker') }}</p>
           <h1 class="ui-display text-2xl font-semibold tracking-tight text-white sm:text-3xl">
             {{ t('marketplace.title') }}
           </h1>
-          <p class="ui-subtle mx-auto max-w-lg">{{ t('marketplace.subtitle') }}</p>
+          <p class="ui-subtle mx-auto max-w-lg text-slate-300/80">{{ t('marketplace.subtitle') }}</p>
         </div>
       </header>
 
       <!-- Filter bar -->
-      <section :aria-label="t('marketplace.kicker')" class="space-y-2.5">
+      <section :aria-label="t('marketplace.kicker')" class="ui-section-band space-y-3 px-4 py-3.5">
         <!-- Row 1: search + location -->
         <div class="flex gap-2">
           <input
@@ -26,7 +26,7 @@
             enterkeyhint="search"
           />
           <button
-            class="ui-btn-outline ui-press ui-touch-target flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
+            class="ui-btn-outline ui-press ui-touch-target flex shrink-0 items-center gap-1.5 px-3.5 py-2 text-xs disabled:opacity-50"
             :aria-label="t('marketplace.locationBtn')"
             :disabled="locating"
             @click="requestLocation"
@@ -100,7 +100,7 @@
           <select
             v-model="selectedBusinessType"
             :aria-label="t('marketplace.filterType')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
           >
             <option value="">{{ t('marketplace.typeAll') }}</option>
             <option value="food">{{ t('marketplace.typeFood') }}</option>
@@ -111,7 +111,7 @@
           <button
             type="button"
             :aria-pressed="openOnly"
-            class="ui-state-chip ui-press ui-touch-target px-3 py-1.5 text-xs font-medium"
+            class="ui-state-chip ui-press px-3 py-1.5 text-xs font-medium"
             :data-active="openOnly ? 'true' : 'false'"
             @click="openOnly = !openOnly"
           >
@@ -123,7 +123,7 @@
           <button
             type="button"
             :aria-pressed="showFavouritesOnly"
-            class="ui-state-chip ui-press ui-touch-target px-3 py-1.5 text-xs font-medium"
+            class="ui-state-chip ui-press px-3 py-1.5 text-xs font-medium"
             :data-active="showFavouritesOnly ? 'true' : 'false'"
             @click="showFavouritesOnly = !showFavouritesOnly"
           >
@@ -166,20 +166,22 @@
       </section>
 
       <!-- Loading: skeleton card grid -->
-      <ul v-if="loading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" :aria-label="t('marketplace.loading')">
+      <ul v-if="loading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" :aria-label="t('marketplace.loading')">
         <li
           v-for="i in 6"
           :key="i"
           class="ui-skeleton animate-pulse overflow-hidden"
         >
-          <div class="h-28 bg-slate-800/60" />
-          <div class="space-y-2 p-4">
+          <div class="h-32 rounded-t-[1.35rem] bg-slate-800/60" />
+          <div class="space-y-2.5 p-4">
             <div class="h-4 w-3/4 rounded bg-slate-700/60" />
             <div class="h-3 w-1/2 rounded bg-slate-800/50" />
             <div class="flex gap-2 pt-1">
               <div class="h-5 w-16 rounded-full bg-slate-800/60" />
               <div class="h-5 w-12 rounded-full bg-slate-800/50" />
+              <div class="h-5 w-10 rounded-full bg-slate-800/40" />
             </div>
+            <div class="mt-1 h-8 w-full rounded-full bg-slate-800/50" />
           </div>
         </li>
       </ul>
@@ -202,8 +204,9 @@
       <!-- Empty: favourites filter on but none saved -->
       <div
         v-else-if="showFavouritesOnly && !displayedRestaurants.length"
-        class="ui-empty-state ui-reveal text-center space-y-1"
+        class="ui-empty-state ui-reveal py-8 text-center space-y-2"
       >
+        <p class="text-2xl" aria-hidden="true">❤️</p>
         <p class="text-sm font-semibold text-slate-100">{{ t('marketplace.noFavourites') }}</p>
         <p class="text-xs text-slate-400">{{ t('marketplace.noFavouritesHint') }}</p>
       </div>
@@ -211,8 +214,9 @@
       <!-- Empty -->
       <div
         v-else-if="!displayedRestaurants.length"
-        class="ui-empty-state ui-reveal text-center space-y-1"
+        class="ui-empty-state ui-reveal py-8 text-center space-y-2"
       >
+        <p class="text-2xl" aria-hidden="true">🔍</p>
         <p class="text-sm font-semibold text-slate-100">{{ t('marketplace.noResults') }}</p>
         <p class="text-xs text-slate-400">{{ t('marketplace.noResultsHint') }}</p>
         <button
@@ -224,7 +228,7 @@
       </div>
 
       <!-- Grid -->
-      <ul v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <li
           v-for="(r, index) in displayedRestaurants"
           :key="r.slug"
@@ -232,21 +236,21 @@
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <!-- Hero / logo strip -->
-          <div class="relative flex h-28 items-center justify-center overflow-hidden bg-slate-800/60">
+          <div class="relative flex h-32 items-center justify-center overflow-hidden rounded-t-[1.35rem] bg-slate-800/60">
             <img
               v-if="r.logo_url"
               :src="r.logo_url"
               :alt="r.name"
               loading="lazy"
               decoding="async"
-              class="h-full w-full object-cover opacity-80"
+              class="h-full w-full object-cover opacity-85 transition-opacity duration-300 group-hover:opacity-95"
               @error="$event.target.style.display='none'"
             />
-            <span v-else class="text-3xl text-slate-600" aria-hidden="true">🍽️</span>
+            <span v-else class="text-4xl text-slate-600" aria-hidden="true">🍽️</span>
 
             <!-- Favourite toggle -->
             <button
-              class="ui-press ui-touch-target absolute end-2 top-2 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+              class="ui-press absolute end-2 top-2 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
               :class="isFavourite(r.slug) ? 'bg-red-500/20 text-red-400' : 'bg-slate-900/60 text-slate-500 hover:text-red-400'"
               :aria-label="isFavourite(r.slug) ? t('marketplace.unfavourite') : t('marketplace.favourite')"
               :aria-pressed="isFavourite(r.slug)"
@@ -259,7 +263,7 @@
 
             <!-- Open/closed badge -->
             <span
-              class="absolute bottom-2 end-2 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm"
+              class="absolute bottom-2 end-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide backdrop-blur-sm"
               :class="r.is_open
                 ? 'bg-emerald-900/80 text-emerald-300'
                 : 'bg-slate-800/80 text-slate-400'"
@@ -270,7 +274,7 @@
             <!-- Distance badge -->
             <span
               v-if="r.distance_km != null"
-              class="absolute start-2 top-2 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] tabular-nums text-slate-300 backdrop-blur-sm"
+              class="absolute start-2 top-2 rounded-full bg-slate-900/80 px-2.5 py-0.5 text-[10px] tabular-nums text-slate-300 backdrop-blur-sm"
             >
               <span aria-hidden="true">📍</span> {{ t('marketplace.kmAway', { km: r.distance_km }) }}
             </span>
@@ -278,19 +282,31 @@
 
           <!-- Card body -->
           <div class="flex flex-1 flex-col gap-2 p-4">
-            <!-- Name + price tier -->
+            <!-- Name + price tier + rating on same visual band -->
             <div class="flex items-start justify-between gap-2 min-w-0">
-              <h2 class="min-w-0 flex-1 truncate text-sm font-bold leading-snug text-slate-100">{{ r.name }}</h2>
-              <span class="shrink-0 text-[11px] font-medium text-slate-500">{{ '€'.repeat(r.price_tier || 2) }}</span>
+              <div class="min-w-0 flex-1">
+                <h2 class="truncate text-sm font-bold leading-snug text-slate-100">{{ r.name }}</h2>
+                <div v-if="r.rating_average" class="mt-0.5 flex items-center gap-1 text-[11px] text-amber-400">
+                  <span class="tabular-nums">★ {{ r.rating_average.toFixed(1) }}</span>
+                  <span class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
+                </div>
+              </div>
+              <span class="shrink-0 text-[11px] font-medium text-slate-500 pt-0.5">{{ '€'.repeat(r.price_tier || 2) }}</span>
             </div>
 
             <!-- Tagline -->
-            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-2">{{ r.tagline }}</p>
+            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-2 leading-relaxed">{{ r.tagline }}</p>
 
             <!-- Chips row -->
-            <div class="mt-auto flex flex-wrap items-center gap-1">
+            <div class="mt-auto flex flex-wrap items-center gap-1 pt-1">
               <span v-if="isShopBusiness(r)" class="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
                 {{ t('marketplace.badgeShop') }}
+              </span>
+              <span v-if="r.flash_sale_active" class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                <span aria-hidden="true">⚡</span> {{ t('marketplace.flashSale') }}
+              </span>
+              <span v-if="r.promo_badge && !r.flash_sale_active" class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                {{ t('marketplace.promo', { badge: r.promo_badge }) }}
               </span>
               <span v-if="r.cuisine_type" class="rounded-full border border-slate-700/70 px-2 py-0.5 text-[10px] text-slate-400">
                 {{ r.cuisine_type }}
@@ -324,30 +340,10 @@
               </span>
             </div>
 
-            <!-- Flash sale badge -->
-            <div v-if="r.flash_sale_active" class="flex items-center">
-              <span class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                <span aria-hidden="true">⚡</span> {{ t('marketplace.flashSale') }}
-              </span>
-            </div>
-
-            <!-- Promo badge -->
-            <div v-if="r.promo_badge && !r.flash_sale_active" class="flex items-center">
-              <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                {{ t('marketplace.promo', { badge: r.promo_badge }) }}
-              </span>
-            </div>
-
-            <!-- Rating -->
-            <div v-if="r.rating_average" class="flex items-center gap-1 text-xs text-amber-400">
-              <span class="tabular-nums">★ {{ r.rating_average.toFixed(1) }}</span>
-              <span class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
-            </div>
-
             <!-- CTA -->
             <router-link
               :to="{ name: 'marketplace-menu', params: { slug: r.slug } }"
-              class="ui-btn-primary mt-1 text-xs"
+              class="ui-btn-primary mt-2 w-full text-xs"
             >
               {{ t('marketplace.viewMenu') }}
             </router-link>

@@ -38,75 +38,77 @@
       </div>
 
       <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
-        <div class="space-y-3 text-center">
+        <div class="space-y-2 text-center">
           <p class="ui-kicker">{{ t("signIn.kicker") }}</p>
-          <h1 class="ui-display text-2xl font-semibold text-white">{{ t("signIn.title") }}</h1>
-          <p class="text-sm text-slate-300">{{ t("signIn.description") }}</p>
+          <h1 class="ui-display text-3xl font-semibold tracking-tight text-white">{{ t("signIn.title") }}</h1>
+          <p class="text-sm leading-relaxed text-slate-400">{{ t("signIn.description") }}</p>
         </div>
 
         <!-- Session-expired notice (shown when redirected from a 401) -->
         <div
           v-if="sessionExpired"
           role="alert"
-          class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5"
+          class="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0V5.75A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-          <p class="flex-1 text-sm text-amber-300">{{ t("signIn.sessionExpired") }}</p>
+          <p class="flex-1 text-sm font-medium text-amber-300">{{ t("signIn.sessionExpired") }}</p>
         </div>
 
-        <form class="space-y-4" novalidate @submit.prevent="submit">
-          <label class="block space-y-1 text-sm text-slate-200">
+        <form class="space-y-5" novalidate @submit.prevent="submit">
+          <label class="block space-y-1.5 text-sm font-medium text-slate-200">
             {{ t("signIn.identifier") }}
             <input
               v-model="identifier"
               type="text"
               autocomplete="username"
-              class="ui-input"
+              class="ui-input mt-1 font-normal"
               :class="fieldErrors.identifier ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.identifier ? 'true' : undefined"
               :aria-describedby="fieldErrors.identifier ? 'signin-identifier-error' : undefined"
               aria-required="true"
               @input="fieldErrors.identifier = ''"
             />
-            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.identifier }}</p>
+            <p v-if="fieldErrors.identifier" id="signin-identifier-error" class="text-xs font-normal text-red-300" role="alert">{{ fieldErrors.identifier }}</p>
           </label>
-          <label class="block space-y-1 text-sm text-slate-200">
+          <label class="block space-y-1.5 text-sm font-medium text-slate-200">
             {{ t("signIn.password") }}
             <input
               v-model="password"
               type="password"
               autocomplete="current-password"
-              class="ui-input"
+              class="ui-input mt-1 font-normal"
               :class="fieldErrors.password ? 'border-red-400' : ''"
               :aria-invalid="fieldErrors.password ? 'true' : undefined"
               :aria-describedby="fieldErrors.password ? 'signin-password-error' : undefined"
               aria-required="true"
               @input="fieldErrors.password = ''"
             />
-            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs text-red-300" role="alert">{{ fieldErrors.password }}</p>
+            <p v-if="fieldErrors.password" id="signin-password-error" class="text-xs font-normal text-red-300" role="alert">{{ fieldErrors.password }}</p>
           </label>
-          <button
-            type="submit"
-            :disabled="session.loading"
-            class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
-          >
-            {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
-          </button>
-          <div v-if="error" role="alert" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
-            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+          <div class="space-y-3 pt-1">
+            <button
+              type="submit"
+              :disabled="session.loading"
+              class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
+            >
+              {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
+            </button>
+            <div v-if="error" role="alert" class="flex items-start gap-2.5 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ error }}</p>
+            </div>
           </div>
         </form>
 
-        <div class="ui-section-band space-y-3 text-xs text-slate-300">
-          <p class="font-medium text-slate-100">{{ t("signIn.firstTime") }}</p>
-          <p>
+        <div class="ui-section-band space-y-2.5 text-xs text-slate-400">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ t("signIn.firstTime") }}</p>
+          <p class="leading-relaxed">
             {{ t("signIn.firstTime") }}
-            <RouterLink :to="activateLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:rounded-sm focus-visible:underline">{{ t("signIn.activationLink") }}</RouterLink>
+            <RouterLink :to="activateLink" class="ms-1 font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:underline">{{ t("signIn.activationLink") }}</RouterLink>
           </p>
-          <p>
+          <p class="leading-relaxed">
             {{ t("signIn.forgotPassword") }}
-            <RouterLink :to="forgotPasswordLink" class="text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:rounded-sm focus-visible:underline">{{ t("signIn.resetHere") }}</RouterLink>
+            <RouterLink :to="forgotPasswordLink" class="ms-1 font-medium text-[var(--color-secondary)] underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:underline">{{ t("signIn.resetHere") }}</RouterLink>
           </p>
         </div>
       </div>
