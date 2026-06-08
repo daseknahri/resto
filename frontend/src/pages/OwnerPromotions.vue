@@ -3,35 +3,37 @@
     <!-- Page header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-0.5">
+        <div class="min-w-0 space-y-0.5">
           <p class="ui-kicker">{{ t('ownerPromotions.kicker') }}</p>
-          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl leading-tight">{{ t('ownerPromotions.title') }}</h1>
-          <p class="ui-subtle">{{ t('ownerPromotions.subtitle') }}</p>
+          <h1 class="ui-display text-xl font-bold tracking-tight text-white sm:text-2xl leading-tight">{{ t('ownerPromotions.title') }}</h1>
+          <p class="ui-subtle text-xs">{{ t('ownerPromotions.subtitle') }}</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="mt-1 flex shrink-0 items-center gap-2">
           <svg v-if="updating" class="h-4 w-4 animate-spin text-slate-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.1-3.3M13.5 2v3.5H10"/>
           </svg>
+          <span class="sr-only" aria-live="polite" aria-atomic="true">{{ updating ? t('common.updating') : '' }}</span>
           <button class="ui-btn-primary ui-press" @click="openCreate">{{ t('ownerPromotions.newPromotion') }}</button>
         </div>
       </div>
     </header>
 
     <!-- Loading: skeleton cards -->
-    <div v-if="loading" class="space-y-3">
+    <div v-if="loading" class="space-y-3" aria-busy="true">
       <div v-for="i in 3" :key="i" class="ui-panel animate-pulse p-4">
         <div class="flex items-start justify-between gap-4">
-          <div class="flex-1 space-y-2">
+          <div class="flex-1 space-y-2.5">
             <div class="flex items-center gap-2">
-              <div class="h-4 w-32 rounded-full bg-slate-700/60" />
-              <div class="h-4 w-14 rounded-full bg-slate-800/60" />
+              <div class="h-4 w-36 rounded-full bg-slate-700/60" />
+              <div class="h-5 w-16 rounded-full bg-slate-800/60" />
             </div>
-            <div class="h-3 w-24 rounded bg-slate-800/50" />
-            <div class="h-3 w-48 rounded bg-slate-800/40" />
+            <div class="h-3 w-28 rounded bg-slate-800/50" />
+            <div class="h-3 w-52 rounded bg-slate-800/40" />
+            <div class="h-3 w-40 rounded bg-slate-800/30" />
           </div>
-          <div class="flex gap-2 shrink-0">
-            <div class="h-7 w-12 rounded-lg bg-slate-800/60" />
-            <div class="h-7 w-14 rounded-lg bg-slate-800/50" />
+          <div class="flex shrink-0 gap-2">
+            <div class="h-7 w-14 rounded-lg bg-slate-800/60" />
+            <div class="h-7 w-16 rounded-lg bg-slate-800/50" />
           </div>
         </div>
       </div>
@@ -50,12 +52,14 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!promotions.length" class="ui-empty-state text-center p-8 space-y-1.5">
+    <div v-else-if="!promotions.length" class="ui-panel ui-reveal text-center px-6 py-12 space-y-2">
       <p class="text-sm font-semibold text-slate-100">{{ t('ownerPromotions.noPromotions') }}</p>
-      <p class="text-xs text-slate-400">{{ t('ownerPromotions.noPromotionsHint') }}</p>
-      <button class="ui-btn-primary mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm" @click="openCreate">
-        {{ t('ownerPromotions.newPromotion') }}
-      </button>
+      <p class="text-xs text-slate-400 max-w-xs mx-auto">{{ t('ownerPromotions.noPromotionsHint') }}</p>
+      <div class="pt-2">
+        <button class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-5 py-2 text-sm" @click="openCreate">
+          {{ t('ownerPromotions.newPromotion') }}
+        </button>
+      </div>
     </div>
 
     <!-- List -->
@@ -64,27 +68,37 @@
         v-for="(promo, index) in promotions"
         :key="promo.id"
         :aria-labelledby="`promo-name-${promo.id}`"
-        class="ui-panel ui-surface-lift ui-reveal p-3 flex items-start justify-between gap-3"
+        class="ui-panel ui-surface-lift ui-reveal p-4 flex items-start justify-between gap-4"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
-        <div class="flex-1 min-w-0 space-y-1">
+        <div class="flex-1 min-w-0 space-y-1.5">
+          <!-- Name + status badge -->
           <div class="flex items-center gap-2 flex-wrap">
-            <span :id="`promo-name-${promo.id}`" class="text-sm font-semibold text-white truncate">{{ promo.name }}</span>
+            <span :id="`promo-name-${promo.id}`" class="text-sm font-semibold text-white leading-snug">{{ promo.name }}</span>
             <span
-              class="ui-status-pill shrink-0"
+              class="ui-status-pill shrink-0 inline-flex items-center gap-1"
               :class="promo.is_active
                 ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
                 : 'border-slate-600/60 bg-slate-700/30 text-slate-400'"
             >
+              <span
+                class="h-1.5 w-1.5 rounded-full shrink-0"
+                :class="promo.is_active ? 'bg-emerald-400' : 'bg-slate-500'"
+                aria-hidden="true"
+              />
               {{ promo.is_active ? t('ownerPromotions.activeNow') : t('ownerPromotions.inactive') }}
             </span>
           </div>
-          <p class="text-xs text-slate-400">{{ promoLabel(promo) }}</p>
-          <p v-if="promo.code" class="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-indigo-300">
-            <span class="opacity-60 font-sans font-normal">{{ t('ownerPromotions.codeLabel') }}:</span> {{ promo.code }}
+          <!-- Discount label -->
+          <p class="text-xs font-medium text-slate-300">{{ promoLabel(promo) }}</p>
+          <!-- Promo code badge -->
+          <p v-if="promo.code" class="inline-flex items-center gap-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-mono font-semibold text-indigo-300">
+            <span class="opacity-60 font-sans font-normal not-italic">{{ t('ownerPromotions.codeLabel') }}:</span>{{ promo.code }}
           </p>
+          <!-- Description -->
           <p v-if="promo.description" class="text-xs text-slate-500 truncate">{{ promo.description }}</p>
-          <div class="flex flex-wrap gap-3 text-[11px] text-slate-500 tabular-nums">
+          <!-- Metadata chips -->
+          <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500 tabular-nums pt-0.5">
             <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
               {{ t('ownerPromotions.minOrderShort', { amount: promo.min_order_amount }) }}
             </span>
@@ -96,14 +110,15 @@
             <span>{{ t('ownerPromotions.useCount_other', { count: promo.use_count }) }}</span>
           </div>
         </div>
-        <div class="flex gap-2 shrink-0">
+        <!-- Actions -->
+        <div class="flex shrink-0 gap-2">
           <button
-            class="ui-btn-outline ui-press px-2.5 py-1 text-xs"
+            class="ui-btn-outline ui-press px-3 py-1.5 text-xs font-medium"
             :aria-label="t('ownerPromotions.editAriaLabel', { name: promo.name })"
             @click="openEdit(promo)"
           >{{ t('common.edit') }}</button>
           <button
-            class="ui-press rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:border-red-500/50 hover:text-red-300 transition-colors"
+            class="ui-press rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/50 hover:bg-red-500/15 hover:text-red-300 transition-colors"
             :aria-label="t('ownerPromotions.deleteAriaLabel', { name: promo.name })"
             @click="deletePromo(promo)"
           >{{ t('common.delete') }}</button>
@@ -114,9 +129,11 @@
     <!-- Create / Edit drawer -->
     <Teleport to="body">
       <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="drawerOpen = false">
-        <div ref="drawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="ui-panel-soft w-full max-w-md p-4 space-y-4 max-h-[92vh] overflow-y-auto">
-          <div class="flex items-center justify-between">
-            <h2 id="owner-promotions-form-dialog-title" class="text-base font-bold text-white">
+        <div ref="drawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="ui-panel-soft w-full max-w-md max-h-[92vh] overflow-y-auto">
+
+          <!-- Dialog header -->
+          <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/50 bg-inherit px-5 py-4">
+            <h2 id="owner-promotions-form-dialog-title" class="text-base font-bold tracking-tight text-white">
               {{ editingPromo ? t('common.edit') : t('ownerPromotions.newPromotion') }}
             </h2>
             <button
@@ -130,153 +147,175 @@
             </button>
           </div>
 
-          <!-- Name -->
-          <div class="space-y-1.5">
-            <label for="promo-name" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.nameLabel') }}</label>
-            <input
-              id="promo-name"
-              v-model="form.name"
-              type="text"
-              :placeholder="t('ownerPromotions.namePlaceholder')"
-              class="ui-input w-full"
-            />
-          </div>
+          <!-- Form body -->
+          <div class="space-y-5 px-5 py-5">
 
-          <!-- Description -->
-          <div class="space-y-1.5">
-            <label for="promo-description" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
-            <input id="promo-description" v-model="form.description" type="text" class="ui-input w-full" />
-          </div>
+            <!-- Section: Basic info -->
+            <div class="space-y-4">
+              <!-- Name -->
+              <div class="space-y-1.5">
+                <label for="promo-name" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.nameLabel') }}</label>
+                <input
+                  id="promo-name"
+                  v-model="form.name"
+                  type="text"
+                  :placeholder="t('ownerPromotions.namePlaceholder')"
+                  class="ui-input w-full"
+                />
+              </div>
 
-          <!-- Promo code -->
-          <div class="space-y-1.5">
-            <label for="promo-code" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.codeLabel') }}</label>
-            <input
-              id="promo-code"
-              v-model="form.code"
-              type="text"
-              maxlength="20"
-              autocomplete="off"
-              class="ui-input w-full uppercase"
-              :placeholder="t('ownerPromotions.codePlaceholder')"
-              @input="form.code = form.code.toUpperCase()"
-            />
-            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.codeHint') }}</p>
-          </div>
+              <!-- Description -->
+              <div class="space-y-1.5">
+                <label for="promo-description" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.descriptionLabel') }}</label>
+                <input id="promo-description" v-model="form.description" type="text" class="ui-input w-full" />
+              </div>
 
-          <!-- Type -->
-          <div class="space-y-1.5">
-            <p id="promo-type-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.typeLabel') }}</p>
-            <div role="group" aria-labelledby="promo-type-label" class="flex gap-2 flex-wrap">
-              <button
-                v-for="opt in promoTypes"
-                :key="opt.value"
-                type="button"
-                :aria-pressed="form.promo_type === opt.value"
-                class="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
-                :class="form.promo_type === opt.value
-                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                @click="form.promo_type = opt.value"
-              >{{ opt.label }}</button>
+              <!-- Promo code -->
+              <div class="space-y-1.5">
+                <label for="promo-code" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.codeLabel') }}</label>
+                <input
+                  id="promo-code"
+                  v-model="form.code"
+                  type="text"
+                  maxlength="20"
+                  autocomplete="off"
+                  class="ui-input w-full uppercase font-mono tracking-widest"
+                  :placeholder="t('ownerPromotions.codePlaceholder')"
+                  @input="form.code = form.code.toUpperCase()"
+                />
+                <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.codeHint') }}</p>
+              </div>
             </div>
-          </div>
 
-          <!-- Discount value -->
-          <div v-if="form.promo_type !== 'free_delivery'" class="space-y-1.5">
-            <label for="promo-discount-value" class="block text-xs font-semibold text-slate-300">
-              {{ t('ownerPromotions.discountValueLabel') }}
-              <span class="text-slate-500 font-normal ms-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
-            </label>
-            <input id="promo-discount-value" v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" />
-            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.discountValueHint') }}</p>
-          </div>
+            <div class="border-t border-slate-700/40" />
 
-          <!-- Min order -->
-          <div class="space-y-1.5">
-            <label for="promo-min-order" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
-            <input id="promo-min-order" v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" />
-          </div>
+            <!-- Section: Discount -->
+            <div class="space-y-4">
+              <!-- Type -->
+              <div class="space-y-1.5">
+                <p id="promo-type-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.typeLabel') }}</p>
+                <div role="group" aria-labelledby="promo-type-label" class="flex gap-2 flex-wrap">
+                  <button
+                    v-for="opt in promoTypes"
+                    :key="opt.value"
+                    type="button"
+                    :aria-pressed="form.promo_type === opt.value"
+                    class="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors"
+                    :class="form.promo_type === opt.value
+                      ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                    @click="form.promo_type = opt.value"
+                  >{{ opt.label }}</button>
+                </div>
+              </div>
 
-          <!-- Live preview of what the customer sees -->
-          <div class="rounded-xl border border-indigo-500/25 bg-indigo-500/8 px-4 py-3">
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-300 mb-1">{{ t('ownerPromotions.previewTitle') }}</p>
-            <p class="text-sm text-slate-200">{{ promoPreview }}</p>
-          </div>
+              <!-- Discount value -->
+              <div v-if="form.promo_type !== 'free_delivery'" class="space-y-1.5">
+                <label for="promo-discount-value" class="block text-xs font-semibold text-slate-300">
+                  {{ t('ownerPromotions.discountValueLabel') }}
+                  <span class="text-slate-500 font-normal ms-1">{{ form.promo_type === 'percentage' ? '%' : '' }}</span>
+                </label>
+                <input id="promo-discount-value" v-model="form.discount_value" type="number" min="0" step="0.01" class="ui-input w-full" />
+                <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.discountValueHint') }}</p>
+              </div>
 
-          <!-- Days checkboxes -->
-          <div class="space-y-1.5">
-            <p id="promo-days-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</p>
-            <div role="group" aria-labelledby="promo-days-label" class="flex flex-wrap gap-1.5">
-              <button
-                v-for="d in DAYS"
-                :key="d.key"
-                type="button"
-                :aria-pressed="form.days.includes(d.key)"
-                class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
-                :class="form.days.includes(d.key)
-                  ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-                  : 'border-slate-700 text-slate-400 hover:border-slate-500'"
-                @click="toggleDay(d.key)"
-              >{{ d.label }}</button>
+              <!-- Min order -->
+              <div class="space-y-1.5">
+                <label for="promo-min-order" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.minOrderLabel') }}</label>
+                <input id="promo-min-order" v-model="form.min_order_amount" type="number" min="0" step="0.01" class="ui-input w-full" />
+              </div>
+
+              <!-- Live preview of what the customer sees -->
+              <div class="rounded-xl border border-indigo-500/25 bg-indigo-500/8 px-4 py-3 space-y-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">{{ t('ownerPromotions.previewTitle') }}</p>
+                <p class="text-sm text-slate-200">{{ promoPreview }}</p>
+              </div>
             </div>
-            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.daysHint') }}</p>
-          </div>
 
-          <!-- Time window -->
-          <div class="space-y-1.5">
-            <p id="promo-time-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</p>
-            <div role="group" aria-labelledby="promo-time-label" class="flex items-center gap-2">
-              <input v-model="form.time_start" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeStart')" />
-              <span class="text-slate-500" aria-hidden="true">—</span>
-              <input v-model="form.time_end" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeEnd')" />
+            <div class="border-t border-slate-700/40" />
+
+            <!-- Section: Scheduling -->
+            <div class="space-y-4">
+              <!-- Days checkboxes -->
+              <div class="space-y-1.5">
+                <p id="promo-days-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.daysLabel') }}</p>
+                <div role="group" aria-labelledby="promo-days-label" class="flex flex-wrap gap-1.5">
+                  <button
+                    v-for="d in DAYS"
+                    :key="d.key"
+                    type="button"
+                    :aria-pressed="form.days.includes(d.key)"
+                    class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+                    :class="form.days.includes(d.key)
+                      ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
+                      : 'border-slate-700 text-slate-400 hover:border-slate-500'"
+                    @click="toggleDay(d.key)"
+                  >{{ d.label }}</button>
+                </div>
+                <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.daysHint') }}</p>
+              </div>
+
+              <!-- Time window -->
+              <div class="space-y-1.5">
+                <p id="promo-time-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.timeLabel') }}</p>
+                <div role="group" aria-labelledby="promo-time-label" class="flex items-center gap-2">
+                  <input v-model="form.time_start" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeStart')" />
+                  <span class="text-slate-500 shrink-0" aria-hidden="true">—</span>
+                  <input v-model="form.time_end" type="time" class="ui-input flex-1" :aria-label="t('ownerPromotions.timeEnd')" />
+                </div>
+              </div>
+
+              <!-- Date range -->
+              <div class="space-y-1.5">
+                <p id="promo-daterange-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</p>
+                <div role="group" aria-labelledby="promo-daterange-label" class="flex items-center gap-2">
+                  <input v-model="form.active_from" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateFrom')" />
+                  <span class="text-slate-500 shrink-0" aria-hidden="true">—</span>
+                  <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" />
+                </div>
+              </div>
             </div>
-          </div>
 
-          <!-- Date range -->
-          <div class="space-y-1.5">
-            <p id="promo-daterange-label" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.dateRangeLabel') }}</p>
-            <div role="group" aria-labelledby="promo-daterange-label" class="flex items-center gap-2">
-              <input v-model="form.active_from" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateFrom')" />
-              <span class="text-slate-500" aria-hidden="true">—</span>
-              <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" />
+            <div class="border-t border-slate-700/40" />
+
+            <!-- Section: Limits & activation -->
+            <div class="space-y-4">
+              <!-- Max uses -->
+              <div class="space-y-1.5">
+                <label for="promo-max-uses" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
+                <input id="promo-max-uses" v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" />
+                <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.maxUsesHint') }}</p>
+              </div>
+
+              <!-- Active toggle -->
+              <label class="flex items-center gap-3 cursor-pointer rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3 ui-touch-target transition-colors hover:border-slate-600/60">
+                <input
+                  v-model="form.is_active"
+                  type="checkbox"
+                  class="rounded"
+                />
+                <span class="text-sm font-medium text-slate-300">{{ t('ownerPromotions.isActiveLabel') }}</span>
+              </label>
             </div>
+
+            <!-- Error -->
+            <div v-if="drawerError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+              <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+              <p class="flex-1 text-sm text-red-300">{{ drawerError }}</p>
+            </div>
+
+            <!-- Submit -->
+            <button
+              class="ui-btn-primary w-full justify-center"
+              :disabled="submitting"
+              @click="submitForm"
+            >
+              {{ submitting
+                ? (editingPromo ? t('ownerPromotions.saving') : t('ownerPromotions.creating'))
+                : (editingPromo ? t('ownerPromotions.save') : t('ownerPromotions.create'))
+              }}
+            </button>
           </div>
-
-          <!-- Max uses -->
-          <div class="space-y-1.5">
-            <label for="promo-max-uses" class="block text-xs font-semibold text-slate-300">{{ t('ownerPromotions.maxUsesLabel') }}</label>
-            <input id="promo-max-uses" v-model="form.max_uses" type="number" min="1" step="1" class="ui-input w-full" placeholder="∞" />
-            <p class="text-[11px] text-slate-500">{{ t('ownerPromotions.maxUsesHint') }}</p>
-          </div>
-
-          <!-- Active toggle -->
-          <label class="flex items-center gap-2.5 cursor-pointer rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 ui-touch-target">
-            <input
-              v-model="form.is_active"
-              type="checkbox"
-              class="rounded"
-            />
-            <span class="text-sm text-slate-300">{{ t('ownerPromotions.isActiveLabel') }}</span>
-          </label>
-
-          <!-- Error -->
-          <div v-if="drawerError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
-            <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-            <p class="flex-1 text-sm text-red-300">{{ drawerError }}</p>
-          </div>
-
-          <!-- Submit -->
-          <button
-            class="ui-btn-primary w-full justify-center"
-            :disabled="submitting"
-            @click="submitForm"
-          >
-            {{ submitting
-              ? (editingPromo ? t('ownerPromotions.saving') : t('ownerPromotions.creating'))
-              : (editingPromo ? t('ownerPromotions.save') : t('ownerPromotions.create'))
-            }}
-          </button>
         </div>
       </div>
     </Teleport>

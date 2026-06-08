@@ -1,20 +1,20 @@
 <template>
-  <div class="ui-page-shell space-y-3 ui-safe-bottom">
-    <section class="ui-workspace-stage ui-reveal overflow-hidden p-4 sm:p-5">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div class="min-w-0 space-y-1">
+  <div class="ui-page-shell space-y-4 ui-safe-bottom">
+    <section class="ui-workspace-stage ui-reveal overflow-hidden p-4 sm:p-5 sm:pb-5">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="min-w-0 space-y-1.5">
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>
-          <h2 class="ui-display truncate text-xl font-semibold text-white sm:text-2xl">{{ tenantName }}</h2>
+          <h2 class="ui-display truncate text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ tenantName }}</h2>
         </div>
         <!-- TODO: requires logic change — after tab switch, focus the panel wrapper via nextTick + ref for WCAG 2.1 SC 2.4.3 -->
-        <nav role="tablist" class="ui-segmented min-w-0" :aria-label="t('ownerProfile.sectionsNav')">
+        <nav role="tablist" class="ui-segmented min-w-0 sm:shrink-0" :aria-label="t('ownerProfile.sectionsNav')">
           <button
             v-for="tab in tabs"
             :id="'owner-profile-tab-' + tab.key"
             :key="tab.key"
             type="button"
             role="tab"
-            class="ui-segmented-button ui-press"
+            class="ui-segmented-button ui-press flex-1 gap-1.5"
             :data-active="activeTab === tab.key"
             :aria-selected="activeTab === tab.key"
             @click="setTab(tab.key)"
@@ -27,8 +27,11 @@
     </section>
 
     <div
+      :id="'owner-profile-panel-' + activeTab"
       role="tabpanel"
+      tabindex="-1"
       :aria-labelledby="'owner-profile-tab-' + activeTab"
+      class="focus-visible:outline-none"
     >
       <component
         :is="activeComponent"

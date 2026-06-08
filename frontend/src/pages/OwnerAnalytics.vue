@@ -1,20 +1,20 @@
 <template>
-  <section class="space-y-3 pb-24 sm:pb-6" aria-labelledby="analytics-heading">
-    <article class="ui-workspace-stage ui-reveal space-y-3 p-3 sm:p-4">
+  <section class="space-y-4 pb-24 sm:pb-6" aria-labelledby="analytics-heading">
+    <article class="ui-workspace-stage ui-reveal space-y-4 p-4 sm:p-5">
       <!-- Header + period selector -->
       <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0 space-y-1.5">
+        <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("ownerAnalytics.kicker") }}</p>
-          <h2 id="analytics-heading" class="ui-display text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ t("ownerAnalytics.title") }}</h2>
+          <h2 id="analytics-heading" class="ui-display text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">{{ t("ownerAnalytics.title") }}</h2>
         </div>
-        <div class="flex shrink-0 flex-wrap items-center gap-1" role="group" :aria-label="t('ownerHome.periodLabel')">
+        <div class="flex shrink-0 flex-wrap items-center gap-1.5" role="group" :aria-label="t('ownerHome.periodLabel')">
           <button
             v-for="d in PERIOD_OPTIONS"
             :key="d"
-            class="ui-press ui-touch-target inline-flex items-center justify-center rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-press inline-flex items-center justify-center rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
             :class="insightsPeriod === d
-              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
-              : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] shadow-sm shadow-[var(--color-secondary)]/10'
+              : 'border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
             :aria-pressed="insightsPeriod === d"
             :aria-label="d + ' ' + t('ownerAnalytics.daysSuffix')"
             @click="insightsPeriod = d"
@@ -23,23 +23,23 @@
       </div>
 
       <!-- KPI cards: loading skeleton -->
-      <div v-if="insightsLoading" class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5" aria-hidden="true">
-        <div v-for="i in 5" :key="i" class="ui-skeleton h-24" />
+      <div v-if="insightsLoading" class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5" aria-hidden="true">
+        <div v-for="i in 5" :key="i" class="ui-skeleton h-28" />
       </div>
 
       <!-- KPI cards: today stats + 7-day sparklines -->
-      <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+      <div v-else class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
         <div
-          class="ui-admin-subcard ui-reveal space-y-1.5"
+          class="ui-admin-subcard ui-reveal space-y-2 p-3"
           :style="{ '--ui-delay': '0ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
           <div class="flex items-end justify-between gap-1">
-            <p class="ui-stat-value tabular-nums text-slate-100">{{ todayStats.count }}</p>
+            <p class="ui-stat-value tabular-nums text-slate-100 !mt-0 text-[1.6rem]">{{ todayStats.count }}</p>
             <span
               v-if="yesterdayStats.count > 0"
-              class="mb-0.5 text-[10px] tabular-nums"
-              :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
+              class="mb-0.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+              :class="todayStats.count >= yesterdayStats.count ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800/60 text-slate-500'"
               :aria-label="t('ownerAnalytics.deltaLabel', { delta: todayStats.count - yesterdayStats.count })"
             >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
           </div>
@@ -47,31 +47,31 @@
         </div>
 
         <div
-          class="ui-admin-subcard ui-reveal space-y-1.5"
+          class="ui-admin-subcard ui-reveal space-y-2 p-3"
           :style="{ '--ui-delay': '28ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
-          <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
+          <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem] text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
           <SparklineChart :values="sparklineRevenue" color="secondary" :height="28" :label="t('ownerAnalytics.sparklineRevenue')" />
         </div>
 
         <div
-          class="ui-admin-subcard ui-reveal space-y-1.5"
+          class="ui-admin-subcard ui-reveal space-y-2 p-3"
           :style="{ '--ui-delay': '56ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
-          <p class="ui-stat-value tabular-nums text-slate-100">{{ avgTicketLabel }}</p>
+          <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem] text-slate-100">{{ avgTicketLabel }}</p>
           <SparklineChart :values="sparklineAvgTicket" :color="trend(sparklineAvgTicket) === 'up' ? 'emerald' : 'slate'" :height="28" :label="t('ownerAnalytics.sparklineAvgTicket')" />
         </div>
 
         <div
-          class="ui-admin-subcard ui-reveal space-y-1.5"
+          class="ui-admin-subcard ui-reveal space-y-2 p-3"
           :class="todayStats.pending > 0 ? 'border-amber-500/30' : ''"
           :style="{ '--ui-delay': '84ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
           <div class="flex items-center gap-1.5">
-            <p class="ui-stat-value tabular-nums" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
+            <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem]" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
             <AppIcon v-if="todayStats.pending > 0" name="info" class="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden="true" />
           </div>
           <div class="h-7" />
@@ -79,15 +79,15 @@
 
         <RouterLink
           :to="{ name: 'owner-reservations' }"
-          class="ui-admin-subcard ui-reveal ui-surface-lift space-y-1.5"
+          class="ui-admin-subcard ui-reveal ui-surface-lift space-y-2 p-3"
           :class="todayNewReservations > 0 ? 'border-sky-500/30' : 'hover:border-slate-600'"
           :style="{ '--ui-delay': '112ms' }"
         >
           <p class="ui-stat-label">{{ t("ownerHome.todayReservations") }}</p>
-          <p class="ui-stat-value tabular-nums" :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'">
+          <p class="ui-stat-value tabular-nums !mt-0 text-[1.6rem]" :class="todayReservations === null ? 'text-slate-700' : todayNewReservations > 0 ? 'text-sky-400' : 'text-slate-100'">
             {{ todayReservations === null ? "—" : todayReservations }}
           </p>
-          <p class="flex items-center gap-1 text-[10px] text-slate-500">
+          <p class="flex items-center gap-1 text-[10px] font-medium tracking-wide text-slate-500">
             <span>{{ t("ownerHome.viewReservations") }}</span>
             <span class="ltr:inline rtl:hidden" aria-hidden="true">→</span>
             <span class="ltr:hidden rtl:inline" aria-hidden="true">←</span>
