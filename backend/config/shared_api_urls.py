@@ -71,6 +71,7 @@ from sales.views import (
     AdminReservationAlertsView,
     AdminPlanFeatureFlagListView,
     AdminPlanFeatureFlagUpdateView,
+    AdminTenantDeliveryView,
     AdminTenantLifecycleView,
     AdminTenantListView,
     AdminTenantSettingsExportView,
@@ -175,6 +176,7 @@ shared_api_urlpatterns = [
     ),
     path("api/admin-tenants/", AdminTenantListView.as_view(), name="admin-tenants"),
     path("api/admin-tenants/<int:tenant_id>/lifecycle/", AdminTenantLifecycleView.as_view(), name="admin-tenant-lifecycle"),
+    path("api/admin-tenants/<int:tenant_id>/delivery/", AdminTenantDeliveryView.as_view(), name="admin-tenant-delivery"),
     path("api/admin-tenants/<int:tenant_id>/timeline/", AdminTenantTimelineView.as_view(), name="admin-tenant-timeline"),
     path(
         "api/admin-tenants/<int:tenant_id>/settings-export/",

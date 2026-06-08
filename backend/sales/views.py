@@ -1116,6 +1116,109 @@ class AdminTenantLifecycleView(APIView):
         return Response({"detail": detail, "tenant": payload}, status=status.HTTP_200_OK)
 
 
+class AdminTenantDeliveryView(APIView):
+    """GET/PATCH /api/admin-tenants/<tenant_id>/delivery/
+
+    Platform admin reads/sets a restaurant's delivery PRICING + platform-network
+    enrollment. The delivery platform is separate, so this is admin-only — the
+    restaurant owner can no longer edit pricing (the owner profile serializer marks
+    these fields read-only). The owner keeps the operational `delivery_enabled`
+    on/off toggle from their dashboard.
+    """
+
+    permission_classes = [IsPlatformAdmin]
+
+    _DECIMAL_FIELDS = (
+        "delivery_fee", "delivery_base_fee", "delivery_per_km",
+        "delivery_free_over", "delivery_minimum_order",
+    )
+
+    @staticmethod
+    def _serialize(profile):
+        def _s(v):
+            return str(v) if v is not None else None
+        return {
+            "delivery_enabled": bool(profile.delivery_enabled),
+            "platform_delivery_enabled": bool(profile.platform_delivery_enabled),
+            "delivery_fee": _s(profile.delivery_fee),
+            "delivery_base_fee": _s(profile.delivery_base_fee),
+            "delivery_per_km": _s(profile.delivery_per_km),
+            "delivery_free_over": _s(profile.delivery_free_over),
+            "delivery_minimum_order": _s(profile.delivery_minimum_order),
+            "delivery_radius_km": profile.delivery_radius_km,
+            "delivery_zone_description": profile.delivery_zone_description or "",
+        }
+
+    def _resolve_tenant(self, tenant_id):
+        with schema_context(get_public_schema_name()):
+            return get_object_or_404(Tenant.objects.all(), pk=tenant_id)
+
+    def get(self, request, tenant_id):
+        tenant = self._resolve_tenant(tenant_id)
+        from tenancy.models import Profile
+        with schema_context(tenant.schema_name):
+            profile = Profile.objects.filter(tenant=tenant).first()
+            if profile is None:
+                return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            data = self._serialize(profile)
+        return Response({
+            "tenant": {"id": tenant.id, "slug": tenant.slug, "name": tenant.name},
+            "delivery": data,
+        })
+
+    def patch(self, request, tenant_id):
+        from decimal import Decimal as _Dec, InvalidOperation
+        from tenancy.models import Profile
+
+        tenant = self._resolve_tenant(tenant_id)
+        body = request.data or {}
+        with schema_context(tenant.schema_name):
+            profile = Profile.objects.filter(tenant=tenant).first()
+            if profile is None:
+                return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            update_fields = []
+            for f in self._DECIMAL_FIELDS:
+                if f in body:
+                    try:
+                        val = _Dec(str(body[f])).quantize(_Dec("0.01"))
+                        if val < 0:
+                            raise InvalidOperation
+                    except (InvalidOperation, ValueError, TypeError):
+                        return Response({"detail": f"Invalid value for {f}.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+                    setattr(profile, f, val)
+                    update_fields.append(f)
+
+            if "delivery_radius_km" in body:
+                raw = body["delivery_radius_km"]
+                if raw in (None, "", "null"):
+                    profile.delivery_radius_km = None
+                else:
+                    try:
+                        rv = float(raw)
+                        if rv < 0:
+                            raise ValueError
+                    except (ValueError, TypeError):
+                        return Response({"detail": "Invalid delivery_radius_km.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+                    profile.delivery_radius_km = rv
+                update_fields.append("delivery_radius_km")
+
+            if "platform_delivery_enabled" in body:
+                profile.platform_delivery_enabled = bool(body["platform_delivery_enabled"])
+                update_fields.append("platform_delivery_enabled")
+
+            if "delivery_zone_description" in body:
+                profile.delivery_zone_description = str(body["delivery_zone_description"] or "")[:200]
+                update_fields.append("delivery_zone_description")
+
+            if update_fields:
+                update_fields.append("updated_at")
+                profile.save(update_fields=update_fields)
+            data = self._serialize(profile)
+
+        return Response({"detail": "Delivery settings updated.", "delivery": data})
+
+
 class AdminTenantTimelineView(APIView):
     permission_classes = [IsPlatformAdmin]
 

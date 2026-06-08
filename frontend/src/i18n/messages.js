@@ -1635,6 +1635,7 @@ export const messages = {
       refreshChecksFailed: "Unable to refresh checks",
       deliverySettings: "Delivery settings",
       deliverySettingsHint: "Configure the delivery option shown to customers at checkout.",
+      deliveryPricingAdminNote: "Delivery pricing (per-km, fees, radius) and platform-network enrollment are managed by the platform team. You can pause or resume accepting delivery orders anytime from your dashboard.",
       deliveryEnabled: "Delivery available",
       deliveryEnabledHint: "Show the delivery fulfilment option at checkout. Uncheck to hide it entirely.",
       platformDelivery: "Use platform driver network",

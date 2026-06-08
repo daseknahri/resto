@@ -255,6 +255,21 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "is_menu_published",
             "published_at",
         ]
+        # Delivery PRICING + platform enrollment are a platform-admin concern (the
+        # delivery network is separate), so the restaurant owner cannot edit them
+        # here. They remain readable (the customer checkout computes the fee from
+        # them) and are set by the admin via AdminTenantDeliveryView. The owner
+        # keeps the operational `delivery_enabled` on/off toggle (not read-only).
+        read_only_fields = [
+            "delivery_fee",
+            "delivery_base_fee",
+            "delivery_per_km",
+            "delivery_free_over",
+            "delivery_minimum_order",
+            "delivery_radius_km",
+            "delivery_zone_description",
+            "platform_delivery_enabled",
+        ]
 
     def get_capabilities(self, obj) -> dict:
         """Restaurant-only capability flags derived from business_type."""

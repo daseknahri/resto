@@ -242,108 +242,14 @@
             <input id="sp-delivery-enabled" v-model="form.delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
           </label>
 
-          <template v-if="form.delivery_enabled">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div class="space-y-1">
-                <label for="sp-delivery-fee" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFee") }}</label>
-                <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryFeeHint") }}</p>
-                <input
-                  id="sp-delivery-fee"
-                  v-model.number="form.delivery_fee"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="w-28 ui-input tabular-nums"
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label for="sp-delivery-min-order" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryMinimumOrder") }}</label>
-                <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryMinimumOrderHint") }}</p>
-                <input
-                  id="sp-delivery-min-order"
-                  v-model.number="form.delivery_minimum_order"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="w-28 ui-input tabular-nums"
-                />
-              </div>
-            </div>
-
-            <!-- Distance-based pricing (base + per-km). Per-km > 0 turns it on. -->
-            <div class="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-200">{{ t("stepPublish.distancePricingTitle") }}</p>
-                <p class="text-[11px] text-slate-500">{{ t("stepPublish.distancePricingHint") }}</p>
-              </div>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <div class="space-y-1">
-                  <label for="sp-delivery-base-fee" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryBaseFee") }}</label>
-                  <input
-                    id="sp-delivery-base-fee"
-                    v-model.number="form.delivery_base_fee"
-                    type="number" min="0" step="0.01"
-                    class="w-28 ui-input tabular-nums"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label for="sp-delivery-per-km" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryPerKm") }}</label>
-                  <input
-                    id="sp-delivery-per-km"
-                    v-model.number="form.delivery_per_km"
-                    type="number" min="0" step="0.01"
-                    class="w-28 ui-input tabular-nums"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label for="sp-delivery-radius-km" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryRadiusKm") }}</label>
-                  <input
-                    id="sp-delivery-radius-km"
-                    v-model.number="form.delivery_radius_km"
-                    type="number" min="0" step="0.5"
-                    class="w-28 ui-input tabular-nums"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label for="sp-delivery-free-over" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryFreeOver") }}</label>
-                  <input
-                    id="sp-delivery-free-over"
-                    v-model.number="form.delivery_free_over"
-                    type="number" min="0" step="0.01"
-                    class="w-28 ui-input tabular-nums"
-                  />
-                </div>
-              </div>
-              <p class="text-[11px] text-slate-500">{{ t("stepPublish.distancePricingExample") }}</p>
-              <p
-                v-if="Number(form.delivery_per_km) > 0 && !Number(form.delivery_base_fee) && !Number(form.delivery_fee)"
-                class="text-[11px] text-amber-400"
-              >{{ t("stepPublish.distancePricingZeroWarn") }}</p>
-            </div>
-
-            <div class="space-y-1">
-              <label for="sp-delivery-zone-desc" class="text-xs font-medium text-slate-300">{{ t("stepPublish.deliveryZoneDescription") }}</label>
-              <p class="text-[11px] text-slate-500">{{ t("stepPublish.deliveryZoneDescriptionHint") }}</p>
-              <input
-                id="sp-delivery-zone-desc"
-                v-model="form.delivery_zone_description"
-                type="text"
-                maxlength="200"
-                :placeholder="t('stepPublish.deliveryZoneDescriptionPlaceholder')"
-                class="w-full ui-input"
-              />
-              <p class="text-end text-[11px] text-slate-600 tabular-nums">{{ (form.delivery_zone_description || "").length }}/200</p>
-            </div>
-
-            <label for="sp-platform-delivery" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
-              <div class="space-y-0.5 min-w-0">
-                <span class="text-sm font-medium text-slate-200">{{ t("stepPublish.platformDelivery") }}</span>
-                <p class="text-xs text-slate-500">{{ t("stepPublish.platformDeliveryHint") }}</p>
-              </div>
-              <input id="sp-platform-delivery" v-model="form.platform_delivery_enabled" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
-            </label>
-          </template>
+          <!-- Delivery pricing (per-km, fees, radius) + platform enrollment are
+               admin-managed; the owner only toggles whether delivery is offered. -->
+          <p
+            v-if="form.delivery_enabled"
+            class="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400"
+          >
+            {{ t("stepPublish.deliveryPricingAdminNote") }}
+          </p>
         </div>
 
         <!-- Reservation capacity settings -->
