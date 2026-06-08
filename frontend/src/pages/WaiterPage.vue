@@ -242,10 +242,10 @@
             <p class="truncate text-xl font-bold leading-tight text-white">
               {{ orderHeadline(order) }}
             </p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-400">
+            <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
               <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
               <span aria-hidden="true" class="text-slate-600">·</span>
-              <span>{{ timeAgo(order.created_at) }}</span>
+              <span :class="timeUrgencyClass(order.created_at, order.status)">{{ timeAgo(order.created_at) }}</span>
               <template v-if="order.customer_name">
                 <span aria-hidden="true" class="text-slate-600">·</span>
                 <span>{{ order.customer_name }}</span>
@@ -264,15 +264,18 @@
         </div>
 
         <!-- Items -->
-        <ul class="border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
+        <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
           <li
             v-for="(item, idx) in order.items"
             :key="idx"
-            class="flex items-baseline gap-2 py-0.5 text-sm text-slate-300"
+            class="flex items-start gap-2.5 py-0.5 text-sm text-slate-300"
           >
-            <span class="w-6 shrink-0 tabular-nums font-bold text-slate-100">{{ item.qty }}×</span>
-            <span class="min-w-0 flex-1 truncate">{{ item.dish_name }}</span>
-            <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500">({{ item.note }})</span>
+            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold text-slate-100 tabular-nums">
+              {{ item.qty }}
+            </span>
+            <span class="min-w-0 flex-1 leading-snug" :class="item.is_ready ? 'line-through text-slate-500' : ''">{{ item.dish_name }}</span>
+            <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
+            <span v-if="item.is_ready" class="shrink-0 text-[10px] font-semibold text-emerald-500/80 leading-snug">✓</span>
           </li>
         </ul>
 
@@ -953,6 +956,15 @@ const timeAgo = (iso) => {
   if (diff < 60) return t("waiterPage.justNow");
   if (diff < 3600) return t("waiterPage.minutesAgo", { n: Math.floor(diff / 60) });
   return t("waiterPage.hoursAgo", { n: Math.floor(diff / 3600) });
+};
+
+// Returns the time-ago urgency class — amber > 10 min pending, red > 20 min
+const timeUrgencyClass = (iso, status) => {
+  if (!['pending', 'confirmed'].includes(status)) return 'text-slate-400';
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins >= 20) return 'font-semibold text-red-400';
+  if (mins >= 10) return 'font-semibold text-amber-400';
+  return 'text-slate-400';
 };
 
 const actionLabel = (order) => {
