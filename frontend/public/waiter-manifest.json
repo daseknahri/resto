@@ -1,7 +1,7 @@
 {
-  "name": "Resto Waiter",
+  "name": "Kepoli Waiter",
   "short_name": "Waiter",
-  "description": "Take and manage table orders from the floor",
+  "description": "Take and manage table orders from the floor on Kepoli.",
   "start_url": "/waiter",
   "scope": "/",
   "display": "standalone",

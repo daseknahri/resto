@@ -7,7 +7,7 @@ logger = logging.getLogger("app.email")
 
 
 def send_password_reset_email(email: str, reset_url: str, token: str):
-    subject = "Reset your restaurant menu account password"
+    subject = "Reset your Kepoli account password"
     body = (
         "Hello,\n\n"
         "We received a request to reset your password.\n"

@@ -81,9 +81,9 @@ const arabicMessages = {
     }
   },
   "landingLayout": {
-    "kicker": "منصة القوائم",
-    "title": "منصة SaaS للمطاعم",
-    "footerTitle": "منصة Resto Menu",
+    "kicker": "اطلب • وصل • اربح",
+    "title": "Kepoli",
+    "footerTitle": "Kepoli",
     "navDesktop": "التنقل الرئيسي",
     "navMobile": "التنقل الرئيسي"
   },
@@ -92,10 +92,10 @@ const arabicMessages = {
     "dismiss": "إغلاق",
     "dismissAriaLabel": "إغلاق رسالة التأكيد",
     "recommended": "موصى به",
-    "heroBadge": "منصة SaaS للمطاعم",
+    "heroBadge": "تطبيق Kepoli الشامل",
     "heroLive": "مباشر",
-    "heroTitle": "أنشئ وبِع قوائم مطاعم احترافية عبر منصة SaaS قوية واحدة.",
-    "heroSubtitle": "منتج واحد، ثلاث واجهات استخدام: صفحة تحويل، مساحة عمل للمالك، وقائمة عميل مهيأة للجوال. ابدأ الآن بباقة Basic ثم توسع لاحقاً إلى Growth وPro.",
+    "heroTitle": "اطلب من المطاعم والمتاجر، ويصلك للباب — أو اربح كسائق توصيل.",
+    "heroSubtitle": "Kepoli منصة واحدة للجميع: تدير الأعمال قوائمها أو كتالوجها وتستقبل الطلبات، ويطلب العملاء ويتابعون التوصيل، ويكسب السائقون على الطريق.",
     "getMyMenu": "أريد قائمتي",
     "customerDivider": "جائع؟",
     "browseRestaurants": "تصفّح المطاعم",

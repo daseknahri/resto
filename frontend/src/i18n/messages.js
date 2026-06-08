@@ -107,9 +107,9 @@ export const messages = {
       details: "Error details"
     },
     landingLayout: {
-      kicker: "Resto Menu",
-      title: "Restaurant SaaS",
-      footerTitle: "Resto Menu SaaS",
+      kicker: "Order • Delivered • Earn",
+      title: "Kepoli",
+      footerTitle: "Kepoli",
       navDesktop: "Main navigation",
       navMobile: "Main navigation"
     },
@@ -118,10 +118,10 @@ export const messages = {
       dismiss: "Dismiss",
       dismissAriaLabel: "Dismiss confirmation message",
       recommended: "Recommended",
-      heroBadge: "Restaurant SaaS platform",
+      heroBadge: "The Kepoli super-app",
       heroLive: "Live",
-      heroTitle: "Build and sell premium restaurant menus with one strong SaaS core.",
-      heroSubtitle: "One product, three user interfaces: conversion landing, owner workspace, and customer menu. Launch with Basic now, then scale to Growth and Pro.",
+      heroTitle: "Order from restaurants and shops, delivered — or earn as a rider.",
+      heroSubtitle: "Kepoli is one platform for everyone: businesses run their menu or catalog and take orders, customers order and track delivery, and riders earn on the road.",
       getMyMenu: "Get my menu",
       customerDivider: "Hungry?",
       browseRestaurants: "Browse restaurants",
@@ -3879,9 +3879,9 @@ export const messages = {
       details: "Details de l'erreur"
     },
     landingLayout: {
-      kicker: "Resto Menu",
-      title: "SaaS restaurant",
-      footerTitle: "Resto Menu SaaS",
+      kicker: "Commandez • Livré • Gagnez",
+      title: "Kepoli",
+      footerTitle: "Kepoli",
       navDesktop: "Navigation principale",
       navMobile: "Navigation principale"
     },
@@ -3890,10 +3890,10 @@ export const messages = {
       dismiss: "Fermer",
       dismissAriaLabel: "Fermer le message de confirmation",
       recommended: "Recommande",
-      heroBadge: "Plateforme SaaS restaurant",
+      heroBadge: "La super-app Kepoli",
       heroLive: "Live",
-      heroTitle: "Creez et vendez des menus premium avec un socle SaaS solide.",
-      heroSubtitle: "Un seul produit, trois interfaces: landing de conversion, espace proprietaire et menu client. Lancez Basic maintenant puis passez a Growth et Pro.",
+      heroTitle: "Commandez auprès des restaurants et boutiques, livré — ou gagnez comme livreur.",
+      heroSubtitle: "Kepoli est une seule plateforme pour tous : les commerces gèrent leur menu ou catalogue et reçoivent les commandes, les clients commandent et suivent la livraison, et les livreurs gagnent sur la route.",
       getMyMenu: "Obtenir mon menu",
       customerDivider: "Vous avez faim ?",
       browseRestaurants: "Parcourir les restaurants",

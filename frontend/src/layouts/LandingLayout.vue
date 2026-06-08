@@ -9,8 +9,8 @@
     <header class="ui-header ui-fade-up relative z-[2000] overflow-visible">
       <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <RouterLink to="/" class="flex min-w-0 items-center gap-3" :aria-label="t('landingLayout.title')">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
-            RM
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-base font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
+            {{ brandMonogram }}
           </div>
           <div class="min-w-0" aria-hidden="true">
             <p class="truncate text-xs uppercase tracking-[0.24em] text-slate-400">{{ t("landingLayout.kicker") }}</p>
@@ -92,8 +92,8 @@
       <div class="ui-reveal ui-panel-soft mx-auto grid w-full max-w-6xl gap-4 p-4 md:grid-cols-[minmax(0,1.15fr),minmax(0,0.45fr),minmax(0,0.45fr)] md:items-start">
         <div class="space-y-2">
           <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
-              RM
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-base font-bold text-slate-950 shadow-lg shadow-black/30" :style="logoStyle" aria-hidden="true">
+              {{ brandMonogram }}
             </div>
             <div>
               <p class="ui-kicker">{{ t("landingLayout.kicker") }}</p>
@@ -169,8 +169,10 @@ import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { useCustomerStore } from "../stores/customer";
+import { PLATFORM_MONOGRAM } from "../lib/brand";
 
 const router = useRouter();
+const brandMonogram = PLATFORM_MONOGRAM;
 const session = useSessionStore();
 const customerStore = useCustomerStore();
 const { t } = useI18n();

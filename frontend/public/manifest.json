@@ -1,7 +1,7 @@
 {
-  "name": "Resto — Restaurant OS",
-  "short_name": "Resto",
-  "description": "Restaurant management and ordering platform",
+  "name": "Kepoli Business — Restaurant & Store OS",
+  "short_name": "Kepoli Business",
+  "description": "Run your menu or catalog, take orders, and manage delivery on Kepoli.",
   "start_url": "/owner",
   "scope": "/",
   "display": "standalone",

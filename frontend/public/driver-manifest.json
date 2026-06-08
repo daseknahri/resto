@@ -1,7 +1,7 @@
 {
-  "name": "Resto Driver",
-  "short_name": "Driver",
-  "description": "Accept deliveries, navigate, and track your earnings",
+  "name": "Kepoli Rider",
+  "short_name": "Rider",
+  "description": "Accept deliveries, navigate, and track your earnings on Kepoli.",
   "start_url": "/driver",
   "scope": "/",
   "display": "standalone",
