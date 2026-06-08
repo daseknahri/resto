@@ -6289,6 +6289,109 @@ class OwnerMenuImportView(APIView):
         })
 
 
+class ApplyTemplateView(APIView):
+    """GET  /api/owner/apply-template/ — list the available starter templates.
+       POST /api/owner/apply-template/ — apply one (theme + optional sample menu).
+
+    A template sets the tenant's theme (colours + menu presentation) and
+    business_type, and optionally seeds a ready-to-edit sample menu. Sample
+    categories/dishes are matched by name, so re-applying never duplicates.
+    Body: { "template": <key>, "with_sample_content"?: bool (default true) }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_menu(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        from .menu_templates import template_summaries
+        return Response({"templates": template_summaries()})
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_menu(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal as _Dec
+        from django.db import transaction as _txn
+        from .menu_templates import TEMPLATES
+
+        key = str(request.data.get("template") or "").strip().lower()
+        tpl = TEMPLATES.get(key)
+        if not tpl:
+            return Response(
+                {"detail": "Unknown template.", "code": "unknown_template"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with_content = request.data.get("with_sample_content", True)
+        if isinstance(with_content, str):
+            with_content = with_content.strip().lower() in ("1", "true", "yes")
+        else:
+            with_content = bool(with_content)
+
+        tenant = getattr(request, "tenant", None)
+        theme = tpl["theme"]
+
+        created_categories = 0
+        created_dishes = 0
+        with _txn.atomic():
+            # 1. Apply the theme + business_type to the tenant profile.
+            profile = Profile.objects.filter(tenant=tenant).first() if tenant else None
+            if profile is not None:
+                profile.primary_color = theme["primary_color"]
+                profile.secondary_color = theme["secondary_color"]
+                profile.menu_theme = theme["menu_theme"]
+                profile.menu_card_layout = theme["menu_card_layout"]
+                profile.business_type = tpl["business_type"]
+                profile.save(update_fields=[
+                    "primary_color", "secondary_color", "menu_theme",
+                    "menu_card_layout", "business_type", "updated_at",
+                ])
+
+            # 2. Optionally seed the sample menu (idempotent by name).
+            if with_content:
+                default_super_cat = SuperCategory.objects.order_by("position", "id").first()
+                if default_super_cat is None:
+                    default_super_cat = SuperCategory.objects.create(
+                        name=tpl.get("super_category", "Menu"),
+                        slug=_make_unique_slug(tpl.get("super_category", "menu"), SuperCategory),
+                        position=0,
+                    )
+                for cat in tpl["categories"]:
+                    category = Category.objects.filter(name__iexact=cat["name"]).first()
+                    if category is None:
+                        category = Category.objects.create(
+                            super_category=default_super_cat,
+                            name=cat["name"],
+                            slug=_make_unique_slug(cat["name"], Category),
+                            position=Category.objects.count(),
+                        )
+                        created_categories += 1
+                    for d in cat["dishes"]:
+                        if Dish.objects.filter(category=category, name__iexact=d["name"]).exists():
+                            continue
+                        try:
+                            price = _Dec(str(d["price"])).quantize(_Dec("0.01"))
+                        except Exception:
+                            continue
+                        Dish.objects.create(
+                            category=category,
+                            name=d["name"],
+                            slug=_make_unique_slug(d["name"], Dish),
+                            description=d.get("description", ""),
+                            price=price,
+                            position=Dish.objects.filter(category=category).count(),
+                        )
+                        created_dishes += 1
+
+        return Response({
+            "applied": key,
+            "business_type": tpl["business_type"],
+            "theme": theme,
+            "created_categories": created_categories,
+            "created_dishes": created_dishes,
+        })
+
+
 def _make_unique_slug(name: str, model_class, max_length: int = 200) -> str:
     """Generate a slug from name that doesn't collide with existing rows."""
     from django.utils.text import slugify as _slugify
