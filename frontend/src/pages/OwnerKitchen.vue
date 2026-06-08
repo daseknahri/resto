@@ -63,7 +63,7 @@
     </nav>
 
     <!-- Loading: skeleton cards matching the kitchen-grid layout -->
-    <div v-if="waiter.loading" class="kitchen-grid" aria-busy="true" aria-label="t('kitchen.activeCount', { n: 0 })">
+    <div v-if="waiter.loading" class="kitchen-grid" aria-busy="true" :aria-label="t('kitchen.activeCount', { n: 0 })">
       <div v-for="i in 3" :key="i" class="kitchen-card animate-pulse border-slate-700/40 bg-slate-800/20">
         <div class="h-1.5 w-full rounded-t-xl bg-slate-700/60" />
         <div class="flex items-start justify-between gap-2 px-4 pt-5">

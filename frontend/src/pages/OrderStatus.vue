@@ -272,7 +272,7 @@
           <div class="flex items-start gap-2.5 min-w-0">
             <span
               class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums"
-              aria-label="{{ item.qty }}x"
+              :aria-label="`${item.qty}x`"
             >{{ item.qty }}</span>
             <div class="min-w-0 space-y-0.5">
               <p class="font-semibold text-slate-100 truncate">{{ item.dish_name }}</p>
