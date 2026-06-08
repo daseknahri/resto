@@ -142,7 +142,7 @@
     </article>
 
     <!-- Loading skeleton grid -->
-    <div v-if="loading" class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3" aria-busy="true" role="status" aria-label="{{ t('ownerTables.refreshing') }}">
+    <div v-if="loading" class="grid gap-3 sm:grid-cols-2 sm:gap-4 2xl:grid-cols-3" aria-busy="true" role="status" :aria-label="t('ownerTables.refreshing')">
       <div v-for="i in 3" :key="i" class="animate-pulse space-y-4 rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4">
         <div class="rounded-xl border border-slate-800 bg-slate-950/55 p-3.5 space-y-2.5">
           <div class="flex items-center gap-2">
