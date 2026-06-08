@@ -117,13 +117,36 @@
           <button
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-2.5 py-1 text-xs text-red-300 border-[var(--color-danger)]/25 hover:border-[var(--color-danger)]/50"
             :aria-label="`${t('common.delete')} ${s.name}`"
-            @click="removeSection(s)"
+            @click="deletingId = s.id"
           >
             <AppIcon name="trash" class="h-3.5 w-3.5" aria-hidden="true" />
             <span class="hidden sm:inline">{{ t('common.delete') }}</span>
           </button>
         </div>
       </div>
+
+      <!-- Delete confirm panel -->
+      <Transition name="ui-fade">
+        <div
+          v-if="deletingId === s.id"
+          class="flex items-center justify-between gap-3 border-t border-rose-500/20 bg-rose-500/8 px-4 py-3"
+          role="alert"
+        >
+          <p class="text-xs text-rose-200">{{ t('ownerSections.deleteConfirm', { name: s.name }) }}</p>
+          <div class="flex shrink-0 gap-2">
+            <button
+              class="rounded-full border border-rose-500/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
+              :disabled="busy"
+              @click="removeSection(s)"
+            >{{ t('ownerSections.deleteYes') }}</button>
+            <button
+              class="rounded-full border border-slate-600/60 px-3 py-1 text-[11px] font-semibold text-slate-400 hover:border-slate-500/60 hover:text-slate-300"
+              :disabled="busy"
+              @click="deletingId = null"
+            >{{ t('common.back') }}</button>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Edit panel -->
       <Transition name="ui-fade">
@@ -298,14 +321,16 @@ const saveSection = async (s) => {
   }
 };
 
+const deletingId = ref(null);
 const removeSection = async (s) => {
-  if (!window.confirm(t('ownerSections.deleteConfirm', { name: s.name }))) return;
   busy.value = true;
   try {
     await api.delete(`/owner/sections/${s.id}/`);
+    deletingId.value = null;
     await fetchSections();
   } catch {
     toast.show(t('ownerSections.deleteError'), 'error');
+    deletingId.value = null;
   } finally {
     busy.value = false;
   }

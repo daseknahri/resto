@@ -402,24 +402,58 @@
                 <span v-if="o.delivery_job.failure_reason" class="font-normal text-red-300/90">· {{ t(`ownerOrders.djReason_${o.delivery_job.failure_reason}`) }}</span>
               </p>
               <p v-if="o.delivery_job.failure_note" class="text-[11px] italic text-slate-400">“{{ o.delivery_job.failure_note }}”</p>
-              <div v-if="!o.delivery_job.resolution" class="flex flex-wrap gap-2">
-                <button
-                  class="rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/25 disabled:opacity-50"
-                  :disabled="deliveryActing === o.id"
-                  @click="deliveryAction(o, 'redispatch')"
-                >{{ t('ownerOrders.djRedispatch') }}</button>
-                <button
-                  class="rounded-full border border-red-500/30 bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
-                  :disabled="deliveryActing === o.id"
-                  @click="deliveryAction(o, 'refund_cancel')"
-                >{{ t('ownerOrders.djRefundCancel') }}</button>
-                <button
-                  v-if="o.delivery_job.failure_reason === 'customer_no_show'"
-                  class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
-                  :disabled="deliveryActing === o.id"
-                  @click="deliveryAction(o, 'confirm_noshow')"
-                >{{ t('ownerOrders.djPayNoshow') }}</button>
-              </div>
+              <Transition name="ui-fade" mode="out-in">
+                <!-- Inline refund_cancel confirm -->
+                <div
+                  v-if="djConfirmId === o.id"
+                  key="confirm"
+                  class="space-y-2 rounded-xl border border-rose-500/25 bg-rose-500/8 p-3"
+                >
+                  <div class="flex items-start gap-2.5">
+                    <svg class="mt-0.5 h-4 w-4 shrink-0 text-rose-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                    </svg>
+                    <div class="space-y-0.5">
+                      <p class="text-xs font-semibold text-rose-100">{{ t('ownerOrders.djRefundCancelConfirm') }}</p>
+                      <p class="text-[11px] leading-relaxed text-rose-200/75">{{ t('ownerOrders.djRefundCancelBody') }}</p>
+                    </div>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      class="flex-1 rounded-full border border-rose-500/40 bg-rose-500/20 px-2.5 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
+                      :disabled="deliveryActing === o.id"
+                      @click="deliveryAction(o, 'refund_cancel')"
+                    >
+                      {{ deliveryActing === o.id ? t('common.saving') : t('ownerOrders.djRefundCancelYes') }}
+                    </button>
+                    <button
+                      class="rounded-full border border-slate-600/60 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:border-slate-500/60 hover:text-slate-300 disabled:opacity-50"
+                      :disabled="deliveryActing === o.id"
+                      @click="djConfirmId = null"
+                    >{{ t('common.back') }}</button>
+                  </div>
+                </div>
+
+                <!-- Normal action buttons -->
+                <div v-else key="init" class="flex flex-wrap gap-2">
+                  <button
+                    class="rounded-full border border-sky-500/30 bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/25 disabled:opacity-50"
+                    :disabled="deliveryActing === o.id"
+                    @click="deliveryAction(o, 'redispatch')"
+                  >{{ t('ownerOrders.djRedispatch') }}</button>
+                  <button
+                    class="rounded-full border border-red-500/30 bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                    :disabled="deliveryActing === o.id"
+                    @click="djConfirmId = o.id"
+                  >{{ t('ownerOrders.djRefundCancel') }}</button>
+                  <button
+                    v-if="o.delivery_job.failure_reason === 'customer_no_show'"
+                    class="rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                    :disabled="deliveryActing === o.id"
+                    @click="deliveryAction(o, 'confirm_noshow')"
+                  >{{ t('ownerOrders.djPayNoshow') }}</button>
+                </div>
+              </Transition>
               <p v-if="o.delivery_job.resolution" class="text-[11px] text-emerald-400">
                 <span aria-hidden="true">✓</span> {{ t(`ownerOrders.djResolution_${o.delivery_job.resolution}`) }}
               </p>
@@ -1066,16 +1100,18 @@ const submitJobRating = async (o) => {
 
 // ── Failed-delivery resolution ──────────────────────────────────────────────────
 const deliveryActing = ref(null);  // order id currently being resolved
+const djConfirmId = ref(null);     // order id awaiting refund_cancel inline confirm
 const deliveryAction = async (o, action) => {
   if (deliveryActing.value) return;
-  if (action === 'refund_cancel' && !window.confirm(t('ownerOrders.djRefundCancelConfirm'))) return;
   deliveryActing.value = o.id;
   try {
     const { data } = await api.post(`/owner/orders/${o.id}/delivery-action/`, { action });
     toast.show(t(`ownerOrders.djAction_${data.resolution || action}`), 'success');
+    djConfirmId.value = null;
     await order.fetchOrders();
   } catch (err) {
     toast.show(err?.response?.data?.detail || t('ownerOrders.djActionFailed'), 'error');
+    djConfirmId.value = null;
   } finally {
     deliveryActing.value = null;
   }

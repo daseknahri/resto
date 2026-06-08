@@ -371,13 +371,49 @@
 
         <!-- Self-cancel — early pickup/delivery orders, signed-in owner only (server-gated) -->
         <template v-if="orderData.can_cancel">
-          <button
-            class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold border-red-400/30 text-red-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
-            :disabled="cancelling"
-            @click="cancelOrder"
-          >
-            {{ cancelling ? t('orderStatus.cancelling') : t('orderStatus.cancelOrder') }}
-          </button>
+          <Transition name="ui-fade" mode="out-in">
+            <div v-if="!cancelConfirming" key="init">
+              <button
+                class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold border-red-400/30 text-red-300 hover:border-red-400/60 hover:text-red-200 disabled:opacity-50"
+                :disabled="cancelling"
+                @click="cancelConfirming = true"
+              >
+                {{ t('orderStatus.cancelOrder') }}
+              </button>
+            </div>
+            <div
+              v-else
+              key="confirm"
+              class="space-y-3 rounded-2xl border border-rose-500/25 bg-rose-500/8 p-4"
+            >
+              <div class="flex items-start gap-3">
+                <svg class="mt-0.5 h-5 w-5 shrink-0 text-rose-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                </svg>
+                <div class="space-y-0.5">
+                  <p class="text-sm font-semibold text-rose-100">{{ t('orderStatus.cancelConfirm') }}</p>
+                  <p class="text-xs leading-relaxed text-rose-200/75">{{ t('orderStatus.cancelConfirmBody') }}</p>
+                </div>
+              </div>
+              <div class="flex gap-2.5">
+                <button
+                  class="ui-btn-primary flex-1 py-2.5 text-sm"
+                  style="--color-secondary: #f43f5e; --color-secondary-rgb: 244,63,94"
+                  :disabled="cancelling"
+                  @click="cancelOrder"
+                >
+                  <span aria-live="polite" aria-atomic="true">
+                    {{ cancelling ? t('orderStatus.cancelling') : t('orderStatus.cancelConfirmYes') }}
+                  </span>
+                </button>
+                <button
+                  class="ui-btn-outline px-4 py-2.5 text-sm"
+                  :disabled="cancelling"
+                  @click="cancelConfirming = false"
+                >{{ t('common.back') }}</button>
+              </div>
+            </div>
+          </Transition>
           <p class="text-center text-[11px] text-slate-500">{{ t('orderStatus.cancelHint') }}</p>
         </template>
       </div>
@@ -840,20 +876,22 @@ const payWithWallet = async () => {
 
 // Self-cancel an early pickup/delivery order (wallet auto-refunds server-side).
 const cancelling = ref(false);
+const cancelConfirming = ref(false);
 const cancelOrder = async () => {
   if (cancelling.value) return;
-  if (typeof window !== "undefined" && !window.confirm(t("orderStatus.cancelConfirm"))) return;
   cancelling.value = true;
   try {
     await api.post(`/order-status/${props.orderNumber}/cancel/`);
     await fetchStatus(); // refresh → flips to Cancelled, hides the button
     toast.show(t("orderStatus.cancelledOk"), "success");
+    cancelConfirming.value = false;
   } catch (err) {
     const code = err?.response?.data?.code;
     toast.show(
       code === "not_cancellable" ? t("orderStatus.cancelTooLate") : t("orderStatus.cancelFailed"),
       "error",
     );
+    cancelConfirming.value = false;
   } finally {
     cancelling.value = false;
   }

@@ -177,14 +177,50 @@
           </div>
 
           <!-- Self-cancel (early pickup/delivery orders only) -->
-          <div v-if="order.can_cancel" class="mt-3 text-center">
-            <button
-              class="ui-press ui-touch-target inline-flex items-center rounded-full border border-red-500/40 px-4 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:opacity-50"
-              :disabled="cancelling"
-              @click="cancelOrder"
-            >
-              {{ cancelling ? t('common.saving') : t('mktOrderStatus.cancelOrder') }}
-            </button>
+          <div v-if="order.can_cancel" class="mt-3">
+            <Transition name="ui-fade" mode="out-in">
+              <div v-if="!cancelConfirming" key="init" class="text-center">
+                <button
+                  class="ui-press ui-touch-target inline-flex items-center rounded-full border border-red-500/40 px-4 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:opacity-50"
+                  :disabled="cancelling"
+                  @click="cancelConfirming = true"
+                >
+                  {{ t('mktOrderStatus.cancelOrder') }}
+                </button>
+              </div>
+              <div
+                v-else
+                key="confirm"
+                class="space-y-3 rounded-2xl border border-rose-500/25 bg-rose-500/8 p-4"
+              >
+                <div class="flex items-start gap-3">
+                  <svg class="mt-0.5 h-5 w-5 shrink-0 text-rose-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                  </svg>
+                  <div class="space-y-0.5">
+                    <p class="text-sm font-semibold text-rose-100">{{ t('mktOrderStatus.cancelConfirm') }}</p>
+                    <p class="text-xs leading-relaxed text-rose-200/75">{{ t('mktOrderStatus.cancelConfirmBody') }}</p>
+                  </div>
+                </div>
+                <div class="flex gap-2.5">
+                  <button
+                    class="ui-btn-primary ui-press flex-1 py-2.5 text-sm"
+                    style="--color-secondary: #f43f5e; --color-secondary-rgb: 244,63,94"
+                    :disabled="cancelling"
+                    @click="cancelOrder"
+                  >
+                    <span aria-live="polite" aria-atomic="true">
+                      {{ cancelling ? t('common.saving') : t('mktOrderStatus.cancelConfirmYes') }}
+                    </span>
+                  </button>
+                  <button
+                    class="ui-btn-outline ui-press px-4 py-2.5 text-sm"
+                    :disabled="cancelling"
+                    @click="cancelConfirming = false"
+                  >{{ t('common.back') }}</button>
+                </div>
+              </div>
+            </Transition>
           </div>
         </div>
 
@@ -366,17 +402,19 @@ const fetchStatus = async () => {
 };
 
 const cancelling = ref(false);
+const cancelConfirming = ref(false);
 const cancelOrder = async () => {
   if (cancelling.value) return;
-  if (typeof window !== 'undefined' && !window.confirm(t('mktOrderStatus.cancelConfirm'))) return;
   cancelling.value = true;
   try {
     await api.post(`/marketplace/order/${orderNumber}/cancel/`, { restaurant: slug });
     toast.show(t('mktOrderStatus.cancelledOk'), 'success');
+    cancelConfirming.value = false;
     await fetchStatus();
   } catch (err) {
     const code = err?.response?.data?.code;
     toast.show(code === 'cancel_too_late' ? t('mktOrderStatus.cancelTooLate') : t('mktOrderStatus.cancelFailed'), 'error');
+    cancelConfirming.value = false;
   } finally {
     cancelling.value = false;
   }

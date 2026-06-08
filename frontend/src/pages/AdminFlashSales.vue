@@ -121,10 +121,32 @@
               class="ui-btn-outline ui-press ui-touch-target border-red-500/40 px-3 py-1 text-xs text-red-300 hover:border-red-400/60 hover:bg-red-500/10 disabled:opacity-50"
               :disabled="busyId === fs.id"
               :aria-label="t('adminFlashSales.delete') + ' ' + fs.name"
-              @click="deleteSale(fs)"
+              @click="deleteConfirmId = fs.id"
             >{{ t('adminFlashSales.delete') }}</button>
           </div>
         </div>
+        <!-- Inline delete confirm -->
+        <Transition name="ui-fade">
+          <div
+            v-if="deleteConfirmId === fs.id"
+            class="mt-3 flex items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-4 py-2.5"
+            role="alert"
+          >
+            <p class="text-xs text-rose-200">{{ t('adminFlashSales.deleteConfirm', { name: fs.name }) }}</p>
+            <div class="flex shrink-0 gap-2">
+              <button
+                class="rounded-full border border-rose-500/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
+                :disabled="busyId === fs.id"
+                @click="deleteSale(fs)"
+              >{{ t('adminFlashSales.deleteYes') }}</button>
+              <button
+                class="rounded-full border border-slate-600/60 px-3 py-1 text-[11px] font-semibold text-slate-400 hover:border-slate-500/60 hover:text-slate-300"
+                :disabled="busyId === fs.id"
+                @click="deleteConfirmId = null"
+              >{{ t('common.back') }}</button>
+            </div>
+          </div>
+        </Transition>
       </li>
     </ul>
   </div>
@@ -214,15 +236,17 @@ const toggleActive = async (fs) => {
   }
 };
 
+const deleteConfirmId = ref(null);
 const deleteSale = async (fs) => {
-  if (!window.confirm(t('adminFlashSales.deleteConfirm', { name: fs.name }))) return;
   busyId.value = fs.id;
   try {
     await api.delete(`/admin/flash-sales/${fs.id}/`);
     sales.value = sales.value.filter((s) => s.id !== fs.id);
+    deleteConfirmId.value = null;
     toast.show(t('adminFlashSales.deleted'), 'success');
   } catch {
     toast.show(t('adminFlashSales.deleteFailed'), 'error');
+    deleteConfirmId.value = null;
   } finally {
     busyId.value = null;
   }
