@@ -315,6 +315,45 @@
           <input v-model="form.google_maps_url" type="url" inputmode="url" :class="inputClass('google_maps_url')" :aria-invalid="fieldError('google_maps_url') ? 'true' : undefined" aria-describedby="step-brand-maps-error" @input="clearField('google_maps_url')" />
           <p v-if="fieldError('google_maps_url')" id="step-brand-maps-error" role="alert" class="text-xs text-red-300">{{ fieldError("google_maps_url") }}</p>
         </label>
+
+        <!-- Map location → coordinates used for delivery distance pricing -->
+        <div class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-3 sm:col-span-2">
+          <p class="text-sm font-medium text-slate-100">{{ t("stepBrand.locationTitle") }}</p>
+          <p class="text-xs text-slate-500">{{ t("stepBrand.locationHint") }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="locationFromMapsUrl">
+              {{ t("stepBrand.locationFromUrl") }}
+            </button>
+            <button type="button" class="ui-btn-outline ui-press px-3 py-1.5 text-xs" :disabled="locating" @click="useCurrentLocation">
+              {{ locating ? t("stepBrand.locating") : t("stepBrand.locationUseCurrent") }}
+            </button>
+            <button
+              v-if="form.lat != null || form.lng != null"
+              type="button"
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs text-red-200"
+              @click="clearLocation"
+            >
+              {{ t("common.clear") }}
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="space-y-1 text-xs text-slate-400">
+              {{ t("stepBrand.latitude") }}
+              <input v-model.number="form.lat" type="number" step="any" inputmode="decimal" class="ui-input" />
+            </label>
+            <label class="space-y-1 text-xs text-slate-400">
+              {{ t("stepBrand.longitude") }}
+              <input v-model.number="form.lng" type="number" step="any" inputmode="decimal" class="ui-input" />
+            </label>
+          </div>
+          <p
+            v-if="locationMsg"
+            class="text-xs"
+            :class="form.lat != null && form.lng != null ? 'text-emerald-300' : 'text-amber-300'"
+          >
+            {{ locationMsg }}
+          </p>
+        </div>
         <label class="space-y-1 text-sm text-slate-200">
           {{ t("stepBrand.reservationUrl") }}
           <input
@@ -420,6 +459,8 @@ const form = reactive({
   address: "",
   address_i18n: {},
   google_maps_url: "",
+  lat: null,
+  lng: null,
   reservation_url: "",
   facebook_url: "",
   instagram_url: "",
@@ -584,6 +625,60 @@ const syncFieldLocales = () => {
 };
 
 watch([contentLocaleCodes, defaultContentLocale], syncFieldLocales, { immediate: true });
+
+// ── Map location → restaurant coordinates (drives delivery distance pricing) ──
+const locating = ref(false);
+const locationMsg = ref("");
+
+const _validLatLng = (la, ln) =>
+  Number.isFinite(la) && Number.isFinite(ln) &&
+  la >= -90 && la <= 90 && ln >= -180 && ln <= 180 &&
+  !(Math.abs(la) < 1e-6 && Math.abs(ln) < 1e-6);
+
+// Extract coordinates from a pasted Google Maps link (@lat,lng / ?q=lat,lng / !3d!4d).
+const locationFromMapsUrl = () => {
+  const url = (form.google_maps_url || "").trim();
+  if (!url) { locationMsg.value = t("stepBrand.locationNoUrl"); return; }
+  const patterns = [
+    /@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/,
+    /[?&]q=(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)/,
+    /!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/,
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m) {
+      const la = parseFloat(m[1]); const ln = parseFloat(m[2]);
+      if (_validLatLng(la, ln)) {
+        form.lat = la; form.lng = ln;
+        locationMsg.value = t("stepBrand.locationSet");
+        return;
+      }
+    }
+  }
+  locationMsg.value = t("stepBrand.locationParseFailed");
+};
+
+const useCurrentLocation = () => {
+  if (!navigator.geolocation) { locationMsg.value = t("stepBrand.locationUnsupported"); return; }
+  locating.value = true;
+  locationMsg.value = "";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const la = pos.coords.latitude; const ln = pos.coords.longitude;
+      if (_validLatLng(la, ln)) {
+        form.lat = Number(la.toFixed(6)); form.lng = Number(ln.toFixed(6));
+        locationMsg.value = t("stepBrand.locationSet");
+      } else {
+        locationMsg.value = t("stepBrand.locationParseFailed");
+      }
+      locating.value = false;
+    },
+    () => { locationMsg.value = t("stepBrand.locationDenied"); locating.value = false; },
+    { enableHighAccuracy: true, timeout: 10000 },
+  );
+};
+
+const clearLocation = () => { form.lat = null; form.lng = null; locationMsg.value = ""; };
 
 const load = async () => {
   try {
