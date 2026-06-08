@@ -1891,6 +1891,21 @@ const arabicMessages = {
     "cta": "تثبيت",
     "dismiss": "إغلاق"
   },
+  "waiterJoin": {
+    "kicker": "تطبيق النادل",
+    "installTitle": "تثبيت التطبيق",
+    "installHint": "أضف التطبيق إلى شاشتك الرئيسية للوصول الفوري — يعمل أيضاً بدون إنترنت.",
+    "installCta": "أضف إلى الشاشة الرئيسية",
+    "iosHint": "على iPhone أو iPad (Safari):",
+    "iosStep1": "اضغط على زر المشاركة (⬆) أسفل Safari",
+    "iosStep2": "مرّر لأسفل واضغط على «إضافة إلى الشاشة الرئيسية»",
+    "iosStep3": "اضغط على «إضافة» في الزاوية العلوية اليمنى",
+    "alreadyInstalled": "التطبيق مثبّت — جاهز للاستخدام",
+    "thenStep": "ثم",
+    "signInTitle": "تسجيل الدخول",
+    "signInCta": "افتح تطبيق النادل",
+    "successRedirecting": "تم تسجيل الدخول — جارٍ فتح التطبيق…"
+  },
   "ownerNotifications": {
     "kicker": "سجل الإشعارات",
     "title": "سجل الإشعارات",

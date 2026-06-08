@@ -986,17 +986,19 @@ class OwnerStaffListCreateView(APIView):
                     base_url = f"https://{primary_domain}"
             else:
                 base_url = primary_domain or ""
-            signin_url = f"{base_url}/signin" if base_url else "/signin"
+            join_url = f"{base_url}/waiter/join" if base_url else "/waiter/join"
 
             _send_mail(
-                subject=f"You've been added to {tenant.name}",
+                subject=f"You're invited to the {tenant.name} waiter app",
                 message=(
                     f"Hi {first_name},\n\n"
-                    f"You've been added as a staff member at {tenant.name}.\n\n"
-                    f"Sign in at: {signin_url}\n"
-                    f"Email: {email}\n"
-                    f"Temporary password: {temp_password}\n\n"
-                    f"Please change your password after signing in.\n\n"
+                    f"You've been added as a waiter at {tenant.name}.\n\n"
+                    f"Open the link below on your phone to install the app and sign in:\n"
+                    f"{join_url}\n\n"
+                    f"Your credentials:\n"
+                    f"  Email:    {email}\n"
+                    f"  Password: {temp_password}\n\n"
+                    f"Tip: tap the link in Safari (iOS) or Chrome (Android) for the best install experience.\n\n"
                     f"— {tenant.name}"
                 ),
                 from_email=_cfg.DEFAULT_FROM_EMAIL,

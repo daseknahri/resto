@@ -63,6 +63,7 @@ const Activate = () => import("../pages/Activate.vue");
 const ForgotPassword = () => import("../pages/ForgotPassword.vue");
 const ResetPassword = () => import("../pages/ResetPassword.vue");
 const SignIn = () => import("../pages/SignIn.vue");
+const WaiterJoin = () => import("../pages/WaiterJoin.vue");
 const Unauthorized = () => import("../pages/Unauthorized.vue");
 
 const PrivacyPolicy = () => import("../pages/PrivacyPolicy.vue");
@@ -249,6 +250,9 @@ const routes = [
   { path: "/order/:n([A-Z]+-[A-Z0-9]+)", redirect: (to) => ({ name: "order-status", params: { orderNumber: to.params.n } }) },
   { path: "/onboarding", redirect: { name: "onboarding" } },
   { path: "/signin", name: "signin", component: SignIn },
+  // Public waiter onboarding — linked from staff invite emails; no auth required.
+  // Starts PWA install flow then accepts the staff credentials.
+  { path: "/waiter/join", name: "waiter-join", component: WaiterJoin, meta: { interface: "waiter" } },
   { path: "/forgot-password", name: "forgot-password", component: ForgotPassword },
   { path: "/reset-password", name: "reset-password", component: ResetPassword },
   { path: "/unauthorized", name: "unauthorized", component: Unauthorized },
