@@ -48,6 +48,7 @@ def _make_profile(**kwargs):
     p.tagline = "Great food"
     p.logo_url = "https://example.com/logo.png"
     p.cuisine_type = "Italian"
+    p.business_type = "restaurant"
     p.city = "Paris"
     p.delivery_enabled = True
     p.lat = 48.8566
