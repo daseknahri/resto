@@ -48,7 +48,7 @@
       <Transition name="ui-fade">
         <div
           v-if="showImport"
-          class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
+          class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
           @click.self="closeImport"
           @keydown.esc="closeImport"
         >
@@ -189,7 +189,7 @@
       <Transition name="ui-fade">
         <div
           v-if="showTemplates"
-          class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
+          class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
           @click.self="showTemplates = false"
           @keydown.esc="showTemplates = false"
         >

@@ -148,7 +148,7 @@
     <Teleport to="body">
       <div
         v-if="editorOpen && editingCategory"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
         @click.self="closeEditor"
         @keydown.esc="closeEditor"
       >
@@ -254,7 +254,7 @@
     <Teleport to="body">
       <div
         v-if="quickModalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
         @click.self="closeQuickModal"
         @keydown.esc="closeQuickModal"
       >
