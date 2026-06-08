@@ -2926,7 +2926,26 @@ export const messages = {
       onTrack: "On track",
       sla: "SLA",
       action: "Action",
-      navMobile: "Admin navigation"
+      navMobile: "Admin navigation",
+      delivery: {
+        button: "Delivery",
+        title: "Delivery pricing",
+        subtitle: "Configure delivery fees and radius for this restaurant.",
+        fee: "Flat delivery fee",
+        baseFee: "Base fee",
+        perKm: "Per-km rate",
+        freeOver: "Free delivery over",
+        minimumOrder: "Minimum order",
+        radiusKm: "Delivery radius (km)",
+        zoneDescription: "Zone description",
+        platformDelivery: "Platform-managed delivery",
+        platformDeliveryHint: "When enabled, the platform dispatches drivers for this restaurant.",
+        save: "Save",
+        saved: "Delivery pricing updated",
+        saveFailed: "Unable to save delivery pricing",
+        loadFailed: "Unable to load delivery config",
+        close: "Close"
+      }
     },
     ownerReservations: {
       kicker: "Owner inbox",
@@ -6744,7 +6763,26 @@ export const messages = {
       onTrack: "Dans les temps",
       sla: "SLA",
       action: "Action",
-      navMobile: "Navigation admin"
+      navMobile: "Navigation admin",
+      delivery: {
+        button: "Livraison",
+        title: "Tarification livraison",
+        subtitle: "Configurez les frais et le rayon de livraison pour ce restaurant.",
+        fee: "Frais fixes de livraison",
+        baseFee: "Frais de base",
+        perKm: "Tarif par km",
+        freeOver: "Livraison gratuite au-dela de",
+        minimumOrder: "Commande minimum",
+        radiusKm: "Rayon de livraison (km)",
+        zoneDescription: "Description de zone",
+        platformDelivery: "Livraison geree par la plateforme",
+        platformDeliveryHint: "Si active, la plateforme dispatche les livreurs pour ce restaurant.",
+        save: "Enregistrer",
+        saved: "Tarification livraison mise a jour",
+        saveFailed: "Impossible d enregistrer la tarification livraison",
+        loadFailed: "Impossible de charger la configuration livraison",
+        close: "Fermer"
+      }
     },
     ownerReservations: {
       kicker: "Boite proprietaire",

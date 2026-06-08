@@ -373,6 +373,12 @@
           </div>
           <button
             class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
+            @click="openDeliveryModal(tenant)"
+          >
+            {{ t("adminConsole.delivery.button") }}
+          </button>
+          <button
+            class="ui-btn-outline ui-press w-full px-3 py-1.5 text-xs"
             :aria-expanded="tenantToolsExpanded(tenant.id)"
             :aria-controls="`tenant-tools-${tenant.id}`"
             @click="toggleTenantTools(tenant.id)"
@@ -1141,6 +1147,141 @@
     </nav>
   </div>
 
+  <!-- Delivery pricing modal -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-all duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-all duration-150"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="deliveryModal.open"
+        tabindex="-1"
+        class="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        @click.self="closeDeliveryModal"
+        @keydown.esc="closeDeliveryModal"
+      >
+        <div
+          ref="deliveryDialogRef"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-delivery-dialog-title"
+          class="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl"
+        >
+          <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">{{ deliveryModal.tenant?.name }}</p>
+              <h3 id="admin-delivery-dialog-title" class="mt-0.5 text-base font-semibold text-white">{{ t("adminConsole.delivery.title") }}</h3>
+              <p class="mt-0.5 text-xs text-slate-400">{{ t("adminConsole.delivery.subtitle") }}</p>
+            </div>
+            <button
+              class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
+              @click="closeDeliveryModal"
+            >{{ t("adminConsole.delivery.close") }}</button>
+          </div>
+          <div v-if="deliveryModal.loading" class="space-y-3 px-5 py-4">
+            <div v-for="n in 6" :key="`dl-sk-${n}`" class="ui-skeleton h-8 rounded-lg"></div>
+          </div>
+          <div v-else class="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.fee") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_fee"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.baseFee") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_base_fee"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.perKm") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_per_km"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.freeOver") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_free_over"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.minimumOrder") }}</span>
+              <input
+                v-model.number="deliveryForm.delivery_minimum_order"
+                type="number"
+                min="0"
+                step="0.01"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.radiusKm") }}</span>
+              <input
+                v-model="deliveryForm.delivery_radius_km_raw"
+                type="number"
+                min="0"
+                step="0.5"
+                class="ui-input w-full px-3 py-2 text-sm"
+                placeholder="—"
+              />
+            </label>
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.zoneDescription") }}</span>
+              <input
+                v-model="deliveryForm.delivery_zone_description"
+                type="text"
+                maxlength="200"
+                class="ui-input w-full px-3 py-2 text-sm"
+              />
+            </label>
+            <label class="flex cursor-pointer items-start gap-3">
+              <input
+                v-model="deliveryForm.platform_delivery_enabled"
+                type="checkbox"
+                class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-800 accent-[var(--color-primary)]"
+              />
+              <span class="space-y-0.5">
+                <span class="block text-xs font-medium text-slate-300">{{ t("adminConsole.delivery.platformDelivery") }}</span>
+                <span class="block text-xs text-slate-500">{{ t("adminConsole.delivery.platformDeliveryHint") }}</span>
+              </span>
+            </label>
+          </div>
+          <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-5 py-4">
+            <button
+              class="ui-btn-outline ui-press px-4 py-2 text-sm"
+              @click="closeDeliveryModal"
+            >{{ t("adminConsole.delivery.close") }}</button>
+            <button
+              class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+              :disabled="deliveryModal.saving || deliveryModal.loading"
+              @click="saveDeliveryPricing"
+            >{{ deliveryModal.saving ? "…" : t("adminConsole.delivery.save") }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Dry-run import review modal -->
   <Teleport to="body">
     <Transition
@@ -1278,7 +1419,10 @@ watch(dryRunReview, async (val) => {
     document.removeEventListener('keydown', trapDryRunFocus);
   }
 });
-onBeforeUnmount(() => document.removeEventListener('keydown', trapDryRunFocus));
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', trapDryRunFocus);
+  document.removeEventListener('keydown', trapDeliveryFocus);
+});
 const applyingImport = ref(false);
 const tenantTools = ref({});
 const tenantTimeline = ref({});
@@ -2310,6 +2454,116 @@ const selectAdminView = async (view) => {
     await Promise.all([fetchReservationAlerts(), fetchJobs(), fetchAuditLogs()]);
   }
 };
+
+// ── Delivery pricing modal ─────────────────────────────────────────────────
+const deliveryDialogRef = ref(null);
+const deliveryModal = ref({ open: false, tenant: null, loading: false, saving: false });
+const deliveryForm = ref({
+  delivery_fee: 0,
+  delivery_base_fee: 0,
+  delivery_per_km: 0,
+  delivery_free_over: 0,
+  delivery_minimum_order: 0,
+  delivery_radius_km_raw: "",
+  delivery_zone_description: "",
+  platform_delivery_enabled: false,
+});
+
+const FOCUSABLE_DL = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+const trapDeliveryFocus = (e) => {
+  if (!deliveryDialogRef.value || e.key !== 'Tab') return;
+  const focusable = Array.from(deliveryDialogRef.value.querySelectorAll(FOCUSABLE_DL));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+};
+
+watch(() => deliveryModal.value.open, async (open) => {
+  if (open) {
+    await nextTick();
+    deliveryDialogRef.value?.querySelector(FOCUSABLE_DL)?.focus();
+    document.addEventListener('keydown', trapDeliveryFocus);
+  } else {
+    document.removeEventListener('keydown', trapDeliveryFocus);
+  }
+});
+
+const openDeliveryModal = async (tenant) => {
+  deliveryModal.value = { open: true, tenant, loading: true, saving: false };
+  deliveryForm.value = {
+    delivery_fee: 0,
+    delivery_base_fee: 0,
+    delivery_per_km: 0,
+    delivery_free_over: 0,
+    delivery_minimum_order: 0,
+    delivery_radius_km_raw: "",
+    delivery_zone_description: "",
+    platform_delivery_enabled: false,
+  };
+  try {
+    const res = await adminApi.get(`/admin-tenants/${tenant.id}/delivery/`);
+    const d = res.data.delivery;
+    deliveryForm.value = {
+      delivery_fee: Number(d.delivery_fee ?? 0),
+      delivery_base_fee: Number(d.delivery_base_fee ?? 0),
+      delivery_per_km: Number(d.delivery_per_km ?? 0),
+      delivery_free_over: Number(d.delivery_free_over ?? 0),
+      delivery_minimum_order: Number(d.delivery_minimum_order ?? 0),
+      delivery_radius_km_raw: d.delivery_radius_km != null ? String(d.delivery_radius_km) : "",
+      delivery_zone_description: d.delivery_zone_description ?? "",
+      platform_delivery_enabled: !!d.platform_delivery_enabled,
+    };
+  } catch {
+    toast.show(t("adminConsole.delivery.loadFailed"), "error");
+    deliveryModal.value.open = false;
+    return;
+  } finally {
+    deliveryModal.value.loading = false;
+  }
+};
+
+const closeDeliveryModal = () => {
+  if (deliveryModal.value.saving) return;
+  deliveryModal.value.open = false;
+};
+
+const saveDeliveryPricing = async () => {
+  if (deliveryModal.value.saving) return;
+  deliveryModal.value.saving = true;
+  const f = deliveryForm.value;
+  const payload = {
+    delivery_fee: f.delivery_fee,
+    delivery_base_fee: f.delivery_base_fee,
+    delivery_per_km: f.delivery_per_km,
+    delivery_free_over: f.delivery_free_over,
+    delivery_minimum_order: f.delivery_minimum_order,
+    delivery_radius_km: f.delivery_radius_km_raw !== "" && f.delivery_radius_km_raw !== null
+      ? Number(f.delivery_radius_km_raw)
+      : null,
+    delivery_zone_description: f.delivery_zone_description,
+    platform_delivery_enabled: f.platform_delivery_enabled,
+  };
+  try {
+    await adminApi.patch(`/admin-tenants/${deliveryModal.value.tenant.id}/delivery/`, payload);
+    toast.show(t("adminConsole.delivery.saved"), "success");
+    deliveryModal.value.open = false;
+  } catch {
+    toast.show(t("adminConsole.delivery.saveFailed"), "error");
+  } finally {
+    deliveryModal.value.saving = false;
+  }
+};
+// ──────────────────────────────────────────────────────────────────────────
 
 onMounted(() => {
   selectAdminView("operations");
