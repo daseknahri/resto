@@ -4200,6 +4200,19 @@ class OwnerOrderStatusUpdateView(APIView):
 
         order.save(update_fields=update_fields)
 
+        # Mirror the prep ETA onto the platform delivery job so the assigned/searching
+        # driver knows when the food will be ready (pre-dispatch timing). Best-effort.
+        if order.fulfillment_type == Order.FulfillmentType.DELIVERY:
+            try:
+                from accounts.delivery_service import set_delivery_job_food_ready
+                _ct = getattr(request, "tenant", None)
+                if _ct:
+                    set_delivery_job_food_ready(
+                        _ct.id, order.order_number, order.estimated_ready_minutes
+                    )
+            except Exception:
+                pass
+
         # Real-time ping so other connected owner/kitchen screens refresh immediately
         # (no-op if WS not configured). Low-sensitivity signal only.
         try:

@@ -209,6 +209,7 @@ class SerializeDeliveryJobTests(SimpleTestCase):
             picked_up_at=None,
             delivered_at=None,
             failed_at=None,
+            food_ready_at=None,
             created_at=SimpleNamespace(isoformat=lambda: "2025-06-01T12:00:00"),
             is_terminal=False,
             failure_reason="",
@@ -287,6 +288,7 @@ class SerializeDeliveryJobTests(SimpleTestCase):
         result = _serialize_delivery_job(self._job())
         self.assertIsNone(result["assigned_at"])
         self.assertIsNone(result["delivered_at"])
+        self.assertIsNone(result["food_ready_at"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

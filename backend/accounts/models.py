@@ -704,6 +704,10 @@ class DeliveryJob(models.Model):
     failed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # When the food is expected to be ready for pickup — the owner's prep ETA entered
+    # at confirm time, mirrored from the order so the assigned driver can time their
+    # arrival (pre-dispatch). Null = unknown / not yet estimated.
+    food_ready_at = models.DateTimeField(null=True, blank=True)
 
     # ── Failure / recovery (unhappy-path handling) ──────────────────────────────
     failure_reason = models.CharField(

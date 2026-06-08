@@ -57,6 +57,47 @@ class CancelDeliveryJobTests(SimpleTestCase):
         enq.assert_not_called()
 
 
+class SetFoodReadyTests(SimpleTestCase):
+    """accounts.delivery_service.set_delivery_job_food_ready mirrors the prep ETA
+    onto the active delivery job so the driver knows when to be at the restaurant."""
+
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_sets_food_ready_at_from_minutes(self, mock_dj, _atomic):
+        from accounts.delivery_service import set_delivery_job_food_ready
+        job = SimpleNamespace(is_terminal=False, food_ready_at=None, save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        set_delivery_job_food_ready(1, "ORD-1", 15)
+        self.assertIsNotNone(job.food_ready_at)
+        job.save.assert_called_once()
+
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_none_minutes_clears_eta(self, mock_dj, _atomic):
+        from accounts.delivery_service import set_delivery_job_food_ready
+        job = SimpleNamespace(is_terminal=False, food_ready_at="something", save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        set_delivery_job_food_ready(1, "ORD-1", None)
+        self.assertIsNone(job.food_ready_at)
+        job.save.assert_called_once()
+
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_terminal_job_is_noop(self, mock_dj, _atomic):
+        from accounts.delivery_service import set_delivery_job_food_ready
+        job = SimpleNamespace(is_terminal=True, food_ready_at=None, save=MagicMock())
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        set_delivery_job_food_ready(1, "ORD-1", 15)
+        job.save.assert_not_called()
+
+    @patch("accounts.models.DeliveryJob")
+    def test_invalid_minutes_is_noop(self, mock_dj):
+        from accounts.delivery_service import set_delivery_job_food_ready
+        out = set_delivery_job_food_ready(1, "ORD-1", "bad")
+        self.assertIsNone(out)
+        mock_dj.objects.select_for_update.assert_not_called()
+
+
 class OwnerDeliveryActionGuardTests(SimpleTestCase):
     def setUp(self):
         from menu.views import OwnerDeliveryJobActionView

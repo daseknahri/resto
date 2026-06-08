@@ -2622,6 +2622,8 @@ Object.assign(arabicMessages, {
     distanceKm: "{km} كم",
     itemsCount: "{n} عناصر",
     itemsTitle: "عناصر الطلب",
+    foodReady: "جاهز ~{time}",
+    foodReadyIn: "خلال {minutes} د",
     collectCash: "حصّل النقود عند التسليم",
     prepaid: "مدفوع مسبقاً ({amount}) — لا نقود للتحصيل",
     prepaidShort: "مدفوع مسبقاً",

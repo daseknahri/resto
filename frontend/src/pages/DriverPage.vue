@@ -241,6 +241,16 @@
             <span v-if="activeJob.items_count">{{ t('driver.itemsCount', { n: activeJob.items_count }) }}</span>
           </div>
 
+          <!-- Food-ready ETA (owner's prep estimate) — when to be at the restaurant -->
+          <div
+            v-if="activeReadyEta"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-900/15 px-2.5 py-1 text-xs font-semibold text-emerald-300"
+          >
+            <span aria-hidden="true">⏱</span>
+            <span>{{ t('driver.foodReady', { time: activeReadyEta.clock }) }}</span>
+            <span v-if="activeReadyEta.mins > 0" class="font-normal text-emerald-400/70">· {{ t('driver.foodReadyIn', { minutes: activeReadyEta.mins }) }}</span>
+          </div>
+
           <!-- Cash to collect (COD) vs already paid — the driver must know -->
           <div
             v-if="activeJob.collect_cash"
@@ -606,6 +616,22 @@ const fmtDate = (iso) => {
     return '';
   }
 };
+
+// Owner's food-ready ETA for the active job → { clock: "14:30", mins: 12 }, so the
+// driver can time their arrival at the restaurant. Null when no estimate is set.
+const activeReadyEta = computed(() => {
+  const iso = activeJob.value?.food_ready_at;
+  if (!iso) return null;
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return null;
+  let clock = '';
+  try {
+    clock = new Date(ts).toLocaleTimeString(currentLocale.value || undefined, { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    clock = '';
+  }
+  return { clock, mins: Math.round((ts - Date.now()) / 60000) };
+});
 
 // Recent deliveries (history) — lazy-loaded the first time the driver expands it.
 const showHistory = ref(false);

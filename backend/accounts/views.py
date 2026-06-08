@@ -3631,6 +3631,9 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
         "picked_up_at": job.picked_up_at.isoformat() if job.picked_up_at else None,
         "delivered_at": job.delivered_at.isoformat() if job.delivered_at else None,
         "failed_at": job.failed_at.isoformat() if job.failed_at else None,
+        # Owner-entered prep ETA (when the food is ready for pickup), so the driver
+        # can time their arrival. Null until the owner confirms with an estimate.
+        "food_ready_at": job.food_ready_at.isoformat() if job.food_ready_at else None,
         "created_at": job.created_at.isoformat(),
         "is_terminal": job.is_terminal,
         "failure_reason": job.failure_reason,
