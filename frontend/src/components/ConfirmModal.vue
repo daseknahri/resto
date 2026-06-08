@@ -1,10 +1,6 @@
 <template>
   <Teleport to="body">
     <Transition name="confirm-fade">
-      <!-- TODO (logic owner): move Esc-key handling into trapFocus (document-level keydown listener)
-           by adding: if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }
-           The @keydown.esc below is unreachable because the backdrop has no tabindex and focus is
-           trapped inside dialogRef. -->
       <div
         v-if="modal.visible.value"
         class="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -82,11 +78,12 @@ const FOCUSABLE = [
 
 const trapFocus = (e) => {
   if (!dialogRef.value) return;
+  if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }
+  if (e.key !== 'Tab') return;
   const focusable = Array.from(dialogRef.value.querySelectorAll(FOCUSABLE));
   if (!focusable.length) return;
   const first = focusable[0];
   const last  = focusable[focusable.length - 1];
-  if (e.key !== 'Tab') return;
   if (e.shiftKey) {
     if (document.activeElement === first) { e.preventDefault(); last.focus(); }
   } else {

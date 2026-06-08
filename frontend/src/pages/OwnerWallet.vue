@@ -185,7 +185,6 @@
     </section>
 
     <!-- Top-up form (shown when a customer is selected) -->
-    <!-- TODO: requires logic change — after selectCustomer() resolves, focus the first interactive element inside this section for keyboard users -->
     <Transition
       enter-active-class="transition-all duration-200"
       enter-from-class="opacity-0 translate-y-2"
@@ -222,6 +221,7 @@
             <span class="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500" aria-hidden="true">{{ currency() }}</span>
             <input
               id="topup-amount"
+              ref="topupAmountRef"
               v-model="topupAmount"
               type="number"
               step="0.01"
@@ -441,12 +441,16 @@ const runSearch = async (q) => {
   }
 };
 
+const topupAmountRef = ref(null);
+
 const selectCustomer = (c) => {
   selected.value = c;
   topupAmount.value = '';
   topupNote.value = '';
   topupError.value = '';
   fetchHistory(c.id);
+  // Move keyboard focus into the amount field once the top-up section renders (WCAG 2.4.3).
+  nextTick(() => topupAmountRef.value?.focus());
 };
 
 // ── Scan pay code (QR) → resolve customer for a fast top-up ────────────────────

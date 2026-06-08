@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 z-[3000] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center" @click.self="$emit('close')">
-    <!-- TODO: requires logic change — add useFocusTrap() on open and restore focus on close -->
     <div
+      ref="sheetRef"
       class="ui-panel ui-reveal flex max-h-[85vh] w-full max-w-md flex-col rounded-t-3xl sm:rounded-2xl"
       role="dialog"
       aria-modal="true"
@@ -140,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
@@ -155,6 +155,46 @@ const emit = defineEmits(['close']);
 const { t, formatPrice } = useI18n();
 const cart = useCartStore();
 const toast = useToastStore();
+
+// ── Focus trap — keeps keyboard focus inside the sheet, restores it on close ─
+const sheetRef = ref(null);
+
+const TRAP_SELECTORS = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+let _returnFocus = null;
+
+const _trapKeydown = (e) => {
+  if (!sheetRef.value) return;
+  if (e.key === 'Escape') { e.preventDefault(); emit('close'); return; }
+  if (e.key !== 'Tab') return;
+  const focusable = Array.from(sheetRef.value.querySelectorAll(TRAP_SELECTORS));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+};
+
+onMounted(async () => {
+  _returnFocus = document.activeElement;
+  document.addEventListener('keydown', _trapKeydown);
+  await nextTick();
+  if (!sheetRef.value?.contains(document.activeElement)) {
+    sheetRef.value?.querySelector(TRAP_SELECTORS)?.focus();
+  }
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', _trapKeydown);
+  _returnFocus?.focus();
+  _returnFocus = null;
+});
 
 // Selection state — mirrors DishPage exactly so the cart payload is identical.
 const groupSelections = ref({});   // { [groupId]: optionId | optionId[] }

@@ -6,7 +6,6 @@
           <p class="ui-section-kicker">{{ t("common.profile") }}</p>
           <h2 class="ui-display truncate text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">{{ tenantName }}</h2>
         </div>
-        <!-- TODO: requires logic change — after tab switch, focus the panel wrapper via nextTick + ref for WCAG 2.1 SC 2.4.3 -->
         <nav role="tablist" class="ui-segmented min-w-0 sm:shrink-0" :aria-label="t('ownerProfile.sectionsNav')">
           <button
             v-for="tab in tabs"
@@ -28,6 +27,7 @@
 
     <div
       :id="'owner-profile-panel-' + activeTab"
+      ref="panelRef"
       role="tabpanel"
       tabindex="-1"
       :aria-labelledby="'owner-profile-tab-' + activeTab"
@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, nextTick, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
@@ -99,6 +99,14 @@ const activeTabConfig = computed(() => tabs.value.find((tab) => tab.key === acti
 const activeComponent = computed(() => activeTabConfig.value.component);
 const activeComponentProps = computed(() => ({ standalone: true }));
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
+
+const panelRef = ref(null);
+
+// After a tab switch, move focus to the panel wrapper so keyboard users land in
+// the new section without having to Tab through the nav again (WCAG 2.4.3).
+watch(activeTab, () => {
+  nextTick(() => panelRef.value?.focus());
+});
 
 const setTab = (tab) => {
   if (tab === activeTab.value) return;
