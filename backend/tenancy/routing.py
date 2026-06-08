@@ -45,6 +45,23 @@ DEFAULT_ROAD_FACTOR = 1.3
 # does not change. Keyed on coords rounded to ~11 m so repeat addresses dedupe.
 _ROUTE_CACHE_TTL = 7 * 24 * 3600
 _OSRM_TIMEOUT = 4  # seconds; on timeout we fall back to the factor, never block checkout
+# Average urban driving speed (km/h) for the ETA estimate when no engine returns a
+# real duration. ~22 km/h matches the customer-tracker's previous straight-line guess.
+AVG_SPEED_KMH = 22.0
+# Live-route geometry is cached on coarser (~110 m) coords so a moving driver only
+# triggers a recompute every ~100 m, not on every position poll.
+_GEOM_CACHE_TTL = 24 * 3600
+
+
+def _eta_minutes(distance_km) -> int:
+    """Rough driving ETA (minutes, floored at 1) for a distance at AVG_SPEED_KMH."""
+    try:
+        km = float(distance_km)
+    except (TypeError, ValueError):
+        return 1
+    if km <= 0:
+        return 1
+    return max(1, round(km / AVG_SPEED_KMH * 60.0))
 
 
 def road_factor() -> float:
@@ -151,3 +168,93 @@ def road_distance_km(lat1, lng1, lat2, lng2) -> float:
         if km is not None:
             return km
     return _factor_distance(lat1, lng1, lat2, lng2)
+
+
+def _osrm_route(base_url, lat1, lng1, lat2, lng2):
+    """Full driving route from OSRM: {"geometry": [[lat,lng],...], "distance_km",
+    "duration_min"} or None on failure. Cached on coarse (~110 m) coords."""
+    try:
+        key = "osrmgeom:{:.3f},{:.3f}:{:.3f},{:.3f}".format(
+            float(lat1), float(lng1), float(lat2), float(lng2)
+        )
+    except (TypeError, ValueError):
+        return None
+
+    try:
+        from django.core.cache import cache
+    except Exception:  # pragma: no cover
+        cache = None
+    if cache is not None:
+        try:
+            cached = cache.get(key)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return cached
+
+    try:
+        import requests
+    except Exception:  # pragma: no cover
+        return None
+
+    url = "{}/route/v1/driving/{},{};{},{}".format(base_url, lng1, lat1, lng2, lat2)
+    try:
+        resp = requests.get(
+            url, params={"overview": "full", "geometries": "geojson"}, timeout=_OSRM_TIMEOUT
+        )
+        if not resp.ok:
+            return None
+        data = resp.json()
+        if data.get("code") != "Ok" or not data.get("routes"):
+            return None
+        route = data["routes"][0]
+        # GeoJSON coordinates are [lng, lat]; the map wants [lat, lng].
+        coords = route.get("geometry", {}).get("coordinates") or []
+        geometry = [[float(c[1]), float(c[0])] for c in coords if len(c) >= 2]
+        km = round(float(route.get("distance", 0)) / 1000.0, 2)
+        dur = max(1, round(float(route.get("duration", 0)) / 60.0))
+        out = {"geometry": geometry, "distance_km": km, "duration_min": dur}
+    except Exception as exc:
+        logger.warning("OSRM route failed (%s); falling back to a straight line", exc)
+        return None
+
+    if cache is not None:
+        try:
+            cache.set(key, out, _GEOM_CACHE_TTL)
+        except Exception:
+            pass
+    return out
+
+
+def road_route(lat1, lng1, lat2, lng2) -> dict:
+    """Driving route geometry + distance + ETA from point 1 → point 2, for drawing a
+    live delivery line on the map and showing a real ETA.
+
+    Returns::
+
+        {"geometry": [[lat, lng], ...], "distance_km": float, "duration_min": int}
+
+    With a routing engine configured (``DELIVERY_OSRM_URL``) this is the real street
+    route (cached). Otherwise it's a **straight two-point line** with a road-factor
+    distance and a speed-based ETA — so the map always has something to draw and the
+    upgrade to real routes is a single env var. Never raises; ``geometry`` is ``[]``
+    only when the coordinates are unusable.
+    """
+    from .delivery_pricing import valid_coord
+
+    if not (valid_coord(lat1, lng1) and valid_coord(lat2, lng2)):
+        return {"geometry": [], "distance_km": 0.0, "duration_min": 0}
+
+    base_url = _osrm_base_url()
+    if base_url:
+        data = _osrm_route(base_url, lat1, lng1, lat2, lng2)
+        if data is not None:
+            return data
+
+    # Fallback: straight line, road-factor distance, speed-based ETA.
+    km = _factor_distance(lat1, lng1, lat2, lng2)
+    return {
+        "geometry": [[float(lat1), float(lng1)], [float(lat2), float(lng2)]],
+        "distance_km": km,
+        "duration_min": _eta_minutes(km),
+    }

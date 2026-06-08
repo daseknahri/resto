@@ -197,6 +197,10 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 const etaMinutes = computed(() => {
   const d = props.delivery;
   if (!d || d.status !== 'picked_up') return null;
+  // Prefer the server's route ETA (real road time when a routing engine is on);
+  // fall back to the straight-line estimate.
+  const serverEta = Number(d.eta_minutes);
+  if (Number.isFinite(serverEta) && serverEta > 0) return Math.max(1, Math.round(serverEta));
   const km = haversineKm(d.driver?.lat, d.driver?.lng, d.delivery_lat, d.delivery_lng);
   if (km == null) return null;
   return Math.max(3, Math.round((km / 22) * 60));
@@ -265,7 +269,7 @@ const submitRating = async () => {
 
 // ── Live driver map (Leaflet, lazy-loaded) ──────────────────────────────────────
 const mapEl = ref(null);
-let _map = null, _driverMarker = null, _destMarker = null, _leaflet = null;
+let _map = null, _driverMarker = null, _destMarker = null, _routeLine = null, _leaflet = null;
 
 const ensureLeaflet = async () => {
   if (_leaflet) return _leaflet;
@@ -303,7 +307,23 @@ const renderMap = async () => {
     else _destMarker.setLatLng(destPos);
     points.push(destPos);
   }
-  if (points.length > 1) _map.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
+  // Route line: the real street route from the server (OSRM) when present, else a
+  // straight line driver → destination. This is the "short road to the point".
+  const serverRoute = Array.isArray(props.delivery?.route) ? props.delivery.route : null;
+  let linePts = null;
+  if (serverRoute && serverRoute.length >= 2) {
+    linePts = serverRoute
+      .map((p) => [Number(p[0]), Number(p[1])])
+      .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  } else if (points.length > 1) {
+    linePts = points;
+  }
+  if (linePts && linePts.length >= 2) {
+    if (!_routeLine) _routeLine = L.polyline(linePts, { color: '#34d399', weight: 4, opacity: 0.75 }).addTo(_map);
+    else _routeLine.setLatLngs(linePts);
+  }
+  const boundsPts = (linePts && linePts.length >= 2) ? linePts : points;
+  if (boundsPts.length > 1) _map.fitBounds(boundsPts, { padding: [30, 30], maxZoom: 15 });
   else _map.setView(driverPos, 14);
   setTimeout(() => _map && _map.invalidateSize(), 0); // container just became visible
 };
@@ -323,6 +343,7 @@ onBeforeUnmount(() => {
     _map = null;
     _driverMarker = null;
     _destMarker = null;
+    _routeLine = null;
   }
 });
 </script>

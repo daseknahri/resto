@@ -11,7 +11,12 @@ from django.core.cache import cache
 from django.test import SimpleTestCase
 
 from tenancy.delivery_pricing import haversine_km
-from tenancy.routing import DEFAULT_ROAD_FACTOR, road_distance_km, road_factor
+from tenancy.routing import (
+    DEFAULT_ROAD_FACTOR,
+    road_distance_km,
+    road_factor,
+    road_route,
+)
 
 # Two real Casablanca→Rabat-ish points with a known non-zero straight-line distance.
 A = (33.5731, -7.5898)
@@ -113,3 +118,48 @@ class RoadDistanceOsrmPathTests(SimpleTestCase):
             with patch("requests.get", return_value=bad):
                 expected = round(haversine_km(*A, *B) * DEFAULT_ROAD_FACTOR, 2)
                 self.assertEqual(road_distance_km(*A, *B), expected)
+
+
+class RoadRouteTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_fallback_is_straight_two_point_line(self):
+        with _no_osrm_env():
+            r = road_route(*A, *B)
+            self.assertEqual(len(r["geometry"]), 2)
+            self.assertEqual(r["geometry"][0], [A[0], A[1]])
+            self.assertEqual(r["geometry"][1], [B[0], B[1]])
+            self.assertGreater(r["distance_km"], 0)
+            self.assertGreaterEqual(r["duration_min"], 1)
+
+    def test_invalid_coords_empty_geometry(self):
+        with _no_osrm_env():
+            r = road_route(None, None, 1, 1)
+            self.assertEqual(r["geometry"], [])
+            self.assertEqual(r["distance_km"], 0.0)
+
+    def test_uses_osrm_geometry_when_configured(self):
+        resp = Mock()
+        resp.ok = True
+        resp.json.return_value = {
+            "code": "Ok",
+            "routes": [{
+                "distance": 5000.0,
+                "duration": 600.0,
+                # GeoJSON is [lng, lat]; road_route must return [lat, lng].
+                "geometry": {"coordinates": [[-7.5898, 33.5731], [-6.8416, 34.0209]]},
+            }],
+        }
+        with patch.dict(os.environ, {"DELIVERY_OSRM_URL": "http://osrm:5000"}):
+            with patch("requests.get", return_value=resp):
+                r = road_route(*A, *B)
+        self.assertEqual(r["distance_km"], 5.0)
+        self.assertEqual(r["duration_min"], 10)
+        self.assertEqual(r["geometry"][0], [33.5731, -7.5898])
+
+    def test_osrm_failure_falls_back_to_straight(self):
+        with patch.dict(os.environ, {"DELIVERY_OSRM_URL": "http://osrm:5000", "DELIVERY_ROAD_FACTOR": ""}):
+            with patch("requests.get", side_effect=Exception("boom")):
+                r = road_route(*A, *B)
+        self.assertEqual(len(r["geometry"]), 2)  # straight line fallback

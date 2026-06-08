@@ -3395,6 +3395,34 @@ class OwnerDeliveryJobActionView(APIView):
         return Response({"ok": True, "resolution": "noshow_paid"})
 
 
+class OwnerDeliveryTrackView(APIView):
+    """GET /api/owner/orders/<order_id>/delivery-track/ — live driver position +
+    route + ETA so the restaurant can follow the delivery on a map (same payload the
+    customer tracker uses). Owner/manager of the tenant only.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return Response({"detail": "Restaurant context required.", "code": "no_tenant"}, status=status.HTTP_400_BAD_REQUEST)
+        order = Order.objects.filter(pk=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        from accounts.models import DeliveryJob as _DJob
+        job = (
+            _DJob.objects.select_related("driver")
+            .filter(tenant_id=tenant.id, order_number=order.order_number)
+            .first()
+        )
+        if job is None:
+            return Response({"detail": "No delivery job for this order.", "code": "no_job"}, status=status.HTTP_404_NOT_FOUND)
+        from accounts.views import _serialize_delivery_job
+        return Response(_serialize_delivery_job(job, include_driver_position=True))
+
+
 class OwnerNotificationsView(APIView):
     """GET /api/owner/notifications/ — the outbound-notification audit log for this tenant
     (web push + email + SMS + WhatsApp attempts and outcomes). Owner/manager only. Supports

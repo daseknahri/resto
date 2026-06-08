@@ -601,6 +601,13 @@
             <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
               {{ t("ownerOrders.markDelivered") }}
             </button>
+            <button
+              v-if="o.fulfillment_type === 'delivery'"
+              class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+              @click="openTrack(o)"
+            >
+              <span aria-hidden="true">📍</span> {{ t("ownerOrders.trackDelivery") }}
+            </button>
           </template>
 
           <button
@@ -632,6 +639,29 @@
         </div>
       </article>
     </div>
+
+    <!-- Live delivery tracking modal (owner follows the driver on a map) -->
+    <div
+      v-if="trackModal.open"
+      class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      @click.self="closeTrack"
+    >
+      <div class="ui-panel w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+          <h3 class="text-sm font-semibold text-slate-100">
+            {{ t("ownerOrders.trackTitle") }} <span class="text-slate-500">#{{ trackModal.orderNumber }}</span>
+          </h3>
+          <button class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="closeTrack">{{ t("common.close") }}</button>
+        </div>
+        <div class="p-4">
+          <p v-if="trackModal.error" class="ui-empty-state py-6 text-center text-sm text-slate-400">
+            {{ trackModal.error }}
+          </p>
+          <DeliveryTracker v-else-if="trackModal.delivery" :delivery="trackModal.delivery" />
+          <div v-else class="ui-skeleton h-48" aria-busy="true" />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -639,6 +669,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
@@ -948,6 +979,39 @@ const saveNote = async (o) => {
     noteError.value = t("ownerOrders.updateFailed");
   }
 };
+
+// ── Live delivery tracking (owner follows the driver on a map) ─────────────────
+const trackModal = ref({ open: false, orderId: null, orderNumber: "", delivery: null, error: "" });
+let _trackPoll = null;
+
+const fetchTrack = async () => {
+  const id = trackModal.value.orderId;
+  if (!id) return;
+  try {
+    const { data } = await api.get(`/owner/orders/${id}/delivery-track/`);
+    trackModal.value.delivery = data;
+    trackModal.value.error = "";
+    if (data?.is_terminal && _trackPoll) { clearInterval(_trackPoll); _trackPoll = null; }
+  } catch (err) {
+    if (!trackModal.value.delivery) {
+      trackModal.value.error = err?.response?.data?.detail || t("ownerOrders.trackUnavailable");
+    }
+  }
+};
+
+const openTrack = (o) => {
+  trackModal.value = { open: true, orderId: o.id, orderNumber: o.order_number, delivery: null, error: "" };
+  fetchTrack();
+  if (_trackPoll) clearInterval(_trackPoll);
+  _trackPoll = setInterval(fetchTrack, 10000);
+};
+
+const closeTrack = () => {
+  trackModal.value.open = false;
+  if (_trackPoll) { clearInterval(_trackPoll); _trackPoll = null; }
+};
+
+onUnmounted(() => { if (_trackPoll) clearInterval(_trackPoll); });
 
 // ── Settle / mark order paid ──────────────────────────────────────────────────
 // Customer trust ratings are no longer submitted from the owner dashboard — only

@@ -3684,6 +3684,28 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
                 driver_data["rating"] = None
                 driver_data["rating_count"] = 0
         data["driver"] = driver_data
+
+    # Live route line + ETA for the tracking map (customer + owner): from the driver's
+    # current position to the current leg's target — the restaurant before pickup, the
+    # customer after. Real street route when DELIVERY_OSRM_URL is set, else a straight
+    # line. Only on live-tracking calls for an active (non-terminal) job with a driver fix.
+    if include_driver_position and job.driver and not job.is_terminal:
+        from .models import DeliveryJob as _DJ
+        _dlat = getattr(job.driver, "driver_lat", None)
+        _dlng = getattr(job.driver, "driver_lng", None)
+        if job.status == _DJ.Status.PICKED_UP:
+            _tlat, _tlng, _target = job.delivery_lat, job.delivery_lng, "dropoff"
+        else:
+            _tlat, _tlng, _target = job.pickup_lat, job.pickup_lng, "pickup"
+        if None not in (_dlat, _dlng, _tlat, _tlng):
+            try:
+                from tenancy.routing import road_route
+                _r = road_route(_dlat, _dlng, _tlat, _tlng)
+                data["route"] = _r["geometry"]
+                data["eta_minutes"] = _r["duration_min"]
+                data["route_target"] = _target
+            except Exception:
+                pass
     return data
 
 
