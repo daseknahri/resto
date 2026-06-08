@@ -476,9 +476,9 @@
             class="flex items-start justify-between gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 py-2 pe-3 ps-3 text-xs"
           >
             <div class="min-w-0 space-y-0.5">
-              <p class="font-semibold leading-snug text-slate-100">
-                <span class="tabular-nums text-[var(--color-secondary)] opacity-80">{{ item.qty }}×</span>
-                {{ item.dish_name }}
+              <p class="flex items-start gap-2 font-semibold leading-snug text-slate-100">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold text-slate-100 tabular-nums">{{ item.qty }}</span>
+                <span class="min-w-0 flex-1">{{ item.dish_name }}</span>
               </p>
               <p v-if="item.options?.length" class="text-slate-400">
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}

@@ -244,33 +244,43 @@
 
           <!-- Cart items -->
           <div class="space-y-2">
-            <div
+            <article
               v-for="item in cart"
               :key="item.slug"
-              class="ui-panel flex items-center gap-3 px-3 py-2.5"
+              class="relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-800/60 bg-slate-900/60 py-2.5 ps-3.5 pe-2.5"
             >
-              <div class="flex-1 min-w-0">
-                <p class="text-sm text-slate-100 truncate">{{ item.name }}</p>
-                <p class="text-xs text-slate-500 tabular-nums">{{ fmtPrice(item.price) }} × {{ item.qty }}</p>
+              <!-- left accent bar -->
+              <div
+                class="pointer-events-none absolute inset-y-0 start-0 w-[3px] rounded-s-xl"
+                style="background: linear-gradient(to bottom, rgba(245,158,11,0.55), rgba(245,158,11,0.10))"
+              />
+              <!-- info -->
+              <div class="flex-1 min-w-0 space-y-0.5">
+                <p class="truncate text-sm font-semibold leading-snug text-slate-100">{{ item.name }}</p>
+                <p class="text-xs tabular-nums">
+                  <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.price * item.qty) }}</span>
+                  <span class="text-slate-500"> · {{ fmtPrice(item.price) }} ea.</span>
+                </p>
               </div>
-              <div class="flex items-center gap-1.5">
+              <!-- stepper pill -->
+              <div class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
                 <button
-                  class="ui-press h-7 w-7 rounded-full border border-slate-700 text-slate-300 text-sm hover:border-slate-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                  class="ui-press flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                   :aria-label="`${t('dishPage.decreaseQuantity')} ${item.name}`"
                   @click="removeFromCart(item.slug)"
                 >
-                  <span aria-hidden="true">−</span>
+                  <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M2 6h8"/></svg>
                 </button>
-                <span class="text-sm text-white w-5 text-center tabular-nums" aria-live="polite">{{ item.qty }}</span>
+                <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ item.qty }}</span>
                 <button
-                  class="ui-press h-7 w-7 rounded-full border border-slate-700 text-slate-300 text-sm hover:border-slate-500 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+                  class="ui-press flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
                   :aria-label="`${t('dishPage.increaseQuantity')} ${item.name}`"
                   @click="addToCartBySlug(item.slug)"
                 >
-                  <span aria-hidden="true">+</span>
+                  <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                 </button>
               </div>
-            </div>
+            </article>
           </div>
 
           <!-- Fulfillment type -->
