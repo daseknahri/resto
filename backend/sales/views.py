@@ -618,6 +618,17 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Destroy
             and incoming_party_size > 0
         )
 
+        # Reservations are a restaurant-only capability; shops (retail/grocery)
+        # don't take table bookings. Defaults to allowed for restaurants (non-breaking).
+        if _is_reservation:
+            from tenancy.capabilities import tenant_capability_enabled
+            if not tenant_capability_enabled(tenant_for_lead, "reservations"):
+                return Response(
+                    {"detail": "Reservations are not available for this business.",
+                     "code": "reservations_unavailable"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         from django.db import transaction as _txn
         with _txn.atomic():
             if _is_reservation:

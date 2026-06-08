@@ -572,6 +572,15 @@ class TableLinkViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return TableLink.objects.all().order_by("position", "label", "id")
 
+    def perform_create(self, serializer):
+        # Tables are a restaurant-only capability; shops (retail/grocery) don't
+        # have table service. Defaults to allowed for restaurants (non-breaking).
+        from rest_framework.exceptions import PermissionDenied
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(self.request, "tenant", None), "tables"):
+            raise PermissionDenied(detail="Tables are not available for this business.")
+        super().perform_create(serializer)
+
     def _safe_filename_token(self, value, fallback="item"):
         cleaned = re.sub(r"[^a-z0-9_-]+", "-", str(value or "").strip().lower())
         cleaned = re.sub(r"-+", "-", cleaned).strip("-")
@@ -1937,6 +1946,15 @@ class PlaceOrderView(APIView):
         fulfillment_type = (validated.get("fulfillment_type") or "")
         table_label = (validated.get("table_label") or "").strip()
         if table_slug:
+            # Dine-in is a restaurant-only capability; shops (retail/grocery) can't
+            # take table orders. Defaults to allowed for restaurants (non-breaking).
+            _caps = getattr(profile, "capabilities", None) or {}
+            if not _caps.get("dine_in", True):
+                return Response(
+                    {"detail": "Dine-in ordering is not available for this business.",
+                     "code": "dine_in_unavailable"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             fulfillment_type = Order.FulfillmentType.TABLE
             resolved_table = TableLink.objects.filter(slug=table_slug, is_active=True).first()
             if resolved_table is None:
@@ -3155,6 +3173,15 @@ class StaffOrderItemReadyView(APIView):
     def patch(self, request, item_id, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        # Kitchen item-readiness is a restaurant-only capability (shops have no
+        # kitchen). Defaults to allowed for restaurants (non-breaking).
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(request, "tenant", None), "kitchen"):
+            return Response(
+                {"detail": "Kitchen features are not available for this business.",
+                 "code": "kitchen_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         item = OrderItem.objects.select_related("order").filter(id=item_id).first()
         if item is None:
             return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
