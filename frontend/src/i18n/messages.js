@@ -847,6 +847,8 @@ export const messages = {
         hotel: "Hotel",
         fine_dining: "Fine dining / Big restaurant",
         fast_casual: "Fast casual / QSR",
+        bakery: "Bakery / Patisserie",
+        bar: "Bar / Lounge",
       },
     },
     ownerMenuBuilder: {
@@ -4679,6 +4681,8 @@ export const messages = {
         hotel: "Hôtel",
         fine_dining: "Gastronomique / Grand restaurant",
         fast_casual: "Fast casual / Restauration rapide",
+        bakery: "Boulangerie / Pâtisserie",
+        bar: "Bar / Lounge",
       },
     },
     ownerMenuBuilder: {

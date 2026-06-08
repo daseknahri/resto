@@ -1,11 +1,11 @@
-"""Starter templates for new restaurants.
+"""Starter templates for new businesses.
 
 Each template bundles a professional theme (colours + menu presentation) and a
 ready-to-edit sample menu (categories + dishes), so a new owner can pick their
 kind of place and instantly have a polished, populated app.
 
 Templates are presentation + content presets — they set Profile.business_type
-too, but several kinds (hotel / fine dining / fast casual) all map to the
+too, but several kinds (hotel / fine dining / fast casual / bar) all map to the
 "restaurant" business_type and differ only in look + sample menu.
 
 Prices are in the platform default currency (MAD) and are illustrative; owners
@@ -38,6 +38,15 @@ TEMPLATES = {
                     {"name": "Cappuccino", "price": "25", "description": "Espresso with steamed milk and foam."},
                     {"name": "Caffè Latte", "price": "28", "description": "Smooth espresso with steamed milk."},
                     {"name": "Flat White", "price": "28", "description": "Velvety microfoam over a double shot."},
+                ],
+            },
+            {
+                "name": "Tea & Chocolate",
+                "dishes": [
+                    {"name": "Moroccan Mint Tea", "price": "20", "description": "Fresh mint, lightly sweet."},
+                    {"name": "Earl Grey", "price": "18", "description": "Classic bergamot black tea."},
+                    {"name": "Hot Chocolate", "price": "30", "description": "Rich dark chocolate, steamed milk."},
+                    {"name": "Chai Latte", "price": "30", "description": "Spiced tea with steamed milk."},
                 ],
             },
             {
@@ -93,6 +102,14 @@ TEMPLATES = {
                     {"name": "Penne Arrabbiata", "price": "110", "description": "Spicy tomato, garlic, basil."},
                 ],
             },
+            {
+                "name": "Beverages",
+                "dishes": [
+                    {"name": "Fresh Orange Juice", "price": "35", "description": "Squeezed to order."},
+                    {"name": "Moroccan Mint Tea", "price": "25", "description": "Served in a traditional pot."},
+                    {"name": "Sparkling Water", "price": "20", "description": "Chilled, 50cl."},
+                ],
+            },
         ],
     },
     "fine_dining": {
@@ -129,6 +146,14 @@ TEMPLATES = {
                     {"name": "Chocolate Fondant", "price": "95", "description": "Molten centre, vanilla ice cream."},
                 ],
             },
+            {
+                "name": "Wine & Pairings",
+                "dishes": [
+                    {"name": "House Red (Glass)", "price": "70", "description": "Sommelier's selection."},
+                    {"name": "House White (Glass)", "price": "70", "description": "Crisp and balanced."},
+                    {"name": "Champagne Flute", "price": "120", "description": "Brut, served chilled."},
+                ],
+            },
         ],
     },
     "fast_casual": {
@@ -151,6 +176,14 @@ TEMPLATES = {
                 ],
             },
             {
+                "name": "Wraps & Salads",
+                "dishes": [
+                    {"name": "Chicken Wrap", "price": "40", "description": "Grilled chicken, garlic mayo, veggies."},
+                    {"name": "Caesar Wrap", "price": "42", "description": "Chicken, romaine, parmesan, caesar."},
+                    {"name": "Garden Salad", "price": "35", "description": "Mixed greens, vinaigrette."},
+                ],
+            },
+            {
                 "name": "Combos",
                 "dishes": [
                     {"name": "Burger Combo", "price": "75", "description": "Burger + fries + drink."},
@@ -163,6 +196,82 @@ TEMPLATES = {
                     {"name": "French Fries", "price": "20", "description": "Crispy, lightly salted."},
                     {"name": "Onion Rings", "price": "25", "description": "Golden, crunchy."},
                     {"name": "Soft Drink", "price": "12", "description": "Choice of cola, lemon-lime or orange."},
+                ],
+            },
+        ],
+    },
+    "bakery": {
+        "label": "Bakery / Patisserie",
+        "business_type": "bakery",
+        "theme": {
+            "primary_color": "#8B5E3C",
+            "secondary_color": "#E8C39E",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Breads",
+                "dishes": [
+                    {"name": "Sourdough Loaf", "price": "35", "description": "Slow-fermented, crusty crust."},
+                    {"name": "Baguette", "price": "12", "description": "Classic French, baked fresh."},
+                    {"name": "Whole Wheat Loaf", "price": "30", "description": "Hearty and wholesome."},
+                ],
+            },
+            {
+                "name": "Pastries",
+                "dishes": [
+                    {"name": "Butter Croissant", "price": "15", "description": "Flaky, all-butter."},
+                    {"name": "Cinnamon Roll", "price": "22", "description": "Soft, swirled, glazed."},
+                    {"name": "Almond Danish", "price": "24", "description": "Almond cream, toasted flakes."},
+                ],
+            },
+            {
+                "name": "Cakes & Sweets",
+                "dishes": [
+                    {"name": "Chocolate Cake (slice)", "price": "30", "description": "Rich layered ganache."},
+                    {"name": "Cheesecake (slice)", "price": "32", "description": "Creamy, biscuit base."},
+                    {"name": "Macarons (6)", "price": "60", "description": "Assorted flavours."},
+                ],
+            },
+        ],
+    },
+    "bar": {
+        "label": "Bar / Lounge",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#1B1B2F",
+            "secondary_color": "#C0A062",
+            "menu_theme": "dark",
+            "menu_card_layout": "row",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Cocktails",
+                "dishes": [
+                    {"name": "Mojito", "price": "75", "description": "White rum, mint, lime, soda."},
+                    {"name": "Old Fashioned", "price": "90", "description": "Bourbon, bitters, orange."},
+                    {"name": "Margarita", "price": "85", "description": "Tequila, triple sec, lime."},
+                    {"name": "Negroni", "price": "90", "description": "Gin, vermouth, Campari."},
+                ],
+            },
+            {
+                "name": "Wine & Beer",
+                "dishes": [
+                    {"name": "House Red (Glass)", "price": "60", "description": "Smooth and easy-drinking."},
+                    {"name": "House White (Glass)", "price": "60", "description": "Crisp and chilled."},
+                    {"name": "Draft Beer", "price": "45", "description": "Cold, on tap."},
+                    {"name": "IPA", "price": "55", "description": "Hoppy and aromatic."},
+                ],
+            },
+            {
+                "name": "Small Plates",
+                "dishes": [
+                    {"name": "Loaded Nachos", "price": "65", "description": "Cheese, jalapeños, salsa."},
+                    {"name": "Chicken Wings", "price": "70", "description": "Spicy glaze, blue cheese dip."},
+                    {"name": "Olives & Cheese", "price": "55", "description": "Marinated olives, mixed cheese."},
                 ],
             },
         ],
