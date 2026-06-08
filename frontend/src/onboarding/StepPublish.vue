@@ -94,6 +94,19 @@
       </div>
 
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <!-- Business type — gates restaurant-only features (tables, dine-in, waiter…) -->
+        <div class="space-y-1.5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+          <label for="sp-business-type" class="text-sm font-medium text-slate-100">{{ t("stepPublish.businessTypeLabel") }}</label>
+          <p class="text-xs text-slate-500">{{ t("stepPublish.businessTypeHint") }}</p>
+          <select id="sp-business-type" v-model="form.business_type" class="w-full ui-input">
+            <option value="restaurant">{{ t("stepPublish.businessTypeRestaurant") }}</option>
+            <option value="cafe">{{ t("stepPublish.businessTypeCafe") }}</option>
+            <option value="bakery">{{ t("stepPublish.businessTypeBakery") }}</option>
+            <option value="grocery">{{ t("stepPublish.businessTypeGrocery") }}</option>
+            <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
+          </select>
+        </div>
+
         <label for="sp-is-open" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
           <div class="space-y-0.5">
             <span class="text-sm font-medium text-slate-100">{{ t("stepPublish.restaurantOpen") }}</span>
@@ -770,6 +783,7 @@ const form = reactive({
   platform_delivery_enabled: false,
   max_covers_per_slot: 0,
   slot_duration_minutes: 60,
+  business_type: "restaurant",
   directory_opt_in: false,
   cuisine_type: "",
   city: "",
@@ -853,6 +867,7 @@ const load = async () => {
     form.platform_delivery_enabled = Boolean(data?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(data?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(data?.slot_duration_minutes ?? 60) || 60;
+    form.business_type = data?.business_type || "restaurant";
     form.directory_opt_in = Boolean(data?.directory_opt_in);
     form.cuisine_type = data?.cuisine_type || "";
     form.city = data?.city || "";
@@ -899,6 +914,7 @@ const saveProfile = async (publishFlag = null) => {
     auto_confirm_min_hours: Number(form.auto_confirm_min_hours) || 24,
     reservation_reminders_enabled: form.reservation_reminders_enabled,
     menu_card_layout: form.menu_card_layout,
+    business_type: form.business_type,
     delivery_enabled: form.delivery_enabled,
     delivery_fee: Number(form.delivery_fee) || 0,
     delivery_base_fee: Number(form.delivery_base_fee) || 0,
@@ -945,6 +961,7 @@ const saveStatus = async () => {
     form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(saved?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(saved?.slot_duration_minutes ?? 60) || 60;
+    form.business_type = saved?.business_type || "restaurant";
     await tenant.fetchMeta();
     toast.show(t("stepPublish.statusSaved"), "success");
   } catch (e) {
@@ -1064,6 +1081,7 @@ const publish = async () => {
     form.platform_delivery_enabled = Boolean(saved?.platform_delivery_enabled);
     form.max_covers_per_slot = Number(saved?.max_covers_per_slot ?? 0);
     form.slot_duration_minutes = Number(saved?.slot_duration_minutes ?? 60) || 60;
+    form.business_type = saved?.business_type || "restaurant";
     await tenant.fetchMeta();
     trackEvent("owner_publish", {
       source: "owner_wizard",

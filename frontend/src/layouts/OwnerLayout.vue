@@ -105,6 +105,7 @@
             <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <!-- Waiter view shortcut (desktop) -->
               <RouterLink
+                v-if="showWaiter"
                 to="/waiter"
                 class="ui-chip hidden md:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               >
@@ -196,7 +197,7 @@
 
                     <div role="group" :aria-label="t('ownerLayout.groupOperations')">
                       <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupOperations") }}</p>
-                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
+                      <RouterLink v-if="showKitchen" class="owner-settings-item" role="menuitem" :to="{ name: 'owner-kitchen' }" @click="closeSettingsMenu">
                         <AppIcon name="menu" class="owner-settings-item-icon" />
                         <span>{{ t("ownerLayout.kitchen") }}</span>
                       </RouterLink>
@@ -306,7 +307,7 @@
     </main>
 
     <nav class="ui-bottom-dock owner-bottom-dock md:hidden" :aria-label="t('ownerLayout.navMobile')">
-      <div class="ui-bottom-dock-grid" :class="`grid-cols-${4 + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
+      <div class="ui-bottom-dock-grid" :class="`grid-cols-${3 + (showWaiter ? 1 : 0) + (showTables ? 1 : 0) + (showReservations ? 1 : 0)}`">
         <RouterLink
           to="/owner"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
@@ -335,6 +336,7 @@
           <span>{{ t("ownerLayout.orders") }}</span>
         </RouterLink>
         <RouterLink
+          v-if="showWaiter"
           to="/waiter"
           class="ui-pill-nav owner-dock-link justify-center px-2 py-1 text-center text-[10px] leading-tight"
           :data-active="$route.path.startsWith('/waiter')"
@@ -432,8 +434,13 @@ const {
 const tenantName = computed(() => tenant.meta?.name || t("ownerLayout.fallbackTenantName"));
 const tenantLogo = computed(() => String(tenant.meta?.profile?.logo_url || "").trim());
 // Always show all features until tier gating is configured
-const showTables = computed(() => true);
-const showReservations = computed(() => true);
+// Restaurant-only features are gated by the tenant's business_type capabilities
+// (served in the profile meta). Non-restaurant verticals (retail, grocery) hide
+// table/dine-in service navigation. Restaurants keep everything (defaults all true).
+const showTables = computed(() => tenant.capabilities.tables !== false);
+const showReservations = computed(() => tenant.capabilities.reservations !== false);
+const showWaiter = computed(() => tenant.capabilities.waiter !== false);
+const showKitchen = computed(() => tenant.capabilities.kitchen !== false);
 const pendingOrdersCount = computed(() => order.orders.filter((o) => o.status === "pending").length);
 const activeWorkspaceLabel = computed(() => {
   const path = router.currentRoute.value.path || "";

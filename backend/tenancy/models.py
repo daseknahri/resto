@@ -309,6 +309,54 @@ class Profile(models.Model):
         help_text="Dietary and feature tags used for marketplace filtering.",
     )
 
+    # ── Business type & capabilities (Kepoli super-app generalization seam) ─────
+    # The platform began restaurant-only; business_type lets the same tenant
+    # infrastructure serve other verticals (retail shops, bakeries, groceries) by
+    # gating restaurant-specific features. Defaults to 'restaurant' so every
+    # existing tenant keeps the full feature set — fully non-breaking. The heavy
+    # catalog rename (Dish -> Item) is deferred; this is only the capability seam.
+    class BusinessType(models.TextChoices):
+        RESTAURANT = "restaurant", "Restaurant"
+        CAFE = "cafe", "Café"
+        BAKERY = "bakery", "Bakery"
+        GROCERY = "grocery", "Grocery"
+        RETAIL = "retail", "Retail / Shop"
+
+    business_type = models.CharField(
+        max_length=20,
+        choices=BusinessType.choices,
+        default=BusinessType.RESTAURANT,
+        help_text=(
+            "Vertical this tenant operates in. Gates restaurant-only features "
+            "(tables, dine-in, waiter, kitchen, reservations) for non-restaurant types."
+        ),
+    )
+
+    # Restaurant-only capability flags derived from business_type. Restaurants and
+    # cafés get the full dine-in service set; retail/grocery/bakery hide it and
+    # operate as catalog + pickup/delivery shops. Exposed to the SPA via the
+    # profile meta so the UI can hide irrelevant navigation and features.
+    CAPABILITY_KEYS = ("tables", "dine_in", "waiter", "kitchen", "reservations")
+    _FULL_CAPABILITIES = {k: True for k in CAPABILITY_KEYS}
+    _SHOP_CAPABILITIES = {k: False for k in CAPABILITY_KEYS}
+    _CAPABILITIES_BY_TYPE = {
+        BusinessType.RESTAURANT: _FULL_CAPABILITIES,
+        BusinessType.CAFE: _FULL_CAPABILITIES,
+        # Bakeries prep in a kitchen but have no table service.
+        BusinessType.BAKERY: {**_SHOP_CAPABILITIES, "kitchen": True},
+        BusinessType.GROCERY: _SHOP_CAPABILITIES,
+        BusinessType.RETAIL: _SHOP_CAPABILITIES,
+    }
+
+    @property
+    def capabilities(self) -> dict:
+        """Return the capability map for this tenant's business_type.
+
+        Always returns the full restaurant set for unknown/blank types so the
+        default behaviour can never silently disable an existing restaurant.
+        """
+        return dict(self._CAPABILITIES_BY_TYPE.get(self.business_type, self._FULL_CAPABILITIES))
+
     # ── Delivery zone & radius ─────────────────────────────────────────────────
     delivery_zone_id = models.IntegerField(
         null=True, blank=True, db_index=True,

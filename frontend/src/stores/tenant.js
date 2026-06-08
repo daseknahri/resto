@@ -43,6 +43,20 @@ export const useTenantStore = defineStore("tenant", {
       if (mode) return mode === "menu_only";
       return false;
     },
+    /** The tenant's business vertical (restaurant | cafe | bakery | grocery | retail). */
+    businessType() {
+      return this.resolvedMeta?.profile?.business_type || "restaurant";
+    },
+    /**
+     * Restaurant-only capability flags derived (server-side) from business_type.
+     * Falls back to the full restaurant set when absent so older cached metas or
+     * a missing profile never hide features from an existing restaurant.
+     */
+    capabilities() {
+      const full = { tables: true, dine_in: true, waiter: true, kitchen: true, reservations: true };
+      const caps = this.resolvedMeta?.profile?.capabilities;
+      return caps && typeof caps === "object" ? { ...full, ...caps } : full;
+    },
     /**
      * Check if a plan feature flag is enabled.
      * TODO: restore per-flag gating once tier work is complete.

@@ -190,10 +190,13 @@ class LocalizedProfileContentMixin:
 class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerializer):
     published_at = serializers.DateTimeField(read_only=True)
     is_open_now = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
         fields = [
+            "business_type",
+            "capabilities",
             "tagline",
             "tagline_i18n",
             "description",
@@ -252,6 +255,10 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "is_menu_published",
             "published_at",
         ]
+
+    def get_capabilities(self, obj) -> dict:
+        """Restaurant-only capability flags derived from business_type."""
+        return obj.capabilities
 
     def get_is_open_now(self, obj) -> bool:
         """Server-side open/closed evaluation: manual toggle + closure dates + schedule."""

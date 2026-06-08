@@ -7,7 +7,7 @@ export default {
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
   safelist: [
-    { pattern: /^grid-cols-(4|5|6)$/ },
+    { pattern: /^grid-cols-(3|4|5|6)$/ },
   ],
   theme: {
     extend: {
