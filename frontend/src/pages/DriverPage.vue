@@ -553,6 +553,102 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Delivery code modal -->
+  <Teleport to="body">
+    <div
+      v-if="codeModalOpen"
+      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="closeCodeModal"
+      @keydown.esc="closeCodeModal"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('driver.enterDeliveryCode')"
+        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+      >
+        <div>
+          <p class="text-sm font-semibold text-white">{{ t('driver.enterDeliveryCode') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.codeReminder') }}</p>
+        </div>
+        <input
+          ref="codeFirstRef"
+          v-model="codeInput"
+          type="text"
+          class="ui-input text-center text-lg tracking-[0.3em] font-bold uppercase"
+          :placeholder="t('driver.enterDeliveryCode')"
+          :aria-label="t('driver.enterDeliveryCode')"
+          autocomplete="one-time-code"
+          maxlength="10"
+          @keydown.enter="submitDeliveryCode"
+        />
+        <div v-if="codeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <p class="text-sm text-red-300">{{ codeError }}</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCodeModal">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+            :disabled="!codeInput.trim() || codeSubmitting"
+            :aria-busy="codeSubmitting"
+            :aria-label="codeSubmitting ? t('common.loading') : undefined"
+            @click="submitDeliveryCode"
+          >{{ codeSubmitting ? '…' : t('common.confirm') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Cash-out amount modal -->
+  <Teleport to="body">
+    <div
+      v-if="cashoutModalOpen"
+      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="closeCashoutModal"
+      @keydown.esc="closeCashoutModal"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('driver.cashOut')"
+        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+      >
+        <div>
+          <p class="text-sm font-semibold text-white">{{ t('driver.cashOut') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">{{ t('driver.cashOutAmountPrompt', { max: fmtMoney(earnings ? earnings.available : 0) }) }}</p>
+        </div>
+        <input
+          ref="cashoutFirstRef"
+          v-model="cashoutInput"
+          type="number"
+          min="1"
+          :max="earnings ? earnings.available : undefined"
+          step="0.01"
+          class="ui-input text-lg font-bold tabular-nums"
+          :aria-label="t('driver.cashOut')"
+          @keydown.enter="submitCashout"
+        />
+        <div v-if="cashoutModalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <p class="text-sm text-red-300">{{ cashoutModalError }}</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="closeCashoutModal">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+            :disabled="busy"
+            :aria-busy="busy"
+            :aria-label="busy ? t('common.loading') : undefined"
+            @click="submitCashout"
+          >{{ busy ? '…' : t('driver.cashOut') }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -699,6 +795,82 @@ const fetchEarnings = async () => {
   }
 };
 
+// ── Delivery-code modal (replaces window.prompt) ─────────────────────────────────
+const codeModalOpen = ref(false);
+const codeInput = ref('');
+const codeError = ref('');
+const codeSubmitting = ref(false);
+const codeFirstRef = ref(null);
+let _codeReturnFocus = null;
+
+const closeCodeModal = () => {
+  codeModalOpen.value = false;
+  _codeReturnFocus?.focus();
+  _codeReturnFocus = null;
+};
+
+const submitDeliveryCode = async () => {
+  const code = codeInput.value.trim();
+  if (!code) { codeError.value = t('driver.enterDeliveryCode'); return; }
+  codeError.value = '';
+  codeSubmitting.value = true;
+  const job = activeJob.value;
+  try {
+    const { data } = await api.patch(`/driver/jobs/${job.id}/status/`, { status: 'delivered', code });
+    closeCodeModal();
+    if (data.is_terminal) {
+      activeJob.value = null;
+      online.value = false;
+      stopGeo();
+      toast.show(t('driver.deliveredToast'), 'success');
+      if (job && job.restaurant_slug) openCustomerRating(job);
+      await fetchJobs();
+      fetchEarnings();
+    } else {
+      activeJob.value = data;
+    }
+  } catch (err) {
+    const errCode = err?.response?.data?.code;
+    codeError.value = errCode === 'bad_delivery_code'
+      ? t('driver.badDeliveryCode')
+      : (err?.response?.data?.detail || t('driver.errorGeneric'));
+  } finally {
+    codeSubmitting.value = false;
+  }
+};
+
+// ── Cash-out modal (replaces window.prompt) ───────────────────────────────────────
+const cashoutModalOpen = ref(false);
+const cashoutInput = ref('');
+const cashoutModalError = ref('');
+const cashoutFirstRef = ref(null);
+let _cashoutReturnFocus = null;
+
+const closeCashoutModal = () => {
+  cashoutModalOpen.value = false;
+  _cashoutReturnFocus?.focus();
+  _cashoutReturnFocus = null;
+};
+
+const submitCashout = async () => {
+  const amount = Number(String(cashoutInput.value).replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    cashoutModalError.value = t('driver.errorGeneric');
+    return;
+  }
+  cashoutModalError.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.post('/driver/cashout/', { amount });
+    cashout.value = data;
+    closeCashoutModal();
+  } catch (err) {
+    cashoutModalError.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
 // ── Cash-out: redeem wallet balance for cash at a restaurant ─────────────────────
 const cashout = ref(null); // current pending request { id, amount, code, ... }
 const fetchCashout = async () => {
@@ -709,22 +881,14 @@ const fetchCashout = async () => {
     cashout.value = null;
   }
 };
-const requestCashout = async () => {
+const requestCashout = () => {
+  _cashoutReturnFocus = document.activeElement;
   errorMsg.value = '';
   const max = Number(earnings.value?.available || 0);
-  const raw = window.prompt(t('driver.cashOutAmountPrompt', { max: fmtMoney(max) }), String(max));
-  if (raw == null) return;
-  const amount = Number(String(raw).replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0) return;
-  busy.value = true;
-  try {
-    const { data } = await api.post('/driver/cashout/', { amount });
-    cashout.value = data;
-  } catch (err) {
-    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
-  } finally {
-    busy.value = false;
-  }
+  cashoutInput.value = String(max);
+  cashoutModalError.value = '';
+  cashoutModalOpen.value = true;
+  nextTick(() => { cashoutFirstRef.value?.focus(); });
 };
 const cancelCashout = async () => {
   if (!cashout.value) return;
@@ -844,13 +1008,17 @@ const decline = async (jobId) => {
 
 const advance = async (toStatus, extra = {}) => {
   errorMsg.value = '';
-  const payload = { status: toStatus, ...extra };
   if (toStatus === 'delivered') {
-    // Proof of delivery — the customer reads the code shown on their order.
-    const code = (window.prompt(t('driver.enterDeliveryCode')) || '').trim();
-    if (!code) return; // driver cancelled the prompt
-    payload.code = code;
+    // Proof of delivery — open the code modal instead of window.prompt().
+    _codeReturnFocus = document.activeElement;
+    codeInput.value = '';
+    codeError.value = '';
+    codeModalOpen.value = true;
+    await nextTick();
+    codeFirstRef.value?.focus();
+    return;
   }
+  const payload = { status: toStatus, ...extra };
   busy.value = true;
   try {
     const job = activeJob.value;
@@ -860,21 +1028,14 @@ const advance = async (toStatus, extra = {}) => {
       online.value = false; // backend takes the driver offline after delivery
       stopGeo();
       toast.show(t('driver.deliveredToast'), 'success');
-      // The driver just met the customer — prompt them to rate the drop-off
-      // while it's fresh (only on a successful delivery, not a failure).
-      if (toStatus === 'delivered' && job && job.restaurant_slug) {
-        openCustomerRating(job);
-      }
+      if (job && job.restaurant_slug) openCustomerRating(job);
       await fetchJobs();
       fetchEarnings(); // a completed delivery just added to earnings
     } else {
       activeJob.value = data;
     }
   } catch (err) {
-    const errCode = err?.response?.data?.code;
-    errorMsg.value = errCode === 'bad_delivery_code'
-      ? t('driver.badDeliveryCode')
-      : (err?.response?.data?.detail || t('driver.errorGeneric'));
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {
     busy.value = false;
   }

@@ -3598,6 +3598,7 @@ export const messages = {
       displayHeader: "Kitchen display header",
       stationFilterNav: "Station filters",
       orderItems: "Order items",
+      newOrderAlert: "New order!",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -7511,6 +7512,7 @@ export const messages = {
       displayHeader: "En-tete affichage cuisine",
       stationFilterNav: "Filtres de station",
       orderItems: "Articles de la commande",
+      newOrderAlert: "Nouvelle commande !",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

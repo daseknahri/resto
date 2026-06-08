@@ -47,6 +47,20 @@
       </div>
     </div>
 
+    <!-- New-order flash banner (supplements audio alert in noisy kitchens) -->
+    <Transition name="kitchen-flash">
+      <div
+        v-if="newOrderFlash"
+        class="kitchen-new-order-banner"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span class="h-2.5 w-2.5 rounded-full bg-amber-300 animate-ping" aria-hidden="true" />
+        {{ t('kitchen.newOrderAlert') }}
+      </div>
+    </Transition>
+
     <!-- Station filter bar -->
     <nav class="kitchen-filter-bar" :aria-label="t('kitchen.stationFilterNav')">
       <button
@@ -234,6 +248,10 @@ const stationFilter = ref("all");
 // Reactive "now" for elapsed timers — updated every tick with the clock
 const nowMs = ref(Date.now());
 
+// Visual flash when a new pending order arrives (supplements the audio alert)
+const newOrderFlash = ref(false);
+let flashTimer = null;
+
 // Active orders — exclude completed/cancelled, apply station filter
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "preparing", "ready"]);
 
@@ -317,6 +335,10 @@ const playAlert = () => {
       osc.stop(ctx.currentTime + delay + 0.4);
     });
   } catch { /* AudioContext unavailable */ }
+  // Visual flash for 4 s (supplements audio — noisy kitchen environments)
+  newOrderFlash.value = true;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { newOrderFlash.value = false; }, 4000);
 };
 
 const checkNewOrders = (orders) => {
@@ -355,6 +377,7 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(pollTimer);
   clearInterval(clockTimer);
+  clearTimeout(flashTimer);
   document.removeEventListener("fullscreenchange", onFullscreenChange);
   document.removeEventListener("visibilitychange", onKitchenPageVisible);
   waiter.teardownConnectivityListeners();
@@ -602,6 +625,39 @@ const actionBtnClass = (s) => ({
   border-color: rgba(100, 116, 139, 0.8);
   color: rgb(203, 213, 225);
   background: rgba(30, 41, 59, 0.8);
+}
+
+/* New-order flash banner */
+.kitchen-new-order-banner {
+  position: fixed;
+  top: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: rgba(245, 158, 11, 0.92);
+  border: 1px solid rgba(251, 191, 36, 0.7);
+  border-radius: 9999px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 24px rgba(245, 158, 11, 0.55), 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.kitchen-flash-enter-active,
+.kitchen-flash-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.kitchen-flash-enter-from,
+.kitchen-flash-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-0.5rem);
 }
 
 .kitchen-filter-count {
