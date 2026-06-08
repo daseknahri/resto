@@ -48,6 +48,46 @@
         </button>
       </div>
 
+      <!-- Quick operational toggles — accepting delivery + menu availability ──── -->
+      <div class="grid gap-2 sm:grid-cols-2">
+        <!-- Accepting delivery orders -->
+        <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 px-3.5 py-2.5">
+          <div class="min-w-0 leading-snug">
+            <p class="text-xs font-semibold" :class="acceptingDelivery ? 'text-emerald-200' : 'text-amber-300'" aria-live="polite">
+              {{ acceptingDelivery ? t("ownerHome.acceptingDelivery") : t("ownerHome.deliveryPaused") }}
+            </p>
+            <p class="text-[11px] text-slate-500">{{ t("ownerHome.deliveryToggleHint") }}</p>
+          </div>
+          <button
+            class="ui-touch-target shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            :class="acceptingDelivery ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/10' : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
+            :disabled="togglingDelivery"
+            :aria-pressed="acceptingDelivery"
+            @click="toggleDelivery"
+          >
+            {{ togglingDelivery ? "…" : (acceptingDelivery ? t("ownerHome.pauseDelivery") : t("ownerHome.resumeDelivery")) }}
+          </button>
+        </div>
+        <!-- Menu availability -->
+        <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/40 px-3.5 py-2.5">
+          <div class="min-w-0 leading-snug">
+            <p class="text-xs font-semibold" :class="menuActive ? 'text-emerald-200' : 'text-amber-300'" aria-live="polite">
+              {{ menuActive ? t("ownerHome.menuActive") : t("ownerHome.menuDisabled") }}
+            </p>
+            <p class="text-[11px] text-slate-500">{{ t("ownerHome.menuToggleHint") }}</p>
+          </div>
+          <button
+            class="ui-touch-target shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            :class="menuActive ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/10' : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
+            :disabled="togglingMenu"
+            :aria-pressed="menuActive"
+            @click="toggleMenu"
+          >
+            {{ togglingMenu ? "…" : (menuActive ? t("ownerHome.disableMenu") : t("ownerHome.enableMenu")) }}
+          </button>
+        </div>
+      </div>
+
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
       <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
@@ -302,6 +342,11 @@ const profile = computed(() => tenant.meta?.profile || {});
 const published = computed(() => profile.value?.is_menu_published === true);
 const isOpen = computed(() => profile.value?.is_open !== false);
 const togglingOpen = ref(false);
+// Quick operational toggles (owner controls; delivery PRICING is admin-only).
+const acceptingDelivery = computed(() => profile.value?.delivery_enabled !== false);
+const menuActive = computed(() => profile.value?.is_menu_temporarily_disabled !== true);
+const togglingDelivery = ref(false);
+const togglingMenu = ref(false);
 
 const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsapp = computed(() => tenant.entitlements?.can_whatsapp_order === true);
@@ -325,6 +370,40 @@ const toggleOpen = async () => {
     toast.show(t("ownerHome.toggleFailed"), "error");
   } finally {
     togglingOpen.value = false;
+  }
+};
+
+// ── Quick toggle: accepting delivery orders (operational; pricing is admin-only) ─
+const toggleDelivery = async () => {
+  if (togglingDelivery.value) return;
+  togglingDelivery.value = true;
+  const newValue = !acceptingDelivery.value;
+  try {
+    await api.patch("/profile/", { delivery_enabled: newValue });
+    tenant.mergeProfile({ delivery_enabled: newValue });
+    bustCache("meta");
+    toast.show(newValue ? t("ownerHome.deliveryResumedToast") : t("ownerHome.deliveryPausedToast"), newValue ? "success" : "info");
+  } catch {
+    toast.show(t("ownerHome.toggleFailed"), "error");
+  } finally {
+    togglingDelivery.value = false;
+  }
+};
+
+// ── Quick toggle: menu active / temporarily disabled ────────────────────────────
+const toggleMenu = async () => {
+  if (togglingMenu.value) return;
+  togglingMenu.value = true;
+  const nextActive = !menuActive.value; // store the inverse on is_menu_temporarily_disabled
+  try {
+    await api.patch("/profile/", { is_menu_temporarily_disabled: !nextActive });
+    tenant.mergeProfile({ is_menu_temporarily_disabled: !nextActive });
+    bustCache("meta");
+    toast.show(nextActive ? t("ownerHome.menuEnabledToast") : t("ownerHome.menuDisabledToast"), nextActive ? "success" : "info");
+  } catch {
+    toast.show(t("ownerHome.toggleFailed"), "error");
+  } finally {
+    togglingMenu.value = false;
   }
 };
 
