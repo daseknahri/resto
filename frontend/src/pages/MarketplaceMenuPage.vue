@@ -621,8 +621,20 @@ const deliveryPricing = computed(() => {
     lng: p.lng,
   };
 });
+// A coordinate is usable only if it's in range AND not the null-island (0,0)
+// default a failed locate/geocode leaves behind — mirrors backend valid_coord.
+const validCoord = (lat, lng) => {
+  const a = Number(lat), o = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(o)) return false;
+  if (a < -90 || a > 90 || o < -180 || o > 180) return false;
+  return !(Math.abs(a) < 1e-6 && Math.abs(o) < 1e-6);
+};
 const deliveryDistanceKm = computed(() => {
   const p = deliveryPricing.value;
+  // Only compute distance when BOTH the restaurant and the chosen address are real
+  // points; a bogus/unset restaurant coordinate must NOT read as "outside delivery
+  // area" — fall back to flat pricing instead.
+  if (!validCoord(p.lat, p.lng) || !validCoord(form.delivery_lat, form.delivery_lng)) return null;
   const d = haversineKm(p.lat, p.lng, form.delivery_lat, form.delivery_lng);
   return d == null ? null : Math.round(d * 10) / 10;
 });
