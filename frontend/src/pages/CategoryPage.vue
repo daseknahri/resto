@@ -1,8 +1,8 @@
-﻿<template>
-  <div class="space-y-4 px-3 py-3 pb-24 sm:space-y-5 sm:px-4 sm:py-4 ui-safe-bottom">
+<template>
+  <div class="space-y-5 px-3 py-4 pb-24 sm:space-y-6 sm:px-4 sm:py-5 ui-safe-bottom">
     <!-- Category hero -->
     <header class="ui-hero-stage ui-reveal overflow-hidden border border-slate-800/80 bg-slate-950/84 p-0">
-      <div class="relative min-h-[11rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[13rem]">
+      <div class="relative min-h-[12rem] overflow-hidden rounded-[1.35rem] bg-slate-950/90 sm:min-h-[14rem]">
         <img
           v-if="currentCategory?.image_url"
           :src="currentCategory.image_url"
@@ -13,17 +13,21 @@
           decoding="async"
           @error="handleCategoryImageError"
         />
-        <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/15"></div>
+        <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/97 via-slate-950/55 to-slate-950/10"></div>
 
-        <div class="relative flex h-full flex-col justify-end space-y-2 p-4 md:p-5">
-          <div class="space-y-1">
-            <p class="ui-kicker">{{ t("category.kicker") }}</p>
-            <h1 class="ui-display text-2xl font-semibold capitalize text-white md:text-3xl">{{ categoryName }}</h1>
-            <p v-if="categoryDescription" class="ui-subtle max-w-2xl">{{ categoryDescription }}</p>
+        <div class="relative flex h-full flex-col justify-end space-y-3 p-5 md:p-6">
+          <div class="space-y-1.5">
+            <p class="ui-kicker tracking-widest uppercase text-[10px]">{{ t("category.kicker") }}</p>
+            <h1 class="ui-display text-3xl font-bold capitalize tracking-tight text-white md:text-4xl">{{ categoryName }}</h1>
+            <p v-if="categoryDescription" class="ui-subtle max-w-2xl text-sm leading-relaxed">{{ categoryDescription }}</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="ui-chip tabular-nums text-[11px]">{{ itemCountLabel(filteredDishes.length) }}</span>
-            <RouterLink :to="{ name: 'menu' }" class="ui-chip text-[11px] hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]">
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <span class="ui-chip tabular-nums text-[11px] font-medium">{{ itemCountLabel(filteredDishes.length) }}</span>
+            <RouterLink
+              :to="{ name: 'menu' }"
+              class="ui-chip text-[11px] font-medium hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)]"
+              :aria-label="t('customerLayout.navMenu')"
+            >
               <AppIcon name="menu" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
               {{ t("customerLayout.navMenu") }}
             </RouterLink>
@@ -34,7 +38,15 @@
 
     <!-- Search -->
     <div class="relative">
-      <input v-model.trim="search" type="search" class="ui-input pr-10" :aria-label="t('category.searchPlaceholder')" :placeholder="t('category.searchPlaceholder')" enterkeyhint="search" />
+      <AppIcon name="search" class="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+      <input
+        v-model.trim="search"
+        type="search"
+        class="ui-input ps-9 pe-10"
+        :aria-label="t('category.searchPlaceholder')"
+        :placeholder="t('category.searchPlaceholder')"
+        enterkeyhint="search"
+      />
       <button
         v-if="search"
         class="ui-press ui-touch-target absolute end-2 top-1/2 -translate-y-1/2 rounded-full border border-slate-700/80 p-1 text-slate-300 hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -45,27 +57,29 @@
       </button>
     </div>
 
-    <!-- Dish grid -->
-    <div v-if="menu.loading && !filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Dish grid – loading skeletons -->
+    <div v-if="menu.loading && !filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading dishes">
       <div v-for="n in 6" :key="`loading-${n}`" class="ui-skeleton h-80 rounded-[1.8rem]"></div>
     </div>
 
-    <div v-else-if="filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Dish grid – results -->
+    <div v-else-if="filteredDishes.length" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       <article
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
-        class="ui-surface-lift ui-reveal group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)]"
+        class="ui-surface-lift ui-reveal group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-shadow duration-300"
         :class="cartQty(dish) > 0
-          ? 'border-[var(--color-secondary)]/45 shadow-[0_20px_50px_rgba(245,158,11,0.10)]'
-          : 'border-slate-800/80 hover:border-slate-700/80 hover:shadow-[0_28px_64px_rgba(2,6,23,0.48)]'"
+          ? 'border-[var(--color-secondary)]/50 shadow-[0_20px_50px_rgba(245,158,11,0.12)]'
+          : 'border-slate-800/80 hover:border-slate-700/60 hover:shadow-[0_28px_64px_rgba(2,6,23,0.52)]'"
         :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
+        :aria-label="dish.name"
       >
         <!-- in-cart top accent -->
         <div
           v-if="cartQty(dish) > 0"
           aria-hidden="true"
-          class="pointer-events-none absolute inset-x-0 top-0 h-[2px] rounded-t-[1.8rem]"
-          style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.7), transparent)"
+          class="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] rounded-t-[1.8rem]"
+          style="background: linear-gradient(90deg, transparent, rgba(245,158,11,0.85), transparent)"
         />
         <!-- Image -->
         <RouterLink :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }" class="block" aria-hidden="true" tabindex="-1">
@@ -74,21 +88,25 @@
               :src="dish.image_url"
               :name="dish.name"
               :seed="dish.slug"
-              img-class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+              img-class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.05]"
               :loading="dishIndex < 2 ? 'eager' : 'lazy'"
               :fetchpriority="dishIndex < 1 ? 'high' : 'auto'"
             />
-            <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/15 to-transparent"></div>
+            <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/15 to-transparent"></div>
             <!-- In-cart badge -->
-            <div v-if="cartQty(dish) > 0" class="absolute start-3 top-3">
-              <span class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-slate-950 shadow-lg">
-                <AppIcon name="check" class="h-3 w-3" aria-hidden="true" /><span aria-hidden="true">{{ cartQty(dish) }}&times;</span>
+            <div v-if="cartQty(dish) > 0" class="absolute start-3 top-3 z-10">
+              <span
+                class="flex items-center gap-1 rounded-full bg-[var(--color-secondary)] px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-950 shadow-md"
+                role="status"
+              >
+                <AppIcon name="check" class="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span aria-hidden="true">{{ cartQty(dish) }}&times;</span>
                 <span class="sr-only">{{ t('category.inCartBadge', { count: cartQty(dish) }) }}</span>
               </span>
             </div>
             <!-- Price badge -->
-            <div class="absolute end-3 top-3">
-              <span class="rounded-full bg-[var(--color-secondary)] px-3 py-1 text-xs font-bold tabular-nums text-slate-950 shadow-lg">
+            <div class="absolute end-3 top-3 z-10">
+              <span class="rounded-full bg-slate-950/75 px-3 py-1 text-xs font-bold tabular-nums text-[var(--color-secondary)] shadow-md ring-1 ring-[var(--color-secondary)]/30 backdrop-blur-sm">
                 {{ formatPrice(dish.price) }}
               </span>
             </div>
@@ -96,17 +114,17 @@
         </RouterLink>
 
         <!-- Content -->
-        <div class="space-y-3 p-4">
+        <div class="flex flex-col gap-3 p-4">
           <div class="min-w-0 space-y-1">
-            <h3 class="truncate text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
-            <p class="line-clamp-2 text-sm text-slate-400">{{ dish.description || '' }}</p>
+            <h3 class="truncate text-base font-semibold leading-snug tracking-tight text-white">{{ dish.name }}</h3>
+            <p class="line-clamp-2 text-sm leading-relaxed text-slate-400">{{ dish.description || '' }}</p>
           </div>
 
           <ul v-if="dish.tags?.length" class="flex flex-wrap gap-1 list-none p-0 m-0">
             <li
               v-for="tag in dish.tags"
               :key="tag"
-            ><span class="rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] text-slate-400">{{ t(`dishPage.tag_${tag}`) }}</span></li>
+            ><span class="rounded-full border border-slate-700/60 bg-slate-800/40 px-2 py-0.5 text-[10px] text-slate-400">{{ t(`dishPage.tag_${tag}`) }}</span></li>
           </ul>
 
           <ul v-if="dish.options?.length || dish.option_groups?.length" class="flex flex-wrap gap-1.5 list-none p-0 m-0">
@@ -118,21 +136,23 @@
             </span></li>
           </ul>
 
-          <div class="flex gap-2">
+          <div class="mt-auto flex gap-2 pt-1">
             <button
               v-if="!quickAddDisabled"
-              class="ui-btn-primary ui-press flex-1 justify-center gap-1.5 py-2 text-sm"
+              class="ui-btn-primary ui-press flex-1 justify-center gap-1.5 py-2.5 text-sm font-semibold"
+              :aria-label="t('dishPage.add') + ' ' + dish.name"
               @click="addDishQuick(dish)"
             >
-              <AppIcon name="plus" class="h-4 w-4" aria-hidden="true" />
+              <AppIcon name="plus" class="h-4 w-4 shrink-0" aria-hidden="true" />
               {{ t("dishPage.add") }}
             </button>
             <RouterLink
               :to="{ name: 'dish', params: { category: props.slug, dish: dish.slug } }"
-              class="ui-btn-outline justify-center gap-1.5 py-2 text-sm"
+              class="ui-btn-outline justify-center gap-1.5 py-2.5 text-sm"
               :class="quickAddDisabled ? 'flex-1' : ''"
+              :aria-label="t('category.viewDish') + ' ' + dish.name"
             >
-              <AppIcon name="eye" class="h-3.5 w-3.5" aria-hidden="true" />
+              <AppIcon name="eye" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {{ t("category.viewDish") }}
             </RouterLink>
           </div>
@@ -140,30 +160,35 @@
       </article>
     </div>
 
-    <div v-else-if="!menu.loading" class="ui-empty-state space-y-3 text-center">
-      <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-200">
-        <AppIcon name="search" class="h-5 w-5" />
+    <!-- Empty / no-results state -->
+    <div v-else-if="!menu.loading" class="ui-empty-state space-y-4 py-6 text-center" role="status">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-900/70 text-slate-300 shadow-inner">
+        <AppIcon name="search" class="h-6 w-6" aria-hidden="true" />
       </div>
       <div class="space-y-1">
-        <p class="ui-kicker">{{ categoryName }}</p>
-        <p class="text-lg font-semibold text-white">{{ t("category.noMatch") }}</p>
+        <p class="ui-kicker tracking-widest uppercase text-[10px]">{{ categoryName }}</p>
+        <p class="text-lg font-semibold tracking-tight text-white">{{ t("category.noMatch") }}</p>
       </div>
       <div class="flex flex-wrap justify-center gap-2">
-        <button class="ui-btn-outline justify-center" @click="search = ''">
-          <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+        <button class="ui-btn-outline justify-center gap-1.5" @click="search = ''">
+          <AppIcon name="close" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {{ t("common.clear") }}
         </button>
-        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center">
-          <AppIcon name="menu" class="h-3.5 w-3.5" aria-hidden="true" />
+        <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline justify-center gap-1.5">
+          <AppIcon name="menu" class="h-3.5 w-3.5 shrink-0 rtl:scale-x-[-1]" aria-hidden="true" />
           {{ t("customerLayout.navMenu") }}
         </RouterLink>
       </div>
     </div>
 
-    <div v-if="menu.error" class="ui-reveal flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+    <!-- Error banner -->
+    <div v-if="menu.error" class="ui-reveal flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/8 px-3.5 py-3" role="alert">
       <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
-      <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
-      <button class="ui-press ui-touch-target shrink-0 rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60" @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)">{{ t('common.retry') }}</button>
+      <p class="flex-1 text-sm leading-relaxed text-red-300">{{ menu.error }}</p>
+      <button
+        class="ui-press ui-touch-target shrink-0 rounded-full border border-slate-700/70 px-3 py-1 text-xs text-slate-300 transition hover:border-[var(--color-secondary)] hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+        @click="menu.fetchCategories(true); menu.fetchDishesByCategory(props.slug, true)"
+      >{{ t('common.retry') }}</button>
     </div>
   </div>
 </template>

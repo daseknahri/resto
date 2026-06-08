@@ -13,29 +13,29 @@
         decoding="async"
         @error="handleHeroImageError"
       />
-      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/97 via-slate-950/50 to-slate-950/10" />
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.09),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.09),transparent_30%)]" />
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-slate-950/10" />
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.10),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.10),transparent_30%)]" />
 
-      <div class="relative flex h-full flex-col justify-end p-4 sm:p-5">
-        <div class="flex items-end gap-3">
+      <div class="relative flex h-full flex-col justify-end p-4 pb-5 sm:p-6 sm:pb-6">
+        <div class="flex items-end gap-3.5">
           <img
             v-if="logoImage"
             :src="logoImage"
             :alt="`${tenantName} logo`"
-            class="h-14 w-14 shrink-0 rounded-2xl border-2 object-cover shadow-2xl shadow-black/50 sm:h-16 sm:w-16 transition-colors duration-500"
+            class="h-16 w-16 shrink-0 rounded-2xl border-2 object-cover shadow-2xl shadow-black/60 sm:h-[4.5rem] sm:w-[4.5rem] transition-colors duration-500"
             :class="isRestaurantOpen ? 'border-[var(--color-secondary)]/60' : 'border-white/20'"
             loading="eager"
             decoding="async"
             @error="handleLogoImageError"
           />
-          <div class="min-w-0 space-y-0.5">
-            <h1 class="ui-display text-xl font-semibold tracking-tight text-white sm:text-2xl drop-shadow">{{ tenantName }}</h1>
-            <p v-if="tenantDescription" class="line-clamp-1 text-xs text-slate-300/80">{{ tenantDescription }}</p>
+          <div class="min-w-0 space-y-1">
+            <h1 class="ui-display text-2xl font-semibold tracking-tight text-white sm:text-3xl drop-shadow-lg">{{ tenantName }}</h1>
+            <p v-if="tenantDescription" class="line-clamp-1 text-xs text-slate-300/75 leading-relaxed">{{ tenantDescription }}</p>
           </div>
         </div>
-        <div class="mt-2.5 flex flex-wrap gap-1.5">
+        <div class="mt-3 flex flex-wrap gap-2">
           <span
-            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold backdrop-blur-sm"
+            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-sm"
             :style="isRestaurantOpen
               ? 'border-color:rgba(52,211,153,0.40);background:rgba(16,185,129,0.14);color:rgb(110,231,183)'
               : 'border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.12);color:rgb(252,165,165)'"
@@ -50,20 +50,20 @@
           <RouterLink
             v-if="superCategories.length > 1"
             :to="{ name: 'menu' }"
-            class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-xs font-semibold text-slate-300 backdrop-blur-sm"
+            class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-xs font-semibold text-slate-300 backdrop-blur-sm hover:border-slate-500/80 hover:text-white transition-colors"
           >
             <AppIcon name="arrowLeft" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
             {{ t('menuSelect.backToMenus') }}
           </RouterLink>
           <span v-if="locationLine" class="inline-flex items-center gap-1 rounded-full border border-slate-700/60 bg-slate-900/55 px-2.5 py-1 text-xs text-slate-300 backdrop-blur-sm">
-            <AppIcon name="info" class="h-3 w-3 shrink-0" aria-hidden="true" />{{ locationLine }}
+            <AppIcon name="info" class="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />{{ locationLine }}
           </span>
           <span
             v-if="ratingSummary && ratingSummary.count > 0"
             class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs backdrop-blur-sm"
             :aria-label="t('menu.ratingLabel', { avg: ratingSummary.average?.toFixed(1), count: ratingSummary.count })"
           >
-            <span class="text-amber-400" aria-hidden="true">★</span>
+            <span class="text-amber-400 text-[11px]" aria-hidden="true">★</span>
             <span class="font-semibold text-amber-200">{{ ratingSummary.average !== null ? ratingSummary.average.toFixed(1) : '' }}</span>
             <span class="text-amber-400/60 text-[10px]">({{ ratingSummary.count }})</span>
           </span>
@@ -72,14 +72,14 @@
     </header>
 
     <!-- ══ Table context banner ══ -->
-    <div v-if="tableContextBanner" class="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-      <span class="flex min-w-0 items-center gap-1.5 truncate">
-        <AppIcon name="check" class="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
+    <div v-if="tableContextBanner" class="mx-3 mt-3 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100 shadow-sm shadow-black/20">
+      <span class="flex min-w-0 items-center gap-2 truncate font-medium">
+        <AppIcon name="check" class="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
         {{ tableContextBanner }}
       </span>
       <button
         type="button"
-        class="ui-touch-target shrink-0 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50"
+        class="ui-touch-target shrink-0 rounded-xl border border-amber-400/50 bg-amber-500/15 px-3.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 active:scale-95 disabled:opacity-50"
         :disabled="callingWaiter"
         @click="callWaiter"
       >
@@ -92,22 +92,22 @@
       <div class="relative">
         <div
           ref="pillRowEl"
-          class="flex gap-2 overflow-x-auto px-3 py-2.5 sm:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          class="flex gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <button
             v-for="cat in visibleCategories"
             :key="cat.slug"
             :data-cat-pill="cat.slug"
-            class="ui-pill-nav shrink-0 whitespace-nowrap px-3 py-1.5 text-xs"
+            class="ui-pill-nav shrink-0 whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
             :data-active="activeCategorySlug === cat.slug"
             :aria-current="activeCategorySlug === cat.slug ? 'page' : undefined"
             @click="scrollToSection(cat.slug)"
           >{{ cat.name }}</button>
           <template v-if="isOverflowing">
-            <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" />
+            <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" aria-hidden="true" />
             <button
               ref="catSheetTriggerEl"
-              class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-wider"
+              class="ui-pill-nav shrink-0 px-3 py-1.5 text-xs font-bold tracking-widest"
               :data-active="catSheetOpen"
               :aria-expanded="catSheetOpen"
               :aria-label="t('menu.allCategories')"
@@ -121,14 +121,14 @@
           <div
             v-if="catSheetOpen"
             ref="catSheetEl"
-            class="absolute left-0 right-0 top-full z-30 border-b border-slate-800/80 bg-slate-950/98 px-3 py-3 backdrop-blur-xl"
+            class="absolute left-0 right-0 top-full z-30 border-b border-slate-800/60 bg-slate-950/98 px-4 py-4 backdrop-blur-xl"
             @keydown.escape="catSheetOpen = false; $nextTick(() => catSheetTriggerEl?.focus())"
           >
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="cat in visibleCategories"
                 :key="`sheet-${cat.slug}`"
-                class="ui-pill-nav whitespace-nowrap px-3 py-1.5 text-xs"
+                class="ui-pill-nav whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
                 :data-active="activeCategorySlug === cat.slug"
                 @click="scrollToSection(cat.slug); catSheetOpen = false"
               >{{ cat.name }}</button>
@@ -138,23 +138,23 @@
       </div>
 
       <!-- Allergen strip -->
-      <div v-if="availableAllergens.length" role="group" :aria-label="t('menu.allergenFilter')" class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ t('menu.freeFrom') }}</span>
+      <div v-if="availableAllergens.length" role="group" :aria-label="t('menu.allergenFilter')" class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span class="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('menu.freeFrom') }}</span>
         <button
           v-for="allergen in availableAllergens"
           :key="allergen"
           :aria-pressed="selectedAllergenFilter.includes(allergen)"
-          class="ui-touch-target shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] transition-colors"
+          class="ui-touch-target shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors"
           :class="selectedAllergenFilter.includes(allergen)
             ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
-            : 'border-slate-700 bg-slate-900/60 text-slate-400'"
+            : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
           @click="toggleAllergenFilter(allergen)"
         >{{ t(`menu.allergen_${allergen}`) }}</button>
       </div>
     </nav>
 
     <!-- ══ Sections ══ -->
-    <div class="px-3 sm:px-4 mt-3 space-y-4 sm:space-y-5">
+    <div class="px-3 sm:px-4 mt-4 space-y-6 sm:space-y-7">
       <section
         v-for="(cat, index) in visibleCategories"
         :id="`section-${cat.slug}`"
@@ -164,27 +164,32 @@
         class="ui-reveal scroll-mt-24 space-y-3 md:scroll-mt-32"
         :style="{ '--ui-delay': `${Math.min(index, 6) * 40}ms` }"
       >
-        <div class="flex items-start justify-between gap-3 border-b border-slate-800/50 pb-3">
-          <div class="flex items-start gap-3 min-w-0">
+        <!-- Section header -->
+        <div class="flex items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+          <div class="flex items-center gap-3 min-w-0">
             <span
-              class="mt-[3px] shrink-0 block h-7 w-[3.5px] rounded-full"
+              class="shrink-0 block h-7 w-1 rounded-full"
               style="background:linear-gradient(180deg,var(--color-secondary) 0%,var(--color-primary) 100%)"
+              aria-hidden="true"
             />
             <div class="min-w-0">
-              <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-2xl">{{ cat.name }}</h2>
-              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-xs text-slate-500">{{ cat.description }}</p>
+              <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-[1.35rem] tracking-tight">{{ cat.name }}</h2>
+              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-[11px] text-slate-500 leading-relaxed">{{ cat.description }}</p>
             </div>
           </div>
           <span
             v-if="menu.dishes[cat.slug]?.length"
-            class="mt-1 shrink-0 rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-0.5 text-[11px] text-slate-500 tabular-nums"
+            class="shrink-0 rounded-full border border-slate-800/80 bg-slate-900/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums"
+            :aria-label="`${sectionDishes(cat.slug).length} items`"
           >{{ sectionDishes(cat.slug).length }}</span>
         </div>
 
-        <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass">
-          <div v-for="n in 3" :key="n" class="ui-skeleton rounded-2xl" :class="cardLayout === 'card' ? 'h-80 rounded-[1.8rem]' : 'h-[7rem]'" />
+        <!-- Loading skeletons -->
+        <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass" aria-busy="true" aria-label="Loading dishes">
+          <div v-for="n in 3" :key="n" class="ui-skeleton" :class="cardLayout === 'card' ? 'h-80 rounded-[1.8rem]' : 'h-[7rem] rounded-2xl'" />
         </div>
 
+        <!-- Dish list -->
         <div v-else-if="sectionDishes(cat.slug).length" :class="dishGridClass">
           <DishCard
             v-for="dish in sectionDishes(cat.slug)"
@@ -198,35 +203,40 @@
           />
         </div>
 
-        <p v-else-if="menu.dishes[cat.slug] && selectedAllergenFilter.length" class="px-1 text-sm text-slate-500">
-          {{ t('menu.noMatchText') }}
-        </p>
+        <!-- Empty state after allergen filter -->
+        <div
+          v-else-if="menu.dishes[cat.slug] && selectedAllergenFilter.length"
+          class="flex flex-col items-center gap-2 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center"
+        >
+          <p class="text-sm font-medium text-slate-400">{{ t('menu.noMatchText') }}</p>
+        </div>
       </section>
 
-      <div v-if="menu.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+      <!-- Error state -->
+      <div v-if="menu.error" class="flex items-start gap-3 rounded-2xl border border-red-500/25 bg-red-500/8 px-4 py-3.5 shadow-sm shadow-black/20" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
-        <button class="shrink-0 text-xs text-slate-400 underline hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400" @click="menu.fetchCategories(true)">{{ t('common.retry') }}</button>
+        <button class="shrink-0 text-xs font-medium text-slate-400 underline hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400" @click="menu.fetchCategories(true)">{{ t('common.retry') }}</button>
       </div>
 
       <!-- Recent orders -->
-      <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal p-4 space-y-3">
+      <section v-if="cart.recentOrders?.length" class="ui-panel ui-reveal space-y-3 p-4" :aria-label="t('menu.recentOrdersTitle')">
         <p class="ui-kicker">{{ t('menu.recentOrdersTitle') }}</p>
         <ul class="space-y-2">
           <li v-for="order in cart.recentOrders.slice(0, 5)" :key="order.order_number">
             <RouterLink
               :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="ui-surface-lift flex items-center justify-between rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-sm hover:border-slate-600/80"
+              class="ui-surface-lift flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3.5 py-3 text-sm hover:border-slate-600/70 active:scale-[0.99]"
             >
               <div class="min-w-0 space-y-0.5">
-                <p class="font-semibold text-slate-200 tabular-nums">{{ order.order_number }}</p>
-                <p v-if="order.items?.length" class="truncate text-xs text-slate-400">
+                <p class="text-xs font-semibold tracking-wide text-slate-200 tabular-nums">{{ order.order_number }}</p>
+                <p v-if="order.items?.length" class="truncate text-[11px] text-slate-400 leading-relaxed">
                   {{ order.items.slice(0, 3).map(i => i.dish_name).join(', ') }}{{ order.items.length > 3 ? '…' : '' }}
                 </p>
               </div>
-              <div class="ms-3 shrink-0 space-y-0.5 text-end">
-                <p class="text-xs font-semibold tabular-nums" style="color:var(--color-secondary)">{{ formatPrice(order.total) }}</p>
-                <p class="text-[10px] text-slate-500">{{ t('menu.viewStatus') }}</p>
+              <div class="shrink-0 space-y-0.5 text-end">
+                <p class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ formatPrice(order.total) }}</p>
+                <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('menu.viewStatus') }}</p>
               </div>
             </RouterLink>
           </li>
@@ -241,13 +251,14 @@
         v-if="cart.count"
         :to="{ name: 'cart' }"
         class="ui-cart-bar fixed z-20 flex items-center justify-between gap-4 rounded-2xl px-4 py-3 backdrop-blur-xl bottom-[5.15rem] left-3 right-3 sm:left-auto sm:right-6 sm:rtl:left-6 sm:rtl:right-auto sm:bottom-6 sm:w-auto sm:min-w-[15rem] sm:shadow-2xl"
+        :aria-label="t('common.cart')"
       >
         <div class="flex items-center gap-2.5">
-          <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-slate-950" style="background:var(--color-secondary)">{{ cart.count }}</span>
+          <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-slate-950 shadow-sm" style="background:var(--color-secondary)">{{ cart.count }}</span>
           <p class="text-sm font-semibold text-white">{{ t('common.cart') }}</p>
         </div>
         <div class="flex items-center gap-2">
-          <p class="text-base font-bold" style="color:var(--color-secondary)">{{ formatPrice(cart.total) }}</p>
+          <p class="text-base font-bold tabular-nums" style="color:var(--color-secondary)">{{ formatPrice(cart.total) }}</p>
           <AppIcon name="cart" class="h-4 w-4" style="color:var(--color-secondary)" aria-hidden="true" />
         </div>
       </RouterLink>
