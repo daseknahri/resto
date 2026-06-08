@@ -62,7 +62,7 @@
 
     <!-- Empty state -->
     <div
-      v-if="!sections.length && !creating"
+      v-if="!loading && !sections.length && !creating"
       class="ui-empty-state text-center"
     >
       <AppIcon name="table" class="mx-auto mb-2 h-8 w-8 text-slate-500" aria-hidden="true" />
@@ -77,9 +77,12 @@
       </button>
     </div>
 
-    <!-- TODO: requires logic change — add a `loading` ref, set true before fetchSections/fetchStaff, false after; render <div v-if="loading" class="ui-skeleton h-14 rounded-xl" /> x2 before the <ul> per §2.4 -->
+    <!-- Loading skeletons -->
+    <template v-if="loading">
+      <div v-for="i in 2" :key="i" class="ui-skeleton h-14 rounded-xl" />
+    </template>
     <!-- Section list -->
-    <ul class="space-y-2">
+    <ul v-if="!loading" class="space-y-2">
     <li
       v-for="(s, index) in sections"
       :key="s.id"
@@ -248,6 +251,7 @@ const toast = useToastStore();
 const sections = ref([]);
 const staff = ref([]);
 const busy = ref(false);
+const loading = ref(false);
 
 const creating = ref(false);
 const newName = ref('');
@@ -336,6 +340,11 @@ const removeSection = async (s) => {
   }
 };
 
-onMounted(() => { fetchSections(); fetchStaff(); });
+onMounted(() => {
+  loading.value = true;
+  Promise.all([fetchSections(), fetchStaff()]).finally(() => {
+    loading.value = false;
+  });
+});
 defineExpose({ fetchSections });
 </script>

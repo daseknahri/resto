@@ -13,6 +13,8 @@ import api from "../lib/api";
 const messages = ref([]);
 const unread = ref(0);
 const isOpen = ref(false);
+const loading = ref(false);
+const error = ref(false);
 
 export function useStaffChat() {
   const appendMessage = (msg) => {
@@ -23,11 +25,15 @@ export function useStaffChat() {
   };
 
   const load = async () => {
+    loading.value = true;
+    error.value = false;
     try {
       const { data } = await api.get("/owner/chat/");
       messages.value = Array.isArray(data.results) ? data.results : [];
     } catch {
-      /* keep whatever we have */
+      error.value = true;
+    } finally {
+      loading.value = false;
     }
   };
 
@@ -55,5 +61,5 @@ export function useStaffChat() {
     isOpen.value = false;
   };
 
-  return { messages, unread, isOpen, load, send, handleRealtime, open, close };
+  return { messages, unread, isOpen, loading, error, load, send, handleRealtime, open, close };
 }

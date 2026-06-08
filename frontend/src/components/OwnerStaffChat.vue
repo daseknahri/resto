@@ -44,9 +44,22 @@
         </div>
 
         <!-- Message list -->
-        <!-- TODO: requires logic change — add loading skeleton and error state once useStaffChat exposes loading/error -->
         <div ref="listEl" role="log" aria-labelledby="staff-chat-title" class="flex-1 overflow-y-auto px-3 py-3">
-          <div v-if="!messages.length" class="ui-empty-state text-center p-5 space-y-1">
+          <!-- Loading skeletons -->
+          <div v-if="loading" class="space-y-2" aria-busy="true">
+            <div v-for="i in 3" :key="i" class="ui-skeleton rounded-xl" :class="i === 2 ? 'h-10' : 'h-14'" />
+          </div>
+          <!-- Error state -->
+          <div v-else-if="error" class="flex flex-col items-center gap-2 p-4 text-center">
+            <p class="text-xs text-slate-400">{{ t("staffChat.loadError") }}</p>
+            <button
+              type="button"
+              class="ui-press rounded-full border border-slate-700 px-3 py-1 text-[11px] font-semibold text-slate-300 hover:border-slate-500 hover:text-white"
+              @click="load"
+            >{{ t("common.retry") }}</button>
+          </div>
+          <!-- Empty state -->
+          <div v-else-if="!messages.length" class="ui-empty-state text-center p-5 space-y-1">
             <p class="text-sm font-semibold text-slate-100">{{ t("staffChat.emptyTitle") }}</p>
             <p class="text-xs text-slate-400">{{ t("staffChat.empty") }}</p>
           </div>
@@ -98,7 +111,7 @@ import { useToastStore } from "../stores/toast";
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
-const { messages, unread, isOpen, load, send, open, close } = useStaffChat();
+const { messages, unread, isOpen, loading, error, load, send, open, close } = useStaffChat();
 
 const draft = ref("");
 const sending = ref(false);

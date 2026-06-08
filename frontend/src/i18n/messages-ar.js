@@ -316,6 +316,7 @@ const arabicMessages = {
     "send": "إرسال",
     "sending": "جارٍ الإرسال…",
     "sendFailed": "تعذّر الإرسال. حاول مرة أخرى.",
+    "loadError": "تعذّر تحميل الرسائل.",
     "someone": "الموظفون",
     "unreadCap": "99+",
     "inputLabel": "رسالة"
