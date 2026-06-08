@@ -31,7 +31,8 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 | `VAPID_ADMIN_EMAIL` | Contact `mailto:` for push (e.g. `admin@yourdomain.com`). |
 | `OPENROUTER_API_KEY` | Optional — only needed for the AI translation feature |
 | `DELIVERY_ROAD_FACTOR` | Optional (default `1.3`). Multiplier turning straight-line distance into an estimated road distance for delivery fees. Leave default unless you tune it. |
-| `DELIVERY_OSRM_URL` | Optional. Point at a self-hosted OSRM instance (e.g. `http://osrm:5000`) for **real** driving distances (cached 7d, falls back to the road factor on any error). Unset = use the road factor. Recommended path to a full delivery/ride platform: run OSRM on a small VPS with a Morocco OSM extract = unlimited & free. |
+| `DELIVERY_OSRM_URL` | Optional. Point at a self-hosted OSRM instance (e.g. `http://osrm:5000`) for **real** driving distances + map route lines + ETAs (cached, falls back to the road factor on any error). Unset = use the road factor. **Copy-paste setup: see `OSRM_SELF_HOST.md`.** |
+| `VITE_MAP_TILE_URL` / `VITE_MAP_TILE_ATTRIBUTION` | Optional **build-time** (frontend) vars for the map image tiles. Default = OpenStreetMap public tiles (dev only — not licensed for heavy production). Set a MapTiler/Mapbox/Stadia free-tier URL+key before real volume. Must be present when the frontend image is built. See `frontend/src/lib/mapTiles.js`. |
 
 > **Note on CSRF:** leave `DJANGO_CSRF_COOKIE_HTTPONLY` unset/`False`. The SPA reads the
 > `csrftoken` cookie in JS and echoes it in the `X-CSRFToken` header (Django double-submit) —

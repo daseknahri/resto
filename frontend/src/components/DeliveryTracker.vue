@@ -172,6 +172,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
@@ -293,7 +294,7 @@ const renderMap = async () => {
   const driverPos = [Number(d.lat), Number(d.lng)];
   if (!_map) {
     _map = L.map(mapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_map);
+    addTileLayer(L, _map);
   }
   if (!_driverMarker) _driverMarker = L.marker(driverPos).addTo(_map);
   else _driverMarker.setLatLng(driverPos);

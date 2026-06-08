@@ -922,6 +922,7 @@ import { useCurrencyStore } from '../stores/currency';
 import api from '../lib/api';
 import { trackEvent } from '../lib/analytics';
 import { safeExternalUrl } from '../lib/escape';
+import { addTileLayer } from '../lib/mapTiles';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -1455,10 +1456,7 @@ const initLeafletMap = async () => {
       zoomControl: true,
       attributionControl: true,
     });
-    Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(leafletMap.value);
+    addTileLayer(Leaflet, leafletMap.value);
     leafletMap.value.on('click', (event) => {
       const lat = Number(event?.latlng?.lat);
       const lng = Number(event?.latlng?.lng);
