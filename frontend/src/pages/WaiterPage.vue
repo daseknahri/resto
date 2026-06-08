@@ -19,74 +19,79 @@
       >✕</button>
     </div>
 
-    <!-- Status tabs + action buttons -->
-    <div class="min-w-0 flex items-center gap-2">
-      <div
-        class="ui-scroll-row flex-1 min-w-0"
-        role="tablist"
-        :aria-label="t('waiterPage.tablistLabel')"
-        @keydown.left.prevent="focusPrevTab"
-        @keydown.right.prevent="focusNextTab"
-      >
-        <button
-          v-for="tab in tabs"
-          :id="`waiter-tab-${tab.key}`"
-          :key="tab.key"
-          role="tab"
-          :aria-selected="activeTab === tab.key"
-          :aria-controls="`waiter-panel-${tab.key}`"
-          class="ui-state-chip ui-press ui-touch-target shrink-0"
-          :data-active="activeTab === tab.key"
-          @click="activeTab = tab.key"
+    <!-- Status tabs + action buttons — single scroll row so nothing clips on narrow screens -->
+    <div class="overflow-x-auto" style="scrollbar-width:none;-webkit-overflow-scrolling:touch">
+      <div class="flex min-w-max items-center gap-2 pb-0.5">
+        <!-- Tablist (ARIA-correct container for the tab buttons) -->
+        <div
+          class="flex shrink-0 items-center gap-2"
+          role="tablist"
+          :aria-label="t('waiterPage.tablistLabel')"
+          @keydown.left.prevent="focusPrevTab"
+          @keydown.right.prevent="focusNextTab"
         >
-          {{ tab.label }}
-          <span
-            v-if="tab.count > 0"
-            class="ms-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums"
-            :class="tab.key === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-700/70 text-slate-200'"
-          >{{ tab.count }}</span>
-        </button>
-        <!-- Recent / past orders tab -->
-        <button
-          id="waiter-tab-recent"
-          role="tab"
-          :aria-selected="activeTab === 'recent'"
-          aria-controls="waiter-panel-recent"
-          class="ui-state-chip ui-press ui-touch-target shrink-0"
-          :data-active="activeTab === 'recent'"
-          @click="activeTab = 'recent'"
-        >
-          {{ t('waiterPage.tabRecent') }}
-        </button>
-        <!-- Shift summary tab -->
-        <button
-          id="waiter-tab-shift"
-          role="tab"
-          :aria-selected="activeTab === 'shift'"
-          aria-controls="waiter-panel-shift"
-          class="ui-state-chip ui-press ui-touch-target shrink-0"
-          :data-active="activeTab === 'shift'"
-          @click="openShiftSummary"
-        >
-          {{ t('waiterPage.tabShift') }}
-        </button>
-      </div>
-      <!-- Action buttons — live outside the tablist per ARIA spec -->
-      <div class="flex shrink-0 items-center gap-1.5">
-        <button
-          v-if="canManageOrders"
-          class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 text-[var(--color-secondary)]"
-          @click="openCharge()"
-        >
-          {{ t('waiterPage.chargeWalletBtn') }}
-        </button>
-        <button
-          v-if="canManageOrders"
-          class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/40 text-emerald-300"
-          @click="showNewOrder = true"
-        >
-          + {{ t('waiterPage.newOrderBtn') }}
-        </button>
+          <button
+            v-for="tab in tabs"
+            :id="`waiter-tab-${tab.key}`"
+            :key="tab.key"
+            role="tab"
+            :aria-selected="activeTab === tab.key"
+            :aria-controls="`waiter-panel-${tab.key}`"
+            class="ui-state-chip ui-press ui-touch-target shrink-0"
+            :data-active="activeTab === tab.key"
+            @click="activeTab = tab.key"
+          >
+            {{ tab.label }}
+            <span
+              v-if="tab.count > 0"
+              class="ms-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums"
+              :class="tab.key === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-700/70 text-slate-200'"
+            >{{ tab.count }}</span>
+          </button>
+          <!-- Recent / past orders tab -->
+          <button
+            id="waiter-tab-recent"
+            role="tab"
+            :aria-selected="activeTab === 'recent'"
+            aria-controls="waiter-panel-recent"
+            class="ui-state-chip ui-press ui-touch-target shrink-0"
+            :data-active="activeTab === 'recent'"
+            @click="activeTab = 'recent'"
+          >
+            {{ t('waiterPage.tabRecent') }}
+          </button>
+          <!-- Shift summary tab -->
+          <button
+            id="waiter-tab-shift"
+            role="tab"
+            :aria-selected="activeTab === 'shift'"
+            aria-controls="waiter-panel-shift"
+            class="ui-state-chip ui-press ui-touch-target shrink-0"
+            :data-active="activeTab === 'shift'"
+            @click="openShiftSummary"
+          >
+            {{ t('waiterPage.tabShift') }}
+          </button>
+        </div>
+        <!-- Separator -->
+        <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-700/40" aria-hidden="true" />
+        <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
+        <div class="flex shrink-0 items-center gap-1.5">
+          <button
+            v-if="canManageOrders"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 text-[var(--color-secondary)]"
+            @click="openCharge()"
+          >
+            {{ t('waiterPage.chargeWalletBtn') }}
+          </button>
+          <button
+            v-if="canManageOrders"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/40 text-emerald-300"
+            @click="showNewOrder = true"
+          >
+            + {{ t('waiterPage.newOrderBtn') }}
+          </button>
+        </div>
       </div>
     </div>
 
