@@ -1,15 +1,14 @@
 <template>
   <div class="ui-shell">
 
-    <!-- Screen-reader live region: announces order status changes -->
-    <!-- TODO: requires logic change — deduplicate live-region announcements on polling updates -->
+    <!-- Screen-reader live region: announces status transitions only (not every poll cycle). -->
     <div
-      v-if="order"
+      v-if="liveStatus"
       role="status"
       aria-live="polite"
       aria-atomic="true"
       class="sr-only"
-    >{{ t(`mktOrderStatus.${order.status}`) }}</div>
+    >{{ t(`mktOrderStatus.${liveStatus}`) }}</div>
 
     <main class="mx-auto max-w-md space-y-4 px-4 py-6 pb-16 sm:py-8">
       <!-- Back -->
@@ -280,7 +279,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
@@ -310,6 +309,12 @@ const orderNumber = route.params.orderNumber;
 const loading = ref(true);
 const fetchError = ref(false);
 const order = ref(null);
+// Only announce when status genuinely changes — not on every poll cycle that
+// re-assigns the same order object (which would re-trigger screen readers).
+const liveStatus = ref('');
+watch(() => order.value?.status, (newStatus) => {
+  if (newStatus && newStatus !== liveStatus.value) liveStatus.value = newStatus;
+});
 
 // ── Delivery tracking (driver card + live map rendered by <DeliveryTracker>) ─────
 const delivery = ref(null);

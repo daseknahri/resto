@@ -158,7 +158,6 @@
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-editor-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.editCategory") }}</h3>
             </div>
-            <!-- TODO: requires logic change — restore focus to trigger element on close -->
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeEditor">{{ t("common.close") }}</button>
           </div>
 
@@ -264,7 +263,6 @@
               <p class="ui-kicker">{{ t("common.categories") }}</p>
               <h3 id="step-categories-quick-dialog-title" class="text-lg font-semibold text-white">{{ t("stepCategories.addCategory") }}</h3>
             </div>
-            <!-- TODO: requires logic change — restore focus to trigger element on close -->
             <button type="button" class="ui-btn-outline ui-touch-target px-3 py-1.5 text-xs" @click="closeQuickModal">{{ t("common.close") }}</button>
           </div>
           <div class="space-y-4 p-4">

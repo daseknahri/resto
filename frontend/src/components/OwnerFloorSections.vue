@@ -25,9 +25,9 @@
         role="group"
         :aria-label="t('ownerSections.add')"
       >
-        <!-- TODO: requires logic change — focus should move to newName input when this form opens (startCreate) -->
         <div class="flex flex-wrap items-center gap-2">
           <input
+            ref="newNameInputRef"
             v-model="newName"
             class="ui-input min-w-0 flex-1 text-sm"
             :placeholder="t('ownerSections.namePlaceholder')"
@@ -112,7 +112,7 @@
             :aria-label="editId === s.id ? `${t('common.close')} ${s.name}` : `${t('common.edit')} ${s.name}`"
             :aria-expanded="editId === s.id"
             :aria-controls="`section-edit-${s.id}`"
-            @click="toggleEdit(s)"
+            @click="toggleEdit(s, $event.currentTarget)"
           >
             <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
             <span class="hidden sm:inline">{{ t('common.edit') }}</span>
@@ -212,7 +212,6 @@
             </div>
           </fieldset>
 
-          <!-- TODO: requires logic change — focus should return to the edit toggle button when editId is cleared (cancel or save) -->
           <div class="flex items-center gap-2 pt-0.5">
             <button
               class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
@@ -224,7 +223,7 @@
             </button>
             <button
               class="ui-btn-outline ui-press inline-flex items-center gap-1 px-3 py-1.5 text-xs"
-              @click="editId = null"
+              @click="cancelEdit"
             >
               {{ t('common.cancel') }}
             </button>
@@ -237,7 +236,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
@@ -256,12 +255,14 @@ const loading = ref(false);
 const creating = ref(false);
 const newName = ref('');
 const newColor = ref('#f59e0b');
+const newNameInputRef = ref(null);
 
 const editId = ref(null);
 const editName = ref('');
 const editColor = ref('#64748b');
 const editServers = ref([]);
 const editTables = ref([]);
+let _editTriggerEl = null;
 
 const fetchSections = async () => {
   try {
@@ -281,6 +282,7 @@ const startCreate = () => {
   creating.value = true;
   newName.value = '';
   newColor.value = '#f59e0b';
+  nextTick(() => newNameInputRef.value?.focus());
 };
 
 const createSection = async () => {
@@ -297,13 +299,19 @@ const createSection = async () => {
   }
 };
 
-const toggleEdit = (s) => {
+const toggleEdit = (s, triggerEl) => {
   if (editId.value === s.id) { editId.value = null; return; }
+  _editTriggerEl = triggerEl || null;
   editId.value = s.id;
   editName.value = s.name;
   editColor.value = s.color || '#64748b';
   editServers.value = s.servers.map((x) => x.id);
   editTables.value = s.tables.map((x) => x.id);
+};
+
+const cancelEdit = () => {
+  editId.value = null;
+  nextTick(() => { _editTriggerEl?.focus(); _editTriggerEl = null; });
 };
 
 const saveSection = async (s) => {
@@ -317,6 +325,7 @@ const saveSection = async (s) => {
       server_user_ids: editServers.value,
     });
     editId.value = null;
+    nextTick(() => { _editTriggerEl?.focus(); _editTriggerEl = null; });
     await fetchSections();
   } catch {
     toast.show(t('ownerSections.saveError'), 'error');

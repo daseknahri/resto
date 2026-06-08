@@ -265,7 +265,6 @@
     </div>
 
     <!-- ══ Contact modal ══ -->
-    <!-- TODO: requires logic change — openLeadModal/closeLeadModal should save/restore document.activeElement so keyboard focus returns to the trigger button on dismiss -->
     <Teleport to="body">
       <div
         v-if="showLeadModal"
@@ -368,13 +367,17 @@ const trapLeadFocus = (e) => {
   }
 };
 
+let _leadReturnFocus = null;
 watch(showLeadModal, async (open) => {
   if (open) {
+    _leadReturnFocus = document.activeElement;
     await nextTick();
     leadDialogRef.value?.querySelector(FOCUSABLE_LEAD)?.focus();
     document.addEventListener('keydown', trapLeadFocus);
   } else {
     document.removeEventListener('keydown', trapLeadFocus);
+    _leadReturnFocus?.focus();
+    _leadReturnFocus = null;
   }
 });
 const showPlatformDemo = computed(() => isPublicDemoHost());
