@@ -3,17 +3,17 @@
     <!-- Install-the-app banner (waiters work from the installed app) -->
     <div
       v-if="!isStandalone && !installDismissed"
-      class="ui-reveal flex items-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-3 py-2.5 text-xs"
+      class="ui-reveal flex items-center gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/8 px-4 py-3 text-xs"
       role="status"
     >
-      <span class="flex-1 text-indigo-200">
+      <span class="flex-1 font-medium text-indigo-200">
         {{ canInstall ? t('waiterInstall.prompt') : t('waiterInstall.manual') }}
       </span>
-      <button v-if="canInstall" class="ui-btn-primary ui-press px-3 py-1.5 text-[11px]" @click="install">
+      <button v-if="canInstall" class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-[11px]" @click="install">
         {{ t('waiterInstall.cta') }}
       </button>
       <button
-        class="ui-touch-target ui-press flex items-center justify-center rounded-full p-1.5 text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+        class="ui-touch-target ui-press flex shrink-0 items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
         :aria-label="t('waiterInstall.dismiss')"
         @click="installDismissed = true"
       >✕</button>
@@ -44,8 +44,8 @@
             {{ tab.label }}
             <span
               v-if="tab.count > 0"
-              class="ms-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums"
-              :class="tab.key === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-700/70 text-slate-200'"
+              class="ms-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums leading-none"
+              :class="tab.key === 'pending' ? 'bg-amber-500 text-white shadow-sm shadow-amber-900/30' : 'bg-slate-700/80 text-slate-100'"
             >{{ tab.count }}</span>
           </button>
           <!-- Recent / past orders tab -->
@@ -74,19 +74,19 @@
           </button>
         </div>
         <!-- Separator -->
-        <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-700/40" aria-hidden="true" />
+        <span class="waiter-tab-sep h-5 w-px shrink-0 self-center bg-slate-600/50" aria-hidden="true" />
         <!-- Action buttons — outside the tablist per ARIA spec but scroll with the tabs -->
-        <div class="flex shrink-0 items-center gap-1.5">
+        <div class="flex shrink-0 items-center gap-2">
           <button
             v-if="canManageOrders"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 text-[var(--color-secondary)]"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-[var(--color-secondary)]/40 font-semibold text-[var(--color-secondary)]"
             @click="openCharge()"
           >
             {{ t('waiterPage.chargeWalletBtn') }}
           </button>
           <button
             v-if="canManageOrders"
-            class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/40 text-emerald-300"
+            class="ui-state-chip ui-press ui-touch-target shrink-0 border-emerald-500/50 bg-emerald-500/10 font-semibold text-emerald-300"
             @click="showNewOrder = true"
           >
             + {{ t('waiterPage.newOrderBtn') }}
@@ -125,7 +125,7 @@
       <div
         v-for="i in 3"
         :key="i"
-        class="ui-skeleton h-28"
+        class="ui-skeleton h-36"
       />
     </div>
 
@@ -136,10 +136,10 @@
       role="tabpanel"
       :aria-labelledby="`waiter-tab-${activeTab}`"
     >
-      <div role="alert" class="flex items-start gap-2 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">
+      <div role="alert" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3.5">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ waiter.error }}</p>
-        <button class="ui-press shrink-0 text-xs text-slate-400 underline hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60" @click="reload">{{ t('waiterPage.retry') }}</button>
+        <button class="ui-press shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium text-slate-300 underline hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/60" @click="reload">{{ t('waiterPage.retry') }}</button>
       </div>
     </div>
 
@@ -149,11 +149,11 @@
       :id="`waiter-panel-${activeTab}`"
       role="tabpanel"
       :aria-labelledby="`waiter-tab-${activeTab}`"
-      class="ui-empty-state text-center"
+      class="ui-empty-state py-10 text-center"
     >
-      <p class="text-2xl" aria-hidden="true">{{ activeTab === 'recent' ? '🗒️' : '✓' }}</p>
-      <p class="mt-2 text-sm font-semibold text-slate-100">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrders') : t('waiterPage.noActiveOrders') }}</p>
-      <p class="mt-1 text-xs text-slate-400">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrdersBody') : t('waiterPage.noActiveOrdersBody') }}</p>
+      <p class="text-3xl" aria-hidden="true">{{ activeTab === 'recent' ? '🗒️' : '✓' }}</p>
+      <p class="mt-3 text-sm font-semibold text-slate-100">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrders') : t('waiterPage.noActiveOrders') }}</p>
+      <p class="mt-1.5 text-xs text-slate-400">{{ activeTab === 'recent' ? t('waiterPage.noRecentOrdersBody') : t('waiterPage.noActiveOrdersBody') }}</p>
     </div>
 
     <!-- Shift summary panel -->
@@ -193,16 +193,16 @@
 
       <!-- Stats grid -->
       <div v-else-if="waiter.shiftSummary" class="grid gap-3" :class="showShiftRevenue ? 'grid-cols-3' : 'grid-cols-2'">
-        <div class="ui-stat-tile text-center space-y-1">
-          <p class="ui-stat-value tabular-nums">{{ waiter.shiftSummary.orders_handled }}</p>
+        <div class="ui-stat-tile space-y-1.5 text-center">
+          <p class="ui-stat-value tabular-nums text-2xl font-bold">{{ waiter.shiftSummary.orders_handled }}</p>
           <p class="ui-stat-label">{{ t('waiterPage.shiftOrders') }}</p>
         </div>
-        <div v-if="showShiftRevenue" class="ui-stat-tile text-center space-y-1">
-          <p class="ui-stat-value tabular-nums text-emerald-300">{{ shiftRevenue }}</p>
+        <div v-if="showShiftRevenue" class="ui-stat-tile space-y-1.5 text-center">
+          <p class="ui-stat-value tabular-nums text-2xl font-bold text-emerald-300">{{ shiftRevenue }}</p>
           <p class="ui-stat-label">{{ t('waiterPage.shiftRevenue') }}</p>
         </div>
-        <div class="ui-stat-tile text-center space-y-1">
-          <p class="ui-stat-value tabular-nums text-sky-300">
+        <div class="ui-stat-tile space-y-1.5 text-center">
+          <p class="ui-stat-value tabular-nums text-2xl font-bold text-sky-300">
             {{ waiter.shiftSummary.average_prep_time_minutes != null ? waiter.shiftSummary.average_prep_time_minutes : '—' }}<span v-if="waiter.shiftSummary.average_prep_time_minutes != null" class="text-base font-normal text-sky-400/70">m</span>
           </p>
           <p class="ui-stat-label">{{ t('waiterPage.shiftAvgPrep') }}</p>
@@ -215,7 +215,7 @@
       </p>
 
       <!-- Empty state while not yet loaded -->
-      <div v-else class="ui-empty-state text-center">
+      <div v-else class="ui-empty-state py-8 text-center">
         <p class="text-sm text-slate-400">{{ t('waiterPage.shiftHint') }}</p>
       </div>
     </div>
@@ -236,65 +236,77 @@
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
       >
         <!-- Card header -->
-        <div class="flex items-start justify-between gap-3 px-4 pt-4">
+        <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
           <div class="min-w-0">
             <!-- Table / fulfillment label (largest text — for quick scanning) -->
-            <p class="truncate text-lg font-bold leading-tight text-white">
+            <p class="truncate text-xl font-bold leading-tight text-white">
               {{ orderHeadline(order) }}
             </p>
-            <p class="mt-0.5 text-xs text-slate-400">
-              <span class="tabular-nums">#{{ order.order_number }}</span> · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span><span v-if="order.section_name" class="text-slate-500"> · {{ order.section_name }}</span>
+            <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-400">
+              <span class="tabular-nums font-medium text-slate-300">#{{ order.order_number }}</span>
+              <span aria-hidden="true" class="text-slate-600">·</span>
+              <span>{{ timeAgo(order.created_at) }}</span>
+              <template v-if="order.customer_name">
+                <span aria-hidden="true" class="text-slate-600">·</span>
+                <span>{{ order.customer_name }}</span>
+              </template>
+              <template v-if="order.section_name">
+                <span aria-hidden="true" class="text-slate-600">·</span>
+                <span class="text-slate-500">{{ order.section_name }}</span>
+              </template>
             </p>
           </div>
           <!-- Status chip -->
           <span
-            class="shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
             :class="statusChipClass(order.status)"
           >{{ t(`waiterPage.status_${order.status}`) }}</span>
         </div>
 
         <!-- Items -->
-        <ul class="mt-2 space-y-0.5 px-4">
+        <ul class="border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
           <li
             v-for="(item, idx) in order.items"
             :key="idx"
-            class="flex items-baseline gap-2 text-sm text-slate-300"
+            class="flex items-baseline gap-2 py-0.5 text-sm text-slate-300"
           >
-            <span class="shrink-0 tabular-nums font-semibold text-slate-100">{{ item.qty }}×</span>
-            <span class="min-w-0 truncate">{{ item.dish_name }}</span>
+            <span class="w-6 shrink-0 tabular-nums font-bold text-slate-100">{{ item.qty }}×</span>
+            <span class="min-w-0 flex-1 truncate">{{ item.dish_name }}</span>
             <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500">({{ item.note }})</span>
           </li>
         </ul>
 
         <!-- Notes row -->
-        <div v-if="order.customer_note || order.owner_note" class="mt-2 space-y-1 px-4">
-          <p v-if="order.customer_note" class="text-xs text-slate-400">
-            <span class="font-medium text-slate-300">{{ t('waiterPage.customerNote') }}:</span>
-            {{ order.customer_note }}
+        <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
+          <p v-if="order.customer_note" class="flex gap-2 text-xs text-slate-400">
+            <span class="shrink-0 font-semibold text-slate-300">{{ t('waiterPage.customerNote') }}:</span>
+            <span>{{ order.customer_note }}</span>
           </p>
-          <p v-if="order.owner_note" class="text-xs text-amber-300/80">
-            <span class="font-medium">{{ t('waiterPage.staffNote') }}:</span>
-            {{ order.owner_note }}
+          <p v-if="order.owner_note" class="flex gap-2 text-xs text-amber-300/90">
+            <span class="shrink-0 font-semibold">{{ t('waiterPage.staffNote') }}:</span>
+            <span>{{ order.owner_note }}</span>
           </p>
         </div>
 
-        <!-- ETA + total + payment -->
-        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 text-xs text-slate-500">
-          <span v-if="order.estimated_ready_minutes" class="tabular-nums">
+        <!-- ETA + total + payment status -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2" :class="statusBorderClass(order.status)">
+          <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
             {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
           </span>
-          <span class="tabular-nums">{{ fmtOrderPrice(order.total, order.currency) }}</span>
+          <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
           <span
-            class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            :class="order.payment_status === 'paid' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+            :class="order.payment_status === 'paid'
+              ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
+              : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
           >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
         </div>
 
         <!-- Action footer -->
-        <div class="mt-3 flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
+        <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
           <button
             v-if="canManageOrders && waiter.nextStatus(order)"
-            class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-semibold transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            class="ui-press ui-touch-target flex-1 rounded-xl py-2.5 text-sm font-bold tracking-wide shadow-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
@@ -309,7 +321,7 @@
                a ready dine-in order). -->
           <button
             v-if="canManageOrders && order.payment_status !== 'paid'"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             @click="settleChooser = order"
           ><span aria-hidden="true">💵</span> {{ order.status === 'ready' ? t('ownerOrders.settleAndClose') : t('ownerOrders.markPaid') }}</button>
@@ -317,13 +329,13 @@
           <!-- Rate the customer — only the server who handled this order -->
           <button
             v-if="order.customer_id && order.handled_by_me"
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+            class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
             @click="openCustomerRating(order)"
           ><span aria-hidden="true">★</span> {{ t('ownerOrders.rateCustomer') }}</button>
 
           <!-- Bill button -->
           <button
-            class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
+            class="ui-press ui-touch-target shrink-0 rounded-xl border border-slate-600/70 bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/40"
             @click="openBill(order)"
           ><span aria-hidden="true">🧾</span> {{ t('waiterPage.billBtn') }}</button>
         </div>

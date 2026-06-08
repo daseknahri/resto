@@ -1,42 +1,44 @@
 <template>
   <div class="ui-shell">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[9999] focus:rounded-lg focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none focus:ring-2 focus:ring-brand-secondary">{{ t('common.skipToMain') }}</a>
     <!-- Sticky top bar -->
     <header class="ui-header z-[2000]">
-      <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-3 py-2.5 ui-fade-up">
-        <!-- Left: restaurant name + waiter badge -->
+      <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-3 py-2 ui-fade-up">
+        <!-- Left: restaurant logo + name + waiter badge -->
         <div class="flex min-w-0 items-center gap-2.5">
           <img
             v-if="tenantLogo"
             :src="tenantLogo"
             :alt="`${tenantName} logo`"
-            class="h-7 w-7 shrink-0 rounded-xl border border-slate-700/70 object-cover"
+            class="h-8 w-8 shrink-0 rounded-xl border border-slate-700/70 object-cover shadow-sm shadow-black/20"
             loading="eager"
             decoding="async"
             @error="$event.target.style.display='none'"
           />
           <div class="min-w-0">
-            <p class="truncate text-sm font-semibold text-slate-100">{{ tenantName }}</p>
-            <p class="ui-kicker text-[10px]">{{ t('waiterLayout.role') }}</p>
+            <p class="truncate text-sm font-semibold leading-tight text-slate-100">{{ tenantName }}</p>
+            <p class="ui-kicker mt-0.5 text-[10px] leading-none">{{ t('waiterLayout.role') }}</p>
           </div>
         </div>
 
-        <!-- Right: connectivity dot + pending badge + sign-out -->
-        <div class="flex shrink-0 items-center gap-2">
+        <!-- Right: connectivity + queue indicators + controls -->
+        <div class="flex shrink-0 items-center gap-1.5">
           <!-- Connectivity status (single live region for queue + online state) -->
-          <span class="flex items-center gap-2" role="status" aria-live="polite">
+          <span class="flex items-center gap-1.5" role="status" aria-live="polite">
             <!-- Offline queue indicator -->
             <span
               v-show="waiter.queueLength > 0"
-              class="ui-chip-strong inline-flex items-center gap-1 px-2 py-0.5 text-[10px]"
+              class="ui-chip-strong inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold"
             >
               <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
               {{ t('waiterLayout.queued', { count: waiter.queueLength }) }}
             </span>
             <!-- Live / offline dot -->
             <span
-              class="flex items-center gap-1 text-[10px] font-medium"
-              :class="waiter.isOnline ? 'text-emerald-400' : 'text-slate-500'"
+              class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium transition-colors"
+              :class="waiter.isOnline
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-slate-700/60 bg-slate-800/40 text-slate-500'"
             >
               <span
                 :class="waiter.isOnline ? 'ui-live-dot bg-emerald-400' : 'h-2 w-2 rounded-full bg-slate-600'"
@@ -45,11 +47,16 @@
               <span>{{ waiter.isOnline ? t('waiterLayout.live') : t('waiterLayout.offline') }}</span>
             </span>
           </span>
+
+          <!-- Divider -->
+          <span class="mx-0.5 h-5 w-px shrink-0 rounded-full bg-slate-700/50" aria-hidden="true" />
+
           <!-- Language switcher -->
           <LanguageSwitcher compact dropdown />
+
           <!-- Dark / light toggle -->
           <button
-            class="ui-touch-target flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800/60 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 ui-press"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 text-slate-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 ui-touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             type="button"
             :aria-label="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
             :title="ownerTheme === 'dark' ? t('waiterLayout.themeLight') : t('waiterLayout.themeDark')"
@@ -62,6 +69,7 @@
               <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
             </svg>
           </button>
+
           <!-- Back to owner dashboard (owners only) -->
           <RouterLink
             v-if="session.isTenantOwner"
@@ -70,9 +78,10 @@
           >
             {{ t('waiterLayout.ownerView') }}
           </RouterLink>
+
           <!-- Sign out -->
           <button
-            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center text-xs px-2.5 py-1.5 hover:border-red-500/40 hover:text-red-300"
+            class="flex h-8 shrink-0 items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/50 px-2.5 text-xs text-slate-400 transition-colors hover:border-red-500/40 hover:text-red-400 ui-touch-target ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
             type="button"
             @click="handleSignOut"
           >
