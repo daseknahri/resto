@@ -1066,12 +1066,14 @@ const ALLERGENS = [
   "milk", "tree_nuts", "celery", "mustard", "sesame",
   "sulphites", "lupin", "molluscs",
 ];
+import { useRoute } from "vue-router";
 const props = defineProps({
   standalone: {
     type: Boolean,
     default: false,
   },
 });
+const route = useRoute();
 const activeCategoryId = ref("");
 const dishEditorModalOpen = ref(false);
 const dishEditorDialogRef = ref(null);
@@ -1222,6 +1224,16 @@ const syncActiveCategory = () => {
   if (!sortedCategoryOptions.value.length) {
     activeCategoryId.value = "";
     return;
+  }
+  // On first load, honour the ?category= query param passed from the categories tab.
+  // Only applied when activeCategoryId is not yet set (initial mount), so the user's
+  // own dropdown interactions take precedence afterwards.
+  if (!activeCategoryId.value) {
+    const requested = route?.query?.category;
+    if (requested && sortedCategoryOptions.value.some((c) => String(c.id) === String(requested))) {
+      activeCategoryId.value = String(requested);
+      return;
+    }
   }
   const exists = sortedCategoryOptions.value.some(
     (category) => String(category.id) === String(activeCategoryId.value)

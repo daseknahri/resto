@@ -1366,6 +1366,7 @@ const arabicMessages = {
     "quickTemplates": "قوالب تصنيفات سريعة",
     "applyTemplate": "تطبيق القالب المحدد",
     "categoryNamePlaceholder": "اسم التصنيف",
+    "viewDishes": "عرض الأطباق",
     "categoryDescriptionPlaceholder": "وصف التصنيف",
     "remove": "حذف",
     "categoryImageUrlPlaceholder": "رابط صورة التصنيف",

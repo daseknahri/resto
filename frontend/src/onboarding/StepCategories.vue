@@ -98,18 +98,27 @@
             </button>
           </div>
 
-          <!-- Name + meta — the whole block opens the editor -->
+          <!-- Name + meta — in standalone mode navigates to dishes, otherwise opens editor -->
           <div
             role="button"
             tabindex="0"
-            class="min-w-0 flex-1 cursor-pointer text-start"
-            :aria-label="`${t('common.edit')} ${cat.name || t('stepCategories.categoryNamePlaceholder')}`"
-            @click="openEditor(cat.local_id)"
-            @keydown.enter.space.prevent="openEditor(cat.local_id)"
+            class="group/card min-w-0 flex-1 cursor-pointer text-start"
+            :aria-label="props.standalone && cat.id
+              ? `${t('stepCategories.viewDishes')} — ${cat.name || t('stepCategories.categoryNamePlaceholder')}`
+              : `${t('common.edit')} ${cat.name || t('stepCategories.categoryNamePlaceholder')}`"
+            @click="goToDishes(cat)"
+            @keydown.enter.space.prevent="goToDishes(cat)"
           >
             <div class="flex items-center gap-1.5">
               <span class="h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" :class="cat.is_published ? 'bg-emerald-400' : 'bg-slate-600'" />
               <h3 class="truncate text-sm font-semibold text-white">{{ cat.name || t("stepCategories.categoryNamePlaceholder") }}</h3>
+              <!-- Navigation hint: only shown in standalone mode when the category is saved -->
+              <AppIcon
+                v-if="props.standalone && cat.id"
+                name="chevronRight"
+                class="ms-auto h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover/card:translate-x-0.5 group-hover/card:text-slate-400"
+                aria-hidden="true"
+              />
             </div>
             <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
               <span>{{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}</span>
@@ -365,7 +374,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -377,6 +386,7 @@ import { useToastStore } from "../stores/toast";
 const props = defineProps({ standalone: { type: Boolean, default: false } });
 const emit = defineEmits(["next", "back"]);
 const route = useRoute();
+const router = useRouter();
 const { t } = useI18n();
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -635,6 +645,17 @@ const load = async () => {
 const openEditor = (localId) => {
   editorLocalId.value = String(localId || "");
   editorOpen.value = true;
+};
+
+// In the standalone menu-builder context, clicking the card body navigates to
+// the Dishes tab pre-filtered to this category instead of opening the editor.
+// The pen (pencil) button still opens the editor.
+const goToDishes = (cat) => {
+  if (props.standalone && cat.id) {
+    router.replace({ name: "owner-menu-builder", query: { ...route.query, tab: "dishes", category: String(cat.id) } });
+  } else {
+    openEditor(cat.local_id);
+  }
 };
 const closeEditor = () => {
   editorOpen.value = false;
