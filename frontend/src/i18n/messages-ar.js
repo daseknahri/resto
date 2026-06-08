@@ -6,6 +6,7 @@ const arabicMessages = {
     "landing": "الرئيسية",
     "liveDemo": "عرض حي",
     "getStarted": "ابدأ الآن",
+    "getApp": "احصل على التطبيق",
     "contact": "تواصل",
     "demo": "تجريبي",
     "admin": "الإدارة",

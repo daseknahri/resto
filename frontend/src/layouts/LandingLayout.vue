@@ -31,6 +31,16 @@
             {{ t("home.heroLive") }}
           </div>
           <LanguageSwitcher dropdown />
+          <!-- Install the Kepoli app (PWA) — shown only when the browser offers it -->
+          <button
+            v-if="canInstall && !isStandalone"
+            type="button"
+            class="ui-btn-outline ui-touch-target hidden items-center gap-1.5 px-3 py-2 text-[11px] sm:inline-flex sm:px-4 sm:text-sm"
+            :aria-label="t('common.getApp')"
+            @click="installApp"
+          >
+            <span aria-hidden="true">⬇</span> {{ t("common.getApp") }}
+          </button>
           <RouterLink v-if="session.isPlatformAdmin" to="/admin-console" class="ui-btn-outline ui-touch-target hidden text-sm lg:inline-flex">{{ t("common.admin") }}</RouterLink>
           <RouterLink
             v-if="session.canEditTenantMenu"
@@ -132,6 +142,12 @@
                   <span>{{ t("common.contact") }}</span>
                 </RouterLink>
               </li>
+              <li>
+                <RouterLink class="ui-top-link inline-flex items-center gap-2" to="/driver">
+                  <AppIcon name="truck" class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{{ t("driver.landingCta") }}</span>
+                </RouterLink>
+              </li>
             </ul>
           </nav>
         </div>
@@ -169,10 +185,12 @@ import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { useCustomerStore } from "../stores/customer";
+import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { PLATFORM_MONOGRAM } from "../lib/brand";
 
 const router = useRouter();
 const brandMonogram = PLATFORM_MONOGRAM;
+const { canInstall, isStandalone, install: installApp } = useInstallPrompt();
 const session = useSessionStore();
 const customerStore = useCustomerStore();
 const { t } = useI18n();

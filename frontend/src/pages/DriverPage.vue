@@ -9,13 +9,49 @@
     <!-- Loading -->
     <div v-if="!customerStore.loaded" class="ui-skeleton h-28" aria-busy="true" :aria-label="t('common.loading')" />
 
-    <!-- Not signed in -->
-    <div v-else-if="!customerStore.isAuthenticated" class="ui-empty-state text-center space-y-3 ui-reveal">
-      <AppIcon name="truck" class="mx-auto h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p class="text-sm text-slate-300">{{ t('driver.signInPrompt') }}</p>
-      <RouterLink :to="{ name: 'customer-account' }" class="ui-btn-primary inline-flex px-5 py-2 text-sm">
-        {{ t('driver.signInCta') }}
-      </RouterLink>
+    <!-- Not signed in — public rider acquisition + install-first PWA -->
+    <div v-else-if="!customerStore.isAuthenticated" class="space-y-4 ui-reveal">
+      <div class="ui-panel p-5 space-y-3">
+        <div class="flex items-center gap-2.5">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+            <AppIcon name="truck" class="h-4.5 w-4.5 text-emerald-300" aria-hidden="true" />
+          </div>
+          <p class="text-base font-semibold text-slate-100">{{ t('driver.earnTitle') }}</p>
+        </div>
+        <p class="ui-subtle">{{ t('driver.earnSubtitle') }}</p>
+        <ul class="space-y-1.5 text-sm text-slate-300">
+          <li class="flex items-start gap-2">
+            <AppIcon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />{{ t('driver.benefit1') }}
+          </li>
+          <li class="flex items-start gap-2">
+            <AppIcon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />{{ t('driver.benefit2') }}
+          </li>
+          <li class="flex items-start gap-2">
+            <AppIcon name="check" class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />{{ t('driver.benefit3') }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- Install the app (riders work from the installed app) -->
+      <div v-if="!isStandalone && !continueInBrowser" class="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
+        <p class="text-sm font-semibold text-emerald-200">{{ t('driver.installTitle') }}</p>
+        <p class="text-xs text-slate-300">{{ t('driver.installDesc') }}</p>
+        <button v-if="canInstall" class="ui-btn-primary ui-touch-target w-full py-2 text-sm" @click="promptInstall">
+          {{ t('driver.installCta') }}
+        </button>
+        <p v-else class="text-xs text-slate-400">{{ t('driver.installManual') }}</p>
+        <button class="ui-touch-target text-[11px] text-slate-500 underline hover:text-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400" @click="continueInBrowser = true">
+          {{ t('driver.continueInBrowser') }}
+        </button>
+      </div>
+
+      <!-- Sign in to apply -->
+      <div class="ui-panel p-5 text-center space-y-3">
+        <p class="text-sm text-slate-300">{{ t('driver.signInPrompt') }}</p>
+        <RouterLink :to="{ name: 'customer-account' }" class="ui-btn-primary inline-flex px-5 py-2 text-sm">
+          {{ t('driver.signInCta') }}
+        </RouterLink>
+      </div>
     </div>
 
     <!-- Signed in but not yet a driver -->

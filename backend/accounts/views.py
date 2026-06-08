@@ -3701,6 +3701,55 @@ def _serialize_zone(zone) -> dict:
 # ── Driver registration & availability ────────────────────────────────────────
 
 
+def _notify_admins_new_driver(customer):
+    """Best-effort notify platform admins that a new rider applied. Never raises.
+
+    Riders self-apply (is_driver=True) but can't go online until a platform admin
+    vets them — so admins need to know an application is waiting in the console.
+    """
+    try:
+        from django.db.models import Q
+        from django.core.mail import send_mail as _send_mail
+        from django.conf import settings as _cfg
+        from .models import User
+        from .notifications import record_notification
+
+        admins = list(
+            User.objects.filter(
+                Q(is_platform_admin=True) | Q(is_superuser=True) | Q(is_staff=True)
+            )
+            .exclude(email="")
+            .values_list("email", flat=True)
+            .distinct()
+        )
+        name = (customer.name or customer.phone or customer.email or f"Customer #{customer.id}")
+        vehicle = customer.driver_vehicle or "—"
+        if admins:
+            _send_mail(
+                subject="New rider application on Kepoli",
+                message=(
+                    "A new rider has applied to join the Kepoli delivery network.\n\n"
+                    f"Name: {name}\n"
+                    f"Vehicle: {vehicle}\n\n"
+                    "Review and approve them in the admin console under Drivers "
+                    "(/admin-drivers).\n"
+                ),
+                from_email=_cfg.DEFAULT_FROM_EMAIL,
+                recipient_list=admins,
+                fail_silently=True,
+            )
+        record_notification(
+            channel="email",
+            event="driver_application",
+            status="sent" if admins else "skipped",
+            recipient=", ".join(admins)[:300],
+            detail=f"Rider application: {name}"[:300],
+            reference=f"driver_apply:{customer.id}",
+        )
+    except Exception:
+        pass
+
+
 class DriverRegisterView(APIView):
     """POST /api/driver/register/ — customer applies to become a delivery driver.
 
@@ -3726,12 +3775,18 @@ class DriverRegisterView(APIView):
         if vehicle and vehicle != (customer.driver_vehicle or ""):
             customer.driver_vehicle = vehicle
             fields.append("driver_vehicle")
+        newly_applied = False
         if not customer.is_driver:
             customer.is_driver = True
             fields.append("is_driver")
+            newly_applied = True
         if fields:
             fields.append("updated_at")
             customer.save(update_fields=fields)
+
+        # Tell platform admins a fresh application is waiting to be vetted.
+        if newly_applied:
+            _notify_admins_new_driver(customer)
 
         return Response({
             "is_driver": True,
