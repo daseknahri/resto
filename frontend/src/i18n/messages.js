@@ -851,6 +851,10 @@ export const messages = {
         bar: "Bar / Lounge",
         grocery: "Grocery / Mini-market",
         retail: "Retail / Shop",
+        pizza: "Pizza / Italian",
+        sushi: "Sushi / Japanese",
+        moroccan: "Moroccan / Traditional",
+        health: "Healthy / Salad bar",
       },
     },
     ownerMenuBuilder: {
@@ -4730,6 +4734,10 @@ export const messages = {
         bar: "Bar / Lounge",
         grocery: "Épicerie / Supérette",
         retail: "Commerce / Boutique",
+        pizza: "Pizza / Italien",
+        sushi: "Sushi / Japonais",
+        moroccan: "Marocain / Traditionnel",
+        health: "Santé / Salade bar",
       },
     },
     ownerMenuBuilder: {

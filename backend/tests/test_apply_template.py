@@ -62,7 +62,10 @@ class TemplateDataTests(SimpleTestCase):
     def test_expected_templates_exist(self):
         self.assertEqual(
             set(TEMPLATES),
-            {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar", "grocery", "retail"},
+            {
+                "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
+                "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+            },
         )
 
     def test_each_template_is_well_formed(self):
@@ -120,7 +123,10 @@ class ApplyTemplateViewTests(SimpleTestCase):
         keys = {t["key"] for t in resp.data["templates"]}
         self.assertEqual(
             keys,
-            {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar", "grocery", "retail"},
+            {
+                "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
+                "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+            },
         )
 
     # ── POST validation ───────────────────────────────────────────────────────────
