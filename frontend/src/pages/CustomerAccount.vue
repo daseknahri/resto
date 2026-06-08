@@ -562,13 +562,14 @@
                       v-if="expandedOrders.has(order.order_number) && order.items?.length"
                       class="border-t border-slate-700/50 px-3 pb-3 pt-2.5 space-y-2"
                     >
-                      <ul class="space-y-1">
-                        <li v-for="(item, itemIdx) in order.items" :key="itemIdx" class="flex items-start justify-between gap-2 text-slate-300">
-                          <span class="min-w-0 flex-1">
-                            <span class="text-slate-400">{{ item.qty }}×</span> {{ item.dish_name }}
+                      <ul class="space-y-1.5">
+                        <li v-for="(item, itemIdx) in order.items" :key="itemIdx" class="flex items-start gap-2 text-slate-300">
+                          <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold text-slate-100 tabular-nums">{{ item.qty }}</span>
+                          <span class="min-w-0 flex-1 leading-snug">
+                            {{ item.dish_name }}
                             <span v-if="item.options?.length" class="ms-1 text-slate-500">({{ item.options.map(o => o.name).join(', ') }})</span>
                           </span>
-                          <span class="shrink-0 tabular-nums text-slate-400">{{ formatPrice(item.subtotal) }}</span>
+                          <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatPrice(item.subtotal) }}</span>
                         </li>
                       </ul>
                       <button
