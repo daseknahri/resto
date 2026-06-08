@@ -107,6 +107,22 @@ export const messages = {
       goHome: "Go home",
       details: "Error details"
     },
+    vocabulary: {
+      restaurant: {
+        catalog: "Menu",
+        itemSingular: "Dish",
+        itemPlural: "Dishes",
+        groupSingular: "Category",
+        groupPlural: "Categories",
+      },
+      shop: {
+        catalog: "Catalog",
+        itemSingular: "Product",
+        itemPlural: "Products",
+        groupSingular: "Section",
+        groupPlural: "Sections",
+      },
+    },
     landingLayout: {
       kicker: "Order • Delivered • Earn",
       title: "Kepoli",
@@ -302,6 +318,11 @@ export const messages = {
       filterFulfillmentPickup: "Pickup only",
       filterOpenNow: "Open now",
       filterFavourites: "Favourites",
+      filterType: "Type",
+      typeAll: "All",
+      typeFood: "Restaurants",
+      typeShop: "Shops",
+      badgeShop: "Shop",
       favourite: "Add to favourites",
       unfavourite: "Remove from favourites",
       noFavourites: "No favourites yet",
@@ -3893,6 +3914,22 @@ export const messages = {
       goHome: "Accueil",
       details: "Details de l'erreur"
     },
+    vocabulary: {
+      restaurant: {
+        catalog: "Menu",
+        itemSingular: "Plat",
+        itemPlural: "Plats",
+        groupSingular: "Catégorie",
+        groupPlural: "Catégories",
+      },
+      shop: {
+        catalog: "Catalogue",
+        itemSingular: "Produit",
+        itemPlural: "Produits",
+        groupSingular: "Rayon",
+        groupPlural: "Rayons",
+      },
+    },
     landingLayout: {
       kicker: "Commandez • Livré • Gagnez",
       title: "Kepoli",
@@ -4088,6 +4125,11 @@ export const messages = {
       filterFulfillmentPickup: "Retrait uniquement",
       filterOpenNow: "Ouvert maintenant",
       filterFavourites: "Favoris",
+      filterType: "Type",
+      typeAll: "Tous",
+      typeFood: "Restaurants",
+      typeShop: "Boutiques",
+      badgeShop: "Boutique",
       favourite: "Ajouter aux favoris",
       unfavourite: "Retirer des favoris",
       noFavourites: "Aucun favori",

@@ -96,6 +96,17 @@
             <option value="4.5">{{ t('marketplace.minRating45') }}</option>
           </select>
 
+          <!-- Business type (restaurants vs shops) -->
+          <select
+            v-model="selectedBusinessType"
+            :aria-label="t('marketplace.filterType')"
+            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          >
+            <option value="">{{ t('marketplace.typeAll') }}</option>
+            <option value="food">{{ t('marketplace.typeFood') }}</option>
+            <option value="shop">{{ t('marketplace.typeShop') }}</option>
+          </select>
+
           <!-- Open now toggle -->
           <button
             type="button"
@@ -278,6 +289,9 @@
 
             <!-- Chips row -->
             <div class="mt-auto flex flex-wrap items-center gap-1">
+              <span v-if="isShopBusiness(r)" class="rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                {{ t('marketplace.badgeShop') }}
+              </span>
               <span v-if="r.cuisine_type" class="rounded-full border border-slate-700/70 px-2 py-0.5 text-[10px] text-slate-400">
                 {{ r.cuisine_type }}
               </span>
@@ -372,8 +386,13 @@ const selectedCuisine = ref('');
 const selectedFulfillment = ref('any');
 const selectedPriceTier = ref('');
 const selectedMinRating = ref('');
+const selectedBusinessType = ref(''); // '' = all | 'food' (restaurant/cafe) | 'shop' (retail/grocery/bakery)
 const openOnly = ref(false);
 const selectedTags = ref([]);
+
+// Buckets the fine-grained business_type into the two marketplace lenses.
+const SHOP_BUSINESS_TYPES = ['retail', 'grocery', 'bakery'];
+const isShopBusiness = (r) => SHOP_BUSINESS_TYPES.includes(r?.business_type || 'restaurant');
 
 // Location
 const locating = ref(false);
@@ -402,6 +421,7 @@ const activeFilterCount = computed(() => {
   if (selectedFulfillment.value !== 'any') n++;
   if (selectedPriceTier.value) n++;
   if (selectedMinRating.value) n++;
+  if (selectedBusinessType.value) n++;
   if (openOnly.value) n++;
   if (showFavouritesOnly.value) n++;
   n += selectedTags.value.length;
@@ -415,17 +435,26 @@ const clearFilters = () => {
   selectedFulfillment.value = 'any';
   selectedPriceTier.value = '';
   selectedMinRating.value = '';
+  selectedBusinessType.value = '';
   openOnly.value = false;
   selectedTags.value = [];
   showFavouritesOnly.value = false;
 };
 
-// Favourites filtering is client-side (the saved set lives in localStorage).
-const displayedRestaurants = computed(() =>
-  showFavouritesOnly.value
-    ? restaurants.value.filter((r) => favourites.value.has(r.slug))
-    : restaurants.value
-);
+// Favourites + business-type filtering are client-side (favourites live in
+// localStorage; business_type is already in each result, so no refetch needed).
+const displayedRestaurants = computed(() => {
+  let list = restaurants.value;
+  if (showFavouritesOnly.value) {
+    list = list.filter((r) => favourites.value.has(r.slug));
+  }
+  if (selectedBusinessType.value === 'shop') {
+    list = list.filter((r) => isShopBusiness(r));
+  } else if (selectedBusinessType.value === 'food') {
+    list = list.filter((r) => !isShopBusiness(r));
+  }
+  return list;
+});
 
 const toggleTag = (tag) => {
   const idx = selectedTags.value.indexOf(tag);

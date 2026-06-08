@@ -62,7 +62,7 @@
                 exact-active-class=""
               >
                 <AppIcon name="menu" class="owner-nav-icon" />
-                <span>{{ t("ownerLayout.menuBuilder") }}</span>
+                <span>{{ menuBuilderLabel }}</span>
               </RouterLink>
               <RouterLink
                 v-if="showTables"
@@ -356,7 +356,7 @@
           exact-active-class=""
         >
           <AppIcon name="menu" class="owner-dock-icon" />
-          <span>{{ t("ownerLayout.menuBuilder") }}</span>
+          <span>{{ menuBuilderLabel }}</span>
         </RouterLink>
         <RouterLink
           v-if="showTables"
@@ -397,6 +397,7 @@ import AppIcon from "../components/AppIcon.vue";
 import LanguageSwitcher from "../components/LanguageSwitcher.vue";
 import OwnerStaffChat from "../components/OwnerStaffChat.vue";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { useOwnerTheme } from "../composables/useOwnerTheme";
 import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import { useWaiterCalls } from "../composables/useWaiterCalls";
@@ -412,6 +413,9 @@ const tenant = useTenantStore();
 const order = useOrderStore();
 const router = useRouter();
 const { t } = useI18n();
+const { isShop: vocabIsShop, catalog: vocabCatalog } = useVocabulary();
+// Shops see "Catalog" in place of "Menu Builder" in the nav.
+const menuBuilderLabel = computed(() => (vocabIsShop.value ? vocabCatalog.value : t("ownerLayout.menuBuilder")));
 
 // ── Owner color scheme (dark / light) ─────────────────────────────────────────
 const { theme: ownerTheme, toggleTheme, activate: activateTheme, deactivate: deactivateTheme } = useOwnerTheme();

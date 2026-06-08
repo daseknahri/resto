@@ -81,6 +81,22 @@ const arabicMessages = {
       "warning": "تنبيه:"
     }
   },
+  "vocabulary": {
+    "restaurant": {
+      "catalog": "القائمة",
+      "itemSingular": "طبق",
+      "itemPlural": "الأطباق",
+      "groupSingular": "فئة",
+      "groupPlural": "الفئات"
+    },
+    "shop": {
+      "catalog": "الكتالوج",
+      "itemSingular": "منتج",
+      "itemPlural": "المنتجات",
+      "groupSingular": "قسم",
+      "groupPlural": "الأقسام"
+    }
+  },
   "landingLayout": {
     "kicker": "اطلب • وصل • اربح",
     "title": "Kepoli",

@@ -181,6 +181,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useVocabulary } from "../composables/useVocabulary";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
@@ -194,9 +195,11 @@ defineOptions({ name: "OwnerMenuBuilder" });
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { itemPlural, groupPlural } = useVocabulary();
 const toast = useToastStore();
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
+// Category/Dish tab labels flex by business_type (shops read "Sections"/"Products").
 const tabs = computed(() => [
   {
     key: "super-categories",
@@ -207,14 +210,14 @@ const tabs = computed(() => [
   },
   {
     key: "categories",
-    label: t("onboardingWizard.steps.categories.title"),
+    label: groupPlural.value,
     description: t("onboardingWizard.steps.categories.description"),
     icon: "menu",
     component: StepCategories,
   },
   {
     key: "dishes",
-    label: t("onboardingWizard.steps.dishes.title"),
+    label: itemPlural.value,
     description: t("onboardingWizard.steps.dishes.description"),
     icon: "cart",
     component: StepDishes,
