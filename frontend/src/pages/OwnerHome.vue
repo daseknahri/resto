@@ -2,15 +2,15 @@
   <section class="space-y-3 pb-24 sm:pb-6">
 
     <!-- ── CRITICAL SECTION: renders on first paint from cached store data ──── -->
-    <article class="ui-workspace-stage ui-reveal space-y-3 p-3 sm:p-4">
+    <article class="ui-workspace-stage ui-reveal space-y-4 p-4 sm:p-5">
 
       <!-- Header row -->
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-1.5">
           <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-          <h1 class="ui-page-title ui-display text-[1.42rem] leading-tight sm:text-[2rem]">{{ t("ownerHome.title") }}</h1>
+          <h1 class="ui-page-title ui-display text-[1.5rem] leading-tight tracking-tight sm:text-[2.1rem]">{{ t("ownerHome.title") }}</h1>
         </div>
-        <div class="ui-scroll-row">
+        <div class="ui-scroll-row mt-0.5">
           <span class="ui-chip-strong">{{ published ? t("ownerHome.published") : t("ownerHome.draft") }}</span>
           <span class="ui-chip">{{ planModeLabel }}</span>
         </div>
@@ -18,15 +18,16 @@
 
       <!-- Open / Closed — the first thing an owner checks: are we taking orders? -->
       <div
-        class="flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors"
-        :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'"
+        class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition-colors"
+        :class="isOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/25 bg-amber-500/5'"
+        role="status"
       >
-        <div class="flex min-w-0 items-center gap-2.5">
-          <span class="relative flex h-2.5 w-2.5 shrink-0">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="relative flex h-3 w-3 shrink-0">
             <span v-if="isOpen" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span class="relative inline-flex h-2.5 w-2.5 rounded-full" :class="isOpen ? 'bg-emerald-400' : 'bg-red-400'" />
+            <span class="relative inline-flex h-3 w-3 rounded-full" :class="isOpen ? 'bg-emerald-400' : 'bg-red-400'" />
           </span>
-          <div class="min-w-0 leading-tight">
+          <div class="min-w-0 leading-snug">
             <p class="text-sm font-semibold" :class="isOpen ? 'text-emerald-200' : 'text-amber-300'" aria-live="polite">
               {{ isOpen ? t("ownerHome.restaurantOpen") : t("ownerHome.restaurantClosed") }}
             </p>
@@ -49,42 +50,42 @@
 
       <!-- Today's snapshot — live from the order store (no heavy fetch) ─────── -->
       <!-- Skeleton while the first orders load -->
-      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4">
-        <div v-for="i in 4" :key="i" class="animate-pulse space-y-2 bg-slate-950/60 px-3 py-2.5">
-          <div class="h-2.5 w-14 rounded bg-slate-700/60" />
-          <div class="h-7 w-16 rounded bg-slate-700/40" />
+      <div v-if="order.ordersLoading && !order.orders.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" aria-hidden="true">
+        <div v-for="i in 4" :key="i" class="animate-pulse space-y-2.5 bg-slate-950/60 px-4 py-3.5">
+          <div class="h-2.5 w-16 rounded bg-slate-700/60" />
+          <div class="h-7 w-20 rounded-lg bg-slate-700/40" />
         </div>
       </div>
 
       <!-- Today's snapshot — unified stat strip with hairline dividers -->
-      <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4">
+      <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800/70 sm:grid-cols-4" role="region" :aria-label="t('ownerHome.todayOrders')">
         <!-- Today's orders -->
-        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
+        <div class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayOrders") }}</p>
           <div class="flex items-end gap-1.5">
             <p class="ui-stat-value text-slate-100">{{ todayStats.count }}</p>
             <span
               v-if="yesterdayStats.count > 0"
-              class="mb-1 text-[10px] tabular-nums"
+              class="mb-1.5 text-[10px] tabular-nums"
               :class="todayStats.count >= yesterdayStats.count ? 'text-emerald-500' : 'text-slate-500'"
             >{{ todayStats.count >= yesterdayStats.count ? '+' : '' }}{{ todayStats.count - yesterdayStats.count }}</span>
           </div>
         </div>
 
         <!-- Today's revenue -->
-        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
+        <div class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
           <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
         </div>
 
         <!-- Avg ticket today -->
-        <div class="space-y-1 bg-slate-950/60 px-3 py-2.5">
+        <div class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerHome.kpiAvgTicket") }}</p>
           <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
         </div>
 
         <!-- Pending orders — tinted when there's a queue -->
-        <div class="space-y-1 px-3 py-2.5 transition-colors" :class="todayStats.pending > 0 ? 'bg-amber-500/10' : 'bg-slate-950/60'">
+        <div class="space-y-1.5 px-4 py-3.5 transition-colors" :class="todayStats.pending > 0 ? 'bg-amber-500/10' : 'bg-slate-950/60'">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
           <p class="ui-stat-value" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
         </div>
@@ -108,45 +109,47 @@
         <RouterLink
           v-if="ratingsSummary.count > 0"
           :to="{ name: 'owner-ratings' }"
-          class="ui-surface-lift flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 transition hover:border-amber-500/35 hover:bg-amber-500/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+          class="ui-surface-lift flex items-center justify-between gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 transition hover:border-amber-500/35 hover:bg-amber-500/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
           :aria-label="t('ownerHome.viewAllRatings')"
         >
-          <div class="flex items-center gap-2.5">
-            <span class="text-amber-400 text-lg leading-none">★</span>
-            <span class="text-sm font-bold text-white tabular-nums">{{ ratingsSummary.average !== null ? ratingsSummary.average.toFixed(1) : "—" }}</span>
-            <span class="text-xs text-slate-500">/ 5 · {{ ratingsSummary.count }} {{ t("ownerHome.avgRating").toLowerCase() }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-amber-400 text-xl leading-none" aria-hidden="true">★</span>
+            <div class="flex items-baseline gap-1.5">
+              <span class="text-sm font-bold text-white tabular-nums">{{ ratingsSummary.average !== null ? ratingsSummary.average.toFixed(1) : "—" }}</span>
+              <span class="text-xs text-slate-500">/ 5 · {{ ratingsSummary.count }} {{ t("ownerHome.avgRating").toLowerCase() }}</span>
+            </div>
           </div>
-          <span class="flex items-center gap-1 text-xs font-medium text-amber-400/80">
+          <span class="flex items-center gap-1 text-xs font-semibold text-amber-400/80">
             {{ t("ownerHome.viewAllRatings") }}
             <AppIcon name="chevronRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" aria-hidden="true" />
           </span>
         </RouterLink>
-        <div v-else class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-2.5">
-          <span class="text-sm text-slate-600">★</span>
+        <div v-else class="flex items-center gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/30 px-4 py-3">
+          <span class="text-sm text-slate-700" aria-hidden="true">★</span>
           <span class="text-xs text-slate-600">{{ t("ownerHome.noRatingsYet") }}</span>
         </div>
       </template>
-      <div v-else class="h-10 animate-pulse rounded-xl bg-slate-800/30" />
+      <div v-else class="h-11 animate-pulse rounded-2xl bg-slate-800/30" aria-hidden="true" />
 
       <!-- Quick actions (Analytics lives in the top nav now, so it's not duplicated here) -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
-        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary ui-press col-span-2 w-full gap-1.5 px-5 py-2 sm:w-auto">
+        <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary ui-press col-span-2 w-full gap-2 px-5 py-2.5 text-sm sm:w-auto">
           <AppIcon name="menu" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("ownerHome.openMenuBuilder") }}
         </RouterLink>
-        <RouterLink to="/menu" class="ui-btn-outline ui-press w-full gap-1.5 px-4 py-2 sm:w-auto">
+        <RouterLink to="/menu" class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs sm:w-auto">
           <AppIcon name="eye" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("ownerLayout.publicPreview") }}
         </RouterLink>
         <button
-          class="ui-btn-outline ui-press w-full gap-1.5 px-4 py-2 transition-colors sm:w-auto"
+          class="ui-btn-outline ui-press w-full gap-2 px-4 py-2 text-xs transition-colors sm:w-auto"
           :class="copied ? 'border-emerald-500/50 text-emerald-300' : ''"
           @click="copyMenuUrl"
         >
           <AppIcon :name="copied ? 'check' : 'copy'" class="owner-home-btn-icon" aria-hidden="true" />
           {{ copied ? t("ownerHome.menuUrlCopied") : t("ownerHome.copyPublicUrl") }}
         </button>
-        <button class="ui-btn-outline ui-press col-span-2 w-full gap-1.5 px-4 py-2 sm:w-auto" @click="manualRefresh">
+        <button class="ui-btn-outline ui-press col-span-2 w-full gap-2 px-4 py-2 text-xs sm:w-auto" @click="manualRefresh">
           <AppIcon name="refresh" class="owner-home-btn-icon" aria-hidden="true" />
           {{ t("common.refresh") }}
         </button>
@@ -159,11 +162,11 @@
     </div>
 
     <!-- ── LIVE ORDERS: from order store ───────────────────────────────────── -->
-    <article class="ui-command-deck ui-reveal space-y-3 p-3 sm:p-4" style="--ui-delay: 80ms">
+    <article class="ui-command-deck ui-reveal space-y-4 p-4 sm:p-5" style="--ui-delay: 80ms">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div class="space-y-0.5">
           <p class="ui-kicker">{{ t("ownerHome.kicker") }}</p>
-          <h2 class="inline-flex items-center gap-2 text-lg font-semibold">
+          <h2 class="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-white">
             <AppIcon name="cart" class="owner-home-section-icon" aria-hidden="true" />
             <span>{{ t("ownerHome.liveOrders") }}</span>
             <span v-if="order.ordersLoading" class="ui-live-dot ms-0.5 bg-slate-500" aria-hidden="true" />
@@ -177,20 +180,20 @@
       <!-- Status summary chips -->
       <div class="flex flex-wrap gap-2" aria-live="polite" aria-atomic="true">
         <div
-          class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors"
+          class="flex items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 transition-colors"
           :class="pendingOrders.length ? 'border-amber-500/60 bg-amber-500/10' : 'border-slate-700 bg-slate-900/40'"
         >
           <span class="text-xl font-bold tabular-nums" :class="pendingOrders.length ? 'text-amber-300' : 'text-slate-400'">{{ pendingOrders.length }}</span>
           <span class="text-xs font-medium" :class="pendingOrders.length ? 'text-amber-200' : 'text-slate-500'">{{ t("ownerOrders.statusPending") }}</span>
           <span v-if="pendingOrders.length" class="ui-live-dot bg-amber-400" aria-hidden="true" />
         </div>
-        <div class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2">
+        <div class="flex items-center gap-2.5 rounded-2xl border border-slate-700 bg-slate-900/40 px-3.5 py-2.5">
           <span class="text-xl font-bold tabular-nums text-slate-300">{{ activeOrders.length }}</span>
           <span class="text-xs font-medium text-slate-500">{{ t("ownerHome.inProgress") }}</span>
         </div>
         <div
           v-if="!pendingOrders.length && !activeOrders.length && recentOrders.length"
-          class="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2"
+          class="flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 px-3.5 py-2.5"
         >
           <AppIcon name="check" class="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
           <span class="text-xs font-medium text-emerald-300/70">{{ t("ownerHome.allClear") }}</span>
@@ -198,19 +201,19 @@
       </div>
 
       <!-- Recent orders list -->
-      <div v-if="recentOrders.length" class="space-y-1.5">
+      <div v-if="recentOrders.length" class="space-y-2">
         <p class="ui-kicker">{{ t("ownerHome.recentOrdersList") }}</p>
         <RouterLink
           v-for="(o, index) in recentOrders"
           :key="o.id"
           :to="{ name: 'owner-orders', query: { q: o.order_number } }"
-          class="ui-reveal flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3 py-2 text-xs transition-colors hover:bg-slate-900/60"
+          class="ui-reveal flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3.5 py-2.5 text-xs transition-colors hover:bg-slate-900/60"
           :class="['pending','confirmed','preparing','ready'].includes(o.status)
             ? 'border-slate-700 hover:border-slate-600'
             : 'border-slate-800 hover:border-slate-700'"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <div class="flex min-w-0 items-center gap-2">
+          <div class="flex min-w-0 items-center gap-2.5">
             <span class="font-mono font-bold text-slate-100 tabular-nums">{{ o.order_number }}</span>
             <span class="rounded-full px-2 py-0.5 font-semibold" :class="orderStatusClass(o.status)">{{ orderStatusLabel(o.status) }}</span>
             <span v-if="o.fulfillment_type" class="hidden text-slate-400 sm:inline">{{ fulfillmentLabel(o) }}</span>
@@ -223,15 +226,16 @@
       </div>
       <div v-else-if="!order.ordersLoading" class="ui-empty-state text-center">
         <p class="text-sm font-semibold text-slate-100">{{ t("ownerHome.noOrdersYet") }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ t("ownerHome.openToggleHint") }}</p>
       </div>
     </article>
 
     <!-- ── PLAN CARD ────────────────────────────────────────────────────────── -->
-    <article class="ui-command-deck ui-reveal p-3 sm:p-4" style="--ui-delay: 160ms">
+    <article class="ui-command-deck ui-reveal p-4 sm:p-5" style="--ui-delay: 160ms">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="space-y-1">
           <p class="ui-kicker">{{ t("ownerHome.planSection") }}</p>
-          <h2 class="inline-flex items-center gap-2 text-base font-semibold">
+          <h2 class="inline-flex items-center gap-2 text-base font-semibold tracking-tight">
             <AppIcon name="card" class="owner-home-section-icon" aria-hidden="true" />
             <span class="text-white">{{ tenant.entitlements?.tier_name || tenant.meta?.plan?.name || "Basic" }}</span>
           </h2>
@@ -490,6 +494,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.owner-home-btn-icon { width: 0.86rem; height: 0.86rem; }
+.owner-home-btn-icon { width: 0.9rem; height: 0.9rem; }
 .owner-home-section-icon { width: 1rem; height: 1rem; color: var(--color-secondary); }
 </style>

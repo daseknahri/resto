@@ -5,30 +5,30 @@
   >
     <!-- Top bar -->
     <div class="kitchen-topbar" role="region" :aria-label="t('kitchen.displayHeader')">
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-3">
         <span class="ui-kicker">{{ t("kitchen.title") }}</span>
         <!-- Offline / syncing indicator -->
         <span
           v-if="!waiter.isOnline"
-          class="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-400"
+          class="rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-red-400"
           role="status"
           aria-live="polite"
         >{{ t("kitchen.offline") }}</span>
         <span
           v-else-if="waiter.isSyncing || waiter.queueLength > 0"
-          class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400"
+          class="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-amber-400"
           role="status"
           aria-live="polite"
         >{{ t("kitchen.syncing") }}</span>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-4">
         <!-- Active order count -->
-        <span class="text-sm font-bold text-white tabular-nums" aria-live="polite" aria-atomic="true">
+        <span class="rounded-full border border-slate-600/60 bg-slate-700/50 px-3 py-1 text-sm font-bold tabular-nums text-slate-100" aria-live="polite" aria-atomic="true">
           {{ t("kitchen.activeCount", { n: activeOrders.length }) }}
         </span>
         <!-- Clock -->
-        <span class="font-mono text-sm tabular-nums text-slate-400" aria-hidden="true">{{ clockDisplay }}</span>
+        <span class="font-mono text-base tabular-nums text-slate-300" aria-hidden="true">{{ clockDisplay }}</span>
         <!-- Fullscreen toggle -->
         <button
           class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -63,37 +63,39 @@
     </nav>
 
     <!-- Loading: skeleton cards matching the kitchen-grid layout -->
-    <div v-if="waiter.loading" class="kitchen-grid">
+    <div v-if="waiter.loading" class="kitchen-grid" aria-busy="true" aria-label="t('kitchen.activeCount', { n: 0 })">
       <div v-for="i in 3" :key="i" class="kitchen-card animate-pulse border-slate-700/40 bg-slate-800/20">
-        <div class="h-1 w-full bg-slate-700/60" />
-        <div class="flex items-start justify-between gap-2 px-4 pt-4">
-          <div class="flex-1 space-y-2">
-            <div class="h-5 w-24 rounded bg-slate-700/60" />
-            <div class="h-3 w-36 rounded bg-slate-800/60" />
+        <div class="h-1.5 w-full rounded-t-xl bg-slate-700/60" />
+        <div class="flex items-start justify-between gap-2 px-4 pt-5">
+          <div class="flex-1 space-y-2.5">
+            <div class="h-8 w-28 rounded-lg bg-slate-700/60" />
+            <div class="h-3 w-40 rounded bg-slate-800/60" />
           </div>
           <div class="flex flex-col items-end gap-2 shrink-0">
-            <div class="h-5 w-12 rounded-full bg-slate-700/60" />
-            <div class="h-4 w-16 rounded-full bg-slate-800/50" />
+            <div class="h-6 w-14 rounded-full bg-slate-700/60" />
+            <div class="h-5 w-16 rounded-full bg-slate-800/50" />
           </div>
         </div>
-        <div class="mt-4 flex-1 space-y-2 px-4">
-          <div v-for="j in 3" :key="j" class="flex items-center gap-2">
-            <div class="h-4 w-6 rounded bg-slate-700/50" />
-            <div class="h-3 rounded bg-slate-800/50" :style="`width: ${60 + j * 15}px`" />
+        <div class="mt-5 flex-1 space-y-3 px-4">
+          <div v-for="j in 3" :key="j" class="flex items-center gap-3">
+            <div class="h-5 w-7 rounded bg-slate-700/50" />
+            <div class="h-4 rounded-md bg-slate-800/50" :style="`width: ${60 + j * 20}px`" />
           </div>
         </div>
-        <div class="m-4 mt-auto h-9 rounded-xl bg-slate-700/40" />
+        <div class="m-4 mt-auto h-10 rounded-xl bg-slate-700/40" />
       </div>
     </div>
 
     <!-- All-clear -->
     <div v-else-if="!activeOrders.length" class="kitchen-empty" role="status" aria-live="polite">
       <!-- Checkmark icon -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-16 w-16 text-emerald-400/70" aria-hidden="true">
-        <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
-      </svg>
-      <p class="mt-3 text-xl font-semibold text-slate-200">{{ t("kitchen.allClear") }}</p>
-      <p class="mt-1 text-sm text-slate-500">{{ t("kitchen.allClearBody") }}</p>
+      <div class="flex h-24 w-24 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-12 w-12 text-emerald-400" aria-hidden="true">
+          <path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+        </svg>
+      </div>
+      <p class="mt-5 text-2xl font-bold tracking-tight text-slate-100">{{ t("kitchen.allClear") }}</p>
+      <p class="mt-1.5 text-sm text-slate-500">{{ t("kitchen.allClearBody") }}</p>
     </div>
 
     <!-- Order grid -->
@@ -110,25 +112,25 @@
         <div class="kitchen-strip" :class="stripClass(order.status)" />
 
         <!-- Order headline -->
-        <div class="flex items-start justify-between gap-2 px-4 pt-4">
+        <div class="flex items-start justify-between gap-3 px-4 pt-4">
           <div class="min-w-0 flex-1">
             <p class="kitchen-headline truncate" :class="headlineColorClass(order.status)">
               {{ orderHeadline(order) }}
             </p>
-            <p class="mt-0.5 text-xs text-slate-500 tabular-nums">
+            <p class="mt-1 text-xs font-medium text-slate-500 tabular-nums">
               #{{ order.order_number }} · {{ timeAgo(order.created_at) }}<span v-if="order.customer_name"> · {{ order.customer_name }}</span>
             </p>
           </div>
-          <div class="flex shrink-0 flex-col items-end gap-1.5">
+          <div class="flex shrink-0 flex-col items-end gap-2">
             <!-- Elapsed timer badge -->
             <span
-              class="rounded-full border px-2 py-0.5 text-[11px] font-bold tabular-nums"
+              class="rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums"
               :class="elapsedBadgeClass(elapsedMinutes(order))"
               :aria-label="`${elapsedMinutes(order)}${t('kitchen.elapsedMin')} ${t('kitchen.elapsed')}`"
             >{{ elapsedMinutes(order) }}{{ t('kitchen.elapsedMin') }}</span>
             <!-- Status chip -->
             <span
-              class="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+              class="rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest"
               :class="chipClass(order.status)"
             >{{ t(`kitchen.status_${order.status}`) }}</span>
           </div>
@@ -136,7 +138,7 @@
 
         <!-- Items -->
         <p class="sr-only">{{ t('kitchen.tapItemReady') }}</p>
-        <ul class="mt-3 flex-1 space-y-1 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
+        <ul class="mt-4 flex-1 divide-y divide-slate-700/30 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
           <li
             v-for="(item, idx) in order.items"
             :key="item.id ?? idx"
@@ -145,14 +147,14 @@
             <button
               v-if="item.id != null"
               type="button"
-              class="flex w-full items-baseline gap-2 cursor-pointer ui-press text-start"
-              :class="item.is_ready ? 'opacity-45 line-through' : ''"
+              class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2 -mx-2 transition-colors hover:bg-slate-700/30"
+              :class="item.is_ready ? 'opacity-40 line-through' : ''"
               :title="t('kitchen.tapItemReady')"
               :aria-pressed="item.is_ready"
               @click="toggleItem(order, item)"
             >
               <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
-              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span class="kitchen-name font-medium">{{ item.dish_name }}</span>
               <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
               <span v-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
                 <!-- Checkmark icon -->
@@ -162,28 +164,30 @@
               </span>
             </button>
             <template v-else>
-              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
-              <span class="kitchen-name">{{ item.dish_name }}</span>
+              <span class="kitchen-qty px-2 py-2" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name font-medium py-2">{{ item.dish_name }}</span>
               <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
             </template>
           </li>
         </ul>
 
         <!-- Notes -->
-        <div v-if="order.customer_note || order.owner_note" class="mt-2 space-y-1 border-t border-slate-700/40 px-4 pt-2 text-xs">
-          <p v-if="order.customer_note" class="text-slate-400">
-            <span class="font-semibold text-slate-300">{{ t("kitchen.noteCustomer") }}: </span>{{ order.customer_note }}
+        <div v-if="order.customer_note || order.owner_note" class="mt-3 space-y-1.5 border-t border-slate-700/40 px-4 pt-3 text-xs">
+          <p v-if="order.customer_note" class="flex items-start gap-1.5 text-slate-400">
+            <span class="mt-px shrink-0 font-semibold text-slate-300">{{ t("kitchen.noteCustomer") }}:</span>
+            <span>{{ order.customer_note }}</span>
           </p>
-          <p v-if="order.owner_note" class="text-amber-300/80">
-            <span class="font-semibold">{{ t("kitchen.noteStaff") }}: </span>{{ order.owner_note }}
+          <p v-if="order.owner_note" class="flex items-start gap-1.5 text-amber-300/80">
+            <span class="mt-px shrink-0 font-semibold">{{ t("kitchen.noteStaff") }}:</span>
+            <span>{{ order.owner_note }}</span>
           </p>
         </div>
 
         <!-- Action button -->
-        <div class="mt-auto space-y-2 px-4 pb-4 pt-3">
+        <div class="mt-auto space-y-2 px-4 pb-4 pt-4">
           <button
             v-if="waiter.nextStatus(order)"
-            class="ui-btn-primary ui-touch-target w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+            class="ui-btn-primary ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
@@ -448,10 +452,10 @@ const actionBtnClass = (s) => ({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  border-radius: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 0.875rem;
+  padding: 0.625rem 1rem;
   flex-shrink: 0;
 }
 
@@ -461,30 +465,40 @@ const actionBtnClass = (s) => ({
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 16rem;
-  gap: 0.25rem;
+  min-height: 20rem;
+  gap: 0;
   text-align: center;
+  padding: 2rem 1rem;
 }
 
 /* Responsive grid: 1 col on phones, 2 on tablet, 3+ on wide kitchen displays */
 .kitchen-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
   grid-template-columns: 1fr;
   flex: 1;
   align-content: start;
 }
 
 @media (min-width: 640px) {
-  .kitchen-grid { grid-template-columns: repeat(2, 1fr); }
+  .kitchen-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
 }
 
 @media (min-width: 1024px) {
-  .kitchen-grid { grid-template-columns: repeat(3, 1fr); }
+  .kitchen-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
 }
 
 @media (min-width: 1400px) {
-  .kitchen-grid { grid-template-columns: repeat(4, 1fr); }
+  .kitchen-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
 }
 
 .kitchen-card {
@@ -493,12 +507,13 @@ const actionBtnClass = (s) => ({
   border-radius: 1rem;
   border-width: 1px;
   overflow: hidden;
-  min-height: 18rem;
-  background: rgba(15, 23, 42, 0.6);
+  min-height: 20rem;
+  background: rgba(15, 23, 42, 0.65);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .kitchen-strip {
-  height: 0.25rem;
+  height: 0.375rem;
   width: 100%;
   flex-shrink: 0;
 }
@@ -515,20 +530,22 @@ const actionBtnClass = (s) => ({
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
-  font-size: 1rem;
-  line-height: 1.4;
+  font-size: 1.05rem;
+  line-height: 1.5;
   color: rgb(226, 232, 240);
 }
 
 .kitchen-qty {
   flex-shrink: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .kitchen-name {
   min-width: 0;
   word-break: break-word;
+  font-size: 1rem;
 }
 
 /* Station filter bar */
@@ -547,8 +564,8 @@ const actionBtnClass = (s) => ({
   border-radius: 9999px;
   border: 1px solid rgba(51, 65, 85, 0.6);
   background: rgba(30, 41, 59, 0.5);
-  padding: 0.3rem 0.85rem;
-  font-size: 0.75rem;
+  padding: 0.375rem 1rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: rgb(148, 163, 184);
   cursor: pointer;
@@ -558,12 +575,14 @@ const actionBtnClass = (s) => ({
 .kitchen-filter-btn:hover {
   border-color: rgba(100, 116, 139, 0.8);
   color: rgb(203, 213, 225);
+  background: rgba(30, 41, 59, 0.7);
 }
 
 .kitchen-filter-btn--active {
   border-color: rgba(245, 158, 11, 0.5);
   background: rgba(245, 158, 11, 0.12);
   color: rgb(251, 191, 36);
+  font-weight: 700;
 }
 
 .kitchen-fs-btn {
@@ -589,14 +608,14 @@ const actionBtnClass = (s) => ({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
   border-radius: 9999px;
-  background: rgba(51, 65, 85, 0.8);
-  font-size: 0.65rem;
+  background: rgba(51, 65, 85, 0.9);
+  font-size: 0.7rem;
   font-weight: 700;
   color: rgb(148, 163, 184);
-  padding: 0 0.25rem;
+  padding: 0 0.3rem;
 }
 
 .kitchen-filter-btn--active .kitchen-filter-count {

@@ -5,7 +5,7 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("ownerOrders.kicker") }}</p>
-          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerOrders.title") }}</h1>
+          <h1 class="ui-display text-2xl font-bold tracking-tight text-white sm:text-3xl">{{ t("ownerOrders.title") }}</h1>
           <p class="ui-subtle">{{ t("ownerOrders.description") }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -55,21 +55,21 @@
       </div>
 
       <!-- Today's stats bar -->
-      <div v-else class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
+      <div v-else class="grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3.5">
         <div class="text-center">
-          <p class="text-xl font-bold text-white tabular-nums">{{ todayStats.count }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayOrders") }}</p>
+          <p class="text-2xl font-bold text-white tabular-nums leading-none">{{ todayStats.count }}</p>
+          <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayOrders") }}</p>
         </div>
         <div class="border-x border-slate-800 text-center">
-          <p class="text-xl font-bold text-[var(--color-secondary)] tabular-nums">{{ formatCurrency(todayStats.revenue, todayStats.currency) }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayRevenue") }}</p>
+          <p class="text-2xl font-bold text-[var(--color-secondary)] tabular-nums leading-none">{{ formatCurrency(todayStats.revenue, todayStats.currency) }}</p>
+          <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayRevenue") }}</p>
         </div>
         <div class="text-center">
           <p
-            class="text-xl font-bold tabular-nums transition-colors"
+            class="text-2xl font-bold tabular-nums leading-none transition-colors"
             :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-white'"
           >{{ todayStats.pending }}</p>
-          <p class="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
+          <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">{{ t("ownerOrders.todayPending") }}</p>
         </div>
       </div>
 
@@ -118,7 +118,10 @@
           @click="setFilter(tab.value)"
         >
           {{ tab.label }}
-          <span v-if="tab.count > 0" class="ms-1 rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px] tabular-nums">{{ tab.count }}</span>
+          <span
+            v-if="tab.count > 0"
+            class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
+          >{{ tab.count }}</span>
         </button>
       </div>
 
@@ -186,8 +189,11 @@
     </div>
 
     <!-- Empty: filters active but no matches -->
-    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-empty-state space-y-3 p-8 text-center">
-      <p class="text-sm font-semibold text-slate-100">{{ t("ownerOrders.noOrders") }}</p>
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
+      <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
+        <AppIcon name="close" class="h-5 w-5 text-slate-500" aria-hidden="true" />
+      </div>
+      <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrders") }}</p>
       <button
         class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
         @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'"
@@ -198,8 +204,11 @@
     </div>
 
     <!-- Empty: no orders at all -->
-    <div v-else-if="!filteredOrders.length" class="ui-empty-state p-10 text-center">
-      <p class="text-sm font-semibold text-slate-100">{{ t("ownerOrders.noOrdersYet") }}</p>
+    <div v-else-if="!filteredOrders.length" class="ui-empty-state p-12 text-center" role="status">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
+        <AppIcon name="refresh" class="h-6 w-6 text-slate-500" aria-hidden="true" />
+      </div>
+      <p class="mt-4 text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrdersYet") }}</p>
     </div>
 
     <!-- Order list -->
@@ -207,7 +216,7 @@
       <article
         v-for="(o, index) in filteredOrders"
         :key="o.id"
-        class="ui-panel ui-surface-lift ui-reveal space-y-3 p-3.5 transition-colors"
+        class="ui-panel ui-surface-lift ui-reveal space-y-3 p-4 transition-colors"
         :class="orderCardClass(o)"
         :aria-label="o.order_number"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 220px' }"
@@ -216,11 +225,11 @@
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="space-y-1.5">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="font-mono text-base font-bold text-white">{{ o.order_number }}</span>
+              <span class="font-mono text-base font-bold tracking-tight text-white">{{ o.order_number }}</span>
               <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="statusClass(o.status)">
                 {{ statusLabel(o.status) }}
               </span>
-              <span class="ui-data-strip">{{ fulfillmentLabel(o) }}</span>
+              <span class="ui-data-strip font-medium">{{ fulfillmentLabel(o) }}</span>
               <!-- Scheduled-for badge (advance orders) -->
               <span
                 v-if="o.scheduled_for"
@@ -254,7 +263,7 @@
                 <span aria-hidden="true">⏱</span> {{ orderAgeMin(o) }}m
               </span>
             </div>
-            <p class="text-xs text-slate-400">{{ formatTime(o.created_at) }}</p>
+            <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
             <!-- Floor section + responsible waiter (table orders) -->
             <p v-if="o.section_name || (o.responsible_waiters && o.responsible_waiters.length)" class="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
               <span v-if="o.section_name" class="inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5 text-[10px] font-medium text-slate-300">{{ o.section_name }}</span>
@@ -264,23 +273,23 @@
               <span v-else-if="o.fulfillment_type === 'table'" class="text-amber-400/80">{{ t('ownerOrders.noWaiterAssigned') }}</span>
             </p>
           </div>
-          <div class="text-right">
-            <p class="text-lg font-bold text-[var(--color-secondary)]">{{ formatCurrency(o.total, o.currency) }}</p>
-            <p v-if="o.promotion_discount && Number(o.promotion_discount) > 0" class="text-[10px] text-emerald-400">
+          <div class="shrink-0 text-end">
+            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ formatCurrency(o.total, o.currency) }}</p>
+            <p class="mt-1 text-xs tabular-nums text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
+            <p v-if="o.promotion_discount && Number(o.promotion_discount) > 0" class="mt-0.5 text-[10px] tabular-nums text-emerald-400">
               {{ t('ownerOrders.promoDiscount') }} −{{ formatCurrency(o.promotion_discount, o.currency) }}
             </p>
-            <p v-if="o.tip_amount && Number(o.tip_amount) > 0" class="text-[10px] text-sky-400">
+            <p v-if="o.tip_amount && Number(o.tip_amount) > 0" class="text-[10px] tabular-nums text-sky-400">
               {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}
             </p>
-            <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] text-emerald-300">
+            <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] tabular-nums text-emerald-300">
               <span aria-hidden="true">💰</span> {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
             </p>
-            <p class="text-xs text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
           </div>
         </div>
 
         <!-- Customer info -->
-        <div v-if="o.customer_name || o.customer_phone || o.customer_email" class="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs sm:grid-cols-2">
+        <div v-if="o.customer_name || o.customer_phone || o.customer_email" class="grid gap-2 rounded-xl border border-slate-800/80 bg-slate-950/40 px-3 py-2.5 text-xs sm:grid-cols-2">
           <div v-if="o.customer_name" class="flex flex-wrap items-center gap-2">
             <div>
               <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
@@ -460,22 +469,25 @@
         </div>
 
         <!-- Items -->
-        <div class="space-y-1.5">
+        <div class="space-y-1">
           <div
             v-for="item in o.items"
             :key="item.dish_slug + item.note"
-            class="flex items-start justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs"
+            class="flex items-start justify-between gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 py-2 pe-3 ps-3 text-xs"
           >
-            <div class="space-y-0.5">
-              <p class="font-semibold text-slate-100">{{ item.qty }}× {{ item.dish_name }}</p>
+            <div class="min-w-0 space-y-0.5">
+              <p class="font-semibold leading-snug text-slate-100">
+                <span class="tabular-nums text-[var(--color-secondary)] opacity-80">{{ item.qty }}×</span>
+                {{ item.dish_name }}
+              </p>
               <p v-if="item.options?.length" class="text-slate-400">
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}
               </p>
-              <p v-if="item.note" class="text-slate-400">{{ item.note }}</p>
+              <p v-if="item.note" class="italic text-slate-400">{{ item.note }}</p>
             </div>
-            <p class="shrink-0 font-medium text-slate-200">{{ formatCurrency(item.subtotal, o.currency) }}</p>
+            <p class="shrink-0 font-semibold tabular-nums text-slate-200">{{ formatCurrency(item.subtotal, o.currency) }}</p>
           </div>
-          <p v-if="o.customer_note" class="rounded-xl border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-300">
+          <p v-if="o.customer_note" class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300">
             <span class="font-semibold text-slate-400">{{ t("ownerOrders.note") }}:</span> {{ o.customer_note }}
           </p>
         </div>
@@ -528,18 +540,18 @@
         </div>
 
         <div v-else class="flex flex-wrap items-center gap-2">
-          <span v-if="o.owner_note" class="text-xs text-slate-400">
-            <span class="font-semibold">{{ t("ownerOrders.ownerNote") }}:</span> {{ o.owner_note }}
+          <span v-if="o.owner_note" class="rounded-full border border-slate-700/50 bg-slate-800/40 px-2.5 py-0.5 text-xs text-slate-300">
+            <span class="font-semibold text-slate-400">{{ t("ownerOrders.ownerNote") }}:</span> {{ o.owner_note }}
           </span>
-          <span v-if="o.estimated_ready_minutes" class="ui-data-strip text-emerald-200">
+          <span v-if="o.estimated_ready_minutes" class="ui-data-strip font-semibold text-emerald-200">
             {{ t("ownerOrders.estimatedReady", { minutes: o.estimated_ready_minutes }) }}
           </span>
         </div>
 
         <!-- Action buttons -->
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 pt-0.5">
           <template v-if="o.status === 'scheduled'">
-            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
+            <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'pending')">
               {{ t("ownerOrders.releaseNow") }}
             </button>
             <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
@@ -547,7 +559,7 @@
             </button>
           </template>
           <template v-else-if="o.status === 'pending'">
-            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
+            <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'confirmed')">
               {{ t("ownerOrders.confirm") }}
             </button>
             <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
@@ -555,7 +567,7 @@
             </button>
           </template>
           <template v-else-if="o.status === 'confirmed'">
-            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'preparing')">
+            <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'preparing')">
               {{ t("ownerOrders.startPreparing") }}
             </button>
             <button class="ui-btn-outline ui-press border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:border-red-400" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'cancelled')">
@@ -563,7 +575,7 @@
             </button>
           </template>
           <template v-else-if="o.status === 'preparing'">
-            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'ready')">
+            <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'ready')">
               {{ t("ownerOrders.markReady") }}
             </button>
           </template>
@@ -572,21 +584,21 @@
                  is finished by the Settle & close button (the pay step). -->
             <button
               v-if="o.fulfillment_type === 'delivery'"
-              class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id"
               @click="updateStatus(o, 'out_for_delivery')"
             >
               {{ t("ownerOrders.outForDelivery") }}
             </button>
             <button
               v-else-if="o.fulfillment_type !== 'table' || o.payment_status === 'paid'"
-              class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id"
+              class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id"
               @click="updateStatus(o, 'completed')"
             >
               {{ t("ownerOrders.complete") }}
             </button>
           </template>
           <template v-else-if="o.status === 'out_for_delivery'">
-            <button class="ui-btn-primary ui-press px-3 py-1.5 text-xs" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
+            <button class="ui-btn-primary ui-press px-4 py-2 text-xs font-semibold" :disabled="order.updatingOrderId === o.id" @click="updateStatus(o, 'completed')">
               {{ t("ownerOrders.markDelivered") }}
             </button>
           </template>
@@ -601,7 +613,7 @@
 
           <!-- Print ticket -->
           <button
-            class="ui-btn-outline ui-press px-3 py-1.5 text-xs"
+            class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
             @click="printTicket(o)"
           >
             <span aria-hidden="true">🖨</span> {{ t("ownerOrders.printTicket") }}
@@ -611,7 +623,7 @@
                ready dine-in order this also closes the open tab. -->
           <button
             v-if="o.payment_status !== 'paid' && o.status !== 'cancelled'"
-            class="ui-btn-outline ui-press border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
+            class="ui-btn-outline ui-press inline-flex items-center gap-1.5 border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
             :disabled="settlingOrderId === o.id"
             @click="settleOrder(o)"
           >
