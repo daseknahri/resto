@@ -849,6 +849,8 @@ export const messages = {
         fast_casual: "Fast casual / QSR",
         bakery: "Bakery / Patisserie",
         bar: "Bar / Lounge",
+        grocery: "Grocery / Mini-market",
+        retail: "Retail / Shop",
       },
     },
     ownerMenuBuilder: {
@@ -4683,6 +4685,8 @@ export const messages = {
         fast_casual: "Fast casual / Restauration rapide",
         bakery: "Boulangerie / Pâtisserie",
         bar: "Bar / Lounge",
+        grocery: "Épicerie / Supérette",
+        retail: "Commerce / Boutique",
       },
     },
     ownerMenuBuilder: {

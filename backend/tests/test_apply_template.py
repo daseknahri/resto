@@ -60,7 +60,10 @@ class TemplateDataTests(SimpleTestCase):
     THEME_KEYS = {"primary_color", "secondary_color", "menu_theme", "menu_card_layout"}
 
     def test_expected_templates_exist(self):
-        self.assertEqual(set(TEMPLATES), {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar"})
+        self.assertEqual(
+            set(TEMPLATES),
+            {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar", "grocery", "retail"},
+        )
 
     def test_each_template_is_well_formed(self):
         for key, tpl in TEMPLATES.items():
@@ -115,7 +118,10 @@ class ApplyTemplateViewTests(SimpleTestCase):
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         keys = {t["key"] for t in resp.data["templates"]}
-        self.assertEqual(keys, {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar"})
+        self.assertEqual(
+            keys,
+            {"cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar", "grocery", "retail"},
+        )
 
     # ── POST validation ───────────────────────────────────────────────────────────
     def test_post_unknown_template_400(self):

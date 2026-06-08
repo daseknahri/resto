@@ -276,6 +276,92 @@ TEMPLATES = {
             },
         ],
     },
+    # ── Non-restaurant verticals ───────────────────────────────────────────────
+    # These set business_type=grocery/retail, so the capability seam hides
+    # tables/dine-in/waiter/kitchen/reservations and the UI reads as a catalog
+    # (Catalog / Products / Sections via the vocabulary layer). Sample "dishes"
+    # are products; owners edit everything after applying.
+    "grocery": {
+        "label": "Grocery / Mini-market",
+        "business_type": "grocery",
+        "theme": {
+            "primary_color": "#2E7D32",
+            "secondary_color": "#A5D6A7",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Fruits & Vegetables",
+                "dishes": [
+                    {"name": "Bananas (per kg)", "price": "12", "description": "Fresh, ripe."},
+                    {"name": "Tomatoes (per kg)", "price": "9", "description": "Vine-ripened."},
+                    {"name": "Apples (per kg)", "price": "16", "description": "Crisp and sweet."},
+                ],
+            },
+            {
+                "name": "Pantry",
+                "dishes": [
+                    {"name": "Rice 1kg", "price": "18", "description": "Long-grain."},
+                    {"name": "Pasta 500g", "price": "10", "description": "Durum wheat."},
+                    {"name": "Olive Oil 1L", "price": "60", "description": "Extra virgin."},
+                ],
+            },
+            {
+                "name": "Beverages",
+                "dishes": [
+                    {"name": "Still Water 1.5L", "price": "6", "description": "Pack of one."},
+                    {"name": "Orange Juice 1L", "price": "15", "description": "100% juice."},
+                    {"name": "Cola 33cl", "price": "7", "description": "Chilled can."},
+                ],
+            },
+            {
+                "name": "Household",
+                "dishes": [
+                    {"name": "Dish Soap", "price": "20", "description": "Lemon scent, 750ml."},
+                    {"name": "Paper Towels (2)", "price": "18", "description": "Two-roll pack."},
+                    {"name": "Trash Bags (30)", "price": "22", "description": "30 bags, 30L."},
+                ],
+            },
+        ],
+    },
+    "retail": {
+        "label": "Retail / Shop",
+        "business_type": "retail",
+        "theme": {
+            "primary_color": "#37474F",
+            "secondary_color": "#FF7043",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "New Arrivals",
+                "dishes": [
+                    {"name": "Classic T-Shirt", "price": "120", "description": "Soft cotton, unisex."},
+                    {"name": "Denim Jacket", "price": "450", "description": "Mid-wash, timeless cut."},
+                    {"name": "Canvas Sneakers", "price": "320", "description": "Everyday comfort."},
+                ],
+            },
+            {
+                "name": "Accessories",
+                "dishes": [
+                    {"name": "Leather Belt", "price": "150", "description": "Full-grain, brass buckle."},
+                    {"name": "Sunglasses", "price": "180", "description": "UV400 protection."},
+                    {"name": "Cotton Cap", "price": "90", "description": "Adjustable, embroidered."},
+                ],
+            },
+            {
+                "name": "Bags",
+                "dishes": [
+                    {"name": "Canvas Tote", "price": "110", "description": "Roomy everyday tote."},
+                    {"name": "Backpack", "price": "390", "description": "Laptop sleeve, water-resistant."},
+                ],
+            },
+        ],
+    },
 }
 
 
