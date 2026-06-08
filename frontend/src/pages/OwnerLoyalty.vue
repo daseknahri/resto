@@ -1,14 +1,14 @@
-﻿<template>
+<template>
   <div class="ui-page-shell space-y-4 pb-6">
     <!-- Page header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-0.5">
           <p class="ui-kicker">{{ t('ownerLoyalty.kicker') }}</p>
-          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">
+          <h1 class="ui-display text-xl font-bold tracking-tight text-white leading-tight sm:text-2xl">
             {{ t('ownerLoyalty.title') }}
           </h1>
-          <p class="ui-subtle text-xs">{{ t('ownerLoyalty.subtitle') }}</p>
+          <p class="ui-subtle mt-0.5 text-xs">{{ t('ownerLoyalty.subtitle') }}</p>
         </div>
         <div class="mt-1 shrink-0">
           <svg
@@ -29,7 +29,7 @@
     </header>
 
     <!-- Loading skeleton -->
-    <div v-if="loading" class="ui-skeleton animate-pulse p-4 space-y-4" aria-busy="true">
+    <div v-if="loading" class="ui-panel animate-pulse p-4 space-y-4" aria-busy="true">
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1.5">
           <div class="h-4 w-32 rounded bg-slate-700/60" />
@@ -71,37 +71,37 @@
     <template v-else>
       <!-- How it works — shown first so owners understand the model before configuring -->
       <section class="ui-panel ui-reveal p-4 space-y-3" :style="{ '--ui-delay': '28ms' }">
-        <h2 class="ui-kicker">{{ t('ownerLoyalty.howItWorksTitle') }}</h2>
-        <ul class="space-y-2">
-          <li class="flex items-start gap-2 text-xs text-slate-400">
-            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)]" aria-hidden="true">•</span>
+        <h2 class="ui-kicker tracking-wide">{{ t('ownerLoyalty.howItWorksTitle') }}</h2>
+        <ul class="space-y-2.5">
+          <li class="flex items-start gap-2.5 text-xs text-slate-400 leading-relaxed">
+            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)] text-sm" aria-hidden="true">•</span>
             {{ t('ownerLoyalty.how1') }}
           </li>
-          <li class="flex items-start gap-2 text-xs text-slate-400">
-            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)]" aria-hidden="true">•</span>
+          <li class="flex items-start gap-2.5 text-xs text-slate-400 leading-relaxed">
+            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)] text-sm" aria-hidden="true">•</span>
             {{ t('ownerLoyalty.how2') }}
           </li>
-          <li class="flex items-start gap-2 text-xs text-slate-400">
-            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)]" aria-hidden="true">•</span>
+          <li class="flex items-start gap-2.5 text-xs text-slate-400 leading-relaxed">
+            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)] text-sm" aria-hidden="true">•</span>
             {{ t('ownerLoyalty.how3') }}
           </li>
-          <li class="flex items-start gap-2 text-xs text-slate-400">
-            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)]" aria-hidden="true">•</span>
+          <li class="flex items-start gap-2.5 text-xs text-slate-400 leading-relaxed">
+            <span class="mt-0.5 shrink-0 text-[var(--color-secondary)] text-sm" aria-hidden="true">•</span>
             {{ t('ownerLoyalty.how4') }}
           </li>
         </ul>
       </section>
 
       <!-- Settings card -->
-      <section class="ui-panel ui-reveal p-4 space-y-4" :style="{ '--ui-delay': '56ms' }">
+      <section class="ui-panel ui-reveal p-4 space-y-5" :style="{ '--ui-delay': '56ms' }">
         <!-- Section heading -->
         <div class="space-y-0.5">
-          <p class="ui-kicker">{{ t('ownerLoyalty.settingsKicker') }}</p>
+          <p class="ui-kicker tracking-wide">{{ t('ownerLoyalty.settingsKicker') }}</p>
           <h2 class="text-sm font-semibold text-slate-100 leading-snug">{{ t('ownerLoyalty.settingsTitle') }}</h2>
         </div>
 
         <!-- Enable / disable toggle -->
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-3">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-100">{{ t('ownerLoyalty.enableLabel') }}</p>
             <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerLoyalty.enableHint') }}</p>
@@ -124,74 +124,78 @@
           </button>
         </div>
 
-        <div class="border-t border-slate-700/50" />
+        <div class="border-t border-slate-700/40" />
 
-        <!-- Points per unit -->
-        <div class="space-y-1.5">
-          <label for="loyalty-points-per-unit" class="block text-xs font-semibold text-slate-300">
-            {{ t('ownerLoyalty.pointsPerUnitLabel') }}
-          </label>
-          <div class="flex flex-wrap items-center gap-3">
-            <input
-              id="loyalty-points-per-unit"
-              v-model.number="form.points_per_unit"
-              type="number"
-              min="1"
-              step="1"
-              class="ui-input w-32 tabular-nums"
-            />
-            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsPerUnitSuffix') }}</span>
-          </div>
-          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.pointsPerUnitHint') }}</p>
-        </div>
+        <!-- Earn / redemption fields -->
+        <div class="space-y-4">
 
-        <!-- Redeem threshold -->
-        <div class="space-y-1.5">
-          <label for="loyalty-redeem-threshold" class="block text-xs font-semibold text-slate-300">
-            {{ t('ownerLoyalty.redeemThresholdLabel') }}
-          </label>
-          <div class="flex flex-wrap items-center gap-3">
-            <input
-              id="loyalty-redeem-threshold"
-              v-model.number="form.redeem_threshold"
-              type="number"
-              min="1"
-              step="1"
-              class="ui-input w-32 tabular-nums"
-            />
-            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.redeemThresholdSuffix') }}</span>
+          <!-- Points per unit -->
+          <div class="space-y-1.5">
+            <label for="loyalty-points-per-unit" class="block text-xs font-semibold text-slate-300">
+              {{ t('ownerLoyalty.pointsPerUnitLabel') }}
+            </label>
+            <div class="flex flex-wrap items-center gap-3">
+              <input
+                id="loyalty-points-per-unit"
+                v-model.number="form.points_per_unit"
+                type="number"
+                min="1"
+                step="1"
+                class="ui-input w-32 tabular-nums"
+              />
+              <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsPerUnitSuffix') }}</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-slate-500">{{ t('ownerLoyalty.pointsPerUnitHint') }}</p>
           </div>
-          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.redeemThresholdHint') }}</p>
-        </div>
 
-        <!-- Points value -->
-        <div class="space-y-1.5">
-          <label for="loyalty-points-value" class="block text-xs font-semibold text-slate-300">
-            {{ t('ownerLoyalty.pointsValueLabel') }}
-          </label>
-          <div class="flex flex-wrap items-center gap-3">
-            <input
-              id="loyalty-points-value"
-              v-model="form.points_value"
-              type="number"
-              min="0.0001"
-              step="0.001"
-              class="ui-input w-32 tabular-nums"
-            />
-            <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsValueSuffix') }}</span>
+          <!-- Redeem threshold -->
+          <div class="space-y-1.5">
+            <label for="loyalty-redeem-threshold" class="block text-xs font-semibold text-slate-300">
+              {{ t('ownerLoyalty.redeemThresholdLabel') }}
+            </label>
+            <div class="flex flex-wrap items-center gap-3">
+              <input
+                id="loyalty-redeem-threshold"
+                v-model.number="form.redeem_threshold"
+                type="number"
+                min="1"
+                step="1"
+                class="ui-input w-32 tabular-nums"
+              />
+              <span class="text-xs text-slate-400">{{ t('ownerLoyalty.redeemThresholdSuffix') }}</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-slate-500">{{ t('ownerLoyalty.redeemThresholdHint') }}</p>
           </div>
-          <p class="text-[11px] text-slate-500">{{ t('ownerLoyalty.pointsValueHint') }}</p>
+
+          <!-- Points value -->
+          <div class="space-y-1.5">
+            <label for="loyalty-points-value" class="block text-xs font-semibold text-slate-300">
+              {{ t('ownerLoyalty.pointsValueLabel') }}
+            </label>
+            <div class="flex flex-wrap items-center gap-3">
+              <input
+                id="loyalty-points-value"
+                v-model="form.points_value"
+                type="number"
+                min="0.0001"
+                step="0.001"
+                class="ui-input w-32 tabular-nums"
+              />
+              <span class="text-xs text-slate-400">{{ t('ownerLoyalty.pointsValueSuffix') }}</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-slate-500">{{ t('ownerLoyalty.pointsValueHint') }}</p>
+          </div>
         </div>
 
         <!-- Preview card -->
         <div
-          class="ui-section-band space-y-1 px-4 py-3"
+          class="ui-section-band space-y-2 rounded-xl px-4 py-3.5"
           role="group"
           aria-labelledby="loyalty-preview-label"
         >
-          <p id="loyalty-preview-label" class="ui-kicker text-[var(--color-secondary)]">{{ t('ownerLoyalty.previewTitle') }}</p>
-          <p class="text-xs tabular-nums text-slate-300">{{ previewEarn }}</p>
-          <p class="text-xs tabular-nums text-slate-300">{{ previewRedeem }}</p>
+          <p id="loyalty-preview-label" class="ui-kicker text-[var(--color-secondary)] tracking-wide">{{ t('ownerLoyalty.previewTitle') }}</p>
+          <p class="text-xs tabular-nums text-slate-300 leading-relaxed">{{ previewEarn }}</p>
+          <p class="text-xs tabular-nums text-slate-300 leading-relaxed">{{ previewRedeem }}</p>
         </div>
 
         <div

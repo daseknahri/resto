@@ -1,17 +1,17 @@
 <template>
   <div class="space-y-4">
     <!-- Header -->
-    <header class="ui-hero-ribbon ui-reveal space-y-3 p-4">
+    <header class="ui-hero-ribbon ui-reveal space-y-4 px-4 py-4 sm:px-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t("ownerRatings.kicker") }}</p>
-          <h1 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t("ownerRatings.title") }}</h1>
+          <h1 class="ui-display text-2xl font-bold tracking-tight text-white sm:text-3xl">{{ t("ownerRatings.title") }}</h1>
           <p class="ui-subtle">{{ t("ownerRatings.description") }}</p>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
-            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 text-sm"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
             :disabled="exporting || !ratings.length"
             @click="exportCsv"
           >
@@ -20,7 +20,7 @@
           </button>
           <button
             type="button"
-            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 text-sm"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
             :disabled="loading || updating"
             @click="fetchRatings(true)"
           >
@@ -31,55 +31,55 @@
       </div>
 
       <!-- Summary stats skeleton -->
-      <div v-if="loading && !summary" class="animate-pulse grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3">
-        <div class="flex flex-col items-center gap-1.5">
-          <div class="h-6 w-10 rounded bg-slate-700/50" />
-          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+      <div v-if="loading && !summary" class="animate-pulse grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+        <div class="flex flex-col items-center gap-2 bg-slate-950/70 px-3 py-4">
+          <div class="h-7 w-12 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-20 rounded bg-slate-800/50" />
         </div>
-        <div class="flex flex-col items-center gap-1.5 border-x border-slate-800">
-          <div class="h-6 w-10 rounded bg-slate-700/50" />
-          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        <div class="flex flex-col items-center gap-2 bg-slate-950/70 px-3 py-4">
+          <div class="h-7 w-12 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-20 rounded bg-slate-800/50" />
         </div>
-        <div class="flex flex-col items-center gap-1.5">
-          <div class="h-6 w-10 rounded bg-slate-700/50" />
-          <div class="h-2.5 w-16 rounded bg-slate-800/50" />
+        <div class="flex flex-col items-center gap-2 bg-slate-950/70 px-3 py-4">
+          <div class="h-7 w-12 rounded bg-slate-700/50" />
+          <div class="h-2.5 w-20 rounded bg-slate-800/50" />
         </div>
       </div>
 
       <!-- Summary stats -->
       <div v-if="summary" class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold text-white tabular-nums">{{ summary.count }}</p>
-          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.totalRatings") }}</p>
+        <div class="bg-slate-950/70 px-3 py-4 text-center">
+          <p class="text-2xl font-bold leading-none text-white tabular-nums">{{ summary.count }}</p>
+          <p class="ui-stat-label mt-1.5">{{ t("ownerRatings.totalRatings") }}</p>
         </div>
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold text-amber-400 tabular-nums">
+        <div class="bg-slate-950/70 px-3 py-4 text-center">
+          <p class="text-2xl font-bold leading-none text-amber-400 tabular-nums">
             {{ summary.average !== null ? summary.average.toFixed(1) : "—" }}
           </p>
-          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.averageScore") }}</p>
+          <p class="ui-stat-label mt-1.5">{{ t("ownerRatings.averageScore") }}</p>
         </div>
-        <div class="bg-slate-950/70 px-3 py-3 text-center">
-          <p class="text-xl font-bold text-white tabular-nums">{{ summary.comments }}</p>
-          <p class="ui-stat-label mt-0.5">{{ t("ownerRatings.withComments") }}</p>
+        <div class="bg-slate-950/70 px-3 py-4 text-center">
+          <p class="text-2xl font-bold leading-none text-white tabular-nums">{{ summary.comments }}</p>
+          <p class="ui-stat-label mt-1.5">{{ t("ownerRatings.withComments") }}</p>
         </div>
       </div>
 
       <!-- Score distribution bar -->
-      <div v-if="ratings.length" class="space-y-1.5">
-        <div v-for="s in [5, 4, 3, 2, 1]" :key="s" class="flex items-center gap-2 text-xs">
-          <span class="w-4 shrink-0 text-end font-semibold text-amber-400 tabular-nums">{{ s }}</span>
-          <div class="h-2 min-w-0 flex-1 rounded-full bg-slate-800" role="progressbar" :aria-label="t('ownerRatings.starLabel', { n: s })" :aria-valuenow="scorePercent(s)" aria-valuemin="0" aria-valuemax="100">
+      <div v-if="ratings.length" class="space-y-2">
+        <div v-for="s in [5, 4, 3, 2, 1]" :key="s" class="flex items-center gap-2.5 text-xs">
+          <span class="w-4 shrink-0 text-end font-bold text-amber-400 tabular-nums">{{ s }}</span>
+          <div class="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800/80" role="progressbar" :aria-label="t('ownerRatings.starLabel', { n: s })" :aria-valuenow="scorePercent(s)" aria-valuemin="0" aria-valuemax="100">
             <div
-              class="h-full rounded-full bg-amber-400/70 transition-all duration-500"
+              class="h-full rounded-full bg-amber-400/75 transition-all duration-500"
               :style="{ width: `${scorePercent(s)}%` }"
             />
           </div>
-          <span class="w-6 shrink-0 tabular-nums text-slate-500">{{ scoreCounts[s] || 0 }}</span>
+          <span class="w-6 shrink-0 text-end tabular-nums text-slate-500">{{ scoreCounts[s] || 0 }}</span>
         </div>
       </div>
 
       <!-- Score filter pills -->
-      <div v-if="ratings.length" class="ui-scroll-row min-w-0 max-w-full">
+      <div v-if="ratings.length" class="ui-scroll-row min-w-0 max-w-full" role="group" :aria-label="t('ownerRatings.filterAll')">
         <button
           v-for="f in scoreFilters"
           :key="f.value"
@@ -106,10 +106,10 @@
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!ratings.length" class="ui-empty-state ui-reveal text-center">
-      <AppIcon name="star" class="mx-auto mb-2 h-8 w-8 text-slate-600" aria-hidden="true" />
+    <div v-else-if="!ratings.length" class="ui-empty-state ui-reveal py-12 text-center">
+      <AppIcon name="star" class="mx-auto mb-3 h-10 w-10 text-slate-700" aria-hidden="true" />
       <p class="text-sm font-semibold text-slate-100">{{ t("ownerRatings.emptyTitle") }}</p>
-      <p class="text-xs text-slate-400">{{ t("ownerRatings.emptyBody") }}</p>
+      <p class="mt-1 text-xs text-slate-400">{{ t("ownerRatings.emptyBody") }}</p>
     </div>
 
     <!-- Ratings list -->
@@ -117,17 +117,17 @@
       <article
         v-for="(r, index) in filtered"
         :key="r.id"
-        class="ui-panel ui-surface-lift ui-reveal p-4 space-y-2.5"
+        class="ui-panel ui-surface-lift ui-reveal space-y-3 p-4"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         :aria-label="r.customer_name ? r.customer_name + ', ' + r.score + '/5' : r.score + '/5'"
       >
         <!-- Top row: stars + score · date -->
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <!-- Stars + score -->
-          <div class="flex items-center gap-2">
-            <span class="text-lg leading-none text-amber-400" aria-hidden="true">{{ "★".repeat(r.score) }}<span class="text-slate-600">{{ "★".repeat(5 - r.score) }}</span></span>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <!-- Stars + score badge -->
+          <div class="flex items-center gap-2.5">
+            <span class="text-base leading-none tracking-tight text-amber-400" aria-hidden="true">{{ "★".repeat(r.score) }}<span class="text-slate-700">{{ "★".repeat(5 - r.score) }}</span></span>
             <span
-              class="ui-status-pill"
+              class="ui-status-pill text-xs font-semibold"
               :class="{
                 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300': r.score >= 4,
                 'border-amber-500/30 bg-amber-500/15 text-amber-300': r.score === 3,
@@ -136,29 +136,30 @@
             >{{ r.score }}/5</span>
           </div>
           <!-- Date -->
-          <p class="text-xs tabular-nums text-slate-500">{{ formatDate(r.created_at) }}</p>
+          <time class="text-xs tabular-nums text-slate-500" :datetime="r.created_at">{{ formatDate(r.created_at) }}</time>
         </div>
 
         <!-- Customer + order info row -->
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-          <span v-if="r.customer_name" class="flex min-w-0 items-center gap-1 font-medium text-slate-200">
+          <span v-if="r.customer_name" class="flex min-w-0 items-center gap-1.5 font-medium text-slate-300">
             <AppIcon name="user" class="h-3 w-3 shrink-0 text-slate-500" aria-hidden="true" />
             <span class="truncate">{{ r.customer_name }}</span>
           </span>
-          <span v-if="r.customer_name && r.order_number" class="text-slate-600" aria-hidden="true">·</span>
+          <span v-if="r.customer_name && r.order_number" class="text-slate-700" aria-hidden="true">·</span>
           <RouterLink
             :to="{ name: 'owner-orders', query: { q: r.order_number } }"
-            class="font-mono text-slate-400 transition hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/50 rounded"
+            class="rounded font-mono text-slate-400 transition hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/50"
           >#{{ r.order_number }}</RouterLink>
         </div>
 
         <!-- Comment -->
-        <p v-if="r.comment" class="rounded-lg border-s-2 border-slate-700 bg-slate-900/40 py-2 ps-3 pe-3 text-sm italic leading-relaxed text-slate-300">{{ r.comment }}</p>
+        <p v-if="r.comment" class="rounded-lg border-s-2 border-slate-600/60 bg-slate-900/50 py-2.5 ps-3.5 pe-3 text-sm italic leading-relaxed text-slate-300">{{ r.comment }}</p>
         <p v-else class="text-xs italic text-slate-600">{{ t("ownerRatings.noComment") }}</p>
       </article>
 
       <!-- No matches for current filter -->
-      <div v-if="!filtered.length && activeScore !== 'all'" class="ui-empty-state text-center">
+      <div v-if="!filtered.length && activeScore !== 'all'" class="ui-empty-state py-10 text-center">
+        <AppIcon name="star" class="mx-auto mb-3 h-8 w-8 text-slate-700" aria-hidden="true" />
         <p class="text-sm font-semibold text-slate-100">{{ t("ownerRatings.noMatchFilter") }}</p>
       </div>
     </div>

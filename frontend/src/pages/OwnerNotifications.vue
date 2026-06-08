@@ -1,28 +1,40 @@
 <template>
   <main class="ui-page-shell max-w-4xl space-y-4">
     <!-- Header -->
-    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="min-w-0">
+    <header class="ui-hero-ribbon ui-reveal space-y-3 px-4 py-4 md:px-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0 space-y-1">
           <p class="ui-kicker">{{ t('ownerNotifications.kicker') }}</p>
-          <h1 class="ui-display text-xl font-semibold leading-tight tracking-tight text-white md:text-2xl">
+          <h1 class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl">
             {{ t('ownerNotifications.title') }}
           </h1>
-          <p class="ui-subtle mt-0.5 hidden text-xs sm:block">{{ t('ownerNotifications.subtitle') }}</p>
+          <p class="ui-subtle">{{ t('ownerNotifications.subtitle') }}</p>
         </div>
-        <div class="flex shrink-0 flex-wrap items-center gap-1.5">
-          <span class="ui-chip tabular-nums">
-            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400/80"></span>
-            {{ summary.sent || 0 }} {{ t('ownerNotifications.statusSent') }}
-          </span>
-          <span class="ui-chip tabular-nums">
-            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-red-400/80"></span>
-            {{ summary.failed || 0 }} {{ t('ownerNotifications.statusFailed') }}
-          </span>
-          <span class="ui-chip tabular-nums">
-            <span aria-hidden="true" class="h-2 w-2 rounded-full bg-slate-500/80"></span>
-            {{ summary.skipped || 0 }} {{ t('ownerNotifications.statusSkipped') }}
-          </span>
+        <div class="shrink-0">
+          <button
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            :disabled="loading"
+            :aria-label="t('ownerNotifications.refresh')"
+            @click="fetchLog"
+          >
+            {{ loading ? t('common.loading') : t('ownerNotifications.refresh') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary stat bar -->
+      <div class="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+        <div class="bg-slate-950/70 px-3 py-3 text-center">
+          <p class="text-xl font-bold tabular-nums text-emerald-400">{{ summary.sent || 0 }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSent') }}</p>
+        </div>
+        <div class="bg-slate-950/70 px-3 py-3 text-center">
+          <p class="text-xl font-bold tabular-nums text-red-400">{{ summary.failed || 0 }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusFailed') }}</p>
+        </div>
+        <div class="bg-slate-950/70 px-3 py-3 text-center">
+          <p class="text-xl font-bold tabular-nums text-slate-400">{{ summary.skipped || 0 }}</p>
+          <p class="ui-stat-label mt-0.5">{{ t('ownerNotifications.statusSkipped') }}</p>
         </div>
       </div>
     </header>
@@ -55,21 +67,13 @@
           <option value="failed">{{ t('ownerNotifications.statusFailed') }}</option>
           <option value="skipped">{{ t('ownerNotifications.statusSkipped') }}</option>
         </select>
-        <button
-          class="ui-btn-outline ui-press ui-touch-target ms-auto px-4 py-1.5 text-xs"
-          :disabled="loading"
-          :aria-label="t('ownerNotifications.refresh')"
-          @click="fetchLog"
-        >
-          {{ loading ? t('common.loading') : t('ownerNotifications.refresh') }}
-        </button>
       </div>
     </div>
 
     <!-- Error -->
     <div
       v-if="loadError"
-      class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5"
+      class="flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/8 px-4 py-3"
       role="alert"
     >
       <svg class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -82,36 +86,55 @@
     </div>
 
     <!-- Loading skeletons -->
-    <div v-else-if="loading" class="space-y-1.5" aria-busy="true" aria-live="polite" :aria-label="t('common.loading')">
-      <div v-for="i in 6" :key="i" class="ui-skeleton h-10 rounded-xl" />
+    <div v-else-if="loading" class="space-y-2" aria-busy="true" aria-live="polite" :aria-label="t('common.loading')">
+      <div v-for="i in 6" :key="i" class="ui-skeleton rounded-xl" :class="i % 3 === 0 ? 'h-12' : 'h-10'" />
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!rows.length" class="ui-empty-state text-center">
+    <div v-else-if="!rows.length" class="ui-empty-state py-12 text-center">
       <p class="text-sm font-semibold text-slate-100">{{ t('ownerNotifications.empty') }}</p>
-      <p class="mt-1 text-xs text-slate-400">{{ t('ownerNotifications.emptyHint') }}</p>
+      <p class="mt-1.5 text-xs text-slate-400">{{ t('ownerNotifications.emptyHint') }}</p>
     </div>
 
     <!-- List -->
-    <ul v-else class="space-y-1.5">
+    <ul v-else class="space-y-2">
       <li
         v-for="(n, index) in rows"
         :key="n.id"
-        class="ui-panel ui-reveal flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 text-xs"
+        class="ui-panel ui-reveal min-w-0 px-4 py-3"
         :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         :aria-label="`${channelLabel(n.channel)}, ${statusLabel(n.status)}, ${n.event || ''}`"
       >
-        <span role="img" class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="channelClass(n.channel)" :aria-label="channelLabel(n.channel)">{{ channelLabel(n.channel) }}</span>
-        <span role="img" class="shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="statusClass(n.status)" :aria-label="statusLabel(n.status)">{{ statusLabel(n.status) }}</span>
-        <span class="min-w-0 truncate text-slate-300" :title="n.event || undefined">{{ n.event || '—' }}</span>
-        <span v-if="n.reference" class="shrink-0 font-mono text-slate-500">{{ n.reference }}</span>
-        <span v-if="n.detail" class="min-w-0 truncate text-slate-500" :title="n.detail">{{ n.detail }}</span>
-        <span v-if="n.recipient" class="shrink-0 text-slate-500">
-          <span class="sr-only">{{ t('ownerNotifications.recipient') }}</span>
-          <span aria-hidden="true" class="ltr:me-0.5 rtl:scale-x-[-1] rtl:inline-block">→</span>{{ n.recipient }}
-        </span>
-        <span v-if="n.error" class="min-w-0 truncate text-red-400/80" :title="n.error">{{ n.error }}</span>
-        <time class="ms-auto shrink-0 whitespace-nowrap tabular-nums text-slate-500" :datetime="n.created_at">{{ fmtTime(n.created_at) }}</time>
+        <!-- Top row: badges + time -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span
+            role="img"
+            class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide"
+            :class="channelClass(n.channel)"
+            :aria-label="channelLabel(n.channel)"
+          >{{ channelLabel(n.channel) }}</span>
+          <span
+            role="img"
+            class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide"
+            :class="statusClass(n.status)"
+            :aria-label="statusLabel(n.status)"
+          >{{ statusLabel(n.status) }}</span>
+          <time
+            class="ms-auto shrink-0 whitespace-nowrap tabular-nums text-[11px] text-slate-500"
+            :datetime="n.created_at"
+          >{{ fmtTime(n.created_at) }}</time>
+        </div>
+        <!-- Bottom row: event, recipient, reference, detail, error -->
+        <div class="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+          <span class="min-w-0 truncate font-medium text-slate-200" :title="n.event || undefined">{{ n.event || '—' }}</span>
+          <span v-if="n.recipient" class="shrink-0 text-slate-400">
+            <span class="sr-only">{{ t('ownerNotifications.recipient') }}</span>
+            <span aria-hidden="true" class="ltr:me-0.5 rtl:scale-x-[-1] rtl:inline-block">→</span>{{ n.recipient }}
+          </span>
+          <span v-if="n.reference" class="shrink-0 font-mono text-slate-500">{{ n.reference }}</span>
+          <span v-if="n.detail" class="min-w-0 truncate text-slate-500" :title="n.detail">{{ n.detail }}</span>
+          <span v-if="n.error" class="min-w-0 truncate text-red-400/80" :title="n.error">{{ n.error }}</span>
+        </div>
       </li>
     </ul>
   </main>
