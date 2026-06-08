@@ -30,6 +30,8 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 | `VAPID_PRIVATE_KEY` | Web-push private key (PEM). Generate the pair with `python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); v.save_key('private.pem')"` (or any VAPID keygen) and paste both. |
 | `VAPID_ADMIN_EMAIL` | Contact `mailto:` for push (e.g. `admin@yourdomain.com`). |
 | `OPENROUTER_API_KEY` | Optional — only needed for the AI translation feature |
+| `DELIVERY_ROAD_FACTOR` | Optional (default `1.3`). Multiplier turning straight-line distance into an estimated road distance for delivery fees. Leave default unless you tune it. |
+| `DELIVERY_OSRM_URL` | Optional. Point at a self-hosted OSRM instance (e.g. `http://osrm:5000`) for **real** driving distances (cached 7d, falls back to the road factor on any error). Unset = use the road factor. Recommended path to a full delivery/ride platform: run OSRM on a small VPS with a Morocco OSM extract = unlimited & free. |
 
 > **Note on CSRF:** leave `DJANGO_CSRF_COOKIE_HTTPONLY` unset/`False`. The SPA reads the
 > `csrftoken` cookie in JS and echoes it in the `X-CSRFToken` header (Django double-submit) —
@@ -47,7 +49,7 @@ or advance/scheduled orders never reach the kitchen.
 |---|---|---|
 | `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
 | `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
-| `python manage.py sweep_delivery_jobs` | every ~3 min | Re-dispatch unclaimed delivery jobs, alert the restaurant when none accept, release jobs abandoned by an offline driver, expire stale cash-out codes. **Required for reliable delivery.** |
+| `python manage.py sweep_delivery_jobs` | **every ~60 s** | Advance ranked-offer cascades (60 s offer window), re-broadcast unclaimed open-pool jobs, alert the restaurant when none accept, release jobs abandoned by an offline driver, expire stale cash-out codes. **Required for reliable delivery** — the dispatch heartbeat. |
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
 | `python manage.py enforce_subscriptions --apply` | daily | Grace-period → mark lapsed tenants suspended (drop out of the marketplace). |
