@@ -4052,6 +4052,14 @@ class DriverJobAcceptView(APIView):
             return Response({"detail": "Complete your current delivery before accepting a new one."}, status=status.HTTP_409_CONFLICT)
 
         with _tx.atomic():
+            # Serialize this driver's concurrent accepts (double-tap / two tabs) on the
+            # driver row, then re-check capacity under the lock — the pre-check above is
+            # racy on its own and could otherwise let one driver hold two jobs at once.
+            Customer.objects.select_for_update().filter(pk=customer.id).first()
+            if DeliveryJob.objects.filter(
+                driver=customer, status__in=DeliveryJob.ACTIVE_STATUSES,
+            ).exists():
+                return Response({"detail": "Complete your current delivery before accepting a new one."}, status=status.HTTP_409_CONFLICT)
             try:
                 job = DeliveryJob.objects.select_for_update().get(
                     pk=job_id,

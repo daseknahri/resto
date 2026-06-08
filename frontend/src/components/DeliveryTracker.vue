@@ -169,7 +169,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
@@ -296,9 +296,12 @@ const renderMap = async () => {
     _map = L.map(mapEl.value, { zoomControl: false, attributionControl: false }).setView(driverPos, 14);
     addTileLayer(L, _map);
   }
-  if (!_driverMarker) _driverMarker = L.marker(driverPos).addTo(_map);
-  else _driverMarker.setLatLng(driverPos);
-  if (_driverMarker.bindPopup) _driverMarker.bindPopup(t('deliveryTracker.title'));
+  if (!_driverMarker) {
+    _driverMarker = L.marker(driverPos).addTo(_map);
+    if (_driverMarker.bindPopup) _driverMarker.bindPopup(t('deliveryTracker.title'));
+  } else {
+    _driverMarker.setLatLng(driverPos);
+  }
 
   const destLat = props.delivery?.delivery_lat, destLng = props.delivery?.delivery_lng;
   const points = [driverPos];
@@ -307,6 +310,9 @@ const renderMap = async () => {
     if (!_destMarker) _destMarker = L.marker(destPos, { opacity: 0.7 }).addTo(_map);
     else _destMarker.setLatLng(destPos);
     points.push(destPos);
+  } else if (_destMarker) {
+    _map.removeLayer(_destMarker);
+    _destMarker = null;
   }
   // Route line: the real street route from the server (OSRM) when present, else a
   // straight line driver → destination. This is the "short road to the point".
@@ -322,6 +328,9 @@ const renderMap = async () => {
   if (linePts && linePts.length >= 2) {
     if (!_routeLine) _routeLine = L.polyline(linePts, { color: '#34d399', weight: 4, opacity: 0.75 }).addTo(_map);
     else _routeLine.setLatLngs(linePts);
+  } else if (_routeLine) {
+    _map.removeLayer(_routeLine);
+    _routeLine = null;
   }
   const boundsPts = (linePts && linePts.length >= 2) ? linePts : points;
   if (boundsPts.length > 1) _map.fitBounds(boundsPts, { padding: [30, 30], maxZoom: 15 });
@@ -337,6 +346,13 @@ watch(
   },
   { immediate: true },
 );
+
+// The watch's immediate run fires before the DOM ref exists (renderMap bails when
+// mapEl is null). Render once after mount so the map appears even if the driver
+// position doesn't change afterwards (e.g. the owner opening the tracking modal).
+onMounted(() => {
+  if (hasDriverPos.value) nextTick(renderMap);
+});
 
 onBeforeUnmount(() => {
   if (_map) {

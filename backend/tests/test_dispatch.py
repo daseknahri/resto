@@ -87,6 +87,23 @@ class OfferToNextDriverTests(SimpleTestCase):
         self.assertTrue(job.is_open_pool)
 
     @patch("accounts.dispatch._do_push")
+    @patch("accounts.dispatch.pick_nearest_driver")
+    @patch("django.db.transaction.atomic", return_value=_noop_atomic())
+    @patch("accounts.models.DeliveryJob")
+    def test_noop_when_live_offer_exists(self, mock_dj, _atomic, mock_pick, mock_push):
+        # Idempotency: a concurrent caller must not re-roll a job that already has a
+        # live exclusive offer (would reset the current driver's window).
+        mock_dj.Status.SEARCHING = "searching"
+        job = _job(offered_to_id=5, offer_expires_at=timezone.now() + timedelta(seconds=30))
+        mock_dj.objects.select_for_update.return_value.filter.return_value.first.return_value = job
+        from accounts.dispatch import offer_to_next_driver
+        out = offer_to_next_driver(1)
+        self.assertIsNone(out)
+        mock_pick.assert_not_called()
+        mock_push.assert_not_called()
+        job.save.assert_not_called()
+
+    @patch("accounts.dispatch._do_push")
     @patch("django.db.transaction.atomic", return_value=_noop_atomic())
     @patch("accounts.models.DeliveryJob")
     def test_noop_when_not_searching(self, mock_dj, _atomic, mock_push):

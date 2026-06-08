@@ -986,14 +986,17 @@ let _trackPoll = null;
 
 const fetchTrack = async () => {
   const id = trackModal.value.orderId;
-  if (!id) return;
+  if (!id || !trackModal.value.open) return;
   try {
     const { data } = await api.get(`/owner/orders/${id}/delivery-track/`);
+    // The modal may have been closed (or switched to another order) while this
+    // request was in flight — don't write stale data back.
+    if (!trackModal.value.open || trackModal.value.orderId !== id) return;
     trackModal.value.delivery = data;
     trackModal.value.error = "";
     if (data?.is_terminal && _trackPoll) { clearInterval(_trackPoll); _trackPoll = null; }
   } catch (err) {
-    if (!trackModal.value.delivery) {
+    if (trackModal.value.open && trackModal.value.orderId === id && !trackModal.value.delivery) {
       trackModal.value.error = err?.response?.data?.detail || t("ownerOrders.trackUnavailable");
     }
   }
@@ -1007,7 +1010,7 @@ const openTrack = (o) => {
 };
 
 const closeTrack = () => {
-  trackModal.value.open = false;
+  trackModal.value = { open: false, orderId: null, orderNumber: "", delivery: null, error: "" };
   if (_trackPoll) { clearInterval(_trackPoll); _trackPoll = null; }
 };
 

@@ -121,6 +121,16 @@ def offer_to_next_driver(job_id):
         job = DeliveryJob.objects.select_for_update().filter(pk=job_id).first()
         if job is None or job.status != DeliveryJob.Status.SEARCHING:
             return None
+        # Idempotency against concurrent callers (e.g. two overlapping sweep runs):
+        # if a live exclusive offer already exists, leave it alone rather than
+        # re-rolling it and resetting the current driver's window.
+        if (
+            not job.is_open_pool
+            and job.offered_to_id is not None
+            and job.offer_expires_at is not None
+            and job.offer_expires_at > timezone.now()
+        ):
+            return None
         tenant_id = job.tenant_id
         exclude = set(job.declined_by or [])
         driver = None
