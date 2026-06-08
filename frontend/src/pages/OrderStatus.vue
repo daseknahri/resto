@@ -10,18 +10,27 @@
     >{{ statusLabel(orderData?.status) }}</div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading && !orderData" class="space-y-3">
-      <div class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-3">
+    <div v-if="loading && !orderData" class="space-y-3" aria-busy="true" aria-label="Loading order status">
+      <div class="ui-skeleton animate-pulse p-5 space-y-3">
         <div class="h-2.5 w-16 rounded bg-slate-700/60" />
         <div class="flex items-start justify-between gap-3">
           <div class="space-y-2">
-            <div class="h-6 w-40 rounded bg-slate-700/60" />
-            <div class="h-5 w-24 rounded-full bg-slate-800/60" />
+            <div class="h-6 w-44 rounded bg-slate-700/60" />
+            <div class="h-5 w-28 rounded-full bg-slate-800/60" />
           </div>
           <div class="h-8 w-20 rounded bg-slate-700/50" />
         </div>
       </div>
-      <div class="animate-pulse rounded-2xl border border-slate-700/60 bg-slate-900/60 p-5 space-y-3">
+      <div class="ui-skeleton animate-pulse p-5 space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div v-for="i in 4" :key="i" class="flex flex-1 flex-col items-center gap-2">
+            <div class="h-9 w-9 rounded-full bg-slate-700/60" />
+            <div class="h-2 w-10 rounded bg-slate-800/50" />
+          </div>
+        </div>
+        <div class="h-1.5 w-full rounded-full bg-slate-800/60" />
+      </div>
+      <div class="ui-skeleton animate-pulse p-5 space-y-3">
         <div class="h-2.5 w-20 rounded bg-slate-700/60" />
         <div v-for="i in 3" :key="i" class="flex items-center justify-between gap-3">
           <div class="h-3 w-36 rounded bg-slate-800/60" />
@@ -31,10 +40,10 @@
     </div>
 
     <!-- Not found -->
-    <div v-else-if="notFound" class="ui-empty-state p-8 text-center space-y-3">
-      <AppIcon name="info" class="mx-auto h-8 w-8 text-slate-500" aria-hidden="true" />
+    <div v-else-if="notFound" class="ui-empty-state p-10 text-center space-y-4">
+      <AppIcon name="info" class="mx-auto h-10 w-10 text-slate-500" aria-hidden="true" />
       <p class="text-base font-semibold text-slate-100">{{ t("orderStatus.notFound") }}</p>
-      <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-4 py-2 text-sm">
+      <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-5 py-2.5 text-sm">
         {{ t("orderStatus.backToMenu") }}
       </RouterLink>
     </div>
@@ -43,17 +52,19 @@
       <!-- Proof-of-delivery code (give it to your driver) -->
       <div
         v-if="orderData.delivery_code"
-        class="ui-reveal rounded-2xl border border-indigo-400/50 bg-indigo-500/12 p-4 text-center"
+        class="ui-reveal rounded-2xl border border-indigo-400/50 bg-indigo-500/12 p-5 text-center"
+        :style="{ '--ui-delay': '28ms' }"
       >
         <p class="ui-kicker text-indigo-300">{{ t("orderStatus.deliveryCodeTitle") }}</p>
-        <p class="mt-1 text-3xl font-bold tracking-[0.3em] text-white">{{ orderData.delivery_code }}</p>
-        <p class="mt-1 text-xs text-indigo-100/75">{{ t("orderStatus.deliveryCodeHint") }}</p>
+        <p class="mt-2 text-4xl font-bold tracking-[0.35em] text-white tabular-nums">{{ orderData.delivery_code }}</p>
+        <p class="mt-1.5 text-xs text-indigo-100/75">{{ t("orderStatus.deliveryCodeHint") }}</p>
       </div>
 
       <!-- Order-ready banner -->
       <div
         v-if="orderData.status === 'ready'"
         class="ui-reveal relative overflow-hidden rounded-2xl border border-emerald-400/50 bg-emerald-500/12 p-5 text-center shadow-xl shadow-emerald-900/25 sm:p-6"
+        :style="{ '--ui-delay': '28ms' }"
       >
         <!-- background glow -->
         <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.18),transparent_60%)]" />
@@ -69,10 +80,11 @@
       <!-- Scheduled (advance order) banner -->
       <div
         v-if="orderData.status === 'scheduled' && orderData.scheduled_for"
-        class="ui-reveal rounded-2xl border border-violet-400/50 bg-violet-500/12 p-4 text-center shadow-lg shadow-violet-900/20 sm:p-5"
+        class="ui-reveal rounded-2xl border border-violet-400/50 bg-violet-500/12 p-5 text-center shadow-lg shadow-violet-900/20"
+        :style="{ '--ui-delay': '28ms' }"
       >
         <p class="text-2xl" aria-hidden="true">🗓️</p>
-        <p class="mt-1 text-lg font-bold text-violet-100">{{ t("orderStatus.scheduledTitle") }}</p>
+        <p class="mt-1.5 text-lg font-bold text-violet-100">{{ t("orderStatus.scheduledTitle") }}</p>
         <p class="mt-1 text-sm text-violet-100/80">
           {{ t("orderStatus.scheduledBody", { time: formatScheduledFor(orderData.scheduled_for) }) }}
         </p>
@@ -81,25 +93,26 @@
       <!-- Order-cancelled banner -->
       <div
         v-if="orderData.status === 'cancelled'"
-        class="ui-reveal rounded-2xl border border-red-400/60 bg-red-500/15 p-4 text-center shadow-lg shadow-red-900/20 sm:p-5"
+        class="ui-reveal rounded-2xl border border-red-400/60 bg-red-500/15 p-5 text-center shadow-lg shadow-red-900/20"
+        :style="{ '--ui-delay': '28ms' }"
         role="alert"
       >
         <p class="text-2xl font-bold text-red-200">{{ t("orderStatus.cancelledTitle") }}</p>
-        <p class="mt-1 text-sm text-red-100/80">{{ t("orderStatus.cancelledBody") }}</p>
-        <RouterLink :to="{ name: 'menu' }" class="mt-3 ui-btn-outline inline-flex px-4 py-1.5 text-xs">
+        <p class="mt-1.5 text-sm text-red-100/80">{{ t("orderStatus.cancelledBody") }}</p>
+        <RouterLink :to="{ name: 'menu' }" class="mt-4 ui-btn-outline inline-flex px-5 py-2 text-sm">
           {{ t("orderStatus.backToMenu") }}
         </RouterLink>
       </div>
 
       <!-- Header -->
-      <div class="ui-hero-ribbon ui-reveal p-4 sm:p-5">
+      <div class="ui-hero-ribbon ui-reveal p-5 sm:p-6" :style="{ '--ui-delay': '42ms' }">
         <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="space-y-1">
+          <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("orderStatus.kicker") }}</p>
-            <h1 class="ui-display text-2xl font-semibold text-white">
+            <h1 class="ui-display text-2xl font-semibold text-white sm:text-3xl">
               {{ t("orderStatus.orderNumber", { number: orderData.order_number }) }}
             </h1>
-            <div class="flex flex-wrap items-center gap-2 mt-1">
+            <div class="flex flex-wrap items-center gap-2 mt-1.5">
               <span class="ui-status-pill" :class="statusClass(orderData.status)">
                 {{ statusLabel(orderData.status) }}
               </span>
@@ -108,7 +121,7 @@
           </div>
           <div class="text-end space-y-1 shrink-0">
             <p class="text-2xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatCurrency(orderData.total, orderData.currency) }}</p>
-            <p class="text-[10px] text-slate-500">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
+            <p class="text-[10px] text-slate-500 tracking-wide">{{ t("orderStatus.items") }}: {{ orderData.items_count }}</p>
           </div>
         </div>
       </div>
@@ -117,14 +130,15 @@
       <div
         v-if="orderData.fulfillment_type === 'table'"
         class="ui-reveal rounded-2xl border border-emerald-500/40 bg-emerald-500/12 p-5 text-center"
+        :style="{ '--ui-delay': '56ms' }"
       >
         <p class="ui-kicker text-emerald-400">
           {{ t("orderStatus.tableOrderLabel") }}
         </p>
-        <p class="mt-1 text-5xl font-bold text-white tracking-tight">
+        <p class="mt-2 text-5xl font-bold text-white tracking-tight">
           {{ orderData.table_label || t("orderStatus.tableUnknown") }}
         </p>
-        <p v-if="orderData.customer_name" class="mt-1.5 text-sm font-medium text-slate-300">
+        <p v-if="orderData.customer_name" class="mt-2 text-sm font-medium text-slate-300">
           {{ orderData.customer_name }}
         </p>
         <p class="mt-2 text-sm text-emerald-300/75">
@@ -135,12 +149,13 @@
       <!-- Delivery address confirmation -->
       <div
         v-if="orderData.fulfillment_type === 'delivery' && orderData.delivery_address"
-        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+        class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 sm:p-5"
+        :style="{ '--ui-delay': '56ms' }"
       >
         <p class="ui-kicker">
           {{ t("orderStatus.deliveryAddress") }}
         </p>
-        <p class="mt-1.5 text-sm text-slate-200">{{ orderData.delivery_address }}</p>
+        <p class="mt-2 text-sm text-slate-200 leading-relaxed">{{ orderData.delivery_address }}</p>
         <a
           v-if="orderData.delivery_location_url &&
                 (orderData.delivery_location_url.startsWith('http://') ||
@@ -148,7 +163,7 @@
           :href="orderData.delivery_location_url"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-2 inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
+          class="mt-2.5 inline-flex items-center gap-1.5 text-xs font-medium text-sky-400 hover:text-sky-300 transition-colors"
         >
           <AppIcon name="location" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("orderStatus.openMap") }}
@@ -162,6 +177,7 @@
       <div
         v-else-if="orderData.fulfillment_type === 'delivery' && orderData.status === 'out_for_delivery'"
         class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4"
+        :style="{ '--ui-delay': '56ms' }"
       >
         <div class="flex items-center gap-2.5 text-sm text-slate-300">
           <AppIcon name="location" class="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
@@ -170,7 +186,7 @@
       </div>
 
       <!-- Status timeline -->
-      <div class="ui-panel p-4 sm:p-5">
+      <div class="ui-journey-rail ui-reveal p-4 sm:p-5" :style="{ '--ui-delay': '70ms' }">
         <ol class="flex items-center justify-between gap-1">
           <li
             v-for="(step, idx) in statusSteps"
@@ -203,7 +219,7 @@
         </ol>
         <!-- Progress bar -->
         <div
-          class="mt-3 h-1.5 w-full rounded-full bg-slate-800"
+          class="mt-4 ui-journey-progress"
           role="progressbar"
           :aria-valuenow="progressPercent"
           aria-valuemin="0"
@@ -211,8 +227,8 @@
           :aria-label="statusLabel(orderData?.status)"
           :aria-valuetext="statusLabel(orderData?.status)"
         >
-          <div
-            class="h-full rounded-full bg-[var(--color-secondary)] transition-all duration-500"
+          <span
+            class="absolute inset-y-0 start-0 rounded-full transition-all duration-500"
             :style="{ width: `${progressPercent}%` }"
           />
         </div>
@@ -221,7 +237,8 @@
       <!-- Restaurant message -->
       <div
         v-if="orderData.owner_note || orderData.estimated_ready_minutes"
-        class="ui-panel border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2"
+        class="ui-panel ui-reveal border-emerald-500/30 bg-emerald-500/5 p-4 sm:p-5 space-y-2"
+        :style="{ '--ui-delay': '84ms' }"
       >
         <p v-if="orderData.estimated_ready_minutes" class="text-sm font-semibold text-emerald-200">
           <template v-if="countdownSeconds !== null && countdownSeconds > 0">
@@ -237,14 +254,14 @@
             ⏱ {{ t("orderStatus.estimatedReady", { minutes: orderData.estimated_ready_minutes }) }}
           </template>
         </p>
-        <p v-if="orderData.owner_note" class="text-sm text-slate-200">
-          <span class="ui-kicker block mb-0.5">{{ t("orderStatus.ownerNote") }}</span>
+        <p v-if="orderData.owner_note" class="text-sm text-slate-200 leading-relaxed">
+          <span class="ui-kicker block mb-1">{{ t("orderStatus.ownerNote") }}</span>
           {{ orderData.owner_note }}
         </p>
       </div>
 
       <!-- Items -->
-      <div class="ui-panel p-4 sm:p-5 space-y-3">
+      <div class="ui-panel ui-reveal p-4 sm:p-5 space-y-3" :style="{ '--ui-delay': '98ms' }">
         <h2 class="ui-kicker">{{ t("orderStatus.items") }}</h2>
         <div
           v-for="(item, idx) in orderData.items"
@@ -253,7 +270,10 @@
           :style="{ '--ui-delay': `${Math.min(idx, 9) * 20}ms` }"
         >
           <div class="flex items-start gap-2.5 min-w-0">
-            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-400 tabular-nums">{{ item.qty }}</span>
+            <span
+              class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums"
+              aria-label="{{ item.qty }}x"
+            >{{ item.qty }}</span>
             <div class="min-w-0 space-y-0.5">
               <p class="font-semibold text-slate-100 truncate">{{ item.dish_name }}</p>
               <p v-if="item.options?.length" class="text-xs text-slate-400">
@@ -279,7 +299,7 @@
             <span>{{ t("orderStatus.vatIncluded", { label: orderData.vat_label, rate: Number(orderData.vat_rate) }) }}</span>
             <span>{{ formatCurrency(orderData.vat_amount, orderData.currency) }}</span>
           </div>
-          <div class="flex justify-between border-t border-slate-700 pt-2">
+          <div class="flex justify-between border-t border-slate-700 pt-2.5">
             <span class="text-sm font-semibold text-slate-300">{{ t("orderStatus.total") }}</span>
             <span class="text-base font-bold text-white">{{ formatCurrency(orderData.total, orderData.currency) }}</span>
           </div>
@@ -328,7 +348,7 @@
         <!-- Pay this open bill from wallet — only the signed-in order owner sees this -->
         <template v-if="orderData.can_pay_with_wallet">
           <button
-            class="ui-btn-primary w-full justify-center py-2.5 text-sm font-semibold disabled:opacity-50"
+            class="ui-btn-primary w-full justify-center py-3 text-sm font-semibold disabled:opacity-50"
             :disabled="payingWallet"
             @click="payWithWallet"
           >
@@ -365,7 +385,8 @@
       <!-- Receipt message (thank-you note from the restaurant owner) -->
       <div
         v-if="orderData.receipt_message && ['confirmed', 'ready', 'completed'].includes(orderData.status)"
-        class="ui-panel ui-reveal p-4 sm:p-5 space-y-1.5 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-2 border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/5"
+        :style="{ '--ui-delay': '112ms' }"
       >
         <p class="ui-kicker text-[var(--color-secondary)]/70">
           {{ t("orderStatus.receiptMessage") }}
@@ -377,13 +398,14 @@
       <div
         v-if="orderData.status === 'completed' && !orderData.has_rating"
         class="ui-panel ui-reveal p-4 sm:p-5 space-y-4"
+        :style="{ '--ui-delay': '126ms' }"
       >
-        <div class="space-y-0.5">
+        <div class="space-y-1">
           <p class="text-sm font-semibold text-slate-200">{{ t("orderStatus.rateTitle") }}</p>
           <p class="text-xs text-slate-400">{{ t("orderStatus.rateSubtitle") }}</p>
         </div>
         <!-- Star picker -->
-        <div class="flex gap-1" role="radiogroup" :aria-label="t('orderStatus.rateTitle')">
+        <div class="flex gap-2" role="radiogroup" :aria-label="t('orderStatus.rateTitle')">
           <button
             v-for="star in 5"
             :key="star"
@@ -407,7 +429,7 @@
         />
         <button
           :disabled="ratingScore === 0 || ratingSubmitting"
-          class="ui-btn-primary inline-flex px-5 py-2 text-sm disabled:opacity-40"
+          class="ui-btn-primary inline-flex px-5 py-2.5 text-sm disabled:opacity-40"
           @click="submitRating"
         >
           {{ ratingSubmitting ? t("orderStatus.rateSubmitting") : t("orderStatus.rateSubmit") }}
@@ -418,7 +440,8 @@
            echoed back to them (they only see feedback from the restaurant below). -->
       <div
         v-else-if="orderData.status === 'completed' && orderData.has_rating"
-        class="ui-panel ui-reveal flex items-center gap-2 p-4 text-sm font-medium text-emerald-300"
+        class="ui-panel ui-reveal flex items-center gap-2.5 p-4 text-sm font-medium text-emerald-300"
+        :style="{ '--ui-delay': '126ms' }"
       >
         <AppIcon name="check" class="h-4 w-4 shrink-0" />
         {{ t("orderStatus.rateSubmitted") }}
@@ -428,45 +451,47 @@
            customer who owns the order (the backend gates this to the order owner). -->
       <div
         v-if="orderData.restaurant_feedback"
-        class="ui-panel ui-reveal p-4 sm:p-5 space-y-1"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-2"
+        :style="{ '--ui-delay': '140ms' }"
       >
         <p class="ui-kicker">{{ t("orderStatus.restaurantFeedbackTitle") }}</p>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5">
           <span class="text-2xl text-amber-400">{{ "★".repeat(orderData.restaurant_feedback.score) }}<span class="text-slate-700">{{ "★".repeat(5 - orderData.restaurant_feedback.score) }}</span></span>
           <span class="text-sm font-semibold text-slate-200">{{ orderData.restaurant_feedback.score }}/5</span>
         </div>
-        <p v-if="orderData.restaurant_feedback.note" class="text-sm text-slate-400 italic">{{ orderData.restaurant_feedback.note }}</p>
+        <p v-if="orderData.restaurant_feedback.note" class="text-sm text-slate-400 italic leading-relaxed">{{ orderData.restaurant_feedback.note }}</p>
       </div>
 
       <!-- Sign-in nudge for anonymous table orders -->
       <div
         v-if="orderData.fulfillment_type === 'table' && !customerStore.isAuthenticated"
-        class="ui-panel ui-reveal p-4 space-y-3"
+        class="ui-panel ui-reveal p-4 sm:p-5 space-y-3"
+        :style="{ '--ui-delay': '154ms' }"
       >
         <div class="space-y-1">
           <p class="text-sm font-semibold text-slate-100">{{ t("orderStatus.tableSignInNudgeTitle") }}</p>
           <p class="text-xs text-slate-400">{{ t("orderStatus.tableSignInNudgeBody") }}</p>
         </div>
-        <button class="ui-btn-primary inline-flex w-full justify-center py-2 text-sm" @click="showAuthModal = true">
+        <button class="ui-btn-primary inline-flex w-full justify-center py-2.5 text-sm" @click="showAuthModal = true">
           <AppIcon name="user" class="h-3.5 w-3.5" aria-hidden="true" />
           {{ t("orderStatus.tableSignInNudgeButton") }}
         </button>
       </div>
 
       <!-- Re-order + navigation -->
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-3 px-1">
         <span v-if="isLiveStatus" class="text-xs text-slate-500">
           {{ t("orderStatus.autoRefresh", { seconds: POLL_INTERVAL_S }) }}
         </span>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 ms-auto">
           <button
             v-if="orderData.items?.some(i => i.dish_slug)"
-            class="ui-btn-primary inline-flex px-4 py-2 text-sm"
+            class="ui-btn-primary inline-flex px-5 py-2.5 text-sm"
             @click="reorder"
           >
             {{ t("orderStatus.reorder") }}
           </button>
-          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-3 py-1.5 text-xs">
+          <RouterLink :to="{ name: 'menu' }" class="ui-btn-outline inline-flex px-4 py-2 text-sm">
             {{ t("orderStatus.backToMenu") }}
           </RouterLink>
         </div>

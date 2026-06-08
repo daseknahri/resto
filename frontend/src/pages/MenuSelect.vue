@@ -52,26 +52,35 @@
     </header>
 
     <!-- Loading state -->
-    <div v-if="menu.loading && !publishedMenus.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading menus" aria-busy="true">
-      <div v-for="n in 3" :key="n" class="ui-skeleton h-52 rounded-[1.8rem]" />
+    <div
+      v-if="menu.loading && !publishedMenus.length"
+      class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      role="status"
+      :aria-label="t('menuSelect.kicker')"
+      aria-busy="true"
+    >
+      <div v-for="n in 3" :key="n" class="ui-skeleton rounded-[1.8rem]" style="height: 17rem;" />
     </div>
 
     <!-- Empty state -->
     <div
       v-else-if="!menu.loading && !menu.error && !publishedMenus.length"
-      class="ui-empty-state mt-2 p-6 text-center"
+      class="ui-empty-state mt-3 p-8 text-center"
+      role="status"
     >
-      <AppIcon name="menu" class="mx-auto mb-3 h-8 w-8 text-slate-500" aria-hidden="true" />
-      <p class="text-sm font-semibold text-slate-100">{{ t('menuSelect.emptyTitle') }}</p>
-      <p class="mt-1 text-xs text-slate-400">{{ t('menuSelect.emptyBody') }}</p>
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-700/60 bg-slate-900/60">
+        <AppIcon name="menu" class="h-7 w-7 text-slate-400" aria-hidden="true" />
+      </div>
+      <p class="text-base font-semibold tracking-tight text-slate-100">{{ t('menuSelect.emptyTitle') }}</p>
+      <p class="mt-1.5 text-sm text-slate-400">{{ t('menuSelect.emptyBody') }}</p>
     </div>
 
     <!-- Menu cards -->
-    <div v-else-if="publishedMenus.length" class="space-y-3">
-      <div class="space-y-0.5 px-1">
-        <p class="ui-kicker">{{ t('menuSelect.kicker') }}</p>
-        <h2 class="ui-display text-xl font-semibold text-white sm:text-2xl">{{ t('menuSelect.title') }}</h2>
-        <p class="ui-subtle">{{ t('menuSelect.subtitle', { count: publishedMenus.length }) }}</p>
+    <div v-else-if="publishedMenus.length" class="space-y-4">
+      <div class="space-y-1 px-1 pt-1">
+        <p class="ui-section-kicker">{{ t('menuSelect.kicker') }}</p>
+        <h2 class="ui-display text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ t('menuSelect.title') }}</h2>
+        <p class="ui-subtle mt-0.5">{{ t('menuSelect.subtitle', { count: publishedMenus.length }) }}</p>
       </div>
 
       <ul class="grid list-none gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -85,7 +94,7 @@
             : t('menuSelect.browseLinkLabel', { name: sc.name }) + ', ' + t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug) })"
         >
           <!-- Card image area -->
-          <div class="relative h-40 w-full overflow-hidden bg-slate-900 sm:h-44">
+          <div class="relative h-44 w-full overflow-hidden bg-slate-900 sm:h-48">
             <img
               v-if="menuCoverImage(sc)"
               :src="menuCoverImage(sc)"
@@ -113,7 +122,7 @@
 
             <!-- Top-end: category count chip (RTL-safe) -->
             <div class="absolute end-3 top-3">
-              <span class="rounded-full border border-slate-700/60 bg-slate-950/75 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-300 backdrop-blur-sm">
+              <span class="rounded-full border border-slate-700/55 bg-slate-950/80 px-3 py-1 text-[11px] font-semibold tabular-nums text-slate-200 backdrop-blur-md">
                 {{ t('menuSelect.categoryCount', { count: sc.category_count || menuCategoryCount(sc.slug) }) }}
               </span>
             </div>
@@ -127,24 +136,24 @@
           </div>
 
           <!-- Card content -->
-          <div class="space-y-2.5 p-4">
+          <div class="space-y-3 p-4 pb-4">
             <div class="space-y-1">
-              <h3 class="text-base font-bold leading-snug text-white transition-colors group-hover:text-[var(--color-secondary)]">
+              <h3 class="text-[0.95rem] font-bold leading-snug tracking-tight text-white transition-colors duration-200 group-hover:text-[var(--color-secondary)]">
                 {{ sc.name }}
               </h3>
-              <p v-if="sc.description" class="line-clamp-2 text-sm text-slate-400">{{ sc.description }}</p>
+              <p v-if="sc.description" class="line-clamp-2 text-[13px] leading-relaxed text-slate-400">{{ sc.description }}</p>
             </div>
 
             <!-- CTA row -->
-            <div class="flex items-center justify-between gap-2">
-              <span class="min-w-0 truncate text-xs tabular-nums text-slate-500">
+            <div class="flex items-center justify-between gap-2 pt-0.5">
+              <span class="min-w-0 truncate text-[12px] tabular-nums text-slate-500">
                 {{ t('menuSelect.dishCount', { count: menuDishCount(sc.slug) }) }}
               </span>
               <span
-                class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all duration-200"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-all duration-200"
                 :class="sc.is_temporarily_disabled
                   ? 'border-slate-700/60 bg-slate-800/60 text-slate-500'
-                  : 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] group-hover:bg-[var(--color-secondary)]/20'"
+                  : 'border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] group-hover:border-[var(--color-secondary)]/70 group-hover:bg-[var(--color-secondary)]/20'"
               >
                 <AppIcon name="menu" class="h-3.5 w-3.5" aria-hidden="true" />
                 {{ sc.is_temporarily_disabled ? t('menuSelect.unavailable') : t('menuSelect.browse') }}
@@ -160,7 +169,7 @@
     </div>
 
     <!-- Error -->
-    <div v-if="menu.error" class="mt-2 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+    <div v-if="menu.error" class="mt-3 flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
       <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
       <p class="flex-1 text-sm text-red-300">{{ menu.error }}</p>
       <button class="ui-press ui-touch-target shrink-0 text-xs text-slate-400 underline hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400" @click="menu.fetchCategories(true)">{{ t('common.retry') }}</button>

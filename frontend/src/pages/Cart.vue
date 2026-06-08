@@ -2,12 +2,12 @@
   <div class="space-y-3 px-3 py-2 pb-28 sm:space-y-4 sm:px-4 sm:py-4 sm:pb-6 ui-safe-bottom">
 
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
-    <header class="ui-hero-ribbon ui-reveal px-4 py-3.5 md:px-5 md:py-4">
+    <header class="ui-hero-ribbon ui-reveal px-4 py-4 md:px-5 md:py-5">
       <div class="flex items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div>
             <p class="ui-kicker">{{ t('cartPage.kicker') }}</p>
-            <h1 class="ui-display text-xl font-semibold tracking-tight text-white md:text-2xl leading-tight">
+            <h1 class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl leading-tight">
               {{ t('common.cart') }}
             </h1>
           </div>
@@ -40,11 +40,11 @@
     <!-- ── Empty state ──────────────────────────────────────────────────────── -->
     <div
       v-else-if="!cart.items.length"
-      class="ui-empty-state ui-reveal text-center space-y-1"
+      class="ui-empty-state ui-reveal text-center space-y-2"
     >
-      <p class="text-sm font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
-      <p class="text-xs text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
-      <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary mt-3 inline-flex items-center gap-1.5 px-5 py-2 text-sm">
+      <p class="text-base font-semibold text-slate-100">{{ t('cartPage.cartEmpty') }}</p>
+      <p class="text-sm text-slate-400">{{ t('cartPage.cartEmptyBody') }}</p>
+      <RouterLink :to="{ name: 'menu' }" class="ui-btn-primary mt-4 inline-flex items-center gap-1.5 px-6 py-2.5 text-sm font-semibold tracking-wide">
         <AppIcon name="menu" class="h-4 w-4" />{{ t('cartPage.browseMenu') }}
       </RouterLink>
     </div>
@@ -60,7 +60,7 @@
         <article
           v-for="(item, index) in cart.items"
           :key="item.key"
-          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden pl-4 pr-3.5 py-3"
+          class="ui-panel ui-surface-lift ui-reveal relative overflow-hidden pl-4 pr-3.5 py-3.5"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
           <!-- left accent bar -->
@@ -71,23 +71,23 @@
           <div class="flex items-center gap-3">
             <!-- Name + meta -->
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold leading-snug text-slate-100">{{ item.name }}</p>
-              <p v-if="item.note" class="mt-0.5 text-[11px] text-slate-500 truncate">{{ item.note }}</p>
-              <p v-else-if="item.option_labels?.length" class="mt-0.5 text-[11px] text-slate-500 truncate">{{ item.option_labels.join(' · ') }}</p>
-              <p class="mt-0.5 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
+              <p class="truncate text-sm font-semibold leading-snug text-slate-100 tracking-tight">{{ item.name }}</p>
+              <p v-if="item.note" class="mt-1 text-[11px] text-slate-400 truncate">{{ item.note }}</p>
+              <p v-else-if="item.option_labels?.length" class="mt-1 text-[11px] text-slate-400 truncate">{{ item.option_labels.join(' · ') }}</p>
+              <p class="mt-1 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
             </div>
             <!-- Stepper pill -->
             <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
               <button
-                class="ui-press h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
+                class="ui-press h-8 w-8 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.decreaseQuantity')"
                 @click="cart.decrement(item.key)"
               >
                 <span class="text-base leading-none" aria-hidden="true">−</span>
               </button>
-              <span class="w-6 text-center text-xs font-semibold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
+              <span class="w-7 text-center text-sm font-bold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
               <button
-                class="ui-press h-7 w-7 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
+                class="ui-press h-8 w-8 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.increaseQuantity')"
                 @click="cart.increment(item.key)"
               >
@@ -95,10 +95,10 @@
               </button>
             </div>
             <!-- Subtotal + remove -->
-            <div class="shrink-0 min-w-[4rem] text-right">
-              <p class="text-sm font-semibold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
+            <div class="shrink-0 min-w-[4.5rem] text-right">
+              <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
               <button
-                class="mt-0.5 px-1 py-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded"
+                class="mt-1 px-1 py-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded"
                 :aria-label="`${t('cartPage.remove')} ${item.name}`"
                 @click="cart.remove(item.key)"
               >{{ t('cartPage.remove') }}</button>
@@ -129,15 +129,15 @@
         <section class="ui-glass p-4 sm:p-5 space-y-4">
 
           <!-- Compact total header -->
-          <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/50 px-4 py-3">
+          <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/60 px-4 py-3.5 border border-slate-800/60">
             <div>
-              <p class="text-[10px] uppercase tracking-widest text-slate-500">{{ t('cartPage.total') }}</p>
-              <p class="text-2xl font-bold tabular-nums leading-tight text-[var(--color-secondary)]">
+              <p class="text-[10px] font-medium uppercase tracking-widest text-slate-500">{{ t('cartPage.total') }}</p>
+              <p class="text-3xl font-bold tabular-nums leading-tight text-[var(--color-secondary)]">
                 {{ formatPrice(orderGrandTotal) }}
               </p>
             </div>
             <div class="text-right text-[11px] text-slate-500 space-y-0.5">
-              <p>{{ itemCountLabel(cart.count) }}</p>
+              <p class="font-medium text-slate-400">{{ itemCountLabel(cart.count) }}</p>
               <p v-if="fulfillmentType" class="capitalize text-slate-400">
                 {{ fulfillmentType === 'delivery' ? t('cartPage.delivery') : t('cartPage.pickup') }}
               </p>
@@ -737,14 +737,14 @@
           </label>
 
           <!-- ── Order summary breakdown ── -->
-          <div class="border-t border-slate-800/50 pt-3 space-y-1.5 text-xs">
+          <div class="border-t border-slate-800/50 pt-3 space-y-2 text-xs">
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-400">
               <span>{{ t('cartPage.subtotal') }}</span>
-              <span class="tabular-nums">{{ formatPrice(cart.total) }}</span>
+              <span class="tabular-nums font-medium">{{ formatPrice(cart.total) }}</span>
             </div>
             <div v-if="loyaltyDiscount > 0" class="flex items-center justify-between text-amber-300">
               <span>{{ t('cartPage.loyaltyDiscount') }}</span>
-              <span class="tabular-nums font-medium">-{{ formatPrice(loyaltyDiscount) }}</span>
+              <span class="tabular-nums font-semibold">-{{ formatPrice(loyaltyDiscount) }}</span>
             </div>
             <div v-if="fulfillmentType === 'delivery' && deliveryFeeAmount > 0" class="flex items-center justify-between text-slate-300">
               <span>
@@ -759,59 +759,59 @@
             </div>
             <div v-else-if="fulfillmentType === 'delivery' && !deliveryOutOfRange && deliveryFeeAmount === 0" class="flex items-center justify-between text-emerald-400">
               <span>{{ t('cartPage.deliveryFee') }}</span>
-              <span class="font-medium">{{ t('cartPage.free') }}</span>
+              <span class="font-semibold">{{ t('cartPage.free') }}</span>
             </div>
             <div v-if="tipAmount > 0" class="flex items-center justify-between text-[var(--color-secondary)]/75">
               <span>{{ t('cartPage.tipLabel') }}</span>
-              <span class="tabular-nums">+{{ formatPrice(tipAmount) }}</span>
+              <span class="tabular-nums font-medium">+{{ formatPrice(tipAmount) }}</span>
             </div>
             <div v-if="walletApplied && walletDeduction > 0" class="flex items-center justify-between text-emerald-400">
               <span>{{ t('cartPage.payWithCredits') }}</span>
-              <span class="tabular-nums font-medium">-{{ formatPrice(walletDeduction) }}</span>
+              <span class="tabular-nums font-semibold">-{{ formatPrice(walletDeduction) }}</span>
             </div>
-            <div class="flex items-center justify-between pt-1.5 border-t border-slate-800/40">
-              <span class="text-sm font-semibold text-slate-200">{{ t('cartPage.total') }}</span>
-              <span class="text-lg font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-700/50">
+              <span class="text-sm font-bold text-slate-200 tracking-tight">{{ t('cartPage.total') }}</span>
+              <span class="text-xl font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(orderGrandTotal) }}</span>
             </div>
           </div>
 
           <!-- Payment-timing note: pickup/delivery pay now, dine-in pays at the table -->
           <p
             v-if="!isBrowseOnlyPlan"
-            class="flex items-center gap-1.5 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400"
+            class="flex items-start gap-2 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3 py-2.5 text-[11px] text-slate-400 leading-relaxed"
           >
-            <AppIcon name="info" class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+            <AppIcon name="info" class="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-500" />
             <span v-if="isTableContextOrder">{{ t('cartPage.payAtEndNote') }}</span>
             <span v-else>{{ t('cartPage.payNowNote') }}</span>
           </p>
 
           <!-- ── CTA buttons ── -->
-          <div class="space-y-2">
+          <div class="space-y-2.5">
             <button
               v-if="!isBrowseOnlyPlan"
-              class="ui-btn-primary w-full justify-center py-3.5 text-base font-semibold shadow-lg shadow-[var(--color-secondary)]/15"
+              class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
               :disabled="placingOrder || prepayShortfall || deliveryBlocked"
               @click="placeInAppOrder"
             >
-              <AppIcon name="cart" class="h-3.5 w-3.5" />
+              <AppIcon name="cart" class="h-4 w-4" />
               {{ placingOrder ? t('cartPage_order.placing') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : t('cartPage_order.placeOrder'))) }}
             </button>
             <button
               v-if="cart.canWhatsapp"
-              class="ui-btn-outline w-full justify-center"
+              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
               :disabled="sendingWhatsapp"
               @click="openWhatsApp"
             >
-              <AppIcon name="chat" class="h-3.5 w-3.5" />
+              <AppIcon name="chat" class="h-4 w-4" />
               {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
             </button>
             <button
               v-if="cart.canCheckout"
-              class="ui-btn-outline w-full justify-center"
+              class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
               :disabled="processingCheckout"
               @click="startCheckout"
             >
-              <AppIcon name="card" class="h-3.5 w-3.5" />
+              <AppIcon name="card" class="h-4 w-4" />
               {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
             </button>
             <button
