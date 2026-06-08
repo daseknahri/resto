@@ -48,23 +48,20 @@
       </div>
 
       <!-- Loading: skeleton card grid -->
-      <ul v-if="loading" :aria-label="t('directory.loading')" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul v-if="loading" :aria-label="t('directory.loading')" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
         <li
           v-for="i in 6"
           :key="i"
-          class="ui-skeleton animate-pulse overflow-hidden"
+          class="animate-pulse overflow-hidden rounded-[1.35rem] border border-slate-800/60 bg-slate-900/60"
         >
-          <div class="h-36 rounded-t-[1.35rem] bg-slate-800/60" />
-          <div class="space-y-3 p-5">
-            <div class="h-4 w-3/4 rounded bg-slate-700/60" />
+          <div class="h-44 rounded-t-[1.35rem] bg-slate-800/60" />
+          <div class="space-y-3 p-4">
             <div class="h-3 w-full rounded bg-slate-800/50" />
-            <div class="h-3 w-2/3 rounded bg-slate-800/40" />
             <div class="flex gap-2 pt-1">
               <div class="h-5 w-16 rounded-full bg-slate-800/60" />
-              <div class="h-5 w-14 rounded-full bg-slate-800/50" />
-              <div class="h-5 w-12 rounded-full bg-slate-800/40" />
+              <div class="h-5 w-20 rounded-full bg-slate-800/50" />
             </div>
-            <div class="h-9 w-full rounded-full bg-slate-800/60 pt-1" />
+            <div class="h-9 w-full rounded-xl bg-slate-800/60 pt-1" />
           </div>
         </li>
       </ul>
@@ -104,59 +101,60 @@
         <li
           v-for="(r, index) in filteredRestaurants"
           :key="r.slug"
-          class="ui-panel ui-surface-lift ui-reveal group relative flex flex-col overflow-hidden"
+          class="group relative flex flex-col overflow-hidden rounded-[1.35rem] border border-slate-800/60 bg-slate-900/60 shadow-md shadow-black/30 transition-all duration-300 hover:border-slate-700/60 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/40 ui-reveal"
+          :class="{ 'opacity-75': !r.is_open }"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
         >
-          <!-- Logo / hero strip -->
-          <div class="relative flex h-36 items-center justify-center overflow-hidden rounded-t-[calc(1rem+2px)] bg-slate-800/60">
-            <img
-              v-if="r.logo_url"
-              :src="r.logo_url"
-              :alt="r.name"
-              loading="lazy"
-              decoding="async"
-              class="h-full w-full object-cover opacity-90 transition-opacity duration-300 group-hover:opacity-100"
-              @error="$event.target.style.display='none'"
-            />
-            <span v-else aria-hidden="true">
-              <svg aria-hidden="true" viewBox="0 0 24 24" class="h-14 w-14 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.87c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513m-3 4.493V19.5m-6-7.5h12m-12 0a1.5 1.5 0 01-1.5-1.5v-.75A2.25 2.25 0 014.75 8.5M18 15.5a1.5 1.5 0 001.5-1.5v-.75A2.25 2.25 0 0019.25 8.5" />
-              </svg>
-            </span>
-            <!-- Open/closed badge overlaid on hero strip -->
+          <!-- Hero image — taller, with name+meta overlay matching Marketplace quality -->
+          <div class="relative h-44 overflow-hidden rounded-t-[1.35rem]">
+            <!-- Background -->
+            <div class="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900">
+              <img
+                v-if="r.logo_url"
+                :src="r.logo_url"
+                :alt="r.name"
+                loading="lazy"
+                decoding="async"
+                class="h-full w-full object-cover opacity-80 transition-all duration-500 group-hover:scale-105 group-hover:opacity-90"
+                @error="$event.target.style.display='none'"
+              />
+              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">🍽️</span>
+            </div>
+            <!-- Bottom gradient: name + meta overlaid -->
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950 via-slate-950/65 to-transparent" />
+            <div class="absolute inset-x-0 bottom-0 z-10 px-3.5 pb-3">
+              <h2 class="text-sm font-bold leading-snug text-white drop-shadow-md">{{ r.name }}</h2>
+              <div class="mt-0.5 flex items-center gap-2 text-[11px]">
+                <span v-if="r.rating_average" class="flex items-center gap-0.5 text-amber-400" :aria-label="`${r.rating_average.toFixed(1)} ${t('directory.ratingLabel')}, ${r.rating_count} ${t('directory.reviewsLabel')}`">
+                  <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
+                  <span class="tabular-nums">{{ r.rating_average.toFixed(1) }}</span>
+                  <span class="text-slate-500 tabular-nums">({{ r.rating_count }})</span>
+                </span>
+                <span v-if="r.cuisine_type" class="text-slate-400">· {{ r.cuisine_type }}</span>
+              </div>
+            </div>
+
+            <!-- Open/closed badge (top-start) -->
             <span
-              class="ui-status-pill absolute end-3 top-3 shrink-0 text-[11px]"
-              :class="r.is_open ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-slate-600/40 bg-slate-900/70 text-slate-400'"
+              class="absolute start-2 top-2 z-20 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide backdrop-blur-md"
+              :class="r.is_open
+                ? 'border border-emerald-500/30 bg-emerald-950/90 text-emerald-300'
+                : 'border border-slate-700/40 bg-slate-950/80 text-slate-500'"
             >
               <span
                 v-if="r.is_open"
                 aria-hidden="true"
-                class="ui-live-dot h-1.5 w-1.5 bg-emerald-400"
+                class="block h-1.5 w-1.5 rounded-full bg-emerald-400 motion-safe:animate-pulse"
               />
               {{ r.is_open ? t('directory.open') : t('directory.closed') }}
             </span>
           </div>
 
-          <!-- Card body -->
-          <div class="flex flex-1 flex-col gap-2.5 p-5">
-            <div>
-              <h2 class="min-w-0 truncate text-base font-bold leading-snug tracking-tight text-slate-50">{{ r.name }}</h2>
-              <p v-if="r.tagline" class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-400">{{ r.tagline }}</p>
-            </div>
-
-            <!-- Rating -->
-            <div
-              v-if="r.rating_average"
-              class="flex items-center gap-1.5 text-xs"
-              :aria-label="`${r.rating_average.toFixed(1)} ${t('directory.ratingLabel')}, ${r.rating_count} ${t('directory.reviewsLabel')}`"
-            >
-              <span aria-hidden="true" class="text-amber-400">★★★★★</span>
-              <span aria-hidden="true" class="font-semibold tabular-nums text-amber-300">{{ r.rating_average.toFixed(1) }}</span>
-              <span aria-hidden="true" class="tabular-nums text-slate-500">({{ r.rating_count }})</span>
-            </div>
+          <!-- Card body: tagline + capability chips + CTA -->
+          <div class="flex flex-1 flex-col gap-2.5 p-4">
+            <p v-if="r.tagline" class="line-clamp-2 text-xs leading-relaxed text-slate-400">{{ r.tagline }}</p>
 
             <div class="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-              <span v-if="r.cuisine_type" class="ui-chip text-[11px]">{{ r.cuisine_type }}</span>
               <span v-if="r.city" class="ui-chip text-[11px]">{{ r.city }}</span>
               <span v-if="r.delivery_enabled" class="ui-chip text-[11px]">
                 {{ t('directory.delivery') }}
