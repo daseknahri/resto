@@ -68,6 +68,36 @@
           <p class="mt-1 text-xs text-slate-400">{{ t('mktOrderStatus.trackingHint') }}</p>
         </header>
 
+        <!-- Order-ready celebration banner -->
+        <div
+          v-if="order.status === 'ready'"
+          class="ui-reveal relative overflow-hidden rounded-2xl border border-emerald-400/50 bg-emerald-500/12 p-5 text-center shadow-xl shadow-emerald-900/25"
+          :style="{ '--ui-delay': '28ms' }"
+          role="alert"
+        >
+          <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.18),transparent_60%)]" />
+          <div class="relative space-y-1.5">
+            <p class="text-3xl" aria-hidden="true">🎉</p>
+            <p class="text-xl font-bold text-emerald-200">{{ t('mktOrderStatus.ready') }}</p>
+          </div>
+        </div>
+
+        <!-- Order-cancelled banner -->
+        <div
+          v-if="order.status === 'cancelled'"
+          class="ui-reveal rounded-2xl border border-red-400/60 bg-red-500/15 p-5 text-center"
+          :style="{ '--ui-delay': '28ms' }"
+          role="alert"
+        >
+          <p class="text-lg font-bold text-red-200">{{ t('mktOrderStatus.cancelled') }}</p>
+          <router-link
+            to="/order"
+            class="mt-3 inline-flex items-center gap-1.5 rounded-full border border-red-400/30 px-5 py-2 text-sm font-medium text-red-300 transition-colors hover:border-red-400/60 hover:text-red-200"
+          >
+            {{ t('mktOrderStatus.backToMarketplace') }}
+          </router-link>
+        </div>
+
         <!-- Proof-of-delivery code (give it to your driver) -->
         <div
           v-if="order.delivery_code"
@@ -93,35 +123,58 @@
         <div class="ui-panel ui-reveal p-5" :style="{ '--ui-delay': '84ms' }">
           <div class="flex items-center justify-between gap-1" role="list" :aria-label="t('mktOrderStatus.statusStepperLabel')">
             <template v-for="(step, idx) in statusSteps" :key="step.key">
-              <div class="relative flex flex-1 flex-col items-center gap-1" role="listitem">
-                <div
-                  class="flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors"
-                  :class="stepClass(step.key)"
-                  :aria-current="isCurrentStep(step.key) ? 'step' : undefined"
-                  :aria-label="t(`mktOrderStatus.${step.key}`) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
-                >
-                  <span v-if="isStepDone(step.key)" aria-hidden="true">✓</span>
-                  <span v-else-if="isCurrentStep(step.key)" aria-hidden="true">●</span>
-                  <span v-else aria-hidden="true">{{ idx + 1 }}</span>
+              <div class="relative flex flex-1 flex-col items-center gap-1.5" role="listitem">
+                <!-- Bubble + pulse ring -->
+                <div class="relative flex items-center justify-center">
+                  <div
+                    v-if="isCurrentStep(step.key) && order.status !== 'cancelled'"
+                    class="absolute -inset-1.5 motion-safe:animate-ping rounded-full border border-[var(--color-secondary)]/30"
+                    aria-hidden="true"
+                  />
+                  <div
+                    class="relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500"
+                    :class="stepClass(step.key)"
+                    :aria-current="isCurrentStep(step.key) ? 'step' : undefined"
+                    :aria-label="t(`mktOrderStatus.${step.key}`) + (isCurrentStep(step.key) ? ' — ' + t('mktOrderStatus.currentStep') : isStepDone(step.key) ? ' — ' + t('mktOrderStatus.stepDone') : '')"
+                  >
+                    <span v-if="isStepDone(step.key)" aria-hidden="true">✓</span>
+                    <span v-else-if="isCurrentStep(step.key)" aria-hidden="true">
+                      <span class="block h-2.5 w-2.5 rounded-full bg-current" />
+                    </span>
+                    <span v-else aria-hidden="true">{{ idx + 1 }}</span>
+                  </div>
                 </div>
-                <span class="text-center text-[10px] leading-tight" :class="isCurrentStep(step.key) ? 'font-semibold text-white' : 'text-slate-500'">
+                <span
+                  class="text-center text-[10px] leading-tight transition-colors duration-300"
+                  :class="isCurrentStep(step.key) ? 'font-semibold text-[var(--color-secondary)]' : isStepDone(step.key) ? 'text-emerald-500/70' : 'text-slate-500'"
+                >
                   {{ t(`mktOrderStatus.${step.key}`) }}
                 </span>
                 <!-- Connector line — sits inside the listitem, bridging to the next step -->
                 <div
                   v-if="idx < statusSteps.length - 1"
-                  class="absolute top-4 start-1/2 h-0.5 w-full rounded transition-colors"
-                  :class="isStepDone(statusSteps[idx + 1].key) || isCurrentStep(statusSteps[idx + 1].key) ? 'bg-emerald-500/60' : 'bg-slate-700'"
+                  class="absolute top-5 start-1/2 h-0.5 w-full rounded transition-colors duration-500"
+                  :class="isStepDone(statusSteps[idx + 1].key) || isCurrentStep(statusSteps[idx + 1].key) ? 'bg-[var(--color-secondary)]/50' : 'bg-slate-700'"
                   aria-hidden="true"
                 />
               </div>
             </template>
           </div>
 
-          <!-- Current status label -->
-          <p class="mt-4 text-center text-sm font-medium" :class="order.status === 'cancelled' ? 'text-red-400' : 'text-emerald-400'">
-            {{ t(`mktOrderStatus.${order.status}`) }}
-          </p>
+          <!-- Progress bar -->
+          <div
+            v-if="order.status !== 'cancelled'"
+            class="mt-4 relative h-1.5 overflow-hidden rounded-full bg-slate-800"
+            role="progressbar"
+            :aria-valuenow="progressPercent"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span
+              class="absolute inset-y-0 start-0 rounded-full bg-[var(--color-secondary)] transition-all duration-700"
+              :style="{ width: `${progressPercent}%` }"
+            />
+          </div>
 
           <!-- Self-cancel (early pickup/delivery orders only) -->
           <div v-if="order.can_cancel" class="mt-3 text-center">
@@ -150,15 +203,18 @@
 
         <!-- Order items -->
         <div class="ui-panel ui-reveal space-y-3 p-4" :style="{ '--ui-delay': '140ms' }">
-          <h2 class="text-sm font-semibold text-slate-200">{{ t('mktOrderStatus.yourItems') }}</h2>
-          <ul class="space-y-2">
+          <h2 class="ui-kicker">{{ t('mktOrderStatus.yourItems') }}</h2>
+          <ul class="space-y-1.5">
             <li
               v-for="(item, idx) in order.items"
               :key="idx"
-              class="flex min-w-0 items-baseline justify-between gap-2 text-sm"
+              class="flex items-start gap-2.5 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm"
             >
-              <span class="min-w-0 flex-1 truncate text-slate-300">{{ item.qty }}× {{ item.dish_name }}</span>
-              <span class="shrink-0 tabular-nums text-slate-400">{{ fmtPrice(item.subtotal, order.currency) }}</span>
+              <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums">
+                {{ item.qty }}
+              </span>
+              <span class="min-w-0 flex-1 text-slate-200">{{ item.dish_name }}</span>
+              <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.subtotal, order.currency) }}</span>
             </li>
           </ul>
 
@@ -273,14 +329,18 @@ const isStepDone = (key) => {
 
 const stepClass = (key) => {
   if (order.value?.status === 'cancelled') {
-    return key === 'cancelled'
-      ? 'border-red-500 bg-red-500/20 text-red-300'
-      : 'border-slate-700 text-slate-600';
+    return 'border-slate-700 bg-slate-900 text-slate-600';
   }
-  if (isCurrentStep(key)) return 'border-emerald-500 bg-emerald-500/20 text-emerald-300';
-  if (isStepDone(key)) return 'border-emerald-600/60 bg-emerald-900/40 text-emerald-500';
-  return 'border-slate-700 text-slate-600';
+  if (isCurrentStep(key)) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]';
+  if (isStepDone(key)) return 'border-[var(--color-secondary)] bg-[var(--color-secondary)] text-slate-950';
+  return 'border-slate-700 bg-slate-900 text-slate-600';
 };
+
+const progressPercent = computed(() => {
+  const idx = currentStatusIdx.value;
+  if (idx < 0) return 0;
+  return Math.round(((idx + 1) / statusSteps.length) * 100);
+});
 
 // ── Polling ───────────────────────────────────────────────────────────────────
 let _pollTimer = null;
