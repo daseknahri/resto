@@ -685,6 +685,65 @@ class CustomerMarketplaceOrdersView(APIView):
         })
 
 
+class CustomerReservationsView(APIView):
+    """GET /api/customer/reservations/ — the customer's reservations across all restaurants.
+
+    Matches by email (+ phone fallback) against the Lead table which lives in the
+    public schema (sales is a SHARED_APP). Returns only actual booking-type leads
+    (booked_for set, excluding provisioning/live/paid tenant-signup leads).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response({"reservations": [], "count": 0})
+
+        try:
+            customer = Customer.objects.get(pk=customer_id)
+        except Customer.DoesNotExist:
+            return Response({"reservations": [], "count": 0})
+
+        from sales.models import Lead
+        from django.db.models import Q as _Q
+
+        q = _Q()
+        if customer.email:
+            q |= _Q(email=customer.email)
+        if customer.phone:
+            q |= _Q(phone=customer.phone)
+        if not q:
+            return Response({"reservations": [], "count": 0})
+
+        qs = list(
+            Lead.objects
+            .filter(q, booked_for__isnull=False)
+            .exclude(status__in=[Lead.Status.PROVISIONING, Lead.Status.LIVE, Lead.Status.PAID])
+            .select_related("tenant")
+            .order_by("-booked_for")[:50]
+        )
+
+        return Response({
+            "reservations": [
+                {
+                    "id": lead.pk,
+                    "restaurant_name": lead.tenant.name if lead.tenant_id else "",
+                    "restaurant_slug": lead.tenant.slug if lead.tenant_id else "",
+                    "booked_for": lead.booked_for.isoformat() if lead.booked_for else None,
+                    "party_size": lead.party_size,
+                    "status": lead.status,
+                    "notes": lead.notes or "",
+                    "cancel_token": str(lead.cancel_token) if lead.cancel_token else None,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                }
+                for lead in qs
+            ],
+            "count": len(qs),
+        })
+
+
 # ── Customer email OTP ────────────────────────────────────────────────────────
 
 
