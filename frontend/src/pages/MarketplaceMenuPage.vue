@@ -547,6 +547,10 @@
               </span>
               <span class="tabular-nums">{{ deliveryIsFree ? t('mktMenu.freeDelivery') : fmtPrice(deliveryFee) }}</span>
             </div>
+            <div v-if="flashSaleDiscount > 0" class="flex justify-between text-amber-300">
+              <span>{{ t('mktMenu.flashDiscount', { pct: restaurant.flash_sale.discount_pct }) }}</span>
+              <span class="tabular-nums">-{{ fmtPrice(flashSaleDiscount) }}</span>
+            </div>
             <div v-if="loyaltyDiscount > 0" class="flex justify-between text-amber-300">
               <span>{{ t('mktMenu.loyaltyDiscount') }}</span>
               <span class="tabular-nums">-{{ fmtPrice(loyaltyDiscount) }}</span>
@@ -779,6 +783,13 @@ const cartTotal = computed(() =>
   cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0)
 );
 
+// Flash sale discount — mirrors backend: pct applied to food subtotal only
+const flashSaleDiscount = computed(() => {
+  if (!restaurant.value?.flash_sale) return 0;
+  const pct = Number(restaurant.value.flash_sale.discount_pct);
+  return pct > 0 ? Math.round(cartTotal.value * pct) / 100 : 0;
+});
+
 // ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
 // Straight-line→road multiplier, mirrors backend tenancy/routing road factor
 // (DELIVERY_ROAD_FACTOR, default 1.3). Server figure is authoritative.
@@ -867,10 +878,14 @@ const orderBaseTotal = computed(() => {
 const loyaltyDiscount = computed(() => {
   if (!useLoyalty.value || !loyaltyAvailable.value) return 0;
   const ptsValue = Number(loyaltyConfig.value.points_value) || 0;
-  return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, orderBaseTotal.value));
+  // Cap redeemable amount against the post-flash-sale total (mirrors backend)
+  const maxRedeemable = Math.max(0, orderBaseTotal.value - flashSaleDiscount.value);
+  return Math.max(0, Math.min(loyaltyPoints.value * ptsValue, maxRedeemable));
 });
 
-const orderTotal = computed(() => Math.max(0, orderBaseTotal.value - loyaltyDiscount.value));
+const orderTotal = computed(() =>
+  Math.max(0, orderBaseTotal.value - flashSaleDiscount.value - loyaltyDiscount.value)
+);
 
 // Marketplace orders are pay-now: settled in full from the wallet at checkout.
 const walletBalanceNum = computed(() => {

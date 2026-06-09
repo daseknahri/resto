@@ -430,6 +430,7 @@ export const messages = {
       noMatchDish: "No dishes match your search.",
       flashSaleBanner: "⚡ {pct}% off everything — flash sale!",
       flashSaleEnds: "Ends in {time}",
+      flashDiscount: "Flash sale ({pct}% off)",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4353,6 +4354,7 @@ export const messages = {
       noMatchDish: "Aucun plat ne correspond a votre recherche.",
       flashSaleBanner: "⚡ -{pct}% sur tout — vente flash !",
       flashSaleEnds: "Se termine dans {time}",
+      flashDiscount: "Vente flash ({pct}% de reduction)",
     },
     reservationManage: {
       kicker: "Reservation",
