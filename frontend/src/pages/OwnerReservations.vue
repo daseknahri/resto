@@ -648,7 +648,7 @@
                   {{ waitlistStatusLabel(entry.status) }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-xs text-slate-400 max-w-[12rem] truncate">{{ entry.notes || '—' }}</td>
+              <td class="max-w-[12rem] truncate px-4 py-3 text-xs text-slate-400" :title="entry.notes || undefined">{{ entry.notes || '—' }}</td>
             </tr>
           </tbody>
         </table>

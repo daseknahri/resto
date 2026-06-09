@@ -50,10 +50,12 @@
         <p class="flex-1 text-sm text-red-300">{{ formError }}</p>
       </div>
       <button
-        class="ui-btn-primary ui-touch-target"
+        class="ui-btn-primary ui-touch-target inline-flex items-center justify-center gap-2"
         :disabled="creating || !form.name.trim() || !form.email.trim()"
+        :aria-busy="creating"
         @click="createStaff"
       >
+        <svg v-if="creating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
         {{ creating ? t("ownerStaff.inviting") : t("ownerStaff.inviteBtn") }}
       </button>
     </section>

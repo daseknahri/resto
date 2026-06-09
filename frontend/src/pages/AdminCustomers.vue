@@ -254,13 +254,13 @@
                   <div class="flex gap-2">
                     <input v-model="creditAmount" type="number" step="0.01" min="0.01" class="ui-input flex-1 text-sm" :placeholder="t('adminCustomers.creditAmount')" :aria-label="t('adminCustomers.creditAmount')" />
                     <button
-                      class="ui-btn-primary ui-press shrink-0 px-4 py-2 text-sm disabled:opacity-50"
+                      class="ui-btn-primary ui-press inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
                       :disabled="crediting || !creditAmount"
-                      :aria-busy="crediting || undefined"
+                      :aria-busy="crediting"
                       @click="creditWallet"
                     >
-                      <span v-if="crediting" class="sr-only">{{ t('common.loading') }}</span>
-                      {{ crediting ? '…' : t('adminCustomers.creditBtn') }}
+                      <svg v-if="crediting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                      {{ crediting ? t('common.loading') : t('adminCustomers.creditBtn') }}
                     </button>
                   </div>
                   <input v-model="creditNote" type="text" maxlength="200" class="ui-input w-full text-sm" :placeholder="t('adminCustomers.creditNote')" :aria-label="t('adminCustomers.creditNote')" />

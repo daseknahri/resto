@@ -584,11 +584,14 @@
                   @input="promoCode = promoCode.toUpperCase(); promoError = ''"
                 />
                 <button
-                  class="shrink-0 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                  class="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors disabled:opacity-50"
                   :disabled="promoChecking || !promoCode.trim()"
-                  :aria-label="promoChecking ? t('common.loading') : t('cartPage.promoApply')"
+                  :aria-busy="promoChecking"
                   @click="applyPromoCode"
-                >{{ promoChecking ? '…' : t('cartPage.promoApply') }}</button>
+                >
+                  <svg v-if="promoChecking" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ promoChecking ? t('common.loading') : t('cartPage.promoApply') }}
+                </button>
               </div>
               <p v-if="promoError" id="cart-promo-error" class="mt-1 text-[10px] text-red-300">{{ promoError }}</p>
             </template>

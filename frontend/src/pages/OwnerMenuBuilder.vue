@@ -148,6 +148,7 @@
               <button
                 class="ui-btn-primary w-full justify-center"
                 :disabled="!selectedFile || importing"
+                :aria-busy="importing"
                 @click="runImport"
               >
                 <AppIcon v-if="importing" name="refresh" class="h-4 w-4 animate-spin me-1.5" aria-hidden="true" />

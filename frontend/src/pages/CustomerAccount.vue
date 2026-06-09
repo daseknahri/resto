@@ -170,8 +170,9 @@
               :aria-label="t('customerAccount.ordersTitle')"
               @click="activeTab = 'orders'"
             >
-              <p class="text-sm font-bold tabular-nums leading-tight" :class="apiOrders.length > 0 ? 'text-sky-300' : 'text-slate-500'">
-                {{ loadingOrders ? '…' : apiOrders.length }}
+              <p class="text-sm font-bold tabular-nums leading-tight" :class="loadingOrders ? '' : (apiOrders.length > 0 ? 'text-sky-300' : 'text-slate-500')">
+                <span v-if="loadingOrders" class="inline-block h-3.5 w-5 animate-pulse rounded bg-slate-700/70" aria-hidden="true" />
+                <template v-else>{{ apiOrders.length }}</template>
               </p>
               <p class="text-[10px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('customerAccount.ordersTitle') }}</p>
             </button>
@@ -686,10 +687,14 @@
                 @keyup.enter="redeemVoucher"
               />
               <button
-                class="shrink-0 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
                 :disabled="!voucherCode.trim() || voucherLoading"
+                :aria-busy="voucherLoading"
                 @click="redeemVoucher"
-              >{{ voucherLoading ? '…' : t('customerAccount.voucherRedeem') }}</button>
+              >
+                <svg v-if="voucherLoading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                {{ voucherLoading ? t('common.loading') : t('customerAccount.voucherRedeem') }}
+              </button>
             </div>
             <div v-if="voucherError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
               <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>

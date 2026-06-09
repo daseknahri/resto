@@ -29,10 +29,12 @@
             class="ui-btn-outline ui-press ui-touch-target flex shrink-0 items-center gap-1.5 px-3.5 py-2 text-xs disabled:opacity-50"
             :aria-label="t('marketplace.locationBtn')"
             :disabled="locating"
+            :aria-busy="locating"
             @click="requestLocation"
           >
-            <span aria-hidden="true">📍</span>
-            <span class="hidden sm:inline">{{ locating ? '…' : t('marketplace.locationBtn') }}</span>
+            <svg v-if="locating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            <span v-else aria-hidden="true">📍</span>
+            <span class="hidden sm:inline">{{ locating ? t('common.loading') : t('marketplace.locationBtn') }}</span>
           </button>
         </div>
 

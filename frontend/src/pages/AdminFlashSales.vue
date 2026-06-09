@@ -96,7 +96,7 @@
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 space-y-1.5">
             <div class="flex flex-wrap items-center gap-2 min-w-0">
-              <span class="truncate text-sm font-semibold text-slate-100">{{ fs.name }}</span>
+              <span class="truncate text-sm font-semibold text-slate-100" :title="fs.name">{{ fs.name }}</span>
               <span class="ui-chip tabular-nums text-[var(--color-secondary)]">−{{ fs.discount_value }}%</span>
               <span v-if="fs.is_live" class="ui-status-pill border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
                 <span class="ui-live-dot bg-emerald-400" aria-hidden="true" />
@@ -105,7 +105,7 @@
               <span v-else-if="!fs.is_active" class="ui-status-pill text-slate-400">{{ t('adminFlashSales.paused') }}</span>
               <span v-else class="ui-status-pill border-sky-500/30 bg-sky-500/10 text-sky-300">{{ t('adminFlashSales.scheduled') }}</span>
             </div>
-            <p v-if="fs.description" class="truncate text-xs text-slate-400">{{ fs.description }}</p>
+            <p v-if="fs.description" class="truncate text-xs text-slate-400" :title="fs.description">{{ fs.description }}</p>
             <p class="text-[11px] tabular-nums text-slate-500">
               {{ fmtDate(fs.active_from) }}<span aria-hidden="true"> → </span><span class="sr-only"> {{ t('adminFlashSales.to') }} </span>{{ fmtDate(fs.active_until) }}
               · {{ t('adminFlashSales.redemptions', { count: fs.redemption_count, max: fs.max_redemptions || '∞' }) }}

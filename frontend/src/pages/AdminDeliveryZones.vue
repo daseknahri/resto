@@ -123,12 +123,15 @@
               @click="openEdit(zone)"
             >{{ t('adminZones.edit') }}</button>
             <button
-              class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
+              class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
               :disabled="deletingId === zone.id"
               :aria-label="`${t('adminZones.delete')} ${zone.name}`"
-              :aria-busy="deletingId === zone.id ? 'true' : undefined"
+              :aria-busy="deletingId === zone.id || undefined"
               @click="deleteZone(zone)"
-            >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
+            >
+              <svg v-if="deletingId === zone.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ deletingId === zone.id ? t('common.loading') : t('adminZones.delete') }}
+            </button>
           </div>
         </div>
       </div>
@@ -181,12 +184,15 @@
                   @click="openEdit(zone)"
                 >{{ t('adminZones.edit') }}</button>
                 <button
-                  class="ui-press ui-touch-target inline-flex items-center rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
+                  class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-red-400 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-400/60 disabled:opacity-50"
                   :disabled="deletingId === zone.id"
                   :aria-label="`${t('adminZones.delete')} ${zone.name}`"
-                  :aria-busy="deletingId === zone.id ? 'true' : undefined"
+                  :aria-busy="deletingId === zone.id || undefined"
                   @click="deleteZone(zone)"
-                >{{ deletingId === zone.id ? '…' : t('adminZones.delete') }}</button>
+                >
+                  <svg v-if="deletingId === zone.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ deletingId === zone.id ? t('common.loading') : t('adminZones.delete') }}
+                </button>
               </div>
             </td>
           </tr>
