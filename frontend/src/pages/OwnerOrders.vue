@@ -296,7 +296,7 @@
             <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ formatCurrency(o.total, o.currency) }}</p>
             <p class="mt-1 text-xs tabular-nums text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
             <p v-if="o.promotion_discount && Number(o.promotion_discount) > 0" class="mt-0.5 text-[10px] tabular-nums text-emerald-400">
-              {{ t('ownerOrders.promoDiscount') }} −{{ formatCurrency(o.promotion_discount, o.currency) }}
+              {{ o.applied_promotion_name || t('ownerOrders.promoDiscount') }} −{{ formatCurrency(o.promotion_discount, o.currency) }}
             </p>
             <p v-if="o.tip_amount && Number(o.tip_amount) > 0" class="text-[10px] tabular-nums text-sky-400">
               {{ t('ownerOrders.tip') }} +{{ formatCurrency(o.tip_amount, o.currency) }}

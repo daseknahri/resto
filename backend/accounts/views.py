@@ -3166,6 +3166,7 @@ class MarketplaceOrderStatusView(APIView):
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "loyalty_discount": str(order.loyalty_discount),
             "promotion_discount": str(order.promotion_discount),
+            "applied_promotion_name": order.applied_promotion_name or "",
             "currency": order.currency,
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,

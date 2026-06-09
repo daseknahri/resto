@@ -505,6 +505,7 @@ const arabicMessages = {
     "planSection": "باقتك",
     "pendingUpgradeShort": "ترقية معلقة",
     "avgRating": "متوسط التقييم",
+    "oldestPending": "الأقدم: {min} د",
     "viewAllRatings": "عرض جميع التقييمات",
     "noRatingsYet": "لا توجد تقييمات بعد",
     "allClear": "كل شيء على ما يرام",

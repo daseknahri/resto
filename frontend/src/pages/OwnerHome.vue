@@ -142,6 +142,9 @@
             <AppIcon name="chevronRight" class="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60 rtl:scale-x-[-1]" aria-hidden="true" />
           </p>
           <p class="ui-stat-value text-amber-400">{{ todayStats.pending }}</p>
+          <p v-if="oldestPendingMinutes !== null" class="mt-0.5 text-[10px] tabular-nums text-amber-300/60">
+            {{ t('ownerHome.oldestPending', { min: oldestPendingMinutes }) }}
+          </p>
         </RouterLink>
         <div v-else class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
@@ -468,6 +471,14 @@ const yesterdayStats = computed(() => {
 
 // ── Live orders ───────────────────────────────────────────────────────────────
 const pendingOrders = computed(() => order.orders.filter((o) => o.status === "pending"));
+const oldestPendingMinutes = computed(() => {
+  if (!pendingOrders.value.length) return null;
+  const oldest = pendingOrders.value.reduce((min, o) => {
+    const ts = new Date(o.created_at).getTime();
+    return ts < min ? ts : min;
+  }, Infinity);
+  return Math.max(0, Math.round((Date.now() - oldest) / 60000));
+});
 const activeOrders = computed(() => order.orders.filter((o) => ["confirmed", "preparing", "ready"].includes(o.status)));
 const ORDER_STATUS_PRIORITY = { pending: 0, confirmed: 1, preparing: 2, ready: 3, completed: 4, cancelled: 5 };
 const recentOrders = computed(() =>
