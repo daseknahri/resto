@@ -15,8 +15,8 @@
                 @error="$event.target.style.display='none'"
               />
               <div class="min-w-0">
-                <p class="truncate text-base font-semibold text-slate-100 md:text-lg">{{ tenantName }}</p>
-                <p v-if="tenantTagline" class="hidden truncate text-[10px] text-slate-400 md:block md:text-[11px]">{{ tenantTagline }}</p>
+                <p class="truncate text-base font-semibold text-slate-100 md:text-lg" :title="tenantName">{{ tenantName }}</p>
+                <p v-if="tenantTagline" class="hidden truncate text-[10px] text-slate-400 md:block md:text-[11px]" :title="tenantTagline">{{ tenantTagline }}</p>
               </div>
             </RouterLink>
 

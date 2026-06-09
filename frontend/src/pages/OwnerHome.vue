@@ -35,15 +35,17 @@
           </div>
         </div>
         <button
-          class="ui-touch-target shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+          class="ui-touch-target inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
           :class="isOpen
             ? 'border-red-500/50 text-red-300 hover:bg-red-500/10'
             : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
           :disabled="togglingOpen"
+          :aria-busy="togglingOpen"
           :aria-label="togglingOpen ? t('common.loading') : (isOpen ? t('ownerHome.closeNow') : t('ownerHome.openNow'))"
           :aria-pressed="isOpen"
           @click="toggleOpen"
         >
+          <svg v-if="togglingOpen" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
           {{ togglingOpen ? t("common.loading") : (isOpen ? t("ownerHome.closeNow") : t("ownerHome.openNow")) }}
         </button>
       </div>

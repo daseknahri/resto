@@ -10,8 +10,8 @@
       <!-- Header -->
       <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
         <div class="min-w-0">
-          <h2 id="qa-sheet-title" class="truncate text-base font-semibold text-white">{{ dish.name }}</h2>
-          <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-slate-400">{{ dish.description }}</p>
+          <h2 id="qa-sheet-title" class="truncate text-base font-semibold text-white" :title="dish.name">{{ dish.name }}</h2>
+          <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-slate-400" :title="dish.description">{{ dish.description }}</p>
         </div>
         <button
           class="ui-press ui-touch-target shrink-0 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
