@@ -79,7 +79,7 @@
             <!-- Stepper pill -->
             <div class="inline-flex shrink-0 items-center rounded-full border border-slate-700/60 bg-slate-900/60">
               <button
-                class="ui-press h-8 w-8 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
+                class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors select-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.decreaseQuantity')"
                 @click="cart.decrement(item.key)"
               >
@@ -87,7 +87,7 @@
               </button>
               <span class="w-7 text-center text-sm font-bold text-slate-100 select-none tabular-nums" aria-live="polite">{{ item.qty }}</span>
               <button
-                class="ui-press h-8 w-8 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 transition-colors select-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
+                class="ui-press flex h-10 w-10 items-center justify-center rounded-full text-slate-300 transition-colors select-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 focus:outline-none"
                 :aria-label="t('cartPage.increaseQuantity')"
                 @click="cart.increment(item.key)"
               >
@@ -98,7 +98,7 @@
             <div class="shrink-0 min-w-[4.5rem] text-right">
               <p class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price * item.qty) }}</p>
               <button
-                class="mt-1 px-1 py-0.5 text-[10px] text-slate-600 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded"
+                class="mt-1 px-2 py-1 text-[11px] text-slate-500 hover:text-red-400 transition-colors focus-visible:text-red-400 focus:outline-none rounded-md"
                 :aria-label="`${t('cartPage.remove')} ${item.name}`"
                 @click="cart.remove(item.key)"
               >{{ t('cartPage.remove') }}</button>
