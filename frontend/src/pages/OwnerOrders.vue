@@ -141,9 +141,11 @@
         <button
           class="ui-press shrink-0 rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
           :disabled="confirmingAll"
+          :aria-busy="confirmingAll"
+          :aria-label="confirmingAll ? t('common.loading') : undefined"
           @click="confirmAllPending"
         >
-          {{ confirmingAll ? t("ownerOrders.confirmingAll") : t("ownerOrders.confirmAllPending", { n: pendingOrdersList.length }) }}
+          <span v-if="confirmingAll" class="inline-block animate-spin me-1 h-3 w-3 border border-amber-300 border-t-transparent rounded-full align-middle" aria-hidden="true" />{{ confirmingAll ? t("ownerOrders.confirmingAll") : t("ownerOrders.confirmAllPending", { n: pendingOrdersList.length }) }}
         </button>
       </div>
     </header>
@@ -666,9 +668,13 @@
             v-if="o.payment_status !== 'paid' && o.status !== 'cancelled'"
             class="ui-btn-outline ui-press inline-flex items-center gap-1.5 border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:border-emerald-400"
             :disabled="settlingOrderId === o.id"
+            :aria-busy="settlingOrderId === o.id"
+            :aria-label="settlingOrderId === o.id ? t('common.loading') : undefined"
             @click="settleOrder(o)"
           >
-            <span aria-hidden="true">💵</span> {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
+            <span v-if="settlingOrderId === o.id" class="inline-block animate-spin h-3 w-3 border border-emerald-300 border-t-transparent rounded-full" aria-hidden="true" />
+            <span v-else aria-hidden="true">💵</span>
+            {{ settlingOrderId === o.id ? t("common.saving") : (o.status === 'ready' ? t("ownerOrders.settleAndClose") : t("ownerOrders.markPaid")) }}
           </button>
         </div>
       </article>
@@ -679,10 +685,11 @@
       v-if="trackModal.open"
       class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
       @click.self="closeTrack"
+      @keydown.esc="closeTrack"
     >
-      <div class="ui-panel w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl">
+      <div class="ui-panel w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl" role="dialog" aria-modal="true" aria-labelledby="track-modal-heading">
         <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h3 class="text-sm font-semibold text-slate-100">
+          <h3 id="track-modal-heading" class="text-sm font-semibold text-slate-100">
             {{ t("ownerOrders.trackTitle") }} <span class="text-slate-500">#{{ trackModal.orderNumber }}</span>
           </h3>
           <button class="ui-btn-outline ui-press px-3 py-1.5 text-xs" @click="closeTrack">{{ t("common.close") }}</button>
@@ -692,7 +699,7 @@
             {{ trackModal.error }}
           </p>
           <DeliveryTracker v-else-if="trackModal.delivery" :delivery="trackModal.delivery" />
-          <div v-else class="ui-skeleton h-48" aria-busy="true" />
+          <div v-else class="ui-skeleton h-48" aria-busy="true" :aria-label="t('common.loading')" />
         </div>
       </div>
     </div>

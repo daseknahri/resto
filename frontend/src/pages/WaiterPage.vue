@@ -214,7 +214,12 @@
         {{ t('waiterPage.shiftPeriod', { hours: waiter.shiftSummary.period_hours }) }}
       </p>
 
-      <!-- Empty state while not yet loaded -->
+      <!-- Skeleton while loading shift summary -->
+      <div v-else-if="waiter.shiftSummaryLoading" class="grid grid-cols-2 gap-3" aria-busy="true" :aria-label="t('common.loading')">
+        <div v-for="i in 2" :key="i" class="ui-skeleton h-20 rounded-2xl" />
+      </div>
+
+      <!-- Empty state: no data yet (before first date filter is applied) -->
       <div v-else class="ui-empty-state py-8 text-center">
         <p class="text-sm text-slate-400">{{ t('waiterPage.shiftHint') }}</p>
       </div>
