@@ -469,9 +469,11 @@
         />
         <button
           :disabled="ratingScore === 0 || ratingSubmitting"
-          class="ui-btn-primary inline-flex px-5 py-2.5 text-sm disabled:opacity-40"
+          :aria-busy="ratingSubmitting"
+          class="ui-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm disabled:opacity-40"
           @click="submitRating"
         >
+          <svg v-if="ratingSubmitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
           {{ ratingSubmitting ? t("orderStatus.rateSubmitting") : t("orderStatus.rateSubmit") }}
         </button>
       </div>
