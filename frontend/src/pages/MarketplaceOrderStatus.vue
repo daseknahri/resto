@@ -60,6 +60,33 @@
       </div>
 
       <template v-else-if="order">
+        <!-- Just-placed celebration banner — auto-dismisses after 5 s -->
+        <Transition name="ui-fade">
+          <div
+            v-if="showJustPlacedBanner"
+            class="ui-reveal flex items-center gap-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3.5"
+            role="status"
+            :style="{ '--ui-delay': '0ms' }"
+          >
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/15">
+              <svg viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 text-emerald-400" aria-hidden="true">
+                <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-bold text-emerald-200">{{ t('mktOrderStatus.justPlacedTitle') }}</p>
+              <p class="mt-0.5 text-xs text-emerald-200/70">{{ t('mktOrderStatus.justPlacedSubtitle') }}</p>
+            </div>
+            <button
+              class="shrink-0 rounded-full p-1 text-emerald-400/60 transition hover:text-emerald-300"
+              :aria-label="t('common.dismiss')"
+              @click="showJustPlacedBanner = false"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+        </Transition>
+
         <!-- Header -->
         <header class="ui-hero-ribbon ui-reveal px-4 py-4 text-center">
           <p class="ui-kicker">{{ t('mktOrderStatus.restaurant', { name: order.restaurant_name }) }}</p>
@@ -345,6 +372,10 @@ watch(() => order.value?.status, (newStatus) => {
   if (newStatus && newStatus !== liveStatus.value) liveStatus.value = newStatus;
 });
 
+// ── Just-placed celebration banner ────────────────────────────────────────────
+const showJustPlacedBanner = ref(false);
+let _justPlacedTimer = null;
+
 // ── Delivery-code copy ─────────────────────────────────────────────────────────
 const codeCopied = ref(false);
 let _codeCopiedTimer = null;
@@ -474,6 +505,15 @@ const onMktStatusVisible = () => {
 };
 
 onMounted(() => {
+  // Show celebration banner if arriving within 60s of placing this order
+  try {
+    const lastNum = localStorage.getItem('mktLastOrderNumber');
+    const lastAt = parseInt(localStorage.getItem('mktLastOrderAt') || '0', 10);
+    if (lastNum === String(orderNumber) && (Date.now() - lastAt) < 60000) {
+      showJustPlacedBanner.value = true;
+      _justPlacedTimer = setTimeout(() => { showJustPlacedBanner.value = false; }, 5000);
+    }
+  } catch { /* storage unavailable */ }
   fetchStatus();
   fetchDelivery();
   document.addEventListener('visibilitychange', onMktStatusVisible);
@@ -485,6 +525,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (_justPlacedTimer) clearTimeout(_justPlacedTimer);
   clearInterval(_pollTimer);
   document.removeEventListener('visibilitychange', onMktStatusVisible);
 });

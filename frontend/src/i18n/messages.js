@@ -546,6 +546,8 @@ export const messages = {
       currentStep: "current step",
       stepDone: "completed",
       pointsEarned: "Loyalty points earned",
+      justPlacedTitle: "Order placed!",
+      justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
     },
     contactPage: {
       kicker: "Support",
@@ -4518,6 +4520,8 @@ export const messages = {
       currentStep: "etape en cours",
       stepDone: "termine",
       pointsEarned: "Points de fidelite gagnes",
+      justPlacedTitle: "Commande passee !",
+      justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
     },
     contactPage: {
       kicker: "Support",

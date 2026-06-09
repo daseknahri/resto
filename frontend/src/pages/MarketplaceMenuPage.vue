@@ -1027,6 +1027,12 @@ const placeOrder = async () => {
       payload.redeem_points = loyaltyPoints.value;
     }
     const res = await api.post('/marketplace/order/', payload);
+    // Stamp localStorage so MarketplaceOrderStatus can show a "just placed" banner
+    try {
+      localStorage.setItem('mktLastOrderNumber', String(res.data.order_number));
+      localStorage.setItem('mktLastOrderAt', String(Date.now()));
+      localStorage.setItem('mktLastOrderSlug', String(slug));
+    } catch { /* storage unavailable */ }
     // Navigate to order status page
     router.push({ name: 'marketplace-order-status', params: { slug, orderNumber: res.data.order_number } });
   } catch (err) {
