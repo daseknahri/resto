@@ -174,7 +174,7 @@
             />
             <div class="min-w-0">
               <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-[1.35rem] tracking-tight">{{ cat.name }}</h2>
-              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-[11px] text-slate-500 leading-relaxed">{{ cat.description }}</p>
+              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-[11px] text-slate-500 leading-relaxed" :title="cat.description">{{ cat.description }}</p>
             </div>
           </div>
           <span

@@ -167,8 +167,8 @@
               @click="selectCustomer(c)"
             >
               <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-slate-100">{{ c.name }}</p>
-                <p class="mt-0.5 truncate text-xs text-slate-400">{{ c.phone || c.email || '' }}</p>
+                <p class="truncate text-sm font-semibold text-slate-100" :title="c.name">{{ c.name }}</p>
+                <p class="mt-0.5 truncate text-xs text-slate-400" :title="c.phone || c.email || undefined">{{ c.phone || c.email || '' }}</p>
               </div>
               <span class="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-400">
                 {{ fmtBalance(c.wallet_balance) }}
@@ -195,7 +195,7 @@
         <!-- Selected customer summary -->
         <div class="flex items-center justify-between gap-3">
           <div class="min-w-0 space-y-0.5">
-            <p class="truncate text-base font-semibold text-slate-100">{{ selected.name }}</p>
+            <p class="truncate text-base font-semibold text-slate-100" :title="selected.name">{{ selected.name }}</p>
             <p class="text-xs text-slate-400">
               {{ t('ownerWallet.currentBalance') }}:
               <span class="font-semibold tabular-nums text-emerald-400">{{ fmtBalance(selected.wallet_balance) }}</span>
@@ -275,8 +275,9 @@
               <div class="h-3.5 w-16 rounded bg-slate-700/50" />
             </div>
           </div>
-          <div v-else-if="!walletHistory.length" class="ui-empty-state rounded-xl border border-slate-700/30 p-4 text-center">
-            <p class="text-xs text-slate-500">{{ t('ownerWallet.historyEmpty') }}</p>
+          <div v-else-if="!walletHistory.length" class="ui-empty-state rounded-xl border border-slate-700/30 p-5 text-center">
+            <AppIcon name="wallet" class="mx-auto mb-2 h-7 w-7 text-slate-600" aria-hidden="true" />
+            <p class="text-sm text-slate-400">{{ t('ownerWallet.historyEmpty') }}</p>
           </div>
           <ul v-else class="space-y-1.5">
             <li
@@ -285,7 +286,7 @@
               class="flex items-center justify-between gap-3 rounded-xl border border-slate-700/30 bg-slate-800/30 px-3 py-2.5 text-xs"
             >
               <div class="min-w-0">
-                <p class="truncate font-medium" :class="tx.type === 'payment' ? 'text-red-300' : 'text-slate-200'">
+                <p class="truncate font-medium" :class="tx.type === 'payment' ? 'text-red-300' : 'text-slate-200'" :title="tx.note || tx.type || undefined">
                   {{ tx.note || tx.type }}
                 </p>
                 <p class="mt-0.5 text-[10px] text-slate-500">{{ fmtDate(tx.created_at) }}</p>
