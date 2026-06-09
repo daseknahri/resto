@@ -178,6 +178,36 @@
       </div>
     </nav>
 
+    <!-- ══ Loyalty programme teaser ══ -->
+    <div
+      v-if="loyaltyConfig?.enabled && !isBrowseOnly"
+      class="ui-reveal mx-3 mt-3 flex items-center gap-2.5 rounded-xl border border-violet-500/25 bg-violet-500/8 px-4 py-2 sm:mx-4"
+      :style="{ '--ui-delay': '50ms' }"
+      role="note"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-violet-400" aria-hidden="true">
+        <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+      </svg>
+      <div class="min-w-0 flex-1">
+        <p class="text-[12px] font-semibold leading-tight text-violet-200">
+          {{ customerStore.isAuthenticated && loyaltyPoints > 0
+              ? t('menu.loyaltyTeaserPts', { points: loyaltyPoints })
+              : t('menu.loyaltyTeaserEarn') }}
+        </p>
+        <p v-if="loyaltyAvailable" class="mt-0.5 text-[10px] leading-tight text-violet-400/80">{{ t('menu.loyaltyTeaserRedeem') }}</p>
+        <RouterLink
+          v-else-if="!customerStore.isAuthenticated"
+          :to="{ name: 'customer-account' }"
+          class="mt-0.5 block text-[10px] leading-tight text-violet-400/80 underline hover:text-violet-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-400/40 rounded"
+        >{{ t('menu.loyaltySignIn') }}</RouterLink>
+      </div>
+      <span
+        v-if="customerStore.isAuthenticated && loyaltyPoints > 0"
+        class="shrink-0 rounded-full border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-violet-300"
+        :aria-label="`${loyaltyPoints} ${t('menu.loyaltyTeaserPts', { points: '' }).trim()}`"
+      >{{ loyaltyPoints }}</span>
+    </div>
+
     <!-- ══ Sections ══ -->
     <div class="px-3 sm:px-4 mt-4 space-y-6 sm:space-y-7">
 
@@ -359,15 +389,17 @@ import { withImageFallback } from '../lib/images'
 import { trackEvent } from '../lib/analytics'
 import { getTodayClosingTime, getNextOpenInfo, isCurrentlyOpenBySchedule } from '../lib/businessHours'
 import api from '../lib/api'
-import { useCartStore }   from '../stores/cart'
-import { useMenuStore }   from '../stores/menu'
-import { useTenantStore } from '../stores/tenant'
-import { useToastStore }  from '../stores/toast'
+import { useCartStore }     from '../stores/cart'
+import { useCustomerStore } from '../stores/customer'
+import { useMenuStore }     from '../stores/menu'
+import { useTenantStore }   from '../stores/tenant'
+import { useToastStore }    from '../stores/toast'
 
-const menu   = useMenuStore()
-const tenant = useTenantStore()
-const cart   = useCartStore()
-const toast  = useToastStore()
+const menu           = useMenuStore()
+const tenant         = useTenantStore()
+const cart           = useCartStore()
+const toast          = useToastStore()
+const customerStore  = useCustomerStore()
 const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
 
@@ -428,6 +460,24 @@ const profile          = computed(() => meta.value?.profile || null)
 const menuTheme        = computed(() => profile.value?.menu_theme || 'dark')
 const isBrowseOnly     = computed(() => tenant.isBrowseOnlyPlan === true)
 const ratingSummary    = computed(() => meta.value?.rating_summary || null)
+
+// ── Loyalty programme teaser ──────────────────────────────────────────────────
+const loyaltyConfig  = ref(null)
+const loyaltyPoints  = computed(() => Number(customerStore.customer?.loyalty_points) || 0)
+const loyaltyAvailable = computed(() =>
+  customerStore.isAuthenticated &&
+  !!loyaltyConfig.value?.enabled &&
+  loyaltyPoints.value >= (Number(loyaltyConfig.value?.redeem_threshold) || 0) &&
+  (Number(loyaltyConfig.value?.points_value) || 0) > 0
+)
+const fetchLoyaltyConfig = async () => {
+  try {
+    const res = await api.get('/customer/loyalty/config/')
+    loyaltyConfig.value = res.data?.enabled ? res.data : null
+  } catch {
+    loyaltyConfig.value = null
+  }
+}
 const tenantName       = computed(() => meta.value?.name || t('customerLayout.fallbackTenantName'))
 const tenantDescription = computed(() => String(profile.value?.description || profile.value?.tagline || '').trim() || t('customerLeadPage.fallbackDescription'))
 const heroImage        = computed(() => String(profile.value?.hero_url || '').trim())
@@ -708,6 +758,7 @@ watch(selectedSuperCategorySlug, () => {
 onMounted(async () => {
   await resolveTableContext()
   if (!menuCategories.value.length) await menu.fetchCategories()
+  fetchLoyaltyConfig()  // non-blocking — teaser fades in when data arrives
 
   syncSelection()
 
