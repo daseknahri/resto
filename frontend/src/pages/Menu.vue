@@ -73,7 +73,7 @@
 
     <!-- ══ Table context banner ══ -->
     <div v-if="tableContextBanner" class="mx-3 mt-3 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100 shadow-sm shadow-black/20">
-      <span class="flex min-w-0 items-center gap-2 truncate font-medium">
+      <span class="flex min-w-0 items-center gap-2 truncate font-medium" :title="tableContextBanner">
         <AppIcon name="check" class="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
         {{ tableContextBanner }}
       </span>

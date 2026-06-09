@@ -244,7 +244,7 @@
         <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
           <div class="min-w-0">
             <!-- Table / fulfillment label (largest text — for quick scanning) -->
-            <p class="truncate text-xl font-bold leading-tight text-white">
+            <p class="truncate text-xl font-bold leading-tight text-white" :title="orderHeadline(order)">
               {{ orderHeadline(order) }}
             </p>
             <p class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
