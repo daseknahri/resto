@@ -89,8 +89,10 @@
             <button
               type="submit"
               :disabled="session.loading"
-              class="ui-btn-primary ui-press w-full justify-center disabled:opacity-60"
+              :aria-busy="session.loading"
+              class="ui-btn-primary ui-press inline-flex w-full items-center justify-center gap-2 disabled:opacity-60"
             >
+              <svg v-if="session.loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               {{ session.loading ? t("signIn.signingIn") : t("common.signIn") }}
             </button>
             <div v-if="error" role="alert" class="flex items-start gap-2.5 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3">

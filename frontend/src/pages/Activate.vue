@@ -72,9 +72,10 @@
             <button
               type="submit"
               :disabled="store.submitting"
-              :aria-busy="store.submitting ? 'true' : undefined"
-              class="ui-btn-primary ui-press ui-touch-target w-full justify-center disabled:opacity-60"
+              :aria-busy="store.submitting"
+              class="ui-btn-primary ui-press ui-touch-target inline-flex w-full items-center justify-center gap-2 disabled:opacity-60"
             >
+              <svg v-if="store.submitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               {{ store.submitting ? t("activateAccount.activating") : t("activateAccount.activate") }}
             </button>
 

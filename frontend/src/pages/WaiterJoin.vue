@@ -110,8 +110,10 @@
         <button
           type="submit"
           :disabled="loading || success"
-          class="ui-btn-primary ui-press w-full justify-center ui-touch-target disabled:opacity-60"
+          :aria-busy="loading"
+          class="ui-btn-primary ui-press inline-flex w-full items-center justify-center gap-2 ui-touch-target disabled:opacity-60"
         >
+          <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
           {{ loading ? t('signIn.signingIn') : t('waiterJoin.signInCta') }}
         </button>
 

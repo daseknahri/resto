@@ -196,10 +196,12 @@
               <input v-model.trim="waitlistForm.email" type="email" autocomplete="email" inputmode="email" spellcheck="false" :placeholder="t('common.email')" :aria-label="t('common.email')" class="ui-input text-sm" />
               <div class="flex flex-wrap gap-2">
                 <button
-                  class="ui-press inline-flex items-center rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-60 ui-touch-target"
+                  class="ui-press inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-500/15 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 disabled:opacity-60 ui-touch-target"
                   :disabled="joiningWaitlist"
+                  :aria-busy="joiningWaitlist"
                   @click="joinWaitlist"
                 >
+                  <svg v-if="joiningWaitlist" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                   {{ joiningWaitlist ? t("reservationPage.waitlistSubmitting") : t("reservationPage.waitlistSubmit") }}
                 </button>
                 <button class="ui-btn-outline ui-press px-4 py-2 text-xs" @click="showWaitlistForm = false">
@@ -222,11 +224,13 @@
           <div v-if="!lead.fullyBooked" class="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              class="ui-btn-primary ui-touch-target disabled:cursor-not-allowed disabled:opacity-65"
+              class="ui-btn-primary ui-touch-target inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-65"
               :disabled="lead.submitting || submitted"
+              :aria-busy="lead.submitting"
               @click="submitReservation"
             >
-              <AppIcon name="calendar" class="h-4 w-4" />
+              <svg v-if="lead.submitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              <AppIcon v-else name="calendar" class="h-4 w-4 shrink-0" aria-hidden="true" />
               {{ lead.submitting ? t("reservationPage.sending") : submitted ? t("reservationPage.requestSent") : t("reservationPage.submitReservation") }}
             </button>
             <div v-if="lead.error" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
