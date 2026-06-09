@@ -355,11 +355,13 @@
 
             <div class="mt-5 flex gap-3">
               <button
-                class="ui-btn-primary flex-1 py-2 text-sm disabled:opacity-50"
+                class="ui-btn-primary inline-flex flex-1 items-center justify-center gap-1.5 py-2 text-sm disabled:opacity-50"
                 :disabled="saving"
+                :aria-busy="saving"
                 @click="save"
               >
-                {{ saving ? '…' : (editing ? t('adminZones.saveBtn') : t('adminZones.createBtn')) }}
+                <svg v-if="saving" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                {{ saving ? t('common.loading') : (editing ? t('adminZones.saveBtn') : t('adminZones.createBtn')) }}
               </button>
               <button
                 class="ui-btn-outline px-5 py-2 text-sm"

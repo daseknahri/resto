@@ -14,11 +14,14 @@
           </span>
           <span class="sr-only" aria-live="polite" aria-atomic="true">{{ loading ? t('common.loading') : '' }}</span>
           <button
-            class="ui-btn-outline ui-press ui-touch-target px-4 py-2 text-sm disabled:opacity-50"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
             :disabled="loading"
             :aria-busy="loading"
             @click="fetchJobs"
-          >{{ loading ? '…' : t('adminDeliveryJobs.refresh') }}</button>
+          >
+            <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ loading ? t('common.loading') : t('adminDeliveryJobs.refresh') }}
+          </button>
         </div>
       </div>
     </header>

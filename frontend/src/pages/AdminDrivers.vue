@@ -9,10 +9,14 @@
           <p class="mt-0.5 ui-subtle text-xs hidden sm:block">{{ t('adminDrivers.subtitle') }}</p>
         </div>
         <button
-          class="ui-btn-outline ui-press shrink-0 px-4 py-2 text-sm disabled:opacity-50"
+          class="ui-btn-outline ui-press inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
           :disabled="loading"
+          :aria-busy="loading"
           @click="fetchDrivers"
-        >{{ loading ? '…' : t('adminDrivers.refresh') }}</button>
+        >
+          <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ loading ? t('common.loading') : t('adminDrivers.refresh') }}
+        </button>
       </div>
     </header>
 
