@@ -428,6 +428,8 @@ export const messages = {
       searchClear: "Clear",
       searchResultsKicker: "Search results",
       noMatchDish: "No dishes match your search.",
+      flashSaleBanner: "⚡ {pct}% off everything — flash sale!",
+      flashSaleEnds: "Ends in {time}",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4349,6 +4351,8 @@ export const messages = {
       searchClear: "Effacer",
       searchResultsKicker: "Resultats de recherche",
       noMatchDish: "Aucun plat ne correspond a votre recherche.",
+      flashSaleBanner: "⚡ -{pct}% sur tout — vente flash !",
+      flashSaleEnds: "Se termine dans {time}",
     },
     reservationManage: {
       kicker: "Reservation",

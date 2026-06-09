@@ -105,6 +105,21 @@
         </header>
       </div>
 
+      <!-- Flash sale banner -->
+      <div
+        v-if="restaurant.flash_sale"
+        class="ui-reveal mx-4 mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm"
+        :style="{ '--ui-delay': '40ms' }"
+        role="status"
+      >
+        <p class="font-semibold text-amber-200">
+          {{ t('mktMenu.flashSaleBanner', { pct: restaurant.flash_sale.discount_pct }) }}
+        </p>
+        <p v-if="flashSaleCountdown" class="shrink-0 font-mono text-[11px] tabular-nums text-amber-300/80">
+          {{ t('mktMenu.flashSaleEnds', { time: flashSaleCountdown }) }}
+        </p>
+      </div>
+
       <!-- Sticky horizontal category navigation -->
       <nav
         class="sticky top-0 z-20 -mx-4 mt-1 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-md"
@@ -591,6 +606,39 @@ const slug = route.params.slug;
 const loading = ref(true);
 const fetchError = ref(false);
 const restaurant = ref(null);
+
+// ── Flash sale countdown ───────────────────────────────────────────────────────
+const flashSaleCountdown = ref('');
+let _flashSaleTimer = null;
+const updateFlashSaleCountdown = () => {
+  if (!restaurant.value?.flash_sale?.active_until) { flashSaleCountdown.value = ''; return; }
+  const until = new Date(restaurant.value.flash_sale.active_until);
+  const diff = until - Date.now();
+  if (diff <= 0) {
+    flashSaleCountdown.value = '';
+    restaurant.value = { ...restaurant.value, flash_sale: null };
+    return;
+  }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h >= 24) { flashSaleCountdown.value = ''; return; }
+  flashSaleCountdown.value = h > 0
+    ? `${h}h ${String(m).padStart(2, '0')}m`
+    : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+watch(
+  () => restaurant.value?.flash_sale,
+  (sale) => {
+    clearInterval(_flashSaleTimer);
+    if (sale?.active_until) {
+      updateFlashSaleCountdown();
+      _flashSaleTimer = setInterval(updateFlashSaleCountdown, 1000);
+    }
+  },
+  { immediate: true },
+);
+
 const checkoutOpen = ref(false);
 const checkoutDialogRef = ref(null);
 // Ref to the element that opened the checkout drawer — used to restore focus on close.
@@ -630,6 +678,7 @@ watch(checkoutOpen, async (open) => {
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', trapCheckoutFocus);
   if (_catObserver) { _catObserver.disconnect(); _catObserver = null; }
+  clearInterval(_flashSaleTimer);
 });
 const placing = ref(false);
 const checkoutError = ref('');

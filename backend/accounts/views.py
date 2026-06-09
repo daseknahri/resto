@@ -2494,6 +2494,28 @@ class MarketplaceMenuView(APIView):
             return Response({"detail": "Could not load menu.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         is_open = _compute_is_open_now(profile)
+
+        # ── Flash sale (public schema — no schema_context needed) ─────────────
+        flash_sale_info = None
+        try:
+            from .models import PlatformFlashSale as _PFS, PlatformFlashSaleOptIn as _PFSOI
+            _opted_ids = set(
+                _PFSOI.objects.filter(tenant_id=tenant.id).values_list("flash_sale_id", flat=True)
+            )
+            if _opted_ids:
+                _best_disc = None
+                for _fs in _PFS.objects.filter(id__in=_opted_ids, is_active=True).order_by("-discount_value"):
+                    if _fs.is_live():
+                        if _best_disc is None or _fs.discount_value > _best_disc:
+                            _best_disc = _fs.discount_value
+                            flash_sale_info = {
+                                "name": _fs.name,
+                                "discount_pct": str(_fs.discount_value),
+                                "active_until": _fs.active_until.isoformat(),
+                            }
+        except Exception:
+            flash_sale_info = None
+
         return Response({
             "slug": tenant.slug,
             "name": tenant.name,
@@ -2519,6 +2541,7 @@ class MarketplaceMenuView(APIView):
             "is_open": is_open,
             "is_menu_temporarily_disabled": bool(getattr(profile, "is_menu_temporarily_disabled", False)),
             "loyalty": loyalty_cfg_data,
+            "flash_sale": flash_sale_info,
             "super_categories": super_categories,
         })
 
