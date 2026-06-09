@@ -1413,6 +1413,20 @@
                   @change="savePref('notify_review_prompts', $event.target.checked)"
                 />
               </label>
+              <!-- Browser push notifications opt-in -->
+              <div v-if="pushSupported && pushEnabled" class="flex items-start justify-between gap-3 pt-0.5">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm text-slate-300">{{ t('customerAccount.notifyBrowserPush') }}</p>
+                  <p v-if="!pushSubscribed" class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.notifyBrowserPushHint') }}</p>
+                </div>
+                <button
+                  v-if="!pushSubscribed"
+                  class="shrink-0 rounded-full border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/20 disabled:opacity-50 ui-press"
+                  :disabled="pushLoading"
+                  @click="pushSubscribe"
+                >{{ t('customerAccount.notifyEnable') }}</button>
+                <span v-else class="shrink-0 text-[11px] font-semibold text-emerald-400">{{ t('customerAccount.notifyOn') }}</span>
+              </div>
             </div>
           </div>
 
