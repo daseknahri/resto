@@ -2752,6 +2752,7 @@ export const messages = {
       invoiceDownload: "Download invoice",
       invoiceDownloading: "Preparing invoice...",
       invoiceDownloadFailed: "Could not download invoice.",
+      invoiceDownloaded: "Invoice downloaded.",
       invoiceNotReady: "Invoice not yet available — contact support to complete your invoice.",
     },
     adminConsole: {
@@ -6620,6 +6621,7 @@ export const messages = {
       invoiceDownload: "Telecharger la facture",
       invoiceDownloading: "Preparation de la facture...",
       invoiceDownloadFailed: "Impossible de telecharger la facture.",
+      invoiceDownloaded: "Facture telechargee.",
       invoiceNotReady: "Facture non disponible — contactez le support pour finaliser votre facture.",
     },
     adminConsole: {

@@ -296,7 +296,11 @@ const updateClock = () => {
 };
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────
+let _fsReturnFocus = null;
+
 const toggleFullscreen = () => {
+  // Save the element that has focus now so we can restore it when exiting.
+  _fsReturnFocus = document.activeElement;
   if (!document.fullscreenEnabled) {
     isFullscreen.value = !isFullscreen.value;
     return;
@@ -313,7 +317,14 @@ const toggleFullscreen = () => {
 };
 
 const onFullscreenChange = () => {
+  const wasFullscreen = isFullscreen.value;
   isFullscreen.value = Boolean(document.fullscreenElement);
+  // When the user exits fullscreen (Esc or button), the browser moves focus to
+  // <body>. Return it to whichever element launched the toggle.
+  if (wasFullscreen && !isFullscreen.value && _fsReturnFocus) {
+    _fsReturnFocus.focus?.();
+    _fsReturnFocus = null;
+  }
 };
 
 // ── Polling ───────────────────────────────────────────────────────────────────

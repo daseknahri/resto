@@ -296,8 +296,11 @@
                       <option value="transfer">{{ t('adminDrivers.methodTransfer') }}</option>
                     </select>
                   </div>
-                  <button class="w-full rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="paying" @click="submitPayout">
-                    {{ paying ? '…' : t('adminDrivers.payOut') }}
+                  <button class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="paying" :aria-busy="paying" @click="submitPayout">
+                    <svg v-if="paying" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0">
+                      <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
+                    </svg>
+                    {{ paying ? t('common.loading') : t('adminDrivers.payOut') }}
                   </button>
                   <p v-if="payError" class="text-xs text-red-300" role="alert">{{ payError }}</p>
                 </div>

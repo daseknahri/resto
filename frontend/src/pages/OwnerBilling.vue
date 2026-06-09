@@ -241,8 +241,8 @@
         </button>
       </div>
 
-      <div v-if="loading" class="space-y-2">
-        <div v-for="i in 2" :key="i" class="animate-pulse rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <div v-if="loading" class="space-y-2" aria-busy="true">
+        <div v-for="i in 2" :key="i" class="animate-pulse rounded-xl border border-slate-800 bg-slate-900/40 p-4 min-h-[72px]">
           <div class="flex items-center justify-between gap-3">
             <div class="space-y-1.5">
               <div class="h-3.5 w-24 rounded bg-slate-700/60" />
@@ -417,6 +417,7 @@
               :aria-label="t('ownerBilling.deletionReasonPlaceholder')"
               :placeholder="t('ownerBilling.deletionReasonPlaceholder')"
             ></textarea>
+            <p class="mt-1 text-end text-xs tabular-nums" :class="deletionReason.length >= 480 ? 'text-amber-400' : 'text-slate-600'" aria-live="polite">{{ deletionReason.length }}/500</p>
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -701,6 +702,7 @@ const downloadInvoice = async (requestId) => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    toast.show(t('ownerBilling.invoiceDownloaded'), 'success')
   } catch {
     toast.show(t('ownerBilling.invoiceDownloadFailed'), 'error')
   } finally {

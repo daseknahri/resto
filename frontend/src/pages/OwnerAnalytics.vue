@@ -1,5 +1,5 @@
 <template>
-  <section class="space-y-4 pb-24 sm:pb-6" aria-labelledby="analytics-heading">
+  <section class="space-y-4 pb-24 sm:pb-6" aria-labelledby="analytics-heading" :aria-busy="insightsLoading">
     <article class="ui-workspace-stage ui-reveal space-y-4 p-4 sm:p-5">
       <!-- Header + period selector -->
       <div class="flex flex-wrap items-start justify-between gap-3">
