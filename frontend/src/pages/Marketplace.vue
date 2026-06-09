@@ -503,8 +503,16 @@ const saveFavourites = (set) => {
 
 // ── Recently visited ──────────────────────────────────────────────────────────
 const RECENT_KEY = 'marketplace:recent';
+const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // prune entries older than 30 days
 const loadRecentSlugs = () => {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    const cutoff = Date.now() - RECENT_TTL_MS;
+    // New format: [{slug, ts}]. Legacy plain strings have no ts — silently drop them.
+    return raw
+      .filter(e => e && typeof e === 'object' && e.slug && (e.ts || 0) >= cutoff)
+      .map(e => e.slug);
+  } catch { return []; }
 };
 const recentSlugs = ref(loadRecentSlugs());
 

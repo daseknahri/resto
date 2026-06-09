@@ -982,6 +982,7 @@ let pollTimer = null;
 
 const onStatusPageVisible = () => {
   if (typeof document !== "undefined" && document.visibilityState === "visible" && isLiveStatus.value) {
+    updateCountdown(); // immediately re-sync the timer display before the fetch round-trip
     fetchStatus();
   }
 };

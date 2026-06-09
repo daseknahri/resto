@@ -793,13 +793,13 @@
             <button
               v-if="!isBrowseOnlyPlan"
               class="ui-btn-primary w-full justify-center py-4 text-base font-bold tracking-wide shadow-lg shadow-[var(--color-secondary)]/20"
-              :disabled="placingOrder || prepayShortfall || deliveryBlocked"
+              :disabled="placingOrder || prepayShortfall || deliveryBlocked || deliveryMinGap > 0"
               :aria-busy="placingOrder"
               @click="placeInAppOrder"
             >
               <svg v-if="placingOrder" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               <AppIcon v-else name="cart" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              {{ placingOrder ? t('cartPage_order.placing') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : t('cartPage_order.placeOrder'))) }}
+              {{ placingOrder ? t('cartPage_order.placing') : (deliveryBlocked ? t('cartPage.deliveryOutOfRangeShort') : (prepayShortfall ? t('cartPage.walletTopUpRequiredShort') : (deliveryMinGap > 0 ? t('cartPage.deliveryMinAddMore', { amount: formatPrice(deliveryMinGap) }) : t('cartPage_order.placeOrder')))) }}
             </button>
             <button
               v-if="cart.canWhatsapp"

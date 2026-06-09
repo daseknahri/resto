@@ -969,9 +969,15 @@ const fetchMenu = async () => {
     restaurant.value = res.data;
     loyaltyConfig.value = res.data?.loyalty?.enabled ? res.data.loyalty : null;
     // Track visit for "Continue browsing" on the marketplace landing page
+    // Format: [{slug, ts}] — ts is unix-ms; entries older than 30 days are pruned on load.
     try {
-      const slugs = JSON.parse(localStorage.getItem('marketplace:recent') || '[]').filter(s => s !== slug);
-      localStorage.setItem('marketplace:recent', JSON.stringify([slug, ...slugs].slice(0, 8)));
+      const raw = JSON.parse(localStorage.getItem('marketplace:recent') || '[]');
+      // Normalise legacy plain-string entries (no ts → treat as expired, drop them)
+      const existing = raw
+        .filter(e => e && typeof e === 'object' && e.slug && e.slug !== slug);
+      localStorage.setItem('marketplace:recent', JSON.stringify(
+        [{ slug, ts: Date.now() }, ...existing].slice(0, 8)
+      ));
     } catch { /* storage unavailable */ }
     // Pre-fill customer info if signed in
     if (customer.value) {
