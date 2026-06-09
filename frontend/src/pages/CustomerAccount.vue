@@ -450,13 +450,13 @@
                     :to="{ name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } }"
                     class="min-w-0 flex-1"
                   >
-                    <p class="truncate text-sm font-medium text-slate-200">{{ o.restaurant_name || o.restaurant_slug }}</p>
+                    <p class="truncate text-sm font-medium text-slate-200" :title="o.restaurant_name || o.restaurant_slug">{{ o.restaurant_name || o.restaurant_slug }}</p>
                     <p class="text-[11px] text-slate-500">
                       <span class="font-mono">#{{ o.order_number }}</span> · {{ mktOrderStatus(o.status) }} · {{ formatDate(o.created_at) }}
                     </p>
                   </RouterLink>
                   <div v-else class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium text-slate-200">{{ o.restaurant_name }}</p>
+                    <p class="truncate text-sm font-medium text-slate-200" :title="o.restaurant_name">{{ o.restaurant_name }}</p>
                     <p class="text-[11px] text-slate-500"><span class="font-mono">#{{ o.order_number }}</span> · {{ formatDate(o.created_at) }}</p>
                   </div>
                   <div class="flex shrink-0 items-center gap-2">

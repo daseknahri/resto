@@ -302,7 +302,7 @@
             >
               <div class="min-w-0 space-y-0.5">
                 <p class="text-xs font-semibold tracking-wide text-slate-200 tabular-nums">{{ order.order_number }}</p>
-                <p v-if="order.items?.length" class="truncate text-[11px] text-slate-400 leading-relaxed">
+                <p v-if="order.items?.length" class="truncate text-[11px] text-slate-400 leading-relaxed" :title="order.items.map(i => i.dish_name).join(', ')">
                   {{ order.items.slice(0, 3).map(i => i.dish_name).join(', ') }}{{ order.items.length > 3 ? '…' : '' }}
                 </p>
               </div>

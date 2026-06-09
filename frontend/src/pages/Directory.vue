@@ -152,7 +152,7 @@
 
           <!-- Card body: tagline + capability chips + CTA -->
           <div class="flex flex-1 flex-col gap-2.5 p-4">
-            <p v-if="r.tagline" class="line-clamp-2 text-xs leading-relaxed text-slate-400">{{ r.tagline }}</p>
+            <p v-if="r.tagline" class="line-clamp-2 text-xs leading-relaxed text-slate-400" :title="r.tagline">{{ r.tagline }}</p>
 
             <div class="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
               <span v-if="r.city" class="ui-chip text-[11px]">{{ r.city }}</span>

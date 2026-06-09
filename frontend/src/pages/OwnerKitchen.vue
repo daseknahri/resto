@@ -128,7 +128,7 @@
         <!-- Order headline -->
         <div class="flex items-start justify-between gap-3 px-4 pt-4">
           <div class="min-w-0 flex-1">
-            <p class="kitchen-headline truncate" :class="headlineColorClass(order.status)">
+            <p class="kitchen-headline truncate" :class="headlineColorClass(order.status)" :title="orderHeadline(order)">
               {{ orderHeadline(order) }}
             </p>
             <p class="mt-1 text-xs font-medium text-slate-500 tabular-nums">

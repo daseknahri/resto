@@ -29,7 +29,7 @@
             <div class="min-w-0 space-y-1">
               <p class="ui-kicker">{{ t('menu.kicker') }}</p>
               <h1 class="ui-display text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ tenantName }}</h1>
-              <p v-if="tenantDescription" class="line-clamp-1 ui-subtle">{{ tenantDescription }}</p>
+              <p v-if="tenantDescription" class="line-clamp-1 ui-subtle" :title="tenantDescription">{{ tenantDescription }}</p>
             </div>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -141,7 +141,7 @@
               <h3 class="text-[0.95rem] font-bold leading-snug tracking-tight text-white transition-colors duration-200 group-hover:text-[var(--color-secondary)]">
                 {{ sc.name }}
               </h3>
-              <p v-if="sc.description" class="line-clamp-2 text-[13px] leading-relaxed text-slate-400">{{ sc.description }}</p>
+              <p v-if="sc.description" class="line-clamp-2 text-[13px] leading-relaxed text-slate-400" :title="sc.description">{{ sc.description }}</p>
             </div>
 
             <!-- CTA row -->

@@ -60,7 +60,7 @@
           />
           <div class="min-w-0 pb-0.5">
             <h1 class="ui-display text-[1.9rem] font-semibold leading-[1.1] text-white sm:text-4xl">{{ tenantName }}</h1>
-            <p v-if="tenantDescription" class="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-300/85">{{ tenantDescription }}</p>
+            <p v-if="tenantDescription" class="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-300/85" :title="tenantDescription">{{ tenantDescription }}</p>
           </div>
         </div>
 

@@ -282,7 +282,7 @@
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.pickup') }}</p>
-                <p class="truncate text-sm text-slate-200">{{ activeJob.pickup_address || t('driver.openMaps') }}</p>
+                <p class="truncate text-sm text-slate-200" :title="activeJob.pickup_address || undefined">{{ activeJob.pickup_address || t('driver.openMaps') }}</p>
               </div>
               <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
             </a>
@@ -298,7 +298,7 @@
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.dropoff') }}</p>
-                <p class="truncate text-sm text-slate-200">{{ activeJob.delivery_address || t('driver.openMaps') }}</p>
+                <p class="truncate text-sm text-slate-200" :title="activeJob.delivery_address || undefined">{{ activeJob.delivery_address || t('driver.openMaps') }}</p>
               </div>
               <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
             </a>
@@ -315,7 +315,7 @@
               </span>
               <div class="min-w-0 flex-1">
                 <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.callCustomer') }}</p>
-                <p class="truncate text-sm text-slate-200">{{ activeJob.customer_name || activeJob.customer_phone }}</p>
+                <p class="truncate text-sm text-slate-200" :title="activeJob.customer_name || activeJob.customer_phone || undefined">{{ activeJob.customer_name || activeJob.customer_phone }}</p>
               </div>
               <span class="shrink-0 text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
             </a>
@@ -326,7 +326,7 @@
             <p class="mb-2 text-[11px] uppercase tracking-wider text-slate-500">{{ t('driver.itemsTitle') }}</p>
             <ul class="space-y-1">
               <li v-for="(it, idx) in activeJob.items" :key="idx" class="flex justify-between gap-2 text-sm text-slate-300">
-                <span class="truncate">{{ it.name }}</span>
+                <span class="truncate" :title="it.name">{{ it.name }}</span>
                 <span class="shrink-0 tabular-nums text-slate-400">×{{ it.qty }}</span>
               </li>
             </ul>
@@ -428,7 +428,7 @@
             <!-- Job header row -->
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-slate-100">{{ job.restaurant_name || ('#' + job.order_number) }}</p>
+                <p class="truncate text-sm font-semibold text-slate-100" :title="job.restaurant_name || ('#' + job.order_number)">{{ job.restaurant_name || ('#' + job.order_number) }}</p>
                 <p class="text-[11px] text-slate-500">{{ t('driver.order') }} #{{ job.order_number }}</p>
               </div>
               <span class="shrink-0 text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(job.driver_payout) }}</span>
@@ -450,7 +450,7 @@
               </span>
             </div>
             <!-- Delivery address -->
-            <p v-if="job.delivery_address" class="flex items-start gap-1.5 truncate text-sm text-slate-300">
+            <p v-if="job.delivery_address" class="flex items-start gap-1.5 truncate text-sm text-slate-300" :title="job.delivery_address">
               <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
               <span class="truncate">{{ job.delivery_address }}</span>
             </p>
@@ -502,7 +502,7 @@
                 :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
               >
                 <div class="min-w-0">
-                  <p class="truncate text-sm text-slate-200">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
+                  <p class="truncate text-sm text-slate-200" :title="d.restaurant_name || ('#' + d.order_number)">{{ d.restaurant_name || ('#' + d.order_number) }}</p>
                   <p class="text-[11px] text-slate-500">{{ statusLabel(d.status) }} · {{ fmtDate(d.delivered_at || d.failed_at || d.created_at) }}</p>
                 </div>
                 <span class="shrink-0 text-sm font-semibold tabular-nums" :class="d.status === 'delivered' ? 'text-emerald-300' : 'text-slate-500'">{{ fmtMoney(d.driver_payout) }}</span>

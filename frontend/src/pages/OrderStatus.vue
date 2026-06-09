@@ -287,7 +287,7 @@
               :aria-label="`${item.qty}x`"
             >{{ item.qty }}</span>
             <div class="min-w-0 space-y-0.5">
-              <p class="font-semibold text-slate-100 truncate">{{ item.dish_name }}</p>
+              <p class="font-semibold text-slate-100 truncate" :title="item.dish_name">{{ item.dish_name }}</p>
               <p v-if="item.options?.length" class="text-xs text-slate-400">
                 {{ item.options.map(o => o.name).join(" · ") }}
               </p>

@@ -311,7 +311,7 @@
       <!-- Row 1: dish name + price -->
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <p class="truncate text-sm font-bold text-slate-100 leading-snug">{{ dish.name }}</p>
+          <p class="truncate text-sm font-bold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
           <!-- selected options summary chips -->
           <div v-if="selectedOptionObjects.length" class="mt-1.5 flex flex-wrap gap-1">
             <span
