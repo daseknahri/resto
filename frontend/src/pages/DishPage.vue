@@ -251,7 +251,7 @@
                 <DishImage :src="item.image_url" :name="item.name" :seed="item.slug" img-class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.05]" loading="lazy" />
               </div>
               <div class="flex items-start justify-between gap-2 p-3 pb-3.5">
-                <p class="line-clamp-2 text-sm font-semibold leading-snug text-slate-100">{{ item.name }}</p>
+                <p class="line-clamp-2 text-sm font-semibold leading-snug text-slate-100" :title="item.name">{{ item.name }}</p>
                 <p class="shrink-0 text-sm font-extrabold tabular-nums text-[var(--color-secondary)]">{{ formatPrice(item.price) }}</p>
               </div>
             </RouterLink>

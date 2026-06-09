@@ -226,7 +226,7 @@
             {{ t("adminConsole.source") }}: {{ lead.source || "-" }}
             <span v-if="lead.tenant_slug"> | {{ t("adminConsole.tenant") }}: {{ lead.tenant_slug }}</span>
           </p>
-          <p class="text-xs text-slate-500 line-clamp-2">{{ lead.notes }}</p>
+          <p class="text-xs text-slate-500 line-clamp-2" :title="lead.notes || undefined">{{ lead.notes }}</p>
           <p v-if="lead.onboarded_at" class="text-xs text-emerald-300">
             {{ t("adminConsole.onboarded") }}: {{ formatDate(lead.onboarded_at) }}
           </p>

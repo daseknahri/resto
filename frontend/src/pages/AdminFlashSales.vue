@@ -113,12 +113,16 @@
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button
-              class="ui-btn-outline ui-press ui-touch-target px-3 py-1 text-xs font-semibold disabled:opacity-50"
+              class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold disabled:opacity-50"
               :class="fs.is_active ? 'text-slate-300 hover:border-amber-400/50 hover:text-amber-300' : 'border-emerald-500/40 text-emerald-300 hover:border-emerald-400/70'"
               :disabled="busyId === fs.id"
+              :aria-busy="busyId === fs.id || undefined"
               :aria-label="(fs.is_active ? t('adminFlashSales.pause') : t('adminFlashSales.activate')) + ' ' + fs.name"
               @click="toggleActive(fs)"
-            >{{ fs.is_active ? t('adminFlashSales.pause') : t('adminFlashSales.activate') }}</button>
+            >
+              <svg v-if="busyId === fs.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ busyId === fs.id ? t('common.loading') : (fs.is_active ? t('adminFlashSales.pause') : t('adminFlashSales.activate')) }}
+            </button>
             <button
               class="ui-btn-outline ui-press ui-touch-target border-red-500/40 px-3 py-1 text-xs text-red-300 hover:border-red-400/60 hover:bg-red-500/10 disabled:opacity-50"
               :disabled="busyId === fs.id"
