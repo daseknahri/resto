@@ -959,6 +959,7 @@
                         :placeholder="t('customerAccount.reviewsCommentPlaceholder')"
                         @input="setDraftComment(order.order_number, $event.target.value)"
                       />
+                      <p class="mt-1 text-end text-xs tabular-nums" :class="(getDraft(order.order_number).comment || '').length >= 480 ? 'text-amber-400' : 'text-slate-600'" aria-live="polite">{{ (getDraft(order.order_number).comment || '').length }}/500</p>
                     </div>
                   </Transition>
 

@@ -379,6 +379,7 @@
             </button>
             <input
               v-model="failNote"
+              maxlength="500"
               :placeholder="t('driver.failNotePlaceholder')"
               :aria-label="t('driver.failNotePlaceholder')"
               class="ui-input"

@@ -525,22 +525,28 @@
 
             <div class="space-y-1.5 pt-0.5 border-t border-slate-800/60">
               <div class="flex flex-wrap items-start gap-2 pt-2">
-                <textarea
-                  v-model.trim="timelineNote[reservation.id]"
-                  rows="2"
-                  class="ui-textarea min-w-[220px] flex-1"
-                  :class="timelineNoteError[reservation.id] ? 'border-red-400' : ''"
-                  :aria-label="t('ownerReservations.addFollowUpNote')"
-                  :aria-invalid="timelineNoteError[reservation.id] ? 'true' : undefined"
-                  :aria-describedby="`res-timeline-note-error-${reservation.id}`"
-                  :placeholder="t('ownerReservations.addFollowUpNote')"
-                  @input="timelineNoteError[reservation.id] = ''"
-                ></textarea>
+                <div class="min-w-[220px] flex-1 space-y-1">
+                  <textarea
+                    v-model.trim="timelineNote[reservation.id]"
+                    rows="2"
+                    maxlength="500"
+                    class="ui-textarea w-full"
+                    :class="timelineNoteError[reservation.id] ? 'border-red-400' : ''"
+                    :aria-label="t('ownerReservations.addFollowUpNote')"
+                    :aria-invalid="timelineNoteError[reservation.id] ? 'true' : undefined"
+                    :aria-describedby="`res-timeline-note-error-${reservation.id}`"
+                    :placeholder="t('ownerReservations.addFollowUpNote')"
+                    @input="timelineNoteError[reservation.id] = ''"
+                  ></textarea>
+                  <p class="text-end text-[11px] tabular-nums" :class="(timelineNote[reservation.id] || '').length >= 480 ? 'text-amber-400' : 'text-slate-600'" aria-live="polite">{{ (timelineNote[reservation.id] || '').length }}/500</p>
+                </div>
                 <button
-                  class="ui-btn-outline px-3 py-2 text-xs disabled:opacity-60"
+                  class="ui-btn-outline inline-flex items-center gap-1.5 self-start px-3 py-2 text-xs disabled:opacity-60"
                   :disabled="isTimelineSubmitting(reservation.id)"
+                  :aria-busy="isTimelineSubmitting(reservation.id)"
                   @click="addTimelineNote(reservation.id)"
                 >
+                  <svg v-if="isTimelineSubmitting(reservation.id)" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                   {{ isTimelineSubmitting(reservation.id) ? t("ownerReservations.saving") : t("ownerReservations.addNote") }}
                 </button>
               </div>

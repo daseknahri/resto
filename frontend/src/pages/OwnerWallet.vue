@@ -245,6 +245,7 @@
             class="ui-input w-full px-4 text-sm"
             :placeholder="t('ownerWallet.notePlaceholder')"
           />
+          <p class="mt-1 text-end text-xs tabular-nums" :class="topupNote.length >= 160 ? 'text-amber-400' : 'text-slate-600'" aria-live="polite">{{ topupNote.length }}/200</p>
         </div>
 
         <div v-if="topupError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
@@ -253,10 +254,12 @@
         </div>
 
         <button
-          class="ui-btn-primary ui-press w-full py-3 text-sm font-semibold disabled:opacity-50"
+          class="ui-btn-primary ui-press inline-flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold disabled:opacity-50"
           :disabled="saving || !topupAmount"
+          :aria-busy="saving"
           @click="doTopup"
         >
+          <svg v-if="saving" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
           {{ saving ? t('ownerWallet.saving') : t('ownerWallet.topupBtn') }}
         </button>
 
