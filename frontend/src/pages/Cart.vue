@@ -805,18 +805,22 @@
               v-if="cart.canWhatsapp"
               class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
               :disabled="sendingWhatsapp"
+              :aria-busy="sendingWhatsapp"
               @click="openWhatsApp"
             >
-              <AppIcon name="chat" class="h-4 w-4" />
+              <svg v-if="sendingWhatsapp" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              <AppIcon v-else name="chat" class="h-4 w-4" />
               {{ sendingWhatsapp ? t('cartPage.preparingWhatsApp') : t('cartPage.sendViaWhatsApp') }}
             </button>
             <button
               v-if="cart.canCheckout"
               class="ui-btn-outline w-full justify-center py-2.5 text-sm font-semibold"
               :disabled="processingCheckout"
+              :aria-busy="processingCheckout"
               @click="startCheckout"
             >
-              <AppIcon name="card" class="h-4 w-4" />
+              <svg v-if="processingCheckout" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              <AppIcon v-else name="card" class="h-4 w-4" />
               {{ processingCheckout ? t('cartPage.preparingCheckout') : t('cartPage.proceedCheckout') }}
             </button>
             <button
