@@ -141,10 +141,14 @@
             <p class="text-xs text-rose-200">{{ t('adminFlashSales.deleteConfirm', { name: fs.name }) }}</p>
             <div class="flex shrink-0 gap-2">
               <button
-                class="rounded-full border border-rose-500/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
+                class="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/20 px-3 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
                 :disabled="busyId === fs.id"
+                :aria-busy="busyId === fs.id || undefined"
                 @click="deleteSale(fs)"
-              >{{ t('adminFlashSales.deleteYes') }}</button>
+              >
+                <svg v-if="busyId === fs.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                {{ t('adminFlashSales.deleteYes') }}
+              </button>
               <button
                 class="rounded-full border border-slate-600/60 px-3 py-1 text-[11px] font-semibold text-slate-400 hover:border-slate-500/60 hover:text-slate-300"
                 :disabled="busyId === fs.id"

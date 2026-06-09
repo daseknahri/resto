@@ -59,13 +59,15 @@
             <p class="text-[11px] text-slate-500">{{ t("ownerHome.deliveryToggleHint") }}</p>
           </div>
           <button
-            class="ui-touch-target shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-touch-target inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
             :class="acceptingDelivery ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/10' : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
             :disabled="togglingDelivery"
+            :aria-busy="togglingDelivery"
             :aria-pressed="acceptingDelivery"
             @click="toggleDelivery"
           >
-            {{ togglingDelivery ? "…" : (acceptingDelivery ? t("ownerHome.pauseDelivery") : t("ownerHome.resumeDelivery")) }}
+            <svg v-if="togglingDelivery" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ togglingDelivery ? t('common.loading') : (acceptingDelivery ? t("ownerHome.pauseDelivery") : t("ownerHome.resumeDelivery")) }}
           </button>
         </div>
         <!-- Menu availability -->
@@ -77,13 +79,15 @@
             <p class="text-[11px] text-slate-500">{{ t("ownerHome.menuToggleHint") }}</p>
           </div>
           <button
-            class="ui-touch-target shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+            class="ui-touch-target inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
             :class="menuActive ? 'border-amber-500/50 text-amber-300 hover:bg-amber-500/10' : 'border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10'"
             :disabled="togglingMenu"
+            :aria-busy="togglingMenu"
             :aria-pressed="menuActive"
             @click="toggleMenu"
           >
-            {{ togglingMenu ? "…" : (menuActive ? t("ownerHome.disableMenu") : t("ownerHome.enableMenu")) }}
+            <svg v-if="togglingMenu" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ togglingMenu ? t('common.loading') : (menuActive ? t("ownerHome.disableMenu") : t("ownerHome.enableMenu")) }}
           </button>
         </div>
       </div>

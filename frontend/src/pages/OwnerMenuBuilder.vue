@@ -251,11 +251,13 @@
                     <p class="text-[11px] text-slate-500">{{ t("ownerTemplates.itemCount", { n: tpl.dish_count }) }}</p>
                   </div>
                   <button
-                    class="ui-btn-primary ui-press shrink-0 px-3 py-1.5 text-xs disabled:opacity-50"
+                    class="ui-btn-primary ui-press inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs disabled:opacity-50"
                     :disabled="!!applyingKey"
+                    :aria-busy="applyingKey === tpl.key || undefined"
                     @click="applyTemplate(tpl.key)"
                   >
-                    {{ applyingKey === tpl.key ? "…" : t("ownerTemplates.apply") }}
+                    <svg v-if="applyingKey === tpl.key" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                    {{ applyingKey === tpl.key ? t('common.loading') : t("ownerTemplates.apply") }}
                   </button>
                 </div>
               </li>

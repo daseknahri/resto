@@ -12,11 +12,12 @@
         </div>
         <div class="shrink-0">
           <button
-            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm disabled:opacity-50"
             :disabled="loading"
-            :aria-label="t('ownerNotifications.refresh')"
+            :aria-busy="loading"
             @click="fetchLog"
           >
+            <svg v-if="loading" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
             {{ loading ? t('common.loading') : t('ownerNotifications.refresh') }}
           </button>
         </div>

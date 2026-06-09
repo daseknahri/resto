@@ -1284,10 +1284,14 @@
               @click="closeDeliveryModal"
             >{{ t("adminConsole.delivery.close") }}</button>
             <button
-              class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+              class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-2 text-sm disabled:opacity-50"
               :disabled="deliveryModal.saving || deliveryModal.loading"
+              :aria-busy="deliveryModal.saving"
               @click="saveDeliveryPricing"
-            >{{ deliveryModal.saving ? "…" : t("adminConsole.delivery.save") }}</button>
+            >
+              <svg v-if="deliveryModal.saving" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ deliveryModal.saving ? t('common.loading') : t("adminConsole.delivery.save") }}
+            </button>
           </div>
         </div>
       </div>
