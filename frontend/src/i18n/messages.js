@@ -431,6 +431,9 @@ export const messages = {
       flashSaleBanner: "⚡ {pct}% off everything — flash sale!",
       flashSaleEnds: "Ends in {time}",
       flashDiscount: "Flash sale ({pct}% off)",
+      loyaltyTeaserPts: "You have {points} loyalty pts",
+      loyaltyTeaserEarn: "Earn loyalty points with every order",
+      loyaltyTeaserRedeem: "Redeem at checkout",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4377,6 +4380,9 @@ export const messages = {
       flashSaleBanner: "⚡ -{pct}% sur tout — vente flash !",
       flashSaleEnds: "Se termine dans {time}",
       flashDiscount: "Vente flash ({pct}% de reduction)",
+      loyaltyTeaserPts: "Vous avez {points} pts fidelite",
+      loyaltyTeaserEarn: "Gagnez des points a chaque commande",
+      loyaltyTeaserRedeem: "A utiliser au paiement",
     },
     reservationManage: {
       kicker: "Reservation",
