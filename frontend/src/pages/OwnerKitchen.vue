@@ -150,9 +150,18 @@
           </div>
         </div>
 
-        <!-- Items -->
+        <!-- Items header: ready progress pill -->
         <p class="sr-only">{{ t('kitchen.tapItemReady') }}</p>
-        <ul class="mt-4 flex-1 divide-y divide-slate-700/30 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
+        <div v-if="orderReadyCount(order).total > 0" class="mt-4 flex items-center justify-between px-4 mb-1">
+          <span class="text-[11px] font-medium text-slate-500">{{ t('kitchen.tapItemReady') }}</span>
+          <span
+            class="rounded-full border px-2 py-0.5 text-[11px] tabular-nums font-semibold transition-colors"
+            :class="orderReadyCount(order).done === orderReadyCount(order).total
+              ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
+              : 'text-slate-400 bg-slate-800/60 border-slate-700/40'"
+          >{{ orderReadyCount(order).done }}/{{ orderReadyCount(order).total }}</span>
+        </div>
+        <ul class="mt-2 flex-1 divide-y divide-slate-700/30 overflow-y-auto px-4" :aria-label="t('kitchen.orderItems')">
           <li
             v-for="(item, idx) in order.items"
             :key="item.id ?? idx"
@@ -199,6 +208,19 @@
 
         <!-- Action button -->
         <div class="mt-auto space-y-2 px-4 pb-4 pt-4">
+          <!-- Mark all items ready at once -->
+          <button
+            v-if="hasUnreadyItems(order)"
+            type="button"
+            class="ui-btn-outline ui-press w-full gap-1.5 border-emerald-500/30 text-emerald-300/90 hover:border-emerald-400/50 hover:text-emerald-200 text-xs"
+            :aria-label="`${t('kitchen.markAllReady')} — #${order.order_number}`"
+            @click="markAllReady(order)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+              <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
+            </svg>
+            {{ t('kitchen.markAllReady') }}
+          </button>
           <button
             v-if="waiter.nextStatus(order)"
             class="ui-btn-primary ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -399,6 +421,21 @@ const advance = (orderId) => waiter.advanceStatus(orderId);
 const toggleItem = (order, item) => {
   if (item?.id == null) return; // older payloads without item ids → no-op
   waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+};
+
+// ── Bulk item-readiness helpers ────────────────────────────────────────────────
+const orderReadyCount = (order) => {
+  const trackable = order.items.filter((i) => i.id != null);
+  return { done: trackable.filter((i) => i.is_ready).length, total: trackable.length };
+};
+
+const hasUnreadyItems = (order) =>
+  order.items.some((i) => i.id != null && !i.is_ready);
+
+const markAllReady = (order) => {
+  order.items
+    .filter((i) => i.id != null && !i.is_ready)
+    .forEach((i) => waiter.toggleItemReady(order.id, i.id, true));
 };
 
 // ── Display helpers ────────────────────────────────────────────────────────────

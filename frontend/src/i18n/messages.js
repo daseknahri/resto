@@ -3632,6 +3632,7 @@ export const messages = {
       stationFilterNav: "Station filters",
       orderItems: "Order items",
       newOrderAlert: "New order!",
+      markAllReady: "Mark all ready",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -7591,6 +7592,7 @@ export const messages = {
       stationFilterNav: "Filtres de station",
       orderItems: "Articles de la commande",
       newOrderAlert: "Nouvelle commande !",
+      markAllReady: "Tout marquer pret",
     },
     stepSuperCategories: {
       title: "Groupes de menu",
