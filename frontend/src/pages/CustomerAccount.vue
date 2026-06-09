@@ -937,6 +937,11 @@
                 <AppIcon name="star" class="h-3.5 w-3.5 text-indigo-400" />
                 <p class="text-lg font-bold tabular-nums text-indigo-300">{{ loyaltyPoints }}</p>
                 <span class="text-xs text-slate-500">{{ t('customerAccount.loyaltyPts') }}</span>
+                <span
+                  v-if="loyaltyEquivCredit"
+                  class="ms-0.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium tabular-nums text-indigo-400"
+                  :title="t('customerAccount.loyaltyEquivHint')"
+                >≈ {{ loyaltyEquivCredit }}</span>
               </div>
             </div>
             <div class="p-4 space-y-3">
@@ -958,7 +963,7 @@
                   {{ t('customerAccount.loyaltyCanRedeem', { threshold: loyaltyConfig.redeem_threshold, credit: redeemableCredit }) }}
                 </p>
                 <p v-else class="text-xs text-slate-500">
-                  {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints }) }}
+                  {{ t('customerAccount.loyaltyNeedMore', { need: loyaltyConfig.redeem_threshold - loyaltyPoints, credit: loyaltyUnlockCredit ?? '?' }) }}
                 </p>
 
                 <div v-if="loyaltyPoints >= loyaltyConfig.redeem_threshold && walletVerified" class="flex flex-wrap items-center gap-3 pt-1">
@@ -1707,6 +1712,22 @@ const redeemableCredit = computed(() => {
   if (!loyaltyConfig.value || !loyaltyPoints.value) return '0.00';
   const pts = Math.min(redeemAmount.value || loyaltyConfig.value.redeem_threshold, loyaltyPoints.value);
   return (pts * Number(loyaltyConfig.value.points_value)).toFixed(2);
+});
+
+// Total wallet-equivalent of all current points (shown in header badge)
+const loyaltyEquivCredit = computed(() => {
+  const pv = Number(loyaltyConfig.value?.points_value);
+  const lp = Number(loyaltyPoints.value);
+  if (!pv || !lp) return null;
+  return (lp * pv).toFixed(2);
+});
+
+// Credit unlocked by ONE redemption (threshold × points_value) — shown in the "need more" hint
+const loyaltyUnlockCredit = computed(() => {
+  const pv = Number(loyaltyConfig.value?.points_value);
+  const thr = Number(loyaltyConfig.value?.redeem_threshold);
+  if (!pv || !thr) return null;
+  return (thr * pv).toFixed(2);
 });
 
 // ── Saved addresses ───────────────────────────────────────────────────────────
