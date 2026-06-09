@@ -280,6 +280,22 @@
         </div>
       </section>
 
+      <!-- Results count + sort ── hidden while loading, error, or empty -->
+      <div v-if="!loading && !fetchError && displayedRestaurants.length" class="flex items-center justify-between gap-3 px-1">
+        <p class="text-[11px] text-slate-500">{{ t('marketplace.resultsCount', { n: displayedRestaurants.length }) }}</p>
+        <select
+          v-model="sortBy"
+          :aria-label="t('marketplace.sortBy')"
+          class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/30"
+        >
+          <option value="relevance">{{ t('marketplace.sortRelevance') }}</option>
+          <option value="rating">{{ t('marketplace.sortRating') }}</option>
+          <option value="name">{{ t('marketplace.sortNameAz') }}</option>
+          <option v-if="userLat != null" value="nearest">{{ t('marketplace.sortNearest') }}</option>
+          <option value="open">{{ t('marketplace.sortOpenFirst') }}</option>
+        </select>
+      </div>
+
       <!-- Loading: skeleton card grid -->
       <ul v-if="loading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" :aria-label="t('marketplace.loading')">
         <li
@@ -539,6 +555,7 @@ const userLng = ref(null);
 // ── Favourites ────────────────────────────────────────────────────────────────
 const favourites = ref(loadFavourites());
 const showFavouritesOnly = ref(false);
+const sortBy = ref('relevance'); // 'relevance' | 'rating' | 'name' | 'nearest' | 'open'
 const isFavourite = (slug) => favourites.value.has(slug);
 const toggleFavourite = (slug) => {
   const next = new Set(favourites.value);
@@ -591,6 +608,7 @@ const clearFilters = () => {
 
 // Favourites + business-type filtering are client-side (favourites live in
 // localStorage; business_type is already in each result, so no refetch needed).
+// Sort is also client-side — applied after filtering.
 const displayedRestaurants = computed(() => {
   let list = restaurants.value;
   if (showFavouritesOnly.value) {
@@ -600,6 +618,25 @@ const displayedRestaurants = computed(() => {
     list = list.filter((r) => isShopBusiness(r));
   } else if (selectedBusinessType.value === 'food') {
     list = list.filter((r) => !isShopBusiness(r));
+  }
+  // Apply sort (spread to avoid mutating the reactive array)
+  if (sortBy.value === 'rating') {
+    list = [...list].sort((a, b) =>
+      (b.rating_average || 0) !== (a.rating_average || 0)
+        ? (b.rating_average || 0) - (a.rating_average || 0)
+        : (b.rating_count || 0) - (a.rating_count || 0)
+    );
+  } else if (sortBy.value === 'name') {
+    list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortBy.value === 'nearest') {
+    list = [...list].sort((a, b) => {
+      if (a.distance_km == null && b.distance_km == null) return 0;
+      if (a.distance_km == null) return 1;
+      if (b.distance_km == null) return -1;
+      return a.distance_km - b.distance_km;
+    });
+  } else if (sortBy.value === 'open') {
+    list = [...list].sort((a, b) => Number(b.is_open) - Number(a.is_open));
   }
   return list;
 });
