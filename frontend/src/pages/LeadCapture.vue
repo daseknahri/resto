@@ -133,7 +133,8 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
-          <button type="submit" :disabled="lead.submitting" class="ui-btn-primary ui-touch-target disabled:opacity-60">
+          <button type="submit" :disabled="lead.submitting || lead.success" :aria-busy="lead.submitting" class="ui-btn-primary ui-touch-target inline-flex items-center gap-2 disabled:opacity-60">
+            <svg v-if="lead.submitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
             {{ lead.submitting ? t("leadCapture.submitting") : lead.success ? t("leadCapture.submitted") : t("leadCapture.submitLead") }}
           </button>
           <span class="text-xs text-slate-500">{{ t("leadCapture.step1") }}</span>

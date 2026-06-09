@@ -726,10 +726,14 @@
                 :disabled="sending"
               />
               <button
-                class="shrink-0 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50 transition-opacity"
+                class="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--color-secondary)] px-4 py-2 text-sm font-semibold text-slate-950 transition-opacity disabled:opacity-50"
                 :disabled="!sendPhone.trim() || !sendAmount || sending"
+                :aria-busy="sending"
                 @click="sendCredit"
-              >{{ sending ? '…' : t('customerAccount.sendBtn') }}</button>
+              >
+                <svg v-if="sending" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                {{ sending ? t('common.loading') : t('customerAccount.sendBtn') }}
+              </button>
             </div>
             <input
               v-model="sendNote"
