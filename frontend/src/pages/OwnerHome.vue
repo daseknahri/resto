@@ -128,10 +128,22 @@
           <p class="ui-stat-value text-slate-100">{{ avgTicketLabel }}</p>
         </div>
 
-        <!-- Pending orders — tinted when there's a queue -->
-        <div class="space-y-1.5 px-4 py-3.5 transition-colors" :class="todayStats.pending > 0 ? 'bg-amber-500/10' : 'bg-slate-950/60'">
+        <!-- Pending orders — tinted + clickable when there's a queue -->
+        <RouterLink
+          v-if="todayStats.pending > 0"
+          :to="{ name: 'owner-orders' }"
+          class="group space-y-1.5 bg-amber-500/10 px-4 py-3.5 transition-colors hover:bg-amber-500/18 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-amber-400/50"
+          :aria-label="`${t('ownerOrders.todayPending')}: ${todayStats.pending}`"
+        >
+          <p class="ui-stat-label flex items-center gap-1">
+            {{ t("ownerOrders.todayPending") }}
+            <AppIcon name="chevronRight" class="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60 rtl:scale-x-[-1]" aria-hidden="true" />
+          </p>
+          <p class="ui-stat-value text-amber-400">{{ todayStats.pending }}</p>
+        </RouterLink>
+        <div v-else class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerOrders.todayPending") }}</p>
-          <p class="ui-stat-value" :class="todayStats.pending > 0 ? 'text-amber-400' : 'text-slate-100'">{{ todayStats.pending }}</p>
+          <p class="ui-stat-value text-slate-100">{{ todayStats.pending }}</p>
         </div>
       </div>
 

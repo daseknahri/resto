@@ -99,11 +99,27 @@
           </button>
         </div>
         <button
-          v-if="searchQuery || activeDateFilter !== 'all'"
+          v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType"
           class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
           :aria-label="t('ownerOrders.clearFilters')"
-          @click="searchQuery = ''; activeDateFilter = 'all'"
+          @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''"
         >✕</button>
+      </div>
+
+      <!-- Fulfillment-type filter chips (only rendered when 2+ types exist in the order list) -->
+      <div v-if="fulfillmentTabs.length" class="flex flex-wrap items-center gap-1">
+        <span class="me-1 shrink-0 text-[11px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('ownerOrders.fulfillmentFilter') }}</span>
+        <button
+          v-for="tab in fulfillmentTabs"
+          :key="tab.value"
+          type="button"
+          :aria-pressed="activeFulfillmentType === tab.value"
+          class="ui-state-chip ui-press"
+          :data-active="activeFulfillmentType === tab.value || undefined"
+          @click="activeFulfillmentType = tab.value"
+        >
+          {{ tab.label }}
+        </button>
       </div>
 
       <!-- Status filter tabs: horizontal scroll on mobile (keeps the order list in view),
@@ -736,6 +752,7 @@ const route = useRoute();
 const activeStatus = ref("");
 const activeDateFilter = ref("all");
 const searchQuery = ref("");
+const activeFulfillmentType = ref("");
 const exporting = ref(false);
 const confirmingAll = ref(false);
 const editingId = ref(null);
@@ -782,6 +799,16 @@ const dateTabs = computed(() => [
   { value: "week",      label: t("ownerOrders.dateLast7") },
 ]);
 
+// ── Fulfillment-type filter chips (only shown when 2+ types present) ──────────
+const fulfillmentTabs = computed(() => {
+  const types = new Set(order.orders.map((o) => o.fulfillment_type).filter(Boolean));
+  const tabs = [{ value: "", label: t("ownerOrders.fulfillmentAll") }];
+  if (types.has("pickup"))   tabs.push({ value: "pickup",   label: t("ownerOrders.fulfillmentPickup") });
+  if (types.has("delivery")) tabs.push({ value: "delivery", label: t("ownerOrders.fulfillmentDelivery") });
+  if (types.has("table"))    tabs.push({ value: "table",    label: t("ownerOrders.fulfillmentDineIn") });
+  return tabs.length > 2 ? tabs : [];
+});
+
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
   const counts = {};
@@ -827,6 +854,9 @@ const filteredOrders = computed(() => {
   let base = order.orders.filter((o) => {
     // Status filter
     if (activeStatus.value && o.status !== activeStatus.value) return false;
+
+    // Fulfillment-type filter
+    if (activeFulfillmentType.value && o.fulfillment_type !== activeFulfillmentType.value) return false;
 
     // Date filter
     if (activeDateFilter.value !== "all") {
