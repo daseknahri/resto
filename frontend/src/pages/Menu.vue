@@ -151,66 +151,138 @@
           @click="toggleAllergenFilter(allergen)"
         >{{ t(`menu.allergen_${allergen}`) }}</button>
       </div>
+
+      <!-- Search strip -->
+      <div class="border-t border-slate-800/40 px-3 py-2">
+        <div class="relative flex items-center">
+          <span class="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5 14 14"/></svg>
+          </span>
+          <input
+            v-model="menuSearchQuery"
+            type="search"
+            :placeholder="t('menu.dishSearchPlaceholder')"
+            :aria-label="t('menu.search')"
+            class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
+          />
+          <button
+            v-if="isSearchActive"
+            type="button"
+            class="absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-500 transition-colors hover:text-slate-300"
+            :aria-label="t('menu.searchClear')"
+            @click="menuSearchQuery = ''"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+        </div>
+      </div>
     </nav>
 
     <!-- ══ Sections ══ -->
     <div class="px-3 sm:px-4 mt-4 space-y-6 sm:space-y-7">
-      <section
-        v-for="(cat, index) in visibleCategories"
-        :id="`section-${cat.slug}`"
-        :key="cat.slug"
-        :ref="el => registerSection(el, cat.slug)"
-        :data-slug="cat.slug"
-        class="ui-reveal scroll-mt-24 space-y-3 md:scroll-mt-32"
-        :style="{ '--ui-delay': `${Math.min(index, 6) * 40}ms` }"
-      >
-        <!-- Section header -->
-        <div class="flex items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
-          <div class="flex items-center gap-3 min-w-0">
-            <span
-              class="shrink-0 block h-7 w-1 rounded-full"
-              style="background:linear-gradient(180deg,var(--color-secondary) 0%,var(--color-primary) 100%)"
-              aria-hidden="true"
-            />
-            <div class="min-w-0">
-              <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-[1.35rem] tracking-tight">{{ cat.name }}</h2>
-              <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-[11px] text-slate-500 leading-relaxed" :title="cat.description">{{ cat.description }}</p>
+
+      <!-- ── Search results (query active) ────────────────────────────────── -->
+      <template v-if="isSearchActive">
+        <!-- Has results -->
+        <template v-if="menuSearchResults.length">
+          <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+            {{ t('menu.searchResultsKicker') }}
+            <span class="ms-1.5 font-normal normal-case tabular-nums text-slate-600">({{ totalSearchCount }})</span>
+          </p>
+          <section
+            v-for="group in menuSearchResults"
+            :key="group.category.slug"
+            class="space-y-3"
+          >
+            <h2 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+              <span class="h-px w-4 shrink-0 rounded-full" style="background:var(--color-secondary)" aria-hidden="true" />
+              {{ group.category.name }}
+            </h2>
+            <div :class="dishGridClass">
+              <DishCard
+                v-for="dish in group.dishes"
+                :key="dish.slug"
+                :dish="dish"
+                :layout="cardLayout"
+                :category-slug="group.category.slug"
+                :currency="cartCurrency"
+                :is-browse-only="isBrowseOnly"
+                :is-open="isRestaurantOpen"
+              />
             </div>
-          </div>
-          <span
-            v-if="menu.dishes[cat.slug]?.length"
-            class="shrink-0 rounded-full border border-slate-800/80 bg-slate-900/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums"
-            :aria-label="`${sectionDishes(cat.slug).length} items`"
-          >{{ sectionDishes(cat.slug).length }}</span>
-        </div>
+          </section>
+        </template>
 
-        <!-- Loading skeletons -->
-        <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass" aria-busy="true" aria-label="Loading dishes">
-          <div v-for="n in 3" :key="n" class="ui-skeleton" :class="cardLayout === 'card' ? 'h-80 rounded-[1.8rem]' : 'h-[7rem] rounded-2xl'" />
-        </div>
-
-        <!-- Dish list -->
-        <div v-else-if="sectionDishes(cat.slug).length" :class="dishGridClass">
-          <DishCard
-            v-for="dish in sectionDishes(cat.slug)"
-            :key="dish.slug"
-            :dish="dish"
-            :layout="cardLayout"
-            :category-slug="cat.slug"
-            :currency="cartCurrency"
-            :is-browse-only="isBrowseOnly"
-            :is-open="isRestaurantOpen"
-          />
-        </div>
-
-        <!-- Empty state after allergen filter -->
+        <!-- No results -->
         <div
-          v-else-if="menu.dishes[cat.slug] && selectedAllergenFilter.length"
-          class="flex flex-col items-center gap-2 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center"
+          v-else
+          class="flex flex-col items-center gap-3 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-12 text-center"
         >
-          <p class="text-sm font-medium text-slate-400">{{ t('menu.noMatchText') }}</p>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="h-10 w-10 text-slate-700" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="M13 13 17 17"/></svg>
+          <p class="text-sm font-medium text-slate-400">{{ t('menu.noMatchDish') }}</p>
+          <button type="button" class="text-xs text-slate-500 underline transition-colors hover:text-slate-300" @click="menuSearchQuery = ''">{{ t('menu.searchClear') }}</button>
         </div>
-      </section>
+      </template>
+
+      <!-- ── Normal category sections (search inactive) ──────────────────── -->
+      <template v-else>
+        <section
+          v-for="(cat, index) in visibleCategories"
+          :id="`section-${cat.slug}`"
+          :key="cat.slug"
+          :ref="el => registerSection(el, cat.slug)"
+          :data-slug="cat.slug"
+          class="ui-reveal scroll-mt-24 space-y-3 md:scroll-mt-32"
+          :style="{ '--ui-delay': `${Math.min(index, 6) * 40}ms` }"
+        >
+          <!-- Section header -->
+          <div class="flex items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <span
+                class="shrink-0 block h-7 w-1 rounded-full"
+                style="background:linear-gradient(180deg,var(--color-secondary) 0%,var(--color-primary) 100%)"
+                aria-hidden="true"
+              />
+              <div class="min-w-0">
+                <h2 class="ui-display text-xl font-semibold leading-tight text-white sm:text-[1.35rem] tracking-tight">{{ cat.name }}</h2>
+                <p v-if="cat.description" class="mt-0.5 line-clamp-1 text-[11px] text-slate-500 leading-relaxed" :title="cat.description">{{ cat.description }}</p>
+              </div>
+            </div>
+            <span
+              v-if="menu.dishes[cat.slug]?.length"
+              class="shrink-0 rounded-full border border-slate-800/80 bg-slate-900/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums"
+              :aria-label="`${sectionDishes(cat.slug).length} items`"
+            >{{ sectionDishes(cat.slug).length }}</span>
+          </div>
+
+          <!-- Loading skeletons -->
+          <div v-if="!menu.dishes[cat.slug]" :class="dishGridClass" aria-busy="true" aria-label="Loading dishes">
+            <div v-for="n in 3" :key="n" class="ui-skeleton" :class="cardLayout === 'card' ? 'h-80 rounded-[1.8rem]' : 'h-[7rem] rounded-2xl'" />
+          </div>
+
+          <!-- Dish list -->
+          <div v-else-if="sectionDishes(cat.slug).length" :class="dishGridClass">
+            <DishCard
+              v-for="dish in sectionDishes(cat.slug)"
+              :key="dish.slug"
+              :dish="dish"
+              :layout="cardLayout"
+              :category-slug="cat.slug"
+              :currency="cartCurrency"
+              :is-browse-only="isBrowseOnly"
+              :is-open="isRestaurantOpen"
+            />
+          </div>
+
+          <!-- Empty state after allergen filter -->
+          <div
+            v-else-if="menu.dishes[cat.slug] && selectedAllergenFilter.length"
+            class="flex flex-col items-center gap-2 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center"
+          >
+            <p class="text-sm font-medium text-slate-400">{{ t('menu.noMatchText') }}</p>
+          </div>
+        </section>
+      </template>
 
       <!-- Error state -->
       <div v-if="menu.error" class="flex items-start gap-3 rounded-2xl border border-red-500/25 bg-red-500/8 px-4 py-3.5 shadow-sm shadow-black/20" role="alert">
@@ -437,6 +509,41 @@ const sectionDishes = (slug) => {
   return dishes
 }
 
+// ── Menu text search ──────────────────────────────────────────────────────────
+const menuSearchQuery = ref('')
+const isSearchActive  = computed(() => menuSearchQuery.value.trim().length > 0)
+
+/** Search results grouped by category — applies allergen filter via sectionDishes */
+const menuSearchResults = computed(() => {
+  const q = menuSearchQuery.value.trim().toLowerCase()
+  if (!q) return []
+  const groups = []
+  for (const cat of visibleCategories.value) {
+    const dishes = sectionDishes(cat.slug)
+    const matched = dishes.filter(d =>
+      (d.name || '').toLowerCase().includes(q) ||
+      (d.description || '').toLowerCase().includes(q)
+    )
+    if (matched.length) groups.push({ category: cat, dishes: matched })
+  }
+  return groups
+})
+
+const totalSearchCount = computed(() =>
+  menuSearchResults.value.reduce((n, g) => n + g.dishes.length, 0)
+)
+
+/** Pre-load all visible categories when search activates for comprehensive results */
+watch(isSearchActive, (active) => {
+  if (!active) return
+  for (const cat of visibleCategories.value) {
+    if (!loadedSlugs.value.has(cat.slug)) {
+      loadedSlugs.value.add(cat.slug)
+      menu.fetchDishesByCategory(cat.slug)
+    }
+  }
+})
+
 // ── Sticky category nav ──────────────────────────────────────────────────────
 // The customer layout renders a sticky header (.ui-header, top:0) whose height
 // differs by breakpoint. The category nav must stick directly BELOW it (not at a
@@ -492,6 +599,7 @@ const updateActiveCategory = () => {
 
 /** Tap category pill → smooth scroll to its section */
 const scrollToSection = (slug) => {
+  menuSearchQuery.value = ''        // clear search so sections are visible
   activeCategorySlug.value = slug  // optimistic update
   nextTick(() => {
     const el = document.getElementById(`section-${slug}`)

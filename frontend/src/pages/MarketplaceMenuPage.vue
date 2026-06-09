@@ -107,12 +107,12 @@
 
       <!-- Sticky horizontal category navigation -->
       <nav
-        v-if="allCategories.length > 1"
-        class="sticky top-0 z-20 -mx-4 mb-2 mt-1 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-md"
+        class="sticky top-0 z-20 -mx-4 mt-1 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-md"
+        :class="allCategories.length > 1 ? 'mb-2' : 'mb-1'"
         aria-label="Menu categories"
         style="scrollbar-width: none; -webkit-overflow-scrolling: touch;"
       >
-        <div class="flex gap-1.5 overflow-x-auto px-4 py-2" style="scrollbar-width: none;">
+        <div v-if="allCategories.length > 1" class="flex gap-1.5 overflow-x-auto px-4 py-2" style="scrollbar-width: none;">
           <button
             v-for="cat in allCategories"
             :key="cat.id"
@@ -126,61 +126,62 @@
             {{ cat.name }}
           </button>
         </div>
+        <!-- Search strip -->
+        <div class="border-t border-slate-800/40 px-4 py-2">
+          <div class="relative flex items-center">
+            <span class="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5 14 14"/></svg>
+            </span>
+            <input
+              v-model="mktSearchQuery"
+              type="search"
+              :placeholder="t('mktMenu.searchPlaceholder')"
+              :aria-label="t('mktMenu.search')"
+              class="w-full rounded-xl border border-slate-700/60 bg-slate-900/60 py-1.5 ps-8 pe-8 text-[13px] text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-[color:var(--color-secondary)]/50 focus:ring-1 focus:ring-[color:var(--color-secondary)]/25 [&::-webkit-search-cancel-button]:hidden"
+            />
+            <button
+              v-if="isMktSearchActive"
+              type="button"
+              class="absolute end-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-500 transition-colors hover:text-slate-300"
+              :aria-label="t('mktMenu.searchClear')"
+              @click="mktSearchQuery = ''"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+        </div>
       </nav>
 
       <!-- Menu -->
       <main class="space-y-8">
-        <!-- Empty menu state -->
-        <div
-          v-if="!restaurant.super_categories?.length"
-          class="ui-empty-state text-center space-y-1"
-        >
-          <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty') }}</p>
-          <p class="text-xs text-slate-400">{{ t('mktMenu.menuEmptyBody') }}</p>
-        </div>
 
-        <div
-          v-for="sc in restaurant.super_categories"
-          :key="sc.id"
-        >
-          <p class="ui-kicker mb-2">{{ sc.name }}</p>
-          <div
-            v-for="cat in sc.categories"
-            :id="`mkt-cat-${cat.id}`"
-            :key="cat.id"
-            :data-mkt-cat="cat.id"
-            class="mb-6 scroll-mt-16"
-          >
-            <h2 class="mb-2.5 text-sm font-semibold text-slate-300">{{ cat.name }}</h2>
-            <div class="space-y-2.5">
+        <!-- ── Search results (query active) ─────────────────────────────── -->
+        <template v-if="isMktSearchActive">
+          <template v-if="mktSearchResults.length">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+              {{ t('mktMenu.searchResultsKicker') }}
+              <span class="ms-1.5 font-normal normal-case tabular-nums text-slate-600">({{ mktTotalSearchCount }})</span>
+            </p>
+            <div v-for="group in mktSearchResults" :key="group.catName" class="space-y-2.5">
+              <h2 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+                <span class="h-px w-4 shrink-0 rounded-full" style="background:var(--color-secondary)" aria-hidden="true" />
+                {{ group.catName }}
+              </h2>
               <article
-                v-for="(dish, dishIndex) in cat.dishes"
+                v-for="dish in group.dishes"
                 :key="dish.slug"
-                class="ui-panel ui-surface-lift ui-reveal group flex items-start gap-3.5 p-3.5"
+                class="ui-panel ui-surface-lift group flex items-start gap-3.5 p-3.5"
                 :class="{ 'opacity-50': !dish.is_available }"
-                :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
               >
-                <!-- Image (larger, with hover scale + emoji fallback) -->
                 <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center">
-                  <img
-                    v-if="dish.image_url"
-                    :src="dish.image_url"
-                    :alt="dish.name"
-                    loading="lazy"
-                    decoding="async"
-                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    @error="$event.target.style.display='none'"
-                  />
+                  <img v-if="dish.image_url" :src="dish.image_url" :alt="dish.name" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" @error="$event.target.style.display='none'" />
                   <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                 </div>
-                <!-- Info -->
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-semibold text-slate-100 leading-snug">{{ dish.name }}</p>
                   <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ dish.description }}</p>
                   <div class="mt-2 flex items-center justify-between gap-2">
-                    <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">
-                      {{ fmtPrice(dish.price) }}
-                    </span>
+                    <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                     <button
                       v-if="dish.is_available"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
@@ -195,8 +196,87 @@
                 </div>
               </article>
             </div>
+          </template>
+          <div
+            v-else
+            class="flex flex-col items-center gap-3 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-12 text-center"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="h-10 w-10 text-slate-700" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="M13 13 17 17"/></svg>
+            <p class="text-sm font-medium text-slate-400">{{ t('mktMenu.noMatchDish') }}</p>
+            <button type="button" class="text-xs text-slate-500 underline transition-colors hover:text-slate-300" @click="mktSearchQuery = ''">{{ t('mktMenu.searchClear') }}</button>
           </div>
-        </div>
+        </template>
+
+        <!-- ── Normal category sections (search inactive) ─────────────────── -->
+        <template v-else>
+          <!-- Empty menu state -->
+          <div
+            v-if="!restaurant.super_categories?.length"
+            class="ui-empty-state text-center space-y-1"
+          >
+            <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty') }}</p>
+            <p class="text-xs text-slate-400">{{ t('mktMenu.menuEmptyBody') }}</p>
+          </div>
+
+          <div
+            v-for="sc in restaurant.super_categories"
+            :key="sc.id"
+          >
+            <p class="ui-kicker mb-2">{{ sc.name }}</p>
+            <div
+              v-for="cat in sc.categories"
+              :id="`mkt-cat-${cat.id}`"
+              :key="cat.id"
+              :data-mkt-cat="cat.id"
+              class="mb-6 scroll-mt-16"
+            >
+              <h2 class="mb-2.5 text-sm font-semibold text-slate-300">{{ cat.name }}</h2>
+              <div class="space-y-2.5">
+                <article
+                  v-for="(dish, dishIndex) in cat.dishes"
+                  :key="dish.slug"
+                  class="ui-panel ui-surface-lift ui-reveal group flex items-start gap-3.5 p-3.5"
+                  :class="{ 'opacity-50': !dish.is_available }"
+                  :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
+                >
+                  <!-- Image (larger, with hover scale + emoji fallback) -->
+                  <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center">
+                    <img
+                      v-if="dish.image_url"
+                      :src="dish.image_url"
+                      :alt="dish.name"
+                      loading="lazy"
+                      decoding="async"
+                      class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      @error="$event.target.style.display='none'"
+                    />
+                    <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
+                  </div>
+                  <!-- Info -->
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-slate-100 leading-snug">{{ dish.name }}</p>
+                    <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ dish.description }}</p>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                      <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">
+                        {{ fmtPrice(dish.price) }}
+                      </span>
+                      <button
+                        v-if="dish.is_available"
+                        class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
+                        :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
+                        @click="addToCart(dish)"
+                      >
+                        <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
+                        {{ t('mktMenu.addToCart') }}
+                        <span v-if="cartQty(dish.slug)" class="ms-0.5 rounded-full bg-slate-950/25 px-1.5 tabular-nums text-[10px]" aria-hidden="true">{{ cartQty(dish.slug) }}</span>
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </template>
       </main>
     </template>
 
@@ -871,6 +951,7 @@ const allCategories = computed(() => {
 });
 
 const scrollToCategory = (catId) => {
+  mktSearchQuery.value = '';  // clear search so normal sections are visible
   activeCatId.value = catId;
   const el = document.getElementById(`mkt-cat-${catId}`);
   if (!el) return;
@@ -879,6 +960,31 @@ const scrollToCategory = (catId) => {
   const top = el.getBoundingClientRect().top + window.scrollY - offset;
   window.scrollTo({ top, behavior: 'smooth' });
 };
+
+// ── Menu text search ──────────────────────────────────────────────────────────
+const mktSearchQuery = ref('');
+const isMktSearchActive = computed(() => mktSearchQuery.value.trim().length > 0);
+
+/** Search results grouped by category across all super-categories */
+const mktSearchResults = computed(() => {
+  const q = mktSearchQuery.value.trim().toLowerCase();
+  if (!q) return [];
+  const groups = [];
+  for (const sc of restaurant.value?.super_categories || []) {
+    for (const cat of sc.categories || []) {
+      const matched = (cat.dishes || []).filter(d =>
+        (d.name || '').toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q)
+      );
+      if (matched.length) groups.push({ catName: cat.name, dishes: matched });
+    }
+  }
+  return groups;
+});
+
+const mktTotalSearchCount = computed(() =>
+  mktSearchResults.value.reduce((n, g) => n + g.dishes.length, 0)
+);
 
 let _catObserver = null;
 const _setupCatObserver = () => {
