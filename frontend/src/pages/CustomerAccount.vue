@@ -739,6 +739,39 @@
             </button>
           </div>
 
+          <!-- Empty-wallet onboarding guide — shown only until first top-up -->
+          <div
+            v-if="walletVerified && walletBalance <= 0 && !loadingWallet"
+            class="ui-panel space-y-4 p-4"
+          >
+            <div class="flex items-center gap-2">
+              <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/8">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 text-[var(--color-secondary)]/70" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.walletHowTitle') }}</p>
+            </div>
+            <ol class="space-y-3">
+              <li class="flex items-start gap-3">
+                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-[10px] font-bold text-[var(--color-secondary)]" aria-hidden="true">1</span>
+                <p class="text-xs leading-relaxed text-slate-400">{{ t('customerAccount.walletHowStep1') }}</p>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-[10px] font-bold text-[var(--color-secondary)]" aria-hidden="true">2</span>
+                <p class="text-xs leading-relaxed text-slate-400">{{ t('customerAccount.walletHowStep2') }}</p>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-secondary)]/15 text-[10px] font-bold text-[var(--color-secondary)]" aria-hidden="true">3</span>
+                <p class="text-xs leading-relaxed text-slate-400">{{ t('customerAccount.walletHowStep3') }}</p>
+              </li>
+            </ol>
+            <button
+              class="w-full rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary)]/8 py-2.5 text-xs font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15"
+              @click="togglePayCode"
+            >{{ t('customerAccount.walletShowQr') }}</button>
+          </div>
+
           <!-- Pay code (QR) — restaurant scans this to top up the wallet -->
           <div v-if="showPayCode" class="ui-panel flex flex-col items-center gap-3 p-5">
             <p class="text-sm font-semibold text-slate-200">{{ t('customerAccount.payCodeTitle') }}</p>
