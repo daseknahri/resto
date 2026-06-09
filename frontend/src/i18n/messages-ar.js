@@ -1093,6 +1093,7 @@ const arabicMessages = {
     "callWaiter": "نادِ النادل",
     "callingWaiter": "جارٍ الاتصال…",
     "waiterCalled": "النادل في الطريق إليك 🛎️",
+    "waiterNotifiedCooldown": "تم الإشعار · {sec}ث",
     "waiterCallThrottled": "يرجى الانتظار قليلاً قبل إعادة النداء.",
     "waiterCallFailed": "تعذّر نداء النادل. حاول مرة أخرى."
   },

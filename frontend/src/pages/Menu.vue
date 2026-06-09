@@ -79,11 +79,20 @@
       </span>
       <button
         type="button"
-        class="ui-touch-target shrink-0 rounded-xl border border-amber-400/50 bg-amber-500/15 px-3.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 active:scale-95 disabled:opacity-50"
-        :disabled="callingWaiter"
+        class="ui-touch-target shrink-0 rounded-xl border px-3.5 text-xs font-semibold transition active:scale-95 disabled:opacity-50"
+        :class="waiterCooldown > 0
+          ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-300 hover:bg-emerald-500/20'
+          : 'border-amber-400/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'"
+        :disabled="callingWaiter || waiterCooldown > 0"
         @click="callWaiter"
       >
-        <span aria-hidden="true">🔔</span> {{ callingWaiter ? t('menu.callingWaiter') : t('menu.callWaiter') }}
+        <!-- spinner while calling -->
+        <svg v-if="callingWaiter" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="inline-block h-3.5 w-3.5 animate-spin"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+        <!-- check icon after success -->
+        <svg v-else-if="waiterCooldown > 0" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block h-3.5 w-3.5"><path d="M2.5 8.5 6 12 13.5 4"/></svg>
+        <!-- bell icon default -->
+        <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="inline-block h-3.5 w-3.5"><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2ZM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917Z"/></svg>
+        {{ callingWaiter ? t('menu.callingWaiter') : (waiterCooldown > 0 ? t('menu.waiterNotifiedCooldown', { sec: waiterCooldown }) : t('menu.callWaiter')) }}
       </button>
     </div>
 
@@ -432,14 +441,24 @@ const props = defineProps({
 // ── Table QR context ─────────────────────────────────────────────────────────
 const tableContextBanner = ref('')
 // ── Call waiter (dine-in, table context only) ────────────────────────────────
-const callingWaiter = ref(false)
+const callingWaiter       = ref(false)
+const waiterCooldown      = ref(0)   // seconds remaining; >0 means "just notified, please wait"
+let   _waiterCooldownTimer = null
+
 const callWaiter = async () => {
   const slug = cart.tableSlug
-  if (!slug || callingWaiter.value) return
+  if (!slug || callingWaiter.value || waiterCooldown.value > 0) return
   callingWaiter.value = true
   try {
     await api.post('/waiter-call/', { table: slug })
     toast.show(t('menu.waiterCalled'), 'success')
+    // Start a 30-second cooldown so the user can see "Notified" and can't double-tap
+    waiterCooldown.value = 30
+    clearInterval(_waiterCooldownTimer)
+    _waiterCooldownTimer = setInterval(() => {
+      waiterCooldown.value = Math.max(0, waiterCooldown.value - 1)
+      if (waiterCooldown.value <= 0) clearInterval(_waiterCooldownTimer)
+    }, 1000)
   } catch (e) {
     const status = e?.response?.status
     toast.show(status === 429 ? t('menu.waiterCallThrottled') : t('menu.waiterCallFailed'), 'error')
@@ -830,6 +849,7 @@ onUnmounted(() => {
   // NOTE: do NOT remove data-menu-theme here.
   // CustomerLayout's route watcher fires before this hook runs, so removing
   // the attribute here would undo the theme already re-applied by applyColorScheme().
+  clearInterval(_waiterCooldownTimer)
 })
 
 // ── Utilities ────────────────────────────────────────────────────────────────
