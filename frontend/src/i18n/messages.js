@@ -1369,6 +1369,7 @@ export const messages = {
       fetchError: "Could not load staff list. Please try again.",
       updating: "Updating staff list…",
       loading: "Loading staff…",
+      copyFailed: "Copy failed — clipboard access denied.",
     },
     waiterLayout: {
       role: "Waiter",
@@ -3558,6 +3559,7 @@ export const messages = {
       exportCsv: "Export CSV",
       exporting: "Exporting…",
       exportError: "Export failed. Please try again.",
+      exportSuccess: "Ratings exported successfully.",
       refresh: "Refresh",
       starLabel: "{n} stars",
       starsLabel: "{n} stars",
@@ -5268,6 +5270,7 @@ export const messages = {
       fetchError: "Impossible de charger la liste du personnel. Veuillez reessayer.",
       updating: "Mise a jour de la liste du personnel…",
       loading: "Chargement du personnel…",
+      copyFailed: "Copie echouee — acces presse-papier refuse.",
     },
     waiterLayout: {
       role: "Serveur",
@@ -7472,6 +7475,7 @@ export const messages = {
       exportCsv: "Exporter CSV",
       exporting: "Export en cours…",
       exportError: "L'export a echoue. Veuillez reessayer.",
+      exportSuccess: "Evaluations exportees avec succes.",
       refresh: "Actualiser",
       starLabel: "{n} etoiles",
       starsLabel: "{n} etoiles",

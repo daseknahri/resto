@@ -104,9 +104,10 @@
           <button
             v-for="opt in periodOptions"
             :key="opt.days"
-            class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ui-press"
+            class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ui-press disabled:opacity-50"
             :class="selectedDays === opt.days ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
             :aria-pressed="selectedDays === opt.days"
+            :disabled="loadingStaff"
             @click="changePeriod(opt.days)"
           >{{ t(opt.labelKey) }}</button>
         </div>
@@ -506,7 +507,7 @@ const copyCredentials = async () => {
     copied.value = true;
     setTimeout(() => (copied.value = false), 3000);
   } catch {
-    // clipboard blocked
+    toast.show(t('ownerStaff.copyFailed'), 'error');
   }
 };
 </script>

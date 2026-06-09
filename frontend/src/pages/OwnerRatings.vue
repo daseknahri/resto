@@ -13,9 +13,11 @@
             type="button"
             class="ui-btn-outline ui-press ui-touch-target inline-flex items-center gap-1.5 px-3 py-1.5 text-sm"
             :disabled="exporting || !ratings.length"
+            :aria-busy="exporting"
+            :aria-label="exporting ? t('common.loading') : undefined"
             @click="exportCsv"
           >
-            <AppIcon name="download" class="h-3.5 w-3.5" aria-hidden="true" />
+            <AppIcon name="download" :class="['h-3.5 w-3.5', exporting ? 'animate-bounce' : '']" aria-hidden="true" />
             {{ exporting ? t("ownerRatings.exporting") : t("ownerRatings.exportCsv") }}
           </button>
           <button
@@ -263,6 +265,7 @@ const exportCsv = async () => {
     a.download = "ratings.csv";
     a.click();
     URL.revokeObjectURL(url);
+    toast.show(t("ownerRatings.exportSuccess"), "success");
   } catch {
     toast.show(t("ownerRatings.exportError"), "error");
   } finally {
