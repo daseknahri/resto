@@ -361,6 +361,8 @@ export const messages = {
       minRating4: "★ 4+",
       minRating45: "★ 4.5+",
       recentlyVisited: "Continue browsing",
+      dealsTitle: "Deals & Offers",
+      dealBadge: "Deal",
     },
     mktMenu: {
       loading: "Loading menu…",
@@ -4328,6 +4330,8 @@ export const messages = {
       minRating4: "★ 4+",
       minRating45: "★ 4.5+",
       recentlyVisited: "Continuer la navigation",
+      dealsTitle: "Offres spéciales",
+      dealBadge: "Promo",
     },
     mktMenu: {
       loading: "Chargement du menu…",

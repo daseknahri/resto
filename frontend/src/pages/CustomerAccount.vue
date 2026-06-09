@@ -870,9 +870,16 @@
                 >
                   <div class="flex items-center gap-2.5">
                     <div
-                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                      :class="isOutflow(tx) ? 'bg-red-500/12 text-red-400' : 'bg-emerald-500/12 text-emerald-400'"
-                    >{{ isOutflow(tx) ? '−' : '+' }}</div>
+                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                      :class="tx.type === 'loyalty' ? 'bg-indigo-500/12' : tx.type === 'bonus' ? 'bg-violet-500/12' : isOutflow(tx) ? 'bg-red-500/12' : 'bg-emerald-500/12'"
+                    >
+                      <!-- Loyalty / bonus: star icon -->
+                      <svg v-if="tx.type === 'loyalty' || tx.type === 'bonus'" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" class="h-3.5 w-3.5" :class="tx.type === 'loyalty' ? 'text-indigo-400' : 'text-violet-400'"><path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/></svg>
+                      <!-- Outflow: arrow up -->
+                      <svg v-else-if="isOutflow(tx)" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-red-400"><path d="M8 13V3M5 6l3-3 3 3"/></svg>
+                      <!-- Inflow: arrow down -->
+                      <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="h-3.5 w-3.5 text-emerald-400"><path d="M8 3v10M5 10l3 3 3-3"/></svg>
+                    </div>
                     <div class="min-w-0 space-y-0.5">
                       <p class="font-medium text-slate-200">{{ txLabel(tx) }}</p>
                       <p class="text-[11px] text-slate-500">

@@ -167,6 +167,53 @@
         </p>
       </section>
 
+      <!-- Deals & Promotions strip -->
+      <section
+        v-if="!loading && dealRestaurants.length"
+        class="space-y-2"
+        :aria-label="t('marketplace.dealsTitle')"
+      >
+        <div class="flex items-center gap-2 px-1">
+          <p class="ui-kicker">{{ t('marketplace.dealsTitle') }}</p>
+          <span class="ms-auto inline-flex items-center gap-0.5 rounded-full border border-amber-500/30 bg-amber-500/8 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400">
+            <svg viewBox="0 0 12 12" fill="currentColor" class="h-2 w-2" aria-hidden="true"><path d="M6 .5 7.65 4.05l3.85.56L8.75 7.2l.65 3.8L6 9.38l-3.4 1.62.65-3.8L.5 4.61l3.85-.56z"/></svg>
+            {{ dealRestaurants.length }}
+          </span>
+        </div>
+        <div class="flex gap-2.5 overflow-x-auto pb-1 snap-x -mx-1 px-1">
+          <router-link
+            v-for="r in dealRestaurants"
+            :key="'deal-' + r.slug"
+            :to="{ name: 'marketplace-menu', params: { slug: r.slug } }"
+            class="group relative flex shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-amber-500/20 bg-slate-900/60 transition-colors hover:border-amber-500/40 hover:bg-amber-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+            style="width: 156px"
+          >
+            <div class="relative h-24 w-full overflow-hidden bg-slate-800">
+              <img
+                v-if="r.logo_url"
+                :src="r.logo_url"
+                :alt="r.name"
+                loading="lazy"
+                decoding="async"
+                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                @error="$event.target.style.display='none'"
+              />
+              <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-900/20 to-slate-900">
+                <span aria-hidden="true" class="text-4xl opacity-40">🍽️</span>
+              </div>
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+              <span class="absolute start-2 top-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-black leading-none">
+                {{ r.promo_badge || t('marketplace.dealBadge') }}
+              </span>
+            </div>
+            <div class="px-2.5 py-2">
+              <p class="truncate text-[12px] font-semibold leading-snug text-slate-200 group-hover:text-white">{{ r.name }}</p>
+              <p class="mt-0.5 text-[10px]" :class="r.is_open ? 'text-emerald-400' : 'text-slate-500'">{{ r.is_open ? t('marketplace.open') : t('marketplace.closed') }}</p>
+            </div>
+          </router-link>
+        </div>
+      </section>
+
       <!-- Recently visited quick-access row -->
       <section
         v-if="!loading && recentRestaurants.length"
@@ -463,6 +510,12 @@ const recentRestaurants = computed(() => {
   if (!recentSlugs.value.length || !restaurants.value.length) return [];
   const bySlug = Object.fromEntries(restaurants.value.map(r => [r.slug, r]));
   return recentSlugs.value.map(s => bySlug[s]).filter(Boolean).slice(0, 5);
+});
+
+// Restaurants with active deals / promotions — shown in a featured strip above the main grid
+const dealRestaurants = computed(() => {
+  if (!restaurants.value.length) return [];
+  return restaurants.value.filter(r => r.flash_sale_active || r.promo_badge).slice(0, 8);
 });
 
 const activeFilterCount = computed(() => {
