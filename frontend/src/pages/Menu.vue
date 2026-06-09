@@ -208,6 +208,27 @@
       >{{ loyaltyPoints }}</span>
     </div>
 
+    <!-- ══ Recent customer reviews ══ -->
+    <div
+      v-if="recentReviews.length"
+      class="ui-reveal mt-3 space-y-2"
+      :style="{ '--ui-delay': '80ms' }"
+    >
+      <p class="ui-kicker px-3 sm:px-4">{{ t('mktMenu.reviewsTitle') }}</p>
+      <div class="flex gap-2.5 overflow-x-auto px-3 pb-1 sm:px-4 snap-x" style="scrollbar-width: none; -webkit-overflow-scrolling: touch;">
+        <div
+          v-for="(review, idx) in recentReviews"
+          :key="idx"
+          class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
+        >
+          <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
+            <span :aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
+          </div>
+          <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ Sections ══ -->
     <div class="px-3 sm:px-4 mt-4 space-y-6 sm:space-y-7">
 
@@ -460,6 +481,7 @@ const profile          = computed(() => meta.value?.profile || null)
 const menuTheme        = computed(() => profile.value?.menu_theme || 'dark')
 const isBrowseOnly     = computed(() => tenant.isBrowseOnlyPlan === true)
 const ratingSummary    = computed(() => meta.value?.rating_summary || null)
+const recentReviews    = computed(() => meta.value?.recent_reviews  || [])
 
 // ── Loyalty programme teaser ──────────────────────────────────────────────────
 const loyaltyConfig  = ref(null)

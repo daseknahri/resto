@@ -506,6 +506,8 @@ class TenantMetaSerializer(serializers.Serializer):
     # Per-restaurant rating summary — populated once the tenant has at least one rating.
     # average: float rounded to 1 decimal, or null when no ratings exist yet.
     rating_summary = serializers.DictField()
+    # Recent review comments — up to 5 most-recent rated orders that left a text comment.
+    recent_reviews = serializers.ListField(child=serializers.DictField(), allow_empty=True)
     # Grace period billing fields
     payment_overdue_since = serializers.DateTimeField(allow_null=True, read_only=True)
     grace_period_days = serializers.IntegerField(read_only=True)
@@ -527,6 +529,21 @@ class TenantMetaSerializer(serializers.Serializer):
             return {"average": None, "count": 0}
 
     @staticmethod
+    def _recent_reviews(limit: int = 5) -> list:
+        """Return up to *limit* most-recent ratings that have a non-empty comment."""
+        try:
+            from menu.models import Rating
+            qs = (
+                Rating.objects
+                .exclude(comment="")
+                .order_by("-created_at")
+                .values("score", "comment")[:limit]
+            )
+            return [{"score": r["score"], "comment": r["comment"]} for r in qs]
+        except Exception:
+            return []
+
+    @staticmethod
     def from_tenant(tenant: Tenant, *, request=None):
         plan_flags = []
         if getattr(tenant, "plan", None) and hasattr(tenant.plan, "feature_flags"):
@@ -546,6 +563,7 @@ class TenantMetaSerializer(serializers.Serializer):
                 "entitlements": plan_entitlements(tenant.plan) if getattr(tenant, "plan", None) else {},
                 "feature_flags": plan_flags,
                 "rating_summary": TenantMetaSerializer._rating_summary(),
+                "recent_reviews": TenantMetaSerializer._recent_reviews(),
                 "payment_overdue_since": getattr(tenant, "payment_overdue_since", None),
                 "grace_period_days": Tenant.GRACE_PERIOD_DAYS,
                 "deletion_requested_at": getattr(tenant, "deletion_requested_at", None),
