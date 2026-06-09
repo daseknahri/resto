@@ -58,6 +58,18 @@
         <p class="ui-kicker text-indigo-300">{{ t("orderStatus.deliveryCodeTitle") }}</p>
         <p class="mt-2 text-4xl font-bold tracking-[0.35em] text-white tabular-nums">{{ orderData.delivery_code }}</p>
         <p class="mt-1.5 text-xs text-indigo-100/75">{{ t("orderStatus.deliveryCodeHint") }}</p>
+        <button
+          class="mt-3 inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50"
+          :class="codeCopied
+            ? 'border-emerald-400/50 bg-emerald-500/10 text-emerald-300'
+            : 'border-indigo-400/40 text-indigo-300 hover:border-indigo-400/70 hover:bg-indigo-500/10'"
+          :aria-label="codeCopied ? t('orderStatus.deliveryCodeCopied') : t('orderStatus.deliveryCodeCopy')"
+          @click="copyDeliveryCode(orderData.delivery_code)"
+        >
+          <svg v-if="codeCopied" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M2.5 8L6 11.5 13.5 4"/></svg>
+          <svg v-else viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"><rect x="5" y="3" width="9" height="11" rx="1.5"/><path d="M11 3V2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1"/></svg>
+          {{ codeCopied ? t("orderStatus.deliveryCodeCopied") : t("orderStatus.deliveryCodeCopy") }}
+        </button>
       </div>
 
       <!-- Order-ready banner -->
@@ -580,6 +592,18 @@ const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
 const readyAlertShown = ref(false);
+
+// ── Delivery-code copy ────────────────────────────────────────────────────────
+const codeCopied = ref(false);
+let _codeCopiedTimer = null;
+const copyDeliveryCode = (code) => {
+  if (!code) return;
+  navigator.clipboard.writeText(String(code)).then(() => {
+    codeCopied.value = true;
+    clearTimeout(_codeCopiedTimer);
+    _codeCopiedTimer = setTimeout(() => { codeCopied.value = false; }, 2000);
+  }).catch(() => {/* best-effort */});
+};
 
 // ── Rating ────────────────────────────────────────────────────────────────────
 const ratingScore = ref(0);

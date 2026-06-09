@@ -841,10 +841,14 @@
                     />
                   </div>
                   <button
-                    class="ui-btn-primary px-3 py-1.5 text-xs"
+                    class="ui-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
                     :disabled="redeeming || redeemAmount < loyaltyConfig.redeem_threshold"
+                    :aria-busy="redeeming"
                     @click="redeemPoints"
-                  >{{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}</button>
+                  >
+                    <svg v-if="redeeming" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                    {{ redeeming ? t('customerAccount.loyaltyRedeeming') : t('customerAccount.loyaltyRedeem') }}
+                  </button>
                 </div>
                 <div v-if="redeemError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
                   <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
@@ -1075,10 +1079,14 @@
                 />
                 <button
                   v-if="editableName !== (customerStore.customer?.name || '')"
-                  class="ui-btn-primary shrink-0 px-3 py-1.5 text-xs"
+                  class="ui-btn-primary inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs"
                   :disabled="savingName"
+                  :aria-busy="savingName"
                   @click="saveName"
-                >{{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}</button>
+                >
+                  <svg v-if="savingName" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ savingName ? t('customerAccount.saving') : t('customerAccount.saveName') }}
+                </button>
               </div>
             </div>
 
@@ -1143,7 +1151,8 @@
                       @keydown.enter.prevent="saveEmail"
                       @keydown.escape.prevent="cancelEmailInput"
                     />
-                    <button class="ui-btn-primary shrink-0 px-2.5 py-1.5 text-xs" :disabled="savingEmail || !editableEmail" @click="saveEmail">
+                    <button class="ui-btn-primary inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs" :disabled="savingEmail || !editableEmail" :aria-busy="savingEmail" @click="saveEmail">
+                      <svg v-if="savingEmail" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                       {{ savingEmail ? t('customerAccount.saving') : t('common.save') }}
                     </button>
                     <button class="text-xs text-slate-500 transition hover:text-slate-300" @click="cancelEmailInput">{{ t('common.cancel') }}</button>
