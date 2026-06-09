@@ -246,7 +246,7 @@
                   </span>
                   <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-slate-100">{{ t("ownerTemplates.kinds." + tpl.key) }}</p>
-                    <p class="text-[11px] text-slate-500 truncate">{{ tpl.categories.join(" · ") }}</p>
+                    <p class="text-[11px] text-slate-500 truncate" :title="tpl.categories.join(' · ')">{{ tpl.categories.join(" · ") }}</p>
                     <p class="text-[11px] text-slate-500">{{ t("ownerTemplates.itemCount", { n: tpl.dish_count }) }}</p>
                   </div>
                   <button

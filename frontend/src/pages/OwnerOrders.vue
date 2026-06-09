@@ -35,6 +35,7 @@
             <AppIcon name="refresh" class="h-3.5 w-3.5" aria-hidden="true" />
             {{ t("ownerOrders.refreshOrders") }}
           </button>
+          <span v-if="polling && order.orders.length" class="text-[11px] text-slate-500 tabular-nums" role="status" aria-live="polite">{{ t('adminAnalytics.updating') }}</span>
         </div>
       </div>
 
@@ -295,7 +296,7 @@
           <div v-if="o.customer_name" class="flex flex-wrap items-center gap-2">
             <div>
               <span class="text-slate-500">{{ t("ownerOrders.customer") }}</span>
-              <span class="ms-1.5 font-medium text-slate-100">{{ o.customer_name }}</span>
+              <span class="ms-1.5 font-medium text-slate-100" :title="o.customer_name">{{ o.customer_name }}</span>
             </div>
             <!-- Customer trust badge -->
             <template v-if="o.customer_trust?.rating_count">
@@ -357,7 +358,7 @@
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
-            <span class="ms-1.5 text-slate-200">{{ o.delivery_address }}</span>
+            <span class="ms-1.5 break-words text-slate-200">{{ o.delivery_address }}</span>
             <a
               v-if="orderMapUrl(o)"
               :href="orderMapUrl(o)"
@@ -1247,21 +1248,27 @@ const requestNotificationPermission = async () => {
 
 // ── Polling (visibility-aware) ────────────────────────────────────────────────
 let pollTimer = null;
+const polling = ref(false);
 
 const doPoll = async () => {
-  // Always fetch all orders (no status filter) — filtering is client-side only.
-  // Passing activeStatus to the API would replace the full list with a subset,
-  // making other status groups disappear until the next manual refresh.
-  const fresh = await order.fetchOrders("", { silent: true });
-  const orders = Array.isArray(fresh) ? fresh : order.orders;
-  checkForNewOrders(orders);
+  polling.value = true;
+  try {
+    // Always fetch all orders (no status filter) — filtering is client-side only.
+    // Passing activeStatus to the API would replace the full list with a subset,
+    // making other status groups disappear until the next manual refresh.
+    const fresh = await order.fetchOrders("", { silent: true });
+    const orders = Array.isArray(fresh) ? fresh : order.orders;
+    checkForNewOrders(orders);
 
-  // Recurring alert: re-ping if there are still unhandled pending orders
-  const hasPending = orders.some((o) => o.status === "pending");
-  const cooldownPassed = Date.now() - lastAlertTime.value > RECURRING_ALERT_MS;
-  if (hasPending && knownOrderIds.value.size > 0 && cooldownPassed) {
-    playAlertSound();
-    lastAlertTime.value = Date.now();
+    // Recurring alert: re-ping if there are still unhandled pending orders
+    const hasPending = orders.some((o) => o.status === "pending");
+    const cooldownPassed = Date.now() - lastAlertTime.value > RECURRING_ALERT_MS;
+    if (hasPending && knownOrderIds.value.size > 0 && cooldownPassed) {
+      playAlertSound();
+      lastAlertTime.value = Date.now();
+    }
+  } finally {
+    polling.value = false;
   }
 };
 
