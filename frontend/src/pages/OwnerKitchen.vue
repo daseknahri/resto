@@ -359,7 +359,7 @@ const onKitchenPageVisible = () => {
 onMounted(async () => {
   waiter.setupConnectivityListeners();
   updateClock();
-  clockTimer = setInterval(updateClock, 10_000);
+  clockTimer = setInterval(updateClock, 1_000);
   document.addEventListener("fullscreenchange", onFullscreenChange);
   document.addEventListener("visibilitychange", onKitchenPageVisible);
 
