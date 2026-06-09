@@ -354,7 +354,8 @@
                 :disabled="locatingMkt"
                 @click="useMyLocation"
               >
-                <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />
+                <svg v-if="locatingMkt" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                <AppIcon v-else name="location" class="h-3 w-3 shrink-0" aria-hidden="true" />
                 {{ locatingMkt ? t('mktMenu.locating') : (form.delivery_lat ? t('mktMenu.locationSet') : t('mktMenu.useMyLocation')) }}
               </button>
               <p v-if="locateError" class="text-[11px] text-rose-300" role="alert">{{ locateError }}</p>
@@ -468,10 +469,12 @@
 
           <!-- Submit -->
           <button
-            class="ui-press w-full rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+            class="ui-press inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
             :disabled="placing || prepayShortfall || deliveryBlocked"
+            :aria-busy="placing"
             @click="placeOrder"
           >
+            <svg v-if="placing" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
             {{ placing ? t('mktMenu.placing') : (deliveryBlocked ? t('mktMenu.deliveryOutOfRangeShort') : (prepayShortfall ? t('mktMenu.walletTopUpRequiredShort') : t('mktMenu.placeOrder'))) }}
           </button>
         </div>

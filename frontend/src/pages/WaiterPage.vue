@@ -320,7 +320,9 @@
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
             @click="advance(order.id)"
           >
-            <span v-if="waiter.updatingOrderIds.has(order.id)" aria-hidden="true">…</span>
+            <span v-if="waiter.updatingOrderIds.has(order.id)" class="inline-flex items-center gap-1.5" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            </span>
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>

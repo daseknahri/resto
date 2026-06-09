@@ -188,10 +188,12 @@
             <textarea
               v-model="note"
               rows="3"
+              maxlength="500"
               :aria-label="t('ownerBilling.notePlaceholder')"
               :placeholder="t('ownerBilling.notePlaceholder')"
               class="ui-textarea w-full resize-none text-sm"
             />
+            <p class="mt-1 text-end text-xs tabular-nums" :class="note.length >= 480 ? 'text-amber-400' : 'text-slate-600'" aria-live="polite">{{ note.length }}/500</p>
             <div v-if="submitError" role="alert" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5">
               <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
               <p class="flex-1 text-sm text-red-300">{{ submitError }}</p>
@@ -199,10 +201,12 @@
             <div class="flex flex-wrap gap-3">
               <button
                 type="button"
-                class="ui-btn-primary px-6 py-2 text-sm disabled:opacity-60"
+                class="ui-btn-primary inline-flex items-center gap-2 px-6 py-2 text-sm disabled:opacity-60"
                 :disabled="submitting"
+                :aria-busy="submitting"
                 @click="submitRequest"
               >
+                <svg v-if="submitting" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                 {{ submitting ? t('ownerBilling.sending') : t('ownerBilling.submitRequest') }}
               </button>
               <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="selectedCode = ''">
