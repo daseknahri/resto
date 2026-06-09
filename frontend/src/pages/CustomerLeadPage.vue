@@ -80,15 +80,27 @@
           </span>
         </div>
 
-        <!-- Primary CTA — Browse Menu -->
-        <RouterLink
-          :to="{ name: 'menu' }"
-          class="ui-btn-primary flex w-full items-center justify-center gap-2.5"
-          @click="trackContactClick('hero_menu_cta')"
-        >
-          <AppIcon name="menu" class="h-5 w-5" />
-          {{ t("customerLayout.navMenu") }}
-        </RouterLink>
+        <!-- CTAs — Browse Menu (primary) + Share (secondary) -->
+        <div class="flex gap-2.5">
+          <RouterLink
+            :to="{ name: 'menu' }"
+            class="ui-btn-primary flex flex-1 items-center justify-center gap-2"
+            @click="trackContactClick('hero_menu_cta')"
+          >
+            <AppIcon name="menu" class="h-4 w-4 shrink-0" aria-hidden="true" />
+            {{ t("customerLayout.navMenu") }}
+          </RouterLink>
+          <!-- Share — Web Share API with clipboard fallback -->
+          <button
+            type="button"
+            class="ui-btn-outline ui-press flex shrink-0 items-center justify-center gap-1.5 px-3.5"
+            :aria-label="t('customerLeadPage.shareRestaurant')"
+            @click="shareRestaurant"
+          >
+            <AppIcon name="share" class="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span class="hidden sm:inline text-sm">{{ t('customerLeadPage.shareRestaurant') }}</span>
+          </button>
+        </div>
 
       </div>
     </section>
@@ -337,12 +349,14 @@ import { trackEvent } from "../lib/analytics";
 import { safeExternalUrl } from "../lib/escape";
 import { useLeadStore } from "../stores/lead";
 import { useCustomerStore } from "../stores/customer";
+import { useToastStore } from "../stores/toast";
 import { isPublicDemoHost } from "../lib/runtimeHost";
 import { useTenantStore } from "../stores/tenant";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
 const customerStore = useCustomerStore();
+const toast = useToastStore();
 const { currentLocale, t } = useI18n();
 const meta = computed(() => tenant.resolvedMeta || null);
 const showLeadModal = ref(false);
@@ -499,6 +513,21 @@ const submitLead = async () => {
 
 const trackContactClick = (target) => {
   trackEvent("contact_click", { source: "customer_landing", metadata: { target: String(target || "").slice(0, 60) } });
+};
+
+// ── Share restaurant ──────────────────────────────────────────────────────────
+const shareRestaurant = async () => {
+  const url = window.location.origin;
+  const title = tenantName.value;
+  const text = tenantDescription.value || title;
+  trackContactClick('share');
+  if (typeof navigator.share === 'function') {
+    try { await navigator.share({ title, text, url }); return; } catch { /* user cancelled or not supported */ }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.show(t('customerLeadPage.shareRestaurantCopied'), 'success');
+  } catch { /* clipboard blocked — silently ignore */ }
 };
 
 onMounted(async () => {

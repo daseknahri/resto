@@ -296,21 +296,32 @@
         <p class="ui-kicker">{{ t('menu.recentOrdersTitle') }}</p>
         <ul class="space-y-2">
           <li v-for="order in cart.recentOrders.slice(0, 5)" :key="order.order_number">
-            <RouterLink
-              :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
-              class="ui-surface-lift flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3.5 py-3 text-sm hover:border-slate-600/70 active:scale-[0.99]"
-            >
-              <div class="min-w-0 space-y-0.5">
+            <div class="flex items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-900/40 px-3.5 py-3">
+              <!-- Order info — tapping navigates to status -->
+              <RouterLink
+                :to="{ name: 'order-status', params: { orderNumber: order.order_number } }"
+                class="min-w-0 flex-1 space-y-0.5"
+                :aria-label="`${t('menu.viewStatus')} ${order.order_number}`"
+              >
                 <p class="text-xs font-semibold tracking-wide text-slate-200 tabular-nums">{{ order.order_number }}</p>
-                <p v-if="order.items?.length" class="truncate text-[11px] text-slate-400 leading-relaxed" :title="order.items.map(i => i.dish_name).join(', ')">
-                  {{ order.items.slice(0, 3).map(i => i.dish_name).join(', ') }}{{ order.items.length > 3 ? '…' : '' }}
+                <p v-if="order.items?.length" class="truncate text-[11px] text-slate-400 leading-relaxed" :title="order.items.map(i => i.dish_name || i.name).join(', ')">
+                  {{ order.items.slice(0, 3).map(i => i.dish_name || i.name).join(', ') }}{{ order.items.length > 3 ? '…' : '' }}
                 </p>
-              </div>
-              <div class="shrink-0 space-y-0.5 text-end">
+              </RouterLink>
+              <!-- Price + reorder -->
+              <div class="shrink-0 flex items-center gap-2.5">
                 <p class="text-sm font-bold tabular-nums" style="color:var(--color-secondary)">{{ formatPrice(order.total) }}</p>
-                <p class="text-[10px] font-medium uppercase tracking-wider text-slate-500">{{ t('menu.viewStatus') }}</p>
+                <button
+                  v-if="!isBrowseOnly && order.items?.length"
+                  type="button"
+                  class="ui-press rounded-full border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-2.5 py-1 text-[11px] font-semibold text-[var(--color-secondary)] transition hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/40"
+                  :aria-label="`${t('menu.reorder')} — ${order.order_number}`"
+                  @click="reorderItems(order)"
+                >
+                  {{ t('menu.reorder') }}
+                </button>
               </div>
-            </RouterLink>
+            </div>
           </li>
         </ul>
       </section>
@@ -543,6 +554,28 @@ watch(isSearchActive, (active) => {
     }
   }
 })
+
+// ── Reorder from recent orders ────────────────────────────────────────────────
+/** Add all items from a previous order back to the cart (best-effort — server validates at checkout). */
+const reorderItems = (order) => {
+  if (!order?.items?.length) {
+    toast.show(t('menu.reorderEmpty'), 'info')
+    return
+  }
+  for (const item of order.items) {
+    cart.add({
+      slug:          item.slug,
+      name:          item.dish_name || item.name,
+      price:         item.price,
+      currency:      item.currency,
+      qty:           item.qty || 1,
+      note:          item.note || '',
+      option_ids:    item.option_ids || [],
+      option_labels: item.option_labels || [],
+    })
+  }
+  toast.show(t('menu.reorderAdded'), 'success')
+}
 
 // ── Sticky category nav ──────────────────────────────────────────────────────
 // The customer layout renders a sticky header (.ui-header, top:0) whose height

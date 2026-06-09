@@ -505,6 +505,10 @@ const onMktStatusVisible = () => {
 };
 
 onMounted(() => {
+  // Request push notification permission proactively (best-effort; same as tenant OrderStatus)
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
   // Show celebration banner if arriving within 60s of placing this order
   try {
     const lastNum = localStorage.getItem('mktLastOrderNumber');
