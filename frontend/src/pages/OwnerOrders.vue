@@ -208,14 +208,14 @@
     </div>
 
     <!-- Empty: filters active but no matches -->
-    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery || activeFulfillmentType)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
       <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
         <AppIcon name="close" class="h-5 w-5 text-slate-500" aria-hidden="true" />
       </div>
       <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrders") }}</p>
       <button
         class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
-        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'"
+        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''"
       >
         <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
         {{ t("ownerOrders.clearFilters") }}
@@ -373,17 +373,31 @@
             <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
-            <span class="text-slate-500">{{ t("ownerOrders.delivery") }}</span>
-            <span class="ms-1.5 break-words text-slate-200">{{ o.delivery_address }}</span>
-            <a
-              v-if="orderMapUrl(o)"
-              :href="orderMapUrl(o)"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ms-2 inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
-            >
-              <span aria-hidden="true">📍</span> {{ t("ownerOrders.openMap") }}
-            </a>
+            <div class="flex flex-wrap items-start gap-x-2 gap-y-1">
+              <span class="shrink-0 text-slate-500">{{ t("ownerOrders.delivery") }}</span>
+              <span class="min-w-0 flex-1 break-words text-slate-200">{{ o.delivery_address }}</span>
+              <div class="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-full border border-slate-700/80 px-2 py-0.5 text-[10px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+                  :aria-label="t('ownerOrders.copyAddress')"
+                  @click="copyAddress(o)"
+                >
+                  <svg v-if="copiedAddressId === o.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-emerald-400"><path d="M3 8l3.5 3.5L13 4.5"/></svg>
+                  <svg v-else aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><rect x="4" y="4" width="9" height="11" rx="1.5"/><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11"/></svg>
+                  <span :class="copiedAddressId === o.id ? 'text-emerald-400' : ''">{{ copiedAddressId === o.id ? t('ownerOrders.copied') : t('ownerOrders.copy') }}</span>
+                </button>
+                <a
+                  v-if="orderMapUrl(o)"
+                  :href="orderMapUrl(o)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/20"
+                >
+                  <span aria-hidden="true">📍</span> {{ t("ownerOrders.openMap") }}
+                </a>
+              </div>
+            </div>
           </div>
 
           <!-- Delivery job panel -->
@@ -892,6 +906,19 @@ const filteredOrders = computed(() => {
 
 const setFilter = (val) => { activeStatus.value = val; };
 const refresh = () => order.fetchOrders();
+
+// Copy delivery address to clipboard
+const copiedAddressId = ref(null);
+let _addrCopyTimer = null;
+const copyAddress = async (o) => {
+  if (!o.delivery_address) return;
+  try {
+    await navigator.clipboard.writeText(o.delivery_address);
+    copiedAddressId.value = o.id;
+    if (_addrCopyTimer) clearTimeout(_addrCopyTimer);
+    _addrCopyTimer = setTimeout(() => { copiedAddressId.value = null; _addrCopyTimer = null; }, 1800);
+  } catch { /* clipboard not available */ }
+};
 
 const pendingOrdersList = computed(() =>
   order.orders.filter((o) => o.status === "pending")
