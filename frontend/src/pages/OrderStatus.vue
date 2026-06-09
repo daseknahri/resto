@@ -461,6 +461,26 @@
         </template>
       </div>
 
+      <!-- Loyalty points earned — celebration pill shown on completed orders -->
+      <div
+        v-if="orderData.status === 'completed' && Number(orderData.points_earned) > 0"
+        class="ui-panel ui-reveal flex items-center justify-between p-4 border-violet-500/25 bg-violet-500/8"
+        :style="{ '--ui-delay': '100ms' }"
+      >
+        <div class="flex items-center gap-2.5">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/12">
+            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4 text-violet-400" aria-hidden="true">
+              <path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-violet-200">{{ t('orderStatus.pointsEarned') }}</p>
+            <p class="mt-0.5 text-[11px] text-violet-300/60">{{ t('orderStatus.pointsEarnedHint') }}</p>
+          </div>
+        </div>
+        <span class="text-base font-bold tabular-nums text-violet-200">+{{ orderData.points_earned }}</span>
+      </div>
+
       <!-- Receipt message (thank-you note from the restaurant owner) -->
       <div
         v-if="orderData.receipt_message && ['confirmed', 'ready', 'completed'].includes(orderData.status)"

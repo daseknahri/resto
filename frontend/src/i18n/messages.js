@@ -3753,6 +3753,8 @@ export const messages = {
       tableSignInNudgeButton: "Sign in / Create account",
       justPlacedTitle: "Order placed!",
       justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
+      pointsEarned: "Loyalty points earned",
+      pointsEarnedHint: "Added to your account",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -7782,6 +7784,8 @@ export const messages = {
       tableSignInNudgeButton: "Se connecter / Creer un compte",
       justPlacedTitle: "Commande passée !",
       justPlacedSubtitle: "Votre commande a bien été reçue. Détendez-vous, nous nous en occupons.",
+      pointsEarned: "Points de fidélité gagnés",
+      pointsEarnedHint: "Ajoutés à votre compte",
     },
     customerAccount: {
       kicker: "Votre compte",

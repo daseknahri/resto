@@ -2671,6 +2671,9 @@ class CustomerOrderStatusView(APIView):
             # Rating state — frontend shows 1–5 star prompt when status=completed and has_rating=false
             "has_rating": existing_rating is not None,
             "rating": rating_data,
+            # Loyalty points credited to the customer's account for this order.
+            # Displayed as a celebration panel when status=completed and points>0.
+            "points_earned": order.points_earned,
             # Restaurant's feedback about this customer — only populated for the
             # signed-in customer who owns this order (gated above).
             "restaurant_feedback": restaurant_feedback,

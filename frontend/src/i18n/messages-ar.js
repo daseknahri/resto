@@ -2196,7 +2196,9 @@ const arabicMessages = {
     "walletPaid": "رصيد مُطبَّق: {amount}",
     "loyaltyDiscount": "خصم الولاء",
     "justPlacedTitle": "تم تقديم الطلب!",
-    "justPlacedSubtitle": "استلمنا طلبك. استرخِ بينما نعدّه لك."
+    "justPlacedSubtitle": "استلمنا طلبك. استرخِ بينما نعدّه لك.",
+    "pointsEarned": "نقاط الولاء المكتسبة",
+    "pointsEarnedHint": "أُضيفت إلى حسابك"
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",
