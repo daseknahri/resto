@@ -360,6 +360,7 @@ export const messages = {
       minRating35: "★ 3.5+",
       minRating4: "★ 4+",
       minRating45: "★ 4.5+",
+      recentlyVisited: "Continue browsing",
     },
     mktMenu: {
       loading: "Loading menu…",
@@ -4323,6 +4324,7 @@ export const messages = {
       minRating35: "★ 3.5+",
       minRating4: "★ 4+",
       minRating45: "★ 4.5+",
+      recentlyVisited: "Continuer la navigation",
     },
     mktMenu: {
       loading: "Chargement du menu…",

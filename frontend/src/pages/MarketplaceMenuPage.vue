@@ -941,6 +941,11 @@ const fetchMenu = async () => {
     const res = await api.get(`/marketplace/menu/${slug}/`);
     restaurant.value = res.data;
     loyaltyConfig.value = res.data?.loyalty?.enabled ? res.data.loyalty : null;
+    // Track visit for "Continue browsing" on the marketplace landing page
+    try {
+      const slugs = JSON.parse(localStorage.getItem('marketplace:recent') || '[]').filter(s => s !== slug);
+      localStorage.setItem('marketplace:recent', JSON.stringify([slug, ...slugs].slice(0, 8)));
+    } catch { /* storage unavailable */ }
     // Pre-fill customer info if signed in
     if (customer.value) {
       form.customer_name = customer.value.name || '';

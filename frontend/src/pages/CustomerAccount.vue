@@ -444,16 +444,37 @@
             </div>
             <ul class="divide-y divide-slate-800/60">
               <li v-for="o in marketplaceOrders" :key="o.restaurant_slug + o.order_number">
-                <div class="flex items-center justify-between gap-3 px-4 py-3">
+                <div class="flex items-center gap-3 px-4 py-3">
+                  <!-- Status dot -->
+                  <span
+                    class="mt-0.5 h-1.5 w-1.5 shrink-0 self-start rounded-full"
+                    :class="{
+                      'animate-pulse bg-amber-400': ACTIVE_STATUSES.has(o.status),
+                      'bg-emerald-400': o.status === 'completed',
+                      'bg-red-400': o.status === 'cancelled',
+                      'bg-slate-500': !ACTIVE_STATUSES.has(o.status) && o.status !== 'completed' && o.status !== 'cancelled',
+                    }"
+                    aria-hidden="true"
+                  />
                   <RouterLink
                     v-if="o.restaurant_slug"
                     :to="{ name: 'marketplace-order-status', params: { slug: o.restaurant_slug, orderNumber: o.order_number } }"
                     class="min-w-0 flex-1"
                   >
                     <p class="truncate text-sm font-medium text-slate-200" :title="o.restaurant_name || o.restaurant_slug">{{ o.restaurant_name || o.restaurant_slug }}</p>
-                    <p class="text-[11px] text-slate-500">
-                      <span class="font-mono">#{{ o.order_number }}</span> · {{ mktOrderStatus(o.status) }} · {{ formatDate(o.created_at) }}
-                    </p>
+                    <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <span class="font-mono text-[11px] text-slate-500">#{{ o.order_number }}</span>
+                      <span
+                        class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px]"
+                        :class="{
+                          'text-amber-400': ACTIVE_STATUSES.has(o.status),
+                          'text-emerald-400': o.status === 'completed',
+                          'text-red-400': o.status === 'cancelled',
+                          'text-slate-400': !ACTIVE_STATUSES.has(o.status) && o.status !== 'completed' && o.status !== 'cancelled',
+                        }"
+                      >{{ mktOrderStatus(o.status) }}</span>
+                      <span class="text-[11px] text-slate-500">{{ formatDate(o.created_at) }}</span>
+                    </div>
                   </RouterLink>
                   <div v-else class="min-w-0 flex-1">
                     <p class="truncate text-sm font-medium text-slate-200" :title="o.restaurant_name">{{ o.restaurant_name }}</p>

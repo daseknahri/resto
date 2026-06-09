@@ -2407,6 +2407,7 @@ Object.assign(arabicMessages, {
     minRating35: "\u2605 3.5+",
     minRating4: "\u2605 4+",
     minRating45: "\u2605 4.5+",
+    recentlyVisited: "\u062a\u0635\u0641\u062d \u0633\u0627\u0628\u0642",
   },
   mktMenu: {
     loading: "\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0642\u0627\u0626\u0645\u0629\u2026",

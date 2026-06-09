@@ -167,6 +167,43 @@
         </p>
       </section>
 
+      <!-- Recently visited quick-access row -->
+      <section
+        v-if="!loading && recentRestaurants.length"
+        class="space-y-2"
+        :aria-label="t('marketplace.recentlyVisited')"
+      >
+        <p class="ui-kicker px-1">{{ t('marketplace.recentlyVisited') }}</p>
+        <div class="flex gap-2.5 overflow-x-auto pb-1 snap-x -mx-1 px-1">
+          <router-link
+            v-for="r in recentRestaurants"
+            :key="r.slug"
+            :to="{ name: 'marketplace-menu', params: { slug: r.slug } }"
+            class="group flex shrink-0 snap-start items-center gap-2.5 rounded-xl border border-slate-800/70 bg-slate-900/60 px-3 py-2.5 transition-colors hover:border-[var(--color-secondary)]/40 hover:bg-slate-900/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          >
+            <div class="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-800 flex items-center justify-center">
+              <img
+                v-if="r.logo_url"
+                :src="r.logo_url"
+                :alt="r.name"
+                loading="lazy"
+                decoding="async"
+                class="h-full w-full object-cover"
+                @error="$event.target.style.display='none'"
+              />
+              <span v-else aria-hidden="true" class="text-xl">🍽️</span>
+            </div>
+            <div class="min-w-0 max-w-[110px]">
+              <p class="truncate text-[12px] font-semibold leading-tight text-slate-200 group-hover:text-white">{{ r.name }}</p>
+              <p
+                class="mt-0.5 text-[10px] leading-tight"
+                :class="r.is_open ? 'text-emerald-400' : 'text-slate-500'"
+              >{{ r.is_open ? t('marketplace.open') : t('marketplace.closed') }}</p>
+            </div>
+          </router-link>
+        </div>
+      </section>
+
       <!-- Loading: skeleton card grid -->
       <ul v-if="loading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" :aria-label="t('marketplace.loading')">
         <li
@@ -372,6 +409,13 @@ const saveFavourites = (set) => {
   try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify([...set])); } catch { /* storage unavailable */ }
 };
 
+// ── Recently visited ──────────────────────────────────────────────────────────
+const RECENT_KEY = 'marketplace:recent';
+const loadRecentSlugs = () => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+};
+const recentSlugs = ref(loadRecentSlugs());
+
 const { t } = useI18n();
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -413,6 +457,13 @@ const toggleFavourite = (slug) => {
   favourites.value = next;
   saveFavourites(next);
 };
+
+// Recently visited restaurants — matched against loaded restaurant list so closed/removed ones vanish
+const recentRestaurants = computed(() => {
+  if (!recentSlugs.value.length || !restaurants.value.length) return [];
+  const bySlug = Object.fromEntries(restaurants.value.map(r => [r.slug, r]));
+  return recentSlugs.value.map(s => bySlug[s]).filter(Boolean).slice(0, 5);
+});
 
 const activeFilterCount = computed(() => {
   let n = 0;
