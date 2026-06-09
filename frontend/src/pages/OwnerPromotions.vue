@@ -126,6 +126,52 @@
       </article>
     </div>
 
+    <!-- Platform flash sales opt-in ─────────────────────────────────────── -->
+    <section v-if="flashSalesLoaded && (flashSales.length || flashSalesError)" class="space-y-2 pb-2">
+      <div class="px-1 flex items-center gap-2">
+        <p class="ui-kicker">⚡ {{ t('ownerPromotions.flashKicker') }}</p>
+      </div>
+      <!-- Fetch error -->
+      <div v-if="flashSalesError" class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-2.5 text-xs text-amber-300">
+        {{ t('ownerPromotions.flashFetchError') }}
+      </div>
+      <!-- Sale cards -->
+      <article
+        v-for="(fs, index) in flashSales"
+        :key="fs.id"
+        class="ui-panel ui-reveal flex items-center justify-between gap-3 p-4"
+        :style="{ '--ui-delay': `${Math.min(index, 5) * 24}ms` }"
+      >
+        <div class="min-w-0 space-y-0.5">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <span class="truncate text-sm font-semibold text-white" :title="fs.name">{{ fs.name }}</span>
+            <span class="ui-chip tabular-nums text-amber-300">−{{ fs.discount_value }}%</span>
+            <span v-if="fs.is_live" class="ui-status-pill border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+              <span class="ui-live-dot bg-emerald-400" aria-hidden="true" />
+              {{ t('adminFlashSales.live') }}
+            </span>
+          </div>
+          <p v-if="fs.description" class="truncate text-xs text-slate-400" :title="fs.description">{{ fs.description }}</p>
+          <p class="text-[11px] tabular-nums text-slate-500">
+            {{ t('ownerPromotions.flashUntil', { date: fmtFlashDate(fs.active_until) }) }}
+          </p>
+        </div>
+        <button
+          class="ui-btn-outline ui-press ui-touch-target shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
+          :class="fs.opted_in
+            ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/40 hover:text-red-300'
+            : 'hover:border-amber-400/50 hover:text-amber-300'"
+          :disabled="flashBusyId === fs.id"
+          :aria-pressed="fs.opted_in"
+          :aria-label="`${fs.opted_in ? t('ownerPromotions.flashOptOut') : t('ownerPromotions.flashOptIn')} ${fs.name}`"
+          @click="toggleFlashOptIn(fs)"
+        >
+          <svg v-if="flashBusyId === fs.id" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ flashBusyId === fs.id ? t('common.loading') : (fs.opted_in ? t('ownerPromotions.flashOptOut') : t('ownerPromotions.flashOptIn')) }}
+        </button>
+      </article>
+    </section>
+
     <!-- Create / Edit drawer -->
     <Teleport to="body">
       <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="drawerOpen = false">
@@ -334,7 +380,7 @@ import { isFresh, readCache, writeCache } from '../lib/staleCache';
 // (has event-listener cleanup that must run on unmount).
 defineOptions({ name: "OwnerPromotions" });
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -562,5 +608,58 @@ const deletePromo = async (promo) => {
   }
 };
 
-onMounted(fetchPromotions);
+// ── Platform flash sales opt-in ──────────────────────────────────────────────
+const flashSales = ref([]);
+const flashSalesLoaded = ref(false);
+const flashSalesError = ref(false);
+const flashBusyId = ref(null);
+
+const fmtFlashDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 16);
+  }
+};
+
+const fetchFlashSales = async () => {
+  flashSalesError.value = false;
+  try {
+    const res = await api.get('/owner/flash-sales/');
+    flashSales.value = Array.isArray(res.data) ? res.data : [];
+  } catch {
+    flashSalesError.value = true;
+  } finally {
+    flashSalesLoaded.value = true;
+  }
+};
+
+const toggleFlashOptIn = async (fs) => {
+  flashBusyId.value = fs.id;
+  try {
+    if (fs.opted_in) {
+      await api.delete(`/owner/flash-sales/${fs.id}/opt-in/`);
+      const idx = flashSales.value.findIndex((s) => s.id === fs.id);
+      if (idx >= 0) flashSales.value[idx] = { ...fs, opted_in: false };
+      toast.show(t('ownerPromotions.flashOptedOut'), 'info');
+    } else {
+      await api.post(`/owner/flash-sales/${fs.id}/opt-in/`);
+      const idx = flashSales.value.findIndex((s) => s.id === fs.id);
+      if (idx >= 0) flashSales.value[idx] = { ...fs, opted_in: true };
+      toast.show(t('ownerPromotions.flashOptedIn'), 'success');
+    }
+  } catch {
+    toast.show(t('ownerPromotions.flashToggleFailed'), 'error');
+  } finally {
+    flashBusyId.value = null;
+  }
+};
+
+onMounted(() => {
+  fetchPromotions();
+  fetchFlashSales();
+});
 </script>
