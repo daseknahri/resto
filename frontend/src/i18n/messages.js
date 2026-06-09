@@ -364,6 +364,9 @@ export const messages = {
       recentlyVisited: "Continue browsing",
       dealsTitle: "Deals & Offers",
       dealBadge: "Deal",
+      activeOrderTitle: "Order #{number} in progress",
+      activeOrderHint: "Tap to track your order",
+      activeOrderLabel: "Track order {number}",
     },
     mktMenu: {
       loading: "Loading menu…",
@@ -4338,6 +4341,9 @@ export const messages = {
       recentlyVisited: "Continuer la navigation",
       dealsTitle: "Offres spéciales",
       dealBadge: "Promo",
+      activeOrderTitle: "Commande #{number} en cours",
+      activeOrderHint: "Touchez pour suivre votre commande",
+      activeOrderLabel: "Suivre la commande {number}",
     },
     mktMenu: {
       loading: "Chargement du menu…",
