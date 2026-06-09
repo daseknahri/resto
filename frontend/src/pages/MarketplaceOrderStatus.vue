@@ -271,6 +271,10 @@
               <span>{{ t('mktOrderStatus.deliveryFee') }}</span>
               <span class="tabular-nums">{{ fmtPrice(order.delivery_fee, order.currency) }}</span>
             </div>
+            <div v-if="Number(order.promotion_discount) > 0" class="flex justify-between text-amber-300">
+              <span>{{ t('mktOrderStatus.promoDiscount') }}</span>
+              <span class="tabular-nums">−{{ fmtPrice(order.promotion_discount, order.currency) }}</span>
+            </div>
             <div v-if="Number(order.loyalty_discount) > 0" class="flex justify-between text-amber-400/90">
               <span>{{ t('mktOrderStatus.loyaltyDiscount') }}</span>
               <span class="tabular-nums">−{{ fmtPrice(order.loyalty_discount, order.currency) }}</span>
