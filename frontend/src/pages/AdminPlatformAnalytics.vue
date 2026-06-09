@@ -10,6 +10,13 @@
           </h1>
           <p class="ui-subtle mt-0.5 text-xs">{{ t('adminAnalytics.subtitle') }}</p>
         </div>
+        <!-- Silent refresh indicator (shown when data is already visible but re-fetching) -->
+        <span
+          v-if="loading && data"
+          class="text-[11px] text-slate-500 tabular-nums"
+          role="status"
+          aria-live="polite"
+        >{{ t('adminAnalytics.updating') }}</span>
         <button
           class="ui-btn-outline ui-press ui-touch-target shrink-0 flex items-center gap-2 px-4 text-xs disabled:opacity-50"
           :disabled="loading"
@@ -179,7 +186,7 @@ const refreshedAt = ref('');
 
 const currency = (val) => {
   if (val == null) return '—';
-  return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(val);
+  return new Intl.NumberFormat(currentLocale.value, { style: 'currency', currency: 'MAD', minimumFractionDigits: 2 }).format(val);
 };
 
 const refresh = async () => {
@@ -188,7 +195,7 @@ const refresh = async () => {
   try {
     const res = await api.get('/admin/platform-analytics/');
     data.value = res.data;
-    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+    refreshedAt.value = new Intl.DateTimeFormat(currentLocale.value, { dateStyle: 'short', timeStyle: 'short', timeZoneName: 'short' }).format(new Date());
   } catch {
     fetchError.value = true;
   } finally {

@@ -3543,6 +3543,7 @@ export const messages = {
       bonusIssued: "Total bonus issued",
       payments: "Total payments",
       loaded: "Analytics data loaded.",
+      updating: "Updating…",
     },
     ownerRatings: {
       kicker: "Customer feedback",
@@ -7460,6 +7461,7 @@ export const messages = {
       bonusIssued: "Total bonus emis",
       payments: "Total paiements",
       loaded: "Donnees analytiques chargees.",
+      updating: "Mise a jour…",
     },
     ownerRatings: {
       kicker: "Retours clients",
