@@ -72,7 +72,8 @@ const arabicMessages = {
     "opensInNewTab": "(يفتح في تبويب جديد)",
     "included": "مضمّن",
     "notIncluded": "غير مضمّن",
-    "legal": "قانوني"
+    "legal": "قانوني",
+    "dismiss": "إغلاق"
   },
   "toast": {
     "type": {
@@ -2193,7 +2194,9 @@ const arabicMessages = {
     "findMyOrderCardLabel": "طلب #{number} — {status}",
     "receiptMessage": "رسالة من المطعم",
     "walletPaid": "رصيد مُطبَّق: {amount}",
-    "loyaltyDiscount": "خصم الولاء"
+    "loyaltyDiscount": "خصم الولاء",
+    "justPlacedTitle": "تم تقديم الطلب!",
+    "justPlacedSubtitle": "استلمنا طلبك. استرخِ بينما نعدّه لك."
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",
