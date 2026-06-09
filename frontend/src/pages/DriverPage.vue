@@ -97,12 +97,14 @@
           <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
         </div>
         <button
-          class="ui-btn-primary ui-touch-target w-full text-sm"
+          class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
           :disabled="busy"
           :aria-busy="busy"
-          :aria-label="busy ? t('common.loading') : undefined"
           @click="becomeDriver"
-        >{{ busy ? '…' : t('driver.becomeCta') }}</button>
+        >
+          <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+          {{ busy ? t('common.loading') : t('driver.becomeCta') }}
+        </button>
       </template>
     </div>
 
@@ -351,12 +353,14 @@
           <!-- Advance status -->
           <button
             v-if="nextAction"
-            class="ui-btn-primary ui-touch-target w-full text-sm"
+            class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
             :disabled="busy"
             :aria-busy="busy"
-            :aria-label="busy ? t('common.loading') : undefined"
             @click="advance(nextAction.to)"
-          >{{ busy ? '…' : nextAction.label }}</button>
+          >
+            <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ busy ? t('common.loading') : nextAction.label }}
+          </button>
           <button
             v-if="!failingOpen"
             class="ui-touch-target w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
@@ -544,12 +548,14 @@
             {{ t('driver.rateSkip') }}
           </button>
           <button
-            class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             :disabled="!custRatingScore || submittingRating"
             :aria-busy="submittingRating"
-            :aria-label="submittingRating ? t('common.loading') : undefined"
             @click="submitCustomerRating"
-          >{{ submittingRating ? '…' : t('driver.rateSubmit') }}</button>
+          >
+            <svg v-if="submittingRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ submittingRating ? t('common.loading') : t('driver.rateSubmit') }}
+          </button>
         </div>
       </div>
     </div>
@@ -640,12 +646,14 @@
             {{ t('common.cancel') }}
           </button>
           <button
-            class="ui-btn-primary ui-press px-4 py-2 text-sm disabled:opacity-50"
+            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             :disabled="busy"
             :aria-busy="busy"
-            :aria-label="busy ? t('common.loading') : undefined"
             @click="submitCashout"
-          >{{ busy ? '…' : t('driver.cashOut') }}</button>
+          >
+            <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ busy ? t('common.loading') : t('driver.cashOut') }}
+          </button>
         </div>
       </div>
     </div>

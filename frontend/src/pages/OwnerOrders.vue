@@ -486,10 +486,14 @@
                 />
                 <div class="flex gap-2">
                   <button
-                    class="rounded-full bg-[var(--color-secondary,#f59e0b)] px-3 py-1 text-[11px] font-semibold text-slate-950 disabled:opacity-50"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary,#f59e0b)] px-3 py-1 text-[11px] font-semibold text-slate-950 disabled:opacity-50"
                     :disabled="!ratingScore || submittingRating"
+                    :aria-busy="submittingRating"
                     @click="submitJobRating(o)"
-                  >{{ submittingRating ? '…' : t('ownerOrders.djSubmitRating') }}</button>
+                  >
+                    <svg v-if="submittingRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                    {{ submittingRating ? t('common.loading') : t('ownerOrders.djSubmitRating') }}
+                  </button>
                   <button class="text-slate-500 hover:text-slate-300 text-[11px]" @click="ratingJobId = null; ratingScore = 0; ratingNote = ''">{{ t('common.cancel') }}</button>
                 </div>
               </div>
