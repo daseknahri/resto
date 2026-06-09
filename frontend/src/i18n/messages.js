@@ -1394,6 +1394,7 @@ export const messages = {
       utilityNav: "Utility navigation",
     },
     waiterPage: {
+      searchPlaceholder: "Search by table, order #, or name…",
       noActiveOrders: "All clear — no active orders",
       noActiveOrdersBody: "New orders will appear here automatically.",
       noRecentOrders: "No recent orders",
@@ -5339,6 +5340,7 @@ export const messages = {
       utilityNav: "Navigation utilitaire",
     },
     waiterPage: {
+      searchPlaceholder: "Table, n° commande, ou nom…",
       noActiveOrders: "Tout est calme — aucune commande active",
       noActiveOrdersBody: "Les nouvelles commandes apparaitront ici automatiquement.",
       noRecentOrders: "Aucune commande recente",

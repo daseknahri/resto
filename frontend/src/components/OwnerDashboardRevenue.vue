@@ -164,6 +164,7 @@
             <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
           </div>
           <span class="shrink-0 tabular-nums text-xs text-slate-400">×{{ dish.order_count }}</span>
+          <span v-if="dish.total_revenue > 0" class="shrink-0 tabular-nums text-[10px] text-[var(--color-secondary)]/55">{{ fmt(dish.total_revenue) }}</span>
         </li>
       </ol>
     </div>

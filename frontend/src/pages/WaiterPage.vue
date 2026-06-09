@@ -95,6 +95,23 @@
       </div>
     </div>
 
+    <!-- Quick search (shown on non-shift tabs, fades in when there's something to search) -->
+    <Transition name="fade">
+      <label v-if="activeTab !== 'shift'" class="relative block">
+        <span class="sr-only">{{ t('waiterPage.searchPlaceholder') }}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="pointer-events-none absolute start-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clip-rule="evenodd"/>
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="search"
+          autocomplete="off"
+          :placeholder="t('waiterPage.searchPlaceholder')"
+          class="ui-input ps-8 text-sm placeholder:text-slate-600"
+        />
+      </label>
+    </Transition>
+
     <!-- New Order modal -->
     <WaiterNewOrder
       v-if="showNewOrder"
@@ -807,6 +824,7 @@ const loadShiftSummary = () => {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 const activeTab = ref("all");
+const searchQuery = ref("");
 
 const tabs = computed(() => [
   { key: "all", label: t("waiterPage.tabAll"), count: waiter.orders.length },
@@ -817,9 +835,20 @@ const tabs = computed(() => [
 ]);
 
 const visibleOrders = computed(() => {
-  if (activeTab.value === "recent") return waiter.recentOrders;
-  if (activeTab.value === "all") return waiter.orders;
-  return waiter.byStatus[activeTab.value] ?? [];
+  let orders;
+  if (activeTab.value === "recent") orders = waiter.recentOrders;
+  else if (activeTab.value === "all") orders = waiter.orders;
+  else orders = waiter.byStatus[activeTab.value] ?? [];
+
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return orders;
+  return orders.filter((o) => {
+    const haystack = [o.order_number, o.customer_name, o.table_label, o.section_name]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
 });
 
 // Load history on demand when the waiter opens the Recent tab.
