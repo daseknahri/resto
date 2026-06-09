@@ -72,7 +72,7 @@
             <div class="flex-1 min-w-0">
               <p class="ui-kicker">{{ t('mktMenu.restaurantKicker') }}</p>
               <h1 class="ui-display text-xl font-semibold tracking-tight text-white leading-tight">{{ restaurant.name }}</h1>
-              <p v-if="restaurant.tagline" class="mt-0.5 text-xs text-slate-400 line-clamp-1">{{ restaurant.tagline }}</p>
+              <p v-if="restaurant.tagline" class="mt-0.5 text-xs text-slate-400 line-clamp-1" :title="restaurant.tagline">{{ restaurant.tagline }}</p>
               <!-- Chips row -->
               <div class="mt-2 flex flex-wrap gap-1.5">
                 <span
@@ -178,8 +178,8 @@
                   <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold text-slate-100 leading-snug">{{ dish.name }}</p>
-                  <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ dish.description }}</p>
+                  <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
+                  <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
                   <div class="mt-2 flex items-center justify-between gap-2">
                     <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                     <button
@@ -254,8 +254,8 @@
                   </div>
                   <!-- Info -->
                   <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-slate-100 leading-snug">{{ dish.name }}</p>
-                    <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ dish.description }}</p>
+                    <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
+                    <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
                     <div class="mt-2 flex items-center justify-between gap-2">
                       <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">
                         {{ fmtPrice(dish.price) }}
@@ -336,7 +336,7 @@
               />
               <!-- info -->
               <div class="flex-1 min-w-0 space-y-0.5">
-                <p class="truncate text-sm font-semibold leading-snug text-slate-100">{{ item.name }}</p>
+                <p class="truncate text-sm font-semibold leading-snug text-slate-100" :title="item.name">{{ item.name }}</p>
                 <p class="text-xs tabular-nums">
                   <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.price * item.qty) }}</span>
                   <span class="text-slate-500"> · {{ fmtPrice(item.price) }} ea.</span>

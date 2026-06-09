@@ -71,9 +71,9 @@
           <div class="flex items-center gap-3">
             <!-- Name + meta -->
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-semibold leading-snug text-slate-100 tracking-tight">{{ item.name }}</p>
-              <p v-if="item.note" class="mt-1 text-[11px] text-slate-400 truncate">{{ item.note }}</p>
-              <p v-else-if="item.option_labels?.length" class="mt-1 text-[11px] text-slate-400 truncate">{{ item.option_labels.join(' · ') }}</p>
+              <p class="truncate text-sm font-semibold leading-snug text-slate-100 tracking-tight" :title="item.name">{{ item.name }}</p>
+              <p v-if="item.note" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.note">{{ item.note }}</p>
+              <p v-else-if="item.option_labels?.length" class="mt-1 text-[11px] text-slate-400 truncate" :title="item.option_labels.join(' · ')">{{ item.option_labels.join(' · ') }}</p>
               <p class="mt-1 text-[11px] text-slate-500">{{ formatPrice(item.price) }} {{ t('cartPage.each') }}</p>
             </div>
             <!-- Stepper pill -->

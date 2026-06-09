@@ -116,8 +116,8 @@
         <!-- Content -->
         <div class="flex flex-col gap-3 p-4">
           <div class="min-w-0 space-y-1">
-            <h3 class="truncate text-base font-semibold leading-snug tracking-tight text-white">{{ dish.name }}</h3>
-            <p class="line-clamp-2 text-sm leading-relaxed text-slate-400">{{ dish.description || '' }}</p>
+            <h3 class="truncate text-base font-semibold leading-snug tracking-tight text-white" :title="dish.name">{{ dish.name }}</h3>
+            <p class="line-clamp-2 text-sm leading-relaxed text-slate-400" :title="dish.description || undefined">{{ dish.description || '' }}</p>
           </div>
 
           <ul v-if="dish.tags?.length" class="flex flex-wrap gap-1 list-none p-0 m-0">

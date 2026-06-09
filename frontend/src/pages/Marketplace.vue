@@ -256,7 +256,7 @@
             <!-- Bottom gradient: name + rating overlaid -->
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
             <div class="absolute inset-x-0 bottom-0 z-10 px-3.5 pb-3">
-              <h2 class="text-sm font-bold leading-snug text-white drop-shadow-md">{{ r.name }}</h2>
+              <h2 class="text-sm font-bold leading-snug text-white drop-shadow-md" :title="r.name">{{ r.name }}</h2>
               <div class="mt-0.5 flex items-center gap-2 text-[11px]">
                 <span v-if="r.rating_average" class="flex items-center gap-0.5 text-amber-400">
                   <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
@@ -308,7 +308,7 @@
           <!-- Card body: tagline + chips + delivery info + CTA -->
           <div class="flex flex-1 flex-col gap-2.5 p-4 pt-3">
             <!-- Tagline -->
-            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-1 leading-relaxed">{{ r.tagline }}</p>
+            <p v-if="r.tagline" class="text-xs text-slate-400 line-clamp-1 leading-relaxed" :title="r.tagline">{{ r.tagline }}</p>
 
             <!-- Chips -->
             <div class="flex flex-wrap items-center gap-1">

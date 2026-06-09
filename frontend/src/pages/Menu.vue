@@ -30,7 +30,7 @@
           />
           <div class="min-w-0 space-y-1">
             <h1 class="ui-display text-2xl font-semibold tracking-tight text-white sm:text-3xl drop-shadow-lg">{{ tenantName }}</h1>
-            <p v-if="tenantDescription" class="line-clamp-1 text-xs text-slate-300/75 leading-relaxed">{{ tenantDescription }}</p>
+            <p v-if="tenantDescription" class="line-clamp-1 text-xs text-slate-300/75 leading-relaxed" :title="tenantDescription">{{ tenantDescription }}</p>
           </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">

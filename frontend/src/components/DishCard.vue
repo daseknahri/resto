@@ -28,8 +28,8 @@
     <!-- Left: text -->
     <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 ps-3.5 pe-2.5">
       <div class="space-y-1">
-        <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white">{{ dish.name }}</h3>
-        <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90">{{ dish.description }}</p>
+        <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
+        <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90" :title="dish.description">{{ dish.description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
         <!-- Price pill -->
@@ -181,8 +181,8 @@
     <!-- Info + action -->
     <div class="space-y-3 p-4" @click.stop>
       <div class="space-y-1">
-        <h3 class="text-base font-semibold leading-snug text-white">{{ dish.name }}</h3>
-        <p v-if="dish.description" class="line-clamp-2 text-[13px] text-slate-400">{{ dish.description }}</p>
+        <h3 class="text-base font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
+        <p v-if="dish.description" class="line-clamp-2 text-[13px] text-slate-400" :title="dish.description">{{ dish.description }}</p>
       </div>
       <!-- Qty stepper or Add -->
       <template v-if="canOrder">
@@ -233,7 +233,7 @@
     <!-- Text -->
     <div class="min-w-0 flex-1">
       <div class="flex items-baseline gap-2">
-        <h3 class="truncate text-sm font-medium text-white">{{ dish.name }}</h3>
+        <h3 class="truncate text-sm font-medium text-white" :title="dish.name">{{ dish.name }}</h3>
         <span v-if="isSoldOut" class="shrink-0 text-[10px] text-red-400">{{ t('menu.soldOut') }}</span>
         <span v-else-if="isScheduleUnavailable" class="shrink-0 text-[10px] text-slate-500">{{ t('menu.notAvailableNow') }}</span>
       </div>
