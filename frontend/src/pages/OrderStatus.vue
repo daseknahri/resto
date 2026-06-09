@@ -348,11 +348,13 @@
         <!-- Pay this open bill from wallet — only the signed-in order owner sees this -->
         <template v-if="orderData.can_pay_with_wallet">
           <button
-            class="ui-btn-primary w-full justify-center py-3 text-sm font-semibold disabled:opacity-50"
+            class="ui-btn-primary inline-flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold disabled:opacity-50"
             :disabled="payingWallet"
+            :aria-busy="payingWallet"
             @click="payWithWallet"
           >
-            <AppIcon name="wallet" class="h-4 w-4" aria-hidden="true" />
+            <svg v-if="payingWallet" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-4 w-4 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            <AppIcon v-else name="wallet" class="h-4 w-4 shrink-0" aria-hidden="true" />
             {{ payingWallet ? t('orderStatus.payingWallet') : t('orderStatus.payWithWallet', { amount: formatCurrency(orderData.amount_due, orderData.currency) }) }}
           </button>
           <p class="text-center text-[11px] text-slate-500">
@@ -397,11 +399,13 @@
               </div>
               <div class="flex gap-2.5">
                 <button
-                  class="ui-btn-primary flex-1 py-2.5 text-sm"
+                  class="ui-btn-primary inline-flex flex-1 items-center justify-center gap-2 py-2.5 text-sm"
                   style="--color-secondary: #f43f5e; --color-secondary-rgb: 244,63,94"
                   :disabled="cancelling"
+                  :aria-busy="cancelling"
                   @click="cancelOrder"
                 >
+                  <svg v-if="cancelling" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
                   <span aria-live="polite" aria-atomic="true">
                     {{ cancelling ? t('orderStatus.cancelling') : t('orderStatus.cancelConfirmYes') }}
                   </span>
