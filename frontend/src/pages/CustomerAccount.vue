@@ -1170,13 +1170,66 @@
                 <p class="ui-kicker">{{ t('customerAccount.savedAddressesTitle') }}</p>
                 <p class="mt-0.5 text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesNote') }}</p>
               </div>
-              <span class="text-[10px] text-slate-500">{{ t('customerAccount.savedAddressesMax') }}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500">{{ savedAddresses.length }}/10</span>
+                <button
+                  v-if="!addingAddress && savedAddresses.length < 10"
+                  class="ui-press ui-touch-target inline-flex items-center gap-1 rounded-lg border border-slate-700/60 bg-slate-800/50 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition-colors hover:border-slate-600 hover:text-white"
+                  @click="addingAddress = true"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3 w-3 shrink-0" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+                  {{ t('customerAccount.savedAddressAdd') }}
+                </button>
+              </div>
             </div>
             <div class="p-4 space-y-2">
+              <!-- Add address inline form -->
+              <Transition name="ui-fade">
+                <form v-if="addingAddress" class="space-y-2 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3" @submit.prevent="addAddress">
+                  <label class="block text-[11px] font-medium text-slate-300">
+                    {{ t('customerAccount.savedAddressLabelField') }}
+                    <input
+                      v-model="addrForm.label"
+                      type="text"
+                      maxlength="60"
+                      class="ui-input mt-1 w-full text-xs"
+                      :placeholder="t('customerAccount.savedAddressLabelPlaceholder')"
+                    />
+                  </label>
+                  <label class="block text-[11px] font-medium text-slate-300">
+                    {{ t('customerAccount.savedAddressField') }}
+                    <textarea
+                      v-model="addrForm.address"
+                      rows="2"
+                      maxlength="300"
+                      class="ui-textarea mt-1 w-full resize-none text-xs"
+                      :placeholder="t('customerAccount.savedAddressAddressPlaceholder')"
+                      required
+                    />
+                  </label>
+                  <p v-if="addrError" class="text-[11px] text-red-300" role="alert">{{ addrError }}</p>
+                  <div class="flex gap-2">
+                    <button
+                      type="submit"
+                      class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                      :disabled="savingAddress"
+                    >
+                      <svg v-if="savingAddress" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                      {{ savingAddress ? t('common.loading') : t('customerAccount.savedAddressSave') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-slate-700/60 px-4 py-1.5 text-[11px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                      :disabled="savingAddress"
+                      @click="addingAddress = false; addrForm.label = ''; addrForm.address = ''; addrError = ''"
+                    >{{ t('common.cancel') }}</button>
+                  </div>
+                </form>
+              </Transition>
               <div v-if="loadingAddresses" class="space-y-1.5">
                 <div v-for="i in 2" :key="i" class="h-12 animate-pulse rounded-xl border border-slate-700/40 bg-slate-800/30" />
               </div>
-              <div v-else-if="!savedAddresses.length" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
+              <div v-else-if="!savedAddresses.length && !addingAddress" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
                 {{ t('customerAccount.savedAddressesEmpty') }}
               </div>
               <ul v-else class="space-y-1.5">
@@ -1188,7 +1241,7 @@
                   <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
                   <div class="min-w-0 flex-1 space-y-0.5">
                     <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
-                    <p class="text-slate-400">{{ addr.address }}</p>
+                    <p class="text-slate-400" :title="addr.address">{{ addr.address }}</p>
                   </div>
                   <button class="ui-touch-target ui-press shrink-0 flex items-center justify-center text-slate-500 transition hover:text-red-400" :aria-label="t('common.remove')" @click="deleteAddress(addr.id)">
                     <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
@@ -1525,6 +1578,39 @@ const deleteAddress = async (id) => {
     toast.show(t('customerAccount.savedAddressDeleted'), 'success');
   } catch {
     toast.show(t('customerAccount.savedAddressDeleteFailed'), 'error');
+  }
+};
+
+// Add address
+const addingAddress = ref(false);
+const addrForm = reactive({ label: '', address: '' });
+const addrError = ref('');
+const savingAddress = ref(false);
+
+const addAddress = async () => {
+  addrError.value = '';
+  if (!addrForm.address.trim()) {
+    addrError.value = t('customerAccount.savedAddressRequired');
+    return;
+  }
+  savingAddress.value = true;
+  try {
+    const res = await api.post('/customer/addresses/', {
+      label: addrForm.label.trim(),
+      address: addrForm.address.trim(),
+    });
+    savedAddresses.value.unshift(res.data);
+    addrForm.label = '';
+    addrForm.address = '';
+    addingAddress.value = false;
+    toast.show(t('customerAccount.savedAddressSaved'), 'success');
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    addrError.value = code === 'address_limit'
+      ? t('customerAccount.savedAddressLimit')
+      : t('customerAccount.savedAddressSaveFailed');
+  } finally {
+    savingAddress.value = false;
   }
 };
 
