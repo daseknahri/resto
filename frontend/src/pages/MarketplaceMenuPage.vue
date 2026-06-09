@@ -88,6 +88,12 @@
                   />
                   {{ restaurant.is_open ? t('mktMenu.open') : t('mktMenu.closed') }}
                 </span>
+                <!-- Rating chip -->
+                <span v-if="restaurant.rating_average" class="ui-chip flex items-center gap-0.5 text-amber-400">
+                  <svg viewBox="0 0 12 12" class="h-2.5 w-2.5 fill-current shrink-0" aria-hidden="true"><path d="M6 1l1.39 2.82 3.11.45-2.25 2.19.53 3.09L6 8.12 3.22 9.55l.53-3.09L1.5 4.27l3.11-.45z"/></svg>
+                  <span class="tabular-nums">{{ restaurant.rating_average }}</span>
+                  <span class="text-slate-500 tabular-nums">({{ restaurant.rating_count }})</span>
+                </span>
                 <span v-if="restaurant.cuisine_type" class="ui-chip">{{ restaurant.cuisine_type }}</span>
                 <span v-if="restaurant.city" class="ui-chip">{{ restaurant.city }}</span>
                 <span v-if="restaurant.delivery_enabled" class="ui-chip text-sky-300">
@@ -140,6 +146,27 @@
           v-if="loyaltyPoints > 0"
           class="shrink-0 rounded-full border border-violet-500/20 bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-violet-300"
         >{{ loyaltyPoints }}</span>
+      </div>
+
+      <!-- Customer reviews — horizontal scroll, only shown when restaurant has review comments -->
+      <div
+        v-if="restaurant.recent_reviews?.length"
+        class="ui-reveal mb-2 space-y-2"
+        :style="{ '--ui-delay': '90ms' }"
+      >
+        <p class="ui-kicker px-4">{{ t('mktMenu.reviewsTitle') }}</p>
+        <div class="flex gap-2.5 overflow-x-auto px-4 pb-0.5 snap-x">
+          <div
+            v-for="(review, idx) in restaurant.recent_reviews"
+            :key="idx"
+            class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
+          >
+            <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
+              <span aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
+            </div>
+            <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- Sticky horizontal category navigation -->

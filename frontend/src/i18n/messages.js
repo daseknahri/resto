@@ -435,6 +435,7 @@ export const messages = {
       loyaltyTeaserPts: "You have {points} loyalty pts",
       loyaltyTeaserEarn: "Earn loyalty points with every order",
       loyaltyTeaserRedeem: "Redeem at checkout",
+      reviewsTitle: "What customers say",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4399,6 +4400,7 @@ export const messages = {
       loyaltyTeaserPts: "Vous avez {points} pts fidelite",
       loyaltyTeaserEarn: "Gagnez des points a chaque commande",
       loyaltyTeaserRedeem: "A utiliser au paiement",
+      reviewsTitle: "Avis clients",
     },
     reservationManage: {
       kicker: "Reservation",
