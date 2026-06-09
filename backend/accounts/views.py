@@ -3224,6 +3224,8 @@ class MarketplaceOrderStatusView(APIView):
             "delivery_fee": str(order.delivery_fee),
             "wallet_amount_paid": str(order.wallet_amount_paid),
             "loyalty_discount": str(order.loyalty_discount),
+            "redeemed_loyalty_points": order.redeemed_loyalty_points,
+            "points_earned": order.points_earned,
             "promotion_discount": str(order.promotion_discount),
             "applied_promotion_name": order.applied_promotion_name or "",
             "currency": order.currency,

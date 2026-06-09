@@ -540,6 +540,7 @@ export const messages = {
       statusStepperLabel: "Order progress steps",
       currentStep: "current step",
       stepDone: "completed",
+      pointsEarned: "Loyalty points earned",
     },
     contactPage: {
       kicker: "Support",
@@ -4502,6 +4503,7 @@ export const messages = {
       statusStepperLabel: "Etapes de la commande",
       currentStep: "etape en cours",
       stepDone: "termine",
+      pointsEarned: "Points de fidelite gagnes",
     },
     contactPage: {
       kicker: "Support",

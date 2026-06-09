@@ -287,6 +287,19 @@
               <span>{{ t('mktOrderStatus.total') }}</span>
               <span class="tabular-nums">{{ fmtPrice(order.total, order.currency) }}</span>
             </div>
+            <!-- Points earned celebration — visible on completed orders with loyalty earn -->
+            <div
+              v-if="order.status === 'completed' && order.points_earned > 0"
+              class="mt-1.5 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/8 px-3 py-1.5"
+            >
+              <span class="flex items-center gap-1.5 text-[11px] text-violet-300">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3 shrink-0 text-violet-400" aria-hidden="true">
+                  <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+                </svg>
+                {{ t('mktOrderStatus.pointsEarned') }}
+              </span>
+              <span class="text-[12px] font-bold tabular-nums text-violet-200">+{{ order.points_earned }} pts</span>
+            </div>
           </div>
         </div>
       </template>
