@@ -96,7 +96,7 @@
             <span class="opacity-60 font-sans font-normal not-italic">{{ t('ownerPromotions.codeLabel') }}:</span>{{ promo.code }}
           </p>
           <!-- Description -->
-          <p v-if="promo.description" class="text-xs text-slate-500 truncate">{{ promo.description }}</p>
+          <p v-if="promo.description" class="text-xs text-slate-500 truncate" :title="promo.description">{{ promo.description }}</p>
           <!-- Metadata chips -->
           <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500 tabular-nums pt-0.5">
             <span v-if="promo.min_order_amount && Number(promo.min_order_amount) > 0">
