@@ -1384,15 +1384,48 @@
                       <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
                       <p class="text-slate-400" :title="addr.address">{{ addr.address }}</p>
                     </div>
-                    <button
-                      class="ui-touch-target ui-press shrink-0 flex items-center justify-center transition"
-                      :class="deletingAddressId === addr.id ? 'text-red-400' : 'text-slate-500 hover:text-red-400'"
-                      :aria-label="t('common.remove')"
-                      @click="deletingAddressId = addr.id"
-                    >
-                      <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    <div class="flex shrink-0 gap-0.5">
+                      <!-- Edit toggle -->
+                      <button
+                        class="ui-touch-target ui-press flex items-center justify-center transition"
+                        :class="editingAddressId === addr.id ? 'text-sky-400' : 'text-slate-500 hover:text-sky-400'"
+                        :aria-label="t('common.edit')"
+                        @click="editingAddressId === addr.id ? editingAddressId = null : startEdit(addr)"
+                      >
+                        <AppIcon name="pencil" class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                      <!-- Delete toggle -->
+                      <button
+                        class="ui-touch-target ui-press flex items-center justify-center transition"
+                        :class="deletingAddressId === addr.id ? 'text-red-400' : 'text-slate-500 hover:text-red-400'"
+                        :aria-label="t('common.remove')"
+                        @click="deletingAddressId = addr.id; editingAddressId = null"
+                      >
+                        <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
                   </div>
+                  <!-- Inline edit form -->
+                  <Transition name="ui-fade">
+                    <form v-if="editingAddressId === addr.id" class="mt-2 space-y-2 border-t border-sky-500/15 pt-2" @submit.prevent="saveEdit">
+                      <label class="block text-[11px] font-medium text-slate-300">
+                        {{ t('customerAccount.savedAddressLabelField') }}
+                        <input v-model="editForm.label" type="text" maxlength="60" class="ui-input mt-1 w-full text-xs" :placeholder="t('customerAccount.savedAddressLabelPlaceholder')" />
+                      </label>
+                      <label class="block text-[11px] font-medium text-slate-300">
+                        {{ t('customerAccount.savedAddressField') }}
+                        <textarea v-model="editForm.address" rows="2" maxlength="300" class="ui-textarea mt-1 w-full resize-none text-xs" required />
+                      </label>
+                      <p v-if="editError" class="text-[11px] text-red-300" role="alert">{{ editError }}</p>
+                      <div class="flex gap-2">
+                        <button type="submit" class="ui-btn-primary ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-semibold disabled:opacity-50" :disabled="savingEdit">
+                          <svg v-if="savingEdit" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                          {{ savingEdit ? t('common.loading') : t('common.save') }}
+                        </button>
+                        <button type="button" class="rounded-lg border border-slate-700/60 px-4 py-1.5 text-[11px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200" :disabled="savingEdit" @click="editingAddressId = null">{{ t('common.cancel') }}</button>
+                      </div>
+                    </form>
+                  </Transition>
                   <!-- Inline delete confirmation -->
                   <Transition name="ui-fade">
                     <div v-if="deletingAddressId === addr.id" class="mt-2 flex items-center gap-3 border-t border-red-500/15 pt-2">
@@ -1754,6 +1787,10 @@ const loyaltyUnlockCredit = computed(() => {
 // ── Saved addresses ───────────────────────────────────────────────────────────
 const savedAddresses = ref([]);
 const deletingAddressId = ref(null);
+const editingAddressId = ref(null);
+const editForm = reactive({ label: '', address: '' });
+const editError = ref('');
+const savingEdit = ref(false);
 const loadingAddresses = ref(false);
 
 const fetchAddresses = async () => {
@@ -1774,6 +1811,37 @@ const deleteAddress = async (id) => {
     toast.show(t('customerAccount.savedAddressDeleted'), 'success');
   } catch {
     toast.show(t('customerAccount.savedAddressDeleteFailed'), 'error');
+  }
+};
+
+const startEdit = (addr) => {
+  editingAddressId.value = addr.id;
+  editForm.label = addr.label || '';
+  editForm.address = addr.address || '';
+  editError.value = '';
+  deletingAddressId.value = null; // close any pending delete confirm
+};
+
+const saveEdit = async () => {
+  editError.value = '';
+  if (!editForm.address.trim()) {
+    editError.value = t('customerAccount.savedAddressRequired');
+    return;
+  }
+  savingEdit.value = true;
+  try {
+    const res = await api.patch(`/customer/addresses/${editingAddressId.value}/`, {
+      label: editForm.label.trim(),
+      address: editForm.address.trim(),
+    });
+    const idx = savedAddresses.value.findIndex((a) => a.id === editingAddressId.value);
+    if (idx >= 0) savedAddresses.value[idx] = res.data;
+    editingAddressId.value = null;
+    toast.show(t('customerAccount.savedAddressEdited'), 'success');
+  } catch {
+    editError.value = t('customerAccount.savedAddressEditFailed');
+  } finally {
+    savingEdit.value = false;
   }
 };
 
