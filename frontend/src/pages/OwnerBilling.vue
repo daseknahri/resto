@@ -219,7 +219,10 @@
     </section>
 
     <section v-else-if="!loading" class="ui-panel ui-reveal p-4" style="--ui-delay: 56ms">
-      <div class="ui-empty-state py-6 text-center">
+      <div class="ui-empty-state space-y-3 py-6 text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+          <span class="text-xl leading-none" aria-hidden="true">★</span>
+        </div>
         <p class="text-sm font-semibold text-slate-100">{{ t('ownerBilling.highestTier') }}</p>
       </div>
     </section>
