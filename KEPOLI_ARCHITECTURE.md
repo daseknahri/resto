@@ -135,6 +135,15 @@ Stripe (or a Morocco-friendly PSP) as a wallet **top-up** funding source only â€
 key. Orders/trips still settle from the wallet. No PSP keys are entered by the
 assistant; only the seam is built.
 
+## 5b. Courier service âœ… (shipped 2026-06-10, commit 83221d6)
+Packages are a KIND of trip: `RideRequest.kind` (ride|package, default ride) +
+recipient_name/phone + package_note (migration accounts/0037). Same fares, settle,
+sweep, tracking as rides. Dispatch rules: rides -> car + car-doc approved only;
+packages -> every approved online driver (any vehicle). recipient_phone: never on
+open offers; rider-owned on own trip; assigned driver only otherwise. Customer page
+/send-package (SendPackagePage.vue); registry flip made it appear on Home + the
+marketplace hub automatically.
+
 ## 6. Service registry (how new services are added)
 
 The customer-facing super-app surfaces render from ONE registry:
