@@ -192,6 +192,10 @@
                         <AppIcon name="star" class="owner-settings-item-icon" />
                         <span>{{ t("ownerLayout.ratings") }}</span>
                       </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-customers' }" @click="closeSettingsMenu">
+                        <AppIcon name="users" class="owner-settings-item-icon" />
+                        <span>{{ t("ownerLayout.customers") }}</span>
+                      </RouterLink>
                     </div>
 
                     <div role="group" :aria-label="t('ownerLayout.groupOperations')">
@@ -458,6 +462,7 @@ const activeWorkspaceLabel = computed(() => {
   if (path.startsWith("/owner/loyalty")) return t("ownerLayout.loyalty");
   if (path.startsWith("/owner/wallet")) return t("ownerLayout.wallet");
   if (path.startsWith("/owner/promotions")) return t("ownerLayout.promotions");
+  if (path.startsWith("/owner/customers")) return t("ownerLayout.customers");
   return t("ownerLayout.dashboard");
 });
 const settingsOpen = ref(false);
