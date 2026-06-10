@@ -597,13 +597,22 @@ class CustomerOrdersView(APIView):
         # Import Order + OrderItem from menu app — cross-app import is intentional here.
         from menu.models import Order, OrderItem
 
+        PAGE_SIZE = 20
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        offset = (page - 1) * PAGE_SIZE
+        # Fetch one extra to detect whether a further page exists.
         orders = list(
             Order.objects
             .filter(customer=customer)
             .prefetch_related("items")
             .select_related("rating")   # Rating is a OneToOneField on Order
-            .order_by("-created_at")[:20]
+            .order_by("-created_at")[offset:offset + PAGE_SIZE + 1]
         )
+        has_more = len(orders) > PAGE_SIZE
+        orders = orders[:PAGE_SIZE]
 
         result = []
         for order in orders:
@@ -637,11 +646,13 @@ class CustomerOrdersView(APIView):
                     "score": rating.score,
                     "comment": rating.comment,
                     "created_at": rating.created_at,
+                    "owner_reply": rating.owner_reply or "",
+                    "owner_reply_at": rating.owner_reply_at.isoformat() if rating.owner_reply_at else None,
                 } if rating else None,
                 "items": items,
             })
 
-        return Response({"orders": result, "count": len(result)})
+        return Response({"orders": result, "count": len(result), "has_more": has_more, "page": page})
 
 
 class CustomerMarketplaceOrdersView(APIView):
@@ -661,11 +672,19 @@ class CustomerMarketplaceOrdersView(APIView):
             return Response({"orders": [], "count": 0})
 
         from .models import CustomerOrderRef
+        PAGE_SIZE = 20
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+        offset = (page - 1) * PAGE_SIZE
         refs = list(
             CustomerOrderRef.objects
             .filter(customer_id=customer_id)
-            .order_by("-order_created_at")[:50]
+            .order_by("-order_created_at")[offset:offset + PAGE_SIZE + 1]
         )
+        has_more = len(refs) > PAGE_SIZE
+        refs = refs[:PAGE_SIZE]
         return Response({
             "orders": [
                 {
@@ -682,6 +701,8 @@ class CustomerMarketplaceOrdersView(APIView):
                 for r in refs
             ],
             "count": len(refs),
+            "has_more": has_more,
+            "page": page,
         })
 
 

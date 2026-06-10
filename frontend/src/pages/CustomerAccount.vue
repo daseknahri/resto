@@ -606,6 +606,20 @@
                 </li>
               </ul>
 
+              <!-- Load more button -->
+              <div v-if="ordersHasMore || loadingMoreOrders" class="pt-1 text-center">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-2 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+                  :disabled="loadingMoreOrders"
+                  @click="loadMoreOrders"
+                >
+                  <svg v-if="loadingMoreOrders" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  <AppIcon v-else name="chevronDown" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {{ loadingMoreOrders ? t('common.loading') : t('customerAccount.loadMoreOrders') }}
+                </button>
+              </div>
+
               <!-- Local-only orders (pre-login) -->
               <template v-else-if="cart.recentOrders.length">
                 <ul class="space-y-2">
@@ -1684,7 +1698,10 @@ const LOCALE_LABELS = { en: 'English', fr: 'Français', ar: 'العربية' };
 const localeLabelCurrent = computed(() => LOCALE_LABELS[selectedLocale.value] || selectedLocale.value);
 
 const loadingOrders = ref(false);
+const loadingMoreOrders = ref(false);
 const ordersError = ref(false);
+const ordersHasMore = ref(false);
+const ordersCurrentPage = ref(1);
 const apiOrders = ref([]);
 
 const loadingReservations = ref(false);
@@ -2090,19 +2107,35 @@ const fetchWallet = async () => {
   }
 };
 
-const fetchOrders = async () => {
+const fetchOrders = async (page = 1) => {
   if (!customerStore.isAuthenticated) return;
-  loadingOrders.value = true;
-  ordersError.value = false;
+  const isFirstPage = page === 1;
+  if (isFirstPage) {
+    loadingOrders.value = true;
+    ordersError.value = false;
+    ordersCurrentPage.value = 1;
+  } else {
+    loadingMoreOrders.value = true;
+  }
   try {
-    const res = await api.get('/customer/orders/');
-    apiOrders.value = res.data.orders || [];
+    const res = await api.get(`/customer/orders/?page=${page}`);
+    const incoming = res.data.orders || [];
+    if (isFirstPage) {
+      apiOrders.value = incoming;
+    } else {
+      apiOrders.value = [...apiOrders.value, ...incoming];
+    }
+    ordersHasMore.value = Boolean(res.data.has_more);
+    ordersCurrentPage.value = page;
   } catch {
-    ordersError.value = true;
+    if (isFirstPage) ordersError.value = true;
   } finally {
     loadingOrders.value = false;
+    loadingMoreOrders.value = false;
   }
 };
+
+const loadMoreOrders = () => fetchOrders(ordersCurrentPage.value + 1);
 
 // Cross-restaurant order history (public marketplace index — works on any domain).
 const marketplaceOrders = ref([]);
