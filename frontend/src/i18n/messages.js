@@ -1545,6 +1545,7 @@ export const messages = {
       billPayWallet: "Pay {amount} with wallet",
       billClose: "Close",
       orderSettled: "Order settled.",
+      markPaidFailed: "Could not record payment — please try again.",
       ratingSubmitted: "Customer rating saved.",
       ratingFailed: "Could not save rating — please try again.",
     },
@@ -1804,6 +1805,7 @@ export const messages = {
       priceTier3: "Price tier 3 - premium",
       tagsLabel: "Dietary & feature tags",
       tagsHint: "Select all that apply to your menu.",
+      loadFailed: "Could not load profile settings — please refresh."
     },
     closureDates: {
       addDate: "Add a closure date",
@@ -1983,6 +1985,8 @@ export const messages = {
       groupMaxSelect: "Max choices",
       bulkPublish: "Publish all",
       bulkUnpublish: "Unpublish all",
+      confirmBulkPublish: "Mark all {count} dish(es) in this category as published?",
+      confirmBulkUnpublish: "Mark all {count} dish(es) in this category as unpublished?",
       dishSlug: "URL slug",
       stockQtyLabel: "Stock quantity",
       stockQtyPlaceholder: "Unlimited",
@@ -5639,6 +5643,7 @@ export const messages = {
       billPayWallet: "Payer {amount} avec le portefeuille",
       billClose: "Fermer",
       orderSettled: "Commande reglee.",
+      markPaidFailed: "Impossible d'enregistrer le paiement — reessayez.",
       ratingSubmitted: "Evaluation client enregistree.",
       ratingFailed: "Impossible d'enregistrer l'evaluation — reessayez.",
     },
@@ -5897,6 +5902,7 @@ export const messages = {
       priceTier3: "Niveau de prix 3 - premium",
       tagsLabel: "Tags alimentaires et caracteristiques",
       tagsHint: "Selectionnez tout ce qui s'applique a votre menu.",
+      loadFailed: "Impossible de charger les parametres du profil — veuillez actualiser."
     },
     closureDates: {
       addDate: "Ajouter une date de fermeture",
@@ -6044,6 +6050,8 @@ export const messages = {
       groupMaxSelect: "Choix maximum",
       bulkPublish: "Publier tout",
       bulkUnpublish: "Depublier tout",
+      confirmBulkPublish: "Marquer les {count} plat(s) de cette categorie comme publies ?",
+      confirmBulkUnpublish: "Marquer les {count} plat(s) de cette categorie comme non publies ?",
       dishSlug: "Slug URL",
       stockQtyLabel: "Quantite en stock",
       stockQtyPlaceholder: "Illimite",

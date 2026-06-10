@@ -782,7 +782,7 @@ const load = async () => {
     form.price_tier = Number(data?.price_tier ?? 2) || 2;
     form.tags = Array.isArray(data?.tags) ? [...data.tags] : [];
   } catch {
-    // keep default state
+    toast.show(t("stepPublish.loadFailed"), "error");
   }
 };
 

@@ -1665,10 +1665,25 @@ const toggleAllergen = (dish, allergen, checked) => {
   }
 };
 
-const publishAllInCategory = () => {
+const publishAllInCategory = async () => {
+  const count = activeCategoryDishes.value.length;
+  if (!count) return;
+  const ok = await confirm({
+    title: t("stepDishes.confirmBulkPublish", { count }),
+    confirmLabel: t("stepDishes.bulkPublish"),
+  });
+  if (!ok) return;
   activeCategoryDishes.value.forEach((dish) => { dish.is_published = true; });
 };
-const unpublishAllInCategory = () => {
+const unpublishAllInCategory = async () => {
+  const count = activeCategoryDishes.value.length;
+  if (!count) return;
+  const ok = await confirm({
+    title: t("stepDishes.confirmBulkUnpublish", { count }),
+    confirmLabel: t("stepDishes.bulkUnpublish"),
+    danger: true,
+  });
+  if (!ok) return;
   activeCategoryDishes.value.forEach((dish) => { dish.is_published = false; });
 };
 

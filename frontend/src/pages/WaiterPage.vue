@@ -1035,9 +1035,13 @@ const submitCustomerRating = async () => {
 const _finishSettle = async (order) => {
   const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
   const res = await waiter.markPaid(order.id);
-  if (res && res.completed && eligibleToRate) {
+  if (!res) {
+    toast.show(t("waiterPage.markPaidFailed"), "error");
+    return;
+  }
+  if (res.completed && eligibleToRate) {
     openCustomerRating(order);
-  } else if (res && res.completed) {
+  } else if (res.completed) {
     toast.show(t("waiterPage.orderSettled"), "success");
   }
 };
