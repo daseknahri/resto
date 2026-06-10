@@ -1,19 +1,22 @@
-"""Recover stuck ride requests — the safety net + heartbeat for the ride dispatch loop.
+"""Recover stuck ride requests — the safety net + heartbeat for the dispatch loop.
 
-Idempotent; runs every ~120s (Beat or a Coolify scheduled task) so ride offers
+Idempotent; runs every ~120s (Beat or a Coolify scheduled task) so trip offers
 stay live between driver polls:
 
     python manage.py sweep_ride_requests
 
 Rules (policy: re-dispatch, auto-cancel only on timeout, never touch in_progress):
-  (a) SEARCHING > 3 min  → re-push to online approved car drivers (throttled, ~110s
-      cache key so re-push fires at most once per sweep cycle).
+  (a) SEARCHING > 3 min  → re-push (throttled, ~110s cache key so re-push fires at most
+      once per sweep cycle).  push_new_ride_to_drivers branches on kind internally:
+        ride    → car drivers with car_approved.
+        package → all approved online drivers.
   (b) SEARCHING > 15 min → auto-cancel (status CANCELLED + cancelled_at) + web-push
       rider "no driver found". select_for_update + re-check inside atomic.
   (c) ACCEPTED or ARRIVED (pre-passenger; NEVER touch in_progress) whose driver
       is_driver_online=False OR driver_position_updated_at stale > 10 min →
       clear driver/accepted_at/arrived_at, back to SEARCHING + re-push pool.
       select_for_update + re-check inside atomic.
+      Re-push in rule (c) also uses push_new_ride_to_drivers (kind-aware).
 """
 from datetime import timedelta
 

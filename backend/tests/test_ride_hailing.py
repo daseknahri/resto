@@ -102,6 +102,11 @@ def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
     r.cancelled_at = None
     r.TERMINAL_STATUSES = {"completed", "cancelled"}
     r.is_terminal = status_val in {"completed", "cancelled"}
+    # Courier MVP fields — default to ride values so existing tests need no changes
+    r.kind = "ride"
+    r.recipient_name = ""
+    r.recipient_phone = ""
+    r.package_note = ""
     return r
 
 
@@ -343,8 +348,10 @@ class DriverRideAcceptViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
 
     @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
     @patch("accounts.models.Customer.objects")
-    def test_non_car_driver_returns_403(self, mock_cust_objs, _throttle):
+    def test_non_car_driver_returns_403(self, mock_cust_objs, mock_ride_objs, _throttle):
+        """Motorbike driver cannot accept a ride (kind='ride') — 403 inside lock."""
         driver = _make_customer(pk=2, is_driver=True, driver_approved=True,
                                 is_driver_online=True, driver_vehicle_type="motorbike")
         mock_cust_objs.get.return_value = driver
@@ -352,6 +359,16 @@ class DriverRideAcceptViewTests(SimpleTestCase):
         with patch("accounts.ride_views._tx") as mock_tx:
             mock_tx.atomic.return_value = _noop_atomic()
             mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = driver
+            # No active trip for this driver
+            mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+            # The ride being accepted is a 'ride' kind
+            ride_trip = _make_ride(pk=1)
+            ride_trip.kind = "ride"
+            ride_trip.status = "searching"
+            ride_trip.driver = None
+            ride_trip.driver_id = None
+            mock_ride_objs.select_for_update.return_value.get.return_value = ride_trip
+
             req = self._post(session=_session(customer_id=2))
             resp = self.view(req, ride_id=1)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
@@ -638,9 +655,10 @@ class CarApprovedGateTests(SimpleTestCase):
         self.assertEqual(resp.data["open_rides"], [])
 
     @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
     @patch("accounts.models.Customer.objects")
-    def test_accept_blocked_without_car_approved(self, mock_cust_objs, _throttle):
-        """Car driver without car_approved cannot accept a ride."""
+    def test_accept_blocked_without_car_approved(self, mock_cust_objs, mock_ride_objs, _throttle):
+        """Car driver without car_approved cannot accept a ride (kind='ride')."""
         driver = _make_customer(
             pk=2, is_driver=True, driver_approved=True, is_driver_online=True,
             driver_vehicle_type="car", driver_car_approved=False,
@@ -650,6 +668,16 @@ class CarApprovedGateTests(SimpleTestCase):
         with patch("accounts.ride_views._tx") as mock_tx:
             mock_tx.atomic.return_value = _noop_atomic()
             mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = driver
+            # No active trip for this driver
+            mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+            # The ride being accepted is a 'ride' kind
+            ride_trip = _make_ride(pk=1)
+            ride_trip.kind = "ride"
+            ride_trip.status = "searching"
+            ride_trip.driver = None
+            ride_trip.driver_id = None
+            mock_ride_objs.select_for_update.return_value.get.return_value = ride_trip
+
             req = self.factory.post("/api/driver/rides/1/accept/")
             req.session = _session(customer_id=2)
             req.user = MagicMock(is_authenticated=False)
@@ -1645,3 +1673,525 @@ class AdminAnalyticsRidesBlockTests(SimpleTestCase):
         self.assertIsInstance(rides["wallet_paid"], int)
         self.assertIsInstance(rides["cash_paid"], int)
         self.assertEqual(rides["cash_paid"], rides["completed"] - rides["wallet_paid"])
+
+
+# ── Courier MVP: kind='package' ───────────────────────────────────────────────────
+
+
+def _make_package_ride(pk=50, rider=None, driver=None, status_val="searching",
+                       recipient_name="Jane Doe", recipient_phone="0699999999",
+                       package_note="Fragile"):
+    """Build a mock RideRequest with kind='package' and courier fields."""
+    r = _make_ride(pk=pk, rider=rider, driver=driver, status_val=status_val)
+    r.kind = "package"
+    r.recipient_name = recipient_name
+    r.recipient_phone = recipient_phone
+    r.package_note = package_note
+    return r
+
+
+class PackageCreateViewTests(SimpleTestCase):
+    """POST /api/rides/ with kind='package' — validation + creation."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideCreateView.as_view()
+
+    def _post(self, data, session=None):
+        req = self.factory.post("/api/rides/", data, format="json")
+        req.session = session or _session(customer_id=1)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.models.Customer.objects")
+    def test_unknown_kind_returns_400(self, mock_cust_objs, _throttle):
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+
+        req = self._post({
+            "kind": "express",
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "bad_kind")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_package_missing_recipient_name_returns_400(self, mock_est, mock_cust_objs, _throttle):
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_est.return_value = {"distance_km": 2.0, "fare": Decimal("12.00")}
+
+        req = self._post({
+            "kind": "package",
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            # recipient_name omitted
+            "recipient_phone": "0699999999",
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "missing_field")
+        self.assertIn("recipient_name", resp.data["detail"])
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_package_missing_recipient_phone_returns_400(self, mock_est, mock_cust_objs, _throttle):
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_est.return_value = {"distance_km": 2.0, "fare": Decimal("12.00")}
+
+        req = self._post({
+            "kind": "package",
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            "recipient_name": "Jane Doe",
+            # recipient_phone omitted
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data.get("code"), "missing_field")
+        self.assertIn("recipient_phone", resp.data["detail"])
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_package_create_succeeds_201(self, mock_est, mock_cust_objs,
+                                         mock_ride_objs, mock_tx, _throttle):
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        ride = _make_package_ride(pk=55, rider=rider)
+        mock_ride_objs.create.return_value = ride
+
+        with patch("accounts.ride_views.push_new_ride_to_drivers"):
+            req = self._post({
+                "kind": "package",
+                "pickup_lat": 33.5, "pickup_lng": -7.6,
+                "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+                "recipient_name": "Jane Doe",
+                "recipient_phone": "0699999999",
+                "package_note": "Handle with care",
+                "payment_method": "wallet",
+            })
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        # Verify kind was passed through to RideRequest.objects.create
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        self.assertEqual(create_kwargs.get("kind"), "package")
+        self.assertEqual(create_kwargs.get("recipient_name"), "Jane Doe")
+        self.assertEqual(create_kwargs.get("recipient_phone"), "0699999999")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_ride_kind_default_unchanged(self, mock_est, mock_cust_objs,
+                                          mock_ride_objs, mock_tx, _throttle):
+        """Omitting kind= still creates a 'ride' (default behaviour unchanged)."""
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        ride = _make_ride(pk=5, rider=rider)
+        ride.kind = "ride"
+        ride.recipient_name = ""
+        ride.recipient_phone = ""
+        ride.package_note = ""
+        mock_ride_objs.create.return_value = ride
+
+        with patch("accounts.ride_views.push_new_ride_to_drivers"):
+            req = self.factory.post("/api/rides/", {
+                "pickup_lat": 33.5, "pickup_lng": -7.6,
+                "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            }, format="json")
+            req.session = _session(customer_id=1)
+            req.user = MagicMock(is_authenticated=False)
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        self.assertEqual(create_kwargs.get("kind"), "ride")
+
+
+class PackageOfferVisibilityTests(SimpleTestCase):
+    """DriverRideListView: package offers visible to motorbike; ride offers not."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideListView.as_view()
+
+    @patch("accounts.ride_views.RideDriverThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_package_offer_visible_to_motorbike_driver(self, mock_cust_objs,
+                                                        mock_ride_objs, _throttle):
+        """A motorbike driver (no car approval) must see package offers."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+
+        # own active ride: none (first filter call)
+        active_qs = MagicMock()
+        active_qs.exclude.return_value.select_related.return_value \
+            .order_by.return_value.first.return_value = None
+
+        # last completed: none (second filter call)
+        lc_qs = MagicMock()
+        lc_qs.order_by.return_value.first.return_value = None
+
+        # open SEARCHING: one package ride (third filter call → then kind_filter)
+        package_ride = _make_package_ride(pk=50)
+        package_ride.kind = "package"
+        package_ride.recipient_name = "Jane"
+        package_ride.package_note = "Fragile"
+        package_ride.driver_id = None
+        open_qs = MagicMock()
+        # The view now chains .filter(status=SEARCHING).filter(kind_filter) before
+        # .select_related(); wire accordingly.
+        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+            lambda self, sl: [package_ride]
+        )
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_qs
+            elif call_count[0] == 2:
+                return lc_qs
+            return open_qs
+
+        mock_ride_objs.filter.side_effect = filter_side
+
+        with patch("accounts.ride_views.valid_coord", return_value=False):
+            req = self.factory.get("/api/driver/rides/")
+            req.session = _session(customer_id=3)
+            req.user = MagicMock(is_authenticated=False)
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data["open_rides"]), 1)
+        self.assertEqual(resp.data["open_rides"][0]["kind"], "package")
+
+    @patch("accounts.ride_views.RideDriverThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_ride_offer_not_visible_to_motorbike_driver(self, mock_cust_objs,
+                                                          mock_ride_objs, _throttle):
+        """A motorbike driver must NOT see ride offers (car+car_approved required)."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+
+        active_qs = MagicMock()
+        active_qs.exclude.return_value.select_related.return_value \
+            .order_by.return_value.first.return_value = None
+        lc_qs = MagicMock()
+        lc_qs.order_by.return_value.first.return_value = None
+
+        # open SEARCHING: one ride (kind='ride') — the DB kind_filter will exclude it
+        # for motorbike drivers, so the view's open_qs.filter(...) returns empty.
+        ride_offer = _make_ride(pk=10)
+        ride_offer.kind = "ride"
+        ride_offer.recipient_name = ""
+        ride_offer.package_note = ""
+        ride_offer.driver_id = None
+        open_qs = MagicMock()
+        # Wire the chained .filter(kind_filter) to return empty (DB already filtered out rides)
+        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+            lambda self, sl: []
+        )
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_qs
+            elif call_count[0] == 2:
+                return lc_qs
+            return open_qs
+
+        mock_ride_objs.filter.side_effect = filter_side
+
+        with patch("accounts.ride_views.valid_coord", return_value=False):
+            req = self.factory.get("/api/driver/rides/")
+            req.session = _session(customer_id=3)
+            req.user = MagicMock(is_authenticated=False)
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["open_rides"], [],
+                         "Motorbike driver must not see ride offers")
+
+
+class PackageAcceptViewTests(SimpleTestCase):
+    """DriverRideAcceptView: motorbike driver can accept a package; cannot accept a ride."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideAcceptView.as_view()
+
+    def _post(self, ride_id=50, session=None):
+        req = self.factory.post(f"/api/driver/rides/{ride_id}/accept/")
+        req.session = session or _session(customer_id=3)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_motorbike_driver_accepts_package_succeeds(self, mock_cust_objs,
+                                                        mock_ride_objs, mock_tx, _throttle):
+        """A motorbike driver (no car approval) can accept a package trip."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = driver
+
+        # No active trip for this driver
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+
+        # The locked ride is a package
+        package_ride = _make_package_ride(pk=50, driver=None)
+        package_ride.kind = "package"
+        package_ride.status = "searching"
+        package_ride.driver = None
+        package_ride.driver_id = None
+        package_ride.rider_id = 10
+        mock_ride_objs.select_for_update.return_value.get.return_value = package_ride
+
+        with patch("accounts.ride_views.push_ride_event_to_rider"):
+            req = self._post(ride_id=50, session=_session(customer_id=3))
+            resp = self.view(req, ride_id=50)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(package_ride.driver, driver)
+        self.assertEqual(package_ride.status, "accepted")
+
+    @patch("accounts.ride_views.DriverJobAcceptThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_motorbike_driver_cannot_accept_ride(self, mock_cust_objs,
+                                                  mock_ride_objs, mock_tx, _throttle):
+        """A motorbike driver must get 403 when trying to accept a ride trip."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = driver
+
+        # No active trip
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+
+        # The locked ride is a ride (kind='ride')
+        ride_trip = _make_ride(pk=10)
+        ride_trip.kind = "ride"
+        ride_trip.status = "searching"
+        ride_trip.driver = None
+        ride_trip.driver_id = None
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride_trip
+
+        req = self._post(ride_id=10, session=_session(customer_id=3))
+        resp = self.view(req, ride_id=10)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PackagePIIGatingTests(SimpleTestCase):
+    """recipient_phone: absent on open offers, present on driver's own active trip."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch("accounts.ride_views.RideDriverThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_recipient_phone_absent_from_open_offer(self, mock_cust_objs,
+                                                     mock_ride_objs, _throttle):
+        """recipient_phone must NOT appear in open_rides items."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+
+        active_qs = MagicMock()
+        active_qs.exclude.return_value.select_related.return_value \
+            .order_by.return_value.first.return_value = None
+        lc_qs = MagicMock()
+        lc_qs.order_by.return_value.first.return_value = None
+
+        package_ride = _make_package_ride(pk=50, recipient_phone="0699999999")
+        package_ride.kind = "package"
+        package_ride.driver_id = None
+        open_qs = MagicMock()
+        # The view now calls .filter(status=SEARCHING).filter(kind_filter) before
+        # .select_related(); wire the chained filter so the slice returns our ride.
+        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+            lambda self, sl: [package_ride]
+        )
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_qs
+            elif call_count[0] == 2:
+                return lc_qs
+            return open_qs
+
+        mock_ride_objs.filter.side_effect = filter_side
+
+        with patch("accounts.ride_views.valid_coord", return_value=False):
+            req = self.factory.get("/api/driver/rides/")
+            req.session = _session(customer_id=3)
+            req.user = MagicMock(is_authenticated=False)
+            resp = DriverRideListView.as_view()(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        offer = resp.data["open_rides"][0]
+        # recipient_phone must not appear in the open offer payload
+        self.assertNotIn("recipient_phone", offer,
+                          "recipient_phone must be absent from open offer items")
+
+    def test_recipient_phone_present_on_own_active_trip(self):
+        """recipient_phone must be present when serialize is called with include_driver_pii=True."""
+        from accounts.ride_views import _serialize_ride
+
+        driver = _make_customer(pk=3, is_driver=True, phone="0612345678")
+        package_ride = _make_package_ride(pk=50, driver=driver, status_val="accepted",
+                                           recipient_phone="0699999999")
+        package_ride.kind = "package"
+
+        data = _serialize_ride(package_ride, include_driver_pii=True)
+        self.assertEqual(data["recipient_phone"], "0699999999")
+
+    def test_recipient_phone_always_returned(self):
+        """recipient_phone is always present regardless of include_driver_pii.
+
+        It is recipient PII provided by the rider (they own it), not driver PII,
+        so it must not be gated by the include_driver_pii flag.
+        """
+        from accounts.ride_views import _serialize_ride
+
+        package_ride = _make_package_ride(pk=50, recipient_phone="0699999999")
+        package_ride.kind = "package"
+
+        # False: rider's own-trip view (not yet accepted) — phone must still be present
+        data_pii_false = _serialize_ride(package_ride, include_driver_pii=False)
+        self.assertEqual(data_pii_false["recipient_phone"], "0699999999")
+
+        # True: driver's own-trip view — phone must also be present
+        data_pii_true = _serialize_ride(package_ride, include_driver_pii=True)
+        self.assertEqual(data_pii_true["recipient_phone"], "0699999999")
+
+
+class PackageKindInHistoryAndAdminTests(SimpleTestCase):
+    """kind field must appear in rider history, driver history, and admin list."""
+
+    def test_kind_in_rider_history(self):
+        from accounts.ride_views import RideHistoryView
+        factory = APIRequestFactory()
+        view = RideHistoryView.as_view()
+
+        rider = _make_customer(pk=1)
+
+        r1 = _make_package_ride(pk=60, rider=rider, status_val="completed")
+        r1.kind = "package"
+        r1.completed_at = MagicMock()
+        r1.completed_at.isoformat.return_value = "2026-06-10T11:00:00+00:00"
+        r1.driver = None
+        r1.driver_id = None
+
+        with patch("accounts.models.Customer.objects") as mock_cust, \
+             patch("accounts.ride_views.RideRequest.objects") as mock_ride_objs:
+            mock_cust.get.return_value = rider
+            mock_ride_objs.filter.return_value.select_related.return_value \
+                .order_by.return_value.__getitem__.return_value = [r1]
+
+            req = factory.get("/api/rides/history/")
+            req.session = _session(customer_id=1)
+            req.user = MagicMock(is_authenticated=False)
+            resp = view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("kind", resp.data[0])
+        self.assertEqual(resp.data[0]["kind"], "package")
+
+    def test_kind_in_driver_history(self):
+        from accounts.ride_views import DriverRideHistoryView
+        factory = APIRequestFactory()
+        view = DriverRideHistoryView.as_view()
+
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        r1 = _make_package_ride(pk=61, driver=driver, status_val="completed")
+        r1.kind = "package"
+        r1.completed_at = MagicMock()
+        r1.completed_at.isoformat.return_value = "2026-06-10T12:00:00+00:00"
+
+        with patch("accounts.models.Customer.objects") as mock_cust, \
+             patch("accounts.ride_views.RideRequest.objects") as mock_ride_objs:
+            mock_cust.get.return_value = driver
+            mock_ride_objs.filter.return_value.order_by.return_value \
+                .__getitem__.return_value = [r1]
+
+            req = factory.get("/api/driver/rides/history/")
+            req.session = _session(customer_id=2)
+            req.user = MagicMock(is_authenticated=False)
+            resp = view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("kind", resp.data[0])
+        self.assertEqual(resp.data[0]["kind"], "package")
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    def test_kind_in_admin_list(self, mock_perm, mock_ride_objs):
+        from accounts.ride_views import AdminRideListView
+        factory = APIRequestFactory()
+        view = AdminRideListView.as_view()
+
+        rider = _make_customer(pk=10, name="Alice", phone="0600000001")
+        r1 = _make_package_ride(pk=62, rider=rider, status_val="completed")
+        r1.kind = "package"
+        r1.completed_at = MagicMock()
+        r1.completed_at.isoformat.return_value = "2026-06-10T14:00:00+00:00"
+        r1.driver = None
+        r1.driver_id = None
+
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = mock_qs
+        mock_qs.__getitem__.return_value = [r1]
+        mock_ride_objs.select_related.return_value.order_by.return_value = mock_qs
+
+        req = factory.get("/api/admin/rides/")
+        req.session = _session()
+        req.user = MagicMock(is_authenticated=True, is_platform_admin=True)
+        resp = view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("kind", resp.data[0])
+        self.assertEqual(resp.data[0]["kind"], "package")

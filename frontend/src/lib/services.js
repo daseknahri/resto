@@ -26,5 +26,5 @@ export const SERVICES = [
   { id: 'shops',    icon: '🛍️', status: 'live',        kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
   { id: 'rides',    icon: '🚕', status: 'live',        kind: 'route', routeName: 'ride', accent: 'emerald' },
   { id: 'pharmacy', icon: '💊', status: 'coming_soon',                               accent: 'rose'    },
-  { id: 'courier',  icon: '📦', status: 'coming_soon',                               accent: 'sky'     },
+  { id: 'courier',  icon: '📦', status: 'live',        kind: 'route', routeName: 'send-package', accent: 'sky'     },
 ];

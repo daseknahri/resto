@@ -804,7 +804,10 @@ class DeliveryJob(models.Model):
 
 
 class RideRequest(models.Model):
-    """A ride-hailing request — lives in the PUBLIC schema, accounts app.
+    """A ride-hailing / package-delivery request — lives in the PUBLIC schema, accounts app.
+
+    kind='ride'    — passenger ride (default, all existing behaviour unchanged).
+    kind='package' — courier delivery; uses the same fare model as rides (MVP decision).
 
     Lifecycle:
       searching → accepted → arrived → in_progress → completed
@@ -812,6 +815,10 @@ class RideRequest(models.Model):
 
     Mirrors DeliveryJob conventions: public schema, loose references, ratings stored here.
     """
+
+    class Kind(models.TextChoices):
+        RIDE = "ride", "Ride"
+        PACKAGE = "package", "Package"
 
     class Status(models.TextChoices):
         SEARCHING = "searching", "Searching for driver"
@@ -833,6 +840,18 @@ class RideRequest(models.Model):
     class PaymentMethod(models.TextChoices):
         WALLET = "wallet", "Wallet"
         CASH = "cash", "Cash"
+
+    kind = models.CharField(
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.RIDE,
+        db_index=True,
+    )
+
+    # Package-specific fields (blank for rides)
+    recipient_name = models.CharField(max_length=80, blank=True)
+    recipient_phone = models.CharField(max_length=50, blank=True)
+    package_note = models.CharField(max_length=200, blank=True)
 
     rider = models.ForeignKey(
         Customer,

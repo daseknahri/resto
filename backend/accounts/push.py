@@ -391,6 +391,12 @@ _RIDE_OFFER_MESSAGES = {
     "ar": {"title": "طلب ركوب جديد", "body": "راكب يبحث عن سيارة قريبة — اضغط لعرض التفاصيل."},
 }
 
+_PACKAGE_OFFER_MESSAGES = {
+    "en": {"title": "New package delivery", "body": "A package needs delivering — tap to view."},
+    "fr": {"title": "Nouvelle livraison de colis", "body": "Un colis a livrer — touchez pour voir."},
+    "ar": {"title": "طلب توصيل طرد", "body": "هناك طرد بحاجة للتوصيل — اضغط لعرض التفاصيل."},
+}
+
 _RIDE_ACCEPTED_MESSAGES = {
     "en": {"title": "Driver on the way", "body": "Your driver accepted your ride request."},
     "fr": {"title": "Chauffeur en route", "body": "Votre chauffeur a accepte votre demande de course."},
@@ -399,7 +405,12 @@ _RIDE_ACCEPTED_MESSAGES = {
 
 
 def notify_car_drivers_new_ride_sync(ride_id) -> int:
-    """Push a ride offer to the 10 nearest online, approved car drivers. SYNCHRONOUS."""
+    """Push a trip offer to eligible online approved drivers. SYNCHRONOUS.
+
+    Dispatch rules by kind:
+        ride    — 10 nearest online approved CAR drivers with driver_car_approved=True.
+        package — ALL online approved drivers (any vehicle type, no car-doc requirement).
+    """
     from django_tenants.utils import schema_context
     from menu.push import _send_one
     from tenancy.delivery_pricing import haversine_km, valid_coord
@@ -413,14 +424,27 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
         if ride.status != RideRequest.Status.SEARCHING:
             return 0
 
-        candidates = list(
-            Customer.objects.filter(
-                is_driver=True,
-                driver_approved=True,
-                is_driver_online=True,
-                driver_vehicle_type=Customer.VEHICLE_TYPE_CAR,
+        is_package = ride.kind == RideRequest.Kind.PACKAGE
+
+        if is_package:
+            # Package: all online approved drivers, any vehicle type
+            candidates = list(
+                Customer.objects.filter(
+                    is_driver=True,
+                    driver_approved=True,
+                    is_driver_online=True,
+                )
             )
-        )
+        else:
+            # Ride: online approved CAR drivers with car docs approved
+            candidates = list(
+                Customer.objects.filter(
+                    is_driver=True,
+                    driver_approved=True,
+                    is_driver_online=True,
+                    driver_vehicle_type=Customer.VEHICLE_TYPE_CAR,
+                )
+            )
 
     # Pick up to 10 nearest by haversine (using last known GPS when available).
     pickup_lat = ride.pickup_lat
@@ -445,12 +469,13 @@ def notify_car_drivers_new_ride_sync(ride_id) -> int:
     if not subs:
         return 0
 
+    offer_copy = _PACKAGE_OFFER_MESSAGES if is_package else _RIDE_OFFER_MESSAGES
     gone, sent = [], 0
     for s in subs:
         loc = locales.get(s.customer_id, "en")
-        if loc not in _RIDE_OFFER_MESSAGES:
+        if loc not in offer_copy:
             loc = "en"
-        msg = _RIDE_OFFER_MESSAGES[loc]
+        msg = offer_copy[loc]
         result = _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/driver")
         if result == "gone":
             gone.append(s.id)

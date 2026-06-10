@@ -1,28 +1,34 @@
-"""Ride-hailing API views.
+"""Ride-hailing / courier API views.
 
-All ride views live here for reviewability. Wired into config/shared_api_urls.py
-next to the driver block.
+All ride and package-delivery views live here for reviewability. Wired into
+config/shared_api_urls.py next to the driver block.
 
 Rider endpoints (session customer_id):
     POST   /api/rides/estimate/           — fare estimate (throttled)
-    POST   /api/rides/                    — create ride (SEARCHING)
-    GET    /api/rides/active/             — rider's active/recent ride
-    GET    /api/rides/history/            — rider's last 20 terminal rides
+    POST   /api/rides/                    — create ride or package trip (SEARCHING)
+    GET    /api/rides/active/             — rider's active/recent trip
+    GET    /api/rides/history/            — rider's last 20 terminal trips
     POST   /api/rides/<id>/cancel/        — rider cancels
     POST   /api/rides/<id>/rate/          — rider rates driver (1-5)
 
 Driver endpoints (is_driver + driver_approved):
-    GET    /api/driver/rides/             — open SEARCHING rides + own active + last_completed
-    GET    /api/driver/rides/history/     — driver's last 20 completed/cancelled rides
-    POST   /api/driver/rides/<id>/accept/ — first-accept-wins (requires driver_car_approved)
+    GET    /api/driver/rides/             — open SEARCHING trips + own active + last_completed
+    GET    /api/driver/rides/history/     — driver's last 20 completed/cancelled trips
+    POST   /api/driver/rides/<id>/accept/ — first-accept-wins
     POST   /api/driver/rides/<id>/status/ — advance status
     POST   /api/driver/docs/             — upload licence or insurance doc
     POST   /api/driver/rides/<id>/rate/  — driver rates rider (1-5)
 
 Admin endpoints (IsPlatformAdmin):
-    GET    /api/admin/rides/              — latest 50 rides, optional ?status= filter
+    GET    /api/admin/rides/              — latest 50 trips, optional ?status= filter
     POST   /api/admin/drivers/<id>/car-approve/ — approve car docs
     POST   /api/admin/drivers/<id>/car-reject/  — reject car docs
+
+Dispatch rules by kind:
+    ride    → online + approved CAR drivers with driver_car_approved=True.
+    package → ALL online + approved drivers regardless of vehicle type or car docs.
+
+Fare model for packages is shared with rides (MVP decision: same base/km/min rates).
 """
 from django.db import transaction as _tx
 from django.utils import timezone as _tz
@@ -31,6 +37,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from tenancy.delivery_pricing import haversine_km, valid_coord
 
 from .models import Customer, RideRequest
 from .push import push_new_ride_to_drivers, push_ride_event_to_rider
@@ -61,8 +69,9 @@ def _serialize_ride(ride, *, include_driver_pii=False):
             "driver_lng": drv.driver_lng if include_driver_pii else None,
             "driver_position_updated_at": _ts(drv.driver_position_updated_at) if include_driver_pii else None,
         }
-    return {
+    data = {
         "id": ride.id,
+        "kind": ride.kind,
         "status": ride.status,
         "fare": str(ride.fare),
         "distance_km": ride.distance_km,
@@ -83,7 +92,16 @@ def _serialize_ride(ride, *, include_driver_pii=False):
         "rider_driver_rating": ride.rider_driver_rating,
         "driver_rider_rating": ride.driver_rider_rating,
         "driver": driver,
+        # Package-specific fields (always present; empty string for rides)
+        "recipient_name": ride.recipient_name or "",
+        "package_note": ride.package_note or "",
+        # recipient_phone: always included. This is recipient PII provided by the rider
+        # (they own it), not driver PII, so it must not be gated by include_driver_pii.
+        # The driver receives it via their own-trip serialization (include_driver_pii=True),
+        # and the rider always sees it on their own trip regardless of status.
+        "recipient_phone": ride.recipient_phone or "",
     }
+    return data
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────────
@@ -171,7 +189,19 @@ class RideEstimateView(APIView):
 
 
 class RideCreateView(APIView):
-    """POST /api/rides/ — create a ride request (SEARCHING)."""
+    """POST /api/rides/ — create a ride or package trip (SEARCHING).
+
+    Body (ride):    kind='ride' (default), pickup/dropoff coords + addresses, payment_method.
+    Body (package): kind='package', above + recipient_name (required), recipient_phone (required),
+                    package_note (optional, ≤200 chars).
+
+    Fare model is shared between rides and packages (MVP decision — same base/km/min rates).
+    One active trip per rider regardless of kind (existing guard unchanged).
+
+    Dispatch after create:
+        ride    → online approved CAR drivers with driver_car_approved (existing behaviour).
+        package → ALL online approved drivers, any vehicle type, no car-doc requirement.
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -185,13 +215,41 @@ class RideCreateView(APIView):
         if err:
             return err
 
-        # Validate required fields
+        # Resolve kind — reject unknown values rather than silently coercing,
+        # so client typos and future kinds surface instead of becoming rides.
+        kind = (request.data.get("kind") or "ride").strip().lower()
+        if kind not in ("ride", "package"):
+            return Response(
+                {"detail": "kind must be 'ride' or 'package'.", "code": "bad_kind"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate required geo fields
         for field in ("pickup_lat", "pickup_lng", "dropoff_lat", "dropoff_lng"):
             if request.data.get(field) is None:
                 return Response(
                     {"detail": f"{field} is required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+        # Package-specific required fields
+        recipient_name = ""
+        recipient_phone = ""
+        package_note = ""
+        if kind == "package":
+            recipient_name = str(request.data.get("recipient_name") or "").strip()
+            recipient_phone = str(request.data.get("recipient_phone") or "").strip()
+            if not recipient_name:
+                return Response(
+                    {"detail": "recipient_name is required for package trips.", "code": "missing_field"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not recipient_phone:
+                return Response(
+                    {"detail": "recipient_phone is required for package trips.", "code": "missing_field"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            package_note = str(request.data.get("package_note") or "").strip()[:200]
 
         try:
             result = estimate_ride(
@@ -226,7 +284,7 @@ class RideCreateView(APIView):
             # Lock the rider row to prevent concurrent double-submission (TOCTOU guard)
             Customer.objects.select_for_update().filter(pk=rider.id).first()
 
-            # Guard: one non-terminal ride per rider (checked inside lock)
+            # Guard: one non-terminal trip per rider regardless of kind
             if RideRequest.objects.filter(
                 rider=rider,
             ).exclude(status__in=RideRequest.TERMINAL_STATUSES).exists():
@@ -237,6 +295,7 @@ class RideCreateView(APIView):
 
             ride = RideRequest.objects.create(
                 rider=rider,
+                kind=kind,
                 pickup_lat=float(request.data["pickup_lat"]),
                 pickup_lng=float(request.data["pickup_lng"]),
                 dropoff_lat=float(request.data["dropoff_lat"]),
@@ -247,9 +306,12 @@ class RideCreateView(APIView):
                 fare=fare,
                 payment_method=payment_method,
                 status=RideRequest.Status.SEARCHING,
+                recipient_name=recipient_name,
+                recipient_phone=recipient_phone,
+                package_note=package_note,
             )
 
-        # Notify nearby car drivers (best-effort, after commit)
+        # Dispatch: package → all approved drivers; ride → car drivers only (existing helper)
         try:
             push_new_ride_to_drivers(ride.id)
         except Exception:
@@ -401,12 +463,18 @@ class RideRateView(APIView):
 
 
 class DriverRideListView(APIView):
-    """GET /api/driver/rides/ — open SEARCHING rides + own active ride + last_completed.
+    """GET /api/driver/rides/ — open SEARCHING trips + own active trip + last_completed.
 
-    Only car drivers with driver_car_approved=True see ride offers.
-    Own active ride is always served so an in-progress ride is never stranded.
-    last_completed: driver's most recent COMPLETED ride within the 10-min rating window
-    (mirrors the rider active-view pattern) so the SPA can show the rate prompt.
+    Offer visibility rules by kind:
+        package — visible to EVERY online approved driver (any vehicle type, no car docs needed).
+        ride    — visible only to car drivers with driver_car_approved=True (existing behaviour).
+
+    Own active trip is always returned regardless of kind so an in-progress trip is never stranded.
+    last_completed: driver's most recent COMPLETED trip within the 10-min rating window so the SPA
+    can show the rate prompt.
+
+    PII note: recipient_phone is NOT included in open offer items (it is only present on the
+    driver's own active trip via _serialize_ride with include_driver_pii=True).
     """
 
     permission_classes = [AllowAny]
@@ -418,7 +486,7 @@ class DriverRideListView(APIView):
         if err:
             return err
 
-        # Own active ride (any non-terminal ride assigned to this driver)
+        # Own active trip (any non-terminal trip assigned to this driver)
         own_ride = (
             RideRequest.objects.filter(driver=driver)
             .exclude(status__in=RideRequest.TERMINAL_STATUSES)
@@ -427,7 +495,7 @@ class DriverRideListView(APIView):
             .first()
         )
 
-        # Last completed ride within 10-minute rating window
+        # Last completed trip within 10-minute rating window
         last_completed = None
         from datetime import timedelta
         cutoff = _tz.now() - timedelta(minutes=10)
@@ -443,44 +511,69 @@ class DriverRideListView(APIView):
         if lc_ride:
             last_completed = {
                 "id": lc_ride.id,
+                "kind": lc_ride.kind,
                 "fare": str(lc_ride.fare),
                 "payment_method": lc_ride.payment_method,
                 "paid_with_wallet": lc_ride.paid_with_wallet,
                 "driver_rider_rating": lc_ride.driver_rider_rating,
             }
 
-        # Open SEARCHING rides — only offered to car drivers who are car-approved
-        open_rides = []
-        if (
+        # Determine which kinds this driver is eligible to see as open offers.
+        # package: all approved online drivers (no vehicle-type or car-doc restriction).
+        # ride:    only car drivers with driver_car_approved.
+        is_car_approved = (
             driver.driver_vehicle_type == Customer.VEHICLE_TYPE_CAR
             and driver.driver_car_approved
-        ):
-            from tenancy.delivery_pricing import haversine_km, valid_coord
-            qs = list(
-                RideRequest.objects.filter(status=RideRequest.Status.SEARCHING)
-                .select_related("rider")[:20]
-            )
-            for r in qs:
-                dist_to_pickup = None
-                if valid_coord(driver.driver_lat, driver.driver_lng) and valid_coord(r.pickup_lat, r.pickup_lng):
-                    dist_to_pickup = round(
-                        haversine_km(driver.driver_lat, driver.driver_lng, r.pickup_lat, r.pickup_lng), 2
-                    )
-                data = {
-                    "id": r.id,
-                    "pickup_address": r.pickup_address,
-                    "dropoff_address": r.dropoff_address,
-                    "pickup_lat": r.pickup_lat,
-                    "pickup_lng": r.pickup_lng,
-                    "dropoff_lat": r.dropoff_lat,
-                    "dropoff_lng": r.dropoff_lng,
-                    "distance_km": r.distance_km,
-                    "fare": str(r.fare),
-                    "payment_method": r.payment_method,
-                    "distance_to_pickup_km": dist_to_pickup,
-                    "created_at": _ts(r.created_at),
-                }
-                open_rides.append(data)
+        )
+
+        # Build a DB-level kind filter so the [:40] cap is applied only to trips this
+        # driver can actually accept. Without this, a high-volume moment where all 40
+        # newest trips are 'ride' trips would leave a motorbike driver with zero package
+        # offers even when older package trips are SEARCHING.
+        from django.db.models import Q
+        if is_car_approved:
+            # Car-approved: see both rides and packages
+            kind_filter = Q(kind=RideRequest.Kind.RIDE) | Q(kind=RideRequest.Kind.PACKAGE)
+        else:
+            # Non-car-approved: packages only
+            kind_filter = Q(kind=RideRequest.Kind.PACKAGE)
+
+        open_rides = []
+        qs = list(
+            RideRequest.objects.filter(status=RideRequest.Status.SEARCHING)
+            .filter(kind_filter)
+            .select_related("rider")[:40]
+        )
+        for r in qs:
+            # Per-kind visibility gate (redundant after DB filter, kept as safety assertion)
+            if r.kind == RideRequest.Kind.RIDE and not is_car_approved:
+                continue  # ride offer: car+car_approved required
+            # package offers: visible to all approved online drivers — no extra gate
+
+            dist_to_pickup = None
+            if valid_coord(driver.driver_lat, driver.driver_lng) and valid_coord(r.pickup_lat, r.pickup_lng):
+                dist_to_pickup = round(
+                    haversine_km(driver.driver_lat, driver.driver_lng, r.pickup_lat, r.pickup_lng), 2
+                )
+            data = {
+                "id": r.id,
+                "kind": r.kind,
+                "pickup_address": r.pickup_address,
+                "dropoff_address": r.dropoff_address,
+                "pickup_lat": r.pickup_lat,
+                "pickup_lng": r.pickup_lng,
+                "dropoff_lat": r.dropoff_lat,
+                "dropoff_lng": r.dropoff_lng,
+                "distance_km": r.distance_km,
+                "fare": str(r.fare),
+                "payment_method": r.payment_method,
+                "distance_to_pickup_km": dist_to_pickup,
+                "created_at": _ts(r.created_at),
+                # Package metadata visible on open offers (NOT recipient_phone — PII)
+                "recipient_name": r.recipient_name if r.kind == RideRequest.Kind.PACKAGE else None,
+                "package_note": r.package_note if r.kind == RideRequest.Kind.PACKAGE else None,
+            }
+            open_rides.append(data)
 
         return Response({
             "open_rides": open_rides,
@@ -490,7 +583,12 @@ class DriverRideListView(APIView):
 
 
 class DriverRideAcceptView(APIView):
-    """POST /api/driver/rides/<id>/accept/ — first-accept-wins, atomic."""
+    """POST /api/driver/rides/<id>/accept/ — first-accept-wins, atomic.
+
+    Per-kind eligibility gate (mirrors DriverRideListView offer visibility):
+        ride    — requires vehicle==car AND driver_car_approved.
+        package — any approved online driver (no car-doc requirement).
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -501,23 +599,12 @@ class DriverRideAcceptView(APIView):
         if err:
             return err
 
-        if driver.driver_vehicle_type != Customer.VEHICLE_TYPE_CAR:
-            return Response(
-                {"detail": "Only car drivers can accept ride requests."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if not driver.driver_car_approved:
-            return Response(
-                {"detail": "Car documents not yet approved.", "code": "car_not_approved"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         now = _tz.now()
         with _tx.atomic():
             # Lock driver row first (serialize concurrent accepts from same driver)
             Customer.objects.select_for_update().filter(pk=driver.id).first()
 
-            # Check driver doesn't already have an active ride
+            # Check driver doesn't already have an active trip
             if RideRequest.objects.filter(
                 driver=driver,
             ).exclude(status__in=RideRequest.TERMINAL_STATUSES).exists():
@@ -537,6 +624,20 @@ class DriverRideAcceptView(APIView):
                     {"detail": "Ride not available.", "code": "not_available"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # Per-kind eligibility check (done inside the lock so the kind is authoritative)
+            if ride.kind == RideRequest.Kind.RIDE:
+                if driver.driver_vehicle_type != Customer.VEHICLE_TYPE_CAR:
+                    return Response(
+                        {"detail": "Only car drivers can accept ride requests."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                if not driver.driver_car_approved:
+                    return Response(
+                        {"detail": "Car documents not yet approved.", "code": "car_not_approved"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+            # kind=='package': no extra gate — any approved online driver may accept
 
             ride.driver = driver
             ride.status = RideRequest.Status.ACCEPTED
@@ -897,6 +998,7 @@ class RideHistoryView(APIView):
                 driver_name = ride.driver.name or ""
             data.append({
                 "id": ride.id,
+                "kind": ride.kind,
                 "status": ride.status,
                 "fare": str(ride.fare),
                 "payment_method": ride.payment_method,
@@ -952,6 +1054,7 @@ class DriverRideHistoryView(APIView):
         for ride in rides:
             data.append({
                 "id": ride.id,
+                "kind": ride.kind,
                 "status": ride.status,
                 "fare": str(ride.fare),
                 "payment_method": ride.payment_method,
@@ -1021,6 +1124,7 @@ class AdminRideListView(APIView):
                 }
             data.append({
                 "id": ride.id,
+                "kind": ride.kind,
                 "status": ride.status,
                 "fare": str(ride.fare),
                 "payment_method": ride.payment_method,

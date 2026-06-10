@@ -670,6 +670,22 @@
                 >{{ t('driverRides.paidWallet') }}</span>
               </div>
             </div>
+            <!-- Call recipient (packages only — PII gated to own active trip) -->
+            <a
+              v-if="activeRide.kind === 'package' && activeRide.recipient_phone"
+              :href="`tel:${activeRide.recipient_phone}`"
+              class="flex items-center gap-3 rounded-xl border border-sky-700/50 bg-sky-900/20 px-3 py-3 transition-colors hover:border-sky-600/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+              :aria-label="`${t('driverRides.callRecipient')}: ${activeRide.recipient_phone}`"
+            >
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15">
+                <AppIcon name="phone" class="h-4 w-4 text-sky-300" aria-hidden="true" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('driverRides.callRecipient') }}</p>
+                <p class="truncate text-sm text-slate-200">{{ activeRide.recipient_phone }}</p>
+              </div>
+              <span class="shrink-0 text-xs font-semibold text-sky-300">{{ t('driver.call') }}</span>
+            </a>
             <!-- Action buttons -->
             <button
               v-if="activeRide.status === 'accepted'"
@@ -750,6 +766,18 @@
                   <span class="truncate">{{ ride.dropoff_address }}</span>
                 </p>
               </div>
+              <!-- Package badge + recipient info -->
+              <template v-if="ride.kind === 'package'">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
+                    <span aria-hidden="true">📦</span>{{ t('driverRides.packageBadge') }}
+                  </span>
+                  <span v-if="ride.recipient_name" class="text-xs text-slate-300">
+                    <span class="text-slate-500">{{ t('driverRides.recipientLabel') }}:</span> {{ ride.recipient_name }}
+                  </span>
+                </div>
+                <p v-if="ride.package_note" class="text-xs text-slate-500 leading-snug">{{ ride.package_note }}</p>
+              </template>
               <!-- Meta chips: fare, distance, to-pickup, payment -->
               <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-slate-400">
                 <span class="text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(ride.fare) }}</span>
@@ -845,7 +873,7 @@
                 :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
               >
                 <div class="flex items-start justify-between gap-3">
-                  <p class="truncate text-sm text-slate-200" :title="r.dropoff_address">{{ r.dropoff_address }}</p>
+                  <p class="truncate text-sm text-slate-200" :title="r.dropoff_address"><span v-if="r.kind === 'package'" aria-hidden="true">📦 </span>{{ r.dropoff_address }}</p>
                   <div class="flex shrink-0 items-center gap-1.5">
                     <span
                       v-if="r.payment_method === 'cash'"
