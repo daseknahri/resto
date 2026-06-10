@@ -113,13 +113,14 @@
         <!-- Actions -->
         <div class="flex shrink-0 gap-2">
           <button
-            class="ui-btn-outline ui-press px-3 py-1.5 text-xs font-medium"
+            class="ui-btn-outline ui-press min-h-[44px] px-3 py-2 text-xs font-medium"
             :aria-label="t('ownerPromotions.editAriaLabel', { name: promo.name })"
             @click="openEdit(promo)"
           >{{ t('common.edit') }}</button>
           <button
-            class="ui-press rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 hover:border-red-500/50 hover:bg-red-500/15 hover:text-red-300 transition-colors"
+            class="ui-press min-h-[44px] rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 hover:border-red-500/50 hover:bg-red-500/15 hover:text-red-300 transition-colors disabled:opacity-50"
             :aria-label="t('ownerPromotions.deleteAriaLabel', { name: promo.name })"
+            :disabled="deletingId === promo.id"
             @click="deletePromo(promo)"
           >{{ t('common.delete') }}</button>
         </div>
@@ -174,7 +175,7 @@
 
     <!-- Create / Edit drawer -->
     <Teleport to="body">
-      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="drawerOpen = false">
+      <div v-if="drawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="drawerOpen = false" @click.self="drawerOpen = false">
         <div ref="drawerDialogRef" role="dialog" aria-modal="true" aria-labelledby="owner-promotions-form-dialog-title" class="ui-panel-soft w-full max-w-md max-h-[92vh] overflow-y-auto">
 
           <!-- Dialog header -->
@@ -291,7 +292,7 @@
                     :key="d.key"
                     type="button"
                     :aria-pressed="form.days.includes(d.key)"
-                    class="rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors"
+                    class="inline-flex min-h-[36px] items-center rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
                     :class="form.days.includes(d.key)
                       ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]'
                       : 'border-slate-700 text-slate-400 hover:border-slate-500'"
@@ -317,7 +318,7 @@
                 <div role="group" aria-labelledby="promo-daterange-label" class="flex items-center gap-2">
                   <input v-model="form.active_from" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateFrom')" />
                   <span class="text-slate-500 shrink-0" aria-hidden="true">—</span>
-                  <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" />
+                  <input v-model="form.active_until" type="date" class="ui-input flex-1" :aria-label="t('ownerPromotions.dateUntil')" :min="form.active_from || undefined" />
                 </div>
               </div>
             </div>
@@ -436,6 +437,7 @@ watch(drawerOpen, async (open) => {
 });
 onBeforeUnmount(() => document.removeEventListener('keydown', trapDrawerFocus));
 const submitting = ref(false);
+const deletingId = ref(null);
 const drawerError = ref('');
 const { confirm } = useConfirmModal();
 
@@ -552,6 +554,28 @@ const submitForm = async () => {
     drawerError.value = t('ownerPromotions.nameRequired');
     return;
   }
+  // Discount value required for non-free_delivery types
+  if (form.promo_type !== 'free_delivery') {
+    const dv = parseFloat(form.discount_value);
+    if (!(dv > 0)) {
+      drawerError.value = t('ownerPromotions.discountRequired');
+      return;
+    }
+    if (form.promo_type === 'percentage' && dv > 100) {
+      drawerError.value = t('ownerPromotions.discountMaxPercent');
+      return;
+    }
+  }
+  // Time window: both start and end must be provided together
+  if ((form.time_start && !form.time_end) || (!form.time_start && form.time_end)) {
+    drawerError.value = t('ownerPromotions.timeRangeIncomplete');
+    return;
+  }
+  // Date range: end must not be before start
+  if (form.active_from && form.active_until && form.active_until < form.active_from) {
+    drawerError.value = t('ownerPromotions.dateRangeInvalid');
+    return;
+  }
   submitting.value = true;
   const payload = {
     name: form.name.trim(),
@@ -592,12 +616,14 @@ const submitForm = async () => {
 };
 
 const deletePromo = async (promo) => {
+  if (deletingId.value === promo.id) return;
   const ok = await confirm({
     title: t('ownerPromotions.deleteConfirm'),
     body: t('confirmModal.defaultBody'),
     confirmLabel: t('common.delete'),
   });
   if (!ok) return;
+  deletingId.value = promo.id;
   try {
     await api.delete(`/owner/promotions/${promo.id}/`);
     promotions.value = promotions.value.filter((p) => p.id !== promo.id);
@@ -605,6 +631,8 @@ const deletePromo = async (promo) => {
     toast.show(t('ownerPromotions.deleted'), 'success');
   } catch {
     toast.show(t('ownerPromotions.deleteFailed'), 'error');
+  } finally {
+    deletingId.value = null;
   }
 };
 

@@ -45,7 +45,7 @@
             <span
               v-if="tab.count > 0"
               class="ms-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums leading-none"
-              :class="tab.key === 'pending' ? 'bg-amber-500 text-white shadow-sm shadow-amber-900/30' : 'bg-slate-700/80 text-slate-100'"
+              :class="['pending', 'unpaid'].includes(tab.key) ? 'bg-amber-500 text-white shadow-sm shadow-amber-900/30' : 'bg-slate-700/80 text-slate-100'"
             >{{ tab.count }}</span>
           </button>
           <!-- Recent / past orders tab -->
@@ -127,6 +127,22 @@
       @close="showCharge = false"
       @charged="onWalletCharged"
     />
+
+    <!-- Offline / queue indicator -->
+    <Transition name="ui-fade">
+      <div
+        v-if="!waiter.isOnline || waiter.offlineQueue.length > 0"
+        class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300"
+        role="status"
+        aria-live="polite"
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0">
+          <path fill-rule="evenodd" d="M6.701 2.25c.577-1 2.02-1 2.598 0l5.196 9a1.5 1.5 0 0 1-1.299 2.25H2.804a1.5 1.5 0 0 1-1.3-2.25l5.197-9ZM8 4a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 8 4Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" clip-rule="evenodd"/>
+        </svg>
+        <span v-if="!waiter.isOnline">{{ t('waiterPage.offline') }}</span>
+        <span v-else>{{ t('waiterPage.syncingQueue', { n: waiter.offlineQueue.length }) }}</span>
+      </div>
+    </Transition>
 
     <!-- Loading skeleton (orders only) -->
     <div
@@ -484,6 +500,17 @@
               {{ fmtOrderPrice(settleOutstanding(settleChooser), settleChooser.currency) }}
             </p>
           </div>
+          <!-- Item breakdown -->
+          <ul v-if="settleChooser.items?.length" class="max-h-28 overflow-y-auto divide-y divide-slate-700/40 rounded-lg border border-slate-700/50 bg-slate-800/50" aria-label="Order items">
+            <li
+              v-for="item in settleChooser.items"
+              :key="item.id"
+              class="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
+            >
+              <span class="min-w-0 truncate text-slate-300"><span class="text-slate-500">{{ item.qty }}×</span> {{ item.dish_name }}</span>
+              <span class="shrink-0 tabular-nums text-slate-400">{{ fmtOrderPrice((item.subtotal ?? item.unit_price * item.qty), settleChooser.currency) }}</span>
+            </li>
+          </ul>
           <div class="grid grid-cols-2 gap-2">
             <button
               class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -868,18 +895,20 @@ const tabs = computed(() => [
   { key: "confirmed", label: t("waiterPage.tabConfirmed"), count: waiter.byStatus.confirmed.length },
   { key: "preparing", label: t("waiterPage.tabPreparing"), count: waiter.byStatus.preparing.length },
   { key: "ready", label: t("waiterPage.tabReady"), count: waiter.byStatus.ready.length },
+  { key: "unpaid", label: t("waiterPage.tabUnpaid"), count: waiter.unpaidOrders.length, accent: "amber" },
 ]);
 
 const visibleOrders = computed(() => {
   let orders;
   if (activeTab.value === "recent") orders = waiter.recentOrders;
   else if (activeTab.value === "all") orders = waiter.orders;
+  else if (activeTab.value === "unpaid") orders = waiter.unpaidOrders;
   else orders = waiter.byStatus[activeTab.value] ?? [];
 
   const q = searchQuery.value.trim().toLowerCase();
   if (!q) return orders;
   return orders.filter((o) => {
-    const haystack = [o.order_number, o.customer_name, o.table_label, o.section_name]
+    const haystack = [o.order_number, o.customer_name, o.table_label, o.section_name, o.customer_note, o.owner_note]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -894,7 +923,7 @@ watch(activeTab, (tab) => {
 
 // Arrow-key navigation within the tablist (ARIA APG tab pattern).
 // Only moves focus — activation stays on click/Enter to match existing behavior.
-const _allTabKeys = ["all", "pending", "confirmed", "preparing", "ready", "recent", "shift"];
+const _allTabKeys = ["all", "pending", "confirmed", "preparing", "ready", "unpaid", "recent", "shift"];
 const _focusTabByKey = (key) => {
   const el = document.getElementById(`waiter-tab-${key}`);
   el?.focus();
@@ -1039,7 +1068,7 @@ const timeAgo = (iso) => {
 
 // Returns the time-ago urgency class — amber > 10 min pending, red > 20 min
 const timeUrgencyClass = (iso, status) => {
-  if (!['pending', 'confirmed'].includes(status)) return 'text-slate-400';
+  if (!['pending', 'confirmed', 'preparing'].includes(status)) return 'text-slate-400';
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins >= 20) return 'font-semibold text-red-400';
   if (mins >= 10) return 'font-semibold text-amber-400';

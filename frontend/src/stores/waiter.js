@@ -58,6 +58,8 @@ export const useWaiterStore = defineStore("waiter", {
     queueLength: (state) => state.offlineQueue.length,
 
     nextStatus: () => (order) => nextStatusFor(order),
+
+    unpaidOrders: (state) => state.orders.filter((o) => o.payment_status !== "paid"),
   },
 
   actions: {
