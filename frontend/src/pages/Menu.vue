@@ -136,11 +136,22 @@
             v-for="cat in visibleCategories"
             :key="cat.slug"
             :data-cat-pill="cat.slug"
-            class="ui-pill-nav shrink-0 whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
+            class="ui-pill-nav inline-flex shrink-0 items-center gap-1 whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
+            :class="selectedAllergenFilter.length && filteredCountBySlug.get(cat.slug) === 0 ? 'opacity-40' : ''"
             :data-active="activeCategorySlug === cat.slug"
             :aria-current="activeCategorySlug === cat.slug ? 'page' : undefined"
             @click="scrollToSection(cat.slug)"
-          >{{ cat.name }}</button>
+          >
+            {{ cat.name }}
+            <span
+              v-if="selectedAllergenFilter.length"
+              class="rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums leading-none"
+              :class="filteredCountBySlug.get(cat.slug) === 0
+                ? 'bg-slate-800/60 text-slate-500'
+                : 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'"
+              aria-hidden="true"
+            >{{ filteredCountBySlug.get(cat.slug) ?? 0 }}</span>
+          </button>
           <template v-if="isOverflowing">
             <span class="mx-1 w-px shrink-0 self-stretch bg-slate-700/50" aria-hidden="true" />
             <button
@@ -166,10 +177,21 @@
               <button
                 v-for="cat in visibleCategories"
                 :key="`sheet-${cat.slug}`"
-                class="ui-pill-nav whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
+                class="ui-pill-nav inline-flex items-center gap-1 whitespace-nowrap px-3.5 py-1.5 text-xs font-medium"
+                :class="selectedAllergenFilter.length && filteredCountBySlug.get(cat.slug) === 0 ? 'opacity-40' : ''"
                 :data-active="activeCategorySlug === cat.slug"
                 @click="scrollToSection(cat.slug); catSheetOpen = false"
-              >{{ cat.name }}</button>
+              >
+                {{ cat.name }}
+                <span
+                  v-if="selectedAllergenFilter.length"
+                  class="rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums leading-none"
+                  :class="filteredCountBySlug.get(cat.slug) === 0
+                    ? 'bg-slate-800/60 text-slate-500'
+                    : 'bg-[var(--color-secondary)]/20 text-[var(--color-secondary)]'"
+                  aria-hidden="true"
+                >{{ filteredCountBySlug.get(cat.slug) ?? 0 }}</span>
+              </button>
             </div>
           </div>
         </Transition>
@@ -653,6 +675,23 @@ const sectionDishes = (slug) => {
   }
   return dishes
 }
+
+/**
+ * When an allergen filter is active, maps each visible category slug to the
+ * number of dishes that survive the filter. Empty when no filter is set
+ * (avoids re-computing on every render when no filter is active).
+ */
+const filteredCountBySlug = computed(() => {
+  const m = new Map()
+  if (!selectedAllergenFilter.value.length) return m
+  visibleCategories.value.forEach(cat => {
+    const dishes = menu.dishes[cat.slug] || []
+    m.set(cat.slug, dishes.filter(
+      d => !selectedAllergenFilter.value.some(a => (d.allergens || []).includes(a))
+    ).length)
+  })
+  return m
+})
 
 // ── Menu text search ──────────────────────────────────────────────────────────
 const menuSearchQuery = ref('')
