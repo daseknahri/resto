@@ -353,7 +353,8 @@ class DriverDeliveriesViewTests(SimpleTestCase):
             mock_dj.objects.filter.return_value = qs
             mock_dj.Status.DELIVERED = "delivered"
             mock_dj.Status.FAILED = "failed"
-            with patch("accounts.views._serialize_delivery_job", side_effect=lambda j, **kw: {"restaurant_name": "Demo"}):
+            # DriverDeliveriesView now uses _tenant_slug_name (not _serialize_delivery_job).
+            with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
                 resp = self.view(self._get(session=_session(customer_id=1)))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -539,8 +540,9 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         self._wire_status(mock_dj)
 
         with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "at_restaurant"}):
-            with patch("django.utils.timezone.now", return_value=MagicMock()):
-                resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=1))
+            with patch("accounts.views._batch_business_types", return_value={}):
+                with patch("django.utils.timezone.now", return_value=MagicMock()):
+                    resp = self._patch(1, {"status": "at_restaurant"}, session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     @patch("accounts.views._complete_delivered_order")
@@ -555,8 +557,9 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
 
         with patch("accounts.views._order_delivery_code", return_value=""):
             with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "delivered"}):
-                with patch("django.utils.timezone.now", return_value=MagicMock()):
-                    resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
+                with patch("accounts.views._batch_business_types", return_value={}):
+                    with patch("django.utils.timezone.now", return_value=MagicMock()):
+                        resp = self._patch(1, {"status": "delivered"}, session=_session(customer_id=1))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertFalse(customer.is_driver_online)  # driver freed after delivery
@@ -587,8 +590,138 @@ class DriverJobStatusUpdateViewTests(SimpleTestCase):
         mock_dj.objects.select_for_update.return_value.get.return_value = job
         self._wire_status(mock_dj)
         with patch("accounts.views._serialize_delivery_job", return_value={"id": 1, "status": "failed"}):
-            with patch("django.utils.timezone.now", return_value=MagicMock()):
-                resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
-                                   session=_session(customer_id=1))
+            with patch("accounts.views._batch_business_types", return_value={}):
+                with patch("django.utils.timezone.now", return_value=MagicMock()):
+                    resp = self._patch(1, {"status": "failed", "failure_reason": "customer_no_show"},
+                                       session=_session(customer_id=1))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_failed.assert_called_once()
+
+
+# ── Part A: business_type in delivery job payloads ────────────────────────────
+
+
+class BusinessTypeInJobPayloadsTests(SimpleTestCase):
+    """business_type must appear in driver job payloads via a batch Profile query (no N+1)."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch("accounts.models.Customer.objects")
+    def test_driver_job_list_includes_business_type(self, mock_cust_objs):
+        """DriverJobListView: active and pending job cards must include business_type."""
+        customer = _make_customer()
+        mock_cust_objs.get.return_value = customer
+
+        job_active = _make_job(pk=1, status_val="assigned", driver=customer, tenant_id=42)
+        job_pending = _make_job(pk=2, status_val="searching", driver=None, tenant_id=99)
+
+        with patch("accounts.models.DeliveryJob") as mock_dj, \
+             patch("accounts.views._batch_business_types", return_value={42: "grocery", 99: "pharmacy"}) as mock_biz, \
+             patch("accounts.views._serialize_delivery_job",
+                   side_effect=lambda j, **kw: {"id": j.id, "business_type": kw.get("business_type", "restaurant")}), \
+             patch("accounts.views._summaries_by_tenant", return_value={}, create=True):
+
+            active_qs = MagicMock()
+            active_qs.select_related.return_value = [job_active]
+            pending_qs = MagicMock()
+            pending_qs.filter.return_value.select_related.return_value.__getitem__ = (
+                lambda s, sl: [job_pending]
+            )
+
+            def _filter(**kwargs):
+                if not kwargs.get("driver__isnull"):
+                    return active_qs
+                return pending_qs
+
+            mock_dj.objects.filter.side_effect = _filter
+            mock_dj.Status.ASSIGNED = "assigned"
+            mock_dj.Status.AT_RESTAURANT = "at_restaurant"
+            mock_dj.Status.PICKED_UP = "picked_up"
+            mock_dj.Status.SEARCHING = "searching"
+
+            from django.utils import timezone as tz
+            with patch("accounts.views._job_order_summaries", return_value={}):
+                req = self.factory.get("/api/driver/jobs/")
+                req.session = _session(customer_id=1)
+                req.user = MagicMock(is_authenticated=False)
+                from accounts.views import DriverJobListView
+                resp = DriverJobListView.as_view()(req)
+
+        self.assertEqual(resp.status_code, 200)
+        # _batch_business_types must be called exactly once (no N+1)
+        mock_biz.assert_called_once()
+        # The tenant_ids passed in must cover both active and pending jobs
+        called_tenant_ids = mock_biz.call_args[0][0]
+        self.assertIn(42, called_tenant_ids)
+        self.assertIn(99, called_tenant_ids)
+
+    def test_batch_business_types_single_db_query(self):
+        """_batch_business_types must call Profile.objects.filter exactly once."""
+        from accounts.views import _batch_business_types
+        from unittest.mock import patch, MagicMock, call
+
+        mock_qs = MagicMock()
+        mock_qs.values_list.return_value = [(1, "grocery"), (2, "pharmacy")]
+
+        with patch("tenancy.models.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value = mock_qs
+            result = _batch_business_types({1, 2, 3})
+
+        # Exactly one filter call (no per-row queries)
+        mock_profile.objects.filter.assert_called_once()
+        filter_kwargs = mock_profile.objects.filter.call_args[1]
+        self.assertIn("tenant_id__in", filter_kwargs)
+        self.assertEqual(result, {1: "grocery", 2: "pharmacy"})
+
+    def test_batch_business_types_empty_set(self):
+        """_batch_business_types with empty set returns {} without hitting the DB."""
+        from accounts.views import _batch_business_types
+        from unittest.mock import patch
+
+        with patch("tenancy.models.Profile") as mock_profile:
+            result = _batch_business_types(set())
+
+        mock_profile.objects.filter.assert_not_called()
+        self.assertEqual(result, {})
+
+    def test_batch_business_types_missing_profile_defaults_to_restaurant(self):
+        """Tenants with no Profile row get default 'restaurant' from the caller."""
+        from accounts.views import _batch_business_types
+        from unittest.mock import patch, MagicMock
+
+        mock_qs = MagicMock()
+        # Only tenant 1 has a Profile row
+        mock_qs.values_list.return_value = [(1, "grocery")]
+
+        with patch("tenancy.models.Profile") as mock_profile:
+            mock_profile.objects.filter.return_value = mock_qs
+            result = _batch_business_types({1, 2})
+
+        # tenant 2 missing → not in result; caller defaults to "restaurant"
+        self.assertEqual(result.get(1), "grocery")
+        self.assertNotIn(2, result)
+
+    def test_serialize_delivery_job_includes_business_type_field(self):
+        """_serialize_delivery_job must include business_type in its output."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=5, status_val="assigned", tenant_id=10)
+        # Minimal mocking: slug/name lookup will call _tenant_slug_name
+        with patch("accounts.views._tenant_slug_name", return_value=("demo", "Demo")):
+            with patch("accounts.views._job_distance_km", return_value=None):
+                data = _serialize_delivery_job(job, business_type="pharmacy")
+
+        self.assertIn("business_type", data)
+        self.assertEqual(data["business_type"], "pharmacy")
+
+    def test_serialize_delivery_job_defaults_business_type_restaurant(self):
+        """When business_type is not supplied, it defaults to 'restaurant'."""
+        from accounts.views import _serialize_delivery_job
+
+        job = _make_job(pk=6, status_val="assigned", tenant_id=11)
+        with patch("accounts.views._tenant_slug_name", return_value=("cafe", "The Cafe")):
+            with patch("accounts.views._job_distance_km", return_value=None):
+                data = _serialize_delivery_job(job)
+
+        self.assertEqual(data.get("business_type"), "restaurant")

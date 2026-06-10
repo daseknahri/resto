@@ -93,7 +93,7 @@
                 <span v-else class="italic text-slate-600">{{ t('adminDeliveryJobs.unassigned') }}</span>
               </td>
               <td class="px-4 py-3">
-                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status)">{{ statusLabel(j.status) }}</span>
+                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status, j.business_type)">{{ statusLabel(j.status, j.business_type) }}</span>
               </td>
               <td class="px-4 py-3 text-end tabular-nums text-emerald-300">{{ fmtMoney(j.driver_payout) }}</td>
               <td class="px-4 py-3 text-end text-xs text-slate-500 tabular-nums">{{ fmtDate(j.created_at) }}</td>
@@ -114,7 +114,7 @@
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-mono text-xs text-slate-400">#{{ j.order_number }}</span>
-                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status)">{{ statusLabel(j.status) }}</span>
+                <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="statusClass(j.status)" :aria-label="t('adminDeliveryJobs.colStatus') + ': ' + statusLabel(j.status, j.business_type)">{{ statusLabel(j.status, j.business_type) }}</span>
               </div>
               <p class="mt-0.5 text-sm font-medium text-slate-200 truncate">{{ j.tenant_name || ('#' + j.tenant_id) }}</p>
               <p class="mt-0.5 text-xs text-slate-500 truncate">
@@ -138,6 +138,7 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import AppIcon from '../components/AppIcon.vue';
+import { pickupLabelKey } from '../lib/deliveryVocab';
 
 const { t, currentLocale } = useI18n();
 
@@ -155,7 +156,11 @@ const STATUS_LABELS = {
   delivered: 'adminDeliveryJobs.statusDelivered',
   failed: 'adminDeliveryJobs.statusFailed',
 };
-const statusLabel = (s) => t(STATUS_LABELS[s] || 'adminDeliveryJobs.statusSearching');
+// For at_restaurant chips, branch on the job's business_type; all others use static map.
+const statusLabel = (s, businessType) => {
+  if (s === 'at_restaurant') return t(pickupLabelKey(businessType, 'at'));
+  return t(STATUS_LABELS[s] || 'adminDeliveryJobs.statusSearching');
+};
 
 const statusClass = (s) => {
   if (s === 'delivered') return 'bg-emerald-500/12 text-emerald-300';

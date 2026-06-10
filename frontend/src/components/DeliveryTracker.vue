@@ -174,6 +174,7 @@ import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from './AppIcon.vue';
+import { pickupLabelKey } from '../lib/deliveryVocab';
 
 const props = defineProps({
   delivery: { type: Object, default: null },
@@ -213,7 +214,10 @@ const hasDriverPos = computed(
 
 const statusLabel = computed(() => {
   const s = props.delivery?.status;
-  return s ? t(`deliveryTracker.status_${s}`) : '';
+  if (!s) return '';
+  const bt = props.delivery?.business_type;
+  if (s === 'at_restaurant') return t(pickupLabelKey(bt, 'at'));
+  return t(`deliveryTracker.status_${s}`);
 });
 
 const ratingText = computed(() => {

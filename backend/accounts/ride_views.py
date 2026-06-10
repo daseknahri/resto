@@ -57,7 +57,19 @@ def _ts(dt):
     return dt.isoformat() if dt else None
 
 
-def _serialize_ride(ride, *, include_driver_pii=False):
+def _generate_package_code() -> str:
+    """Return a 6-digit zero-padded random string for package handover proof."""
+    import secrets
+    return str(secrets.randbelow(1_000_000)).zfill(6)
+
+
+def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=False):
+    """Serialize a RideRequest.
+
+    include_driver_pii     — expose driver phone + GPS (own active trip only).
+    include_delivery_code  — expose the package handover code (rider's own trip only;
+                             NEVER set this for driver offer/active payloads or admin).
+    """
     driver = None
     if ride.driver_id:
         drv = ride.driver
@@ -103,6 +115,10 @@ def _serialize_ride(ride, *, include_driver_pii=False):
         # and the rider always sees it on their own trip regardless of status.
         "recipient_phone": ride.recipient_phone or "",
     }
+    # Handover code: only when the caller explicitly opts in (rider's own trip only).
+    # NEVER included in driver offer lists, driver active-trip, or admin payloads.
+    if include_delivery_code and ride.kind == RideRequest.Kind.PACKAGE:
+        data["delivery_code"] = getattr(ride, "delivery_code", "") or ""
     return data
 
 
@@ -379,6 +395,8 @@ class RideCreateView(APIView):
                 recipient_name=recipient_name,
                 recipient_phone=recipient_phone,
                 package_note=package_note,
+                # Generate handover code for packages; rides get an empty string.
+                delivery_code=_generate_package_code() if kind == "package" else "",
             )
 
         # Dispatch: only for immediate trips (scheduled trips wait for sweep rule d).
@@ -448,9 +466,13 @@ class RideActiveView(APIView):
 
         ride_data = None
         if ride is not None:
-            # PII (driver phone + GPS) only revealed after driver is accepted
+            # PII (driver phone + GPS) only revealed after driver is accepted.
+            # Handover code: always shown to the rider on their own active trip so
+            # they can share it with the recipient (it is absent from driver payloads).
             pii_ok = ride.status not in (RideRequest.Status.SEARCHING,)
-            ride_data = _serialize_ride(ride, include_driver_pii=pii_ok)
+            ride_data = _serialize_ride(
+                ride, include_driver_pii=pii_ok, include_delivery_code=True
+            )
 
         return Response({"ride": ride_data, "scheduled": scheduled_list})
 
@@ -816,6 +838,37 @@ class DriverRideStatusView(APIView):
                 ride.started_at = now
                 update_fields.append("started_at")
             elif new_status == "completed":
+                # Package handover: driver must supply the 6-digit code the rider
+                # shared with the recipient. Mirrors DeliveryJob's lockout pattern.
+                if ride.kind == RideRequest.Kind.PACKAGE:
+                    from datetime import timedelta as _td
+                    _expected = getattr(ride, "delivery_code", "") or ""
+                    if _expected:
+                        if ride.code_locked_until and ride.code_locked_until > now:
+                            return Response(
+                                {"detail": "Too many incorrect codes — try again shortly.",
+                                 "code": "code_locked"},
+                                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                            )
+                        _provided = str(request.data.get("code") or "").strip()
+                        if _provided != _expected:
+                            ride.code_attempts = (ride.code_attempts or 0) + 1
+                            _f = ["code_attempts"]
+                            if ride.code_attempts >= 5:
+                                ride.code_locked_until = now + _td(minutes=5)
+                                ride.code_attempts = 0
+                                _f.append("code_locked_until")
+                            ride.save(update_fields=_f)
+                            return Response(
+                                {"detail": "Incorrect handover code. Ask the recipient for the code.",
+                                 "code": "bad_code"},
+                                status=status.HTTP_409_CONFLICT,
+                            )
+                        # Correct code — reset lockout state
+                        ride.code_attempts = 0
+                        ride.code_locked_until = None
+                        update_fields += ["code_attempts", "code_locked_until"]
+
                 ride.completed_at = now
                 update_fields.append("completed_at")
                 # settle_ride runs INSIDE the transaction

@@ -3775,7 +3775,30 @@ def _job_order_summary(tenant_id, order_number, include_contact: bool = False) -
     return _job_order_summaries(tenant_id, [order_number], include_contact).get(order_number, {})
 
 
-def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
+def _batch_business_types(tenant_ids) -> dict:
+    """Return {tenant_id: business_type} for the given tenant ids.
+
+    Single DB query — callers must pre-collect tenant_ids from the page of jobs
+    and pass them here to avoid N+1 per-row lookups. Defaults to 'restaurant'
+    for any tenant whose Profile row is missing.
+    """
+    if not tenant_ids:
+        return {}
+    try:
+        from tenancy.models import Profile as _Profile
+        rows = _Profile.objects.filter(
+            tenant_id__in=tenant_ids
+        ).values_list("tenant_id", "business_type")
+        return {tid: bt for tid, bt in rows}
+    except Exception:
+        return {}
+
+
+def _serialize_delivery_job(
+    job,
+    include_driver_position: bool = False,
+    business_type: str = "restaurant",
+) -> dict:
     _slug, _name = _tenant_slug_name(job.tenant_id)
     data = {
         "id": job.id,
@@ -3785,6 +3808,9 @@ def _serialize_delivery_job(job, include_driver_position: bool = False) -> dict:
         # (the rate endpoint is keyed by ?restaurant=<slug>).
         "restaurant_slug": _slug,
         "restaurant_name": _name,
+        # Vertical type — lets the driver app customise wording/UX per business
+        # (e.g. "at the store" vs "at the restaurant" vs no merchant stop for courier).
+        "business_type": business_type,
         "status": job.status,
         "pickup_address": job.pickup_address,
         "pickup_lat": job.pickup_lat,
@@ -4182,11 +4208,16 @@ class DriverJobListView(APIView):
                     merged[(_tid, _onum)] = _summ
             return merged
 
+        # Batch-fetch business_type for all jobs in one query (no N+1).
+        all_tenant_ids = {j.tenant_id for j in active_jobs + pending_jobs}
+        _biz_types = _batch_business_types(all_tenant_ids)
+
         # Active job(s): include customer contact (the driver's own job).
         _active_sum = _summaries_by_tenant(active_jobs, True)
         active_serialized = []
         for j in active_jobs:
-            d = _serialize_delivery_job(j)
+            _bt = _biz_types.get(j.tenant_id, "restaurant")
+            d = _serialize_delivery_job(j, business_type=_bt)
             d.update(_active_sum.get((j.tenant_id, j.order_number), {}))
             active_serialized.append(d)
 
@@ -4195,7 +4226,8 @@ class DriverJobListView(APIView):
         _pending_sum = _summaries_by_tenant(pending_jobs, False)
         pending_serialized = []
         for j in pending_jobs:
-            d = _serialize_delivery_job(j)
+            _bt = _biz_types.get(j.tenant_id, "restaurant")
+            d = _serialize_delivery_job(j, business_type=_bt)
             d.update(_pending_sum.get((j.tenant_id, j.order_number), {}))
             # Is this job exclusively offered to *this* driver right now? (drives the
             # "offered to you" badge + the decline button in the app).
@@ -4283,7 +4315,8 @@ class DriverJobAcceptView(APIView):
 
         # Tell the customer a driver is on it (best-effort, after commit).
         _notify_customer_milestone(job, "assigned")
-        return Response(_serialize_delivery_job(job), status=status.HTTP_200_OK)
+        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_200_OK)
 
 
 class DriverJobDeclineView(APIView):
@@ -4594,7 +4627,8 @@ class DriverJobStatusUpdateView(APIView):
             except Exception:
                 pass  # Never fail the driver status update due to push errors
 
-        return Response(_serialize_delivery_job(job))
+        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        return Response(_serialize_delivery_job(job, business_type=_bt))
 
 
 # ── Order tracking SSE ────────────────────────────────────────────────────────
@@ -4671,8 +4705,12 @@ class OrderTrackingView(APIView):
         if not _tracking_request_owns_order(request, tenant, order_number):
             return Response({"detail": "Not your order.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
+        _tracking_bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+
         if not use_sse:
-            return Response(_serialize_delivery_job(job, include_driver_position=True))
+            return Response(_serialize_delivery_job(
+                job, include_driver_position=True, business_type=_tracking_bt
+            ))
 
         # ── SSE stream ────────────────────────────────────────────────────────
         import time
@@ -4686,7 +4724,9 @@ class OrderTrackingView(APIView):
                     fresh_job = DeliveryJob.objects.select_related("driver").get(pk=job.pk)
                 except DeliveryJob.DoesNotExist:
                     break
-                data = _json.dumps(_serialize_delivery_job(fresh_job, include_driver_position=True))
+                data = _json.dumps(_serialize_delivery_job(
+                    fresh_job, include_driver_position=True, business_type=_tracking_bt
+                ))
                 yield f"data: {data}\n\n"
                 if fresh_job.is_terminal:
                     # Send terminal event then close
@@ -5224,11 +5264,13 @@ class DriverDeliveriesView(APIView):
                 status__in=[DeliveryJob.Status.DELIVERED, DeliveryJob.Status.FAILED],
             ).order_by("-created_at")[:50]
         )
+        # Batch-resolve restaurant names (avoids N+1 via _tenant_slug_name cache).
+        _names = {j.tenant_id: _tenant_slug_name(j.tenant_id)[1] for j in jobs}
         results = [{
             "id": j.id,
             "order_number": j.order_number,
             "status": j.status,
-            "restaurant_name": _serialize_delivery_job(j).get("restaurant_name", ""),
+            "restaurant_name": _names.get(j.tenant_id, ""),
             "delivery_address": j.delivery_address,
             "driver_payout": str(j.driver_payout),
             "delivered_at": j.delivered_at.isoformat() if j.delivered_at else None,
@@ -5652,7 +5694,14 @@ class AdminDeliveryJobListView(APIView):
             qs = qs.filter(tenant_id=tenant_filter)
 
         jobs = list(qs[:100])
-        data = [_serialize_delivery_job(j, include_driver_position=True) for j in jobs]
+        # Batch-fetch business_type for all jobs (one query — no N+1).
+        all_tenant_ids = {j.tenant_id for j in jobs}
+        _biz_types = _batch_business_types(all_tenant_ids)
+        data = [
+            _serialize_delivery_job(j, include_driver_position=True,
+                                    business_type=_biz_types.get(j.tenant_id, "restaurant"))
+            for j in jobs
+        ]
         # Enrich with the restaurant name so the admin console can show it (the shared
         # job serializer only carries tenant_id).
         tenant_ids = {d["tenant_id"] for d in data if d.get("tenant_id")}
@@ -5748,4 +5797,5 @@ class AdminCreateDeliveryJobView(APIView):
             _pnj(None)
         except Exception:
             pass
-        return Response(_serialize_delivery_job(job), status=status.HTTP_201_CREATED)
+        _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
+        return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_201_CREATED)

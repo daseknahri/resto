@@ -109,6 +109,10 @@ def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
     r.recipient_name = ""
     r.recipient_phone = ""
     r.package_note = ""
+    # Handover code fields (migration 0040)
+    r.delivery_code = ""
+    r.code_attempts = 0
+    r.code_locked_until = None
     return r
 
 
@@ -1726,13 +1730,17 @@ class AdminAnalyticsRidesBlockTests(SimpleTestCase):
 
 def _make_package_ride(pk=50, rider=None, driver=None, status_val="searching",
                        recipient_name="Jane Doe", recipient_phone="0699999999",
-                       package_note="Fragile"):
+                       package_note="Fragile", delivery_code=""):
     """Build a mock RideRequest with kind='package' and courier fields."""
     r = _make_ride(pk=pk, rider=rider, driver=driver, status_val=status_val)
     r.kind = "package"
     r.recipient_name = recipient_name
     r.recipient_phone = recipient_phone
     r.package_note = package_note
+    # Handover code fields (migration 0040)
+    r.delivery_code = delivery_code
+    r.code_attempts = 0
+    r.code_locked_until = None
     return r
 
 
@@ -2724,3 +2732,356 @@ class SweepScheduledReleaseTests(SimpleTestCase):
         self.assertIn("status", save_kwargs.get("update_fields", []))
         self.assertIn("cancelled_at", save_kwargs.get("update_fields", []))
         mock_push_rider.assert_called_once_with(22, "no_driver_found")
+
+
+# ── Part B: Package handover code tests ──────────────────────────────────────────
+
+
+class PackageCodeGenerationTests(SimpleTestCase):
+    """RideCreateView generates a 6-digit delivery_code for kind='package', blank for rides."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideCreateView.as_view()
+
+    def _post(self, data, session=None):
+        req = self.factory.post("/api/rides/", data, format="json")
+        req.session = session or _session(customer_id=1)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_package_create_generates_six_digit_code(self, mock_est, mock_cust_objs,
+                                                       mock_ride_objs, mock_tx, _throttle):
+        """Creating a package trip must pass a 6-digit delivery_code to RideRequest.objects.create."""
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        ride = _make_package_ride(pk=55, rider=rider)
+        ride.delivery_code = "123456"
+        mock_ride_objs.create.return_value = ride
+
+        with patch("accounts.ride_views.push_new_ride_to_drivers"):
+            req = self._post({
+                "kind": "package",
+                "pickup_lat": 33.5, "pickup_lng": -7.6,
+                "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+                "recipient_name": "Jane Doe",
+                "recipient_phone": "0699999999",
+                "payment_method": "wallet",
+            })
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        code = create_kwargs.get("delivery_code", None)
+        self.assertIsNotNone(code, "delivery_code must be passed to create()")
+        self.assertEqual(len(code), 6, f"Expected 6-digit code, got {code!r}")
+        self.assertTrue(code.isdigit(), f"Code must be all digits, got {code!r}")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_ride_kind_delivery_code_is_empty(self, mock_est, mock_cust_objs,
+                                               mock_ride_objs, mock_tx, _throttle):
+        """Creating a ride trip must pass an empty delivery_code to RideRequest.objects.create."""
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100.00"))
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00")}
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        ride = _make_ride(pk=5, rider=rider)
+        ride.kind = "ride"
+        ride.recipient_name = ""
+        ride.recipient_phone = ""
+        ride.package_note = ""
+        ride.delivery_code = ""
+        mock_ride_objs.create.return_value = ride
+
+        with patch("accounts.ride_views.push_new_ride_to_drivers"):
+            req = self._post({
+                "pickup_lat": 33.5, "pickup_lng": -7.6,
+                "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+                "payment_method": "wallet",
+            })
+            resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        self.assertEqual(create_kwargs.get("delivery_code"), "")
+
+
+class PackageCodeSerializationTests(SimpleTestCase):
+    """delivery_code present in rider active payload; ABSENT from driver offers/active + admin."""
+
+    def _make_package_with_code(self, code="654321", status_val="accepted"):
+        r = _make_package_ride(pk=70, status_val=status_val)
+        r.delivery_code = code
+        r.code_attempts = 0
+        r.code_locked_until = None
+        return r
+
+    def test_delivery_code_in_rider_active_payload(self):
+        """include_delivery_code=True must surface delivery_code for kind='package'."""
+        from accounts.ride_views import _serialize_ride
+        ride = self._make_package_with_code()
+        data = _serialize_ride(ride, include_delivery_code=True)
+        self.assertIn("delivery_code", data)
+        self.assertEqual(data["delivery_code"], "654321")
+
+    def test_delivery_code_absent_by_default(self):
+        """default _serialize_ride (no flag) must NOT include delivery_code."""
+        from accounts.ride_views import _serialize_ride
+        ride = self._make_package_with_code()
+        data = _serialize_ride(ride)
+        self.assertNotIn("delivery_code", data,
+                          "delivery_code must be absent without include_delivery_code=True")
+
+    def test_delivery_code_absent_with_driver_pii_only(self):
+        """include_driver_pii=True alone (driver active trip) must NOT expose delivery_code."""
+        from accounts.ride_views import _serialize_ride
+        ride = self._make_package_with_code()
+        driver = _make_customer(pk=5, is_driver=True)
+        ride.driver = driver
+        ride.driver_id = 5
+        data = _serialize_ride(ride, include_driver_pii=True)
+        self.assertNotIn("delivery_code", data,
+                          "delivery_code must not appear in driver-facing serialization")
+
+    def test_delivery_code_absent_for_rides(self):
+        """Even with include_delivery_code=True, delivery_code must be absent for kind='ride'."""
+        from accounts.ride_views import _serialize_ride
+        ride = _make_ride(pk=71)
+        ride.delivery_code = "111111"
+        data = _serialize_ride(ride, include_delivery_code=True)
+        self.assertNotIn("delivery_code", data,
+                          "delivery_code must not appear for kind='ride'")
+
+    @patch("accounts.ride_views.RideDriverThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_delivery_code_absent_from_driver_open_offers(self, mock_cust_objs,
+                                                           mock_ride_objs, _throttle):
+        """Driver's open-offer list must never include delivery_code."""
+        driver = _make_customer(
+            pk=3, is_driver=True, driver_approved=True, is_driver_online=True,
+            driver_vehicle_type="motorbike", driver_car_approved=False,
+        )
+        mock_cust_objs.get.return_value = driver
+
+        active_qs = MagicMock()
+        active_qs.exclude.return_value.select_related.return_value \
+            .order_by.return_value.first.return_value = None
+        lc_qs = MagicMock()
+        lc_qs.order_by.return_value.first.return_value = None
+
+        package_ride = self._make_package_with_code()
+        package_ride.driver_id = None
+        package_ride.driver = None
+        open_qs = MagicMock()
+        open_qs.filter.return_value.select_related.return_value.__getitem__ = (
+            lambda self, sl: [package_ride]
+        )
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_qs
+            elif call_count[0] == 2:
+                return lc_qs
+            return open_qs
+
+        mock_ride_objs.filter.side_effect = filter_side
+
+        with patch("accounts.ride_views.valid_coord", return_value=False):
+            req = self.factory.get("/api/driver/rides/")
+            req.session = _session(customer_id=3)
+            req.user = MagicMock(is_authenticated=False)
+            resp = DriverRideListView.as_view()(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        if resp.data["open_rides"]:
+            self.assertNotIn("delivery_code", resp.data["open_rides"][0],
+                              "delivery_code must never appear in driver open offers")
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+
+class PackageCompletionCodeTests(SimpleTestCase):
+    """DriverRideStatusView: package completion requires correct 6-digit code."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideStatusView.as_view()
+
+    def _post(self, ride_id, data, session=None):
+        req = self.factory.post(f"/api/driver/rides/{ride_id}/status/", data, format="json")
+        req.session = session or _session(customer_id=2)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def _make_package_in_progress(self, code="999888", attempts=0, locked_until=None):
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        ride = _make_package_ride(pk=80, driver=driver, status_val="in_progress")
+        ride.VALID_TRANSITIONS = {"in_progress": {"completed"}}
+        ride.delivery_code = code
+        ride.code_attempts = attempts
+        ride.code_locked_until = locked_until
+        ride.kind = "package"
+        ride.Kind = MagicMock()
+        ride.Kind.PACKAGE = "package"
+        return driver, ride
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_complete_package_without_code_returns_409(self, mock_cust, mock_ride_objs,
+                                                        mock_tx, _throttle):
+        """Completing package with no code supplied must return 409 bad_code."""
+        driver, ride = self._make_package_in_progress()
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            req = self._post(ride_id=80, data={"status": "completed"})
+            resp = self.view(req, ride_id=80)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "bad_code")
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_complete_package_wrong_code_increments_attempts(self, mock_cust, mock_ride_objs,
+                                                              mock_tx, _throttle):
+        """Wrong code must increment code_attempts and return 409 bad_code."""
+        driver, ride = self._make_package_in_progress(code="999888", attempts=0)
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            req = self._post(ride_id=80, data={"status": "completed", "code": "000000"})
+            resp = self.view(req, ride_id=80)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "bad_code")
+        self.assertEqual(ride.code_attempts, 1)
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_fifth_wrong_code_locks(self, mock_cust, mock_ride_objs, mock_tx, _throttle):
+        """5th wrong code must set code_locked_until and reset attempts to 0."""
+        driver, ride = self._make_package_in_progress(code="999888", attempts=4)
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            with patch("accounts.ride_views._tz") as mock_tz:
+                import datetime
+                now = datetime.datetime(2026, 6, 10, 12, 0, 0, tzinfo=datetime.timezone.utc)
+                mock_tz.now.return_value = now
+                req = self._post(ride_id=80, data={"status": "completed", "code": "000000"})
+                resp = self.view(req, ride_id=80)
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        # After 5th attempt: attempts reset to 0, locked_until set
+        self.assertEqual(ride.code_attempts, 0)
+        self.assertIsNotNone(ride.code_locked_until)
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_locked_account_rejected_even_with_correct_code(self, mock_cust, mock_ride_objs,
+                                                              mock_tx, _throttle):
+        """When code_locked_until is in the future, reject immediately (429)."""
+        import datetime
+        future = datetime.datetime(2099, 1, 1, tzinfo=datetime.timezone.utc)
+        driver, ride = self._make_package_in_progress(code="999888", locked_until=future)
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            with patch("accounts.ride_views._tz") as mock_tz:
+                import datetime as _dt
+                mock_tz.now.return_value = _dt.datetime(2026, 6, 10, tzinfo=_dt.timezone.utc)
+                req = self._post(ride_id=80, data={"status": "completed", "code": "999888"})
+                resp = self.view(req, ride_id=80)
+
+        self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(resp.data.get("code"), "code_locked")
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_correct_code_completes_and_settles(self, mock_cust, mock_ride_objs,
+                                                 mock_tx, _throttle):
+        """Correct code allows completion and calls settle_ride."""
+        driver, ride = self._make_package_in_progress(code="999888", attempts=2)
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            with patch("accounts.ride_views._tz") as mock_tz:
+                import datetime as _dt
+                mock_tz.now.return_value = _dt.datetime(2026, 6, 10, tzinfo=_dt.timezone.utc)
+                with patch("accounts.ride_service.settle_ride") as mock_settle:
+                    req = self._post(ride_id=80, data={"status": "completed", "code": "999888"})
+                    resp = self.view(req, ride_id=80)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "completed")
+        mock_settle.assert_called_once_with(ride)
+        # Correct code resets attempts
+        self.assertEqual(ride.code_attempts, 0)
+
+    @patch("accounts.ride_views.DriverStatusUpdateThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_ride_completion_no_code_needed(self, mock_cust, mock_ride_objs,
+                                             mock_tx, _throttle):
+        """kind='ride' completion must succeed with no code in the request."""
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        ride = _make_ride(pk=81, driver=driver, status_val="in_progress")
+        ride.VALID_TRANSITIONS = {"in_progress": {"completed"}}
+        ride.kind = "ride"
+        ride.delivery_code = ""
+        ride.code_attempts = 0
+        ride.code_locked_until = None
+        ride.Kind = MagicMock()
+        ride.Kind.PACKAGE = "package"
+        mock_cust.get.return_value = driver
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        with patch("accounts.ride_views.RideRequest.VALID_TRANSITIONS", {"in_progress": {"completed"}}):
+            with patch("accounts.ride_views._tz") as mock_tz:
+                import datetime as _dt
+                mock_tz.now.return_value = _dt.datetime(2026, 6, 10, tzinfo=_dt.timezone.utc)
+                with patch("accounts.ride_service.settle_ride"):
+                    req = self._post(ride_id=81, data={"status": "completed"})
+                    resp = self.view(req, ride_id=81)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(ride.status, "completed")

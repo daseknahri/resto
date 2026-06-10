@@ -140,6 +140,24 @@
           </dl>
         </div>
 
+        <!-- Handover code — shown once a driver is on the way (accepted/arrived/in_progress) -->
+        <div
+          v-if="activePackage.delivery_code && ['accepted', 'arrived', 'in_progress'].includes(activePackage.status)"
+          class="ui-panel ui-reveal p-4 space-y-2 border-sky-500/30 bg-sky-500/6"
+          role="region"
+          :aria-label="t('sendPackage.handoverCodeTitle')"
+        >
+          <p class="ui-kicker">{{ t('sendPackage.handoverCodeTitle') }}</p>
+          <p
+            class="my-1 text-center text-4xl font-bold tracking-[0.35em] tabular-nums text-white"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <span class="sr-only">{{ t('sendPackage.codeLabel') }}: </span>{{ activePackage.delivery_code }}
+          </p>
+          <p class="text-center text-xs text-slate-400 leading-snug">{{ t('sendPackage.handoverCodeHint') }}</p>
+        </div>
+
         <!-- Live map (driver position) -->
         <div
           v-show="hasDriverPos"

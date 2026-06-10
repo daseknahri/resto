@@ -144,6 +144,37 @@ open offers; rider-owned on own trip; assigned driver only otherwise. Customer p
 /send-package (SendPackagePage.vue); registry flip made it appear on Home + the
 marketplace hub automatically.
 
+## 5c. Per-vertical delivery semantics (the differences that matter)
+
+One driver pool, but each vertical's delivery is a DIFFERENT operation. The platform
+must never paper over these with restaurant-shaped assumptions:
+
+| Aspect            | Restaurant            | Store/Grocery/Pharmacy   | Courier (package)      | Ride            |
+|-------------------|-----------------------|--------------------------|------------------------|-----------------|
+| Merchant step     | KITCHEN cooks (prep)  | Staff PICK shelves       | none — sender hands off| none            |
+| Driver waits at   | "the restaurant"     | "the store/pharmacy"    | pickup address         | pickup address  |
+| Timing driver     | prep-time on confirm  | pick-time (same field,   | immediate              | immediate or    |
+|                   | (DX4)                 | different meaning)       |                        | scheduled       |
+| Handover proof    | delivery code (DV1)   | delivery code (DV1)      | handover code on the   | passenger IS    |
+|                   |                       |                          | trip (sender shares it)| the proof       |
+| Vehicle targeting | any                   | any (big baskets → car,  | any approved driver    | car + car-doc   |
+|                   |                       | deferred)                |                        | approved only   |
+| Cargo notes       | hot food              | bags/fragile/cold-chain  | package_note free text | n/a             |
+|                   |                       | (deferred)               |                        |                 |
+
+Shipped mechanics: every delivery-job payload carries the tenant's business_type
+(batched lookup, default restaurant) and the frontends branch wording through
+frontend/src/lib/deliveryVocab.js — "At the restaurant" / "At the store" /
+"At the pharmacy" across customer tracker, driver cards and admin chips. Packages
+carry a rider-only 6-digit handover code (RideRequest.delivery_code, migration
+accounts/0040) the courier must enter to complete — same lockout pattern as
+restaurant delivery codes; the code never appears in driver or admin payloads.
+
+Deferred (build when a vertical demands it): store pick-time substitutions /
+out-of-stock refund deltas; basket-size → vehicle targeting for groceries;
+cold-chain / fragile flags; prescription flows (explicitly out of scope — pharmacy
+is parapharmacie only).
+
 ## 6. Service registry (how new services are added)
 
 The customer-facing super-app surfaces render from ONE registry:

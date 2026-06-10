@@ -326,7 +326,7 @@
         <div class="flex items-center justify-between gap-2 border-b border-slate-700/40 px-4 py-3">
           <p class="text-sm font-semibold text-slate-200">{{ t('driver.activeTitle') }}</p>
           <span class="ui-status-pill">
-            {{ statusLabel(activeJob.status) }}
+            {{ statusLabel(activeJob.status, activeJob.business_type) }}
           </span>
         </div>
 
@@ -707,6 +707,39 @@
               <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
               {{ busy ? t('common.loading') : t('driverRides.startCta') }}
             </button>
+            <!-- Package in_progress: inline code entry -->
+            <template v-else-if="activeRide.status === 'in_progress' && activeRide.kind === 'package'">
+              <div class="space-y-2">
+                <label class="block text-xs font-medium text-slate-400" :for="`pkg-code-${activeRide.id}`">
+                  {{ t('driverRides.enterCode') }}
+                </label>
+                <input
+                  :id="`pkg-code-${activeRide.id}`"
+                  v-model="packageCodeInput"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  autocomplete="one-time-code"
+                  class="ui-input text-center text-lg tracking-[0.35em] font-bold tabular-nums"
+                  :placeholder="t('driverRides.enterCode')"
+                  :aria-label="t('driverRides.enterCode')"
+                  @keydown.enter="submitPackageCode(activeRide.id)"
+                />
+                <div v-if="packageCodeError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+                  <p class="text-sm text-red-300">{{ packageCodeError }}</p>
+                </div>
+                <button
+                  class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm disabled:opacity-50"
+                  :disabled="busy || !packageCodeInput.trim()"
+                  :aria-busy="busy"
+                  @click="submitPackageCode(activeRide.id)"
+                >
+                  <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ busy ? t('common.loading') : t('driverRides.codeCta') }}
+                </button>
+              </div>
+            </template>
+            <!-- Non-package in_progress: normal complete button -->
             <button
               v-else-if="activeRide.status === 'in_progress'"
               class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
@@ -1090,6 +1123,7 @@ import { useCustomerStore } from '../stores/customer';
 import { useToastStore } from '../stores/toast';
 import { useCustomerPush } from '../composables/useCustomerPush';
 import api from '../lib/api';
+import { pickupLabelKey } from '../lib/deliveryVocab';
 
 const { t, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
@@ -1109,6 +1143,10 @@ const rideOffers = ref([]);
 const activeRide = ref(null);
 const loadingRides = ref(false);
 const releaseRideConfirmOpen = ref(false);
+
+// ── Package handover code (inline on ride completion) ─────────────────────────
+const packageCodeInput = ref('');
+const packageCodeError = ref('');
 
 // ── Car documents ─────────────────────────────────────────────────────────────
 const driverCarApproved = ref(false);
@@ -1250,16 +1288,24 @@ const STATUS_LABELS = {
   delivered: 'driver.statusDelivered',
   failed: 'driver.statusFailed',
 };
-const statusLabel = (s) => t(STATUS_LABELS[s] || 'driver.statusAssigned');
+// at_restaurant label branches on the active job's business_type via deliveryVocab.
+const statusLabel = (s, businessType) => {
+  if (s === 'at_restaurant') return t(pickupLabelKey(businessType, 'at'));
+  return t(STATUS_LABELS[s] || 'driver.statusAssigned');
+};
 
 // Next forward transition for the active job's current status.
-const NEXT = {
-  assigned: { to: 'at_restaurant', label: 'driver.actionAtRestaurant' },
-  at_restaurant: { to: 'picked_up', label: 'driver.actionPickedUp' },
-  picked_up: { to: 'delivered', label: 'driver.actionDelivered' },
-};
+// The button label for "go to at_restaurant" also branches on business_type.
 const nextAction = computed(() => {
-  const n = activeJob.value && NEXT[activeJob.value.status];
+  const job = activeJob.value;
+  if (!job) return null;
+  const bt = job.business_type;
+  const NEXT = {
+    assigned: { to: 'at_restaurant', label: pickupLabelKey(bt, 'collect') },
+    at_restaurant: { to: 'picked_up', label: 'driver.actionPickedUp' },
+    picked_up: { to: 'delivered', label: 'driver.actionDelivered' },
+  };
+  const n = NEXT[job.status];
   return n ? { to: n.to, label: t(n.label) } : null;
 });
 
@@ -1508,7 +1554,13 @@ const fetchRides = async () => {
   try {
     const { data } = await api.get('/driver/rides/');
     rideOffers.value = data.open_rides || [];
+    const prevRideId = activeRide.value?.id;
     activeRide.value = data.active_ride || null;
+    // Reset package code state when the ride changes
+    if (activeRide.value?.id !== prevRideId) {
+      packageCodeInput.value = '';
+      packageCodeError.value = '';
+    }
     if (data.last_completed) {
       lastCompleted.value = data.last_completed;
       // Reset the rating UI if a new last_completed arrived with no rating yet
@@ -1576,6 +1628,33 @@ const advanceRide = async (rideId, status) => {
     }
   } catch (err) {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+// Package handover code submission — sends {status: 'completed', code} to the ride endpoint.
+const submitPackageCode = async (rideId) => {
+  const code = packageCodeInput.value.trim();
+  if (!code) return;
+  packageCodeError.value = '';
+  busy.value = true;
+  try {
+    await api.post(`/driver/rides/${rideId}/status/`, { status: 'completed', code });
+    packageCodeInput.value = '';
+    activeRide.value = null;
+    toast.show(t('driver.deliveredToast'), 'success');
+    fetchEarnings();
+    fetchRides();
+  } catch (err) {
+    const errCode = err?.response?.data?.code;
+    if (errCode === 'bad_code') {
+      packageCodeError.value = t('driverRides.badCode');
+    } else if (errCode === 'code_locked') {
+      packageCodeError.value = t('driverRides.codeLocked');
+    } else {
+      packageCodeError.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    }
   } finally {
     busy.value = false;
   }

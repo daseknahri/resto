@@ -922,6 +922,15 @@ class RideRequest(models.Model):
     # True once the wallet debit for this ride succeeded.
     paid_with_wallet = models.BooleanField(default=False)
 
+    # ── Package proof-of-delivery handover code (migration 0040) ──────────────
+    # Generated at create time ONLY for kind='package' (6 random digits, zero-padded).
+    # The sender shares this with the recipient out-of-band; the driver must enter it
+    # when marking the trip completed. Never exposed in driver offer/active payloads or
+    # admin lists — only in the rider's own active-trip serialization.
+    delivery_code = models.CharField(max_length=6, blank=True, default="")
+    code_attempts = models.PositiveSmallIntegerField(default=0)
+    code_locked_until = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ("-created_at",)
         indexes = [
