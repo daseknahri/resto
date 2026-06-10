@@ -923,6 +923,7 @@ export const messages = {
       applied: "Template applied — {categories} categories, {dishes} dishes added.",
       applyFailed: "Could not apply the template. Please try again.",
       loadFailed: "Could not load templates.",
+      filterAll: "All types",
       kinds: {
         cafe: "Café / Coffee shop",
         hotel: "Hotel",
@@ -1706,7 +1707,16 @@ export const messages = {
       logoUploaded: "Logo uploaded",
       logoUploadFailed: "Logo upload failed",
       heroUploaded: "Hero image uploaded",
-      heroUploadFailed: "Hero upload failed"
+      heroUploadFailed: "Hero upload failed",
+      fullTemplatesTitle: "Start from a full template",
+      fullTemplatesHint: "Applies a colour palette, menu layout and a ready-to-edit sample menu in one tap.",
+      fullTemplatesCta: "Browse templates",
+      presetsFromTemplates: "Palettes from our starter templates — tap to use the colours only.",
+      previewSampleCategory: "Popular today",
+      previewSampleDish: "Grilled chicken skewers",
+      previewSampleDesc: "Smoky, tender, served with lemon.",
+      previewAddCta: "Add",
+      previewSamplePrice: "85"
     },
     stepPublish: {
       title: "Publish",
@@ -5151,6 +5161,7 @@ export const messages = {
       applied: "Modèle appliqué — {categories} catégories, {dishes} plats ajoutés.",
       applyFailed: "Impossible d'appliquer le modèle. Réessayez.",
       loadFailed: "Impossible de charger les modèles.",
+      filterAll: "Tous les types",
       kinds: {
         cafe: "Café",
         hotel: "Hôtel",
@@ -5933,8 +5944,17 @@ export const messages = {
       toastSaveFailed: "Echec de l'enregistrement du theme",
       logoUploaded: "Logo telecharge",
       logoUploadFailed: "Echec du telechargement du logo",
-      heroUploaded: "Image hero telechargee",
-      heroUploadFailed: "Echec du telechargement de l'image hero"
+      heroUploaded: "Image hero téléchargée",
+      heroUploadFailed: "Échec du téléchargement de l'image hero",
+      fullTemplatesTitle: "Partir d'un template complet",
+      fullTemplatesHint: "Applique une palette, une mise en page et un menu d'exemple modifiable en un clic.",
+      fullTemplatesCta: "Parcourir les templates",
+      presetsFromTemplates: "Palettes issues de nos templates — appuyez pour n'utiliser que les couleurs.",
+      previewSampleCategory: "Populaires aujourd'hui",
+      previewSampleDish: "Brochettes de poulet grillées",
+      previewSampleDesc: "Fumées, tendres, servies avec citron.",
+      previewAddCta: "Ajouter",
+      previewSamplePrice: "85"
     },
     stepPublish: {
       title: "Publication",

@@ -67,7 +67,7 @@
           <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
             <div class="space-y-1">
               <p class="text-sm font-semibold text-slate-100">{{ t("stepTheme.themePresets") }}</p>
-              <p class="text-xs text-slate-500">{{ t("stepTheme.presetsHint") }}</p>
+              <p class="text-xs text-slate-500">{{ t("stepTheme.presetsFromTemplates") }}</p>
             </div>
             <div class="flex flex-wrap gap-2">
               <button
@@ -84,6 +84,16 @@
                 {{ preset.label }}
               </button>
             </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+            <div class="space-y-0.5">
+              <p class="text-sm font-semibold text-slate-100">{{ t("stepTheme.fullTemplatesTitle") }}</p>
+              <p class="text-xs text-slate-500">{{ t("stepTheme.fullTemplatesHint") }}</p>
+            </div>
+            <button type="button" class="ui-btn-outline ui-touch-target shrink-0 px-3 py-1.5 text-xs" @click="showTemplatePicker = true">
+              {{ t("stepTheme.fullTemplatesCta") }}
+            </button>
           </div>
         </div>
 
@@ -112,6 +122,29 @@
                 <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/10" :style="{ background: form.secondary_color }" aria-hidden="true"></span>
                 <span class="tabular-nums">{{ form.secondary_color }}</span>
               </span>
+            </div>
+
+            <div aria-hidden="true" class="rounded-xl overflow-hidden border border-white/10 bg-slate-950/70">
+              <div class="flex items-center gap-2 px-3 py-2" :style="{ background: form.primary_color }">
+                <img
+                  v-if="form.logo_url"
+                  :src="form.logo_url"
+                  class="h-6 w-6 rounded-md object-cover"
+                  alt=""
+                  @error="$event.target.style.display='none'"
+                />
+                <span class="text-xs font-semibold text-white/90">{{ t("stepTheme.previewSampleCategory") }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 px-3 py-2.5">
+                <div>
+                  <p class="text-sm font-medium text-slate-100">{{ t("stepTheme.previewSampleDish") }}</p>
+                  <p class="text-[11px] text-slate-400">{{ t("stepTheme.previewSampleDesc") }}</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <span class="rounded-full px-2 py-0.5 text-[11px] font-bold" :style="{ background: form.secondary_color, color: previewBadgeTextColor }">{{ t("stepTheme.previewSamplePrice") }}</span>
+                  <button type="button" tabindex="-1" aria-hidden="true" class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" :style="{ borderColor: form.secondary_color, color: form.secondary_color }">{{ t("stepTheme.previewAddCta") }}</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -263,6 +296,8 @@
         <p class="text-sm text-slate-400">{{ status }}</p>
       </div>
     </section>
+
+    <TemplatePickerModal :open="showTemplatePicker" @close="showTemplatePicker = false" @applied="onTemplateApplied" />
   </div>
 </template>
 
@@ -273,6 +308,8 @@ import { THEME_PRESETS } from "./starterTemplates";
 import { useI18n } from "../composables/useI18n";
 import { useThemeStore } from "../stores/theme";
 import { useToastStore } from "../stores/toast";
+import { fetchTemplateSummaries } from "../lib/templateCatalog";
+import TemplatePickerModal from "../components/TemplatePickerModal.vue";
 
 const form = reactive({
   primary_color: "#0F766E",
@@ -300,7 +337,24 @@ const props = defineProps({
   },
 });
 const emit = defineEmits(["next", "back"]);
-const themePresets = THEME_PRESETS;
+const showTemplatePicker = ref(false);
+const templatePaletteList = ref([]);
+
+const themePresets = computed(() => {
+  if (templatePaletteList.value.length) return templatePaletteList.value;
+  return THEME_PRESETS;
+});
+
+// Dark or light text on the preview price badge, by YIQ luminance of the
+// secondary colour — keeps the mockup legible for very dark brand palettes.
+const previewBadgeTextColor = computed(() => {
+  const hex = String(form.secondary_color || "").replace("#", "");
+  if (hex.length !== 6) return "#0B1120";
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 >= 140 ? "#0B1120" : "#FFFFFF";
+});
 
 const previewStyle = computed(() => ({
   backgroundImage: form.hero_url ? `linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.9)), url(${form.hero_url})` : undefined,
@@ -355,6 +409,30 @@ const isPresetActive = (preset) =>
   preset &&
   String(form.primary_color || "").toUpperCase() === String(preset.primary || "").toUpperCase() &&
   String(form.secondary_color || "").toUpperCase() === String(preset.secondary || "").toUpperCase();
+
+const loadTemplatePalettes = async () => {
+  try {
+    // Shared cached catalog — same request the TemplatePickerModal gallery
+    // uses, so opening the picker later costs no extra fetch.
+    const templates = await fetchTemplateSummaries();
+    const seen = new Set();
+    const palettes = [];
+    for (const tpl of templates) {
+      const key = `${String(tpl.theme?.primary_color || "").toUpperCase()}|${String(tpl.theme?.secondary_color || "").toUpperCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      palettes.push({
+        id: tpl.key,
+        label: t("ownerTemplates.kinds." + tpl.key),
+        primary: tpl.theme.primary_color,
+        secondary: tpl.theme.secondary_color,
+      });
+    }
+    if (palettes.length) templatePaletteList.value = palettes;
+  } catch {
+    // Fall back to THEME_PRESETS (templatePaletteList stays empty).
+  }
+};
 
 const load = async () => {
   try {
@@ -483,7 +561,16 @@ const clearLogo = async () => {
   queueCleanup(old);
 };
 
-onMounted(load);
+const onTemplateApplied = async () => {
+  showTemplatePicker.value = false;
+  await load();
+  theme.apply(form);
+};
+
+onMounted(() => {
+  load();
+  loadTemplatePalettes();
+});
 
 const standalone = computed(() => props.standalone);
 </script>

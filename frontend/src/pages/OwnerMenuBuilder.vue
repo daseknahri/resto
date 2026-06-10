@@ -8,7 +8,7 @@
         <div class="flex shrink-0 items-center gap-2">
           <button
             class="ui-btn-outline ui-press gap-1.5 px-3 py-1.5 text-xs"
-            @click="openTemplates"
+            @click="showTemplates = true"
           >
             <AppIcon name="sparkles" class="h-3.5 w-3.5" aria-hidden="true" />
             <span class="hidden sm:inline">{{ t("ownerTemplates.button") }}</span>
@@ -197,75 +197,7 @@
     </Teleport>
 
     <!-- Templates modal — start from a professionally themed sample menu -->
-    <Teleport to="body">
-      <Transition name="ui-fade">
-        <div
-          v-if="showTemplates"
-          class="fixed inset-0 z-[2100] flex items-end justify-center bg-black/60 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0"
-          @click.self="showTemplates = false"
-          @keydown.esc="showTemplates = false"
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="owner-templates-title"
-            class="ui-panel w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4 p-5 sm:p-6"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="ui-kicker">{{ t("ownerTemplates.kicker") }}</p>
-                <h2 id="owner-templates-title" class="text-base font-bold text-white leading-tight mt-0.5">{{ t("ownerTemplates.title") }}</h2>
-                <p class="ui-subtle mt-0.5 text-xs">{{ t("ownerTemplates.subtitle") }}</p>
-              </div>
-              <button
-                class="ui-press ui-touch-target shrink-0 flex items-center justify-center rounded-xl border border-slate-700/60 bg-slate-800/50 text-slate-400 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-                :aria-label="t('common.close')"
-                @click="showTemplates = false"
-              >
-                <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-
-            <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
-              <span class="text-xs text-slate-300">{{ t("ownerTemplates.withSample") }}</span>
-              <input v-model="withSampleContent" type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 text-brand-secondary" />
-            </label>
-
-            <div v-if="loadingTemplates" class="space-y-2" aria-busy="true">
-              <div v-for="i in 4" :key="i" class="ui-skeleton h-20" />
-            </div>
-            <ul v-else class="space-y-2.5">
-              <li
-                v-for="tpl in templates"
-                :key="tpl.key"
-                class="rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3"
-              >
-                <div class="flex items-center gap-3">
-                  <span class="flex h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700/60" aria-hidden="true">
-                    <span class="h-full w-1/2" :style="{ background: tpl.theme.primary_color }" />
-                    <span class="h-full w-1/2" :style="{ background: tpl.theme.secondary_color }" />
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-slate-100">{{ t("ownerTemplates.kinds." + tpl.key) }}</p>
-                    <p class="text-[11px] text-slate-500 truncate" :title="tpl.categories.join(' · ')">{{ tpl.categories.join(" · ") }}</p>
-                    <p class="text-[11px] text-slate-500">{{ t("ownerTemplates.itemCount", { n: tpl.dish_count }) }}</p>
-                  </div>
-                  <button
-                    class="ui-btn-primary ui-press inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs disabled:opacity-50"
-                    :disabled="!!applyingKey"
-                    :aria-busy="applyingKey === tpl.key || undefined"
-                    @click="applyTemplate(tpl.key)"
-                  >
-                    <svg v-if="applyingKey === tpl.key" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
-                    {{ applyingKey === tpl.key ? t('common.loading') : t("ownerTemplates.apply") }}
-                  </button>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <TemplatePickerModal :open="showTemplates" @close="showTemplates = false" @applied="onTemplateApplied" />
   </div>
 </template>
 
@@ -273,10 +205,10 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import TemplatePickerModal from "../components/TemplatePickerModal.vue";
 import { useI18n } from "../composables/useI18n";
 import { useVocabulary } from "../composables/useVocabulary";
 import { useToastStore } from "../stores/toast";
-import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
 import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
@@ -291,51 +223,18 @@ const router = useRouter();
 const { t } = useI18n();
 const { itemPlural, groupPlural } = useVocabulary();
 const toast = useToastStore();
-const tenant = useTenantStore();
 
 // ── Starter templates ───────────────────────────────────────────────────────────
 const showTemplates = ref(false);
-const templates = ref([]);
-const loadingTemplates = ref(false);
-const applyingKey = ref("");
-const withSampleContent = ref(true);
 // Bumped after applying a template to remount the active tab so new menu shows.
 const reloadKey = ref(0);
 
-const openTemplates = async () => {
-  showTemplates.value = true;
-  if (templates.value.length) return;
-  loadingTemplates.value = true;
-  try {
-    const { data } = await api.get("/owner/apply-template/");
-    templates.value = Array.isArray(data.templates) ? data.templates : [];
-  } catch {
-    toast.show(t("ownerTemplates.loadFailed"), "error");
-  } finally {
-    loadingTemplates.value = false;
-  }
-};
-
-const applyTemplate = async (key) => {
-  if (applyingKey.value) return;
-  applyingKey.value = key;
-  try {
-    const { data } = await api.post("/owner/apply-template/", {
-      template: key,
-      with_sample_content: withSampleContent.value,
-    });
-    showTemplates.value = false;
-    await tenant.fetchMeta();   // pick up the new theme + business_type
-    reloadKey.value += 1;       // remount the active tab to show the new menu
-    toast.show(
-      t("ownerTemplates.applied", { dishes: data.created_dishes, categories: data.created_categories }),
-      "success",
-    );
-  } catch (err) {
-    toast.show(err?.response?.data?.detail || t("ownerTemplates.applyFailed"), "error");
-  } finally {
-    applyingKey.value = "";
-  }
+// TemplatePickerModal (wrapping TemplateGallery) handles fetching, applying,
+// tenant.fetchMeta(), and toasts internally — we only need to close the modal
+// and bump reloadKey so the active tab remounts with the new menu data.
+const onTemplateApplied = () => {
+  showTemplates.value = false;
+  reloadKey.value += 1;
 };
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
