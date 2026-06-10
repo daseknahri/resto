@@ -967,11 +967,13 @@ import { useI18n } from '../composables/useI18n';
 import { useCustomerStore } from '../stores/customer';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import api from '../lib/api';
+import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const customerStore = useCustomerStore();
+const toastStore = useToastStore();
 
 const slug = route.params.slug;
 
@@ -1660,27 +1662,57 @@ const _setupCatObserver = () => {
   sections.forEach((el) => _catObserver.observe(el));
 };
 
+// Build a slug → live dish map from the loaded menu for price resolution.
+const _buildDishMap = () => {
+  const map = new Map();
+  for (const sc of restaurant.value?.super_categories || []) {
+    for (const cat of sc.categories || []) {
+      for (const dish of cat.dishes || []) {
+        if (dish.slug) map.set(dish.slug, dish);
+      }
+    }
+  }
+  return map;
+};
+
 // Pre-fill the cart from a re-order navigation (items_snapshot from CustomerOrderRef).
+// Called after fetchMenu so live prices are available. Silently drops items no longer
+// on the menu and shows a toast only when at least one price changed or an item was dropped.
 const applyReorderItems = () => {
   const items = history.state?.reorderItems;
   if (!Array.isArray(items) || !items.length) return;
-  cart.value = [];
+  const dishMap = _buildDishMap();
+  const newCart = [];
+  let priceChanged = false;
+  let dropped = false;
   for (const item of items) {
     if (!item.slug) continue;
-    cart.value.push({
-      slug: item.slug,
-      name: item.name || item.slug,
-      price: Number(item.price) || 0,
+    const live = dishMap.get(item.slug);
+    if (!live) { dropped = true; continue; }
+    const snapshotPrice = Number(item.price) || 0;
+    const livePrice = Number(live.price) || 0;
+    if (snapshotPrice !== livePrice) priceChanged = true;
+    newCart.push({
+      slug: live.slug,
+      name: live.name || item.name || live.slug,
+      price: livePrice,
+      unitPrice: livePrice,
       qty: Math.max(1, Math.floor(Number(item.qty) || 1)),
+      options: [],
     });
+  }
+  if (!newCart.length) return;
+  cart.value = newCart;
+  if (priceChanged || dropped) {
+    toastStore.show(t('cartPage.reorderPriceNote'), 'info');
   }
 };
 
 onMounted(async () => {
   await customerStore.fetchCustomer();
   fetchMktSavedAddresses(); // non-blocking — degrades gracefully if unauthenticated
-  applyReorderItems(); // pre-fill cart before menu loads so the badge is ready
   await fetchMenu();
+  applyReorderItems(); // resolve live prices after menu is loaded
   // Set up category observer after the menu DOM is rendered
   await nextTick();
   _setupCatObserver();

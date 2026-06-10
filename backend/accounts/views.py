@@ -2540,7 +2540,12 @@ class MarketplaceMenuView(APIView):
                 } if _lc else None
 
                 dishes_qs = (
-                    _Dish.objects.filter(is_published=True, category__is_published=True)
+                    _Dish.objects.filter(
+                        is_published=True,
+                        category__is_published=True,
+                        category__is_temporarily_disabled=False,
+                        category__super_category__is_temporarily_disabled=False,
+                    )
                     .select_related("category__super_category")
                     .prefetch_related("option_groups__options")
                     .order_by("position", "name")
@@ -2824,7 +2829,8 @@ class MarketplacePlaceOrderView(APIView):
                 dishes_map = {
                     d.slug: d
                     for d in _Dish.objects.filter(
-                        slug__in=slugs, is_published=True, is_available=True, category__is_published=True
+                        slug__in=slugs, is_published=True, is_available=True,
+                        category__is_published=True, category__is_temporarily_disabled=False,
                     ).select_related("category")
                 }
                 missing = [s for s in slugs if s not in dishes_map]

@@ -44,6 +44,9 @@
           <p class="ui-stat-label">{{ t("ownerHome.revenueTotal") }}</p>
           <p class="ui-stat-value tabular-nums text-[var(--color-secondary)]">{{ fmt(data.total_revenue) }}</p>
           <PeriodBadge :pct="data.prev_period?.revenue_change_pct" />
+          <p v-if="data.cash_revenue != null && data.wallet_revenue != null" class="ui-stat-note mt-0.5 text-slate-400">
+            {{ t("ownerHome.cashWalletSplit", { cash: fmt(data.cash_revenue), wallet: fmt(data.wallet_revenue) }) }}
+          </p>
         </div>
         <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '28ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>

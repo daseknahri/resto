@@ -421,6 +421,78 @@ class MarketplaceMenuViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertEqual(resp.data["code"], "server_error")
 
+    def test_dish_queryset_excludes_paused_super_category(self):
+        """Dish filter must include category__super_category__is_temporarily_disabled=False.
+
+        Regression guard for the gap where a paused SuperCategory still exposed its
+        child dishes in the marketplace while the direct tenant menu correctly hid them.
+
+        The view imports menu models inside schema_context at function scope, so we
+        inject fakes via sys.modules to intercept the filter call.
+        """
+        import sys
+
+        tenant = MagicMock()
+        tenant.schema_name = "bistro"
+
+        # Build mock Dish ORM chain; .filter() records kwargs, .order_by() returns [].
+        mock_dish_qs = MagicMock()
+        mock_dish_qs.filter.return_value = mock_dish_qs
+        mock_dish_qs.select_related.return_value = mock_dish_qs
+        mock_dish_qs.prefetch_related.return_value = mock_dish_qs
+        mock_dish_qs.order_by.return_value = []
+
+        mock_dish_cls = MagicMock()
+        mock_dish_cls.objects.filter.return_value = mock_dish_qs
+
+        mock_profile = MagicMock()
+        mock_profile.is_menu_published = True
+        mock_profile_cls = MagicMock()
+        mock_profile_cls.objects.filter.return_value.first.return_value = mock_profile
+
+        mock_lc_cls = MagicMock()
+        mock_lc_cls.objects.filter.return_value.first.return_value = None
+
+        # Build a fake menu.models module with only what the view imports.
+        fake_menu_models = MagicMock()
+        fake_menu_models.Profile = mock_profile_cls
+        fake_menu_models.SuperCategory = MagicMock()
+        fake_menu_models.Category = MagicMock()
+        fake_menu_models.Dish = mock_dish_cls
+        fake_menu_models.OptionGroup = MagicMock()
+        fake_menu_models.LoyaltyConfig = mock_lc_cls
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.DoesNotExist = _FakeDNE
+            tenant.lifecycle_status = mock_tenant.LifecycleStatus.ACTIVE
+            mock_tenant.objects.get.return_value = tenant
+
+            with patch("django_tenants.utils.schema_context", _sc_mock()):
+                original_menu_models = sys.modules.get("menu.models")
+                sys.modules["menu.models"] = fake_menu_models
+                try:
+                    self._get()
+                finally:
+                    if original_menu_models is None:
+                        sys.modules.pop("menu.models", None)
+                    else:
+                        sys.modules["menu.models"] = original_menu_models
+
+        # Verify the filter was called with the super_category pause guard.
+        self.assertTrue(
+            mock_dish_cls.objects.filter.called,
+            "Dish.objects.filter should have been called",
+        )
+        call_kwargs = mock_dish_cls.objects.filter.call_args[1]
+        self.assertIn(
+            "category__super_category__is_temporarily_disabled",
+            call_kwargs,
+            "Dish filter must exclude dishes from paused SuperCategories",
+        )
+        self.assertFalse(
+            call_kwargs["category__super_category__is_temporarily_disabled"],
+        )
+
 
 # ── MarketplacePlaceOrderView ─────────────────────────────────────────────────
 

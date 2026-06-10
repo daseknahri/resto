@@ -123,11 +123,28 @@
             <div class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
               <span>{{ cat.is_published ? t("stepPublish.published") : t("stepPublish.draft") }}</span>
               <span v-if="Object.keys(cat.name_i18n || {}).length">· {{ Object.keys(cat.name_i18n || {}).length }} {{ t("stepCategories.translationsTitle") }}</span>
+              <span v-if="cat.is_temporarily_disabled" class="inline-flex items-center gap-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                {{ t("stepCategories.pausedBadge") }}
+              </span>
             </div>
+            <p v-if="cat.is_temporarily_disabled" class="mt-0.5 text-[10px] text-amber-400/70">{{ t("stepCategories.pausedHint") }}</p>
           </div>
 
-          <!-- Actions: edit · delete -->
+          <!-- Actions: pause/resume · edit · delete -->
           <div class="flex shrink-0 items-center gap-1.5">
+            <button
+              v-if="cat.id"
+              class="ui-press ui-touch-target flex items-center justify-center rounded-lg border px-1.5 text-[10px] font-medium transition"
+              :class="cat.is_temporarily_disabled
+                ? 'border-amber-500/40 text-amber-300 hover:border-amber-400/60 hover:text-amber-200'
+                : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+              type="button"
+              :aria-label="cat.is_temporarily_disabled ? t('stepCategories.resumeToggle') : t('stepCategories.pauseToggle')"
+              :disabled="pausingCatId === cat.id"
+              @click="togglePause(cat)"
+            >
+              {{ cat.is_temporarily_disabled ? t("stepCategories.resumeToggle") : t("stepCategories.pauseToggle") }}
+            </button>
             <button
               class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
               type="button" :aria-label="t('common.edit')" @click="openEditor(cat.local_id)"
@@ -374,6 +391,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import api from "../lib/api";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
@@ -396,6 +414,7 @@ const removedIds = ref([]);
 const rowErrors = reactive({});
 const globalError = ref("");
 const saving = ref(false);
+const pausingCatId = ref(null);
 const status = ref("");
 const search = ref("");
 const superCategoryOptions = ref([]);
@@ -464,6 +483,7 @@ const normalizeCategory = (cat = {}) => ({
   description_i18n: cat.description_i18n && typeof cat.description_i18n === "object" ? { ...cat.description_i18n } : {},
   position: cat.position ?? categories.length,
   is_published: cat.is_published ?? true,
+  is_temporarily_disabled: cat.is_temporarily_disabled ?? false,
 });
 
 const superCategoryLabel = (group) => {
@@ -722,6 +742,23 @@ const removeByLocalId = async (localId) => {
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];
   renumberCategoriesForGroup(cat.super_category);
+};
+
+const togglePause = async (cat) => {
+  if (!cat.id || pausingCatId.value === cat.id) return;
+  const next = !cat.is_temporarily_disabled;
+  // Optimistic update
+  cat.is_temporarily_disabled = next;
+  pausingCatId.value = cat.id;
+  try {
+    await api.patch(`/categories/${cat.id}/`, { is_temporarily_disabled: next });
+  } catch {
+    // Revert on failure
+    cat.is_temporarily_disabled = !next;
+    toast.show(t("stepCategories.pauseFailed"), "error");
+  } finally {
+    pausingCatId.value = null;
+  }
 };
 
 const mapServerErrorsToRow = (localId, fieldErrors = {}) => {

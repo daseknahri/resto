@@ -538,6 +538,7 @@ const arabicMessages = {
     "revenueTitle": "الإيرادات",
     "revenuePeriod": "آخر {days} يوم",
     "revenueTotal": "إجمالي الإيرادات",
+    "cashWalletSplit": "{cash} نقداً · {wallet} محفظة",
     "revenueOrders": "الطلبات",
     "revenueAvg": "متوسط الطلب",
     "revenueDailyChart": "الإيرادات اليومية",
@@ -1516,7 +1517,12 @@ const arabicMessages = {
     "selectSuperCategory": "مجموعة القائمة الرئيسية",
     "editCategory": "تعديل التصنيف",
     "superCategoryRequired": "اختر مجموعة قائمة رئيسية.",
-    "visibility": "الظهور"
+    "visibility": "الظهور",
+    "pauseToggle": "إيقاف مؤقت",
+    "resumeToggle": "استئناف",
+    "pausedBadge": "موقوف",
+    "pausedHint": "مخفي من القائمة حتى تستأنفه.",
+    "pauseFailed": "تعذّر تحديث التصنيف."
   },
   "stepDishes": {
     "title": "الأطباق",
@@ -1889,7 +1895,8 @@ const arabicMessages = {
     "tipCustomPlaceholder": "مبلغ مخصص",
     "tipLabel": "إضافة بقشيش",
     "tipHighWarning": "هذه البقشيش تتجاوز إجمالي طلبك — تحقق من المبلغ.",
-    "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط)."
+    "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط).",
+    "reorderPriceNote": "تم تحديث الأسعار وفق قائمة اليوم."
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",
@@ -4024,6 +4031,7 @@ Object.assign(arabicMessages, {
     orderHideItems: "\u0625\u062e\u0641\u0627\u0621 \u0627\u0644\u0639\u0646\u0627\u0635\u0631",
     reorder: "\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0637\u0644\u0628",
     reorderAdded: "\u062a\u0645\u062a \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0625\u0644\u0649 \u0627\u0644\u0633\u0644\u0629",
+    reorderUnavailable: "\u0647\u0630\u0647 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u0644\u0645 \u062a\u0639\u062f \u0645\u062a\u0648\u0641\u0631\u0629 \u0641\u064a \u0627\u0644\u0642\u0627\u0626\u0645\u0629.",
     reorderEmpty: "\u0644\u0627 \u0634\u064a\u0621 \u0644\u0625\u0639\u0627\u062f\u0629 \u0637\u0644\u0628\u0647.",
     loyaltyTitle: "\u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0644\u0627\u0621",
     loyaltyPts: "\u0646\u0642\u0637\u0629",

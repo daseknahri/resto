@@ -427,6 +427,7 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         if self.request.method in ("GET", "HEAD", "OPTIONS") and not self._can_preview_unpublished():
             qs = qs.filter(
                 is_published=True,
+                is_temporarily_disabled=False,
                 super_category__is_published=True,
                 super_category__is_temporarily_disabled=False,
             )
@@ -457,6 +458,7 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             qs = qs.filter(
                 is_published=True,
                 category__is_published=True,
+                category__is_temporarily_disabled=False,
                 category__super_category__is_published=True,
                 category__super_category__is_temporarily_disabled=False,
             )
@@ -517,6 +519,7 @@ class DishOptionViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             qs = qs.filter(
                 dish__is_published=True,
                 dish__category__is_published=True,
+                dish__category__is_temporarily_disabled=False,
                 dish__category__super_category__is_published=True,
                 dish__category__super_category__is_temporarily_disabled=False,
             )
@@ -1298,7 +1301,10 @@ class OrderHandoffView(APIView):
     def _fetch_dishes(self, slugs, can_preview):
         qs = Dish.objects.filter(slug__in=slugs).select_related("category")
         if not can_preview:
-            qs = qs.filter(is_published=True, is_available=True, category__is_published=True)
+            qs = qs.filter(
+                is_published=True, is_available=True,
+                category__is_published=True, category__is_temporarily_disabled=False,
+            )
         return {dish.slug: dish for dish in qs}
 
     def _fetch_options(self, option_ids, can_preview):
@@ -1306,7 +1312,11 @@ class OrderHandoffView(APIView):
             return {}
         qs = DishOption.objects.filter(id__in=option_ids).select_related("dish", "dish__category")
         if not can_preview:
-            qs = qs.filter(dish__is_published=True, dish__category__is_published=True)
+            qs = qs.filter(
+                dish__is_published=True,
+                dish__category__is_published=True,
+                dish__category__is_temporarily_disabled=False,
+            )
         return {opt.id: opt for opt in qs}
 
     def _sanitize_phone(self, value: str) -> str:
@@ -1892,7 +1902,8 @@ class PlaceOrderView(APIView):
         all_option_ids = [oid for i in items_input for oid in i.get("option_ids", [])]
 
         dishes_map = {d.slug: d for d in Dish.objects.filter(
-            slug__in=slugs, is_published=True, is_available=True, category__is_published=True
+            slug__in=slugs, is_published=True, is_available=True,
+            category__is_published=True, category__is_temporarily_disabled=False,
         ).select_related("category")}
 
         missing = [s for s in slugs if s not in dishes_map]

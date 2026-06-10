@@ -69,6 +69,7 @@ def _order_qs_mock():
     qs.count.return_value = 0
     qs.aggregate.return_value = {
         "total_revenue": None, "order_count": 0,
+        "wallet_revenue": None,
         "mkt_count": 0, "mkt_revenue": None, "mkt_commission": None,
         # Loyalty & promotion aggregate (added with the dashboard loyalty_promo panel)
         "promo_discount_total": None, "loyalty_discount_total": None,
@@ -308,7 +309,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         for key in (
             "total_revenue", "order_count", "avg_order_value", "daily", "days",
             "peak_hours", "popular_dishes", "prev_period", "fulfillment_breakdown",
-            "currency", "loyalty_promo",
+            "currency", "loyalty_promo", "wallet_revenue", "cash_revenue",
         ):
             self.assertIn(key, rs, f"Missing revenue_summary key: {key}")
         for key in ("promo_discount_total", "promo_order_count", "loyalty_discount_total",

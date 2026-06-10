@@ -490,6 +490,7 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "image_url",
             "position",
             "is_published",
+            "is_temporarily_disabled",
             "dishes",
         ]
 

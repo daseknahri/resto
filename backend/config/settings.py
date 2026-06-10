@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from celery.schedules import crontab
+
 import dj_database_url
 from dotenv import load_dotenv
 
@@ -304,6 +306,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "accounts.tasks.run_management_command",
         "schedule": 86400.0,  # daily — refresh MAD exchange rates
         "args": ("fetch_currency_rates",),
+    },
+    "send-daily-summary": {
+        "task": "accounts.tasks.run_management_command",
+        # 23:30 UTC ≈ 00:30 Morocco (UTC+1) — after the last orders of the day have settled.
+        "schedule": crontab(hour=23, minute=30),
+        "args": ("send_daily_summary",),
     },
     "prune-analytics-events": {
         "task": "accounts.tasks.run_management_command",

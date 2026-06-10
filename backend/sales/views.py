@@ -2468,10 +2468,16 @@ class OwnerDashboardView(APIView):
             created_at__gte=since,
             status__in=billable_statuses,
         )
-        revenue_agg = revenue_qs.aggregate(total_revenue=Sum("total"), order_count=Count("id"))
+        revenue_agg = revenue_qs.aggregate(
+            total_revenue=Sum("total"),
+            order_count=Count("id"),
+            wallet_revenue=Sum("wallet_amount_paid"),
+        )
         total_revenue = float(revenue_agg["total_revenue"] or 0)
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
+        wallet_revenue = round(float(revenue_agg["wallet_revenue"] or 0), 2)
+        cash_revenue = round(total_revenue - wallet_revenue, 2)
 
         # ── Loyalty & promotion performance (same window) ──────────────────────
         _lp = revenue_qs.aggregate(
@@ -2696,6 +2702,8 @@ class OwnerDashboardView(APIView):
                     "total_revenue": total_revenue,
                     "order_count": order_count,
                     "avg_order_value": avg_order_value,
+                    "wallet_revenue": wallet_revenue,
+                    "cash_revenue": cash_revenue,
                     "prev_period": prev_period,
                     "daily": daily_revenue,
                     "peak_hours": {

@@ -45,6 +45,14 @@ class Category(models.Model):
     image_url = models.URLField(blank=True)
     position = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=True)
+    is_temporarily_disabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Temporarily hide this category and all its dishes from the customer menu "
+            "without permanently unpublishing it — useful for mid-service pauses "
+            "(e.g. a section is sold out for the evening). Set back to False to restore."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

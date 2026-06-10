@@ -1627,6 +1627,7 @@ import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
+import { useMenuStore } from '../stores/menu';
 import { useCustomerStore } from '../stores/customer';
 import { useCurrencyStore } from '../stores/currency';
 import { useTenantStore } from '../stores/tenant';
@@ -1641,6 +1642,7 @@ const currencyStore = useCurrencyStore();
 const tenantStore = useTenantStore();
 const cart = useCartStore();
 const toast = useToastStore();
+const menuStore = useMenuStore();
 const router = useRouter();
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
@@ -1687,25 +1689,56 @@ const toggleOrder = (orderNumber) => {
   expandedOrders.value = s;
 };
 
-const reorder = (order) => {
+const reorder = async (order) => {
   const items = order.items || [];
   if (!items.length) {
     toast.show(t('customerAccount.reorderEmpty'), 'info');
     return;
   }
-  items.forEach((item) => {
+  // Ensure live menu data is loaded so we can resolve current prices.
+  if (!menuStore.categories.length) {
+    await menuStore.fetchCategories().catch(() => {});
+  }
+  // Build slug → live dish map from all loaded categories.
+  const dishMap = new Map();
+  for (const dishes of Object.values(menuStore.dishes || {})) {
+    for (const dish of dishes) {
+      if (dish.slug) dishMap.set(dish.slug, dish);
+    }
+  }
+  let priceChanged = false;
+  let dropped = false;
+  let added = 0;
+  for (const item of items) {
+    if (!item.dish_slug) continue;
+    const live = dishMap.get(item.dish_slug);
+    if (!live) { dropped = true; continue; }
+    const snapshotPrice = parseFloat(item.unit_price) || 0;
+    const livePrice = Number(live.price) || 0;
+    if (snapshotPrice !== livePrice) priceChanged = true;
     cart.add({
-      slug: item.dish_slug,
-      name: item.dish_name,
-      price: parseFloat(item.unit_price) || 0,
+      slug: live.slug,
+      name: live.name || item.dish_name,
+      price: livePrice,
       currency: order.currency || 'MAD',
       qty: item.qty,
       note: item.note || '',
       option_ids: (item.options || []).map((o) => o.id).filter(Boolean),
       option_labels: (item.options || []).map((o) => o.name).filter(Boolean),
     });
-  });
-  toast.show(t('customerAccount.reorderAdded'), 'success');
+    added += 1;
+  }
+  // Nothing made it into the cart (menu changed entirely or fetch failed) —
+  // navigating to an empty cart with a "prices updated" toast would mislead.
+  if (!added) {
+    toast.show(t('customerAccount.reorderUnavailable'), 'error');
+    return;
+  }
+  if (priceChanged || dropped) {
+    toast.show(t('cartPage.reorderPriceNote'), 'info');
+  } else {
+    toast.show(t('customerAccount.reorderAdded'), 'success');
+  }
   router.push({ name: 'cart' });
 };
 

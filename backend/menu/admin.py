@@ -19,8 +19,8 @@ class SuperCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "super_category", "slug", "position", "is_published")
-    list_filter = ("super_category", "is_published")
+    list_display = ("name", "super_category", "slug", "position", "is_published", "is_temporarily_disabled")
+    list_filter = ("super_category", "is_published", "is_temporarily_disabled")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("super_category", "position", "name")
 
