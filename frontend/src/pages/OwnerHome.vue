@@ -121,7 +121,14 @@
         <!-- Today's revenue -->
         <div class="space-y-1.5 bg-slate-950/60 px-4 py-3.5">
           <p class="ui-stat-label">{{ t("ownerHome.todayRevenue") }}</p>
-          <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
+          <div class="flex items-end gap-1.5">
+            <p class="ui-stat-value text-[var(--color-secondary)]">{{ todayStats.revenue }}</p>
+            <span
+              v-if="yesterdayStats.revenue > 0"
+              class="mb-1.5 text-[10px] tabular-nums"
+              :class="todayStats.revenueRaw >= yesterdayStats.revenue ? 'text-emerald-500' : 'text-slate-500'"
+            >{{ todayStats.revenueRaw >= yesterdayStats.revenue ? '+' : '' }}{{ Math.round((todayStats.revenueRaw - yesterdayStats.revenue) / yesterdayStats.revenue * 100) }}%</span>
+          </div>
         </div>
 
         <!-- Avg ticket today -->

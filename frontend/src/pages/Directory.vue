@@ -118,7 +118,7 @@
                 class="h-full w-full object-cover opacity-80 transition-all duration-500 group-hover:scale-105 group-hover:opacity-90"
                 @error="$event.target.style.display='none'"
               />
-              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">🍽️</span>
+              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">{{ businessIcon(r) }}</span>
             </div>
             <!-- Bottom gradient: name + meta overlaid -->
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950 via-slate-950/65 to-transparent" />
@@ -132,6 +132,17 @@
                 </span>
                 <span v-if="r.cuisine_type" class="text-slate-400">· {{ r.cuisine_type }}</span>
               </div>
+            </div>
+
+            <!-- Closed frosted overlay — appears over the hero image when the restaurant is closed -->
+            <div
+              v-if="!r.is_open"
+              class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px]"
+              aria-hidden="true"
+            >
+              <span class="rounded-full border border-slate-600/50 bg-slate-900/90 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                {{ t('directory.closed') }}
+              </span>
             </div>
 
             <!-- Open/closed badge (top-start) -->
@@ -212,6 +223,15 @@ const filteredRestaurants = computed(() => {
   }
   return list;
 });
+
+// Returns an emoji placeholder icon appropriate for the restaurant's business_type.
+const businessIcon = (r) => {
+  const type = r?.business_type || 'restaurant';
+  if (type === 'cafe') return '☕';
+  if (type === 'bakery') return '🥖';
+  if (type === 'retail' || type === 'grocery') return '🛍️';
+  return '🍽️';
+};
 
 const restaurantUrl = (slug) => {
   // Build tenant subdomain URL from the current host

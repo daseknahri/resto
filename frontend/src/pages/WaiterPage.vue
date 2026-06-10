@@ -277,6 +277,13 @@
                 <span class="text-slate-500">{{ order.section_name }}</span>
               </template>
             </p>
+            <!-- Scheduled-for badge — advance orders only -->
+            <span
+              v-if="order.scheduled_for"
+              class="mt-1 inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-300"
+            >
+              <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
+            </span>
           </div>
           <!-- Status chip -->
           <span
@@ -789,6 +796,19 @@ const shiftRevenue = computed(() => {
     return `${num.toFixed(2)} ${s.currency}`;
   }
 });
+
+const formatScheduledFor = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return d.toLocaleString(undefined, {
+      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return d.toLocaleString();
+  }
+};
 
 const fmtOrderPrice = (amount, currency) => {
   if (!currency) return Number(amount || 0).toFixed(2);
