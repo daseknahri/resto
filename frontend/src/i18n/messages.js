@@ -3798,6 +3798,9 @@ export const messages = {
       justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
       pointsEarned: "Loyalty points earned",
       pointsEarnedHint: "Added to your account",
+      pointsPending: "Points pending",
+      pointsPendingHint: "Credited when your order completes",
+      pollFailed: "Updates paused · check your connection",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -7873,6 +7876,9 @@ export const messages = {
       justPlacedSubtitle: "Votre commande a bien été reçue. Détendez-vous, nous nous en occupons.",
       pointsEarned: "Points de fidélité gagnés",
       pointsEarnedHint: "Ajoutés à votre compte",
+      pointsPending: "Points en attente",
+      pointsPendingHint: "Crédités à la fin de votre commande",
+      pollFailed: "Mises à jour suspendues · vérifiez votre connexion",
     },
     customerAccount: {
       kicker: "Votre compte",

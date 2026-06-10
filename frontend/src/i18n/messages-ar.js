@@ -2215,7 +2215,10 @@ const arabicMessages = {
     "justPlacedSubtitle": "استلمنا طلبك. استرخِ بينما نعدّه لك.",
     "orderAgain": "اطلب مرة أخرى",
     "pointsEarned": "نقاط الولاء المكتسبة",
-    "pointsEarnedHint": "أُضيفت إلى حسابك"
+    "pointsEarnedHint": "أُضيفت إلى حسابك",
+    "pointsPending": "نقاط معلّقة",
+    "pointsPendingHint": "ستُضاف إلى حسابك عند إتمام الطلب",
+    "pollFailed": "توقّف التحديث · تحقق من اتصالك"
   },
   "cartPage_order": {
     "placeOrder": "تأكيد الطلب",

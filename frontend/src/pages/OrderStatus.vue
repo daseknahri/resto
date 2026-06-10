@@ -76,6 +76,21 @@
         </div>
       </Transition>
 
+      <!-- Poll-failure warning — shown after 2+ consecutive refresh failures -->
+      <div
+        v-if="pollFailures > 1 && isLiveStatus && !loading"
+        role="alert"
+        class="flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-2.5"
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-amber-400"><path fill-rule="evenodd" d="M8.485 2.495c-.673-1.167-2.357-1.167-3.03 0L1.166 8.741C.473 9.938 1.324 11.5 2.712 11.5h10.576c1.388 0 2.239-1.562 1.546-2.759L8.485 2.495ZM8 5a.75.75 0 0 1 .75.75V8a.75.75 0 1 1-1.5 0V5.75A.75.75 0 0 1 8 5Zm0 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
+        <p class="flex-1 text-xs text-amber-300">{{ t('orderStatus.pollFailed') }}</p>
+        <button
+          type="button"
+          class="shrink-0 text-xs font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200 focus-visible:outline-none"
+          @click="fetchStatus"
+        >{{ t('common.retry') }}</button>
+      </div>
+
       <!-- Proof-of-delivery code (give it to your driver) -->
       <div
         v-if="orderData.delivery_code"
@@ -461,24 +476,36 @@
         </template>
       </div>
 
-      <!-- Loyalty points earned — celebration pill shown on completed orders -->
+      <!-- Loyalty points earned — celebration (completed) or pending (in-progress) -->
       <div
-        v-if="orderData.status === 'completed' && Number(orderData.points_earned) > 0"
-        class="ui-panel ui-reveal flex items-center justify-between p-4 border-violet-500/25 bg-violet-500/8"
+        v-if="Number(orderData.points_earned) > 0"
+        class="ui-panel ui-reveal flex items-center justify-between p-4"
+        :class="orderData.status === 'completed'
+          ? 'border-violet-500/25 bg-violet-500/8'
+          : 'border-slate-700/60 bg-slate-900/40'"
         :style="{ '--ui-delay': '100ms' }"
       >
         <div class="flex items-center gap-2.5">
-          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-violet-500/25 bg-violet-500/12">
-            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4 text-violet-400" aria-hidden="true">
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border"
+            :class="orderData.status === 'completed' ? 'border-violet-500/25 bg-violet-500/12' : 'border-slate-700/50 bg-slate-800/60'"
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" :class="orderData.status === 'completed' ? 'text-violet-400' : 'text-slate-400'" aria-hidden="true">
               <path d="M8 1.25 9.618 4.528l3.617.526-2.617 2.551.618 3.602L8 9.47l-3.236 1.737.618-3.602-2.617-2.551 3.617-.526z"/>
             </svg>
           </div>
           <div>
-            <p class="text-sm font-semibold text-violet-200">{{ t('orderStatus.pointsEarned') }}</p>
-            <p class="mt-0.5 text-[11px] text-violet-300/60">{{ t('orderStatus.pointsEarnedHint') }}</p>
+            <p class="text-sm font-semibold" :class="orderData.status === 'completed' ? 'text-violet-200' : 'text-slate-300'">
+              {{ orderData.status === 'completed' ? t('orderStatus.pointsEarned') : t('orderStatus.pointsPending') }}
+            </p>
+            <p class="mt-0.5 text-[11px]" :class="orderData.status === 'completed' ? 'text-violet-300/60' : 'text-slate-500'">
+              {{ orderData.status === 'completed' ? t('orderStatus.pointsEarnedHint') : t('orderStatus.pointsPendingHint') }}
+            </p>
           </div>
         </div>
-        <span class="text-base font-bold tabular-nums text-violet-200">+{{ orderData.points_earned }}</span>
+        <span class="text-base font-bold tabular-nums" :class="orderData.status === 'completed' ? 'text-violet-200' : 'text-slate-400'">
+          +{{ orderData.points_earned }}
+        </span>
       </div>
 
       <!-- Receipt message (thank-you note from the restaurant owner) -->
@@ -642,6 +669,7 @@ const POLL_INTERVAL_S = 15;
 const orderData = ref(null);
 const loading = ref(false);
 const notFound = ref(false);
+const pollFailures = ref(0);  // consecutive refresh failures → warn the user
 const readyAlertShown = ref(false);
 
 // ── Delivery-code copy ────────────────────────────────────────────────────────
@@ -926,9 +954,12 @@ const fetchStatus = async () => {
       triggerReadyAlert();
     }
     notFound.value = false;
+    pollFailures.value = 0;  // reset consecutive-failure counter on success
   } catch (err) {
     if (err?.response?.status === 404) {
       notFound.value = true;
+    } else {
+      pollFailures.value++;  // track network / server errors so we can warn the user
     }
   } finally {
     loading.value = false;
