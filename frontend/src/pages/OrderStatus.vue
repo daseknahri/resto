@@ -289,6 +289,14 @@
         </div>
       </div>
 
+      <!-- Status context hint (pending / confirmed / preparing) -->
+      <p
+        v-if="statusHint"
+        class="ui-reveal text-center text-sm text-slate-400 leading-relaxed px-1"
+        :style="{ '--ui-delay': '84ms' }"
+        role="status"
+      >{{ statusHint }}</p>
+
       <!-- Restaurant message -->
       <div
         v-if="orderData.owner_note || orderData.estimated_ready_minutes"
@@ -807,6 +815,14 @@ const progressPercent = computed(() => {
   const steps = statusSteps.value;
   if (currentStepIndex.value < 0 || !steps.length) return 0;
   return Math.round(((currentStepIndex.value + 1) / steps.length) * 100);
+});
+
+const statusHint = computed(() => {
+  const s = orderData.value?.status;
+  if (s === 'pending') return t('orderStatus.hintPending');
+  if (s === 'confirmed') return t('orderStatus.hintConfirmed');
+  if (s === 'preparing') return t('orderStatus.hintPreparing');
+  return null;
 });
 
 const isStepDone = (stepValue) => {
