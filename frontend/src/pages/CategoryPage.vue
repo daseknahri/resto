@@ -68,9 +68,11 @@
         v-for="(dish, dishIndex) in filteredDishes"
         :key="dish.slug"
         class="ui-surface-lift ui-reveal group relative ui-content-auto overflow-hidden rounded-[1.8rem] border bg-slate-950/82 shadow-[0_20px_50px_rgba(2,6,23,0.36)] transition-shadow duration-300"
-        :class="cartQty(dish) > 0
-          ? 'border-[var(--color-secondary)]/50 shadow-[0_20px_50px_rgba(245,158,11,0.12)]'
-          : 'border-slate-800/80 hover:border-slate-700/60 hover:shadow-[0_28px_64px_rgba(2,6,23,0.52)]'"
+        :class="dish.is_available === false
+          ? 'border-slate-800/50 opacity-60'
+          : cartQty(dish) > 0
+            ? 'border-[var(--color-secondary)]/50 shadow-[0_20px_50px_rgba(245,158,11,0.12)]'
+            : 'border-slate-800/80 hover:border-slate-700/60 hover:shadow-[0_28px_64px_rgba(2,6,23,0.52)]'"
         :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
         :aria-label="dish.name"
       >
@@ -102,6 +104,16 @@
                 <AppIcon name="check" class="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span aria-hidden="true">{{ cartQty(dish) }}&times;</span>
                 <span class="sr-only">{{ t('category.inCartBadge', { count: cartQty(dish) }) }}</span>
+              </span>
+            </div>
+            <!-- Sold-out frosted overlay on image -->
+            <div
+              v-if="dish.is_available === false"
+              class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px]"
+              aria-hidden="true"
+            >
+              <span class="rounded-full border border-slate-600/50 bg-slate-900/90 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                {{ t('menu.soldOut') }}
               </span>
             </div>
             <!-- Price badge -->
@@ -137,8 +149,12 @@
           </ul>
 
           <div class="mt-auto flex gap-2 pt-1">
+            <span
+              v-if="dish.is_available === false"
+              class="flex flex-1 items-center justify-center rounded-xl border border-slate-700/40 bg-slate-800/40 py-2.5 text-xs font-semibold text-slate-500"
+            >{{ t('menu.soldOut') }}</span>
             <button
-              v-if="!quickAddDisabled"
+              v-else-if="!quickAddDisabled"
               class="ui-btn-primary ui-press flex-1 justify-center gap-1.5 py-2.5 text-sm font-semibold"
               :aria-label="t('dishPage.add') + ' ' + dish.name"
               @click="addDishQuick(dish)"
@@ -248,6 +264,7 @@ const cartQty = (dish) =>
 const handleCategoryImageError = (event) => withImageFallback(event);
 
 const addDishQuick = (dish) => {
+  if (dish.is_available === false) return; // sold-out guard
   if (isBrowseOnlyPlan.value) {
     toast.show(t("dishPage.orderingDisabledForPlan"), "info");
     return;
