@@ -56,7 +56,7 @@ def _tenant(tenant_id=1):
 class TemplateDataTests(SimpleTestCase):
     """Pure validation of the template definitions (no view, no DB)."""
 
-    VALID_BUSINESS_TYPES = {"restaurant", "cafe", "bakery", "grocery", "retail"}
+    VALID_BUSINESS_TYPES = {"restaurant", "cafe", "bakery", "grocery", "retail", "pharmacy"}
     THEME_KEYS = {"primary_color", "secondary_color", "menu_theme", "menu_card_layout"}
 
     def test_expected_templates_exist(self):
@@ -64,7 +64,7 @@ class TemplateDataTests(SimpleTestCase):
             set(TEMPLATES),
             {
                 "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
-                "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+                "grocery", "retail", "pharmacy", "pizza", "sushi", "moroccan", "health",
                 "burger", "bubble_tea", "juice_bar", "ice_cream",
                 "seafood", "steakhouse", "indian", "chinese",
                 "mexican", "snack_shawarma", "breakfast_brunch",
@@ -129,7 +129,7 @@ class ApplyTemplateViewTests(SimpleTestCase):
             keys,
             {
                 "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
-                "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+                "grocery", "retail", "pharmacy", "pizza", "sushi", "moroccan", "health",
                 "burger", "bubble_tea", "juice_bar", "ice_cream",
                 "seafood", "steakhouse", "indian", "chinese",
                 "mexican", "snack_shawarma", "breakfast_brunch",

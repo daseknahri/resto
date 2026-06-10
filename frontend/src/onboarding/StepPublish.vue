@@ -104,6 +104,7 @@
             <option value="bakery">{{ t("stepPublish.businessTypeBakery") }}</option>
             <option value="grocery">{{ t("stepPublish.businessTypeGrocery") }}</option>
             <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
+            <option value="pharmacy">{{ t("stepPublish.businessTypePharmacy") }}</option>
           </select>
         </div>
 

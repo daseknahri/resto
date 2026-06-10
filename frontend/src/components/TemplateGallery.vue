@@ -20,7 +20,7 @@
         :aria-pressed="activeFilter === type"
         @click="activeFilter = type"
       >
-        {{ { restaurant: t("stepPublish.businessTypeRestaurant"), cafe: t("stepPublish.businessTypeCafe"), bakery: t("stepPublish.businessTypeBakery"), grocery: t("stepPublish.businessTypeGrocery"), retail: t("stepPublish.businessTypeRetail") }[type] ?? type }}
+        {{ { restaurant: t("stepPublish.businessTypeRestaurant"), cafe: t("stepPublish.businessTypeCafe"), bakery: t("stepPublish.businessTypeBakery"), grocery: t("stepPublish.businessTypeGrocery"), retail: t("stepPublish.businessTypeRetail"), pharmacy: t("stepPublish.businessTypePharmacy") }[type] ?? type }}
       </button>
     </div>
 
@@ -99,7 +99,7 @@ const withSampleContent = ref(props.initialWithSample);
 const activeFilter = ref(null);
 
 // Canonical order for business-type chips
-const CHIP_ORDER = ["restaurant", "cafe", "bakery", "grocery", "retail"];
+const CHIP_ORDER = ["restaurant", "cafe", "bakery", "grocery", "retail", "pharmacy"];
 
 /** Distinct business_type values present in fetched templates, in canonical order. */
 const visibleChipTypes = computed(() => {

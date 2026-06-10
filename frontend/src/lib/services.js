@@ -18,6 +18,9 @@
  *   status      {'live'|'coming_soon'}
  *   kind        {'lens'|'route'}  only present when status === 'live'
  *   lens        {string}  marketplace ?type= value  (kind === 'lens')
+ *   subtype     {string}  optional — when present, Home strip adds ?sub=<subtype>
+ *                         and Marketplace seeds selectedShopSubtype on load.
+ *                         Only meaningful for kind === 'lens'.
  *   routeName   {string}  vue-router named route    (kind === 'route')
  *   accent      {string}  key into each surface's ACCENT_CLASSES map
  */
@@ -25,6 +28,6 @@ export const SERVICES = [
   { id: 'food',     icon: '🍽️', status: 'live',        kind: 'lens',  lens: 'food',  accent: 'amber'   },
   { id: 'shops',    icon: '🛍️', status: 'live',        kind: 'lens',  lens: 'shop',  accent: 'indigo'  },
   { id: 'rides',    icon: '🚕', status: 'live',        kind: 'route', routeName: 'ride', accent: 'emerald' },
-  { id: 'pharmacy', icon: '💊', status: 'coming_soon',                               accent: 'rose'    },
+  { id: 'pharmacy', icon: '💊', status: 'live',        kind: 'lens',  lens: 'shop', subtype: 'pharmacy', accent: 'rose'    },
   { id: 'courier',  icon: '📦', status: 'live',        kind: 'route', routeName: 'send-package', accent: 'sky'     },
 ];

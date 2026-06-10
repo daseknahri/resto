@@ -94,7 +94,7 @@
           :class="selectedShopSubtype === sub.key
             ? 'border-indigo-500/70 bg-indigo-500/15 text-indigo-300'
             : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:border-slate-600/80 hover:text-slate-300'"
-          @click="selectedShopSubtype = sub.key"
+          @click="setShopSubtype(sub.key)"
         >{{ sub.label }}</button>
       </div>
 
@@ -664,10 +664,11 @@ const BUSINESS_TYPE_TABS = computed(() => [
 
 // ── Shop sub-type chips ───────────────────────────────────────────────────────
 const SHOP_SUBTYPES = computed(() => [
-  { key: '',        label: t('marketplace.typeShop') },
-  { key: 'grocery', label: t('stepPublish.businessTypeGrocery') },
-  { key: 'bakery',  label: t('stepPublish.businessTypeBakery') },
-  { key: 'retail',  label: t('stepPublish.businessTypeRetail') },
+  { key: '',          label: t('marketplace.typeShop') },
+  { key: 'grocery',   label: t('stepPublish.businessTypeGrocery') },
+  { key: 'bakery',    label: t('stepPublish.businessTypeBakery') },
+  { key: 'retail',    label: t('stepPublish.businessTypeRetail') },
+  { key: 'pharmacy',  label: t('stepPublish.businessTypePharmacy') },
 ]);
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -691,22 +692,46 @@ const _initialType = ['food', 'shop'].includes(String(route.query.type || '')) ?
 const selectedBusinessType = ref(_initialType);
 
 // ── Shop sub-type chips ───────────────────────────────────────────────────────
-// '' = all shops | 'grocery' | 'bakery' | 'retail'
-const selectedShopSubtype = ref('');
+// '' = all shops | 'grocery' | 'bakery' | 'retail' | 'pharmacy'
+// Seeded from ?sub= when ?type=shop so deep-links (e.g. ?type=shop&sub=pharmacy) work.
+const _SHOP_SUBTYPE_KEYS = ['grocery', 'bakery', 'retail', 'pharmacy'];
+const _initialSub = (_initialType === 'shop' && _SHOP_SUBTYPE_KEYS.includes(String(route.query.sub || '')))
+  ? String(route.query.sub)
+  : '';
+const selectedShopSubtype = ref(_initialSub);
 
 // Set business-type lens and mirror into ?type= query param (shareable URL).
+// Also clears ?sub= — the caller is responsible for setting it afterwards if needed.
 const setBusinessType = (key) => {
   selectedBusinessType.value = key;
   selectedShopSubtype.value = '';
   const q = { ...route.query };
   if (key) { q.type = key; } else { delete q.type; }
+  delete q.sub;
+  router.replace({ query: q });
+};
+
+// Mirror the selected shop sub-type chip into ?sub= query param.
+const setShopSubtype = (key) => {
+  selectedShopSubtype.value = key;
+  const q = { ...route.query };
+  if (key) { q.sub = key; } else { delete q.sub; }
   router.replace({ query: q });
 };
 
 // Handle a click on the hub rail service card.
+// For lens entries with a subtype field: set type=shop + subtype in one go.
 const onServiceClick = (svc) => {
   if (svc.kind === 'lens') {
-    setBusinessType(svc.lens);
+    if (svc.subtype) {
+      // Deep-link directly into the sub-lens (e.g. pharmacy → ?type=shop&sub=pharmacy)
+      selectedBusinessType.value = svc.lens;
+      selectedShopSubtype.value = svc.subtype;
+      const q = { ...route.query, type: svc.lens, sub: svc.subtype };
+      router.replace({ query: q });
+    } else {
+      setBusinessType(svc.lens);
+    }
   } else if (svc.kind === 'route') {
     router.push({ name: svc.routeName });
   }
@@ -724,7 +749,7 @@ const fmtFee = (val) => {
 };
 
 // Buckets the fine-grained business_type into the two marketplace lenses.
-const SHOP_BUSINESS_TYPES = ['retail', 'grocery', 'bakery'];
+const SHOP_BUSINESS_TYPES = ['retail', 'grocery', 'bakery', 'pharmacy'];
 const isShopBusiness = (r) => SHOP_BUSINESS_TYPES.includes(r?.business_type || 'restaurant');
 
 // Returns an emoji placeholder icon appropriate for the business type.
@@ -733,6 +758,7 @@ const businessIcon = (r) => {
   const t = r?.business_type || 'restaurant';
   if (t === 'cafe') return '☕';
   if (t === 'bakery') return '🥖';
+  if (t === 'pharmacy') return '💊';
   if (t === 'retail' || t === 'grocery') return '🛍️';
   return '🍽️';
 };
@@ -813,6 +839,7 @@ const clearFilters = () => {
   showFavouritesOnly.value = false;
   const q = { ...route.query };
   delete q.type;
+  delete q.sub;
   router.replace({ query: q });
 };
 
@@ -921,12 +948,14 @@ watch(
   }
 );
 
-// Keep selectedBusinessType in sync with browser back/forward navigation.
-// Without this, pressing Back/Forward updates the URL but leaves the chip
-// highlight and displayed list stale.
-watch(() => route.query.type, (val) => {
-  selectedBusinessType.value = ['food', 'shop'].includes(String(val || '')) ? String(val) : '';
-  selectedShopSubtype.value = '';
+// Keep selectedBusinessType / selectedShopSubtype in sync with browser
+// back/forward navigation so the chip highlight and list stay consistent.
+// Watches BOTH params: a history step can change only ?sub (subtype clicks
+// write the URL), and a type-only watch would miss it.
+watch(() => [route.query.type, route.query.sub], ([typeVal, subVal]) => {
+  selectedBusinessType.value = ['food', 'shop'].includes(String(typeVal || '')) ? String(typeVal) : '';
+  const sub = String(subVal || '');
+  selectedShopSubtype.value = (selectedBusinessType.value === 'shop' && _SHOP_SUBTYPE_KEYS.includes(sub)) ? sub : '';
 });
 
 onMounted(fetchRestaurants);

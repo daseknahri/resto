@@ -252,6 +252,7 @@ const businessIcon = (r) => {
   const type = r?.business_type || 'restaurant';
   if (type === 'cafe') return '☕';
   if (type === 'bakery') return '🥖';
+  if (type === 'pharmacy') return '💊';
   if (type === 'retail' || type === 'grocery') return '🛍️';
   return '🍽️';
 };

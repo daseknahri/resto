@@ -1246,6 +1246,55 @@ TEMPLATES = {
             },
         ],
     },
+    "pharmacy": {
+        "label": "Pharmacy / Parapharmacie",
+        "business_type": "pharmacy",
+        "theme": {
+            "primary_color": "#005B72",
+            "secondary_color": "#80CBC4",
+            "menu_theme": "light",
+            "menu_card_layout": "list",
+        },
+        "super_category": "Catalog",
+        "categories": [
+            {
+                "name": "Vitamins & Supplements",
+                "dishes": [
+                    {"name": "Vitamin C 1000mg (30 tabs)", "price": "55", "description": "High-dose vitamin C for daily immune support."},
+                    {"name": "Vitamin D3 2000 IU (60 caps)", "price": "75", "description": "Supports bone health and immune function."},
+                    {"name": "Omega-3 Fish Oil (90 caps)", "price": "120", "description": "Purified EPA & DHA for cardiovascular wellness."},
+                    {"name": "Magnesium 300mg (60 tabs)", "price": "65", "description": "Helps reduce fatigue and muscle cramps."},
+                ],
+            },
+            {
+                "name": "Hygiene & Care",
+                "dishes": [
+                    {"name": "Micellar Water 400ml", "price": "85", "description": "Gentle facial cleanser for all skin types."},
+                    {"name": "SPF 50+ Sunscreen 50ml", "price": "110", "description": "Broad-spectrum UVA/UVB protection, non-greasy."},
+                    {"name": "Moisturising Hand Cream 75ml", "price": "45", "description": "Fast-absorbing, fragrance-free formula."},
+                    {"name": "Antiseptic Gel 100ml", "price": "30", "description": "70% alcohol hand sanitiser."},
+                ],
+            },
+            {
+                "name": "Baby & Mother",
+                "dishes": [
+                    {"name": "Baby Physiological Saline (18 units)", "price": "40", "description": "Sterile saline unidoses for nasal hygiene."},
+                    {"name": "Baby Moisturising Lotion 200ml", "price": "70", "description": "Dermatologically tested, hypoallergenic."},
+                    {"name": "Folic Acid 400mcg (90 tabs)", "price": "60", "description": "Essential B-vitamin for pregnancy preparation."},
+                    {"name": "Nipple Cream 30ml", "price": "80", "description": "Lanolin-based, safe for breastfeeding."},
+                ],
+            },
+            {
+                "name": "First Aid",
+                "dishes": [
+                    {"name": "Sterile Gauze Pads (10 pcs)", "price": "25", "description": "Non-woven, individually wrapped."},
+                    {"name": "Adhesive Bandages Assorted (30 pcs)", "price": "35", "description": "Waterproof, hypoallergenic."},
+                    {"name": "Elastic Bandage 7.5cm×4.5m", "price": "28", "description": "Cohesive, reusable compression bandage."},
+                    {"name": "Digital Thermometer", "price": "90", "description": "Fast 10-second oral/axillary reading."},
+                ],
+            },
+        ],
+    },
 }
 
 

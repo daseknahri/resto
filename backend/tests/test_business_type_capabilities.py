@@ -33,6 +33,10 @@ class ProfileCapabilitiesTests(SimpleTestCase):
         caps = Profile(business_type="grocery").capabilities
         self.assertFalse(any(caps[k] for k in CAP_KEYS))
 
+    def test_pharmacy_disables_all_restaurant_features(self):
+        caps = Profile(business_type="pharmacy").capabilities
+        self.assertFalse(any(caps[k] for k in CAP_KEYS))
+
     def test_bakery_keeps_only_kitchen(self):
         caps = Profile(business_type="bakery").capabilities
         self.assertTrue(caps["kitchen"])
@@ -56,6 +60,16 @@ class ProfileCapabilitiesTests(SimpleTestCase):
         caps = Profile(business_type="restaurant").capabilities
         caps["tables"] = False
         self.assertTrue(Profile(business_type="restaurant").capabilities["tables"])
+
+
+    def test_pharmacy_business_type_value(self):
+        # Sanity-check: the choices constant resolves correctly.
+        self.assertEqual(Profile.BusinessType.PHARMACY, "pharmacy")
+
+    def test_pharmacy_has_correct_business_type_label(self):
+        self.assertEqual(
+            Profile.BusinessType.PHARMACY.label, "Pharmacy / Parapharmacie"
+        )
 
 
 class TenantCapabilityHelperTests(SimpleTestCase):

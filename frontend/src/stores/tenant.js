@@ -43,7 +43,7 @@ export const useTenantStore = defineStore("tenant", {
       if (mode) return mode === "menu_only";
       return false;
     },
-    /** The tenant's business vertical (restaurant | cafe | bakery | grocery | retail). */
+    /** The tenant's business vertical (restaurant | cafe | bakery | grocery | retail | pharmacy). */
     businessType() {
       return this.resolvedMeta?.profile?.business_type || "restaurant";
     },

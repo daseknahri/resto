@@ -321,6 +321,7 @@ class Profile(models.Model):
         BAKERY = "bakery", "Bakery"
         GROCERY = "grocery", "Grocery"
         RETAIL = "retail", "Retail / Shop"
+        PHARMACY = "pharmacy", "Pharmacy / Parapharmacie"
 
     business_type = models.CharField(
         max_length=20,
@@ -346,6 +347,7 @@ class Profile(models.Model):
         BusinessType.BAKERY: {**_SHOP_CAPABILITIES, "kitchen": True},
         BusinessType.GROCERY: _SHOP_CAPABILITIES,
         BusinessType.RETAIL: _SHOP_CAPABILITIES,
+        BusinessType.PHARMACY: _SHOP_CAPABILITIES,
     }
 
     @property

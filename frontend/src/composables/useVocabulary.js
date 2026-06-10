@@ -18,7 +18,7 @@ import { computed } from "vue";
 import { useI18n } from "./useI18n";
 import { useTenantStore } from "../stores/tenant";
 
-const SHOP_TYPES = ["retail", "grocery", "bakery"];
+const SHOP_TYPES = ["retail", "grocery", "bakery", "pharmacy"];
 
 export function useVocabulary() {
   const { t } = useI18n();

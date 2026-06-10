@@ -169,7 +169,7 @@
             :is="svc.status === 'live' ? 'RouterLink' : 'article'"
             v-bind="svc.status === 'live'
               ? { to: svc.kind === 'lens'
-                    ? { name: 'marketplace', query: { type: svc.lens } }
+                    ? { name: 'marketplace', query: svc.subtype ? { type: svc.lens, sub: svc.subtype } : { type: svc.lens } }
                     : { name: svc.routeName } }
               : {}"
             class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
