@@ -430,6 +430,7 @@ const togglePerm = async (member, permKey) => {
       permissions: { [permKey]: newVal },
     });
     writeCache(STAFF_CACHE_KEY, staffList.value);
+    toast.show(t("ownerStaff.permissionSaved"), "success");
   } catch {
     // Roll back on error
     member.permissions[permKey] = !newVal;
@@ -503,6 +504,7 @@ const removeStaff = async (member) => {
     const next = new Set(expandedIds.value);
     next.delete(member.id);
     expandedIds.value = next;
+    toast.show(t("ownerStaff.staffRemoved"), "success");
   } catch {
     toast.show(t("ownerStaff.removeFailed"), "error");
   } finally {

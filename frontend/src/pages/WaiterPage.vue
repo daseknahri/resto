@@ -1020,8 +1020,10 @@ const submitCustomerRating = async () => {
   try {
     await waiter.rateCustomer(order.id, custRatingScore.value, custRatingNote.value);
     ratingOrder.value = null;
+    toast.show(t("waiterPage.ratingSubmitted"), "success");
   } catch {
     // Leave the dialog open so the waiter can retry.
+    toast.show(t("waiterPage.ratingFailed"), "error");
   } finally {
     submittingCustRating.value = false;
   }
@@ -1035,6 +1037,8 @@ const _finishSettle = async (order) => {
   const res = await waiter.markPaid(order.id);
   if (res && res.completed && eligibleToRate) {
     openCustomerRating(order);
+  } else if (res && res.completed) {
+    toast.show(t("waiterPage.orderSettled"), "success");
   }
 };
 
