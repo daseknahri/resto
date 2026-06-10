@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
@@ -197,6 +197,7 @@ def _patch_flash_sales(opted_rows=None, live_fs_objs=None):
     return optin_mock, fs_mock
 
 
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}})
 class MarketplaceViewTests(SimpleTestCase):
     def setUp(self):
         cache.clear()  # responses are cached by query params — isolate each test

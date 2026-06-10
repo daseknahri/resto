@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import csv
 import hashlib
 from io import BytesIO, StringIO
@@ -4495,9 +4495,9 @@ class OwnerOrderExportView(APIView):
         writer.writerow([
             "order_number", "created_at", "status", "payment_status", "fulfillment_type",
             "table_label", "customer_name", "customer_phone",
-            "customer_note", "delivery_address",
+            "customer_note", "owner_note", "delivery_address",
             "items", "subtotal", "delivery_fee", "tip_amount",
-            "promotion_discount", "wallet_amount_paid", "paid_at", "total", "currency",
+            "loyalty_discount", "promotion_discount", "wallet_amount_paid", "paid_at", "total", "currency",
         ])
 
         for order in qs[:5000]:
@@ -4521,11 +4521,13 @@ class OwnerOrderExportView(APIView):
                 _csv_safe(order.customer_name or ""),        # customer-provided
                 _csv_safe(order.customer_phone or ""),       # customer-provided
                 _csv_safe(order.customer_note or ""),        # customer-provided
+                _csv_safe(order.owner_note or ""),           # restaurant's internal note
                 _csv_safe(order.delivery_address or ""),     # customer-provided
                 _csv_safe(items_text),                       # dish names (owner-set)
                 str(subtotal),
                 str(order.delivery_fee),
                 str(order.tip_amount),
+                str(order.loyalty_discount or "0"),          # loyalty redemption value
                 str(order.promotion_discount or "0"),
                 str(order.wallet_amount_paid or "0"),
                 timezone.localtime(order.paid_at).isoformat() if order.paid_at else "",
@@ -4576,6 +4578,129 @@ class DishBulkAvailabilityResetView(APIView):
             "stock_cleared": stock_cleared_count,
             "clear_stock_all": clear_stock,
         }, status=status.HTTP_200_OK)
+
+
+class DishBulkPriceUpdateView(APIView):
+    """PATCH /api/owner/dishes/bulk-price/
+
+    Adjust all (or a single category's) published dish prices by a percentage
+    or a flat amount.  Optionally round the results to a convenient denomination.
+
+    Request body:
+        action:      "increase_percent" | "decrease_percent" |
+                     "increase_flat"    | "decrease_flat"
+        value:       positive number — percentage (1–100) or monetary flat amount
+        category_id: optional int — limit to one category; omit = all categories
+        round_to:    optional int — round result to nearest N cents (expressed as
+                     integer hundredths of the currency unit):
+                         0   → no rounding (default)
+                        50   → nearest 0.50
+                       100   → nearest 1.00
+                       500   → nearest 5.00
+        dry_run:     optional bool (default false) — preview without persisting
+
+    Response 200:
+        { "updated": N, "dry_run": bool,
+          "items": [{"id": …, "name": …, "old_price": "…", "new_price": "…"}, …] }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _VALID_ACTIONS = frozenset({
+        "increase_percent", "decrease_percent",
+        "increase_flat",    "decrease_flat",
+    })
+
+    def patch(self, request, *args, **kwargs):
+        if not _can_edit_menu(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        # ── Parse + validate inputs ───────────────────────────────────────────
+        action = str(request.data.get("action", "")).strip().lower()
+        if action not in self._VALID_ACTIONS:
+            return Response(
+                {"detail": f"action must be one of: {', '.join(sorted(self._VALID_ACTIONS))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            value = Decimal(str(request.data.get("value", "0"))).quantize(Decimal("0.0001"))
+        except Exception:
+            return Response({"detail": "value must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if value <= 0:
+            return Response({"detail": "value must be a positive number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "percent" in action and value > 100:
+            return Response({"detail": "Percentage must be ≤ 100."}, status=status.HTTP_400_BAD_REQUEST)
+
+        category_id = request.data.get("category_id")
+        if category_id is not None:
+            try:
+                category_id = int(category_id)
+            except (ValueError, TypeError):
+                return Response({"detail": "category_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            round_to = int(request.data.get("round_to") or 0)
+        except (ValueError, TypeError):
+            round_to = 0
+
+        dry_run = bool(request.data.get("dry_run", False))
+
+        # ── Fetch dishes ──────────────────────────────────────────────────────
+        qs = Dish.objects.filter(is_published=True).select_related("category")
+        if category_id is not None:
+            qs = qs.filter(category_id=category_id)
+        dishes = list(qs[:500])  # safety cap — 500 dishes per call
+
+        if not dishes:
+            return Response({"updated": 0, "dry_run": dry_run, "items": []})
+
+        # ── Compute new prices ────────────────────────────────────────────────
+        preview = []
+        new_prices = []
+        for dish in dishes:
+            old = dish.price
+            if action == "increase_percent":
+                new = old * (1 + value / Decimal("100"))
+            elif action == "decrease_percent":
+                new = old * (1 - value / Decimal("100"))
+            elif action == "increase_flat":
+                new = old + value
+            else:  # decrease_flat
+                new = old - value
+
+            new = max(new, Decimal("0.01"))  # floor at one cent
+
+            # Optional rounding to a convenient denomination.
+            # round_to is expressed as integer hundredths (e.g. 50 → 0.50).
+            if round_to and round_to > 0:
+                step = Decimal(round_to) / Decimal("100")
+                new = (new / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step
+
+            new = new.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            preview.append({
+                "id": dish.id,
+                "name": dish.name,
+                "old_price": str(old),
+                "new_price": str(new),
+            })
+            new_prices.append(new)
+
+        # ── Persist unless dry_run ────────────────────────────────────────────
+        if not dry_run:
+            now = timezone.now()
+            for dish, new_price in zip(dishes, new_prices):
+                dish.price = new_price
+                dish.updated_at = now
+            Dish.objects.bulk_update(dishes, ["price", "updated_at"])
+
+        return Response({
+            "updated": len(dishes) if not dry_run else 0,
+            "dry_run": dry_run,
+            "items": preview,
+        })
 
 
 # ── Ratings ───────────────────────────────────────────────────────────────────

@@ -31,10 +31,11 @@ def _rating(
     score=5,
     comment="Great!",
     created_at=None,
+    owner_reply="",
 ):
     order = SimpleNamespace(order_number=order_number, customer_name=customer_name)
     dt = created_at or datetime(2026, 1, 15, 12, 30)
-    return SimpleNamespace(order=order, score=score, comment=comment, created_at=dt)
+    return SimpleNamespace(order=order, score=score, comment=comment, created_at=dt, owner_reply=owner_reply)
 
 
 def _parse_csv(response):
@@ -63,7 +64,7 @@ class RatingCsvResponseTests(SimpleTestCase):
 
     def test_header_row_present(self):
         rows = _parse_csv(_view()._csv_response([]))
-        self.assertEqual(rows[0], ["Date", "Order Number", "Customer", "Score", "Comment"])
+        self.assertEqual(rows[0], ["Date", "Order Number", "Customer", "Score", "Comment", "Owner Reply"])
 
     def test_empty_queryset_yields_header_only(self):
         rows = _parse_csv(_view()._csv_response([]))

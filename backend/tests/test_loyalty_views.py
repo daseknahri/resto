@@ -91,10 +91,16 @@ class OwnerLoyaltyViewTests(SimpleTestCase):
 
     # ── GET ───────────────────────────────────────────────────────────────────
 
+    @patch("menu.views.Order.objects")
     @patch("menu.views.LoyaltyConfig.objects")
-    def test_get_returns_config(self, mock_cfg_objs):
+    def test_get_returns_config(self, mock_cfg_objs, mock_order_objs):
         cfg = _make_loyalty_config(enabled=False)
         mock_cfg_objs.get_or_create.return_value = (cfg, False)
+        # Mock the stats queryset chain: Order.objects.filter().values().distinct().count()
+        mock_qs = MagicMock()
+        mock_qs.values.return_value.distinct.return_value.count.return_value = 0
+        mock_qs.aggregate.return_value = {"t": 0}
+        mock_order_objs.filter.return_value = mock_qs
 
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

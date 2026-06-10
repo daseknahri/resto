@@ -10,6 +10,10 @@
           <button class="ui-btn-outline px-4 py-2 text-sm" type="button" :disabled="saving || hasActiveUploads" @click="saveAndNext">
             {{ saving ? t("common.saving") : hasActiveUploads ? t("stepDishes.uploading") : t("common.save") }}
           </button>
+          <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-outline gap-1.5 px-3 py-2 text-sm" @click="openBulkPriceModal">
+            <AppIcon name="tag" class="h-3.5 w-3.5" aria-hidden="true" />
+            {{ t("stepDishes.bulkPriceAdjust") }}
+          </button>
           <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="openQuickDishModal">
             {{ t("stepDishes.addDishToCategory") }}
           </button>
@@ -1017,6 +1021,165 @@
       </div>
     </Teleport>
 
+    <!-- ── Bulk price adjustment modal ────────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="bulkPriceModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('stepDishes.bulkPriceTitle')"
+        @click.self="closeBulkPriceModal"
+      >
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true" />
+        <div
+          ref="bulkPriceDialogRef"
+          class="relative z-10 w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        >
+          <!-- Header -->
+          <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div>
+              <h2 class="text-base font-semibold text-white">{{ t("stepDishes.bulkPriceTitle") }}</h2>
+              <p class="mt-0.5 text-xs text-slate-400">{{ t("stepDishes.bulkPriceSubtitle") }}</p>
+            </div>
+            <button type="button" class="ui-icon-btn" :aria-label="t('common.close')" @click="closeBulkPriceModal">
+              <AppIcon name="x" class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="space-y-4 px-5 py-4">
+            <!-- Action type -->
+            <div>
+              <label class="ui-label mb-1.5 block">{{ t("stepDishes.bulkPriceActionLabel") }}</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="opt in [
+                    { value: 'increase_percent', label: t('stepDishes.bulkPriceIncreasePercent') },
+                    { value: 'decrease_percent', label: t('stepDishes.bulkPriceDecreasePercent') },
+                    { value: 'increase_flat',    label: t('stepDishes.bulkPriceIncreaseFlat') },
+                    { value: 'decrease_flat',    label: t('stepDishes.bulkPriceDecreaseFlat') },
+                  ]"
+                  :key="opt.value"
+                  type="button"
+                  class="rounded-xl border px-3 py-2 text-sm transition"
+                  :class="bulkPriceAction === opt.value
+                    ? 'border-violet-500 bg-violet-500/15 text-violet-300'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-500'"
+                  @click="bulkPriceAction = opt.value; bulkPricePreview = []"
+                >{{ opt.label }}</button>
+              </div>
+            </div>
+
+            <!-- Value + Scope row -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="ui-label mb-1.5 block">{{ t("stepDishes.bulkPriceValue") }}</label>
+                <input
+                  v-model="bulkPriceValue"
+                  type="number"
+                  min="0.01"
+                  :max="isPercentAction ? 100 : undefined"
+                  step="0.01"
+                  class="ui-input w-full"
+                  :placeholder="isPercentAction ? t('stepDishes.bulkPriceValueHintPercent') : t('stepDishes.bulkPriceValueHintFlat')"
+                  @input="bulkPricePreview = []"
+                />
+              </div>
+              <div>
+                <label class="ui-label mb-1.5 block">{{ t("stepDishes.bulkPriceScopeLabel") }}</label>
+                <select v-model="bulkPriceCategoryId" class="ui-select w-full" @change="bulkPricePreview = []">
+                  <option value="">{{ t("stepDishes.bulkPriceScopeAll") }}</option>
+                  <option v-for="cat in sortedCategoryOptions" :key="cat.id" :value="String(cat.id)">
+                    {{ categoryLabel(cat) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Rounding -->
+            <div>
+              <label class="ui-label mb-1.5 block">{{ t("stepDishes.bulkPriceRoundLabel") }}</label>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="opt in [
+                    { value: 0,   label: t('stepDishes.bulkPriceRoundNone') },
+                    { value: 50,  label: t('stepDishes.bulkPriceRound50') },
+                    { value: 100, label: t('stepDishes.bulkPriceRound100') },
+                    { value: 500, label: t('stepDishes.bulkPriceRound500') },
+                  ]"
+                  :key="opt.value"
+                  type="button"
+                  class="rounded-lg border px-3 py-1.5 text-xs transition"
+                  :class="bulkPriceRoundTo === opt.value
+                    ? 'border-violet-500 bg-violet-500/15 text-violet-300'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-500'"
+                  @click="bulkPriceRoundTo = opt.value; bulkPricePreview = []"
+                >{{ opt.label }}</button>
+              </div>
+            </div>
+
+            <!-- Error -->
+            <p v-if="bulkPriceError" class="text-sm text-red-400">{{ bulkPriceError }}</p>
+
+            <!-- Preview table -->
+            <div v-if="bulkPricePreview.length" class="max-h-48 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800/50">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-slate-900/90">
+                  <tr class="text-left text-xs text-slate-400">
+                    <th class="px-3 py-2">{{ t("stepDishes.bulkPriceColItem") }}</th>
+                    <th class="px-3 py-2 text-right">{{ t("stepDishes.bulkPriceColBefore") }}</th>
+                    <th class="px-3 py-2 text-right">{{ t("stepDishes.bulkPriceColAfter") }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                  <tr v-for="item in bulkPricePreview" :key="item.id" class="text-slate-300">
+                    <td class="max-w-[180px] truncate px-3 py-2">{{ item.name }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums text-slate-400">{{ item.old_price }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums font-medium text-emerald-400">{{ item.new_price }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else-if="!bulkPriceLoading" class="text-sm text-slate-500">
+              {{ t("stepDishes.bulkPricePreviewEmpty") }}
+            </p>
+            <div v-if="bulkPriceLoading" class="flex items-center justify-center py-4">
+              <span class="h-5 w-5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-between border-t border-slate-800 px-5 py-4">
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeBulkPriceModal">
+              {{ t("common.cancel") }}
+            </button>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="ui-btn-outline px-4 py-2 text-sm"
+                :disabled="bulkPriceLoading"
+                @click="previewBulkPrice"
+              >
+                {{ bulkPriceLoading ? "…" : t("stepDishes.bulkPricePreviewBtn") }}
+              </button>
+              <button
+                v-if="bulkPricePreview.length"
+                type="button"
+                class="ui-btn-primary px-4 py-2 text-sm"
+                :disabled="bulkPriceApplying"
+                @click="applyBulkPrice"
+              >
+                {{ bulkPriceApplying
+                    ? t("stepDishes.bulkPriceApplying")
+                    : t("stepDishes.bulkPriceApplyBtn", { count: bulkPricePreview.length }) }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <div v-if="globalError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
       <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
       <p class="flex-1 text-sm text-red-300">{{ globalError }}</p>
@@ -1036,6 +1199,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, dishApi, dishOptionApi, optionGroupApi, uploadApi } from "../lib/onboardingApi";
+import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useTranslate } from "../composables/useTranslate";
@@ -2097,9 +2261,91 @@ const saveAndNext = async () => {
   }
 };
 
+// ── Bulk price adjustment ─────────────────────────────────────────────────────
+const bulkPriceModalOpen = ref(false);
+const bulkPriceDialogRef = ref(null);
+const bulkPriceAction = ref("increase_percent");
+const bulkPriceValue = ref("");
+const bulkPriceCategoryId = ref("");   // "" = all categories
+const bulkPriceRoundTo = ref(0);
+const bulkPricePreview = ref([]);
+const bulkPriceLoading = ref(false);
+const bulkPriceApplying = ref(false);
+const bulkPriceError = ref("");
+
+useFocusTrap(bulkPriceDialogRef, bulkPriceModalOpen);
+
+const isPercentAction = computed(() =>
+  bulkPriceAction.value === "increase_percent" || bulkPriceAction.value === "decrease_percent"
+);
+
+const openBulkPriceModal = () => {
+  bulkPriceAction.value = "increase_percent";
+  bulkPriceValue.value = "";
+  bulkPriceCategoryId.value = activeCategoryId.value || "";
+  bulkPriceRoundTo.value = 0;
+  bulkPricePreview.value = [];
+  bulkPriceError.value = "";
+  bulkPriceModalOpen.value = true;
+};
+
+const closeBulkPriceModal = () => {
+  bulkPriceModalOpen.value = false;
+};
+
+const buildBulkPricePayload = (dryRun) => {
+  const v = parseFloat(bulkPriceValue.value);
+  const payload = { action: bulkPriceAction.value, value: v, dry_run: dryRun };
+  if (bulkPriceCategoryId.value) payload.category_id = Number(bulkPriceCategoryId.value);
+  if (bulkPriceRoundTo.value) payload.round_to = bulkPriceRoundTo.value;
+  return payload;
+};
+
+const previewBulkPrice = async () => {
+  const v = parseFloat(bulkPriceValue.value);
+  if (!v || v <= 0) {
+    bulkPriceError.value = t("stepDishes.bulkPriceValueError");
+    return;
+  }
+  bulkPriceError.value = "";
+  bulkPriceLoading.value = true;
+  try {
+    const { data } = await api.patch("/owner/dishes/bulk-price/", buildBulkPricePayload(true));
+    bulkPricePreview.value = data.items || [];
+  } catch (err) {
+    bulkPriceError.value = err?.response?.data?.detail || t("stepDishes.bulkPriceError");
+    bulkPricePreview.value = [];
+  } finally {
+    bulkPriceLoading.value = false;
+  }
+};
+
+const applyBulkPrice = async () => {
+  const v = parseFloat(bulkPriceValue.value);
+  if (!v || v <= 0) {
+    bulkPriceError.value = t("stepDishes.bulkPriceValueError");
+    return;
+  }
+  bulkPriceError.value = "";
+  bulkPriceApplying.value = true;
+  try {
+    const { data } = await api.patch("/owner/dishes/bulk-price/", buildBulkPricePayload(false));
+    const count = data.updated || 0;
+    toast.show(t("stepDishes.bulkPriceApplied", { count }), "success");
+    closeBulkPriceModal();
+    // Reload local dish list so prices reflect the update
+    await load();
+  } catch (err) {
+    bulkPriceError.value = err?.response?.data?.detail || t("stepDishes.bulkPriceError");
+  } finally {
+    bulkPriceApplying.value = false;
+  }
+};
+
 const onModalEscape = (e) => {
   if (e.key !== "Escape") return;
-  if (quickDishModalOpen.value) closeQuickDishModal();
+  if (bulkPriceModalOpen.value) closeBulkPriceModal();
+  else if (quickDishModalOpen.value) closeQuickDishModal();
   else if (dishEditorModalOpen.value) closeDishEditor();
 };
 onMounted(load);
