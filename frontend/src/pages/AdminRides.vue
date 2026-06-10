@@ -259,7 +259,7 @@ import { useToastStore } from '../stores/toast';
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
 
-const STATUSES = ['all', 'searching', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
+const STATUSES = ['all', 'scheduled', 'searching', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
 const loading = ref(true);
 const fetchError = ref(false);
 const rides = ref([]);
@@ -272,6 +272,7 @@ const STATUS_LABELS = {
   in_progress: 'adminRides.statusInProgress',
   completed: 'adminRides.statusCompleted',
   cancelled: 'adminRides.statusCancelled',
+  scheduled: 'tripSchedule.statusScheduled',
 };
 const statusLabel = (s) => {
   const key = STATUS_LABELS[s];
@@ -284,6 +285,7 @@ const statusClass = (s) => {
   if (s === 'cancelled') return 'bg-red-500/12 text-red-300';
   if (s === 'searching') return 'bg-amber-500/12 text-amber-300';
   if (s === 'in_progress') return 'bg-violet-500/12 text-violet-300';
+  if (s === 'scheduled') return 'bg-slate-500/12 text-slate-300';
   return 'bg-sky-500/12 text-sky-300';
 };
 

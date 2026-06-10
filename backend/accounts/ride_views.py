@@ -5,10 +5,10 @@ config/shared_api_urls.py next to the driver block.
 
 Rider endpoints (session customer_id):
     POST   /api/rides/estimate/           — fare estimate (throttled)
-    POST   /api/rides/                    — create ride or package trip (SEARCHING)
-    GET    /api/rides/active/             — rider's active/recent trip
+    POST   /api/rides/                    — create ride or package trip (SEARCHING or SCHEDULED)
+    GET    /api/rides/active/             — rider's active/recent trip + upcoming scheduled list
     GET    /api/rides/history/            — rider's last 20 terminal trips
-    POST   /api/rides/<id>/cancel/        — rider cancels
+    POST   /api/rides/<id>/cancel/        — rider cancels (including SCHEDULED)
     POST   /api/rides/<id>/rate/          — rider rates driver (1-5)
 
 Driver endpoints (is_driver + driver_approved):
@@ -83,6 +83,8 @@ def _serialize_ride(ride, *, include_driver_pii=False):
         "dropoff_lng": ride.dropoff_lng,
         "payment_method": ride.payment_method,
         "paid_with_wallet": ride.paid_with_wallet,
+        "scheduled_for": _ts(ride.scheduled_for),
+        "dispatched_at": _ts(ride.dispatched_at),
         "created_at": _ts(ride.created_at),
         "accepted_at": _ts(ride.accepted_at),
         "arrived_at": _ts(ride.arrived_at),
@@ -189,18 +191,30 @@ class RideEstimateView(APIView):
 
 
 class RideCreateView(APIView):
-    """POST /api/rides/ — create a ride or package trip (SEARCHING).
+    """POST /api/rides/ — create a ride or package trip (SEARCHING or SCHEDULED).
 
     Body (ride):    kind='ride' (default), pickup/dropoff coords + addresses, payment_method.
+                    Optional: scheduled_for (ISO 8601, tz-aware or UTC assumed).
     Body (package): kind='package', above + recipient_name (required), recipient_phone (required),
                     package_note (optional, ≤200 chars).
 
     Fare model is shared between rides and packages (MVP decision — same base/km/min rates).
-    One active trip per rider regardless of kind (existing guard unchanged).
+
+    Scheduling rules:
+        scheduled_for absent/null → immediate trip (status=SEARCHING, dispatched_at=now()).
+        scheduled_for present     → future trip (status=SCHEDULED, dispatched_at=None,
+                                    no driver push at create time).
+        Validation: scheduled_for must be >= now+20min (400 "too_soon") and
+                    <= now+7days (400 "too_far").
+        Cap: max 3 non-terminal SCHEDULED trips per rider (409 "too_many_scheduled").
+        Active-trip guard (one non-terminal non-scheduled trip) still applies;
+        SCHEDULED trips are excluded from that guard so a rider with a future trip
+        can still request an immediate one.
 
     Dispatch after create:
         ride    → online approved CAR drivers with driver_car_approved (existing behaviour).
         package → ALL online approved drivers, any vehicle type, no car-doc requirement.
+        (Scheduled trips: no dispatch at create; sweep_ride_requests rule (d) releases them.)
     """
 
     permission_classes = [AllowAny]
@@ -208,7 +222,9 @@ class RideCreateView(APIView):
     throttle_classes = [RideRequestThrottle]
 
     def post(self, request, *args, **kwargs):
+        from datetime import timedelta
         from decimal import Decimal
+        from django.utils.dateparse import parse_datetime
         from .ride_service import estimate_ride
 
         rider, err = _get_rider(request)
@@ -251,6 +267,32 @@ class RideCreateView(APIView):
                 )
             package_note = str(request.data.get("package_note") or "").strip()[:200]
 
+        # Parse optional scheduled_for
+        scheduled_for = None
+        raw_sf = request.data.get("scheduled_for")
+        if raw_sf:
+            dt = parse_datetime(str(raw_sf))
+            if dt is None:
+                return Response(
+                    {"detail": "scheduled_for must be a valid ISO 8601 datetime.", "code": "bad_scheduled_for"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Make timezone-aware (assume UTC if naive)
+            if _tz.is_naive(dt):
+                dt = _tz.make_aware(dt, _tz.utc)
+            now_sf = _tz.now()
+            if dt < now_sf + timedelta(minutes=20):
+                return Response(
+                    {"detail": "scheduled_for must be at least 20 minutes from now.", "code": "too_soon"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if dt > now_sf + timedelta(days=7):
+                return Response(
+                    {"detail": "scheduled_for must be within 7 days from now.", "code": "too_far"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            scheduled_for = dt
+
         try:
             result = estimate_ride(
                 request.data["pickup_lat"],
@@ -280,18 +322,44 @@ class RideCreateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        now = _tz.now()
+
         with _tx.atomic():
             # Lock the rider row to prevent concurrent double-submission (TOCTOU guard)
             Customer.objects.select_for_update().filter(pk=rider.id).first()
 
-            # Guard: one non-terminal trip per rider regardless of kind
+            # Guard: one non-terminal, non-scheduled trip per rider.
+            # SCHEDULED trips are excluded: a rider with a future scheduled trip can still
+            # book an immediate trip now.
             if RideRequest.objects.filter(
                 rider=rider,
-            ).exclude(status__in=RideRequest.TERMINAL_STATUSES).exists():
+            ).exclude(
+                status__in=RideRequest.TERMINAL_STATUSES | {RideRequest.Status.SCHEDULED}
+            ).exists():
                 return Response(
                     {"detail": "You already have an active ride.", "code": "active_ride_exists"},
                     status=status.HTTP_409_CONFLICT,
                 )
+
+            # Cap: max 3 non-terminal SCHEDULED trips per rider.
+            if scheduled_for is not None:
+                scheduled_count = RideRequest.objects.filter(
+                    rider=rider,
+                    status=RideRequest.Status.SCHEDULED,
+                ).count()
+                if scheduled_count >= 3:
+                    return Response(
+                        {"detail": "You cannot have more than 3 upcoming scheduled trips.", "code": "too_many_scheduled"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+            # Determine initial status and dispatched_at
+            if scheduled_for is not None:
+                initial_status = RideRequest.Status.SCHEDULED
+                dispatched_at = None
+            else:
+                initial_status = RideRequest.Status.SEARCHING
+                dispatched_at = now
 
             ride = RideRequest.objects.create(
                 rider=rider,
@@ -305,43 +373,57 @@ class RideCreateView(APIView):
                 distance_km=result["distance_km"],
                 fare=fare,
                 payment_method=payment_method,
-                status=RideRequest.Status.SEARCHING,
+                status=initial_status,
+                scheduled_for=scheduled_for,
+                dispatched_at=dispatched_at,
                 recipient_name=recipient_name,
                 recipient_phone=recipient_phone,
                 package_note=package_note,
             )
 
-        # Dispatch: package → all approved drivers; ride → car drivers only (existing helper)
-        try:
-            push_new_ride_to_drivers(ride.id)
-        except Exception:
-            pass
+        # Dispatch: only for immediate trips (scheduled trips wait for sweep rule d).
+        # package → all approved drivers; ride → car drivers only (existing helper).
+        if scheduled_for is None:
+            try:
+                push_new_ride_to_drivers(ride.id)
+            except Exception:
+                pass
 
         return Response(_serialize_ride(ride), status=status.HTTP_201_CREATED)
 
 
 class RideActiveView(APIView):
-    """GET /api/rides/active/ — rider's current non-terminal ride (or latest completed within 10 min)."""
+    """GET /api/rides/active/ — rider's current non-terminal ride (or latest completed within 10 min).
+
+    Response shape:
+        {
+            "ride": <serialized active/recent trip or null>,
+            "scheduled": [<up to 3 upcoming SCHEDULED trips, soonest first>]
+        }
+
+    "ride" excludes SCHEDULED status — a scheduled trip in the future is not the active trip.
+    "scheduled" always contains the rider's upcoming scheduled trips (max 3, soonest first).
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def get(self, request, *args, **kwargs):
+        from datetime import timedelta
         rider, err = _get_rider(request)
         if err:
             return err
 
-        # First look for a non-terminal ride
+        # Current active trip: non-terminal and NOT scheduled
         ride = (
             RideRequest.objects.filter(rider=rider)
-            .exclude(status__in=RideRequest.TERMINAL_STATUSES)
+            .exclude(status__in=RideRequest.TERMINAL_STATUSES | {RideRequest.Status.SCHEDULED})
             .select_related("driver")
             .order_by("-created_at")
             .first()
         )
         if ride is None:
             # Fall back to completed within the last 10 minutes (rating window)
-            from datetime import timedelta
             cutoff = _tz.now() - timedelta(minutes=10)
             ride = (
                 RideRequest.objects.filter(
@@ -354,12 +436,23 @@ class RideActiveView(APIView):
                 .first()
             )
 
-        if ride is None:
-            return Response(None)
+        # Upcoming scheduled trips (soonest first, max 3)
+        scheduled_qs = (
+            RideRequest.objects.filter(
+                rider=rider,
+                status=RideRequest.Status.SCHEDULED,
+            )
+            .order_by("scheduled_for")[:3]
+        )
+        scheduled_list = [_serialize_ride(r) for r in scheduled_qs]
 
-        # PII (driver phone + GPS) only revealed after driver is accepted
-        pii_ok = ride.status not in (RideRequest.Status.SEARCHING,)
-        return Response(_serialize_ride(ride, include_driver_pii=pii_ok))
+        ride_data = None
+        if ride is not None:
+            # PII (driver phone + GPS) only revealed after driver is accepted
+            pii_ok = ride.status not in (RideRequest.Status.SEARCHING,)
+            ride_data = _serialize_ride(ride, include_driver_pii=pii_ok)
+
+        return Response({"ride": ride_data, "scheduled": scheduled_list})
 
 
 class RideCancelView(APIView):
@@ -383,11 +476,11 @@ class RideCancelView(APIView):
             except RideRequest.DoesNotExist:
                 return Response({"detail": "Ride not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            if ride.status not in ("searching", "accepted"):
+            if ride.status not in ("scheduled", "searching", "accepted"):
                 return Response(
                     {
                         "detail": f"Cannot cancel a ride in status '{ride.status}'.",
-                        "allowed": ["searching", "accepted"],
+                        "allowed": ["scheduled", "searching", "accepted"],
                         "code": "bad_transition",
                     },
                     status=status.HTTP_409_CONFLICT,
@@ -398,7 +491,7 @@ class RideCancelView(APIView):
             ride.cancelled_at = now
             ride.save(update_fields=["status", "cancelled_at"])
 
-        # Notify assigned driver (best-effort)
+        # Notify assigned driver (best-effort; scheduled trips have no driver)
         if driver_id:
             try:
                 from django_tenants.utils import schema_context
@@ -489,7 +582,9 @@ class DriverRideListView(APIView):
         # Own active trip (any non-terminal trip assigned to this driver)
         own_ride = (
             RideRequest.objects.filter(driver=driver)
-            .exclude(status__in=RideRequest.TERMINAL_STATUSES)
+            # SCHEDULED trips have no driver by design; exclude explicitly so a
+            # data anomaly can never surface one as the driver's active trip.
+            .exclude(status__in=[*RideRequest.TERMINAL_STATUSES, RideRequest.Status.SCHEDULED])
             .select_related("rider")
             .order_by("-created_at")
             .first()

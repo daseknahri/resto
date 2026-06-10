@@ -809,9 +809,13 @@ class RideRequest(models.Model):
     kind='ride'    — passenger ride (default, all existing behaviour unchanged).
     kind='package' — courier delivery; uses the same fare model as rides (MVP decision).
 
-    Lifecycle:
+    Lifecycle (immediate):
       searching → accepted → arrived → in_progress → completed
                 ↘ cancelled (from searching/accepted/arrived)
+
+    Lifecycle (scheduled):
+      scheduled → searching (released by sweep_ride_requests rule d when scheduled_for <= now+10min)
+               ↘ cancelled (rider cancels before release)
 
     Mirrors DeliveryJob conventions: public schema, loose references, ratings stored here.
     """
@@ -821,6 +825,7 @@ class RideRequest(models.Model):
         PACKAGE = "package", "Package"
 
     class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
         SEARCHING = "searching", "Searching for driver"
         ACCEPTED = "accepted", "Driver accepted"
         ARRIVED = "arrived", "Driver arrived"
@@ -829,6 +834,7 @@ class RideRequest(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     VALID_TRANSITIONS = {
+        "scheduled": {"searching", "cancelled"},
         "searching": {"accepted", "cancelled"},
         "accepted": {"arrived", "cancelled", "searching"},
         "arrived": {"in_progress", "cancelled"},
@@ -889,6 +895,17 @@ class RideRequest(models.Model):
         default=Status.SEARCHING,
         db_index=True,
     )
+
+    # Scheduled-trip fields (migration 0038).
+    # scheduled_for: the rider-requested departure time (None for immediate trips).
+    # dispatched_at: when the trip actually entered the SEARCHING pool.
+    #   Immediate trips: set to now() at create time.
+    #   Scheduled trips: left None at create; set to now() when sweep releases them.
+    #   Pre-0038 rows have dispatched_at=None — the sweep falls back to created_at
+    #   for them via a Q-OR branch (dispatched_at <= cutoff | null & created_at <= cutoff).
+    scheduled_for = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Indexed: sweep rules (a)/(b) filter on dispatched_at every cycle.
+    dispatched_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

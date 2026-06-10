@@ -400,6 +400,50 @@
             {{ t('ridePage.insufficientWallet') }}
           </p>
 
+          <!-- ── Schedule for later ── -->
+          <div class="space-y-2 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-semibold text-slate-300">{{ t('tripSchedule.toggle') }}</p>
+              <button
+                type="button"
+                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+                :class="scheduleEnabled ? 'bg-[var(--color-secondary)]' : 'bg-slate-700'"
+                :aria-pressed="scheduleEnabled"
+                :aria-label="t('tripSchedule.toggle')"
+                @click="scheduleEnabled = !scheduleEnabled"
+              >
+                <span
+                  class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform duration-200"
+                  :class="scheduleEnabled ? 'translate-x-4' : 'translate-x-0'"
+                />
+              </button>
+            </div>
+            <template v-if="scheduleEnabled">
+              <p class="text-[11px] text-slate-500">{{ t('tripSchedule.hint') }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="space-y-0.5">
+                  <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.dateLabel') }}</label>
+                  <input
+                    v-model="scheduleDate"
+                    type="date"
+                    :min="minScheduleDate"
+                    class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
+                    :aria-label="t('tripSchedule.dateLabel')"
+                  />
+                </div>
+                <div class="space-y-0.5">
+                  <label class="block text-[10px] text-slate-500">{{ t('tripSchedule.timeLabel') }}</label>
+                  <input
+                    v-model="scheduleTime"
+                    type="time"
+                    class="w-full rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-sm text-slate-100 focus:border-[var(--color-secondary)]/55 focus:outline-none"
+                    :aria-label="t('tripSchedule.timeLabel')"
+                  />
+                </div>
+              </div>
+            </template>
+          </div>
+
           <!-- Request button -->
           <button
             type="button"
@@ -407,9 +451,40 @@
             :disabled="requesting || (paymentMethod === 'wallet' && walletInsufficient)"
             @click="requestRide"
           >
-            {{ requesting ? t('common.loading') : t('ridePage.requestCta') }}
+            {{ requesting ? t('common.loading') : (scheduleEnabled ? t('tripSchedule.scheduledBadge') : t('ridePage.requestCta')) }}
           </button>
         </div>
+
+        <!-- ══════════════════════════ UPCOMING SCHEDULED RIDES ══════════════════════════ -->
+        <section v-if="scheduledTrips.length > 0" class="space-y-2 pt-1">
+          <p class="ui-kicker px-1">{{ t('tripSchedule.upcomingTitle') }}</p>
+          <ul class="space-y-1.5">
+            <li
+              v-for="trip in scheduledTrips"
+              :key="trip.id"
+              class="ui-panel flex items-center gap-3 px-3 py-2.5"
+            >
+              <AppIcon name="truck" class="h-4 w-4 shrink-0 text-indigo-400" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm text-slate-200">{{ trip.dropoff_address || trip.pickup_address }}</p>
+                <p class="mt-0.5 text-[11px] text-slate-500">
+                  {{ t('tripSchedule.forTime', { time: fmtScheduledFor(trip.scheduled_for) }) }}
+                </p>
+              </div>
+              <span class="shrink-0 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-300">
+                {{ t('tripSchedule.scheduledBadge') }}
+              </span>
+              <button
+                type="button"
+                class="shrink-0 rounded-xl border border-red-500/30 bg-red-500/8 px-2.5 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-50"
+                :disabled="cancellingSchId === trip.id"
+                @click="cancelScheduled(trip.id)"
+              >
+                {{ cancellingSchId === trip.id ? t('common.loading') : t('tripSchedule.cancelCta') }}
+              </button>
+            </li>
+          </ul>
+        </section>
 
         <!-- ══════════════════════════ PAST RIDES ══════════════════════════ -->
         <section v-if="rideHistory.length > 0 || historyLoading" class="space-y-2 pt-2">
@@ -510,6 +585,13 @@ const estimate       = ref(null);  // { distance_km, fare }
 const paymentMethod  = ref('wallet');
 const errorMsg       = ref('');
 
+// ── Schedule state ────────────────────────────────────────────────────────────
+const scheduleEnabled  = ref(false);
+const scheduleDate     = ref('');   // "YYYY-MM-DD"
+const scheduleTime     = ref('');   // "HH:mm"
+const cancellingSchId  = ref(null); // id of the scheduled trip being cancelled
+const scheduledTrips   = ref([]);   // kind==='ride' items from active endpoint
+
 // ── Rating state ──────────────────────────────────────────────────────────────
 const ratingScore     = ref(0);
 const submittingRating = ref(false);
@@ -532,6 +614,21 @@ const walletBalance = computed(() => {
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 });
+
+const minScheduleDate = computed(() => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+});
+
+const fmtScheduledFor = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString(currentLocale.value || undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return iso; }
+};
 
 const walletInsufficient = computed(
   () => estimate.value != null && walletBalance.value < Number(estimate.value.fare),
@@ -639,13 +736,45 @@ const requestRide = async () => {
       dropoff_address:  dropoffAddress.value.trim() || `${dropoffLatLng.value?.lat}, ${dropoffLatLng.value?.lng}`,
       payment_method:   paymentMethod.value,
     };
+    if (scheduleEnabled.value) {
+      // Toggle on but date/time blank would silently book an IMMEDIATE trip —
+      // block instead so the button never lies about what it does.
+      if (!scheduleDate.value || !scheduleTime.value) {
+        errorMsg.value = t('tripSchedule.tooSoon');
+        requesting.value = false;
+        return;
+      }
+      const dt = new Date(`${scheduleDate.value}T${scheduleTime.value}`);
+      // Client-side guard: at least 20 min from now
+      if (dt.getTime() - Date.now() < 20 * 60 * 1000) {
+        errorMsg.value = t('tripSchedule.tooSoon');
+        requesting.value = false;
+        return;
+      }
+      payload.scheduled_for = dt.toISOString();
+    }
     const res = await api.post('/rides/', payload);
-    activeRide.value = res.data;
-    startPolling();
+    if (scheduleEnabled.value && payload.scheduled_for) {
+      // Scheduled trip created — show success, reset form, refetch upcoming
+      scheduleEnabled.value = false;
+      scheduleDate.value = '';
+      scheduleTime.value = '';
+      estimate.value = null;
+      await fetchActiveRide();
+    } else {
+      activeRide.value = res.data;
+      startPolling();
+    }
   } catch (err) {
-    const status = err?.response?.status;
-    const code   = err?.response?.data?.code;
-    if (status === 409) {
+    const httpStatus = err?.response?.status;
+    const code       = err?.response?.data?.code;
+    if (code === 'too_soon') {
+      errorMsg.value = t('tripSchedule.tooSoon');
+    } else if (code === 'too_far') {
+      errorMsg.value = t('tripSchedule.tooFar');
+    } else if (code === 'too_many_scheduled') {
+      errorMsg.value = t('tripSchedule.tooMany');
+    } else if (httpStatus === 409) {
       errorMsg.value = t('ridePage.errorActive');
       // Try to load active ride
       fetchActiveRide();
@@ -657,6 +786,20 @@ const requestRide = async () => {
     }
   } finally {
     requesting.value = false;
+  }
+};
+
+// ── Cancel a scheduled trip ───────────────────────────────────────────────────
+const cancelScheduled = async (tripId) => {
+  cancellingSchId.value = tripId;
+  try {
+    await api.post(`/rides/${tripId}/cancel/`);
+    await fetchActiveRide();
+    errorMsg.value = t('tripSchedule.cancelled');
+  } catch {
+    errorMsg.value = t('ridePage.errorRequest');
+  } finally {
+    cancellingSchId.value = null;
   }
 };
 
@@ -704,6 +847,9 @@ const resetForm = () => {
   dropoffAddress.value = '';
   pickupLatLng.value   = null;
   dropoffLatLng.value  = null;
+  scheduleEnabled.value = false;
+  scheduleDate.value    = '';
+  scheduleTime.value    = '';
   destroyTrackingMap();
   fetchHistory();
 };
@@ -712,8 +858,15 @@ const resetForm = () => {
 const fetchActiveRide = async () => {
   try {
     const res = await api.get('/rides/active/');
-    if (res.data && res.data.id) {
-      activeRide.value = res.data;
+    // Endpoint returns { ride, scheduled } — handle both old and new shape
+    const data = res.data;
+    if (data && typeof data === 'object' && 'ride' in data) {
+      activeRide.value = data.ride ?? null;
+      scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
+        .filter((r) => r.kind === 'ride');
+    } else if (data && data.id) {
+      // fallback: legacy flat shape
+      activeRide.value = data;
     }
   } catch {
     // 404 = no active ride, ignore
@@ -739,21 +892,30 @@ const startPolling = () => {
     const prevStatus = activeRide.value.status;
     try {
       const res = await api.get('/rides/active/');
-      if (res.data?.id) {
-        activeRide.value = res.data;
+      const data = res.data;
+      // Handle both { ride, scheduled } and legacy flat shape
+      const rideData = (data && typeof data === 'object' && 'ride' in data)
+        ? data.ride
+        : (data?.id ? data : null);
+      if (data && typeof data === 'object' && 'scheduled' in data) {
+        scheduledTrips.value = (Array.isArray(data.scheduled) ? data.scheduled : [])
+          .filter((r) => r.kind === 'ride');
+      }
+      if (rideData?.id) {
+        activeRide.value = rideData;
         // Stop polling when terminal state
-        if (['completed', 'cancelled'].includes(res.data.status)) {
+        if (['completed', 'cancelled'].includes(rideData.status)) {
           stopPolling();
           // System-cancelled: was searching/accepted, now cancelled (no user action)
           if (
-            res.data.status === 'cancelled' &&
+            rideData.status === 'cancelled' &&
             ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
             !cancelling.value
           ) {
             noDriverFound.value = true;
             activeRide.value = null;
             fetchHistory();
-          } else if (res.data.status === 'completed') {
+          } else if (rideData.status === 'completed') {
             fetchHistory();
           }
         }

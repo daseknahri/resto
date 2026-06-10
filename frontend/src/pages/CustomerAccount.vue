@@ -1769,6 +1769,7 @@ const RIDE_STATUS_LABELS = {
   in_progress: 'adminRides.statusInProgress',
   completed: 'adminRides.statusCompleted',
   cancelled: 'adminRides.statusCancelled',
+  scheduled: 'tripSchedule.statusScheduled',
 };
 const rideStatusLabel = (s) => (RIDE_STATUS_LABELS[s] ? t(RIDE_STATUS_LABELS[s]) : s);
 

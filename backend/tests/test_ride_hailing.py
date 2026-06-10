@@ -100,6 +100,8 @@ def _make_ride(pk=1, status_val="searching", rider=None, driver=None,
     r.started_at = None
     r.completed_at = None
     r.cancelled_at = None
+    r.scheduled_for = None
+    r.dispatched_at = None
     r.TERMINAL_STATUSES = {"completed", "cancelled"}
     r.is_terminal = status_val in {"completed", "cancelled"}
     # Courier MVP fields — default to ride values so existing tests need no changes
@@ -545,8 +547,24 @@ class PIIGatingTests(SimpleTestCase):
         mock_cust_objs.get.return_value = rider
 
         ride = _make_ride(pk=1, status_val="searching", rider=rider, driver=driver)
-        # The query for non-terminal returns this ride
-        mock_ride_objs.filter.return_value.exclude.return_value.select_related.return_value.order_by.return_value.first.return_value = ride
+
+        # Response shape after scheduled-trips: {"ride": ..., "scheduled": []}
+        # Wire the chain: filter().exclude().select_related().order_by().first() → ride
+        # AND filter().filter().order_by().__getitem__() → [] for the scheduled list
+        active_chain = MagicMock()
+        active_chain.exclude.return_value.select_related.return_value.order_by.return_value.first.return_value = ride
+
+        scheduled_chain = MagicMock()
+        scheduled_chain.order_by.return_value.__getitem__ = lambda self, sl: []
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_chain
+            return scheduled_chain
+
+        mock_ride_objs.filter.side_effect = filter_side
 
         req = self.factory.get("/api/rides/active/")
         req.session = _session(customer_id=10)
@@ -554,9 +572,14 @@ class PIIGatingTests(SimpleTestCase):
         resp = self.view(req)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        driver_data = resp.data.get("driver") or {}
+        # New shape: resp.data["ride"] holds the active trip
+        ride_data = resp.data.get("ride") or {}
+        driver_data = ride_data.get("driver") or {}
         self.assertIsNone(driver_data.get("phone"))
         self.assertIsNone(driver_data.get("driver_lat"))
+        # Scheduled list is always present
+        self.assertIn("scheduled", resp.data)
+        self.assertEqual(resp.data["scheduled"], [])
 
 
 # ── DriverRideListView — car vehicle type required ───────────────────────────────
@@ -1107,13 +1130,17 @@ class SweepRideRequestsTests(SimpleTestCase):
         ride_old = _make_ride(pk=1, status_val="searching")
         ride_old.rider_id = 10
 
+        # (d) queryset — no scheduled trips due for release
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
+
         # (a) queryset — no rides in 3-15 min window
         qs_a = MagicMock()
-        qs_a.__iter__ = MagicMock(return_value=iter([]))
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
 
         # (b) queryset — one ride > 15 min
         qs_b = MagicMock()
-        qs_b.__iter__ = MagicMock(return_value=iter([ride_old]))
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([ride_old]))
 
         # (c) queryset — no candidates
         qs_c = MagicMock()
@@ -1124,11 +1151,13 @@ class SweepRideRequestsTests(SimpleTestCase):
         def filter_side(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                return qs_a
+                return qs_d   # rule (d): scheduled trips due for release
             elif call_count[0] == 2:
-                return qs_b
+                return qs_a   # rule (a): SEARCHING driver-less for re-push
+            elif call_count[0] == 3:
+                return qs_b   # rule (b): SEARCHING driver-less for cancel
             else:
-                return qs_c
+                return qs_c   # rule (c): ACCEPTED/ARRIVED stale-driver
 
         mock_rr.objects.filter.side_effect = filter_side
 
@@ -1138,6 +1167,7 @@ class SweepRideRequestsTests(SimpleTestCase):
         mock_rr.objects.select_for_update.return_value = locked_qs
 
         mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
         mock_rr.Status.SEARCHING = "searching"
         mock_rr.Status.CANCELLED = "cancelled"
         mock_rr.Status.ACCEPTED = "accepted"
@@ -1165,11 +1195,13 @@ class SweepRideRequestsTests(SimpleTestCase):
         now = real_tz.now()
         mock_tz.now.return_value = now
 
-        # (a) empty; (b) empty; (c) one ACCEPTED ride with a fresh online driver
+        # (d) empty; (a) empty; (b) empty; (c) one ACCEPTED ride with a fresh online driver
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
         qs_a = MagicMock()
-        qs_a.__iter__ = MagicMock(return_value=iter([]))
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
         qs_b = MagicMock()
-        qs_b.__iter__ = MagicMock(return_value=iter([]))
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
 
         online_driver = _make_customer(pk=5, is_driver=True, driver_approved=True,
                                        is_driver_online=True)
@@ -1184,14 +1216,17 @@ class SweepRideRequestsTests(SimpleTestCase):
         def filter_side(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                return qs_a
+                return qs_d   # rule (d)
             elif call_count[0] == 2:
-                return qs_b
+                return qs_a   # rule (a)
+            elif call_count[0] == 3:
+                return qs_b   # rule (b)
             else:
-                return qs_c
+                return qs_c   # rule (c)
 
         mock_rr.objects.filter.side_effect = filter_side
         mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
         mock_rr.Status.SEARCHING = "searching"
         mock_rr.Status.CANCELLED = "cancelled"
         mock_rr.Status.ACCEPTED = "accepted"
@@ -1225,10 +1260,12 @@ class SweepRideRequestsTests(SimpleTestCase):
 
         ride_accepted = _make_ride(pk=3, status_val="accepted", driver=offline_driver)
 
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
         qs_a = MagicMock()
-        qs_a.__iter__ = MagicMock(return_value=iter([]))
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
         qs_b = MagicMock()
-        qs_b.__iter__ = MagicMock(return_value=iter([]))
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
         qs_c = MagicMock()
         qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([ride_accepted]))
 
@@ -1237,11 +1274,13 @@ class SweepRideRequestsTests(SimpleTestCase):
         def filter_side(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                return qs_a
+                return qs_d   # rule (d)
             elif call_count[0] == 2:
-                return qs_b
+                return qs_a   # rule (a)
+            elif call_count[0] == 3:
+                return qs_b   # rule (b)
             else:
-                return qs_c
+                return qs_c   # rule (c)
 
         mock_rr.objects.filter.side_effect = filter_side
 
@@ -1250,6 +1289,7 @@ class SweepRideRequestsTests(SimpleTestCase):
         mock_rr.objects.select_for_update.return_value = locked_qs
 
         mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
         mock_rr.Status.SEARCHING = "searching"
         mock_rr.Status.CANCELLED = "cancelled"
         mock_rr.Status.ACCEPTED = "accepted"
@@ -1283,6 +1323,8 @@ class SweepRideRequestsTests(SimpleTestCase):
 
         qs_empty = MagicMock()
         qs_empty.__iter__ = MagicMock(return_value=iter([]))
+        qs_empty_ab = MagicMock()
+        qs_empty_ab.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
         qs_c = MagicMock()
         qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
 
@@ -1290,18 +1332,22 @@ class SweepRideRequestsTests(SimpleTestCase):
 
         def filter_side(*args, **kwargs):
             call_count[0] += 1
-            # Verify that the (c) filter does NOT include in_progress in status__in
-            if call_count[0] == 3:
-                # the status__in kwarg must exclude in_progress
+            if call_count[0] == 1:
+                return qs_empty       # rule (d): scheduled
+            elif call_count[0] == 2:
+                return qs_empty_ab    # rule (a): SEARCHING re-push
+            elif call_count[0] == 3:
+                return qs_empty_ab    # rule (b): SEARCHING cancel
+            else:
+                # rule (c) filter — verify in_progress excluded
                 status_in = kwargs.get("status__in", [])
                 self.assertNotIn("in_progress", status_in,
                                  "in_progress must never be in the (c) filter")
-            if call_count[0] <= 2:
-                return qs_empty
-            return qs_c
+                return qs_c
 
         mock_rr.objects.filter.side_effect = filter_side
         mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
         mock_rr.Status.SEARCHING = "searching"
         mock_rr.Status.CANCELLED = "cancelled"
         mock_rr.Status.ACCEPTED = "accepted"
@@ -2195,3 +2241,486 @@ class PackageKindInHistoryAndAdminTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("kind", resp.data[0])
         self.assertEqual(resp.data[0]["kind"], "package")
+
+
+# ── Scheduled trips ───────────────────────────────────────────────────────────────
+
+
+class ScheduledTripCreateTests(SimpleTestCase):
+    """POST /api/rides/ with scheduled_for — validation + creation rules."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideCreateView.as_view()
+
+    def _post(self, data, session=None):
+        req = self.factory.post("/api/rides/", data, format="json")
+        req.session = session or _session(customer_id=1)
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_too_soon_returns_400(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tz, _throttle):
+        """scheduled_for < now+20min must return 400 code=too_soon."""
+        import datetime
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+        mock_tz.is_naive.return_value = False
+
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
+        mock_cust_objs.get.return_value = rider
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
+
+        # scheduled_for = now + 10 minutes (too soon)
+        sf = (now + datetime.timedelta(minutes=10)).isoformat()
+        req = self._post({
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            "scheduled_for": sf,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data.get("code"), "too_soon")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_too_far_returns_400(self, mock_est, mock_cust_objs, mock_ride_objs, mock_tz, _throttle):
+        """scheduled_for > now+7days must return 400 code=too_far."""
+        import datetime
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+        mock_tz.is_naive.return_value = False
+
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
+        mock_cust_objs.get.return_value = rider
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
+
+        sf = (now + datetime.timedelta(days=8)).isoformat()
+        req = self._post({
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            "scheduled_for": sf,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data.get("code"), "too_far")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views.push_new_ride_to_drivers")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_scheduled_create_no_push_status_scheduled(
+        self, mock_est, mock_cust_objs, mock_ride_objs, mock_push, mock_tz, mock_tx, _throttle
+    ):
+        """A scheduled trip must have status=SCHEDULED, dispatched_at=None, NO driver push."""
+        import datetime
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+        mock_tz.is_naive.return_value = False
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
+        mock_cust_objs.get.return_value = rider
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
+
+        # No existing active trip; no scheduled trips yet
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        mock_ride_objs.filter.return_value.count.return_value = 0
+
+        ride = _make_ride(pk=7, status_val="scheduled", rider=rider)
+        ride.scheduled_for = MagicMock()
+        ride.scheduled_for.isoformat.return_value = "2026-06-12T08:00:00+00:00"
+        ride.dispatched_at = None
+        mock_ride_objs.create.return_value = ride
+
+        sf = (now + datetime.timedelta(hours=2)).isoformat()
+        req = self._post({
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            "scheduled_for": sf,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, 201)
+        # Confirm create was called with status=SCHEDULED and dispatched_at=None
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        self.assertEqual(create_kwargs.get("status"), "scheduled")
+        self.assertIsNone(create_kwargs.get("dispatched_at"))
+        # Must NOT push to drivers
+        mock_push.assert_not_called()
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_fourth_scheduled_returns_409(
+        self, mock_est, mock_cust_objs, mock_ride_objs, mock_tz, mock_tx, _throttle
+    ):
+        """A 4th scheduled trip must return 409 code=too_many_scheduled."""
+        import datetime
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+        mock_tz.is_naive.return_value = False
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
+        mock_cust_objs.get.return_value = rider
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
+
+        # No active (non-scheduled) trip, but already 3 scheduled
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+        mock_ride_objs.filter.return_value.count.return_value = 3
+
+        sf = (now + datetime.timedelta(hours=3)).isoformat()
+        req = self._post({
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+            "scheduled_for": sf,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data.get("code"), "too_many_scheduled")
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views._tz")
+    @patch("accounts.ride_views.push_new_ride_to_drivers")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_service.estimate_ride")
+    def test_immediate_create_sets_dispatched_at(
+        self, mock_est, mock_cust_objs, mock_ride_objs, mock_push, mock_tz, mock_tx, _throttle
+    ):
+        """An immediate (no scheduled_for) trip must have dispatched_at=now() at create."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        rider = _make_customer(pk=1, wallet_balance=Decimal("100"))
+        mock_cust_objs.get.return_value = rider
+        mock_cust_objs.select_for_update.return_value.filter.return_value.first.return_value = rider
+        mock_est.return_value = {"distance_km": 3.0, "fare": Decimal("15.00"), "duration_min": 7}
+        mock_ride_objs.filter.return_value.exclude.return_value.exists.return_value = False
+
+        ride = _make_ride(pk=8, status_val="searching", rider=rider)
+        ride.dispatched_at = now
+        mock_ride_objs.create.return_value = ride
+
+        req = self._post({
+            "pickup_lat": 33.5, "pickup_lng": -7.6,
+            "dropoff_lat": 33.55, "dropoff_lng": -7.65,
+        })
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, 201)
+        create_kwargs = mock_ride_objs.create.call_args[1]
+        self.assertEqual(create_kwargs.get("status"), "searching")
+        self.assertEqual(create_kwargs.get("dispatched_at"), now)
+        # Immediate trip: push fires
+        mock_push.assert_called_once_with(ride.id)
+
+
+class ScheduledTripCancelTests(SimpleTestCase):
+    """Cancelling a SCHEDULED trip (before release) must succeed."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideCancelView.as_view()
+
+    @patch("accounts.ride_views.RideRequestThrottle.allow_request", return_value=True)
+    @patch("accounts.ride_views._tx")
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_cancel_scheduled_ok(self, mock_cust_objs, mock_ride_objs, mock_tx, _throttle):
+        """Cancelling a SCHEDULED trip must return 200 with status=cancelled."""
+        rider = _make_customer(pk=1)
+        mock_cust_objs.get.return_value = rider
+        mock_tx.atomic.return_value = _noop_atomic()
+
+        ride = _make_ride(pk=20, status_val="scheduled", rider=rider)
+        ride.driver_id = None
+        mock_ride_objs.select_for_update.return_value.get.return_value = ride
+
+        req = self.factory.post("/api/rides/20/cancel/")
+        req.session = _session(customer_id=1)
+        req.user = MagicMock(is_authenticated=False)
+        resp = self.view(req, ride_id=20)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(ride.status, "cancelled")
+
+
+class ScheduledTripActivePayloadTests(SimpleTestCase):
+    """GET /api/rides/active/ -- scheduled list in response."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideActiveView.as_view()
+
+    @patch("accounts.models.Customer.objects")
+    @patch("accounts.ride_views.RideRequest.objects")
+    def test_active_response_contains_scheduled_list(self, mock_ride_objs, mock_cust_objs):
+        """Response must have 'ride' (null when no active trip) and 'scheduled' list."""
+        rider = _make_customer(pk=5)
+        mock_cust_objs.get.return_value = rider
+
+        # Chain 1: active (non-scheduled) trip query -- returns None (no active trip)
+        active_chain = MagicMock()
+        active_chain.exclude.return_value.select_related.return_value \
+            .order_by.return_value.first.return_value = None
+
+        # Chain 2: completed-within-10-min fallback -- also None
+        completed_chain = MagicMock()
+        completed_chain.select_related.return_value.order_by.return_value.first.return_value = None
+
+        # Chain 3: upcoming scheduled trips
+        sched1 = _make_ride(pk=30, status_val="scheduled", rider=rider)
+        sched1.scheduled_for = MagicMock()
+        sched1.scheduled_for.isoformat.return_value = "2026-06-12T08:00:00+00:00"
+        sched2 = _make_ride(pk=31, status_val="scheduled", rider=rider)
+        sched2.scheduled_for = MagicMock()
+        sched2.scheduled_for.isoformat.return_value = "2026-06-13T10:00:00+00:00"
+
+        scheduled_chain = MagicMock()
+        scheduled_chain.order_by.return_value.__getitem__ = lambda self, sl: [sched1, sched2]
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return active_chain      # non-terminal non-scheduled query
+            elif call_count[0] == 2:
+                return completed_chain   # completed-within-10-min fallback
+            return scheduled_chain       # upcoming scheduled trips
+
+        mock_ride_objs.filter.side_effect = filter_side
+
+        req = self.factory.get("/api/rides/active/")
+        req.session = _session(customer_id=5)
+        req.user = MagicMock(is_authenticated=False)
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["ride"])
+        self.assertEqual(len(resp.data["scheduled"]), 2)
+        self.assertEqual(resp.data["scheduled"][0]["id"], 30)
+        self.assertEqual(resp.data["scheduled"][1]["id"], 31)
+
+
+class SweepScheduledReleaseTests(SimpleTestCase):
+    """Rule (d) in sweep_ride_requests: release SCHEDULED trips when their time is near."""
+
+    def _run_command(self):
+        from accounts.management.commands.sweep_ride_requests import Command
+        cmd = Command()
+        cmd.stdout = MagicMock()
+        cmd.style = MagicMock()
+        cmd.style.SUCCESS = lambda s: s
+        cmd.handle()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_rule_d_flips_scheduled_sets_dispatched_at_and_pushes(
+        self, mock_tz, mock_tx, mock_rr, mock_push_drivers, mock_push_rider
+    ):
+        """Rule (d): a SCHEDULED trip due within 10min is flipped to SEARCHING,
+        dispatched_at set to now(), and push_new_ride_to_drivers called."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        scheduled_ride = _make_ride(pk=50, status_val="scheduled")
+        scheduled_ride.rider_id = 20
+        scheduled_ride.dispatched_at = None
+
+        # (d) returns one due scheduled trip
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([scheduled_ride]))
+
+        # (a) and (b): empty (both have .filter() chained)
+        qs_ab = MagicMock()
+        qs_ab.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        # (c): empty
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_d
+            elif call_count[0] in (2, 3):
+                return qs_ab
+            return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        # select_for_update for rule (d)
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = scheduled_ride
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        # status flipped to searching, dispatched_at = now
+        self.assertEqual(scheduled_ride.status, "searching")
+        self.assertEqual(scheduled_ride.dispatched_at, now)
+        save_kwargs = scheduled_ride.save.call_args[1]
+        self.assertIn("status", save_kwargs.get("update_fields", []))
+        self.assertIn("dispatched_at", save_kwargs.get("update_fields", []))
+        mock_push_drivers.assert_called_once_with(scheduled_ride.id)
+        mock_push_rider.assert_not_called()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_released_trip_not_cancelled_by_rule_b(
+        self, mock_tz, mock_tx, mock_rr, mock_push_drivers, mock_push_rider
+    ):
+        """CRITICAL: a trip released NOW (fresh dispatched_at=now) must NOT be
+        auto-cancelled by rule (b), which only cancels trips with dispatched_at
+        <= now - 15min. A fresh dispatched_at=now does not satisfy that condition."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        # Just-released trip: dispatched_at=now -- rule (b) DB filter won't match it
+        fresh_trip = _make_ride(pk=51, status_val="searching")
+        fresh_trip.rider_id = 21
+        fresh_trip.dispatched_at = now
+
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
+
+        qs_a = MagicMock()
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        # Rule (b) queryset is empty because the DB filter on dispatched_at won't
+        # match a freshly-released trip
+        qs_b = MagicMock()
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_d
+            elif call_count[0] == 2:
+                return qs_a
+            elif call_count[0] == 3:
+                return qs_b
+            return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        fresh_trip.save.assert_not_called()
+        mock_push_rider.assert_not_called()
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_legacy_null_dispatched_at_old_created_at_is_cancelled(
+        self, mock_tz, mock_tx, mock_rr, mock_push_drivers, mock_push_rider
+    ):
+        """Legacy row (dispatched_at=None, created_at >15min ago) must still be cancelled
+        by rule (b) via the Q(dispatched_at__isnull=True, created_at__lte=cutoff) branch."""
+        import datetime
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        legacy_ride = _make_ride(pk=52, status_val="searching")
+        legacy_ride.rider_id = 22
+        legacy_ride.dispatched_at = None
+        legacy_ride.created_at = now - datetime.timedelta(minutes=20)
+
+        qs_d = MagicMock()
+        qs_d.__iter__ = MagicMock(return_value=iter([]))
+
+        qs_a = MagicMock()
+        qs_a.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        # Rule (b) returns legacy_ride (DB includes it via Q fallback)
+        qs_b = MagicMock()
+        qs_b.filter.return_value.__iter__ = MagicMock(return_value=iter([legacy_ride]))
+
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_d
+            elif call_count[0] == 2:
+                return qs_a
+            elif call_count[0] == 3:
+                return qs_b
+            return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = legacy_ride
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SCHEDULED = "scheduled"
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        self.assertEqual(legacy_ride.status, "cancelled")
+        save_kwargs = legacy_ride.save.call_args[1]
+        self.assertIn("status", save_kwargs.get("update_fields", []))
+        self.assertIn("cancelled_at", save_kwargs.get("update_fields", []))
+        mock_push_rider.assert_called_once_with(22, "no_driver_found")
