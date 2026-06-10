@@ -449,6 +449,9 @@ export const messages = {
       loyaltyTeaserEarn: "Earn loyalty points with every order",
       loyaltyTeaserRedeem: "Redeem at checkout",
       reviewsTitle: "What customers say",
+      opensUntil: "Open · closes {time}",
+      opensAt: "Closed · opens {day} {time}",
+      tomorrow: "tomorrow",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4451,6 +4454,9 @@ export const messages = {
       loyaltyTeaserEarn: "Gagnez des points a chaque commande",
       loyaltyTeaserRedeem: "A utiliser au paiement",
       reviewsTitle: "Avis clients",
+      opensUntil: "Ouvert · ferme a {time}",
+      opensAt: "Ferme · ouvre {day} a {time}",
+      tomorrow: "demain",
     },
     reservationManage: {
       kicker: "Reservation",

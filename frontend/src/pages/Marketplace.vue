@@ -422,7 +422,7 @@
                 class="block h-1.5 w-1.5 rounded-full bg-emerald-400 motion-safe:animate-pulse"
                 aria-hidden="true"
               />
-              {{ r.is_open ? t('marketplace.open') : t('marketplace.closed') }}
+              {{ r.is_open ? t('marketplace.open') : (nextOpenLabel(r) || t('marketplace.closed')) }}
             </span>
 
             <!-- Distance badge (sits above name overlay) -->
@@ -492,6 +492,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import { getNextOpenInfo } from '../lib/businessHours';
 
 const FAVOURITES_KEY = 'marketplace:favourites';
 const loadFavourites = () => {
@@ -530,7 +531,7 @@ const activeOrder = computed(() => {
   } catch { return null; }
 });
 
-const { t } = useI18n();
+const { t, currentLocale: locale } = useI18n();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);
@@ -571,6 +572,20 @@ const toggleFavourite = (slug) => {
   else next.add(slug);
   favourites.value = next;
   saveFavourites(next);
+};
+
+/**
+ * For a closed restaurant with a schedule, return a formatted "Opens {day} {time}" string.
+ * Returns null for open restaurants or those with no schedule data.
+ */
+const nextOpenLabel = (r) => {
+  if (r.is_open) return null;
+  const schedule = r.business_hours_schedule;
+  if (!schedule || !Object.keys(schedule).length) return null;
+  const info = getNextOpenInfo(schedule, locale.value);
+  if (!info) return null;
+  const dayPart = info.isTomorrow ? t('mktMenu.tomorrow') : (info.dayLabel || '');
+  return t('mktMenu.opensAt', { day: dayPart, time: info.openTime });
 };
 
 // Recently visited restaurants — matched against loaded restaurant list so closed/removed ones vanish

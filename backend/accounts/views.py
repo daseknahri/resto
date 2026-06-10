@@ -2409,6 +2409,8 @@ class MarketplaceView(APIView):
                 "distance_km": distance_km,
                 "promo_badge": promo_badge,
                 "flash_sale_active": flash_sale_active,
+                # Exposes schedule so the customer UI can compute "Opens at HH:MM"
+                "business_hours_schedule": profile.business_hours_schedule or {},
             })
 
         if user_lat is not None:
