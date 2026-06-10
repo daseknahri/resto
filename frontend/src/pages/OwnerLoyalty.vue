@@ -69,6 +69,29 @@
     </div>
 
     <template v-else>
+      <!-- Enrollment stats — only shown if at least one customer has earned points -->
+      <section
+        v-if="stats"
+        class="ui-panel ui-reveal p-4"
+        :style="{ '--ui-delay': '14ms' }"
+      >
+        <p class="ui-kicker mb-3 tracking-wide">{{ t('ownerLoyalty.statsKicker') }}</p>
+        <div v-if="stats.enrolled_customers === 0" class="flex items-center gap-2 text-xs text-slate-500">
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" class="h-3.5 w-3.5 shrink-0 text-slate-600"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM7.25 5a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0V5Zm.75 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
+          {{ t('ownerLoyalty.statsNoEnrollments') }}
+        </div>
+        <div v-else class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-800 bg-slate-800">
+          <div class="bg-slate-950/70 px-4 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-white leading-none">{{ stats.enrolled_customers }}</p>
+            <p class="ui-stat-label mt-1.5 text-[10px]">{{ t('ownerLoyalty.statsEnrolled') }}</p>
+          </div>
+          <div class="bg-slate-950/70 px-4 py-3 text-center">
+            <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ stats.total_points_issued.toLocaleString() }}</p>
+            <p class="ui-stat-label mt-1.5 text-[10px]">{{ t('ownerLoyalty.statsTotalPoints') }}</p>
+          </div>
+        </div>
+      </section>
+
       <!-- How it works — shown first so owners understand the model before configuring -->
       <section class="ui-panel ui-reveal p-4 space-y-3" :style="{ '--ui-delay': '28ms' }">
         <h2 class="ui-kicker tracking-wide">{{ t('ownerLoyalty.howItWorksTitle') }}</h2>
@@ -244,6 +267,7 @@ const updating = ref(false);
 const fetchError = ref(false);
 const saving = ref(false);
 const saveError = ref('');
+const stats = ref(null);
 
 const form = reactive({
   enabled: false,
@@ -269,6 +293,7 @@ const applyConfig = (data) => {
   form.points_per_unit = data.points_per_unit;
   form.redeem_threshold = data.redeem_threshold;
   form.points_value = data.points_value;
+  if (data.stats) stats.value = data.stats;
 };
 
 const fetchConfig = async () => {
@@ -295,6 +320,15 @@ const fetchConfig = async () => {
 
 const save = async () => {
   saveError.value = '';
+  // Client-side guard: prevent sending zeroes the backend would reject
+  if (form.enabled) {
+    const ppu = Number(form.points_per_unit);
+    const thr = Number(form.redeem_threshold);
+    const val = Number(form.points_value);
+    if (!ppu || ppu < 1) { saveError.value = t('ownerLoyalty.validationPPU'); return; }
+    if (!thr || thr < 1) { saveError.value = t('ownerLoyalty.validationThreshold'); return; }
+    if (!val || val <= 0) { saveError.value = t('ownerLoyalty.validationValue'); return; }
+  }
   saving.value = true;
   try {
     const res = await api.patch('/owner/loyalty/', {

@@ -34,7 +34,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
@@ -6009,20 +6009,27 @@ class OwnerLoyaltyView(APIView):
         )
         return cfg
 
-    def _serialize(self, cfg):
-        return {
+    def _serialize(self, cfg, include_stats=False):
+        data = {
             "enabled": cfg.enabled,
             "points_per_unit": cfg.points_per_unit,
             "redeem_threshold": cfg.redeem_threshold,
             "points_value": str(cfg.points_value),
             "updated_at": cfg.updated_at.isoformat(),
         }
+        if include_stats:
+            qs = Order.objects.filter(points_earned__gt=0)
+            data["stats"] = {
+                "enrolled_customers": qs.values("customer_id").distinct().count(),
+                "total_points_issued": qs.aggregate(t=Sum("points_earned"))["t"] or 0,
+            }
+        return data
 
     def get(self, request, *args, **kwargs):
         if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
         cfg = self._get_or_create_config()
-        return Response(self._serialize(cfg))
+        return Response(self._serialize(cfg, include_stats=True))
 
     def patch(self, request, *args, **kwargs):
         if not _is_tenant_owner(request):

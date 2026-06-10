@@ -824,6 +824,7 @@ const statusHint = computed(() => {
   if (s === 'pending') return t('orderStatus.hintPending');
   if (s === 'confirmed') return t('orderStatus.hintConfirmed');
   if (s === 'preparing') return t('orderStatus.hintPreparing');
+  if (s === 'out_for_delivery') return t('orderStatus.hintOutForDelivery');
   return null;
 });
 

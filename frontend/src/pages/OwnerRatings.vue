@@ -201,7 +201,7 @@ const scoreFilters = computed(() => [
 const filtered = computed(() =>
   activeScore.value === "all"
     ? ratings.value
-    : ratings.value.filter((r) => r.score === activeScore.value)
+    : ratings.value.filter((r) => Number(r.score) === Number(activeScore.value))
 );
 
 const scoreCounts = computed(() => {
