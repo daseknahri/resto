@@ -269,19 +269,24 @@
           :key="o.id"
           :to="{ name: 'owner-orders', query: { q: o.order_number } }"
           class="ui-reveal flex items-center justify-between gap-3 rounded-xl border bg-slate-950/40 px-3.5 py-2.5 text-xs transition-colors hover:bg-slate-900/60"
-          :class="['pending','confirmed','preparing','ready'].includes(o.status)
-            ? 'border-slate-700 hover:border-slate-600'
-            : 'border-slate-800 hover:border-slate-700'"
+          :class="isUrgentOrder(o)
+            ? 'border-red-500/50 bg-red-500/5 hover:border-red-500/70'
+            : ['pending','confirmed','preparing','ready'].includes(o.status)
+              ? 'border-slate-700 hover:border-slate-600'
+              : 'border-slate-800 hover:border-slate-700'"
           :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+          :title="isUrgentOrder(o) ? t('ownerHome.orderUrgentTitle', { min: Math.round((Date.now() - new Date(o.created_at).getTime()) / 60000) }) : undefined"
         >
           <div class="flex min-w-0 items-center gap-2.5">
-            <span class="font-mono font-bold text-slate-100 tabular-nums">{{ o.order_number }}</span>
+            <span class="font-mono font-bold tabular-nums" :class="isUrgentOrder(o) ? 'text-red-300' : 'text-slate-100'">{{ o.order_number }}</span>
             <span class="rounded-full px-2 py-0.5 font-semibold" :class="orderStatusClass(o.status)">{{ orderStatusLabel(o.status) }}</span>
             <span v-if="o.fulfillment_type" class="hidden text-slate-400 sm:inline">{{ fulfillmentLabel(o) }}</span>
+            <!-- Urgency dot — shown when order is overdue -->
+            <span v-if="isUrgentOrder(o)" class="ui-live-dot bg-red-400" aria-hidden="true" />
           </div>
           <div class="flex shrink-0 items-center gap-3 tabular-nums">
             <span class="font-semibold text-[var(--color-secondary)]">{{ formatOrderTotal(o) }}</span>
-            <span class="text-slate-500">{{ formatTimeAgo(o.created_at) }}</span>
+            <span :class="isUrgentOrder(o) ? 'font-semibold text-red-400' : 'text-slate-500'">{{ formatTimeAgo(o.created_at) }}</span>
           </div>
         </RouterLink>
       </div>
@@ -492,6 +497,16 @@ const recentOrders = computed(() =>
 );
 
 // ── Order helpers ─────────────────────────────────────────────────────────────
+// An order is "urgent" when it has been in a live status longer than expected:
+//   pending   > 15 min — owner hasn't confirmed yet (customer is waiting)
+//   confirmed > 30 min — kitchen may be stuck
+const URGENT_THRESHOLDS_MIN = { pending: 15, confirmed: 30 };
+const isUrgentOrder = (o) => {
+  const threshold = URGENT_THRESHOLDS_MIN[o.status];
+  if (!threshold || !o.created_at) return false;
+  return (Date.now() - new Date(o.created_at).getTime()) / 60000 >= threshold;
+};
+
 const orderStatusClass = (s) => ({
   pending: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
   confirmed: "bg-sky-500/20 text-sky-200 border border-sky-500/30",

@@ -507,6 +507,7 @@ const arabicMessages = {
     "pendingUpgradeShort": "ترقية معلقة",
     "avgRating": "متوسط التقييم",
     "oldestPending": "الأقدم: {min} د",
+    "orderUrgentTitle": "في الانتظار منذ {min} د — يحتاج إجراءً",
     "viewAllRatings": "عرض جميع التقييمات",
     "noRatingsYet": "لا توجد تقييمات بعد",
     "allClear": "كل شيء على ما يرام",
