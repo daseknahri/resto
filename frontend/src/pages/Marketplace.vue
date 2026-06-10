@@ -13,6 +13,28 @@
         </div>
       </header>
 
+      <!-- Category tab strip (All · Restaurants · Shops) -->
+      <div
+        class="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="group"
+        :aria-label="t('marketplace.filterType')"
+      >
+        <button
+          v-for="tab in BUSINESS_TYPE_TABS"
+          :key="tab.key"
+          type="button"
+          :aria-pressed="selectedBusinessType === tab.key"
+          class="ui-press flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          :class="selectedBusinessType === tab.key
+            ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+            : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:border-slate-600/80 hover:text-slate-300'"
+          @click="selectedBusinessType = tab.key"
+        >
+          <span aria-hidden="true" class="text-sm leading-none">{{ tab.icon }}</span>
+          {{ tab.label }}
+        </button>
+      </div>
+
       <!-- Filter bar -->
       <section :aria-label="t('marketplace.kicker')" class="ui-section-band space-y-3 px-4 py-3.5">
         <!-- Row 1: search + location -->
@@ -96,17 +118,6 @@
             <option value="3.5">{{ t('marketplace.minRating35') }}</option>
             <option value="4">{{ t('marketplace.minRating4') }}</option>
             <option value="4.5">{{ t('marketplace.minRating45') }}</option>
-          </select>
-
-          <!-- Business type (restaurants vs shops) -->
-          <select
-            v-model="selectedBusinessType"
-            :aria-label="t('marketplace.filterType')"
-            class="rounded-full border border-slate-700/70 bg-slate-950/75 px-3 py-1.5 text-xs text-slate-300 transition focus-visible:border-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
-          >
-            <option value="">{{ t('marketplace.typeAll') }}</option>
-            <option value="food">{{ t('marketplace.typeFood') }}</option>
-            <option value="shop">{{ t('marketplace.typeShop') }}</option>
           </select>
 
           <!-- Open now toggle -->
@@ -532,6 +543,13 @@ const activeOrder = computed(() => {
 });
 
 const { t, currentLocale: locale } = useI18n();
+
+// ── Business-type category tabs ───────────────────────────────────────────────
+const BUSINESS_TYPE_TABS = computed(() => [
+  { key: '',     icon: '🌐', label: t('marketplace.typeAll') },
+  { key: 'food', icon: '🍽️', label: t('marketplace.typeFood') },
+  { key: 'shop', icon: '🛍️', label: t('marketplace.typeShop') },
+]);
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);

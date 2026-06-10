@@ -51,6 +51,14 @@
           class="rounded-full border border-slate-700/40 px-1.5 py-0.5 text-[10px] text-slate-500"
         >{{ t('dishPage.customisable') }}</span>
       </div>
+      <!-- Allergen micro-line (up to 3, then +N) -->
+      <p
+        v-if="dish.allergens?.length"
+        class="text-[10px] leading-tight text-amber-500/60 mt-0.5"
+        :title="dish.allergens.map(a => t(`menu.allergen_${a}`)).join(', ')"
+      >
+        ⚠ {{ dish.allergens.slice(0, 3).map(a => t(`menu.allergen_${a}`)).join(' · ') }}<template v-if="dish.allergens.length > 3"> +{{ dish.allergens.length - 3 }}</template>
+      </p>
     </div>
 
     <!-- Right: square image + add controls -->
