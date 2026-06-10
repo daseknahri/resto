@@ -494,9 +494,10 @@
               <!-- info -->
               <div class="flex-1 min-w-0 space-y-0.5">
                 <p class="truncate text-sm font-semibold leading-snug text-slate-100" :title="item.name">{{ item.name }}</p>
+                <p v-if="item.options?.length" class="truncate text-[11px] text-slate-500 leading-snug">{{ item.options.map(o => o.name).join(', ') }}</p>
                 <p class="text-xs tabular-nums">
-                  <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.price * item.qty) }}</span>
-                  <span class="text-slate-500"> · {{ fmtPrice(item.price) }} ea.</span>
+                  <span class="font-semibold text-[var(--color-secondary)]">{{ fmtPrice((item.unitPrice ?? item.price) * item.qty) }}</span>
+                  <span class="text-slate-500"> · {{ fmtPrice(item.unitPrice ?? item.price) }} ea.</span>
                 </p>
               </div>
               <!-- stepper pill -->
@@ -723,6 +724,135 @@
       </div>
     </Transition>
 
+    <!-- Option group selection panel (bottom sheet) -->
+    <Transition name="slide-up">
+      <div
+        v-if="activeOptionDish"
+        ref="optionPanelRef"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="activeOptionDish.name"
+        class="fixed inset-0 z-50 flex flex-col"
+        @keydown.esc="closeOptionPanel"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+          aria-hidden="true"
+          @click="closeOptionPanel"
+        />
+        <!-- Sheet (slides up from bottom, max ~88 vh) -->
+        <div
+          class="relative mt-auto mx-auto w-full max-w-md overflow-hidden rounded-t-3xl border-t border-slate-800/60 bg-[#0b0d13] shadow-2xl flex flex-col"
+          style="max-height: 88vh"
+        >
+          <!-- Handle bar -->
+          <div class="flex justify-center pt-3 pb-1 shrink-0" aria-hidden="true">
+            <div class="h-1 w-10 rounded-full bg-slate-700" />
+          </div>
+          <!-- Dish header -->
+          <div class="flex items-center gap-3 px-5 py-3 border-b border-slate-800/50 shrink-0">
+            <div class="h-14 w-14 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
+              <img v-if="activeOptionDish.image_url" :src="activeOptionDish.image_url" :alt="activeOptionDish.name" loading="lazy" class="h-full w-full object-cover" />
+              <span v-else aria-hidden="true" class="text-xl select-none">🍴</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-bold text-white leading-snug truncate">{{ activeOptionDish.name }}</p>
+              <p class="text-xs text-[var(--color-secondary)] tabular-nums">{{ fmtPrice(activeOptionDish.price) }}</p>
+            </div>
+            <button
+              type="button"
+              class="ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700/60 text-slate-400 transition hover:border-slate-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+              :aria-label="t('common.close')"
+              @click="closeOptionPanel"
+            >
+              <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+
+          <!-- Option groups (scrollable body) -->
+          <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-6">
+            <div
+              v-for="grp in activeOptionDish.option_groups"
+              :key="grp.id"
+              role="group"
+              :aria-labelledby="`opt-grp-${grp.id}`"
+            >
+              <!-- Group label + badges -->
+              <div class="flex items-start justify-between gap-2 mb-3">
+                <p :id="`opt-grp-${grp.id}`" class="text-sm font-semibold text-white leading-snug">{{ grp.name }}</p>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span
+                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                    :class="grp.min_select > 0
+                      ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                      : 'border-slate-700/60 bg-slate-900/60 text-slate-400'"
+                  >{{ grp.min_select > 0 ? t('mktMenu.optionRequired') : t('mktMenu.optionOptional') }}</span>
+                  <span class="text-[10px] text-slate-500 whitespace-nowrap">{{ grp.max_select === 1 ? t('mktMenu.optionChooseOne') : t('mktMenu.optionChooseUp', { max: grp.max_select }) }}</span>
+                </div>
+              </div>
+              <!-- Option buttons -->
+              <div class="space-y-2">
+                <button
+                  v-for="opt in grp.options"
+                  :key="opt.id"
+                  type="button"
+                  :disabled="!opt.is_available || (!isOptionSelected(grp.id, opt.id) && isGroupAtMax(grp))"
+                  class="w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-start transition-colors ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40 disabled:pointer-events-none disabled:opacity-40"
+                  :class="isOptionSelected(grp.id, opt.id)
+                    ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/10 text-white'
+                    : 'border-slate-700/60 bg-slate-900/40 text-slate-300 hover:border-slate-600 hover:bg-slate-900/60'"
+                  :aria-pressed="isOptionSelected(grp.id, opt.id)"
+                  @click="toggleOption(grp, opt.id)"
+                >
+                  <!-- Indicator: filled dot for radio (single), checkmark for multi -->
+                  <span
+                    class="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition-all"
+                    :class="isOptionSelected(grp.id, opt.id)
+                      ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]'
+                      : 'border-slate-600'"
+                    aria-hidden="true"
+                  >
+                    <svg v-if="isOptionSelected(grp.id, opt.id) && grp.max_select > 1" viewBox="0 0 10 10" class="h-2.5 w-2.5 text-slate-950" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5l2.5 2.5 3.5-4"/></svg>
+                    <span v-else-if="isOptionSelected(grp.id, opt.id)" class="h-2 w-2 rounded-full bg-slate-950" aria-hidden="true" />
+                  </span>
+                  <span class="flex-1 text-sm font-medium">{{ opt.name }}</span>
+                  <span
+                    v-if="Number(opt.price_delta)"
+                    class="shrink-0 text-xs tabular-nums"
+                    :class="isOptionSelected(grp.id, opt.id) ? 'text-[var(--color-secondary)]' : 'text-slate-400'"
+                  >{{ Number(opt.price_delta) > 0 ? '+' : '' }}{{ fmtPrice(opt.price_delta) }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Validation error shown after attempted confirm -->
+          <div
+            v-if="panelShowErrors && !optionPanelValid"
+            class="mx-5 mb-2 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/8 px-3 py-2"
+            role="alert"
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 shrink-0 text-rose-400" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm-.75-9.5a.75.75 0 011.5 0v4a.75.75 0 01-1.5 0v-4zm.75 6a.875.875 0 100-1.75.875.875 0 000 1.75z" clip-rule="evenodd"/>
+            </svg>
+            <p class="text-xs text-rose-300">{{ t('mktMenu.optionInvalid') }}</p>
+          </div>
+
+          <!-- Footer: running unit price + Add CTA -->
+          <div class="px-5 pt-3 pb-6 shrink-0 border-t border-slate-800/50">
+            <button
+              type="button"
+              class="ui-press w-full rounded-2xl bg-[var(--color-secondary)] py-3.5 text-sm font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+              @click="confirmOptionSelection"
+            >
+              {{ t('mktMenu.optionConfirm', { price: fmtPrice(optionPanelUnitPrice) }) }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Inline sign-in modal — triggered when a delivery order requires auth -->
     <CustomerAuthModal
       v-if="showAuthModal"
@@ -896,11 +1026,16 @@ const cartQty = (dishSlug) => {
 };
 
 const addToCart = (dish) => {
+  // Dishes with option groups open the selection panel on the first add
+  if (dish.option_groups?.length && !cartQty(dish.slug)) {
+    openOptionPanel(dish);
+    return;
+  }
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
     existing.qty++;
   } else {
-    cart.value.push({ slug: dish.slug, name: dish.name, price: dish.price, qty: 1 });
+    cart.value.push({ slug: dish.slug, name: dish.name, price: dish.price, unitPrice: Number(dish.price), qty: 1, options: [] });
   }
 };
 
@@ -922,7 +1057,7 @@ const removeFromCart = (dishSlug) => {
 const cartTotalQty = computed(() => cart.value.reduce((s, i) => s + i.qty, 0));
 
 const cartTotal = computed(() =>
-  cart.value.reduce((s, i) => s + Number(i.price) * i.qty, 0)
+  cart.value.reduce((s, i) => s + Number(i.unitPrice ?? i.price) * i.qty, 0)
 );
 
 // Flash sale discount — mirrors backend: pct applied to food subtotal only
@@ -990,6 +1125,96 @@ const filteredSuperCategories = computed(() => {
     })).filter(cat => cat.dishes.length > 0),
   })).filter(sc => sc.categories.length > 0);
 });
+
+// ── Option group selection panel ─────────────────────────────────────────────
+const activeOptionDish = ref(null);   // dish object when panel is open, null = closed
+const optionPanelRef = ref(null);
+const panelSelections = ref({});      // groupId → [selectedOptionId, ...]
+const panelShowErrors = ref(false);
+
+const openOptionPanel = (dish) => {
+  const sel = {};
+  for (const grp of dish.option_groups || []) sel[grp.id] = [];
+  panelSelections.value = sel;
+  panelShowErrors.value = false;
+  activeOptionDish.value = dish;
+  nextTick(() => optionPanelRef.value?.querySelector('button:not([disabled])')?.focus());
+};
+
+const closeOptionPanel = () => { activeOptionDish.value = null; };
+
+const isOptionSelected = (groupId, optionId) =>
+  (panelSelections.value[groupId] || []).includes(optionId);
+
+const isGroupAtMax = (grp) =>
+  (panelSelections.value[grp.id] || []).length >= grp.max_select;
+
+const toggleOption = (grp, optionId) => {
+  const sel = panelSelections.value[grp.id] || [];
+  const idx = sel.indexOf(optionId);
+  if (grp.max_select === 1) {
+    // Single-select: toggle (selecting the same option deselects it)
+    panelSelections.value[grp.id] = idx >= 0 ? [] : [optionId];
+  } else {
+    // Multi-select: add up to max_select
+    if (idx >= 0) {
+      panelSelections.value[grp.id] = sel.filter(id => id !== optionId);
+    } else if (sel.length < grp.max_select) {
+      panelSelections.value[grp.id] = [...sel, optionId];
+    }
+  }
+};
+
+const optionPanelValid = computed(() => {
+  if (!activeOptionDish.value) return false;
+  return (activeOptionDish.value.option_groups || []).every(
+    grp => (panelSelections.value[grp.id] || []).length >= grp.min_select
+  );
+});
+
+const optionPanelUnitPrice = computed(() => {
+  if (!activeOptionDish.value) return 0;
+  let price = Number(activeOptionDish.value.price) || 0;
+  for (const grp of activeOptionDish.value.option_groups || []) {
+    for (const opt of grp.options || []) {
+      if (isOptionSelected(grp.id, opt.id)) price += Number(opt.price_delta) || 0;
+    }
+  }
+  return price;
+});
+
+const confirmOptionSelection = () => {
+  if (!optionPanelValid.value) {
+    panelShowErrors.value = true;
+    return;
+  }
+  const dish = activeOptionDish.value;
+  const selectedOptions = [];
+  for (const grp of dish.option_groups || []) {
+    for (const opt of grp.options || []) {
+      if (isOptionSelected(grp.id, opt.id)) {
+        selectedOptions.push({ id: opt.id, name: opt.name, price_delta: opt.price_delta });
+      }
+    }
+  }
+  const unitPrice = optionPanelUnitPrice.value;
+  const existing = cart.value.find((i) => i.slug === dish.slug);
+  if (existing) {
+    existing.qty++;
+    existing.unitPrice = unitPrice;
+    existing.options = selectedOptions;
+  } else {
+    cart.value.push({
+      slug: dish.slug,
+      name: dish.name,
+      price: dish.price,
+      unitPrice,
+      qty: 1,
+      options: selectedOptions,
+    });
+  }
+  closeOptionPanel();
+};
 
 // ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
 // Straight-line→road multiplier, mirrors backend tenancy/routing road factor
@@ -1164,7 +1389,11 @@ const placeOrder = async () => {
   }
   placing.value = true;
   try {
-    const items = cart.value.map((i) => ({ slug: i.slug, qty: i.qty }));
+    const items = cart.value.map((i) => ({
+      slug: i.slug,
+      qty: i.qty,
+      ...(i.options?.length ? { option_ids: i.options.map(o => o.id) } : {}),
+    }));
     const payload = {
       restaurant: slug,
       items,
