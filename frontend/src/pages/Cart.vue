@@ -1776,8 +1776,12 @@ const validateForm = () => {
   if (!fulfillmentType.value) {
     errors.fulfillment_type = t('cartPage.selectPickupOrDelivery');
   }
-  if (canSchedule.value && scheduleEnabled.value && !scheduledFor.value) {
-    errors.scheduled_for = t('cartPage.scheduleRequired');
+  if (canSchedule.value && scheduleEnabled.value) {
+    if (!scheduledFor.value) {
+      errors.scheduled_for = t('cartPage.scheduleRequired');
+    } else if (scheduledFor.value < minScheduleDatetime.value) {
+      errors.scheduled_for = t('cartPage.scheduleInPast');
+    }
   }
   if (fulfillmentType.value === 'delivery') {
     if (!deliveryAddress.value && !deliveryLocationUrl.value.trim()) {

@@ -338,7 +338,7 @@
               </div>
             </div>
             <span
-              v-if="menu.dishes[cat.slug]?.length"
+              v-if="sectionDishes(cat.slug).length"
               class="shrink-0 rounded-full border border-slate-800/80 bg-slate-900/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums"
               :aria-label="`${sectionDishes(cat.slug).length} items`"
             >{{ sectionDishes(cat.slug).length }}</span>

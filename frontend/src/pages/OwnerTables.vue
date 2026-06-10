@@ -941,7 +941,10 @@ const printCards = () => {
   window.print();
 };
 
+let _setupTriggerEl = null;
+
 const openSetup = (mode = "create") => {
+  _setupTriggerEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   error.value = "";
   formMode.value = mode;
   newTable.label = "";
@@ -954,6 +957,8 @@ const openSetup = (mode = "create") => {
 const closeSetup = () => {
   setupOpen.value = false;
   error.value = "";
+  // Restore focus to the element that triggered the dialog (keyboard a11y)
+  nextTick(() => _setupTriggerEl?.focus());
 };
 
 const onSetupEscape = (e) => {

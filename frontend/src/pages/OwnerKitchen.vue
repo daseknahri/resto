@@ -272,7 +272,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
@@ -309,16 +309,30 @@ const activeOrders = computed(() => {
   return allActiveOrders.value.filter((o) => o.fulfillment_type === stationFilter.value);
 });
 
-// Station filter options with live counts
+// Station filter options with live counts.
+// Non-"all" options with 0 orders are hidden (no useful filter to offer).
 const stationFilters = computed(() => {
   const all = allActiveOrders.value;
   const count = (type) => all.filter((o) => o.fulfillment_type === type).length;
+  const counts = {
+    table: count("table"),
+    pickup: count("pickup"),
+    delivery: count("delivery"),
+  };
   return [
     { value: "all",      label: t("kitchen.filterAll"),      count: all.length },
-    { value: "table",    label: t("kitchen.filterTables"),   count: count("table") },
-    { value: "pickup",   label: t("kitchen.pickup"),         count: count("pickup") },
-    { value: "delivery", label: t("kitchen.delivery"),       count: count("delivery") },
+    ...(counts.table    > 0 ? [{ value: "table",    label: t("kitchen.filterTables"),   count: counts.table }]    : []),
+    ...(counts.pickup   > 0 ? [{ value: "pickup",   label: t("kitchen.pickup"),         count: counts.pickup }]   : []),
+    ...(counts.delivery > 0 ? [{ value: "delivery", label: t("kitchen.delivery"),       count: counts.delivery }] : []),
   ];
+});
+
+// When the selected station filter has no more active orders, fall back to "all"
+// so the kitchen never gets stuck showing an empty filtered view.
+watch(stationFilters, (filters) => {
+  if (stationFilter.value === "all") return;
+  const still = filters.find((f) => f.value === stationFilter.value);
+  if (!still || still.count === 0) stationFilter.value = "all";
 });
 
 // Elapsed time helpers

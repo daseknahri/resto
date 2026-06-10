@@ -1475,9 +1475,15 @@ const placeOrder = async () => {
     checkoutError.value = t('mktMenu.addressRequired');
     return;
   }
-  if (scheduleEnabled.value && !scheduledFor.value) {
-    checkoutError.value = t('mktMenu.scheduleRequired');
-    return;
+  if (scheduleEnabled.value) {
+    if (!scheduledFor.value) {
+      checkoutError.value = t('mktMenu.scheduleRequired');
+      return;
+    }
+    if (scheduledFor.value < minScheduleDatetime.value) {
+      checkoutError.value = t('mktMenu.scheduleInPast');
+      return;
+    }
   }
   // Pay-now: a signed-in customer's wallet must cover the full total.
   if (customerStore.isAuthenticated && orderTotal.value > 0 && walletBalanceNum.value < orderTotal.value) {
