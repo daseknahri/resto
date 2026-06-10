@@ -34,6 +34,12 @@
       "short_name": "Browse",
       "url": "/order",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Book a ride",
+      "short_name": "Ride",
+      "url": "/ride",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "categories": ["food", "shopping", "lifestyle"]

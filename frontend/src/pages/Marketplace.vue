@@ -207,6 +207,21 @@
         </router-link>
       </Transition>
 
+      <!-- Book a ride promo tile -->
+      <router-link
+        to="/ride"
+        class="group flex items-center justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-900/70 via-indigo-900/70 to-slate-900/80 border border-violet-500/25 px-5 py-4 transition-all hover:border-violet-500/40 hover:from-violet-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50"
+        :aria-label="t('marketplace.rideTileTitle')"
+      >
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-white leading-snug">{{ t('marketplace.rideTileTitle') }}</p>
+          <p class="mt-0.5 text-[11px] text-slate-400 leading-relaxed">{{ t('marketplace.rideTileSubtitle') }}</p>
+        </div>
+        <span class="shrink-0 rounded-full bg-violet-500 px-4 py-1.5 text-xs font-bold text-white transition-opacity group-hover:opacity-90">
+          {{ t('marketplace.rideTileCta') }}
+        </span>
+      </router-link>
+
       <!-- Deals & Promotions strip -->
       <section
         v-if="!loading && dealRestaurants.length"

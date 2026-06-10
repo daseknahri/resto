@@ -1601,10 +1601,21 @@ class AdminFundTenantView(APIView):
 class AdminPlatformSettingsView(APIView):
     """GET/PATCH /api/admin/settings/ — platform-wide, admin-editable settings.
 
-    Currently exposes the wallet charge approval threshold. Platform admin only.
+    Exposes the wallet charge approval threshold and ride-hailing fare config.
+    Platform admin only.
     """
 
     permission_classes = [IsAuthenticated]
+
+    # {field_name: (min_value, max_value_or_None)}
+    FIELD_RULES = {
+        "wallet_charge_approval_threshold": (0, None),
+        "ride_base_fare": (0, None),
+        "ride_per_km": (0, None),
+        "ride_per_minute": (0, None),
+        "ride_minimum_fare": (0, None),
+        "ride_commission_pct": (0, 100),
+    }
 
     def _check(self, request):
         from .models import User
@@ -1614,6 +1625,11 @@ class AdminPlatformSettingsView(APIView):
     def _serialize(self, cfg):
         return {
             "wallet_charge_approval_threshold": str(cfg.wallet_charge_approval_threshold),
+            "ride_base_fare": str(cfg.ride_base_fare),
+            "ride_per_km": str(cfg.ride_per_km),
+            "ride_per_minute": str(cfg.ride_per_minute),
+            "ride_minimum_fare": str(cfg.ride_minimum_fare),
+            "ride_commission_pct": str(cfg.ride_commission_pct),
         }
 
     def get(self, request, *args, **kwargs):
@@ -1629,16 +1645,41 @@ class AdminPlatformSettingsView(APIView):
         from .models import PlatformConfig
 
         cfg = PlatformConfig.get_solo()
-        raw = request.data.get("wallet_charge_approval_threshold")
-        if raw is not None:
+        changed = []
+
+        for field, (min_val, max_val) in self.FIELD_RULES.items():
+            raw = request.data.get(field)
+            if raw is None:
+                continue
             try:
                 val = _Dec(str(raw)).quantize(_Dec("0.01"))
             except (InvalidOperation, TypeError, ValueError):
-                return Response({"detail": "Invalid threshold."}, status=status.HTTP_400_BAD_REQUEST)
-            if val < 0:
-                return Response({"detail": "Threshold cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
-            cfg.wallet_charge_approval_threshold = val
-            cfg.save(update_fields=["wallet_charge_approval_threshold", "updated_at"])
+                return Response(
+                    {"detail": f"Invalid value for {field}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if val < min_val:
+                return Response(
+                    {"detail": f"{field} must be at least {min_val}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if max_val is not None and val > max_val:
+                return Response(
+                    {"detail": f"{field} cannot exceed {max_val}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            setattr(cfg, field, val)
+            changed.append(field)
+
+        if changed:
+            cfg.save(update_fields=changed + ["updated_at"])
+            log_admin_action(
+                action="platform_settings_updated",
+                request=request,
+                target_repr="platform_config",
+                metadata={"changed_fields": changed},
+            )
+
         return Response(self._serialize(cfg))
 
 

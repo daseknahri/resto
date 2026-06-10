@@ -26,6 +26,107 @@
       </div>
     </header>
 
+    <!-- Ride fares panel (collapsible) -->
+    <section class="ui-panel p-5 space-y-3 ui-reveal" aria-labelledby="ride-fares-title">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-2 text-start"
+        :aria-expanded="faresOpen"
+        @click="faresOpen = !faresOpen"
+      >
+        <div>
+          <p class="ui-kicker">{{ t('adminRides.kicker') }}</p>
+          <h2 id="ride-fares-title" class="text-sm font-semibold text-white">{{ t('adminRides.faresTitle') }}</h2>
+        </div>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200"
+          :class="faresOpen ? 'rotate-180' : ''"
+        ><path d="M4 6l4 4 4-4"/></svg>
+      </button>
+      <template v-if="faresOpen">
+        <p class="text-[11px] text-slate-500">{{ t('adminRides.faresHint') }}</p>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <!-- Base fare -->
+          <div class="space-y-1">
+            <label for="fare-base" class="block text-xs text-slate-400">{{ t('adminRides.baseFare') }}</label>
+            <input
+              id="fare-base"
+              v-model="fares.ride_base_fare"
+              type="number"
+              step="0.5"
+              min="0"
+              class="ui-input"
+            />
+          </div>
+          <!-- Per km -->
+          <div class="space-y-1">
+            <label for="fare-per-km" class="block text-xs text-slate-400">{{ t('adminRides.perKm') }}</label>
+            <input
+              id="fare-per-km"
+              v-model="fares.ride_per_km"
+              type="number"
+              step="0.5"
+              min="0"
+              class="ui-input"
+            />
+          </div>
+          <!-- Per minute -->
+          <div class="space-y-1">
+            <label for="fare-per-min" class="block text-xs text-slate-400">{{ t('adminRides.perMinute') }}</label>
+            <input
+              id="fare-per-min"
+              v-model="fares.ride_per_minute"
+              type="number"
+              step="0.5"
+              min="0"
+              class="ui-input"
+            />
+          </div>
+          <!-- Minimum fare -->
+          <div class="space-y-1">
+            <label for="fare-min" class="block text-xs text-slate-400">{{ t('adminRides.minFare') }}</label>
+            <input
+              id="fare-min"
+              v-model="fares.ride_minimum_fare"
+              type="number"
+              step="0.5"
+              min="0"
+              class="ui-input"
+            />
+          </div>
+          <!-- Commission -->
+          <div class="space-y-1">
+            <label for="fare-commission" class="block text-xs text-slate-400">{{ t('adminRides.commission') }}</label>
+            <input
+              id="fare-commission"
+              v-model="fares.ride_commission_pct"
+              type="number"
+              step="0.5"
+              min="0"
+              max="100"
+              class="ui-input"
+            />
+          </div>
+        </div>
+        <div v-if="faresSaveError" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-red-300">{{ faresSaveError }}</p>
+        </div>
+        <button
+          class="ui-btn-outline ui-press disabled:opacity-50"
+          :disabled="faresSaving"
+          @click="saveFares"
+        >{{ faresSaving ? t('common.loading') : t('adminRides.faresSave') }}</button>
+      </template>
+    </section>
+
     <!-- Status filter chips -->
     <div class="ui-scroll-row min-w-0" role="radiogroup" :aria-label="t('adminRides.filterAll')">
       <button
@@ -151,9 +252,12 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
+import adminApi from '../lib/adminApi';
 import AppIcon from '../components/AppIcon.vue';
+import { useToastStore } from '../stores/toast';
 
 const { t, currentLocale } = useI18n();
+const toast = useToastStore();
 
 const STATUSES = ['all', 'searching', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'];
 const loading = ref(true);
@@ -235,5 +339,61 @@ const setFilter = (s) => {
   fetchRides();
 };
 
-onMounted(fetchRides);
+// ── Ride fares ────────────────────────────────────────────────────────────────
+const faresOpen = ref(false);
+const FARE_FIELDS = ['ride_base_fare', 'ride_per_km', 'ride_per_minute', 'ride_minimum_fare', 'ride_commission_pct'];
+const fares = ref({
+  ride_base_fare: '',
+  ride_per_km: '',
+  ride_per_minute: '',
+  ride_minimum_fare: '',
+  ride_commission_pct: '',
+});
+const _faresSnapshot = ref({});
+const faresSaving = ref(false);
+const faresSaveError = ref('');
+
+const fetchFares = async () => {
+  try {
+    const res = await adminApi.get('/admin/settings/');
+    for (const k of FARE_FIELDS) {
+      fares.value[k] = res.data?.[k] ?? '';
+    }
+    _faresSnapshot.value = { ...fares.value };
+  } catch { /* non-fatal */ }
+};
+
+const saveFares = async () => {
+  faresSaveError.value = '';
+  // Build partial payload — only send fields that changed
+  const changed = {};
+  for (const k of FARE_FIELDS) {
+    const v = fares.value[k];
+    // Number-coerce both sides: the input model yields numbers ("8") while the
+    // server snapshot holds decimal strings ("8.00") — string compare would
+    // mark every field changed and fire a pointless PATCH.
+    if (v !== '' && Number(v) !== Number(_faresSnapshot.value[k])) {
+      changed[k] = String(v);
+    }
+  }
+  if (!Object.keys(changed).length) return;
+  faresSaving.value = true;
+  try {
+    const res = await adminApi.patch('/admin/settings/', changed);
+    for (const k of FARE_FIELDS) {
+      if (res.data?.[k] !== undefined) fares.value[k] = res.data[k];
+    }
+    _faresSnapshot.value = { ...fares.value };
+    toast.show(t('adminRides.faresSaved'), 'success');
+  } catch (err) {
+    faresSaveError.value = err?.response?.data?.detail || t('adminRides.faresSaveFailed');
+  } finally {
+    faresSaving.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchRides();
+  fetchFares();
+});
 </script>
