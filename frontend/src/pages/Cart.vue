@@ -28,6 +28,16 @@
       </div>
     </header>
 
+    <!-- ── Restaurant closed notice ─────────────────────────────────────────── -->
+    <div
+      v-if="!isRestaurantOpen && !isBrowseOnlyPlan"
+      class="ui-section-band border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-100 space-y-0.5"
+      role="status"
+    >
+      <p class="text-sm font-semibold">{{ t('cartPage.restaurantClosed') }}</p>
+      <p class="text-xs text-amber-200/75">{{ t('cartPage.restaurantClosedBody') }}</p>
+    </div>
+
     <!-- ── Browse-only notice ───────────────────────────────────────────────── -->
     <div
       v-if="isBrowseOnlyPlan"
@@ -1273,6 +1283,7 @@ const planLabel = computed(
   () => meta.value?.plan?.tier_name || meta.value?.plan?.name || 'Basic'
 );
 const isBrowseOnlyPlan = computed(() => tenant.isBrowseOnlyPlan === true);
+const isRestaurantOpen = computed(() => tenant.resolvedMeta?.profile?.is_open !== false);
 const tableLabelModel = computed(() => cart.tableLabel || '');
 const isTableContextOrder = computed(() =>
   Boolean(cart.tableSlug || cart.tableLabel)
