@@ -420,6 +420,16 @@
               <span v-if="nextOpenLabel(r)" class="px-4 text-center text-[10px] leading-snug text-slate-400">{{ nextOpenLabel(r) }}</span>
             </div>
 
+            <!-- Hero click-through: makes the whole hero image area navigate to the restaurant menu.
+                 z-10 sits above the name/rating overlay (same z, later DOM → on top) but below the
+                 z-20 favourite button and open/closed badge, so those stay interactive. -->
+            <router-link
+              :to="{ name: 'marketplace-menu', params: { slug: r.slug } }"
+              class="absolute inset-0 z-10 rounded-t-[1.35rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-secondary)]/60"
+              tabindex="-1"
+              aria-hidden="true"
+            />
+
             <!-- Favourite toggle (top-right) -->
             <button
               class="ui-press absolute end-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
@@ -489,11 +499,11 @@
             <!-- Delivery fee info -->
             <div v-if="r.delivery_enabled" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
               <span v-if="Number(r.delivery_fee) > 0" class="tabular-nums">
-                {{ t('marketplace.deliveryFee') }}: {{ r.delivery_fee }}
+                {{ t('marketplace.deliveryFee') }}: {{ fmtFee(r.delivery_fee) }}
               </span>
               <span v-else class="font-medium text-emerald-400/80">{{ t('marketplace.freeDelivery') }}</span>
               <span v-if="Number(r.delivery_minimum_order) > 0" class="tabular-nums">
-                · {{ t('marketplace.minOrder', { amount: r.delivery_minimum_order }) }}
+                · {{ t('marketplace.minOrder', { amount: fmtFee(r.delivery_minimum_order) }) }}
               </span>
             </div>
 
@@ -579,6 +589,14 @@ const selectedMinRating = ref('');
 const selectedBusinessType = ref(''); // '' = all | 'food' (restaurant/cafe) | 'shop' (retail/grocery/bakery)
 const openOnly = ref(false);
 const selectedTags = ref([]);
+
+// Formats a decimal fee value (string or number) as a localised number string.
+// No currency symbol is shown here — the card listing doesn't know the restaurant's currency.
+const fmtFee = (val) => {
+  const n = parseFloat(val || 0);
+  if (Number.isNaN(n)) return String(val);
+  return n.toLocaleString(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 // Buckets the fine-grained business_type into the two marketplace lenses.
 const SHOP_BUSINESS_TYPES = ['retail', 'grocery', 'bakery'];

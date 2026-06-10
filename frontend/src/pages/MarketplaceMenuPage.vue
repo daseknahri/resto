@@ -162,7 +162,7 @@
             class="w-56 shrink-0 snap-start rounded-xl border border-slate-800/70 bg-slate-900/50 px-3 py-2.5 space-y-1"
           >
             <div class="flex items-center gap-0.5 text-amber-400 text-[11px]">
-              <span aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
+              <span :aria-label="`${review.score} stars`">{{ '★'.repeat(review.score) }}<span class="opacity-25">{{ '★'.repeat(5 - review.score) }}</span></span>
             </div>
             <p class="line-clamp-3 text-[11px] leading-relaxed text-slate-300">{{ review.comment }}</p>
           </div>
