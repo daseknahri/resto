@@ -3554,6 +3554,9 @@ export const messages = {
       flashOptedOut: "Opted out of flash sale.",
       flashFetchError: "Could not load flash sales.",
       flashToggleFailed: "Could not update opt-in.",
+      clonePromo: "Duplicate",
+      clonePromoAriaLabel: "Duplicate {name}",
+      clonedName: "Copy of {name}",
     },
     ownerFlashSales: {
       kicker: "Platform campaigns",
@@ -7756,6 +7759,9 @@ export const messages = {
       flashOptedOut: "Desinscription effectuee.",
       flashFetchError: "Impossible de charger les ventes flash.",
       flashToggleFailed: "Impossible de mettre a jour l'inscription.",
+      clonePromo: "Dupliquer",
+      clonePromoAriaLabel: "Dupliquer {name}",
+      clonedName: "Copie de {name}",
     },
     ownerFlashSales: {
       kicker: "Campagnes plateforme",

@@ -991,22 +991,26 @@ const confirmAllPending = async () => {
   const toConfirm = pendingOrdersList.value.slice();
   if (!toConfirm.length) return;
   confirmingAll.value = true;
-  let failed = 0;
-  for (const o of toConfirm) {
-    try {
-      await order.updateOrderStatus(o.id, { status: "confirmed" });
-    } catch {
-      failed++;
+  try {
+    const res = await api.post("/owner/orders/bulk-status/", {
+      order_ids: toConfirm.map((o) => o.id),
+      status: "confirmed",
+    });
+    const updated = res.data?.updated ?? toConfirm.length;
+    const skipped = res.data?.skipped ?? 0;
+    // Refresh list to show the new confirmed statuses
+    await order.fetchOrders();
+    if (skipped === 0) {
+      toast.show(t("ownerOrders.confirmAllDone", { n: updated }), "success");
+    } else if (updated > 0) {
+      toast.show(t("ownerOrders.confirmAllPartial", { ok: updated, total: toConfirm.length, failed: skipped }), "info");
+    } else {
+      toast.show(t("ownerOrders.confirmAllFailed"), "error");
     }
-  }
-  confirmingAll.value = false;
-  const ok = toConfirm.length - failed;
-  if (failed === 0) {
-    toast.show(t("ownerOrders.confirmAllDone", { n: toConfirm.length }), "success");
-  } else if (ok > 0) {
-    toast.show(t("ownerOrders.confirmAllPartial", { ok, total: toConfirm.length, failed }), "info");
-  } else {
+  } catch {
     toast.show(t("ownerOrders.confirmAllFailed"), "error");
+  } finally {
+    confirmingAll.value = false;
   }
 };
 

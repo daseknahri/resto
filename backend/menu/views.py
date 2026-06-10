@@ -4357,6 +4357,85 @@ class OwnerOrderStatusUpdateView(APIView):
         })
 
 
+class OwnerOrderBulkStatusView(APIView):
+    """POST /api/owner/orders/bulk-status/
+    Batch-confirm (PENDING → CONFIRMED) up to 50 orders in one request.
+
+    Only "confirmed" is accepted — all other transitions stay single-order
+    (cancel / out_for_delivery / ready involve side-effects that must be
+    individually reviewed).
+
+    Body: { "order_ids": [1, 2, 3], "status": "confirmed" }
+    Response: { "updated": N, "skipped": M }
+    """
+    permission_classes = [IsAuthenticated]
+
+    _MAX = 50
+
+    def post(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        new_status = (request.data.get("status") or "").strip().lower()
+        if new_status != "confirmed":
+            return Response(
+                {"detail": "Bulk status update only supports 'confirmed'.", "code": "unsupported_bulk_status"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order_ids = request.data.get("order_ids")
+        if not isinstance(order_ids, list) or not order_ids:
+            return Response({"detail": "'order_ids' must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(order_ids) > self._MAX:
+            return Response(
+                {"detail": f"At most {self._MAX} orders per bulk request."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            order_ids = [int(i) for i in order_ids]
+        except (TypeError, ValueError):
+            return Response({"detail": "'order_ids' must be a list of integers."}, status=status.HTTP_400_BAD_REQUEST)
+
+        now = timezone.now()
+        handler_id = getattr(request.user, "id", None)
+        tenant = getattr(request, "tenant", None)
+
+        # Fetch only orders in PENDING status (the only valid source for bulk confirm)
+        orders = list(
+            Order.objects.filter(
+                id__in=order_ids,
+                status=Order.Status.PENDING,
+            ).select_related("customer")[:self._MAX]
+        )
+
+        updated_count = 0
+        for order in orders:
+            order.status = Order.Status.CONFIRMED
+            order.status_updated_at = now
+            if not order.handled_by_user_id and handler_id:
+                order.handled_by_user_id = handler_id
+            updated_count += 1
+
+        if orders:
+            update_fields = ["status", "status_updated_at", "handled_by_user_id", "updated_at"]
+            Order.objects.bulk_update(orders, update_fields)
+
+            # Fire realtime + email for each confirmed order (best-effort)
+            for order in orders:
+                try:
+                    _broadcast_order_change(order)
+                except Exception:
+                    pass
+                try:
+                    if tenant:
+                        _send_order_status_email(order, tenant, Order.Status.CONFIRMED)
+                except Exception:
+                    pass
+
+        skipped = len(order_ids) - updated_count
+        return Response({"updated": updated_count, "skipped": skipped})
+
+
 def _broadcast_order_change(order):
     """Best-effort realtime ping so the customer's order-tracking page and the
     owner/kitchen screens refresh the moment an order's status or PAYMENT state

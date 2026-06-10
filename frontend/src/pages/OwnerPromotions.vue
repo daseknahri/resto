@@ -112,11 +112,25 @@
         </div>
         <!-- Actions -->
         <div class="flex shrink-0 gap-2">
+          <!-- Duplicate -->
+          <button
+            type="button"
+            class="ui-press min-h-[44px] rounded-lg border border-slate-600/50 bg-slate-700/30 px-3 py-2 text-xs font-medium text-slate-300 hover:border-slate-500/60 hover:bg-slate-700/50 hover:text-white transition-colors"
+            :aria-label="t('ownerPromotions.clonePromoAriaLabel', { name: promo.name })"
+            @click="clonePromo(promo)"
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5">
+              <rect x="7" y="7" width="10" height="10" rx="2" />
+              <path d="M3 13V5a2 2 0 0 1 2-2h8" />
+            </svg>
+          </button>
+          <!-- Edit -->
           <button
             class="ui-btn-outline ui-press min-h-[44px] px-3 py-2 text-xs font-medium"
             :aria-label="t('ownerPromotions.editAriaLabel', { name: promo.name })"
             @click="openEdit(promo)"
           >{{ t('common.edit') }}</button>
+          <!-- Delete -->
           <button
             class="ui-press min-h-[44px] rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 hover:border-red-500/50 hover:bg-red-500/15 hover:text-red-300 transition-colors disabled:opacity-50"
             :aria-label="t('ownerPromotions.deleteAriaLabel', { name: promo.name })"
@@ -526,6 +540,32 @@ const openEdit = (promo) => {
   form.max_uses = promo.max_uses != null ? String(promo.max_uses) : '';
   form.is_active = promo.is_active;
   form.code = promo.code || '';
+  drawerError.value = '';
+  drawerOpen.value = true;
+};
+
+/** Open the create drawer pre-seeded with a copy of `promo`.
+ *  The clone starts inactive (draft) so the owner can review before enabling.
+ *  The promo code is cleared — a code must be unique; the owner sets one if needed.
+ */
+const clonePromo = (promo) => {
+  editingPromo.value = null;
+  form.name = t('ownerPromotions.clonedName', { name: promo.name });
+  form.description = promo.description || '';
+  form.promo_type = promo.promo_type;
+  form.discount_value = promo.discount_value;
+  form.min_order_amount = promo.min_order_amount;
+  form.days = [...(promo.days || [])];
+  form.time_start = promo.time_start || '';
+  form.time_end = promo.time_end || '';
+  // Do not copy date range — the user almost certainly needs new dates for the clone.
+  form.active_from = '';
+  form.active_until = '';
+  form.max_uses = promo.max_uses != null ? String(promo.max_uses) : '';
+  // Start inactive so the owner reviews before it goes live.
+  form.is_active = false;
+  // Clear code — promo codes must be unique; let the owner set a new one if needed.
+  form.code = '';
   drawerError.value = '';
   drawerOpen.value = true;
 };
