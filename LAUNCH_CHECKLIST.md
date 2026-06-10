@@ -50,6 +50,7 @@ or advance/scheduled orders never reach the kitchen.
 |---|---|---|
 | `python manage.py release_scheduled_orders` | every ~5 min | Release advance/scheduled orders into the live kitchen flow ~45 min before their time. |
 | `python manage.py expire_charge_requests` | every ~10 min | Expire stale wallet-charge approvals. |
+| `python manage.py sweep_ride_requests` | **every ~120 s** | Ride-hailing heartbeat: re-push unclaimed ride requests to online car drivers, auto-cancel after 15 min with a rider notification, release rides whose driver went offline/stale pre-pickup. **Required for reliable rides.** |
 | `python manage.py sweep_delivery_jobs` | **every ~60 s** | Advance ranked-offer cascades (60 s offer window), re-broadcast unclaimed open-pool jobs, alert the restaurant when none accept, release jobs abandoned by an offline driver, expire stale cash-out codes. **Required for reliable delivery** — the dispatch heartbeat. |
 | `python manage.py send_review_prompts` | every ~15 min | Push the ~30-min post-order review nudge. |
 | `python manage.py send_reservation_reminders` | hourly | Reservation reminders. |
