@@ -94,6 +94,9 @@ export const messages = {
       confirmBtn: "Delete",
       dangerHint: "This action cannot be undone."
     },
+    promptModal: {
+      fieldRequired: "This field is required."
+    },
     toast: {
       type: {
         info: "Notice:",
@@ -2890,6 +2893,7 @@ export const messages = {
       importTenantSettingsFailed: "Unable to import tenant settings",
       cancellationReasonRequiredPrompt: "Cancellation reason (required)",
       cancellationReasonRequired: "Cancellation reason is required",
+      tenantCancelConfirm: "Terminate account",
       suspendReasonOptionalPrompt: "Suspend reason (optional)",
       tenantActionDone: "Tenant {action}d",
       updateTenantLifecycleFailed: "Unable to update tenant lifecycle",
@@ -4176,6 +4180,9 @@ export const messages = {
       defaultBody: "Cette action est irreversible.",
       confirmBtn: "Supprimer",
       dangerHint: "Cette action est irreversible."
+    },
+    promptModal: {
+      fieldRequired: "Ce champ est obligatoire."
     },
     toast: {
       type: {
@@ -6941,6 +6948,7 @@ export const messages = {
       importTenantSettingsFailed: "Impossible d'importer les parametres du tenant",
       cancellationReasonRequiredPrompt: "Raison d'annulation (obligatoire)",
       cancellationReasonRequired: "La raison d'annulation est obligatoire",
+      tenantCancelConfirm: "Resilier le compte",
       suspendReasonOptionalPrompt: "Raison de suspension (optionnelle)",
       tenantActionDone: "Tenant {action} effectue",
       updateTenantLifecycleFailed: "Impossible de mettre a jour le cycle de vie du tenant",

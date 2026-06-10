@@ -21,6 +21,7 @@
   </ErrorBoundary>
   <ToastHost />
   <ConfirmModal />
+  <PromptModal />
 </template>
 
 <script setup>
@@ -39,6 +40,7 @@ import {
 } from "./lib/runtimeHost";
 import ToastHost from "./components/ToastHost.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
+import PromptModal from "./components/PromptModal.vue";
 import ErrorBoundary from "./components/ErrorBoundary.vue";
 
 const { t } = useI18n();

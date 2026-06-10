@@ -1352,6 +1352,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import adminApi from "../lib/adminApi";
 import { useI18n } from "../composables/useI18n";
 import { useConfirmModal } from "../composables/useConfirmModal";
+import { usePromptModal } from "../composables/usePromptModal";
 import { useToastStore } from "../stores/toast";
 import { getPrimaryPublicHost } from "../lib/runtimeHost";
 
@@ -1468,6 +1469,7 @@ const alertThresholds = ref({
 const toast = useToastStore();
 const { t, currentLocale } = useI18n();
 const { confirm } = useConfirmModal();
+const { prompt } = usePromptModal();
 const lastProvision = ref(null);
 const auditLogs = ref([]);
 const auditPage = ref(1);
@@ -2082,15 +2084,23 @@ const applyTenantLifecycle = async (tenant, action) => {
   if (!tenant?.id || !action) return;
   let reason = "";
   if (action === "cancel") {
-    const value = window.prompt(t("adminConsole.cancellationReasonRequiredPrompt"), "");
+    const value = await prompt({
+      title: t("adminConsole.cancellationReasonRequiredPrompt"),
+      label: t("adminConsole.cancellationReasonRequired"),
+      required: true,
+      confirmLabel: t("adminConsole.tenantCancelConfirm"),
+      danger: true,
+    });
     if (value === null) return;
-    reason = value.trim();
-    if (!reason) {
-      toast.show(t("adminConsole.cancellationReasonRequired"), "error");
-      return;
-    }
+    reason = value;
   } else if (action === "suspend") {
-    reason = (window.prompt(t("adminConsole.suspendReasonOptionalPrompt"), "") || "").trim();
+    const value = await prompt({
+      title: t("adminConsole.suspendReasonOptionalPrompt"),
+      confirmLabel: t("adminConsole.suspend"),
+      danger: true,
+    });
+    if (value === null) return;
+    reason = value;
   }
 
   tenantLifecycleLoading.value = { ...tenantLifecycleLoading.value, [tenant.id]: true };
@@ -2298,23 +2308,38 @@ const removeLead = async (lead) => {
 };
 
 const decideUpgradeRequest = async (requestItem, decision) => {
+  // Collect user input BEFORE activating the loading state so the button
+  // doesn't appear busy while the admin is filling in the dialog.
+  let adminNote = "";
+  let paymentReference = requestItem.payment_reference || "";
+  if (decision === "approve") {
+    const ref = await prompt({
+      title: t("adminConsole.paymentReferenceOptionalPrompt"),
+      initialValue: paymentReference,
+      confirmLabel: t("adminConsole.upgradeApproved"),
+      danger: false,
+    });
+    if (ref === null) return;
+    paymentReference = ref;
+    const note = await prompt({
+      title: t("adminConsole.internalAdminNoteOptionalPrompt"),
+      confirmLabel: t("adminConsole.upgradeApproved"),
+      danger: false,
+    });
+    if (note === null) return;
+    adminNote = note;
+  } else {
+    const note = await prompt({
+      title: t("adminConsole.reasonForRejectionOptionalPrompt"),
+      confirmLabel: t("adminConsole.upgradeRejected"),
+      danger: true,
+    });
+    if (note === null) return;
+    adminNote = note;
+  }
+
   decisionLoading.value = { ...decisionLoading.value, [requestItem.id]: true };
   try {
-    let adminNote = "";
-    let paymentReference = requestItem.payment_reference || "";
-    // A cancelled prompt (null) must abort the decision, not proceed with the default.
-    if (decision === "approve") {
-      const ref = window.prompt(t("adminConsole.paymentReferenceOptionalPrompt"), paymentReference);
-      if (ref === null) return;
-      paymentReference = ref;
-      const note = window.prompt(t("adminConsole.internalAdminNoteOptionalPrompt"), "");
-      if (note === null) return;
-      adminNote = note;
-    } else {
-      const note = window.prompt(t("adminConsole.reasonForRejectionOptionalPrompt"), "");
-      if (note === null) return;
-      adminNote = note;
-    }
     const res = await adminApi.put(`/admin-tier-upgrade-requests/${requestItem.id}/decision/`, {
       decision,
       admin_note: adminNote,
