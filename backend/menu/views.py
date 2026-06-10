@@ -3043,8 +3043,37 @@ class StaffOrderListView(APIView):
             TableLink.objects.exclude(section__isnull=True).values_list("slug", "section__name")
         )
 
+        # ── Materialise query once so we can batch-join delivery jobs ─────────
+        order_objects = list(qs[:100])
+
+        # ── Batch-load delivery job status for delivery orders (kitchen visibility) ─
+        # Kitchen staff need to know whether a driver has been found, is en route,
+        # etc. — without the full PII payload served to the owner view.
+        _dj_map: dict = {}
+        try:
+            _tenant_id = getattr(getattr(request, "tenant", None), "id", None)
+            if _tenant_id:
+                _delivery_nums = [
+                    o.order_number for o in order_objects
+                    if o.fulfillment_type == Order.FulfillmentType.DELIVERY
+                ]
+                if _delivery_nums:
+                    from accounts.models import DeliveryJob as _DJ
+                    for _dj in (
+                        _DJ.objects.select_related("driver")
+                        .filter(tenant_id=_tenant_id, order_number__in=_delivery_nums)
+                    ):
+                        _drv = _dj.driver
+                        _dj_map[_dj.order_number] = {
+                            "status": _dj.status,
+                            # Minimal driver info — name only (no PII like phone for kitchen)
+                            "driver_name": (_drv.name or _drv.phone or "") if _drv else None,
+                        }
+        except Exception:
+            pass  # non-critical — kitchen still functions without delivery-job data
+
         orders = []
-        for order in qs[:100]:
+        for order in order_objects:
             orders.append({
                 "id": order.id,
                 "order_number": order.order_number,
@@ -3081,6 +3110,11 @@ class StaffOrderListView(APIView):
                 ],
                 "created_at": order.created_at.isoformat(),
                 "updated_at": order.updated_at.isoformat(),
+                # Scheduled advance orders — drives the violet 🗓️ badge in the
+                # kitchen display so staff know to hold the order until release time.
+                "scheduled_for": order.scheduled_for.isoformat() if getattr(order, "scheduled_for", None) else None,
+                # Delivery job: compact status chip for kitchen staff awareness.
+                "delivery_job": _dj_map.get(order.order_number),
             })
 
         return Response({"results": orders, "count": len(orders)})

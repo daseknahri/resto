@@ -3696,6 +3696,11 @@ export const messages = {
       orderItems: "Order items",
       newOrderAlert: "New order!",
       markAllReady: "Mark all ready",
+      driverSearching: "Finding driver…",
+      driverAssigned: "Driver assigned",
+      driverAtDoor: "Driver at door",
+      driverPickedUp: "Out for delivery",
+      driverFailed: "Delivery failed",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -7747,6 +7752,11 @@ export const messages = {
       orderItems: "Articles de la commande",
       newOrderAlert: "Nouvelle commande !",
       markAllReady: "Tout marquer pret",
+      driverSearching: "Recherche conducteur…",
+      driverAssigned: "Conducteur assigne",
+      driverAtDoor: "Conducteur a la porte",
+      driverPickedUp: "En livraison",
+      driverFailed: "Livraison echouee",
     },
     stepSuperCategories: {
       title: "Groupes de menu",
