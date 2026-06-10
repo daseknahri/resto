@@ -112,9 +112,10 @@ Shipped: `accounts.RideRequest` + migration 0035 (+ `Customer.driver_vehicle_typ
 PlatformConfig ride fares base/per-km/min/commission); `ride_service.py` estimate +
 atomic idempotent settle (wallet w/ cash fallback); rider endpoints (estimate/create/
 active/cancel/rate) + driver endpoints (offers/accept/status, car-only, first-accept-
-wins); RidePage.vue (/ride) + DriverPage rides section; EN/FR/AR. Still deferred:
-car-document vetting tier (licence/insurance uploads), time-based fare component,
-driver-rates-rider UI. Original plan follows:
+wins); RidePage.vue (/ride) + DriverPage rides section; EN/FR/AR. Completed 2026-06-10
+(98e9a0d): car-document vetting tier (driver doc uploads + admin car-approve gating
+ride offers), time-based fare (PlatformConfig.ride_per_minute, default 0, upfront
+quote fixed), driver-rates-rider. Phase 2 is fully shipped. Original plan follows:
 Reuse the rider pool + live GPS + wallet; the new primitive is a **trip** (no
 tenant, no menu).
 - New public-schema `RideRequest` (rider=Customer, pickup/dropoff coords, fare
