@@ -118,10 +118,10 @@
           />
         </div>
         <button
-          v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType || customDateFrom || customDateTo"
+          v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType || customDateFrom || customDateTo || activePaymentStatus"
           class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
           :aria-label="t('ownerOrders.clearFilters')"
-          @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''"
+          @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
         >✕</button>
       </div>
 
@@ -138,6 +138,26 @@
           @click="activeFulfillmentType = tab.value"
         >
           {{ tab.label }}
+        </button>
+      </div>
+
+      <!-- Payment status filter chips -->
+      <div class="flex flex-wrap items-center gap-1">
+        <span class="me-1 shrink-0 text-[11px] uppercase tracking-wider text-slate-500" aria-hidden="true">{{ t('ownerOrders.paymentFilter') }}</span>
+        <button
+          v-for="p in paymentStatusTabs"
+          :key="p.value"
+          type="button"
+          :aria-pressed="activePaymentStatus === p.value"
+          class="ui-state-chip ui-press"
+          :data-active="activePaymentStatus === p.value || undefined"
+          @click="activePaymentStatus = p.value"
+        >
+          {{ p.label }}
+          <span
+            v-if="p.count > 0"
+            class="ms-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-slate-700/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none"
+          >{{ p.count }}</span>
         </button>
       </div>
 
@@ -227,14 +247,14 @@
     </div>
 
     <!-- Empty: filters active but no matches -->
-    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery || activeFulfillmentType || customDateFrom || customDateTo)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery || activeFulfillmentType || customDateFrom || customDateTo || activePaymentStatus)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
       <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
         <AppIcon name="close" class="h-5 w-5 text-slate-500" aria-hidden="true" />
       </div>
       <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrders") }}</p>
       <button
         class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
-        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''"
+        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''; activePaymentStatus = ''"
       >
         <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
         {{ t("ownerOrders.clearFilters") }}
@@ -788,6 +808,7 @@ const customDateFrom = ref("");
 const customDateTo = ref("");
 const searchQuery = ref("");
 const activeFulfillmentType = ref("");
+const activePaymentStatus = ref(""); // "" = all, "unpaid", "paid"
 const exporting = ref(false);
 const confirmingAll = ref(false);
 const editingId = ref(null);
@@ -845,6 +866,17 @@ const fulfillmentTabs = computed(() => {
   return tabs.length > 2 ? tabs : [];
 });
 
+// ── Payment status filter tabs ────────────────────────────────────────────────
+const paymentStatusTabs = computed(() => {
+  const counts = { unpaid: 0, paid: 0 };
+  order.orders.forEach((o) => { if (o.payment_status) counts[o.payment_status] = (counts[o.payment_status] || 0) + 1; });
+  return [
+    { value: "",       label: t("ownerOrders.paymentAll"),    count: 0 },
+    { value: "unpaid", label: t("ownerOrders.paymentUnpaid"), count: counts.unpaid || 0 },
+    { value: "paid",   label: t("ownerOrders.paymentPaid"),   count: counts.paid   || 0 },
+  ];
+});
+
 // ── Status tabs ───────────────────────────────────────────────────────────────
 const statusTabs = computed(() => {
   const counts = {};
@@ -893,6 +925,9 @@ const filteredOrders = computed(() => {
 
     // Fulfillment-type filter
     if (activeFulfillmentType.value && o.fulfillment_type !== activeFulfillmentType.value) return false;
+
+    // Payment status filter
+    if (activePaymentStatus.value && o.payment_status !== activePaymentStatus.value) return false;
 
     // Date filter
     if (activeDateFilter.value !== "all") {

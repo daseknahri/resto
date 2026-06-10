@@ -1425,7 +1425,7 @@
                         class="ui-touch-target ui-press flex items-center justify-center transition"
                         :class="deletingAddressId === addr.id ? 'text-red-400' : 'text-slate-500 hover:text-red-400'"
                         :aria-label="t('common.remove')"
-                        @click="deletingAddressId = addr.id; editingAddressId = null"
+                        @click="deletingAddressId = addr.id; editingAddressId = null; addrDeleteError = ''"
                       >
                         <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
@@ -1454,10 +1454,13 @@
                   </Transition>
                   <!-- Inline delete confirmation -->
                   <Transition name="ui-fade">
-                    <div v-if="deletingAddressId === addr.id" class="mt-2 flex items-center gap-3 border-t border-red-500/15 pt-2">
-                      <span class="flex-1 text-red-300/80">{{ t('customerAccount.savedAddressConfirmDelete') }}</span>
-                      <button class="text-slate-400 transition hover:text-slate-200" @click.stop="deletingAddressId = null">{{ t('common.back') }}</button>
-                      <button class="font-semibold text-red-300 transition hover:text-red-200" @click.stop="deleteAddress(addr.id); deletingAddressId = null">{{ t('common.remove') }}</button>
+                    <div v-if="deletingAddressId === addr.id" class="mt-2 border-t border-red-500/15 pt-2 space-y-2">
+                      <p v-if="addrDeleteError" class="text-[11px] text-red-300" role="alert">{{ addrDeleteError }}</p>
+                      <div class="flex items-center gap-3">
+                        <span class="flex-1 text-red-300/80">{{ t('customerAccount.savedAddressConfirmDelete') }}</span>
+                        <button class="text-slate-400 transition hover:text-slate-200" @click.stop="deletingAddressId = null; addrDeleteError = ''">{{ t('common.back') }}</button>
+                        <button class="font-semibold text-red-300 transition hover:text-red-200" @click.stop="deleteAddress(addr.id)">{{ t('common.remove') }}</button>
+                      </div>
                     </div>
                   </Transition>
                 </li>
@@ -1817,6 +1820,7 @@ const loyaltyUnlockCredit = computed(() => {
 // ── Saved addresses ───────────────────────────────────────────────────────────
 const savedAddresses = ref([]);
 const deletingAddressId = ref(null);
+const addrDeleteError = ref(''); // inline error for the delete confirmation popover
 const editingAddressId = ref(null);
 const editForm = reactive({ label: '', address: '' });
 const editError = ref('');
@@ -1837,12 +1841,15 @@ const fetchAddresses = async () => {
 };
 
 const deleteAddress = async (id) => {
+  addrDeleteError.value = '';
   try {
     await api.delete(`/customer/addresses/${id}/`);
     savedAddresses.value = savedAddresses.value.filter((a) => a.id !== id);
+    deletingAddressId.value = null;
     toast.show(t('customerAccount.savedAddressDeleted'), 'success');
   } catch {
-    toast.show(t('customerAccount.savedAddressDeleteFailed'), 'error');
+    // Keep the confirm panel open so the user can see the error and retry.
+    addrDeleteError.value = t('customerAccount.savedAddressDeleteFailed');
   }
 };
 
