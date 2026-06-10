@@ -162,6 +162,29 @@
         </button>
       </div>
 
+      <!-- Vehicle-type picker -->
+      <div class="ui-panel p-4 space-y-2.5 ui-reveal">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-xs font-medium text-slate-400">{{ t('driverRides.vehicleTypeLabel') }}</p>
+          <p class="text-[11px]" :class="driverVehicleType === 'car' ? 'text-emerald-400' : 'text-amber-400'">{{ t('driverRides.vehicleTypeHint') }}</p>
+        </div>
+        <div class="flex gap-2" role="group" :aria-label="t('driverRides.vehicleTypeLabel')">
+          <button
+            v-for="vt in VEHICLE_TYPES"
+            :key="vt.value"
+            class="ui-press flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+            :class="driverVehicleType === vt.value
+              ? 'border-emerald-500/50 bg-emerald-600/20 text-emerald-300'
+              : 'border-slate-700 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+            :aria-pressed="driverVehicleType === vt.value"
+            :disabled="busy"
+            @click="setVehicleType(vt.value)"
+          >
+            {{ t(vt.label) }}
+          </button>
+        </div>
+      </div>
+
       <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
@@ -475,6 +498,174 @@
         <p class="text-sm font-medium text-slate-400">{{ t('driver.offlineEmpty') }}</p>
       </div>
 
+      <!-- ── Rides section (car drivers only, while online and no active delivery) ── -->
+      <template v-if="online && !activeJob && driverVehicleType === 'car'">
+        <!-- Active ride card -->
+        <div v-if="activeRide" class="ui-panel p-0 overflow-hidden ui-reveal">
+          <div class="flex items-center justify-between gap-2 border-b border-slate-700/40 px-4 py-3">
+            <p class="text-sm font-semibold text-slate-200">{{ t('driverRides.offersTitle') }}</p>
+            <span class="ui-status-pill">{{ rideStatusLabel(activeRide.status) }}</span>
+          </div>
+          <div class="p-4 space-y-3">
+            <!-- Pickup / dropoff addresses -->
+            <div class="space-y-2">
+              <a
+                v-if="activeRide.pickup_address"
+                :href="mapsLink(null, null, activeRide.pickup_address)"
+                target="_blank" rel="noopener"
+                class="flex items-center gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-3 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              >
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                  <AppIcon name="location" class="h-4 w-4 text-amber-300" aria-hidden="true" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('ridePage.pickupLabel') }}</p>
+                  <p class="truncate text-sm text-slate-200" :title="activeRide.pickup_address">{{ activeRide.pickup_address }}</p>
+                </div>
+                <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
+              </a>
+              <a
+                v-if="activeRide.dropoff_address"
+                :href="mapsLink(null, null, activeRide.dropoff_address)"
+                target="_blank" rel="noopener"
+                class="flex items-center gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-3 transition-colors hover:border-slate-600/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              >
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
+                  <AppIcon name="location" class="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('ridePage.dropoffLabel') }}</p>
+                  <p class="truncate text-sm text-slate-200" :title="activeRide.dropoff_address">{{ activeRide.dropoff_address }}</p>
+                </div>
+                <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-600 rtl:scale-x-[-1]" aria-hidden="true" />
+              </a>
+            </div>
+            <!-- Fare + payment -->
+            <div class="flex items-center justify-between rounded-xl border border-emerald-700/30 bg-emerald-900/10 px-3 py-2.5">
+              <span class="text-xs font-medium text-slate-400">{{ t('driverRides.fareLabel') }}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(activeRide.fare) }}</span>
+                <span
+                  v-if="activeRide.payment_method === 'cash'"
+                  class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300"
+                >{{ t('driverRides.collectCash', { amount: fmtMoney(activeRide.fare) }) }}</span>
+                <span
+                  v-else
+                  class="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
+                >{{ t('driverRides.paidWallet') }}</span>
+              </div>
+            </div>
+            <!-- Action buttons -->
+            <button
+              v-if="activeRide.status === 'accepted'"
+              class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
+              :disabled="busy"
+              :aria-busy="busy"
+              @click="advanceRide(activeRide.id, 'arrived')"
+            >
+              <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ busy ? t('common.loading') : t('driverRides.arrivedCta') }}
+            </button>
+            <button
+              v-else-if="activeRide.status === 'arrived'"
+              class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
+              :disabled="busy"
+              :aria-busy="busy"
+              @click="advanceRide(activeRide.id, 'in_progress')"
+            >
+              <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ busy ? t('common.loading') : t('driverRides.startCta') }}
+            </button>
+            <button
+              v-else-if="activeRide.status === 'in_progress'"
+              class="ui-btn-primary ui-touch-target inline-flex w-full items-center justify-center gap-2 text-sm"
+              :disabled="busy"
+              :aria-busy="busy"
+              @click="advanceRide(activeRide.id, 'completed')"
+            >
+              <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+              {{ busy ? t('common.loading') : t('driverRides.completeCta') }}
+            </button>
+            <!-- Release / abandon -->
+            <button
+              v-if="activeRide.status !== 'completed'"
+              class="ui-touch-target w-full rounded-xl border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:border-red-400/70 hover:text-red-200 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+              :disabled="busy"
+              @click="confirmReleaseRide"
+            >
+              {{ t('driverRides.abandonCta') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Ride offer cards -->
+        <div v-else class="ui-panel p-4 space-y-3 ui-reveal">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-sm font-semibold text-slate-200">{{ t('driverRides.offersTitle') }}</p>
+            <button
+              class="ui-press text-xs text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+              :disabled="loadingRides"
+              @click="fetchRides"
+            >
+              {{ t('driver.refresh') }}
+            </button>
+          </div>
+          <div v-if="loadingRides && !rideOffers.length" class="space-y-2" aria-busy="true">
+            <div v-for="i in 2" :key="i" class="ui-skeleton h-24" />
+          </div>
+          <div v-else-if="!rideOffers.length" class="ui-empty-state text-center py-5 space-y-2">
+            <AppIcon name="location" class="mx-auto h-7 w-7 text-slate-600" aria-hidden="true" />
+            <p class="text-sm font-semibold text-slate-100">{{ t('driverRides.noOffers') }}</p>
+          </div>
+          <ul v-else class="space-y-2">
+            <li
+              v-for="(ride, index) in rideOffers"
+              :key="ride.id"
+              class="ui-reveal rounded-2xl border border-slate-700/60 bg-slate-900/40 p-3 space-y-2.5"
+              :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
+            >
+              <!-- Pickup / dropoff row -->
+              <div class="space-y-1.5">
+                <p class="flex items-start gap-1.5 text-sm text-slate-200" :title="ride.pickup_address">
+                  <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300">A</span>
+                  <span class="truncate">{{ ride.pickup_address }}</span>
+                </p>
+                <p class="flex items-start gap-1.5 text-sm text-slate-300" :title="ride.dropoff_address">
+                  <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-300">B</span>
+                  <span class="truncate">{{ ride.dropoff_address }}</span>
+                </p>
+              </div>
+              <!-- Meta chips: fare, distance, to-pickup, payment -->
+              <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-slate-400">
+                <span class="text-base font-bold tabular-nums text-emerald-300">{{ fmtMoney(ride.fare) }}</span>
+                <span v-if="ride.distance_km != null" class="inline-flex items-center gap-1">
+                  <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driver.distanceKm', { km: ride.distance_km }) }}
+                </span>
+                <span v-if="ride.distance_to_pickup_km != null" class="inline-flex items-center gap-1 text-sky-300">
+                  <AppIcon name="location" class="h-3 w-3" aria-hidden="true" />{{ t('driverRides.toPickup', { km: ride.distance_to_pickup_km }) }}
+                </span>
+                <span
+                  v-if="ride.payment_method === 'cash'"
+                  class="rounded-full bg-amber-500/15 px-2.5 py-0.5 font-semibold text-amber-300"
+                >{{ t('driverRides.collectCash', { amount: fmtMoney(ride.fare) }) }}</span>
+                <span
+                  v-else
+                  class="rounded-full bg-emerald-500/12 px-2.5 py-0.5 font-semibold text-emerald-300"
+                >{{ t('driverRides.paidWallet') }}</span>
+              </div>
+              <!-- Accept button -->
+              <button
+                class="ui-btn-primary ui-touch-target w-full text-sm"
+                :disabled="busy"
+                @click="acceptRide(ride.id)"
+              >
+                {{ t('driverRides.acceptCta') }}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </template>
+
       <!-- Recent deliveries (history) -->
       <div class="ui-panel p-4 space-y-3 ui-reveal">
         <button
@@ -513,6 +704,39 @@
       </div>
     </template>
   </main>
+
+  <!-- Release-ride confirm modal -->
+  <Teleport to="body">
+    <div
+      v-if="releaseRideConfirmOpen"
+      class="fixed inset-0 z-[2000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center"
+      @click.self="releaseRideConfirmOpen = false"
+      @keydown.esc="releaseRideConfirmOpen = false"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('driverRides.abandonCta')"
+        class="w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+      >
+        <p class="text-sm font-semibold text-white">{{ t('driverRides.abandonCta') }}?</p>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <button class="ui-btn-outline ui-press px-3 py-2 text-xs" @click="releaseRideConfirmOpen = false">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="ui-press inline-flex items-center gap-2 rounded-xl border border-red-500/60 px-4 py-2 text-sm font-semibold text-red-300 hover:border-red-400 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            :disabled="busy"
+            :aria-busy="busy"
+            @click="releaseRide"
+          >
+            <svg v-if="busy" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ busy ? t('common.loading') : t('driverRides.abandonCta') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Rate the customer after delivery (driver → customer, private) -->
   <Teleport to="body">
@@ -682,6 +906,26 @@ const vehicle = ref('');
 const online = ref(false);
 const activeJob = ref(null);
 const pendingJobs = ref([]);
+
+// ── Rides (ride-hailing) ─────────────────────────────────────────────────────
+const driverVehicleType = ref('motorbike'); // populated from /driver/status/
+const rideOffers = ref([]);
+const activeRide = ref(null);
+const loadingRides = ref(false);
+const releaseRideConfirmOpen = ref(false);
+
+const VEHICLE_TYPES = [
+  { value: 'car', label: 'driverRides.vehicleCar' },
+  { value: 'motorbike', label: 'driverRides.vehicleMotorbike' },
+  { value: 'bicycle', label: 'driverRides.vehicleBicycle' },
+];
+
+const rideStatusLabel = (s) => {
+  if (s === 'searching') return t('driver.online'); // "on the way"
+  if (s === 'arrived') return t('driverRides.arrivedCta');
+  if (s === 'in_progress') return t('driverRides.startCta');
+  return s;
+};
 
 // ── Install-first PWA — drivers work from the installed app ──────────────────────
 const isStandalone = ref(
@@ -920,6 +1164,7 @@ const fetchStatus = async () => {
     isDriver.value = Boolean(data.is_driver);
     approved.value = Boolean(data.driver_approved);
     online.value = Boolean(data.is_driver_online);
+    if (data.driver_vehicle_type) driverVehicleType.value = data.driver_vehicle_type;
   } catch {
     isDriver.value = Boolean(customerStore.customer?.is_driver);
   }
@@ -940,8 +1185,12 @@ const fetchJobs = async () => {
 };
 
 // Keep the job list fresh while the page is open (idempotent — never double-starts).
+const pollTick = () => {
+  fetchJobs();
+  if (driverVehicleType.value === 'car') fetchRides();
+};
 const ensurePoll = () => {
-  if (!pollTimer) pollTimer = setInterval(fetchJobs, 15000);
+  if (!pollTimer) pollTimer = setInterval(pollTick, 15000);
 };
 
 const becomeDriver = async () => {
@@ -977,8 +1226,11 @@ const toggleOnline = async () => {
       // Subscribe to web push so new jobs reach the driver even when backgrounded.
       driverPush.subscribe().catch(() => {});
       await fetchJobs();
+      if (driverVehicleType.value === 'car') fetchRides();
     } else {
       stopGeo();
+      rideOffers.value = [];
+      activeRide.value = null;
     }
   } catch (err) {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
@@ -1013,6 +1265,95 @@ const decline = async (jobId) => {
   } catch {
     errorMsg.value = t('driver.errorGeneric');
     await fetchJobs();
+  } finally {
+    busy.value = false;
+  }
+};
+
+// ── Ride-hailing functions ────────────────────────────────────────────────────
+const fetchRides = async () => {
+  if (!isDriver.value) return;
+  loadingRides.value = true;
+  try {
+    const { data } = await api.get('/driver/rides/');
+    rideOffers.value = data.open_rides || [];
+    activeRide.value = data.active_ride || null;
+  } catch {
+    /* keep last */
+  } finally {
+    loadingRides.value = false;
+  }
+};
+
+const setVehicleType = async (vt) => {
+  if (driverVehicleType.value === vt) return;
+  busy.value = true;
+  try {
+    await api.post('/driver/status/', { driver_vehicle_type: vt });
+    driverVehicleType.value = vt;
+    // Refresh rides — car gets offers, others won't
+    if (vt === 'car') fetchRides();
+    else { rideOffers.value = []; activeRide.value = null; }
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+const acceptRide = async (rideId) => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.post(`/driver/rides/${rideId}/accept/`, {});
+    activeRide.value = data;
+    rideOffers.value = [];
+  } catch (err) {
+    if (err?.response?.status === 409) {
+      toast.show(t('driver.errorGeneric'), 'error');
+    } else {
+      errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+    }
+    await fetchRides();
+  } finally {
+    busy.value = false;
+  }
+};
+
+const advanceRide = async (rideId, status) => {
+  errorMsg.value = '';
+  busy.value = true;
+  try {
+    const { data } = await api.post(`/driver/rides/${rideId}/status/`, { status });
+    if (data.status === 'completed') {
+      activeRide.value = null;
+      toast.show(t('driver.deliveredToast'), 'success');
+      fetchEarnings();
+      fetchRides();
+    } else {
+      activeRide.value = data;
+    }
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
+  } finally {
+    busy.value = false;
+  }
+};
+
+const confirmReleaseRide = () => {
+  releaseRideConfirmOpen.value = true;
+};
+
+const releaseRide = async () => {
+  if (!activeRide.value) return;
+  busy.value = true;
+  try {
+    await api.post(`/driver/rides/${activeRide.value.id}/status/`, { status: 'searching' });
+    activeRide.value = null;
+    releaseRideConfirmOpen.value = false;
+    await fetchRides();
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {
     busy.value = false;
   }
@@ -1148,6 +1489,7 @@ onMounted(async () => {
     await fetchJobs();
     fetchEarnings();
     fetchCashout();
+    if (driverVehicleType.value === 'car') fetchRides();
     if (online.value) {
       startGeo();
       driverPush.autoRestore().catch(() => {}); // re-arm push if previously opted in

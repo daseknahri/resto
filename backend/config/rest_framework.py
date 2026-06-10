@@ -58,6 +58,9 @@ REST_FRAMEWORK = {
         "delivery_tracking": "120/min",
         "reservation_availability": "240/hour",
         "waitlist_join": "20/hour",
+        "ride_estimate": "120/hour",
+        "ride_request": "30/hour",
+        "ride_driver": "60/min",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

@@ -132,6 +132,21 @@ class WalletTransferThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
+class RideEstimateThrottle(_IPThrottle):
+    """Rate-limit ride fare estimates — cheap but spammable."""
+    scope = "ride_estimate"
+
+
+class RideRequestThrottle(_CustomerThrottle):
+    """Rate-limit ride creation per customer."""
+    scope = "ride_request"
+
+
+class RideDriverThrottle(_CustomerThrottle):
+    """Rate-limit driver ride actions (accept/status)."""
+    scope = "ride_driver"
+
+
 class TranslateThrottle(SimpleRateThrottle):
     """Rate-limit the AI translate endpoint by authenticated user to prevent
     runaway credit consumption against the OpenRouter API."""

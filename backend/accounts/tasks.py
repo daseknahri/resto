@@ -102,3 +102,19 @@ def run_management_command(name, *args, **kwargs):
     """Run a Django management command from Beat (lets Beat own the cron jobs)."""
     from django.core.management import call_command
     call_command(name, *args, **kwargs)
+
+
+# ── Ride-hailing push tasks ──────────────────────────────────────────────────────
+
+@shared_task(name="accounts.tasks.ride_dispatch_to_drivers", **_RETRY)
+def ride_dispatch_to_drivers(ride_id):
+    """Push a new ride offer to nearby online car drivers."""
+    from accounts.push import notify_car_drivers_new_ride_sync
+    notify_car_drivers_new_ride_sync(ride_id)
+
+
+@shared_task(name="accounts.tasks.ride_notify_rider", **_RETRY)
+def ride_notify_rider(rider_id, event):
+    """Push a ride status event to the rider."""
+    from accounts.push import notify_rider_sync
+    notify_rider_sync(rider_id, event)

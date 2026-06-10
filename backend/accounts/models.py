@@ -34,6 +34,20 @@ class Customer(models.Model):
         max_length=120, blank=True,
         help_text="Driver's vehicle, supplied at application (e.g. 'Motorbike — 1234-AB').",
     )
+    # Structured vehicle type for ride-hailing dispatch. Ride dispatch targets ONLY "car".
+    VEHICLE_TYPE_MOTORBIKE = "motorbike"
+    VEHICLE_TYPE_CAR = "car"
+    VEHICLE_TYPE_BICYCLE = "bicycle"
+    VEHICLE_TYPE_CHOICES = [
+        (VEHICLE_TYPE_MOTORBIKE, "Motorbike"),
+        (VEHICLE_TYPE_CAR, "Car"),
+        (VEHICLE_TYPE_BICYCLE, "Bicycle"),
+    ]
+    driver_vehicle_type = models.CharField(
+        max_length=12, blank=True, default="",
+        choices=VEHICLE_TYPE_CHOICES,
+        help_text="Structured vehicle type for ride dispatch (motorbike|car|bicycle).",
+    )
     is_driver_online = models.BooleanField(default=False)
     driver_lat = models.FloatField(null=True, blank=True)
     driver_lng = models.FloatField(null=True, blank=True)
@@ -264,6 +278,12 @@ class PlatformConfig(models.Model):
     wallet_charge_approval_threshold = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal("50.00")
     )
+    # ── Ride-hailing fare config ──────────────────────────────────────────────────
+    ride_base_fare = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("8.00"))
+    ride_per_km = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("3.50"))
+    ride_minimum_fare = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("12.00"))
+    # Platform commission on ride earnings (0 = driver keeps 100%).
+    ride_commission_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -771,6 +791,104 @@ class DeliveryJob(models.Model):
             self.Status.FAILED,
             self.Status.CANCELLED,
         )
+
+
+class RideRequest(models.Model):
+    """A ride-hailing request — lives in the PUBLIC schema, accounts app.
+
+    Lifecycle:
+      searching → accepted → arrived → in_progress → completed
+                ↘ cancelled (from searching/accepted/arrived)
+
+    Mirrors DeliveryJob conventions: public schema, loose references, ratings stored here.
+    """
+
+    class Status(models.TextChoices):
+        SEARCHING = "searching", "Searching for driver"
+        ACCEPTED = "accepted", "Driver accepted"
+        ARRIVED = "arrived", "Driver arrived"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    VALID_TRANSITIONS = {
+        "searching": {"accepted", "cancelled"},
+        "accepted": {"arrived", "cancelled", "searching"},
+        "arrived": {"in_progress", "cancelled"},
+        "in_progress": {"completed"},
+    }
+
+    TERMINAL_STATUSES = {"completed", "cancelled"}
+
+    class PaymentMethod(models.TextChoices):
+        WALLET = "wallet", "Wallet"
+        CASH = "cash", "Cash"
+
+    rider = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="rides",
+    )
+    driver = models.ForeignKey(
+        Customer,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="driven_rides",
+        limit_choices_to={"is_driver": True},
+    )
+
+    pickup_lat = models.FloatField()
+    pickup_lng = models.FloatField()
+    dropoff_lat = models.FloatField()
+    dropoff_lng = models.FloatField()
+    pickup_address = models.CharField(max_length=255, blank=True)
+    dropoff_address = models.CharField(max_length=255, blank=True)
+
+    distance_km = models.FloatField()
+    fare = models.DecimalField(max_digits=8, decimal_places=2)
+
+    payment_method = models.CharField(
+        max_length=10,
+        choices=PaymentMethod.choices,
+        default=PaymentMethod.WALLET,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.SEARCHING,
+        db_index=True,
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    arrived_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    # Ratings: rider rates the driver; driver rates the rider (1–5).
+    rider_driver_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    driver_rider_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # True once the wallet debit for this ride succeeded.
+    paid_with_wallet = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["driver", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"RideRequest #{self.pk} ({self.status})"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in self.TERMINAL_STATUSES
 
 
 class SavedAddress(models.Model):

@@ -371,8 +371,24 @@
             <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-amber-400 rtl:scale-x-[-1]" aria-hidden="true" />
           </button>
 
+          <!-- Book a ride CTA (full-width) -->
+          <RouterLink
+            :to="{ name: 'ride' }"
+            class="group ui-panel ui-surface-lift ui-reveal flex items-center gap-3 p-3.5 text-left hover:border-indigo-500/30"
+            style="--ui-delay: 200ms"
+          >
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/25 bg-indigo-500/8 transition group-hover:bg-indigo-500/15">
+              <AppIcon name="truck" class="h-4 w-4 text-indigo-400" aria-hidden="true" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold leading-tight text-slate-200">{{ t('ridePage.title') }}</p>
+              <p class="mt-0.5 text-[10px] text-slate-500">{{ t('ridePage.kicker') }}</p>
+            </div>
+            <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-400 rtl:scale-x-[-1]" aria-hidden="true" />
+          </RouterLink>
+
           <!-- Most recent order -->
-          <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 200ms">
+          <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 240ms">
             <div class="flex items-center justify-between gap-2">
               <p class="ui-kicker">{{ t('customerAccount.overviewLastOrder') }}</p>
               <button class="ui-press inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)] transition hover:opacity-75" @click="activeTab = 'orders'">

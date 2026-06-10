@@ -1,6 +1,16 @@
 from django.urls import include, path
 from rest_framework import routers
 
+from accounts.ride_views import (
+    RideEstimateView,
+    RideCreateView,
+    RideActiveView,
+    RideCancelView,
+    RideRateView,
+    DriverRideListView,
+    DriverRideAcceptView,
+    DriverRideStatusView,
+)
 from accounts.views import (
     ActivationView,
     AdminCreateDeliveryJobView,
@@ -166,6 +176,15 @@ shared_api_urlpatterns = [
     path("api/driver/jobs/<int:job_id>/accept/", DriverJobAcceptView.as_view(), name="driver-job-accept"),
     path("api/driver/jobs/<int:job_id>/decline/", DriverJobDeclineView.as_view(), name="driver-job-decline"),
     path("api/driver/jobs/<int:job_id>/status/", DriverJobStatusUpdateView.as_view(), name="driver-job-status"),
+    # ── Ride-hailing ──────────────────────────────────────────────────────────────
+    path("api/rides/estimate/", RideEstimateView.as_view(), name="ride-estimate"),
+    path("api/rides/", RideCreateView.as_view(), name="ride-create"),
+    path("api/rides/active/", RideActiveView.as_view(), name="ride-active"),
+    path("api/rides/<int:ride_id>/cancel/", RideCancelView.as_view(), name="ride-cancel"),
+    path("api/rides/<int:ride_id>/rate/", RideRateView.as_view(), name="ride-rate"),
+    path("api/driver/rides/", DriverRideListView.as_view(), name="driver-ride-list"),
+    path("api/driver/rides/<int:ride_id>/accept/", DriverRideAcceptView.as_view(), name="driver-ride-accept"),
+    path("api/driver/rides/<int:ride_id>/status/", DriverRideStatusView.as_view(), name="driver-ride-status"),
     path("api/marketplace/track/<str:order_number>/", OrderTrackingView.as_view(), name="marketplace-track"),
     path("api/marketplace/track/<str:order_number>/rate/", DeliveryRatingView.as_view(), name="marketplace-track-rate"),
     path("api/lead-provision-preview/<int:lead_id>/", LeadProvisionPreviewView.as_view(), name="lead-provision-preview"),

@@ -50,6 +50,7 @@ const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
+const RidePage = () => import("../pages/RidePage.vue");
 const DriverPage = () => import("../pages/DriverPage.vue");
 const AdminCustomers = () => import("../pages/AdminCustomers.vue");
 const AdminDeliveryJobs = () => import("../pages/AdminDeliveryJobs.vue");
@@ -118,6 +119,7 @@ const routes = [
       { path: "orders/:orderNumber", name: "order-status", component: OrderStatus, props: true, meta: { interface: "customer" } },
       { path: "find-my-order", name: "find-my-order", component: FindMyOrder, meta: { interface: "customer" } },
       { path: "account", name: "customer-account", component: CustomerAccount, meta: { interface: "customer" } },
+      { path: "ride", name: "ride", component: RidePage, meta: { interface: "customer" } },
       {
         path: "menu/:slug",
         redirect: (to) => ({ name: "category", params: { slug: to.params.slug } }),

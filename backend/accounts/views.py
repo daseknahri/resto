@@ -4005,10 +4005,27 @@ class DriverStatusView(APIView):
                 {"detail": "Your driver application is pending approval.", "code": "pending_approval"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        update_fields = ["is_driver_online", "updated_at"]
         customer.is_driver_online = online
-        customer.save(update_fields=["is_driver_online", "updated_at"])
 
-        return Response({"is_driver_online": customer.is_driver_online})
+        # Optional: update the structured vehicle type for ride dispatch.
+        raw_vtype = request.data.get("driver_vehicle_type")
+        if raw_vtype is not None:
+            valid_types = [v for v, _ in Customer.VEHICLE_TYPE_CHOICES]
+            if raw_vtype not in valid_types:
+                return Response(
+                    {"detail": f"driver_vehicle_type must be one of {valid_types}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            customer.driver_vehicle_type = raw_vtype
+            update_fields.append("driver_vehicle_type")
+
+        customer.save(update_fields=update_fields)
+
+        return Response({
+            "is_driver_online": customer.is_driver_online,
+            "driver_vehicle_type": customer.driver_vehicle_type,
+        })
 
 
 class DriverPositionUpdateView(APIView):

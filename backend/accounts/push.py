@@ -381,3 +381,130 @@ def send_review_request_sync(customer_id, restaurant_name, order_number) -> int:
     except Exception:
         pass
     return sent
+
+
+# ── Ride-hailing push helpers ────────────────────────────────────────────────────
+
+_RIDE_OFFER_MESSAGES = {
+    "en": {"title": "New ride request", "body": "A rider needs a car nearby — tap to view."},
+    "fr": {"title": "Nouvelle demande de course", "body": "Un passager cherche une voiture — touchez pour voir."},
+    "ar": {"title": "طلب ركوب جديد", "body": "راكب يبحث عن سيارة قريبة — اضغط لعرض التفاصيل."},
+}
+
+_RIDE_ACCEPTED_MESSAGES = {
+    "en": {"title": "Driver on the way", "body": "Your driver accepted your ride request."},
+    "fr": {"title": "Chauffeur en route", "body": "Votre chauffeur a accepte votre demande de course."},
+    "ar": {"title": "السائق في الطريق", "body": "قبل السائق طلب الركوب الخاص بك."},
+}
+
+
+def notify_car_drivers_new_ride_sync(ride_id) -> int:
+    """Push a ride offer to the 10 nearest online, approved car drivers. SYNCHRONOUS."""
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from tenancy.delivery_pricing import haversine_km, valid_coord
+    from .models import Customer, CustomerPushSubscription, RideRequest
+
+    with schema_context("public"):
+        try:
+            ride = RideRequest.objects.get(pk=ride_id)
+        except RideRequest.DoesNotExist:
+            return 0
+        if ride.status != RideRequest.Status.SEARCHING:
+            return 0
+
+        candidates = list(
+            Customer.objects.filter(
+                is_driver=True,
+                driver_approved=True,
+                is_driver_online=True,
+                driver_vehicle_type=Customer.VEHICLE_TYPE_CAR,
+            )
+        )
+
+    # Pick up to 10 nearest by haversine (using last known GPS when available).
+    pickup_lat = ride.pickup_lat
+    pickup_lng = ride.pickup_lng
+    if valid_coord(pickup_lat, pickup_lng):
+        def _dist(c):
+            if valid_coord(c.driver_lat, c.driver_lng):
+                return haversine_km(pickup_lat, pickup_lng, c.driver_lat, c.driver_lng)
+            return 1e9  # no GPS — sort to end
+
+        candidates.sort(key=_dist)
+        candidates = candidates[:10]
+
+    if not candidates:
+        return 0
+
+    driver_ids = [c.id for c in candidates]
+    with schema_context("public"):
+        locales = dict(Customer.objects.filter(id__in=driver_ids).values_list("id", "locale"))
+        subs = list(CustomerPushSubscription.objects.filter(customer_id__in=driver_ids))
+
+    if not subs:
+        return 0
+
+    gone, sent = [], 0
+    for s in subs:
+        loc = locales.get(s.customer_id, "en")
+        if loc not in _RIDE_OFFER_MESSAGES:
+            loc = "en"
+        msg = _RIDE_OFFER_MESSAGES[loc]
+        result = _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/driver")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    return sent
+
+
+def notify_rider_sync(rider_id, event) -> int:
+    """Push a ride-status event to the rider. SYNCHRONOUS."""
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    messages = {
+        "accepted": _RIDE_ACCEPTED_MESSAGES,
+    }
+    copy = messages.get(event)
+    if not copy:
+        return 0
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=rider_id).first()
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=rider_id))
+    if not subs:
+        return 0
+
+    loc = (getattr(cust, "locale", "") or "en")
+    if loc not in copy:
+        loc = "en"
+    msg = copy[loc]
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, msg["title"], msg["body"], "/rides")
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    return sent
+
+
+def push_new_ride_to_drivers(ride_id) -> None:
+    """Enqueue ride dispatch to car drivers. Never raises/blocks."""
+    from accounts.tasks import enqueue, ride_dispatch_to_drivers
+    enqueue(ride_dispatch_to_drivers, ride_id)
+
+
+def push_ride_event_to_rider(rider_id, event) -> None:
+    """Enqueue ride status push to rider. Never raises/blocks."""
+    from accounts.tasks import enqueue, ride_notify_rider
+    enqueue(ride_notify_rider, rider_id, event)
