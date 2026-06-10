@@ -320,6 +320,12 @@
             </span>
           </div>
           <ul role="list" class="flex flex-wrap gap-1.5">
+            <!-- Booked-for date + party size — most critical scheduling info -->
+            <li v-if="reservation.booked_for">
+              <span class="ui-state-chip tabular-nums" data-active="true">
+                {{ t("ownerReservations.bookedFor") }}: {{ formatDateTime(reservation.booked_for) }}<template v-if="reservation.party_size"> · {{ reservation.party_size }} {{ t("ownerReservations.guests") }}</template>
+              </span>
+            </li>
             <li><span class="ui-state-chip tabular-nums" data-active="true">{{ formatDate(reservation.created_at) }}</span></li>
             <li v-if="reservation.sla_state && reservation.sla_state !== 'not_applicable'">
               <span

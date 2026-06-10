@@ -136,10 +136,17 @@
 
       <div
         v-else-if="staffList.length === 0"
-        class="ui-empty-state flex flex-col items-center text-center p-8 space-y-2"
+        class="ui-empty-state flex flex-col items-center text-center p-8 space-y-3"
       >
-        <p class="text-sm font-semibold text-slate-200">{{ t("ownerStaff.noStaff") }}</p>
-        <p class="text-xs text-slate-500">{{ t("ownerStaff.noStaffHint") }}</p>
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/70 text-slate-400">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <div class="space-y-1.5">
+          <p class="text-sm font-semibold text-slate-200">{{ t("ownerStaff.noStaff") }}</p>
+          <p class="text-xs text-slate-500">{{ t("ownerStaff.noStaffHint") }}</p>
+        </div>
       </div>
 
       <div
@@ -198,7 +205,10 @@
                   <p class="ui-stat-label mt-0.5">{{ t('ownerStaff.statRevenueLabel') }}</p>
                 </div>
                 <div class="bg-slate-900/60 p-3 text-center">
-                  <p class="text-sm font-semibold text-sky-300 leading-snug">{{ member.stats?.last_active ? fmtRelative(member.stats.last_active) : '—' }}</p>
+                  <p
+                    class="text-sm font-semibold leading-snug"
+                    :class="member.stats?.last_active ? 'text-sky-300' : 'text-slate-500 italic'"
+                  >{{ member.stats?.last_active ? fmtRelative(member.stats.last_active) : t('ownerStaff.neverActive') }}</p>
                   <p class="ui-stat-label mt-0.5">{{ t('ownerStaff.statLastActiveLabel') }}</p>
                 </div>
               </div>
