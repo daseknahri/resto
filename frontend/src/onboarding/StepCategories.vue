@@ -376,6 +376,7 @@ import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { categoryApi, superCategoryApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
+import { useConfirmModal } from "../composables/useConfirmModal";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
@@ -388,6 +389,7 @@ const router = useRouter();
 const { t } = useI18n();
 const tenant = useTenantStore();
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 
 const categories = reactive([]);
 const removedIds = ref([]);
@@ -708,7 +710,14 @@ const quickAdd = () => {
 const removeByLocalId = async (localId) => {
   const index = categories.findIndex((cat) => cat.local_id === localId);
   if (index < 0) return;
-  const [cat] = categories.splice(index, 1);
+  const cat = categories[index];
+  const ok = await confirm({
+    title: t("stepCategories.removeConfirm", { name: cat?.name?.trim() || t("stepCategories.cardLabel", { index: index + 1 }) }),
+    confirmLabel: t("common.remove"),
+    danger: true,
+  });
+  if (!ok) return;
+  categories.splice(index, 1);
   if (cat?.id) removedIds.value.push(cat.id);
   if (String(editorLocalId.value) === String(localId)) closeEditor();
   delete rowErrors[localId];

@@ -839,7 +839,9 @@ export const messages = {
       scanHintPlain: "Scan to open menu",
       statusFilter: "Status filter",
       noFilterResults: "No tables match the current search or filter.",
-      moreActions: "More actions"
+      moreActions: "More actions",
+      generateConfirm: "Generate {count} table(s) with prefix \"{prefix}\"?",
+      qrGenerateFailed: "QR code generation failed."
     },
     staffChat: {
       title: "Staff chat",
@@ -1893,7 +1895,8 @@ export const messages = {
       imageUploadFailed: "Image upload failed",
       fixValidation: "Fix validation errors",
       savedToast: "Categories saved",
-      saveFailed: "Category save failed"
+      saveFailed: "Category save failed",
+      removeConfirm: "Remove \"{name}\"? Dishes in this category will also be removed."
     },
     stepDishes: {
       title: "Dishes",
@@ -4930,7 +4933,9 @@ export const messages = {
       scanHintPlain: "Scannez pour ouvrir le menu",
       statusFilter: "Filtre par statut",
       noFilterResults: "Aucune table ne correspond a la recherche ou au filtre actuel.",
-      moreActions: "Plus d actions"
+      moreActions: "Plus d actions",
+      generateConfirm: "Generer {count} table(s) avec le prefixe \"{prefix}\" ?",
+      qrGenerateFailed: "Echec de la generation du QR code."
     },
     staffChat: {
       title: "Messagerie equipe",
@@ -5951,7 +5956,8 @@ export const messages = {
       imageUploadFailed: "Echec du telechargement de l'image",
       fixValidation: "Corrigez les erreurs de validation",
       savedToast: "Categories enregistrees",
-      saveFailed: "Echec de l'enregistrement des categories"
+      saveFailed: "Echec de l'enregistrement des categories",
+      removeConfirm: "Supprimer \"{name}\" ? Les plats de cette categorie seront egalement supprimes."
     },
     stepDishes: {
       title: "Plats",

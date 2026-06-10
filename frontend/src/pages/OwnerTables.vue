@@ -542,22 +542,27 @@ const tableShortUrl = (table) => `${typeof window === "undefined" ? "" : window.
 const tableQrSrc = (table) => qrDataUrls.value[table.id] || "";
 
 const generateQrForTable = async (table) => {
-  if (!table?.id) return;
+  if (!table?.id) return false;
   const url = tableShortUrl(table);
-  const QRCode = (await import("qrcode")).default;  // lazy — load the QR lib on demand
-  const dataUrl = await QRCode.toDataURL(url, {
-    width: 240,
-    margin: 1,
-    errorCorrectionLevel: "M",
-    color: {
-      dark: "#0f172a",
-      light: "#ffffff",
-    },
-  });
-  qrDataUrls.value = {
-    ...qrDataUrls.value,
-    [table.id]: dataUrl,
-  };
+  try {
+    const QRCode = (await import("qrcode")).default;  // lazy — load the QR lib on demand
+    const dataUrl = await QRCode.toDataURL(url, {
+      width: 240,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: {
+        dark: "#0f172a",
+        light: "#ffffff",
+      },
+    });
+    qrDataUrls.value = {
+      ...qrDataUrls.value,
+      [table.id]: dataUrl,
+    };
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const generateQrBatch = async () => {
@@ -649,6 +654,12 @@ const generateTables = async () => {
     error.value = t("ownerTables.prefixRequired");
     return;
   }
+  const count = Number(bulk.count) || 1;
+  const ok = await confirm({
+    title: t("ownerTables.generateConfirm", { count, prefix: bulk.prefix.trim() }),
+    confirmLabel: t("ownerTables.generate"),
+  });
+  if (!ok) return;
   generating.value = true;
   error.value = "";
   try {
@@ -732,7 +743,11 @@ const copyShortUrl = (table) => copyText(tableShortUrl(table), t("ownerTables.sh
 const copyTableUrl = (table) => copyText(tableFullMenuUrl(table), t("ownerTables.fullCopied"));
 const copyQrUrl = async (table) => {
   if (!tableQrSrc(table)) {
-    await generateQrForTable(table);
+    const ok = await generateQrForTable(table);
+    if (!ok) {
+      toast.show(t("ownerTables.qrGenerateFailed"), "error");
+      return;
+    }
   }
   const src = tableQrSrc(table);
   if (!src) {
@@ -803,7 +818,11 @@ const downloadQrPng = async (table) => {
   }
 
   if (!tableQrSrc(table)) {
-    await generateQrForTable(table);
+    const ok = await generateQrForTable(table);
+    if (!ok) {
+      toast.show(t("ownerTables.qrGenerateFailed"), "error");
+      return;
+    }
   }
   const src = tableQrSrc(table);
   if (!src) {
