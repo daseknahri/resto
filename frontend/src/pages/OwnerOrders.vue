@@ -98,11 +98,30 @@
             {{ d.label }}
           </button>
         </div>
+        <!-- Custom date-range inputs — shown only when the Custom chip is active -->
+        <div v-if="activeDateFilter === 'custom'" class="flex flex-wrap items-center gap-1.5">
+          <label class="text-xs text-slate-400" :for="'ord-date-from'">{{ t('ownerOrders.dateFrom') }}</label>
+          <input
+            id="ord-date-from"
+            v-model="customDateFrom"
+            type="date"
+            class="ui-input py-1 text-xs"
+            :max="customDateTo || undefined"
+          />
+          <label class="text-xs text-slate-400" :for="'ord-date-to'">{{ t('ownerOrders.dateTo') }}</label>
+          <input
+            id="ord-date-to"
+            v-model="customDateTo"
+            type="date"
+            class="ui-input py-1 text-xs"
+            :min="customDateFrom || undefined"
+          />
+        </div>
         <button
-          v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType"
+          v-if="searchQuery || activeDateFilter !== 'all' || activeFulfillmentType || customDateFrom || customDateTo"
           class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
           :aria-label="t('ownerOrders.clearFilters')"
-          @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''"
+          @click="searchQuery = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''"
         >✕</button>
       </div>
 
@@ -208,14 +227,14 @@
     </div>
 
     <!-- Empty: filters active but no matches -->
-    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery || activeFulfillmentType)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
+    <div v-else-if="!filteredOrders.length && (activeStatus || activeDateFilter !== 'all' || searchQuery || activeFulfillmentType || customDateFrom || customDateTo)" class="ui-empty-state space-y-3 p-10 text-center" role="status">
       <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
         <AppIcon name="close" class="h-5 w-5 text-slate-500" aria-hidden="true" />
       </div>
       <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrders") }}</p>
       <button
         class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-4 py-1.5 text-xs"
-        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''"
+        @click="searchQuery = ''; activeStatus = ''; activeDateFilter = 'all'; activeFulfillmentType = ''; customDateFrom = ''; customDateTo = ''"
       >
         <AppIcon name="close" class="h-3 w-3" aria-hidden="true" />
         {{ t("ownerOrders.clearFilters") }}
@@ -765,6 +784,8 @@ const route = useRoute();
 
 const activeStatus = ref("");
 const activeDateFilter = ref("all");
+const customDateFrom = ref("");
+const customDateTo = ref("");
 const searchQuery = ref("");
 const activeFulfillmentType = ref("");
 const exporting = ref(false);
@@ -811,6 +832,7 @@ const dateTabs = computed(() => [
   { value: "today",     label: t("ownerOrders.dateToday") },
   { value: "yesterday", label: t("ownerOrders.dateYesterday") },
   { value: "week",      label: t("ownerOrders.dateLast7") },
+  { value: "custom",    label: t("ownerOrders.dateCustom") },
 ]);
 
 // ── Fulfillment-type filter chips (only shown when 2+ types present) ──────────
@@ -878,6 +900,11 @@ const filteredOrders = computed(() => {
       if (activeDateFilter.value === "today" && d.toDateString() !== todayStr) return false;
       if (activeDateFilter.value === "yesterday" && d.toDateString() !== yesterdayStr) return false;
       if (activeDateFilter.value === "week" && d < weekAgo) return false;
+      if (activeDateFilter.value === "custom") {
+        const dateStr = o.created_at.slice(0, 10);
+        if (customDateFrom.value && dateStr < customDateFrom.value) return false;
+        if (customDateTo.value && dateStr > customDateTo.value) return false;
+      }
     }
 
     // Search filter
@@ -938,8 +965,11 @@ const confirmAllPending = async () => {
     }
   }
   confirmingAll.value = false;
+  const ok = toConfirm.length - failed;
   if (failed === 0) {
     toast.show(t("ownerOrders.confirmAllDone", { n: toConfirm.length }), "success");
+  } else if (ok > 0) {
+    toast.show(t("ownerOrders.confirmAllPartial", { ok, total: toConfirm.length, failed }), "info");
   } else {
     toast.show(t("ownerOrders.confirmAllFailed"), "error");
   }
@@ -1211,6 +1241,9 @@ const _buildExportParams = () => {
   } else if (activeDateFilter.value === "week") {
     const w = new Date(now); w.setDate(now.getDate() - 6);
     params.from = _toIsoDate(w);
+  } else if (activeDateFilter.value === "custom") {
+    if (customDateFrom.value) params.from = customDateFrom.value;
+    if (customDateTo.value) params.to = customDateTo.value;
   }
   return params;
 };
