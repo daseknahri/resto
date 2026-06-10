@@ -284,6 +284,20 @@
             >
               <span aria-hidden="true">🗓️</span> {{ formatScheduledFor(order.scheduled_for) }}
             </span>
+            <!-- Delivery job status chip — lets waiters see driver dispatch state -->
+            <span
+              v-if="order.fulfillment_type === 'delivery' && order.delivery_job"
+              class="mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+              :class="waiterDjChipClass(order.delivery_job.status)"
+            >
+              <span
+                v-if="order.delivery_job.status === 'searching'"
+                class="block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
+              <span v-else aria-hidden="true">🛵</span>
+              {{ waiterDjChipLabel(order.delivery_job) }}
+            </span>
           </div>
           <!-- Status chip -->
           <span
@@ -1071,6 +1085,27 @@ const actionBtnClass = (s) => ({
   ready:     "bg-emerald-500 hover:bg-emerald-400 text-white",
   out_for_delivery: "bg-indigo-500 hover:bg-indigo-400 text-white",
 }[s] ?? "bg-slate-600 hover:bg-slate-500 text-white");
+
+// ── Delivery job chip helpers ─────────────────────────────────────────────────
+const waiterDjChipClass = (djStatus) => ({
+  searching:     "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  assigned:      "border-sky-500/40 bg-sky-500/10 text-sky-300",
+  at_restaurant: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+  picked_up:     "border-violet-500/40 bg-violet-500/10 text-violet-300",
+  delivered:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  failed:        "border-red-500/40 bg-red-500/10 text-red-300",
+  cancelled:     "border-slate-600/40 bg-slate-800/40 text-slate-400",
+}[djStatus] ?? "border-slate-600/40 bg-slate-800/40 text-slate-400");
+
+const waiterDjChipLabel = (dj) => {
+  const { status, driver_name } = dj;
+  if (status === "searching")     return t("kitchen.driverSearching");
+  if (status === "assigned")      return driver_name ? `${t("kitchen.driverAssigned")} · ${driver_name}` : t("kitchen.driverAssigned");
+  if (status === "at_restaurant") return driver_name ? `${t("kitchen.driverAtDoor")} · ${driver_name}` : t("kitchen.driverAtDoor");
+  if (status === "picked_up")     return t("kitchen.driverPickedUp");
+  if (status === "failed")        return t("kitchen.driverFailed");
+  return status;
+};
 </script>
 
 <style>

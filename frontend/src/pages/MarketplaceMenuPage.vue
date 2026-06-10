@@ -258,7 +258,7 @@
                 :class="{ 'opacity-50': !dish.is_available }"
               >
                 <div
-                  class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
+                  class="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
                   role="button"
                   :aria-label="dish.name"
                   tabindex="0"
@@ -268,6 +268,16 @@
                 >
                   <img v-if="dish.image_url" :src="dish.image_url" :alt="dish.name" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" @error="$event.target.style.display='none'" />
                   <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
+                  <!-- Sold-out frosted overlay on thumbnail -->
+                  <div
+                    v-if="!dish.is_available"
+                    class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px]"
+                    aria-hidden="true"
+                  >
+                    <span class="rounded-full border border-slate-600/40 bg-slate-900/80 px-1.5 py-px text-[8px] font-bold uppercase tracking-widest text-slate-400">
+                      {{ t('mktMenu.soldOut') }}
+                    </span>
+                  </div>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-semibold text-slate-100 leading-snug cursor-pointer hover:text-white transition-colors" :title="dish.name" @click="openOptionPanel(dish)">{{ dish.name }}</p>
@@ -381,7 +391,7 @@
                 >
                   <!-- Image (clickable → detail/option sheet) -->
                   <div
-                    class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
+                    class="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
                     role="button"
                     :aria-label="dish.name"
                     tabindex="0"
@@ -399,6 +409,16 @@
                       @error="$event.target.style.display='none'"
                     />
                     <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
+                    <!-- Sold-out frosted overlay on thumbnail -->
+                    <div
+                      v-if="!dish.is_available"
+                      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px]"
+                      aria-hidden="true"
+                    >
+                      <span class="rounded-full border border-slate-600/40 bg-slate-900/80 px-1.5 py-px text-[8px] font-bold uppercase tracking-widest text-slate-400">
+                        {{ t('mktMenu.soldOut') }}
+                      </span>
+                    </div>
                   </div>
                   <!-- Info -->
                   <div class="flex-1 min-w-0">
