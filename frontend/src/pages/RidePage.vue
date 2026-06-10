@@ -248,6 +248,24 @@
         v-else
         class="px-3 pb-28 space-y-3"
       >
+        <!-- No-driver-found notice (system cancel detected by polling) -->
+        <div
+          v-if="noDriverFound"
+          role="alert"
+          class="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3"
+        >
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+          <p class="flex-1 text-sm text-amber-200">{{ t('ridePage.noDriverFound') }}</p>
+          <button
+            type="button"
+            class="shrink-0 text-amber-400 hover:text-amber-300"
+            :aria-label="t('common.close')"
+            @click="noDriverFound = false"
+          >
+            <AppIcon name="close" class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
         <!-- Error banners -->
         <div
           v-if="errorMsg"
@@ -392,6 +410,72 @@
             {{ requesting ? t('common.loading') : t('ridePage.requestCta') }}
           </button>
         </div>
+
+        <!-- ══════════════════════════ PAST RIDES ══════════════════════════ -->
+        <section v-if="rideHistory.length > 0 || historyLoading" class="space-y-2 pt-2">
+          <p class="ui-kicker px-1">{{ t('ridePage.historyTitle') }}</p>
+
+          <!-- Loading skeleton -->
+          <template v-if="historyLoading && rideHistory.length === 0">
+            <div
+              v-for="n in 3"
+              :key="n"
+              class="h-14 w-full animate-pulse rounded-2xl bg-slate-800/60"
+            />
+          </template>
+
+          <!-- History rows -->
+          <ul v-else class="space-y-1.5">
+            <li
+              v-for="ride in rideHistory"
+              :key="ride.id"
+              class="ui-panel flex items-center gap-3 px-3 py-2.5"
+            >
+              <!-- Route: dropoff (primary) -->
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm text-slate-200">
+                  {{ ride.dropoff_address || ride.pickup_address }}
+                </p>
+                <p class="mt-0.5 truncate text-[11px] text-slate-500">
+                  {{ fmtDate(ride.created_at) }}
+                </p>
+              </div>
+
+              <!-- Fare -->
+              <span class="shrink-0 text-sm font-bold tabular-nums text-slate-200">
+                {{ formatPrice(ride.fare) }}
+              </span>
+
+              <!-- Status chip -->
+              <span
+                class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                :class="ride.status === 'completed'
+                  ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border border-red-500/30 bg-red-500/10 text-red-300'"
+              >
+                {{ historyStatusLabel(ride.status) }}
+              </span>
+
+              <!-- Star rating (if rider rated the driver) -->
+              <span
+                v-if="ride.rider_driver_rating"
+                class="shrink-0 flex items-center gap-0.5 text-amber-400"
+                :aria-label="`${ride.rider_driver_rating} stars`"
+              >
+                <AppIcon name="star" class="h-3.5 w-3.5" aria-hidden="true" />
+                <span class="text-[11px] font-semibold tabular-nums">{{ ride.rider_driver_rating }}</span>
+              </span>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Empty state — only show after load attempt with no results -->
+        <p
+          v-else-if="!historyLoading && rideHistory.length === 0 && customerStore.isAuthenticated"
+          class="px-1 text-center text-xs text-slate-600"
+        >
+          {{ t('ridePage.historyEmpty') }}
+        </p>
       </div>
 
     </template>
@@ -407,7 +491,7 @@ import { addTileLayer } from '../lib/mapTiles';
 import AppIcon from '../components/AppIcon.vue';
 import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 
-const { t, formatPrice } = useI18n();
+const { t, formatPrice, currentLocale } = useI18n();
 const customerStore = useCustomerStore();
 
 // ── Auth modal ────────────────────────────────────────────────────────────────
@@ -432,7 +516,12 @@ const submittingRating = ref(false);
 const ratingDone      = ref(false);
 
 // ── Cancelled state ───────────────────────────────────────────────────────────
-const showCancelled = ref(false);
+const showCancelled   = ref(false);
+const noDriverFound   = ref(false);  // system-cancelled (no driver accepted)
+
+// ── Ride history ──────────────────────────────────────────────────────────────
+const rideHistory    = ref([]);
+const historyLoading = ref(false);
 
 // ── Active ride polling ───────────────────────────────────────────────────────
 const activeRide = ref(null);
@@ -469,6 +558,25 @@ const rideStatusLabel = computed(() => {
 const hasDriverPos = computed(
   () => activeRide.value?.driver?.driver_lat != null && activeRide.value?.driver?.driver_lng != null,
 );
+
+// ── Date helper ───────────────────────────────────────────────────────────────
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(currentLocale.value || undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return '';
+  }
+};
+
+// ── Status label for history chips ────────────────────────────────────────────
+const historyStatusLabel = (status) => {
+  switch (status) {
+    case 'completed': return t('ridePage.completed');
+    case 'cancelled': return t('ridePage.cancelled');
+    default:          return status;
+  }
+};
 
 // ── Geolocation ───────────────────────────────────────────────────────────────
 const useMyLocation = () => {
@@ -561,6 +669,7 @@ const cancelRide = async () => {
     stopPolling();
     activeRide.value = null;
     showCancelled.value = true;
+    fetchHistory();
   } catch {
     errorMsg.value = t('ridePage.errorRequest');
   } finally {
@@ -584,17 +693,19 @@ const submitRating = async () => {
 
 // ── Reset to booking form ─────────────────────────────────────────────────────
 const resetForm = () => {
-  activeRide.value  = null;
-  estimate.value    = null;
-  ratingScore.value = 0;
-  ratingDone.value  = false;
+  activeRide.value    = null;
+  estimate.value      = null;
+  ratingScore.value   = 0;
+  ratingDone.value    = false;
   showCancelled.value = false;
-  errorMsg.value    = '';
+  noDriverFound.value = false;
+  errorMsg.value      = '';
   pickupAddress.value  = '';
   dropoffAddress.value = '';
   pickupLatLng.value   = null;
   dropoffLatLng.value  = null;
   destroyTrackingMap();
+  fetchHistory();
 };
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -609,10 +720,23 @@ const fetchActiveRide = async () => {
   }
 };
 
+const fetchHistory = async () => {
+  historyLoading.value = true;
+  try {
+    const res = await api.get('/rides/history/');
+    rideHistory.value = Array.isArray(res.data) ? res.data : [];
+  } catch {
+    // best-effort; leave existing history intact
+  } finally {
+    historyLoading.value = false;
+  }
+};
+
 const startPolling = () => {
   stopPolling();
   pollTimer = setInterval(async () => {
     if (!activeRide.value?.id) { stopPolling(); return; }
+    const prevStatus = activeRide.value.status;
     try {
       const res = await api.get('/rides/active/');
       if (res.data?.id) {
@@ -620,6 +744,18 @@ const startPolling = () => {
         // Stop polling when terminal state
         if (['completed', 'cancelled'].includes(res.data.status)) {
           stopPolling();
+          // System-cancelled: was searching/accepted, now cancelled (no user action)
+          if (
+            res.data.status === 'cancelled' &&
+            ['searching', 'accepted', 'arrived'].includes(prevStatus) &&
+            !cancelling.value
+          ) {
+            noDriverFound.value = true;
+            activeRide.value = null;
+            fetchHistory();
+          } else if (res.data.status === 'completed') {
+            fetchHistory();
+          }
         }
       } else {
         // No active ride returned — likely completed/cancelled
@@ -745,6 +881,7 @@ onMounted(async () => {
     if (!activeRide.value) {
       nextTick(initPickMap);
     }
+    fetchHistory();
   }
 });
 

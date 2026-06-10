@@ -23,13 +23,16 @@ from accounts.ride_views import (
     RideEstimateView,
     RideCreateView,
     RideActiveView,
+    RideHistoryView,
     RideCancelView,
     RideRateView,
     DriverRideListView,
+    DriverRideHistoryView,
     DriverRideAcceptView,
     DriverRideStatusView,
     DriverDocUploadView,
     DriverRateRideView,
+    AdminRideListView,
     AdminCarApprovalView,
 )
 
@@ -1039,3 +1042,444 @@ class DriverRideListLastCompletedTests(SimpleTestCase):
             self.assertIn("payment_method", lc_data)
             self.assertIn("paid_with_wallet", lc_data)
             self.assertIn("driver_rider_rating", lc_data)
+
+
+# ── sweep_ride_requests command ───────────────────────────────────────────────────
+
+class SweepRideRequestsTests(SimpleTestCase):
+    """Unit tests for accounts/management/commands/sweep_ride_requests.py.
+
+    All DB calls are mocked; no real database needed.
+    update_fields subsets are checked where relevant.
+    """
+
+    def _run_command(self):
+        from accounts.management.commands.sweep_ride_requests import Command
+        cmd = Command()
+        cmd.stdout = MagicMock()
+        cmd.style = MagicMock()
+        cmd.style.SUCCESS = lambda s: s
+        cmd.handle()
+
+    # ── Rule (b): auto-cancel only rides > 15 min SEARCHING ──────────────────────
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_cancel_only_over_15min_searching(self, mock_tz, mock_tx, mock_rr,
+                                               mock_push_drivers, mock_push_rider):
+        """A SEARCHING ride older than 15 min is cancelled; non-expired ride is NOT."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        ride_old = _make_ride(pk=1, status_val="searching")
+        ride_old.rider_id = 10
+
+        # (a) queryset — no rides in 3-15 min window
+        qs_a = MagicMock()
+        qs_a.__iter__ = MagicMock(return_value=iter([]))
+
+        # (b) queryset — one ride > 15 min
+        qs_b = MagicMock()
+        qs_b.__iter__ = MagicMock(return_value=iter([ride_old]))
+
+        # (c) queryset — no candidates
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_a
+            elif call_count[0] == 2:
+                return qs_b
+            else:
+                return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        # select_for_update inside atomic — return the locked ride
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = ride_old
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        ride_old.save.assert_called_once()
+        call_kwargs = ride_old.save.call_args[1]
+        self.assertIn("status", call_kwargs.get("update_fields", []))
+        self.assertIn("cancelled_at", call_kwargs.get("update_fields", []))
+        self.assertEqual(ride_old.status, "cancelled")
+        mock_push_rider.assert_called_once_with(10, "no_driver_found")
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_accepted_ride_not_auto_cancelled(self, mock_tz, mock_tx, mock_rr,
+                                               mock_push_drivers, mock_push_rider):
+        """An ACCEPTED ride is never touched by the auto-cancel rule."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        # (a) empty; (b) empty; (c) one ACCEPTED ride with a fresh online driver
+        qs_a = MagicMock()
+        qs_a.__iter__ = MagicMock(return_value=iter([]))
+        qs_b = MagicMock()
+        qs_b.__iter__ = MagicMock(return_value=iter([]))
+
+        online_driver = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                       is_driver_online=True)
+        online_driver.driver_position_updated_at = now  # fresh — not stale
+        ride_accepted = _make_ride(pk=2, status_val="accepted", driver=online_driver)
+
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([ride_accepted]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_a
+            elif call_count[0] == 2:
+                return qs_b
+            else:
+                return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        # Online + fresh driver: no release, no cancel push
+        ride_accepted.save.assert_not_called()
+        mock_push_rider.assert_not_called()
+
+    # ── Rule (c): release stale-driver ACCEPTED; never touch in_progress ─────────
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_releases_stale_driver_accepted(self, mock_tz, mock_tx, mock_rr,
+                                             mock_push_drivers, mock_push_rider):
+        """An ACCEPTED ride with an offline driver is released back to SEARCHING."""
+        from django.utils import timezone as real_tz
+        from datetime import timedelta
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        offline_driver = _make_customer(pk=5, is_driver=True, driver_approved=True,
+                                        is_driver_online=False)
+        offline_driver.driver_position_updated_at = now - timedelta(minutes=20)
+
+        ride_accepted = _make_ride(pk=3, status_val="accepted", driver=offline_driver)
+
+        qs_a = MagicMock()
+        qs_a.__iter__ = MagicMock(return_value=iter([]))
+        qs_b = MagicMock()
+        qs_b.__iter__ = MagicMock(return_value=iter([]))
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([ride_accepted]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return qs_a
+            elif call_count[0] == 2:
+                return qs_b
+            else:
+                return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+
+        locked_qs = MagicMock()
+        locked_qs.filter.return_value.first.return_value = ride_accepted
+        mock_rr.objects.select_for_update.return_value = locked_qs
+
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        ride_accepted.save.assert_called_once()
+        call_kwargs = ride_accepted.save.call_args[1]
+        ufs = call_kwargs.get("update_fields", [])
+        self.assertIn("driver", ufs)
+        self.assertIn("status", ufs)
+        self.assertIn("accepted_at", ufs)
+        self.assertIn("arrived_at", ufs)
+        self.assertEqual(ride_accepted.status, "searching")
+        self.assertIsNone(ride_accepted.driver)
+        mock_push_drivers.assert_called_once_with(ride_accepted.id)
+
+    @patch("accounts.management.commands.sweep_ride_requests.push_ride_event_to_rider")
+    @patch("accounts.management.commands.sweep_ride_requests.push_new_ride_to_drivers")
+    @patch("accounts.management.commands.sweep_ride_requests.RideRequest")
+    @patch("accounts.management.commands.sweep_ride_requests.transaction")
+    @patch("accounts.management.commands.sweep_ride_requests.cache", MagicMock())
+    @patch("accounts.management.commands.sweep_ride_requests.timezone")
+    def test_in_progress_excluded_from_release(self, mock_tz, mock_tx, mock_rr,
+                                                mock_push_drivers, mock_push_rider):
+        """IN_PROGRESS rides are excluded from rule (c) by the filter clause."""
+        from django.utils import timezone as real_tz
+        now = real_tz.now()
+        mock_tz.now.return_value = now
+
+        qs_empty = MagicMock()
+        qs_empty.__iter__ = MagicMock(return_value=iter([]))
+        qs_c = MagicMock()
+        qs_c.select_related.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        call_count = [0]
+
+        def filter_side(*args, **kwargs):
+            call_count[0] += 1
+            # Verify that the (c) filter does NOT include in_progress in status__in
+            if call_count[0] == 3:
+                # the status__in kwarg must exclude in_progress
+                status_in = kwargs.get("status__in", [])
+                self.assertNotIn("in_progress", status_in,
+                                 "in_progress must never be in the (c) filter")
+            if call_count[0] <= 2:
+                return qs_empty
+            return qs_c
+
+        mock_rr.objects.filter.side_effect = filter_side
+        mock_tx.atomic.return_value = _noop_atomic()
+        mock_rr.Status.SEARCHING = "searching"
+        mock_rr.Status.CANCELLED = "cancelled"
+        mock_rr.Status.ACCEPTED = "accepted"
+        mock_rr.Status.ARRIVED = "arrived"
+
+        self._run_command()
+
+        mock_push_drivers.assert_not_called()
+        mock_push_rider.assert_not_called()
+
+
+# ── GET /api/rides/history/ ───────────────────────────────────────────────────────
+
+class RideHistoryViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = RideHistoryView.as_view()
+
+    def _get(self, session=None):
+        req = self.factory.get("/api/rides/history/")
+        req.session = session or _session()
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def test_no_session_returns_401(self):
+        req = self._get(session=_session(customer_id=None))
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_rider_sees_only_own_terminal_rides(self, mock_cust_objs, mock_ride_objs):
+        rider = _make_customer(pk=1)
+        mock_cust_objs.get.return_value = rider
+
+        r1 = _make_ride(pk=10, status_val="completed", rider=rider, fare=Decimal("20.00"))
+        r1.completed_at = MagicMock()
+        r1.completed_at.isoformat.return_value = "2026-06-10T11:00:00+00:00"
+        r2 = _make_ride(pk=11, status_val="cancelled", rider=rider, fare=Decimal("15.00"))
+        r2.completed_at = None
+        r2.driver = None
+        r2.driver_id = None
+
+        mock_ride_objs.filter.return_value.select_related.return_value \
+            .order_by.return_value.__getitem__.return_value = [r1, r2]
+
+        req = self._get(session=_session(customer_id=1))
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 2)
+
+        required = {"id", "status", "fare", "payment_method", "paid_with_wallet",
+                    "pickup_address", "dropoff_address", "distance_km",
+                    "created_at", "completed_at", "rider_driver_rating"}
+        for ride_data in resp.data:
+            for f in required:
+                self.assertIn(f, ride_data, f"Missing field: {f}")
+
+        # Ensure no driver PII fields leaked at top level
+        for ride_data in resp.data:
+            self.assertNotIn("driver_phone", ride_data)
+            self.assertNotIn("driver_lat", ride_data)
+            self.assertNotIn("driver_lng", ride_data)
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_filter_is_scoped_to_rider(self, mock_cust_objs, mock_ride_objs):
+        """The queryset filter must include rider=rider."""
+        rider = _make_customer(pk=1)
+        mock_cust_objs.get.return_value = rider
+
+        mock_ride_objs.filter.return_value.select_related.return_value \
+            .order_by.return_value.__getitem__.return_value = []
+
+        req = self._get(session=_session(customer_id=1))
+        self.view(req)
+
+        call_kwargs = mock_ride_objs.filter.call_args[1]
+        self.assertEqual(call_kwargs.get("rider"), rider)
+
+
+# ── GET /api/driver/rides/history/ ───────────────────────────────────────────────
+
+class DriverRideHistoryViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DriverRideHistoryView.as_view()
+
+    def _get(self, session=None):
+        req = self.factory.get("/api/driver/rides/history/")
+        req.session = session or _session()
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    def test_no_session_returns_401(self):
+        req = self._get(session=_session(customer_id=None))
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("accounts.models.Customer.objects")
+    def test_unapproved_driver_returns_403(self, mock_cust_objs):
+        from accounts.models import Customer
+        mock_cust_objs.get.side_effect = Customer.DoesNotExist
+        req = self._get(session=_session(customer_id=2))
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("accounts.models.Customer.objects")
+    def test_approved_driver_sees_own_rides(self, mock_cust_objs, mock_ride_objs):
+        driver = _make_customer(pk=2, is_driver=True, driver_approved=True)
+        mock_cust_objs.get.return_value = driver
+
+        r1 = _make_ride(pk=20, status_val="completed", driver=driver, fare=Decimal("30.00"))
+        r1.completed_at = MagicMock()
+        r1.completed_at.isoformat.return_value = "2026-06-10T12:00:00+00:00"
+
+        mock_ride_objs.filter.return_value.order_by.return_value \
+            .__getitem__.return_value = [r1]
+
+        req = self._get(session=_session(customer_id=2))
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+
+        required = {"id", "status", "fare", "payment_method", "paid_with_wallet",
+                    "pickup_address", "dropoff_address", "distance_km",
+                    "completed_at", "driver_rider_rating"}
+        for f in required:
+            self.assertIn(f, resp.data[0], f"Missing field: {f}")
+
+        # filter must scope to this driver
+        call_kwargs = mock_ride_objs.filter.call_args[1]
+        self.assertEqual(call_kwargs.get("driver"), driver)
+
+
+# ── GET /api/admin/rides/ ─────────────────────────────────────────────────────────
+
+class AdminRideListViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = AdminRideListView.as_view()
+
+    def _get(self, session=None, query_string=""):
+        url = "/api/admin/rides/" + query_string
+        req = self.factory.get(url)
+        req.session = session or _session()
+        req.user = MagicMock(is_authenticated=False)
+        return req
+
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=False)
+    def test_non_admin_returns_403(self, mock_perm):
+        req = self._get()
+        resp = self.view(req)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    def test_admin_gets_ride_list_with_nested_rider_and_driver(self, mock_perm, mock_ride_objs):
+        rider = _make_customer(pk=10, name="Alice", phone="0600000001")
+        driver = _make_customer(pk=5, name="Bob", phone="0600000002",
+                                is_driver=True, driver_approved=True)
+        ride = _make_ride(pk=99, status_val="completed", rider=rider, driver=driver,
+                          fare=Decimal("45.00"))
+        ride.completed_at = MagicMock()
+        ride.completed_at.isoformat.return_value = "2026-06-10T14:00:00+00:00"
+
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = mock_qs
+        mock_qs.__getitem__.return_value = [ride]
+        mock_ride_objs.select_related.return_value.order_by.return_value = mock_qs
+
+        req = self._get()
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        ride_data = resp.data[0]
+
+        required_fields = {"id", "status", "fare", "payment_method", "paid_with_wallet",
+                           "distance_km", "pickup_address", "dropoff_address",
+                           "created_at", "completed_at", "rider", "driver"}
+        for f in required_fields:
+            self.assertIn(f, ride_data, f"Missing top-level field: {f}")
+
+        self.assertEqual(ride_data["rider"]["id"], 10)
+        self.assertEqual(ride_data["rider"]["name"], "Alice")
+        self.assertIn("phone", ride_data["rider"])
+
+        self.assertEqual(ride_data["driver"]["id"], 5)
+        self.assertEqual(ride_data["driver"]["name"], "Bob")
+        self.assertIn("phone", ride_data["driver"])
+
+    @patch("accounts.ride_views.RideRequest.objects")
+    @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
+    def test_status_filter_applied(self, mock_perm, mock_ride_objs):
+        """?status=completed passes the filter kwarg to the queryset."""
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = mock_qs
+        mock_qs.__getitem__.return_value = []
+        mock_ride_objs.select_related.return_value.order_by.return_value = mock_qs
+
+        req = self._get(query_string="?status=completed")
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_qs.filter.assert_called_once_with(status="completed")

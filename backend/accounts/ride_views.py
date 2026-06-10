@@ -7,17 +7,20 @@ Rider endpoints (session customer_id):
     POST   /api/rides/estimate/           — fare estimate (throttled)
     POST   /api/rides/                    — create ride (SEARCHING)
     GET    /api/rides/active/             — rider's active/recent ride
+    GET    /api/rides/history/            — rider's last 20 terminal rides
     POST   /api/rides/<id>/cancel/        — rider cancels
     POST   /api/rides/<id>/rate/          — rider rates driver (1-5)
 
 Driver endpoints (is_driver + driver_approved):
     GET    /api/driver/rides/             — open SEARCHING rides + own active + last_completed
+    GET    /api/driver/rides/history/     — driver's last 20 completed/cancelled rides
     POST   /api/driver/rides/<id>/accept/ — first-accept-wins (requires driver_car_approved)
     POST   /api/driver/rides/<id>/status/ — advance status
     POST   /api/driver/docs/             — upload licence or insurance doc
     POST   /api/driver/rides/<id>/rate/  — driver rates rider (1-5)
 
 Admin endpoints (IsPlatformAdmin):
+    GET    /api/admin/rides/              — latest 50 rides, optional ?status= filter
     POST   /api/admin/drivers/<id>/car-approve/ — approve car docs
     POST   /api/admin/drivers/<id>/car-reject/  — reject car docs
 """
@@ -857,6 +860,180 @@ class DriverRateRideView(APIView):
             ride.save(update_fields=["driver_rider_rating"])
 
         return Response({"ok": True, "rating": rating})
+
+
+# ── Rider history ─────────────────────────────────────────────────────────────────
+
+
+class RideHistoryView(APIView):
+    """GET /api/rides/history/ — session rider's last 20 terminal rides, newest-first.
+
+    Fields: id, status, fare, payment_method, paid_with_wallet, pickup_address,
+            dropoff_address, distance_km, created_at, completed_at,
+            rider_driver_rating.
+    No driver PII beyond driver name.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        rider, err = _get_rider(request)
+        if err:
+            return err
+
+        rides = (
+            RideRequest.objects.filter(
+                rider=rider,
+                status__in=RideRequest.TERMINAL_STATUSES,
+            )
+            .select_related("driver")
+            .order_by("-created_at")[:20]
+        )
+        data = []
+        for ride in rides:
+            driver_name = None
+            if ride.driver_id and ride.driver:
+                driver_name = ride.driver.name or ""
+            data.append({
+                "id": ride.id,
+                "status": ride.status,
+                "fare": str(ride.fare),
+                "payment_method": ride.payment_method,
+                "paid_with_wallet": ride.paid_with_wallet,
+                "pickup_address": ride.pickup_address,
+                "dropoff_address": ride.dropoff_address,
+                "distance_km": ride.distance_km,
+                "created_at": _ts(ride.created_at),
+                "completed_at": _ts(ride.completed_at),
+                "rider_driver_rating": ride.rider_driver_rating,
+                "driver_name": driver_name,
+            })
+        return Response(data)
+
+
+# ── Driver history ─────────────────────────────────────────────────────────────────
+
+
+class DriverRideHistoryView(APIView):
+    """GET /api/driver/rides/history/ — session driver's last 20 completed/cancelled rides.
+
+    Auth: is_driver=True + driver_approved=True (is_driver_online NOT required).
+    Fields: id, status, fare, payment_method, paid_with_wallet, pickup_address,
+            dropoff_address, distance_km, completed_at, driver_rider_rating.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        customer_id = request.session.get("customer_id")
+        if not customer_id:
+            return Response(
+                {"detail": "Customer session required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            driver = Customer.objects.get(pk=customer_id, is_driver=True, driver_approved=True)
+        except Customer.DoesNotExist:
+            return Response(
+                {"detail": "Approved driver account not found."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        rides = (
+            RideRequest.objects.filter(
+                driver=driver,
+                status__in=RideRequest.TERMINAL_STATUSES,
+            )
+            .order_by("-created_at")[:20]
+        )
+        data = []
+        for ride in rides:
+            data.append({
+                "id": ride.id,
+                "status": ride.status,
+                "fare": str(ride.fare),
+                "payment_method": ride.payment_method,
+                "paid_with_wallet": ride.paid_with_wallet,
+                "pickup_address": ride.pickup_address,
+                "dropoff_address": ride.dropoff_address,
+                "distance_km": ride.distance_km,
+                "completed_at": _ts(ride.completed_at),
+                "driver_rider_rating": ride.driver_rider_rating,
+            })
+        return Response(data)
+
+
+# ── Admin: ride oversight ──────────────────────────────────────────────────────────
+
+
+class AdminRideListView(APIView):
+    """GET /api/admin/rides/ — IsPlatformAdmin; latest 50 rides, optional ?status= filter.
+
+    Fields per ride: id, status, fare, payment_method, paid_with_wallet,
+                     distance_km, pickup_address, dropoff_address, created_at,
+                     completed_at,
+                     rider {id, name, phone},
+                     driver {id, name, phone} (or null).
+    """
+
+    permission_classes = []  # enforced manually via IsPlatformAdmin check below
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        from sales.permissions import IsPlatformAdmin
+
+        perm = IsPlatformAdmin()
+        if not perm.has_permission(request, self):
+            return Response(
+                {"detail": "Platform admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        qs = RideRequest.objects.select_related("rider", "driver").order_by("-created_at")
+        status_filter = request.query_params.get("status", "").strip()
+        if status_filter:
+            valid_statuses = [s.value for s in RideRequest.Status]
+            if status_filter not in valid_statuses:
+                return Response(
+                    {"detail": f"Invalid status '{status_filter}'. Valid values: {valid_statuses}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(status=status_filter)
+        rides = qs[:50]
+
+        data = []
+        for ride in rides:
+            rider_data = None
+            if ride.rider_id and ride.rider:
+                rider_data = {
+                    "id": ride.rider.id,
+                    "name": ride.rider.name or "",
+                    "phone": ride.rider.phone or "",
+                }
+            driver_data = None
+            if ride.driver_id and ride.driver:
+                driver_data = {
+                    "id": ride.driver.id,
+                    "name": ride.driver.name or "",
+                    "phone": ride.driver.phone or "",
+                }
+            data.append({
+                "id": ride.id,
+                "status": ride.status,
+                "fare": str(ride.fare),
+                "payment_method": ride.payment_method,
+                "paid_with_wallet": ride.paid_with_wallet,
+                "distance_km": ride.distance_km,
+                "pickup_address": ride.pickup_address,
+                "dropoff_address": ride.dropoff_address,
+                "created_at": _ts(ride.created_at),
+                "completed_at": _ts(ride.completed_at),
+                "rider": rider_data,
+                "driver": driver_data,
+            })
+        return Response(data)
 
 
 # ── Admin: car-document approval ──────────────────────────────────────────────────

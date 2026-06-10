@@ -809,6 +809,59 @@
           </template>
         </div>
       </div>
+
+      <!-- Ride history (car drivers only) -->
+      <div v-if="driverVehicleType === 'car'" class="ui-panel p-4 space-y-3 ui-reveal">
+        <button
+          class="flex w-full items-center justify-between gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+          :aria-expanded="showRideHistory"
+          aria-controls="driver-ride-history-panel"
+          @click="toggleRideHistory"
+        >
+          <p class="text-sm font-semibold text-slate-200">{{ t('driverRides.historyTitle') }}</p>
+          <AppIcon :name="showRideHistory ? 'chevronUp' : 'chevronDown'" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+        </button>
+        <div id="driver-ride-history-panel">
+          <template v-if="showRideHistory">
+            <div v-if="loadingRideHistory && !rideHistory.length" class="space-y-2" aria-busy="true">
+              <div v-for="i in 3" :key="i" class="ui-skeleton h-12" />
+            </div>
+            <div v-else-if="!rideHistory.length" class="ui-empty-state text-center py-4 space-y-1">
+              <p class="text-sm font-semibold text-slate-100">{{ t('driverRides.historyEmpty') }}</p>
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="(r, index) in rideHistory"
+                :key="r.id"
+                class="ui-reveal rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 space-y-1"
+                :style="{ '--ui-delay': `${Math.min(index, 9) * 20}ms` }"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <p class="truncate text-sm text-slate-200" :title="r.dropoff_address">{{ r.dropoff_address }}</p>
+                  <div class="flex shrink-0 items-center gap-1.5">
+                    <span
+                      v-if="r.payment_method === 'cash'"
+                      class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300"
+                    >{{ t('driverRides.collectCash', { amount: fmtMoney(r.fare) }) }}</span>
+                    <span
+                      v-else
+                      class="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
+                    >{{ t('driverRides.paidWallet') }}</span>
+                    <span class="text-sm font-bold tabular-nums text-emerald-300">{{ fmtMoney(r.fare) }}</span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 text-[11px] text-slate-500">
+                  <span>{{ fmtDate(r.completed_at) }}</span>
+                  <span v-if="r.driver_rider_rating != null" class="flex items-center gap-0.5 text-amber-400">
+                    <span aria-hidden="true">★</span>
+                    <span>{{ r.driver_rider_rating }}</span>
+                  </span>
+                </div>
+              </li>
+            </ul>
+          </template>
+        </div>
+      </div>
     </template>
   </main>
 
@@ -1132,6 +1185,26 @@ const fetchHistory = async () => {
 const toggleHistory = () => {
   showHistory.value = !showHistory.value;
   if (showHistory.value && !history.value.length) fetchHistory();
+};
+
+// Ride history (driver's completed/cancelled rides) — lazy-loaded on first expand.
+const showRideHistory = ref(false);
+const rideHistory = ref([]);
+const loadingRideHistory = ref(false);
+const fetchRideHistory = async () => {
+  loadingRideHistory.value = true;
+  try {
+    const { data } = await api.get('/driver/rides/history/');
+    rideHistory.value = Array.isArray(data) ? data : [];
+  } catch {
+    /* keep last */
+  } finally {
+    loadingRideHistory.value = false;
+  }
+};
+const toggleRideHistory = () => {
+  showRideHistory.value = !showRideHistory.value;
+  if (showRideHistory.value && !rideHistory.value.length) fetchRideHistory();
 };
 
 const STATUS_LABELS = {

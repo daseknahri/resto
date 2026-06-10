@@ -54,6 +54,7 @@ const RidePage = () => import("../pages/RidePage.vue");
 const DriverPage = () => import("../pages/DriverPage.vue");
 const AdminCustomers = () => import("../pages/AdminCustomers.vue");
 const AdminDeliveryJobs = () => import("../pages/AdminDeliveryJobs.vue");
+const AdminRides = () => import("../pages/AdminRides.vue");
 const AdminFlashSales = () => import("../pages/AdminFlashSales.vue");
 
 const AdminConsole = () => import("../pages/AdminConsole.vue");
@@ -272,6 +273,7 @@ const routes = [
   { path: "/admin-wallets", name: "admin-wallets", component: AdminWallet, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-customers", name: "admin-customers", component: AdminCustomers, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-delivery-jobs", name: "admin-delivery-jobs", component: AdminDeliveryJobs, meta: { requiresAuth: true, adminOnly: true } },
+  { path: "/admin-rides", name: "admin-rides", component: AdminRides, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/admin-flash-sales", name: "admin-flash-sales", component: AdminFlashSales, meta: { requiresAuth: true, adminOnly: true } },
   { path: "/activate", name: "activate", component: Activate },
   // ── Catch-all 404 ───────────────────────────────────────────────────────────

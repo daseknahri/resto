@@ -74,6 +74,12 @@
                 📦 {{ t("adminConsole.deliveryJobs") }}
               </router-link>
               <router-link
+                :to="{ name: 'admin-rides' }"
+                class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
+              >
+                🚗 {{ t("adminConsole.rides") }}
+              </router-link>
+              <router-link
                 :to="{ name: 'admin-flash-sales' }"
                 class="ui-btn-outline w-full px-4 py-2 text-sm text-center"
               >

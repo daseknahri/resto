@@ -287,6 +287,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
         "args": ("sweep_delivery_jobs",),
     },
+    "sweep-ride-requests": {
+        "task": "accounts.tasks.run_management_command",
+        # every 120s — re-dispatch, auto-cancel, and release stale-driver ride requests.
+        "schedule": 120.0,
+        "args": ("sweep_ride_requests",),
+    },
     "enforce-subscriptions": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 86400.0,  # daily
