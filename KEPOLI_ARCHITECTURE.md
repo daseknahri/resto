@@ -96,17 +96,16 @@ so a customer can "switch to work with us" without a second account.
 Brand (kepoli) · `business_type` capability seam · rider acquisition + admin-notify
 · customer & rider PWAs + install/download CTAs.
 
-### Phase 1 — Retail / catalog vertical (next)
+### Phase 1 — Retail / catalog vertical ✅ (shipped 2026-06-10, rename still deferred)
 Goal: a non-restaurant shop can list products and sell with pickup/delivery.
-- Vocabulary layer: i18n aliases so `business_type=retail` renders Menu→Catalog,
-  Dish→Product, "Add dish"→"Add product" **without** the DB rename (map labels by
-  capability in the i18n layer / a `catalogVocabulary` composable).
-- Product attributes retail needs that dishes lack: SKU/barcode, brand, stock
-  units, variants (size/colour). Start by reusing `Dish.options`/stock; add a
-  `Dish.attributes` JSON for retail-only fields (non-breaking) before any rename.
-- Marketplace: filter/sort by `business_type`; category chips per vertical.
-- Defer the hard `Dish→Item` schema rename until retail demand is proven; when
-  done, run on a schema clone first (see §3).
+- ✅ Vocabulary layer (`useVocabulary` composable; Menu→Catalog, Dish→Product).
+- ✅ Product attributes: `Dish.attributes` JSON (sku/barcode/brand/unit, validated
+  in `DishSerializer.validate_attributes`, migration menu/0045, commit d4ec3e6).
+  Owner form is shop-gated; owner search matches sku/barcode/brand; customers see
+  brand · pack-size only. Variants keep riding on `Dish.options`/stock for now.
+- ✅ Marketplace: filter/sort by `business_type`; category chips per vertical.
+- Still deferred by design: the hard `Dish→Item` schema rename — wait for proven
+  retail demand; when done, run on a schema clone first (see §3).
 
 ### Phase 2 — Ride-hailing (car drivers / Uber-like)
 Reuse the rider pool + live GPS + wallet; the new primitive is a **trip** (no
