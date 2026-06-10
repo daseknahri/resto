@@ -92,7 +92,7 @@
           :aria-label="f.value === 'all' ? f.label : t('ownerRatings.starsLabel', { n: f.value })"
           @click="activeScore = f.value"
         >
-          {{ f.label }}
+          {{ f.label }}<span v-if="f.value !== 'all' && scoreCounts[f.value]" class="ms-1 text-[10px] font-normal tabular-nums opacity-60">({{ scoreCounts[f.value] }})</span>
         </button>
       </div>
     </header>
