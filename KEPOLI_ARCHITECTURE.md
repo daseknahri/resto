@@ -90,6 +90,17 @@ so a customer can "switch to work with us" without a second account.
 - Acquisition: signed-out `/driver` is an "Earn with Kepoli" value-prop +
   install page; landing footer links to it.
 
+## 4b. STRATEGY (owner decision, 2026-06-10): restaurant-first completion
+The groundwork for all verticals is LAID: service registry (§6), business_type
+capability seam (§3), retail vocabulary + attributes, per-vertical delivery
+semantics (§5c), and the trip primitive (rides/courier). These seams exist so
+future verticals are config + focused features, not rewrites.
+With the ground set, the FOCUS is completing the FIRST service end-to-end:
+a complete, real-world app for RESTAURANTS. Other verticals stay live but
+receive only fixes until the restaurant experience is finished. New deep
+vertical features (store pick-flow/substitutions, pharmacy-specific flows,
+ride extras) are deliberately parked behind restaurant completeness.
+
 ## 5. Phased roadmap
 
 ### Phase 0 — Super-app foundation ✅ (shipped 2026-06-08)
