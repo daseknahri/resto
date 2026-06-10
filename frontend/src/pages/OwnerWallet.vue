@@ -452,6 +452,7 @@ const selectCustomer = (c) => {
   topupAmount.value = '';
   topupNote.value = '';
   topupError.value = '';
+  topupKey = null; // fresh idempotency key for each new customer selection
   fetchHistory(c.id);
   // Move keyboard focus into the amount field once the top-up section renders (WCAG 2.4.3).
   nextTick(() => topupAmountRef.value?.focus());

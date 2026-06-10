@@ -2847,6 +2847,8 @@ export const messages = {
       invoiceDownloadFailed: "Could not download invoice.",
       invoiceDownloaded: "Invoice downloaded.",
       invoiceNotReady: "Invoice not yet available — contact support to complete your invoice.",
+      dataExportSuccess: "Export downloaded.",
+      commissionDownloaded: "Commission statement downloaded.",
     },
     adminConsole: {
       loadJobsFailed: "Unable to load jobs (login as admin)",
@@ -6883,6 +6885,8 @@ export const messages = {
       invoiceDownloadFailed: "Impossible de telecharger la facture.",
       invoiceDownloaded: "Facture telechargee.",
       invoiceNotReady: "Facture non disponible — contactez le support pour finaliser votre facture.",
+      dataExportSuccess: "Export telecharge.",
+      commissionDownloaded: "Releve de commission telecharge.",
     },
     adminConsole: {
       loadPlanFeatureFlagsFailed: "Impossible de charger les indicateurs de fonctionnalités du forfait",

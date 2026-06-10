@@ -109,7 +109,7 @@
           </label>
           <label class="text-xs text-slate-400">
             {{ t("ownerHome.to") }}
-            <input v-model="dateTo" type="date" class="ui-input mt-1" />
+            <input v-model="dateTo" type="date" class="ui-input mt-1" :min="dateFrom || undefined" />
           </label>
           <div class="flex flex-wrap items-end gap-2 md:justify-end">
             <button
@@ -1165,6 +1165,12 @@ const toggleFailedRetryQueue = async () => {
 };
 
 const applyFilters = async () => {
+  // Silently swap inverted date range so the filter always makes sense
+  if (dateFrom.value && dateTo.value && dateTo.value < dateFrom.value) {
+    const tmp = dateFrom.value;
+    dateFrom.value = dateTo.value;
+    dateTo.value = tmp;
+  }
   page.value = 1;
   await fetchReservations();
 };
