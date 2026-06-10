@@ -71,6 +71,35 @@
       </div>
     </header>
 
+    <!-- ══ Active order tracking strip ══ -->
+    <Transition name="ui-fade">
+      <RouterLink
+        v-if="activeOrder"
+        :to="{ name: 'order-status', params: { orderNumber: activeOrder.number } }"
+        class="group mx-3 mt-3 flex items-center gap-3 rounded-xl border border-[var(--color-secondary)]/30 bg-[var(--color-secondary)]/8 px-4 py-3 transition hover:border-[var(--color-secondary)]/50 hover:bg-[var(--color-secondary)]/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+        :aria-label="t('marketplace.activeOrderLabel', { number: activeOrder.number })"
+      >
+        <!-- Pulsing live indicator -->
+        <span class="relative inline-flex shrink-0" aria-hidden="true">
+          <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full opacity-60" style="background:var(--color-secondary)" />
+          <span class="relative inline-flex h-2 w-2 rounded-full" style="background:var(--color-secondary)" />
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-white">{{ t('marketplace.activeOrderTitle', { number: activeOrder.number }) }}</p>
+          <p class="mt-0.5 text-[11px] text-slate-400">{{ t('marketplace.activeOrderHint') }}</p>
+        </div>
+        <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 rtl:rotate-180"><path d="M6 12l4-4-4-4"/></svg>
+        <button
+          type="button"
+          class="ms-2 shrink-0 rounded-full p-1 text-slate-500 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+          :aria-label="t('common.dismiss')"
+          @click.prevent="activeOrderDismissed = true"
+        >
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-3.5 w-3.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </RouterLink>
+    </Transition>
+
     <!-- ══ Table context banner ══ -->
     <div v-if="tableContextBanner" class="mx-3 mt-3 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100 shadow-sm shadow-black/20">
       <span class="flex min-w-0 items-center gap-2 truncate font-medium" :title="tableContextBanner">
@@ -432,6 +461,20 @@ const toast          = useToastStore()
 const customerStore  = useCustomerStore()
 const route  = useRoute()
 const { currentLocale, formatPrice, t } = useI18n()
+
+// ── Active order tracking strip ───────────────────────────────────────────────
+// Show a persistent "track your order" pill for 2 h after a checkout
+const activeOrderDismissed = ref(false)
+const activeOrder = computed(() => {
+  if (activeOrderDismissed.value) return null
+  try {
+    const latest = cart.recentOrders?.[0]
+    if (!latest?.order_number || !latest?.created_at) return null
+    const age = Date.now() - new Date(latest.created_at).getTime()
+    if (age > 7_200_000) return null  // 2-hour window
+    return { number: latest.order_number }
+  } catch { return null }
+})
 
 // ── Route props (passed by /m/:menuSlug) ─────────────────────────────────────
 const props = defineProps({
