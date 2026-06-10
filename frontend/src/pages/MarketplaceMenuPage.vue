@@ -257,12 +257,20 @@
                 class="ui-panel ui-surface-lift group flex items-start gap-3.5 p-3.5"
                 :class="{ 'opacity-50': !dish.is_available }"
               >
-                <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center">
+                <div
+                  class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
+                  role="button"
+                  :aria-label="dish.name"
+                  tabindex="0"
+                  @click="openOptionPanel(dish)"
+                  @keydown.enter="openOptionPanel(dish)"
+                  @keydown.space.prevent="openOptionPanel(dish)"
+                >
                   <img v-if="dish.image_url" :src="dish.image_url" :alt="dish.name" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" @error="$event.target.style.display='none'" />
                   <span v-else aria-hidden="true" class="text-2xl select-none">🍴</span>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
+                  <p class="text-sm font-semibold text-slate-100 leading-snug cursor-pointer hover:text-white transition-colors" :title="dish.name" @click="openOptionPanel(dish)">{{ dish.name }}</p>
                   <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
                   <!-- Dietary tags -->
                   <div v-if="dish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
@@ -367,8 +375,16 @@
                   :class="{ 'opacity-50': !dish.is_available }"
                   :style="{ '--ui-delay': `${Math.min(dishIndex, 9) * 28}ms` }"
                 >
-                  <!-- Image (larger, with hover scale + emoji fallback) -->
-                  <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center">
+                  <!-- Image (clickable → detail/option sheet) -->
+                  <div
+                    class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-800/50 flex items-center justify-center cursor-pointer"
+                    role="button"
+                    :aria-label="dish.name"
+                    tabindex="0"
+                    @click="openOptionPanel(dish)"
+                    @keydown.enter="openOptionPanel(dish)"
+                    @keydown.space.prevent="openOptionPanel(dish)"
+                  >
                     <img
                       v-if="dish.image_url"
                       :src="dish.image_url"
@@ -382,7 +398,7 @@
                   </div>
                   <!-- Info -->
                   <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
+                    <p class="text-sm font-semibold text-slate-100 leading-snug cursor-pointer hover:text-white transition-colors" :title="dish.name" @click="openOptionPanel(dish)">{{ dish.name }}</p>
                     <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
                     <!-- Dietary tags -->
                     <div v-if="dish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
@@ -751,14 +767,33 @@
             <div class="h-1 w-10 rounded-full bg-slate-700" />
           </div>
           <!-- Dish header -->
-          <div class="flex items-center gap-3 px-5 py-3 border-b border-slate-800/50 shrink-0">
-            <div class="h-14 w-14 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
-              <img v-if="activeOptionDish.image_url" :src="activeOptionDish.image_url" :alt="activeOptionDish.name" loading="lazy" class="h-full w-full object-cover" />
-              <span v-else aria-hidden="true" class="text-xl select-none">🍴</span>
+          <div class="flex items-start gap-3 px-5 py-3.5 border-b border-slate-800/50 shrink-0">
+            <!-- Larger image when available -->
+            <div
+              v-if="activeOptionDish.image_url"
+              class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800"
+            >
+              <img :src="activeOptionDish.image_url" :alt="activeOptionDish.name" loading="lazy" class="h-full w-full object-cover" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold text-white leading-snug truncate">{{ activeOptionDish.name }}</p>
-              <p class="text-xs text-[var(--color-secondary)] tabular-nums">{{ fmtPrice(activeOptionDish.price) }}</p>
+              <p class="text-base font-bold text-white leading-snug">{{ activeOptionDish.name }}</p>
+              <!-- Base price + optional flash-sale strikethrough -->
+              <div class="mt-0.5 flex items-baseline gap-1.5">
+                <span v-if="flashSalePct" class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(activeOptionDish.price) }}</span>
+                <span
+                  class="text-sm font-bold tabular-nums"
+                  :class="flashSalePct ? 'text-amber-400' : 'text-[var(--color-secondary)]'"
+                >{{ fmtPrice(flashSalePct ? dishSalePrice(activeOptionDish.price) : activeOptionDish.price) }}</span>
+              </div>
+              <!-- Dietary tags -->
+              <div v-if="activeOptionDish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+                <span
+                  v-for="tag in activeOptionDish.tags"
+                  :key="tag"
+                  class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
+                  :class="tagBadgeClass(tag)"
+                >{{ tag }}</span>
+              </div>
             </div>
             <button
               type="button"
@@ -770,8 +805,22 @@
             </button>
           </div>
 
-          <!-- Option groups (scrollable body) -->
-          <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-6">
+          <!-- Scrollable body: description + allergens + option groups -->
+          <div class="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-5">
+            <!-- Full description -->
+            <p v-if="activeOptionDish.description" class="text-sm leading-relaxed text-slate-300">{{ activeOptionDish.description }}</p>
+            <!-- Allergen list -->
+            <div v-if="activeOptionDish.allergens?.length" class="flex flex-wrap gap-1.5">
+              <span class="text-[10px] font-semibold uppercase tracking-widest text-slate-500 self-center shrink-0">{{ t('mktMenu.freeFrom') }}:</span>
+              <span
+                v-for="a in activeOptionDish.allergens"
+                :key="a"
+                class="rounded-full border border-amber-500/30 bg-amber-500/8 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+              >{{ t(`mktMenu.allergen_${a}`) }}</span>
+            </div>
+            <!-- Divider between info and option groups (only shown when both exist) -->
+            <hr v-if="(activeOptionDish.description || activeOptionDish.allergens?.length) && activeOptionDish.option_groups?.length" class="border-slate-800/60" />
+            <!-- Option groups (one per group) -->
             <div
               v-for="grp in activeOptionDish.option_groups"
               :key="grp.id"
@@ -1184,11 +1233,13 @@ const optionPanelUnitPrice = computed(() => {
 });
 
 const confirmOptionSelection = () => {
-  if (!optionPanelValid.value) {
+  const dish = activeOptionDish.value;
+  if (!dish) return;
+  // Validate only when the dish actually has option groups
+  if (dish.option_groups?.length && !optionPanelValid.value) {
     panelShowErrors.value = true;
     return;
   }
-  const dish = activeOptionDish.value;
   const selectedOptions = [];
   for (const grp of dish.option_groups || []) {
     for (const opt of grp.options || []) {
@@ -1197,7 +1248,7 @@ const confirmOptionSelection = () => {
       }
     }
   }
-  const unitPrice = optionPanelUnitPrice.value;
+  const unitPrice = dish.option_groups?.length ? optionPanelUnitPrice.value : Number(dish.price);
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
     existing.qty++;
