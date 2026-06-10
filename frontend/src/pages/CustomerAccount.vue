@@ -1799,7 +1799,9 @@ const fetchAddresses = async () => {
   try {
     const res = await api.get('/customer/addresses/');
     savedAddresses.value = res.data || [];
-  } catch { /* silent */ } finally {
+  } catch {
+    toast.show(t('customerAccount.addressLoadFailed'), 'error');
+  } finally {
     loadingAddresses.value = false;
   }
 };
@@ -2067,7 +2069,9 @@ const fetchWallet = async () => {
     if (res.data.balance !== undefined && customerStore.customer) {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }
-  } catch { /* silent */ } finally {
+  } catch {
+    toast.show(t('customerAccount.walletLoadFailed'), 'error');
+  } finally {
     loadingWallet.value = false;
   }
 };
