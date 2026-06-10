@@ -915,7 +915,10 @@ const toggleTag = (tag) => {
 };
 
 const useMyLocation = () => {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    toast.show(t("stepPublish.locationUnavailable"), "error");
+    return;
+  }
   gettingLocation.value = true;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -923,7 +926,10 @@ const useMyLocation = () => {
       form.lng = Math.round(pos.coords.longitude * 10000) / 10000;
       gettingLocation.value = false;
     },
-    () => { gettingLocation.value = false; },
+    () => {
+      gettingLocation.value = false;
+      toast.show(t("stepPublish.locationDenied"), "error");
+    },
     { timeout: 8000 }
   );
 };

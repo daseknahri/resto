@@ -2011,6 +2011,7 @@ const dropImage = async (dish, event) => {
 const saveAndNext = async () => {
   saving.value = true;
   status.value = "";
+  globalError.value = "";
   if (!validateClient()) {
     status.value = t("stepDishes.fixValidation");
     saving.value = false;
