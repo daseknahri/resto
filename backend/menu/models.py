@@ -574,6 +574,10 @@ class Rating(models.Model):
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
+    # Owner reply — the restaurant can post a public response visible to the customer.
+    owner_reply = models.TextField(blank=True, default="")
+    owner_reply_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ("-created_at",)
 

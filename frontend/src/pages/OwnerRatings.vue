@@ -157,6 +157,76 @@
         <!-- Comment -->
         <p v-if="r.comment" class="rounded-lg border-s-2 border-slate-600/60 bg-slate-900/50 py-2.5 ps-3.5 pe-3 text-sm italic leading-relaxed text-slate-300">{{ r.comment }}</p>
         <p v-else class="text-xs italic text-slate-600">{{ t("ownerRatings.noComment") }}</p>
+
+        <!-- Owner reply section -->
+        <div class="border-t border-slate-800/60 pt-3">
+          <!-- Existing reply: show text + edit/delete controls -->
+          <template v-if="r.owner_reply && !replyEditing.has(r.id)">
+            <div class="flex min-w-0 items-start justify-between gap-2">
+              <div class="min-w-0 space-y-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-secondary)]/70">{{ t("ownerRatings.replyKicker") }}</p>
+                <p class="text-sm leading-relaxed text-slate-300">{{ r.owner_reply }}</p>
+                <p v-if="r.owner_reply_at" class="text-[11px] text-slate-500">{{ t("ownerRatings.replyPostedAt", { date: formatDate(r.owner_reply_at) }) }}</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  class="rounded-lg border border-slate-700/50 px-2.5 py-1 text-[11px] font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/50"
+                  @click="startEdit(r)"
+                >{{ t("ownerRatings.replyEdit") }}</button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-red-500/25 px-2.5 py-1 text-[11px] font-medium text-red-400/80 transition hover:border-red-500/50 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500/40 disabled:opacity-40"
+                  :disabled="replyDeleting.has(r.id)"
+                  @click="deleteReply(r)"
+                >{{ replyDeleting.has(r.id) ? t("ownerRatings.replyDeleting") : t("ownerRatings.replyDelete") }}</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Reply form: composing new or editing existing -->
+          <template v-else-if="replyEditing.has(r.id)">
+            <div class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-secondary)]/70">{{ t("ownerRatings.replyKicker") }}</p>
+              <textarea
+                :ref="el => { if (el) replyTextareaRefs[r.id] = el; }"
+                v-model="replyDrafts[r.id]"
+                rows="3"
+                maxlength="1000"
+                :placeholder="t('ownerRatings.replyPlaceholder')"
+                class="ui-textarea w-full resize-none text-sm"
+              />
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="ui-btn-primary inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs disabled:opacity-40"
+                  :disabled="replySaving.has(r.id) || !replyDrafts[r.id]?.trim()"
+                  @click="saveReply(r)"
+                >
+                  <svg v-if="replySaving.has(r.id)" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3 w-3 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+                  {{ replySaving.has(r.id) ? t("ownerRatings.replySaving") : t("ownerRatings.replySave") }}
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg px-2.5 py-1.5 text-xs text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-600"
+                  @click="cancelEdit(r)"
+                >{{ t("common.cancel") }}</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- No reply yet: collapsed "Add reply" button -->
+          <template v-else>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-500 transition hover:text-[var(--color-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/40"
+              @click="startEdit(r)"
+            >
+              <AppIcon name="plus" class="h-3 w-3 shrink-0" aria-hidden="true" />
+              {{ t("ownerRatings.replyAddPrompt") }}
+            </button>
+          </template>
+        </div>
       </article>
 
       <!-- No matches for current filter -->
@@ -169,7 +239,7 @@
 </template>
 
 <script setup>
-import { computed, onActivated, onMounted, ref } from "vue";
+import { computed, nextTick, onActivated, onMounted, reactive, ref } from "vue";
 import { RouterLink } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
@@ -188,6 +258,67 @@ const loading = ref(false);
 const updating = ref(false); // silently revalidating stale cache
 const exporting = ref(false);
 const activeScore = ref("all");
+
+// ── Reply state ───────────────────────────────────────────────────────────────
+// Sets used instead of maps so Vue reactivity works cleanly with has/add/delete.
+const replyEditing = ref(new Set());   // rating IDs currently showing the compose form
+const replySaving = ref(new Set());    // rating IDs with in-flight POST
+const replyDeleting = ref(new Set());  // rating IDs with in-flight DELETE
+const replyDrafts = reactive({});      // ratingId → draft string
+const replyTextareaRefs = reactive({}); // ratingId → textarea DOM ref
+
+const startEdit = async (r) => {
+  replyDrafts[r.id] = r.owner_reply || "";
+  replyEditing.value = new Set([...replyEditing.value, r.id]);
+  await nextTick();
+  if (replyTextareaRefs[r.id]) replyTextareaRefs[r.id].focus();
+};
+
+const cancelEdit = (r) => {
+  const next = new Set(replyEditing.value);
+  next.delete(r.id);
+  replyEditing.value = next;
+};
+
+const saveReply = async (r) => {
+  const text = (replyDrafts[r.id] || "").trim();
+  if (!text) return;
+  replySaving.value = new Set([...replySaving.value, r.id]);
+  try {
+    const res = await api.post(`/owner/ratings/${r.id}/reply/`, { reply: text });
+    // Patch the local rating object so the UI updates without a refetch
+    const idx = ratings.value.findIndex((x) => x.id === r.id);
+    if (idx !== -1) {
+      ratings.value[idx] = { ...ratings.value[idx], owner_reply: res.data.owner_reply, owner_reply_at: res.data.owner_reply_at };
+    }
+    cancelEdit(r);
+    toast.show(t("ownerRatings.replySaved"), "success");
+  } catch {
+    toast.show(t("ownerRatings.replyError"), "error");
+  } finally {
+    const next = new Set(replySaving.value);
+    next.delete(r.id);
+    replySaving.value = next;
+  }
+};
+
+const deleteReply = async (r) => {
+  replyDeleting.value = new Set([...replyDeleting.value, r.id]);
+  try {
+    await api.delete(`/owner/ratings/${r.id}/reply/`);
+    const idx = ratings.value.findIndex((x) => x.id === r.id);
+    if (idx !== -1) {
+      ratings.value[idx] = { ...ratings.value[idx], owner_reply: "", owner_reply_at: null };
+    }
+    toast.show(t("ownerRatings.replyDeleted"), "success");
+  } catch {
+    toast.show(t("ownerRatings.replyDeleteError"), "error");
+  } finally {
+    const next = new Set(replyDeleting.value);
+    next.delete(r.id);
+    replyDeleting.value = next;
+  }
+};
 
 const scoreFilters = computed(() => [
   { value: "all", label: t("ownerRatings.filterAll") },

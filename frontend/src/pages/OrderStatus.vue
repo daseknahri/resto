@@ -573,15 +573,28 @@
         </button>
       </div>
 
-      <!-- Already rated — confirmation only. The customer's own rating is not
-           echoed back to them (they only see feedback from the restaurant below). -->
+      <!-- Already rated — confirmation + owner reply (if any) -->
       <div
         v-else-if="orderData.status === 'completed' && orderData.has_rating"
-        class="ui-panel ui-reveal flex items-center gap-2.5 p-4 text-sm font-medium text-emerald-300"
+        class="ui-panel ui-reveal p-4 space-y-3"
         :style="{ '--ui-delay': '126ms' }"
       >
-        <AppIcon name="check" class="h-4 w-4 shrink-0" />
-        {{ t("orderStatus.rateSubmitted") }}
+        <!-- Submitted confirmation row -->
+        <div class="flex items-center gap-2.5 text-sm font-medium text-emerald-300">
+          <AppIcon name="check" class="h-4 w-4 shrink-0" />
+          {{ t("orderStatus.rateSubmitted") }}
+        </div>
+        <!-- Owner reply block (shown only when the restaurant has replied) -->
+        <div
+          v-if="orderData.rating?.owner_reply"
+          class="rounded-xl border border-[var(--color-secondary)]/20 bg-[var(--color-secondary)]/5 p-3.5 space-y-1.5"
+        >
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-secondary)]/70">{{ t("orderStatus.ownerReplyTitle") }}</p>
+          <p class="text-sm leading-relaxed text-slate-200">{{ orderData.rating.owner_reply }}</p>
+          <p v-if="orderData.rating.owner_reply_at" class="text-[11px] text-slate-500">
+            {{ t("orderStatus.ownerReplyPostedAt", { date: formatReplyDate(orderData.rating.owner_reply_at) }) }}
+          </p>
+        </div>
       </div>
 
       <!-- The restaurant's feedback about this order — shown only to the signed-in
@@ -680,6 +693,16 @@ const loading = ref(false);
 const notFound = ref(false);
 const pollFailures = ref(0);  // consecutive refresh failures → warn the user
 const readyAlertShown = ref(false);
+
+// ── Owner reply date format ───────────────────────────────────────────────────
+const formatReplyDate = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, { dateStyle: "medium" }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+};
 
 // ── Delivery-code copy ────────────────────────────────────────────────────────
 const codeCopied = ref(false);

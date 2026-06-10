@@ -2514,6 +2514,8 @@ class CustomerOrderStatusView(APIView):
             rating_data = {
                 "score": existing_rating.score,
                 "comment": existing_rating.comment,
+                "owner_reply": existing_rating.owner_reply or "",
+                "owner_reply_at": existing_rating.owner_reply_at.isoformat() if existing_rating.owner_reply_at else None,
             }
 
         # Restaurant's trust rating of this customer (owner→customer). This is
@@ -4842,6 +4844,8 @@ class OwnerRatingListView(APIView):
                 "score": r.score,
                 "comment": r.comment,
                 "created_at": r.created_at.isoformat(),
+                "owner_reply": r.owner_reply or "",
+                "owner_reply_at": r.owner_reply_at.isoformat() if r.owner_reply_at else None,
             }
             for r in qs[:500]
         ]
@@ -4856,7 +4860,7 @@ class OwnerRatingListView(APIView):
         output = StringIO()
         output.write("﻿")  # UTF-8 BOM for Excel on Windows
         writer = csv.writer(output)
-        writer.writerow(["Date", "Order Number", "Customer", "Score", "Comment"])
+        writer.writerow(["Date", "Order Number", "Customer", "Score", "Comment", "Owner Reply"])
         for r in qs:
             writer.writerow([
                 r.created_at.strftime("%Y-%m-%d %H:%M"),
@@ -4864,10 +4868,60 @@ class OwnerRatingListView(APIView):
                 _csv_safe(r.order.customer_name or ""),  # customer-provided
                 r.score,                         # integer — safe
                 _csv_safe(r.comment or ""),      # customer-provided review text
+                _csv_safe(r.owner_reply or ""),  # owner-authored reply
             ])
         response = HttpResponse(output.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="ratings.csv"'
         return response
+
+
+class OwnerRatingReplyView(APIView):
+    """
+    POST   /api/owner/ratings/<pk>/reply/  — save or update the owner's reply.
+    DELETE /api/owner/ratings/<pk>/reply/  — remove the owner's reply.
+
+    Only accessible by the tenant owner (or platform staff/superuser).
+    The reply is stored on the Rating row and surfaced to the customer on their
+    order-status page.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_rating(self, request, pk):
+        if not _can_edit_tenant_order(request):
+            return None, Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            rating = Rating.objects.select_related("order").get(pk=pk)
+        except Rating.DoesNotExist:
+            return None, Response({"detail": "Rating not found."}, status=status.HTTP_404_NOT_FOUND)
+        return rating, None
+
+    def post(self, request, pk, *args, **kwargs):
+        rating, err = self._get_rating(request, pk)
+        if err:
+            return err
+        reply = (request.data.get("reply") or "").strip()
+        if not reply:
+            return Response({"detail": "Reply text is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(reply) > 1000:
+            return Response({"detail": "Reply must be 1000 characters or fewer."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.utils import timezone as _tz
+        rating.owner_reply = reply
+        rating.owner_reply_at = _tz.now()
+        rating.save(update_fields=["owner_reply", "owner_reply_at"])
+        return Response({
+            "owner_reply": rating.owner_reply,
+            "owner_reply_at": rating.owner_reply_at.isoformat(),
+        })
+
+    def delete(self, request, pk, *args, **kwargs):
+        rating, err = self._get_rating(request, pk)
+        if err:
+            return err
+        rating.owner_reply = ""
+        rating.owner_reply_at = None
+        rating.save(update_fields=["owner_reply", "owner_reply_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Closure dates (holiday / one-off closures) ────────────────────────────────
