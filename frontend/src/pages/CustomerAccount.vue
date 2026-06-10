@@ -2169,6 +2169,7 @@ const saveName = async () => {
     customerStore.setCustomer(res.data.customer);
   } catch {
     editableName.value = customerStore.customer?.name || '';
+    toast.show(t('customerAccount.saveNameFailed'), 'error');
   } finally {
     savingName.value = false;
   }

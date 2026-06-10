@@ -3455,6 +3455,7 @@ export const messages = {
       discountMaxPercent: "Percentage discount cannot exceed 100%.",
       timeRangeIncomplete: "Please fill in both start time and end time, or leave both empty.",
       dateRangeInvalid: "End date must be on or after the start date.",
+      maxUsesInvalid: "Maximum uses must be at least 1.",
       fetchError: "Could not load promotions.",
       retry: "Retry",
       editAriaLabel: "Edit {name}",
@@ -3842,6 +3843,7 @@ export const messages = {
       pointsPending: "Points pending",
       pointsPendingHint: "Credited when your order completes",
       pollFailed: "Updates paused · check your connection",
+      codeCopyFailed: "Could not copy code — please copy it manually.",
     },
     cartPage_order: {
       placeOrder: "Place Order",
@@ -4074,6 +4076,7 @@ export const messages = {
       voucherRedeem: "Redeem",
       voucherSuccess: "Voucher redeemed! +{amount} added to your wallet.",
       voucherError: "Invalid or expired voucher code.",
+      saveNameFailed: "Could not save name. Please try again.",
       tabNav: "Account sections"
     }
   },
@@ -7546,6 +7549,7 @@ export const messages = {
       discountMaxPercent: "La remise en pourcentage ne peut pas depasser 100 %.",
       timeRangeIncomplete: "Veuillez renseigner l'heure de debut et de fin, ou laisser les deux vides.",
       dateRangeInvalid: "La date de fin doit etre posterieure ou egale a la date de debut.",
+      maxUsesInvalid: "Le nombre maximum d'utilisations doit etre au moins 1.",
       fetchError: "Impossible de charger les promotions.",
       retry: "Reessayer",
       editAriaLabel: "Modifier {name}",
@@ -7965,6 +7969,7 @@ export const messages = {
       pointsPending: "Points en attente",
       pointsPendingHint: "Crédités à la fin de votre commande",
       pollFailed: "Mises à jour suspendues · vérifiez votre connexion",
+      codeCopyFailed: "Impossible de copier le code — veuillez le copier manuellement.",
     },
     customerAccount: {
       kicker: "Votre compte",
@@ -8149,6 +8154,7 @@ export const messages = {
       voucherRedeem: "Utiliser",
       voucherSuccess: "Bon utilisé ! +{amount} ajouté à votre portefeuille.",
       voucherError: "Code de bon invalide ou expiré.",
+      saveNameFailed: "Impossible d'enregistrer le nom. Veuillez reessayer.",
       tabNav: "Sections du compte"
     }
   },

@@ -690,7 +690,9 @@ const copyDeliveryCode = (code) => {
     codeCopied.value = true;
     clearTimeout(_codeCopiedTimer);
     _codeCopiedTimer = setTimeout(() => { codeCopied.value = false; }, 2000);
-  }).catch(() => {/* best-effort */});
+  }).catch(() => {
+    toast.show(t('orderStatus.codeCopyFailed'), 'error');
+  });
 };
 
 // ── Rating ────────────────────────────────────────────────────────────────────

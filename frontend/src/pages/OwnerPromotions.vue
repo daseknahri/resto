@@ -576,6 +576,14 @@ const submitForm = async () => {
     drawerError.value = t('ownerPromotions.dateRangeInvalid');
     return;
   }
+  // max_uses must be ≥ 1 if provided (HTML min="1" is advisory only when typed directly)
+  if (form.max_uses !== '' && form.max_uses !== null) {
+    const mu = parseInt(form.max_uses);
+    if (Number.isNaN(mu) || mu < 1) {
+      drawerError.value = t('ownerPromotions.maxUsesInvalid');
+      return;
+    }
+  }
   submitting.value = true;
   const payload = {
     name: form.name.trim(),
