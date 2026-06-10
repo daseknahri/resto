@@ -47,7 +47,7 @@
           <label class="text-sm text-slate-300">
             <span class="sr-only">{{ t("ownerTables.statusFilter") }}</span>
             <select v-model="statusFilter" class="ui-input">
-              <option value="all">{{ t("ownerTables.cardsTitle") }}</option>
+              <option value="all">{{ t("ownerTables.statusAll") }}</option>
               <option value="active">{{ t("ownerTables.activeTables") }}</option>
               <option value="disabled">{{ t("ownerTables.disabledTables") }}</option>
             </select>
@@ -264,7 +264,7 @@
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
               {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
             </button>
-            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60" @click.stop="removeTable(table)">
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
               {{ t("ownerTables.delete") }}
             </button>
           </div>
@@ -291,7 +291,7 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
             {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
           </button>
-          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60" @click.stop="removeTable(table)">
+          <button class="ui-btn-outline px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
             {{ t("ownerTables.delete") }}
           </button>
         </div>
@@ -486,6 +486,7 @@ const statusFilter = ref("all");
 const selectedTableId = ref(null);
 const { confirm } = useConfirmModal();
 const togglingId = ref(null);
+const deletingId = ref(null);
 const newTable = reactive({
   label: "",
   position: 0,
@@ -695,12 +696,14 @@ const toggleTable = async (table) => {
 };
 
 const removeTable = async (table) => {
+  if (deletingId.value === table.id) return;
   const ok = await confirm({
     title: t("ownerTables.deleteConfirm", { label: table.label }),
     body: t("confirmModal.defaultBody"),
     confirmLabel: t("ownerTables.delete"),
   });
   if (!ok) return;
+  deletingId.value = table.id;
   try {
     await api.delete(`/tables/${table.id}/`);
     tables.value = tables.value.filter((item) => item.id !== table.id);
@@ -711,6 +714,8 @@ const removeTable = async (table) => {
     toast.show(t("ownerTables.deleted"), "success");
   } catch (err) {
     toast.show(parseError(err, t("ownerTables.deleteFailed")), "error");
+  } finally {
+    deletingId.value = null;
   }
 };
 

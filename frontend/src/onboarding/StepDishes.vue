@@ -8,7 +8,7 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="ui-btn-outline px-4 py-2 text-sm" type="button" :disabled="saving || hasActiveUploads" @click="saveAndNext">
-            {{ saving ? t("common.saving") : t("common.save") }}
+            {{ saving ? t("common.saving") : hasActiveUploads ? t("stepDishes.uploading") : t("common.save") }}
           </button>
           <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="openQuickDishModal">
             {{ t("stepDishes.addDishToCategory") }}
@@ -1024,7 +1024,7 @@
 
     <div class="flex flex-wrap items-center gap-3">
       <button type="button" class="ui-btn-primary px-4 py-2" :disabled="saving || hasActiveUploads" @click="saveAndNext">
-        {{ saving ? t("common.saving") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
+        {{ saving ? t("common.saving") : hasActiveUploads ? t("stepDishes.uploading") : props.standalone ? t("common.save") : t("common.saveAndNext") }}
       </button>
       <button v-if="!props.standalone" type="button" class="ui-btn-outline px-4 py-2" @click="$emit('back')">{{ t("common.previous") }}</button>
       <p class="text-sm text-slate-400">{{ status }}</p>
@@ -1042,6 +1042,7 @@ import { useTranslate } from "../composables/useTranslate";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
+import { useConfirmModal } from "../composables/useConfirmModal";
 
 const dishes = reactive([]);
 const categoryOptions = ref([]);
@@ -1056,6 +1057,7 @@ const saving = ref(false);
 const status = ref("");
 const dishSearch = ref("");
 const toast = useToastStore();
+const { confirm } = useConfirmModal();
 const tenant = useTenantStore();
 const { t } = useI18n();
 const { translating: dishTranslating, translateError: dishTranslateError, translateField } = useTranslate();
@@ -1786,6 +1788,7 @@ const load = async () => {
 
 const setActiveCategory = (categoryId) => {
   activeCategoryId.value = String(categoryId || "");
+  dishSearch.value = "";
 };
 
 const goToPreviousCategory = () => {
@@ -1944,7 +1947,14 @@ const remove = async (idx) => {
 };
 
 const removeDishByLocalId = async (localId) => {
-  const index = dishes.findIndex((dish) => dish.local_id === localId);
+  const dish = dishes.find((d) => d.local_id === localId);
+  const ok = await confirm({
+    title: t("stepDishes.confirmRemoveDish", { name: dish?.name || t("common.thisDish") }),
+    body: t("confirmModal.defaultBody"),
+    confirmLabel: t("common.delete"),
+  });
+  if (!ok) return;
+  const index = dishes.findIndex((d) => d.local_id === localId);
   if (index >= 0) await remove(index);
 };
 

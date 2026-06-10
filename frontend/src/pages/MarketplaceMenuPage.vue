@@ -317,7 +317,7 @@
                       </button>
                     </div>
                     <button
-                      v-else-if="dish.is_available"
+                      v-else-if="dish.is_available && restaurant?.is_open"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                       :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                       @click="addToCart(dish)"
@@ -325,6 +325,10 @@
                       <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                       {{ t('mktMenu.addToCart') }}
                     </button>
+                    <span
+                      v-else-if="dish.is_available && !restaurant?.is_open"
+                      class="inline-flex items-center rounded-full border border-slate-600/40 bg-slate-800/50 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
+                    >{{ t('mktMenu.closed') }}</span>
                     <span
                       v-else
                       class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
@@ -1461,6 +1465,14 @@ const placeOrder = async () => {
   checkoutError.value = '';
   if (!form.customer_name.trim()) {
     checkoutError.value = t('mktMenu.nameRequired');
+    return;
+  }
+  if (!form.customer_phone.trim()) {
+    checkoutError.value = t('mktMenu.phoneRequired');
+    return;
+  }
+  if (form.fulfillment_type === 'delivery' && !form.delivery_address.trim()) {
+    checkoutError.value = t('mktMenu.addressRequired');
     return;
   }
   if (scheduleEnabled.value && !scheduledFor.value) {
