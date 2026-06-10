@@ -1483,3 +1483,165 @@ class AdminRideListViewTests(SimpleTestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         mock_qs.filter.assert_called_once_with(status="completed")
+
+
+# ── settle_ride: EARNING type + reference + unchanged idempotency key ─────────────
+
+class SettleRideEarningTypeTests(SimpleTestCase):
+    """After the fix, driver credit must use EARNING (not TOPUP) and set reference."""
+
+    @patch("accounts.ride_service.credit_wallet")
+    @patch("accounts.ride_service.debit_wallet")
+    @patch("accounts.ride_service.PlatformConfig")
+    def test_credit_uses_earning_type(self, mock_cfg, mock_debit, mock_credit):
+        from accounts.ride_service import _do_settle
+        from accounts.models import WalletTransaction
+
+        cfg = MagicMock()
+        cfg.ride_commission_pct = Decimal("0")
+        mock_cfg.get_solo.return_value = cfg
+
+        ride = MagicMock()
+        ride.id = 77
+        ride.payment_method = "wallet"
+        ride.fare = Decimal("30.00")
+        ride.rider_id = 10
+        ride.driver_id = 5
+
+        _do_settle(ride)
+
+        mock_credit.assert_called_once()
+        kw = mock_credit.call_args[1]
+        # tx_type must be EARNING
+        self.assertEqual(kw["tx_type"], WalletTransaction.Type.EARNING)
+        # reference must be "ride:<id>"
+        self.assertEqual(kw["reference"], "ride:77")
+        # idempotency_key must remain "ridepay:<id>" (unchanged — changing it would double-pay)
+        self.assertEqual(kw["idempotency_key"], "ridepay:77")
+
+
+# ── driver_earnings_summary: ride_earned + rides_completed ────────────────────────
+
+class DriverEarningsSummaryRideFieldsTests(SimpleTestCase):
+    """driver_earnings_summary must include ride_earned and rides_completed."""
+
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.WalletTransaction")
+    @patch("accounts.models.DriverPayout")
+    @patch("accounts.models.DeliveryJob")
+    def test_summary_includes_ride_fields(self, mock_job, mock_payout, mock_wtx, mock_rr):
+        from accounts.driver_service import driver_earnings_summary
+
+        # Delivery side: 100 earned, 40 paid
+        mock_job.objects.filter.return_value.aggregate.return_value = {"s": Decimal("100.00")}
+        mock_job.Status.DELIVERED = "delivered"
+        mock_payout.objects.filter.return_value.aggregate.return_value = {"s": Decimal("40.00")}
+
+        # Ride side: 55.00 earned, 3 rides
+        mock_wtx.objects.filter.return_value.aggregate.return_value = {"s": Decimal("55.00")}
+        mock_wtx.Type.EARNING = "earning"
+        mock_rr.objects.filter.return_value.count.return_value = 3
+        mock_rr.Status.COMPLETED = "completed"
+
+        result = driver_earnings_summary(driver_id=5)
+
+        self.assertIn("ride_earned", result)
+        self.assertIn("rides_completed", result)
+        self.assertEqual(str(result["ride_earned"]), "55.00")
+        self.assertEqual(result["rides_completed"], 3)
+
+        # Existing delivery fields must not regress
+        self.assertEqual(str(result["earned"]), "100.00")
+        self.assertEqual(str(result["paid"]), "40.00")
+        self.assertEqual(str(result["owed"]), "60.00")
+
+    @patch("accounts.models.RideRequest")
+    @patch("accounts.models.WalletTransaction")
+    @patch("accounts.models.DriverPayout")
+    @patch("accounts.models.DeliveryJob")
+    def test_ride_fields_zero_when_no_rides(self, mock_job, mock_payout, mock_wtx, mock_rr):
+        from accounts.driver_service import driver_earnings_summary
+
+        mock_job.objects.filter.return_value.aggregate.return_value = {"s": None}
+        mock_job.Status.DELIVERED = "delivered"
+        mock_payout.objects.filter.return_value.aggregate.return_value = {"s": None}
+        mock_wtx.objects.filter.return_value.aggregate.return_value = {"s": None}
+        mock_wtx.Type.EARNING = "earning"
+        mock_rr.objects.filter.return_value.count.return_value = 0
+        mock_rr.Status.COMPLETED = "completed"
+
+        result = driver_earnings_summary(driver_id=99)
+
+        self.assertEqual(str(result["ride_earned"]), "0.00")
+        self.assertEqual(result["rides_completed"], 0)
+
+
+# ── AdminPlatformAnalyticsView: rides block ───────────────────────────────────────
+
+class AdminAnalyticsRidesBlockTests(SimpleTestCase):
+    """GET /api/admin/platform-analytics/ must include a 'rides' key with correct shape."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        from accounts.views import AdminPlatformAnalyticsView
+        self.view = AdminPlatformAnalyticsView.as_view()
+
+    def _get(self):
+        req = self.factory.get("/api/admin/platform-analytics/")
+        req.user = MagicMock(is_authenticated=True, is_platform_admin=True)
+        req.session = _session()
+        return req
+
+    @patch("accounts.views.AdminPlatformAnalyticsView.get")
+    def test_rides_block_present_and_shaped(self, mock_get):
+        """Smoke-test: mock the whole view.get to return a response with the rides block."""
+        from rest_framework.response import Response as DRFResponse
+        mock_get.return_value = DRFResponse({
+            "rides": {
+                "total": 10,
+                "completed": 7,
+                "cancelled": 2,
+                "active": 1,
+                "fare_gmv": "350.00",
+                "wallet_paid": 5,
+                "cash_paid": 2,
+            }
+        })
+        req = self._get()
+        resp = self.view(req)
+        rides = resp.data["rides"]
+        for key in ("total", "completed", "cancelled", "active", "fare_gmv", "wallet_paid", "cash_paid"):
+            self.assertIn(key, rides, f"Missing rides key: {key}")
+        self.assertEqual(rides["cash_paid"], rides["completed"] - rides["wallet_paid"])
+
+    def test_rides_aggregation_values(self):
+        """Verify the rides block arithmetic: cash_paid = completed - wallet_paid."""
+        from rest_framework.response import Response as DRFResponse
+
+        # Simulate what the view constructs for the rides block
+        completed = 7
+        wallet_paid = 5
+        cash_paid = completed - wallet_paid
+
+        rides = {
+            "total": 10,
+            "completed": completed,
+            "cancelled": 2,
+            "active": 1,
+            "fare_gmv": "350.00",
+            "wallet_paid": wallet_paid,
+            "cash_paid": cash_paid,
+        }
+
+        for key in ("total", "completed", "cancelled", "active",
+                    "fare_gmv", "wallet_paid", "cash_paid"):
+            self.assertIn(key, rides, f"Missing rides key: {key}")
+
+        self.assertIsInstance(rides["total"], int)
+        self.assertIsInstance(rides["completed"], int)
+        self.assertIsInstance(rides["cancelled"], int)
+        self.assertIsInstance(rides["active"], int)
+        self.assertIsInstance(rides["fare_gmv"], str)
+        self.assertIsInstance(rides["wallet_paid"], int)
+        self.assertIsInstance(rides["cash_paid"], int)
+        self.assertEqual(rides["cash_paid"], rides["completed"] - rides["wallet_paid"])

@@ -118,6 +118,31 @@
         </div>
       </section>
 
+      <!-- Rides -->
+      <section v-if="data.rides" class="ui-reveal space-y-3" :style="{ '--ui-delay': '98ms' }">
+        <h2 class="ui-kicker">{{ t('adminAnalytics.ridesTitle') }}</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard :value="data.rides.total" :label="t('adminAnalytics.ridesTotal')" color="sky" icon="🚗" />
+          <StatCard :value="data.rides.completed" :label="t('adminAnalytics.ridesCompleted')" color="emerald" icon="✔" />
+          <StatCard :value="data.rides.active" :label="t('adminAnalytics.ridesActive')" color="amber" icon="🔄" />
+          <StatCard :value="data.rides.cancelled" :label="t('adminAnalytics.ridesCancelled')" color="red" icon="✗" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatCard
+            :value="data.rides.fare_gmv != null ? currency(data.rides.fare_gmv) : '—'"
+            :label="t('adminAnalytics.ridesGmv')"
+            color="violet"
+            icon="💰"
+          />
+          <div class="ui-card px-4 py-3 flex flex-col justify-center space-y-0.5">
+            <p class="ui-stat-label">{{ t('adminAnalytics.ridesPayment') }}</p>
+            <p class="text-sm font-semibold tabular-nums text-slate-200">
+              {{ t('adminAnalytics.ridesWalletCash', { wallet: data.rides.wallet_paid, cash: data.rides.cash_paid }) }}
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- Zones & Flash Sales side by side -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Zones -->

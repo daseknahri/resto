@@ -140,8 +140,9 @@ def _do_settle(ride) -> None:
     credit_wallet(
         ride.driver_id,
         driver_amount,
-        tx_type=WalletTransaction.Type.TOPUP,
+        tx_type=WalletTransaction.Type.EARNING,
         idempotency_key=f"ridepay:{ride.id}",
+        reference=f"ride:{ride.id}",
         note=f"Ride #{ride.id} earnings",
         require_verified=False,
     )

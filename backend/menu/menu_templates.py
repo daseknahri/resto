@@ -916,6 +916,300 @@ TEMPLATES = {
             },
         ],
     },
+    "mexican": {
+        "label": "Mexican / Tacos",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#7C1C0A",
+            "secondary_color": "#F5A623",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Tacos",
+                "dishes": [
+                    {"name": "Taco al Pastor", "price": "30", "description": "Porc mariné, ananas, coriandre, salsa rouge."},
+                    {"name": "Taco de Poulet Grillé", "price": "28", "description": "Poulet épicé, guacamole, pico de gallo."},
+                    {"name": "Taco Veggie", "price": "25", "description": "Haricots noirs, maïs, poivrons, salsa verde."},
+                    {"name": "Taco Boeuf", "price": "32", "description": "Boeuf haché assaisonné, fromage, jalapeño."},
+                ],
+            },
+            {
+                "name": "Burritos",
+                "dishes": [
+                    {"name": "Burrito Classic", "price": "55", "description": "Riz, haricots, boeuf, crème, fromage."},
+                    {"name": "Burrito Poulet", "price": "52", "description": "Poulet grillé, riz, guacamole, salsa."},
+                    {"name": "Burrito Végétarien", "price": "48", "description": "Légumes rôtis, haricots, riz, salsa verde."},
+                ],
+            },
+            {
+                "name": "Sides",
+                "dishes": [
+                    {"name": "Guacamole & Nachos", "price": "35", "description": "Avocat frais, tomate, citron vert, chips de maïs."},
+                    {"name": "Quesadilla", "price": "40", "description": "Tortilla grillée, fromage fondant, jalapeño."},
+                    {"name": "Elotes (Maïs grillé)", "price": "22", "description": "Maïs grillé, mayonnaise, fromage, paprika."},
+                    {"name": "Frites de Patate Douce", "price": "25", "description": "Croustillantes, sauce chipotle."},
+                ],
+            },
+            {
+                "name": "Drinks",
+                "dishes": [
+                    {"name": "Horchata", "price": "22", "description": "Boisson de riz crémeuse, cannelle, vanille."},
+                    {"name": "Agua de Jamaica", "price": "20", "description": "Infusion d'hibiscus fraîche, légèrement sucrée."},
+                    {"name": "Limonade Citron Vert", "price": "18", "description": "Pressée minute, piment doux."},
+                ],
+            },
+        ],
+    },
+    "snack_shawarma": {
+        "label": "Snack / Shawarma",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#2C1A0E",
+            "secondary_color": "#E8A020",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Shawarma & Tacos",
+                "dishes": [
+                    {"name": "Shawarma Poulet", "price": "28", "description": "Poulet mariné, sauce blanche, chou, cornichon."},
+                    {"name": "Shawarma Viande", "price": "35", "description": "Viande de veau, tahini, légumes croquants."},
+                    {"name": "Taco Viande", "price": "22", "description": "Galette fine, viande assaisonnée, sauce harissa."},
+                    {"name": "Taco Poulet Crispy", "price": "22", "description": "Poulet frit croustillant, mayonnaise, salade."},
+                    {"name": "Mix Shawarma (Poulet + Viande)", "price": "40", "description": "Moitié poulet, moitié viande, double sauce."},
+                ],
+            },
+            {
+                "name": "Paninis & Burgers",
+                "dishes": [
+                    {"name": "Panini Poulet", "price": "30", "description": "Pain ciabatta grillé, poulet, fromage, tomate."},
+                    {"name": "Panini Viande Hachée", "price": "32", "description": "Viande épicée, fromage fondu, salade, ketchup."},
+                    {"name": "Burger Smash", "price": "45", "description": "Deux steaks smashés, cheddar, pickles, sauce maison."},
+                    {"name": "Burger Poulet Crispy", "price": "42", "description": "Poulet frit, coleslaw, mayo épicée, pain brioché."},
+                ],
+            },
+            {
+                "name": "Frites & Sides",
+                "dishes": [
+                    {"name": "Frites Classiques", "price": "15", "description": "Dorées et croustillantes, sel fin."},
+                    {"name": "Frites Chargées", "price": "30", "description": "Frites, fromage fondu, viande hachée, sauce."},
+                    {"name": "Frites Épicées", "price": "18", "description": "Assaisonnées paprika-cumin, sauce harissa."},
+                    {"name": "Salade Maison", "price": "20", "description": "Laitue, tomate, oignon, vinaigrette citron."},
+                ],
+            },
+            {
+                "name": "Boissons",
+                "dishes": [
+                    {"name": "Soda (cannette)", "price": "10", "description": "Coca, Fanta ou Sprite, servi frais."},
+                    {"name": "Jus d'Orange Pressé", "price": "18", "description": "Oranges fraîches du Maroc, pressées minute."},
+                    {"name": "Eau Minérale", "price": "8", "description": "50cl, servie fraîche."},
+                ],
+            },
+        ],
+    },
+    "breakfast_brunch": {
+        "label": "Breakfast / Brunch",
+        "business_type": "cafe",
+        "theme": {
+            "primary_color": "#A0522D",
+            "secondary_color": "#FDE68A",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Breakfasts",
+                "dishes": [
+                    {"name": "Full Moroccan Breakfast", "price": "65", "description": "Msemen, beghrir, amlou, olive oil, honey, olives, cheese."},
+                    {"name": "Continental Breakfast", "price": "55", "description": "Croissant, butter, jam, orange juice, coffee."},
+                    {"name": "Avocado Toast", "price": "50", "description": "Sourdough, smashed avocado, lemon, chilli flakes."},
+                    {"name": "Granola Bowl", "price": "45", "description": "Homemade granola, yogurt, fresh fruit, honey."},
+                ],
+            },
+            {
+                "name": "Pancakes & Sweets",
+                "dishes": [
+                    {"name": "Fluffy Pancakes", "price": "50", "description": "Stack of three, maple syrup, fresh berries."},
+                    {"name": "French Toast", "price": "48", "description": "Brioche dipped in vanilla custard, powdered sugar."},
+                    {"name": "Msemen au Miel & Argan", "price": "30", "description": "Crêpes feuilletées marocaines, miel, huile d'argan."},
+                    {"name": "Crêpe Sucrée", "price": "28", "description": "Nutella, banane ou confiture au choix."},
+                ],
+            },
+            {
+                "name": "Egg Dishes",
+                "dishes": [
+                    {"name": "Eggs Benedict", "price": "65", "description": "Poached eggs, Canadian ham, hollandaise, English muffin."},
+                    {"name": "Shakshuka", "price": "55", "description": "Eggs poached in spiced tomato sauce, fresh herbs."},
+                    {"name": "Omelette Maison", "price": "45", "description": "Three eggs, choice of fillings: cheese / veggies / merguez."},
+                    {"name": "Scrambled Eggs & Toast", "price": "40", "description": "Creamy soft-scrambled eggs, buttered toast."},
+                ],
+            },
+            {
+                "name": "Coffee & Juice",
+                "dishes": [
+                    {"name": "Cappuccino", "price": "25", "description": "Double shot espresso, steamed milk foam."},
+                    {"name": "Café au Lait", "price": "22", "description": "Strong coffee, hot milk, light and smooth."},
+                    {"name": "Fresh Orange Juice", "price": "22", "description": "Pressed to order, 100% Moroccan oranges."},
+                    {"name": "Green Detox Juice", "price": "30", "description": "Spinach, cucumber, ginger, apple, lemon."},
+                    {"name": "Moroccan Mint Tea", "price": "18", "description": "Fresh mint, green tea, light sugar."},
+                ],
+            },
+        ],
+    },
+    "vegan": {
+        "label": "Vegan / Plant-based",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#1F3D1A",
+            "secondary_color": "#7EC850",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Bowls",
+                "dishes": [
+                    {"name": "Buddha Bowl", "price": "65", "description": "Quinoa, roasted veggies, chickpeas, tahini dressing."},
+                    {"name": "Falafel Bowl", "price": "60", "description": "Crispy falafels, hummus, tabbouleh, pita chips."},
+                    {"name": "Moroccan Couscous Bowl", "price": "58", "description": "Steamed couscous, seven vegetables, harissa."},
+                    {"name": "Poke Bowl", "price": "70", "description": "Brown rice, avocado, edamame, mango, sesame."},
+                ],
+            },
+            {
+                "name": "Burgers & Wraps",
+                "dishes": [
+                    {"name": "Black Bean Burger", "price": "55", "description": "Smoky black-bean patty, avocado, pickles, vegan mayo."},
+                    {"name": "Falafel Wrap", "price": "45", "description": "Whole-wheat wrap, falafel, hummus, veggies."},
+                    {"name": "Mushroom & Lentil Burger", "price": "58", "description": "Earthy mushroom-lentil patty, tomato, rocket, tahini."},
+                ],
+            },
+            {
+                "name": "Salads",
+                "dishes": [
+                    {"name": "Salade de Quinoa", "price": "48", "description": "Quinoa, tomates cerises, concombre, herbes fraîches."},
+                    {"name": "Salade Marocaine", "price": "35", "description": "Tomates, poivrons, cumin, coriandre, huile d'olive."},
+                    {"name": "Salade de Pois Chiches", "price": "42", "description": "Pois chiches rôtis, épinards, citron, sumac."},
+                    {"name": "Salade d'Avocat & Mangue", "price": "50", "description": "Avocat, mangue, roquette, vinaigrette agrumes."},
+                ],
+            },
+            {
+                "name": "Smoothies",
+                "dishes": [
+                    {"name": "Green Power Smoothie", "price": "35", "description": "Spinach, banana, almond milk, chia seeds."},
+                    {"name": "Berry Blast", "price": "38", "description": "Mixed berries, coconut milk, flaxseed."},
+                    {"name": "Mango Sunshine", "price": "35", "description": "Mango, orange, turmeric, ginger."},
+                    {"name": "Chocolate Protein Shake", "price": "40", "description": "Plant protein, cacao, oat milk, almond butter."},
+                ],
+            },
+        ],
+    },
+    "fried_chicken": {
+        "label": "Fried Chicken",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#3D1A00",
+            "secondary_color": "#FF6B00",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Buckets",
+                "dishes": [
+                    {"name": "Bucket 6 pcs", "price": "85", "description": "6 morceaux de poulet frit croustillant, sauce au choix."},
+                    {"name": "Bucket 10 pcs", "price": "130", "description": "10 morceaux, 2 sauces, idéal à partager."},
+                    {"name": "Bucket Family 15 pcs", "price": "190", "description": "15 morceaux assortis, 3 sauces, 4 frites."},
+                ],
+            },
+            {
+                "name": "Burgers",
+                "dishes": [
+                    {"name": "Crispy Chicken Burger", "price": "50", "description": "Filet de poulet frit, coleslaw, mayo épicée, pain brioché."},
+                    {"name": "Double Crispy Burger", "price": "68", "description": "Double filet frit, cheddar, pickles, sauce barbecue."},
+                    {"name": "Spicy Hot Burger", "price": "55", "description": "Poulet mariné piment, sauce ranch, jalapeño."},
+                    {"name": "Chicken Cheese Burger", "price": "58", "description": "Poulet frit, fromage fondu, tomate, laitue."},
+                ],
+            },
+            {
+                "name": "Tenders & Wings",
+                "dishes": [
+                    {"name": "Tenders 4 pcs", "price": "45", "description": "Filets de poulet panés, sauce BBQ ou ranch."},
+                    {"name": "Wings Buffalo 6 pcs", "price": "50", "description": "Ailes marinées sauce buffalo, céleri, bleu cheese."},
+                    {"name": "Wings Honey Garlic 6 pcs", "price": "52", "description": "Ailes glacées miel-ail, sésame, oignon vert."},
+                    {"name": "Combo Tenders & Wings", "price": "75", "description": "3 tenders + 4 wings, 2 sauces, frites."},
+                ],
+            },
+            {
+                "name": "Sides",
+                "dishes": [
+                    {"name": "Frites Croustillantes", "price": "18", "description": "Frites maison dorées, sel et épices."},
+                    {"name": "Coleslaw Maison", "price": "15", "description": "Chou blanc et rouge, carottes, mayo légère."},
+                    {"name": "Corn on the Cob", "price": "15", "description": "Épis de maïs grillés, beurre et herbes."},
+                    {"name": "Mac & Cheese", "price": "28", "description": "Macaroni crémeux au cheddar fondu."},
+                    {"name": "Biscuit Maison", "price": "12", "description": "Biscuit feuilleté chaud, beurre et miel."},
+                ],
+            },
+        ],
+    },
+    "tea_house": {
+        "label": "Tea house / Moroccan pastries",
+        "business_type": "cafe",
+        "theme": {
+            "primary_color": "#4A2C17",
+            "secondary_color": "#D4AC6E",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Teas",
+                "dishes": [
+                    {"name": "Atay bil Nana (Thé à la Menthe)", "price": "18", "description": "Thé vert, menthe fraîche, sucre, servi en théière."},
+                    {"name": "Thé à l'Absinthe", "price": "18", "description": "Thé vert marocain, chiba, saveur légèrement amère."},
+                    {"name": "Thé aux Roses", "price": "20", "description": "Thé vert, pétales de rose, cardamome."},
+                    {"name": "Thé Khmira (Épicé)", "price": "22", "description": "Mélange de 7 épices marocaines, gingembre, cannelle."},
+                    {"name": "Thé au Lait d'Amande", "price": "25", "description": "Thé vert, lait d'amande maison, fleur d'oranger."},
+                ],
+            },
+            {
+                "name": "Moroccan Pastries",
+                "dishes": [
+                    {"name": "Cornes de Gazelle", "price": "12", "description": "Pâtisseries à la pâte d'amande, eau de fleur d'oranger."},
+                    {"name": "Briouates aux Amandes", "price": "15", "description": "Feuilleté croustillant, farce amande-cannelle, miel."},
+                    {"name": "Sellou", "price": "20", "description": "Mélange de farine grillée, amandes, sésame, miel."},
+                    {"name": "Fekkas", "price": "14", "description": "Biscuits secs aux amandes et raisins secs."},
+                    {"name": "Chebakia", "price": "15", "description": "Fleurs de sésame frites, miel, eau de rose."},
+                ],
+            },
+            {
+                "name": "Crepes & Msemen",
+                "dishes": [
+                    {"name": "Msemen Nature", "price": "12", "description": "Crêpe feuilletée marocaine, beurre et miel."},
+                    {"name": "Msemen Farci", "price": "22", "description": "Msemen garni viande hachée et oignons caramélisés."},
+                    {"name": "Beghrir (Crêpe aux Mille Trous)", "price": "18", "description": "Crêpe spongieuse, beurre fondu, miel."},
+                    {"name": "Crêpe Sucrée", "price": "20", "description": "Fine crêpe, miel d'argan ou confiture de figues."},
+                ],
+            },
+            {
+                "name": "Cold Drinks",
+                "dishes": [
+                    {"name": "Jus d'Orange Pressé", "price": "20", "description": "Oranges du Maroc pressées minute, frais."},
+                    {"name": "Citronnade à la Menthe", "price": "22", "description": "Citrons, menthe fraîche, eau gazeuse."},
+                    {"name": "Smoothie Avocat-Lait", "price": "30", "description": "Avocat frais, lait, sucre — classique marocain."},
+                    {"name": "Eau Infusée Hibiscus", "price": "18", "description": "Fleurs de karkadé, citron vert, menthe."},
+                ],
+            },
+        ],
+    },
     "retail": {
         "label": "Retail / Shop",
         "business_type": "retail",

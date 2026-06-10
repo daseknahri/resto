@@ -5079,6 +5079,9 @@ class DriverEarningsView(APIView):
             "available": available,
             "cashout_min": str(CASHOUT_MIN),
             "can_cash_out": (cust.wallet_balance or 0) >= CASHOUT_MIN,
+            # Ride-hailing earnings.
+            "ride_earned": str(s["ride_earned"]),
+            "rides_completed": s["rides_completed"],
         })
 
 
@@ -5208,7 +5211,7 @@ class AdminPlatformAnalyticsView(APIView):
 
         from django.db.models import Avg, Count, Q, Sum
         from django.utils import timezone
-        from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, WalletTransaction
+        from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, RideRequest, WalletTransaction
         from tenancy.models import Tenant
 
         now = timezone.now()
@@ -5255,6 +5258,18 @@ class AdminPlatformAnalyticsView(APIView):
             active=Count("id", filter=Q(is_active=True, active_from__lte=now, active_until__gte=now)),
             total_redemptions=Sum("redemption_count"),
         )
+
+        # ── Ride-hailing ──────────────────────────────────────────────────────
+        ride_agg = RideRequest.objects.aggregate(
+            total=Count("id"),
+            completed=Count("id", filter=Q(status="completed")),
+            cancelled=Count("id", filter=Q(status="cancelled")),
+            wallet_paid=Count("id", filter=Q(status="completed", paid_with_wallet=True)),
+            fare_gmv=Sum("fare", filter=Q(status="completed")),
+        )
+        ride_active = RideRequest.objects.exclude(
+            status__in=["completed", "cancelled"]
+        ).count()
 
         # ── Wallet ────────────────────────────────────────────────────────────
         wallet_agg = Customer.objects.aggregate(
@@ -5325,6 +5340,17 @@ class AdminPlatformAnalyticsView(APIView):
                 "customer_wallet_liability": _f(wallet_agg["total_balance"]) or 0.0,
                 "restaurant_float_outstanding": _f(total_float) or 0.0,
                 "driver_owed": _f(driver_owed) or 0.0,
+            },
+            "rides": {
+                "total": ride_agg["total"] or 0,
+                "completed": ride_agg["completed"] or 0,
+                "cancelled": ride_agg["cancelled"] or 0,
+                "active": ride_active,
+                "fare_gmv": str((_Dec(ride_agg["fare_gmv"] or 0)).quantize(_Dec("0.01"))),
+                "wallet_paid": ride_agg["wallet_paid"] or 0,
+                # Clamped: wallet_paid is bounded by completed under correct
+                # data, but an admin data correction must not show a negative.
+                "cash_paid": max(0, (ride_agg["completed"] or 0) - (ride_agg["wallet_paid"] or 0)),
             },
         })
 

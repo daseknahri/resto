@@ -277,6 +277,14 @@
             <p class="mt-1 text-base font-bold tabular-nums text-emerald-400">{{ fmtMoney(earnings.owed) }}</p>
           </div>
         </div>
+        <!-- Ride earnings row — only shown when driver has completed rides -->
+        <div v-if="earnings.rides_completed > 0" class="border-t border-slate-700/40 flex items-center justify-between px-4 py-3">
+          <p class="ui-stat-label">{{ t('driverRides.earningsLabel') }}</p>
+          <div class="text-right">
+            <p class="text-sm font-bold tabular-nums text-sky-300">{{ fmtMoney(earnings.ride_earned) }}</p>
+            <p class="text-[11px] text-slate-400">{{ t('driverRides.earningsCount', { n: earnings.rides_completed }) }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- Cash-out: available wallet balance + redeem at a restaurant -->

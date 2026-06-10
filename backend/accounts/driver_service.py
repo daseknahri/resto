@@ -13,8 +13,8 @@ from .wallet_service import _money, WalletError  # reuse quantize + error semant
 
 
 def driver_earnings_summary(driver_id) -> dict:
-    """Return {earned, paid, owed} for a driver, as quantised Decimals."""
-    from .models import DeliveryJob, DriverPayout
+    """Return {earned, paid, owed, ride_earned, rides_completed} for a driver, as quantised Decimals."""
+    from .models import DeliveryJob, DriverPayout, RideRequest, WalletTransaction
 
     earned = (
         DeliveryJob.objects
@@ -25,9 +25,25 @@ def driver_earnings_summary(driver_id) -> dict:
         DriverPayout.objects.filter(driver_id=driver_id).aggregate(s=Sum("amount"))["s"]
     ) or Decimal("0")
 
+    ride_earned_raw = (
+        WalletTransaction.objects
+        .filter(customer_id=driver_id, type=WalletTransaction.Type.EARNING, reference__startswith="ride:")
+        .aggregate(s=Sum("amount"))["s"]
+    ) or Decimal("0")
+
+    rides_completed = RideRequest.objects.filter(
+        driver_id=driver_id, status=RideRequest.Status.COMPLETED
+    ).count()
+
     earned = _money(earned)
     paid = _money(paid)
-    return {"earned": earned, "paid": paid, "owed": _money(earned - paid)}
+    return {
+        "earned": earned,
+        "paid": paid,
+        "owed": _money(earned - paid),
+        "ride_earned": _money(ride_earned_raw),
+        "rides_completed": rides_completed,
+    }
 
 
 @transaction.atomic

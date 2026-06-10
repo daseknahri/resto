@@ -372,14 +372,19 @@ class AdminPlatformAnalyticsViewTests(SimpleTestCase):
                             mock_fs.objects.aggregate.return_value = _zero_fs
 
                             with patch("accounts.models.WalletTransaction") as mock_wt, \
-                                 patch("accounts.models.DriverPayout") as mock_dp:
+                                 patch("accounts.models.DriverPayout") as mock_dp, \
+                                 patch("accounts.models.RideRequest") as mock_rr:
                                 mock_wt.objects.aggregate.return_value = _zero_txn
                                 mock_dp.objects.aggregate.return_value = {"s": None}
+                                _zero_ride = {"total": 0, "completed": 0, "cancelled": 0,
+                                              "wallet_paid": 0, "fare_gmv": None}
+                                mock_rr.objects.aggregate.return_value = _zero_ride
+                                mock_rr.objects.exclude.return_value.count.return_value = 0
 
                                 resp = self._get()
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        for section in ("tenants", "customers", "deliveries", "zones", "flash_sales", "wallet"):
+        for section in ("tenants", "customers", "deliveries", "zones", "flash_sales", "wallet", "rides"):
             self.assertIn(section, resp.data, f"Missing section: {section}")
 
 

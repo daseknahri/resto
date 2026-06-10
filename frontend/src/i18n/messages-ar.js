@@ -1322,7 +1322,13 @@ const arabicMessages = {
       "seafood": "مطعم أسماك وبحريات",
       "steakhouse": "ستيك هاوس / مشاوي",
       "indian": "هندي / كاري",
-      "chinese": "صيني / ديم سام"
+      "chinese": "صيني / ديم سام",
+      "mexican": "مكسيكي / تاكوس",
+      "snack_shawarma": "سناك / شاورما",
+      "breakfast_brunch": "فطور / برانش",
+      "vegan": "نباتي / صحي",
+      "fried_chicken": "دجاج مقلي",
+      "tea_house": "صالون شاي / حلويات مغربية"
     }
   },
   "stepPublish": {
@@ -2916,6 +2922,8 @@ Object.assign(arabicMessages, {
     waitingCarApproval: "تُفتح طلبات الرحلات بعد الموافقة على وثائق سيارتك.",
     historyTitle: "سجل الرحلات",
     historyEmpty: "لا توجد رحلات مكتملة حتى الآن.",
+    earningsLabel: "أرباح الرحلات",
+    earningsCount: "{n} رحلات مكتملة",
   },
   adminRides: {
     kicker: "المنصة",
@@ -3790,6 +3798,14 @@ Object.assign(arabicMessages, {
     payments: "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0627\u062a",
     loaded: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062a\u062d\u0644\u064a\u0644.",
     updating: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u062f\u064a\u062b\u2026",
+    ridesTitle: "\u0627\u0644\u0631\u062d\u0644\u0627\u062a",
+    ridesTotal: "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a",
+    ridesCompleted: "\u0645\u0643\u062a\u0645\u0644\u0629",
+    ridesActive: "\u062c\u0627\u0631\u064a\u0629",
+    ridesCancelled: "\u0645\u0644\u063a\u0627\u0629",
+    ridesGmv: "\u062d\u062c\u0645 \u0627\u0644\u0623\u062c\u0631\u0629",
+    ridesPayment: "\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u062f\u0641\u0639",
+    ridesWalletCash: "{wallet} \u0645\u062d\u0641\u0638\u0629 \u00b7 {cash} \u0646\u0642\u062f\u0627\u064b",
   },
   ownerRatings: {
     kicker: "\u062a\u0639\u0644\u064a\u0642\u0627\u062a \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
