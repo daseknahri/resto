@@ -387,6 +387,47 @@
             <AppIcon name="arrowRight" class="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-400 rtl:scale-x-[-1]" aria-hidden="true" />
           </RouterLink>
 
+          <!-- Most recent ride -->
+          <RouterLink
+            v-if="lastRide"
+            :to="{ name: 'ride' }"
+            class="group ui-panel ui-reveal block p-4 space-y-3 hover:border-teal-500/30"
+            style="--ui-delay: 260ms"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <p class="ui-kicker">{{ t('customerAccount.overviewLastRide') }}</p>
+              <AppIcon name="arrowRight" class="h-3 w-3 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-teal-400 rtl:scale-x-[-1]" aria-hidden="true" />
+            </div>
+            <div class="flex items-start gap-2.5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs">
+              <span
+                class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                :class="{
+                  'bg-emerald-400': lastRide.status === 'completed',
+                  'bg-red-400': lastRide.status === 'cancelled',
+                  'bg-slate-500': lastRide.status !== 'completed' && lastRide.status !== 'cancelled',
+                }"
+                aria-hidden="true"
+              />
+              <div class="min-w-0 flex-1 space-y-1">
+                <p class="truncate font-semibold text-slate-200" :title="lastRide.dropoff_address">{{ lastRide.dropoff_address }}</p>
+                <div class="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span v-if="lastRide.fare" class="tabular-nums text-slate-400">{{ formatPrice(lastRide.fare) }}</span>
+                  <span v-if="lastRide.created_at">{{ formatDate(lastRide.created_at) }}</span>
+                  <span class="rounded-full border border-slate-700/60 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">{{ rideStatusLabel(lastRide.status) }}</span>
+                </div>
+              </div>
+            </div>
+          </RouterLink>
+
+          <div v-else-if="lastRideChecked" class="ui-panel ui-reveal p-4 space-y-2" style="--ui-delay: 260ms">
+            <p class="ui-kicker">{{ t('customerAccount.overviewLastRide') }}</p>
+            <p class="text-xs text-slate-400">{{ t('customerAccount.overviewNoRides') }}</p>
+            <RouterLink
+              :to="{ name: 'ride' }"
+              class="ui-press inline-flex items-center gap-1.5 rounded-full border border-teal-500/40 bg-teal-500/8 px-3 py-1.5 text-[11px] font-semibold text-teal-300 transition hover:border-teal-500/70 hover:bg-teal-500/15"
+            >{{ t('customerAccount.overviewBookRide') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
+          </div>
+
           <!-- Most recent order -->
           <div v-if="apiOrders.length" class="ui-panel ui-reveal p-4 space-y-3" style="--ui-delay: 240ms">
             <div class="flex items-center justify-between gap-2">
@@ -1716,6 +1757,34 @@ const localeConfigured = ref(false);
 const LOCALE_LABELS = { en: 'English', fr: 'Français', ar: 'العربية' };
 const localeLabelCurrent = computed(() => LOCALE_LABELS[selectedLocale.value] || selectedLocale.value);
 
+// ── Last ride (overview) ──────────────────────────────────────────────────────
+const lastRide = ref(null);
+const lastRideChecked = ref(false);
+
+// Reuses the adminRides.status* keys — already translated in all three locales.
+const RIDE_STATUS_LABELS = {
+  searching: 'adminRides.statusSearching',
+  accepted: 'adminRides.statusAccepted',
+  arrived: 'adminRides.statusArrived',
+  in_progress: 'adminRides.statusInProgress',
+  completed: 'adminRides.statusCompleted',
+  cancelled: 'adminRides.statusCancelled',
+};
+const rideStatusLabel = (s) => (RIDE_STATUS_LABELS[s] ? t(RIDE_STATUS_LABELS[s]) : s);
+
+const fetchLastRide = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/rides/history/');
+    const rides = Array.isArray(res.data) ? res.data : [];
+    lastRide.value = rides[0] || null;
+  } catch {
+    // silent-fail
+  } finally {
+    lastRideChecked.value = true;
+  }
+};
+
 const loadingOrders = ref(false);
 const loadingMoreOrders = ref(false);
 const ordersError = ref(false);
@@ -2294,6 +2363,8 @@ const handleLogout = async () => {
   localeConfigured.value = false;
   showEmailInput.value = false;
   emailError.value = '';
+  lastRide.value = null;
+  lastRideChecked.value = false;
   activeTab.value = 'overview';
 };
 
@@ -2306,6 +2377,7 @@ const onAuthenticated = (customer) => {
   fetchMarketplaceOrders();
   fetchReservations();
   fetchWallet();
+  fetchLastRide();
 };
 
 const onPhoneAdded = (customer) => {
@@ -2335,6 +2407,7 @@ onMounted(async () => {
     fetchLoyaltyConfig();
     fetchAddresses();
     pushCheckEnabled();
+    fetchLastRide();
   }
 });
 </script>

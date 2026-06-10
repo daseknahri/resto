@@ -155,6 +155,64 @@
       </div>
     </div>
 
+    <!-- ── Customer verticals ────────────────────────────────────────────── -->
+    <section aria-labelledby="verticals-heading">
+      <div class="mb-6 space-y-1.5">
+        <p class="ui-kicker">{{ t('home.verticalsKicker') }}</p>
+        <h2 id="verticals-heading" class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl">{{ t('home.verticalsTitle') }}</h2>
+        <p class="max-w-2xl text-sm leading-relaxed text-slate-300 md:text-base">{{ t('home.verticalsSubtitle') }}</p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <!-- Food -->
+        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '0ms' }">
+          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
+            <AppIcon name="cart" class="h-5 w-5 text-amber-400" aria-hidden="true" />
+          </div>
+          <div class="flex-1 space-y-1.5">
+            <p class="text-sm font-semibold text-white">{{ t('home.verticalFoodTitle') }}</p>
+            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalFoodDesc') }}</p>
+          </div>
+          <RouterLink
+            :to="{ name: 'marketplace', query: { type: 'food' } }"
+            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/8 px-3.5 py-1.5 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
+            :aria-label="t('home.verticalFoodTitle')"
+          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
+        </article>
+
+        <!-- Shops -->
+        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '56ms' }">
+          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-500/10">
+            <AppIcon name="tag" class="h-5 w-5 text-indigo-400" aria-hidden="true" />
+          </div>
+          <div class="flex-1 space-y-1.5">
+            <p class="text-sm font-semibold text-white">{{ t('home.verticalShopsTitle') }}</p>
+            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalShopsDesc') }}</p>
+          </div>
+          <RouterLink
+            :to="{ name: 'marketplace', query: { type: 'shop' } }"
+            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/8 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-500/70 hover:bg-indigo-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+            :aria-label="t('home.verticalShopsTitle')"
+          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
+        </article>
+
+        <!-- Rides -->
+        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '112ms' }">
+          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-500/30 bg-teal-500/10">
+            <AppIcon name="truck" class="h-5 w-5 text-teal-400" aria-hidden="true" />
+          </div>
+          <div class="flex-1 space-y-1.5">
+            <p class="text-sm font-semibold text-white">{{ t('home.verticalRidesTitle') }}</p>
+            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalRidesDesc') }}</p>
+          </div>
+          <RouterLink
+            to="/ride"
+            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-teal-500/40 bg-teal-500/8 px-3.5 py-1.5 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-500/70 hover:bg-teal-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50"
+            :aria-label="t('home.verticalRidesTitle')"
+          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
+        </article>
+      </div>
+    </section>
+
     <section class="grid gap-5 lg:grid-cols-[1.15fr,0.85fr]" aria-labelledby="phases-heading">
       <article class="ui-glass p-6 md:p-8 ui-reveal">
         <div class="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">

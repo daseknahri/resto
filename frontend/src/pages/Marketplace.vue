@@ -538,6 +538,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
@@ -601,7 +602,11 @@ const selectedCuisine = ref('');
 const selectedFulfillment = ref('any');
 const selectedPriceTier = ref('');
 const selectedMinRating = ref('');
-const selectedBusinessType = ref(''); // '' = all | 'food' (restaurant/cafe) | 'shop' (retail/grocery/bakery)
+// '' = all | 'food' (restaurant/cafe) | 'shop' (retail/grocery/bakery).
+// Seeded from ?type= so the landing-page vertical cards deep-link to a lens.
+const route = useRoute();
+const _initialType = ['food', 'shop'].includes(String(route.query.type || '')) ? String(route.query.type) : '';
+const selectedBusinessType = ref(_initialType);
 const openOnly = ref(false);
 const selectedTags = ref([]);
 
