@@ -622,6 +622,22 @@
               />
             </div>
             <div v-if="form.fulfillment_type === 'delivery'" class="space-y-2">
+              <!-- Saved addresses — shown when customer is signed in and has saved addresses -->
+              <div v-if="customerStore.isAuthenticated && mktSavedAddresses.length" class="space-y-1.5">
+                <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('mktMenu.savedAddresses') }}</p>
+                <div class="space-y-1">
+                  <button
+                    v-for="addr in mktSavedAddresses"
+                    :key="addr.id"
+                    type="button"
+                    class="flex min-w-0 w-full items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2 text-start text-xs transition-colors hover:border-indigo-500/40 hover:bg-indigo-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40"
+                    @click="applyMktSavedAddress(addr)"
+                  >
+                    <span v-if="addr.label" class="font-medium text-slate-200 shrink-0 me-0.5">{{ addr.label }} —</span>
+                    <span class="min-w-0 truncate text-slate-400">{{ addr.address }}</span>
+                  </button>
+                </div>
+              </div>
               <div>
                 <label for="mkt-address" class="block text-xs font-medium text-slate-400 mb-1">
                   {{ t('mktMenu.deliveryAddress') }}
@@ -1055,6 +1071,7 @@ const onAuthenticated = async () => {
   showAuthModal.value = false;
   checkoutError.value = '';
   await customerStore.fetchCustomer(true);
+  fetchMktSavedAddresses(); // load addresses now that the customer is signed in
   placeOrder(); // retry with the newly established session
 };
 
@@ -1070,6 +1087,25 @@ const form = reactive({
   delivery_lng: null,
   customer_note: '',
 });
+
+// ── Saved addresses (signed-in customers) ────────────────────────────────────
+const mktSavedAddresses = ref([]);
+
+const fetchMktSavedAddresses = async () => {
+  if (!customerStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/customer/addresses/');
+    mktSavedAddresses.value = Array.isArray(res.data) ? res.data : [];
+  } catch {
+    // silent — address picker degrades gracefully to manual entry
+  }
+};
+
+const applyMktSavedAddress = (addr) => {
+  form.delivery_address = addr.address || '';
+  if (addr.lat != null) form.delivery_lat = addr.lat;
+  if (addr.lng != null) form.delivery_lng = addr.lng;
+};
 
 // Capture the customer's coordinates so the delivery fee can be priced by distance.
 const locatingMkt = ref(false);
@@ -1641,6 +1677,7 @@ const applyReorderItems = () => {
 
 onMounted(async () => {
   await customerStore.fetchCustomer();
+  fetchMktSavedAddresses(); // non-blocking — degrades gracefully if unauthenticated
   applyReorderItems(); // pre-fill cart before menu loads so the badge is ready
   await fetchMenu();
   // Set up category observer after the menu DOM is rendered

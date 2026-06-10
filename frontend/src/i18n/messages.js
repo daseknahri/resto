@@ -483,6 +483,7 @@ export const messages = {
       soldOut: "Sold out",
       phoneRequired: "Please enter your phone number.",
       addressRequired: "Please enter a delivery address.",
+      savedAddresses: "Saved addresses",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -2300,6 +2301,7 @@ export const messages = {
       walletShortNotice: "Add {amount} to your wallet to place this order.",
       walletTopUpRequired: "Your wallet ({balance}) doesn't cover the {total} total. Top up to continue.",
       walletTopUpRequiredShort: "Top up wallet to order",
+      topUpWallet: "Top up your wallet",
       walletInsufficientError: "Your wallet balance doesn't cover this order. Please top up your wallet.",
       creditsApplied: "{amount} credits will be applied",
       creditsInsufficient: "Insufficient credits for this order",
@@ -2774,6 +2776,9 @@ export const messages = {
       peakHoursAxisHour12: "12h",
       peakHoursAxisHour18: "18h",
       peakHoursAxisHour23: "23h",
+      setupIncompleteTitle: "Your menu is in draft",
+      setupIncompleteBody: "Complete your setup to start accepting orders.",
+      setupContinue: "Continue setup",
     },
     revenueChart: {
       kicker: "Analytics",
@@ -4583,6 +4588,7 @@ export const messages = {
       soldOut: "Rupture de stock",
       phoneRequired: "Veuillez entrer votre numero de telephone.",
       addressRequired: "Veuillez entrer une adresse de livraison.",
+      savedAddresses: "Adresses enregistrees",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -6367,6 +6373,7 @@ export const messages = {
       walletShortNotice: "Ajoutez {amount} a votre portefeuille pour passer cette commande.",
       walletTopUpRequired: "Votre portefeuille ({balance}) ne couvre pas le total de {total}. Rechargez pour continuer.",
       walletTopUpRequiredShort: "Rechargez pour commander",
+      topUpWallet: "Recharger mon portefeuille",
       walletInsufficientError: "Votre solde de portefeuille ne couvre pas cette commande. Veuillez recharger votre portefeuille.",
       creditsApplied: "{amount} credits seront appliques",
       creditsInsufficient: "Credits insuffisants pour cette commande",
@@ -6841,6 +6848,9 @@ export const messages = {
       peakHoursAxisHour12: "12h",
       peakHoursAxisHour18: "18h",
       peakHoursAxisHour23: "23h",
+      setupIncompleteTitle: "Votre menu est en brouillon",
+      setupIncompleteBody: "Completez votre configuration pour commencer a accepter des commandes.",
+      setupContinue: "Continuer la configuration",
     },
     revenueChart: {
       kicker: "Analytique",

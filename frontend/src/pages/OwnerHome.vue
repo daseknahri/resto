@@ -1,6 +1,28 @@
 <template>
   <section class="space-y-3 pb-24 sm:pb-6">
 
+    <!-- ── SETUP NUDGE — shown until the menu is published ─────────────── -->
+    <article v-if="!published" class="ui-command-deck ui-reveal p-4 sm:p-5" style="--ui-delay: 0ms">
+      <div class="flex items-start gap-3.5">
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-slate-100">{{ t('ownerHome.setupIncompleteTitle') }}</p>
+          <p class="mt-0.5 text-xs text-slate-400">{{ t('ownerHome.setupIncompleteBody') }}</p>
+        </div>
+        <RouterLink
+          :to="{ name: 'onboarding' }"
+          class="ui-btn-primary shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+        >
+          {{ t('ownerHome.setupContinue') }}
+          <AppIcon name="arrowRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" aria-hidden="true" />
+        </RouterLink>
+      </div>
+    </article>
+
     <!-- ── CRITICAL SECTION: renders on first paint from cached store data ──── -->
     <article class="ui-workspace-stage ui-reveal space-y-4 p-4 sm:p-5">
 

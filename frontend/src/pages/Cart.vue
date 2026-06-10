@@ -656,6 +656,14 @@
               <p v-if="!walletCoversTotal" class="mt-1.5 text-[11px] text-amber-200">
                 {{ t('cartPage.walletShortNotice', { amount: formatPrice(orderGrandTotal - walletBalance) }) }}
               </p>
+              <RouterLink
+                v-if="prepayShortfall"
+                :to="{ name: 'customer-account' }"
+                class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 underline decoration-amber-300/40 underline-offset-2 hover:text-amber-200 transition-colors"
+              >
+                {{ t('cartPage.topUpWallet') }}
+                <AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" />
+              </RouterLink>
             </div>
           </div>
 
