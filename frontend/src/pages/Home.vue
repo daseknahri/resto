@@ -155,61 +155,56 @@
       </div>
     </div>
 
-    <!-- ── Customer verticals ────────────────────────────────────────────── -->
+    <!-- ── Customer verticals (driven by SERVICES registry) ─────────────── -->
     <section aria-labelledby="verticals-heading">
       <div class="mb-6 space-y-1.5">
         <p class="ui-kicker">{{ t('home.verticalsKicker') }}</p>
         <h2 id="verticals-heading" class="ui-display text-2xl font-bold tracking-tight text-white md:text-3xl">{{ t('home.verticalsTitle') }}</h2>
         <p class="max-w-2xl text-sm leading-relaxed text-slate-300 md:text-base">{{ t('home.verticalsSubtitle') }}</p>
       </div>
-      <div class="grid gap-4 sm:grid-cols-3">
-        <!-- Food -->
-        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '0ms' }">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10">
-            <AppIcon name="cart" class="h-5 w-5 text-amber-400" aria-hidden="true" />
-          </div>
-          <div class="flex-1 space-y-1.5">
-            <p class="text-sm font-semibold text-white">{{ t('home.verticalFoodTitle') }}</p>
-            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalFoodDesc') }}</p>
-          </div>
-          <RouterLink
-            :to="{ name: 'marketplace', query: { type: 'food' } }"
-            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/8 px-3.5 py-1.5 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
-            :aria-label="t('home.verticalFoodTitle')"
-          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
-        </article>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <template v-for="(svc, idx) in SERVICES" :key="svc.id">
+          <!-- Live service — links to marketplace lens or named route -->
+          <component
+            :is="svc.status === 'live' ? 'RouterLink' : 'article'"
+            v-bind="svc.status === 'live'
+              ? { to: svc.kind === 'lens'
+                    ? { name: 'marketplace', query: { type: svc.lens } }
+                    : { name: svc.routeName } }
+              : {}"
+            class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+            :class="svc.status === 'coming_soon' ? 'opacity-60' : 'ui-press'"
+            :style="{ '--ui-delay': (idx * 56) + 'ms' }"
+            :aria-label="svc.status === 'live' ? t('services.' + svc.id + 'Title') : undefined"
+          >
+            <!-- Icon tile -->
+            <div
+              class="flex h-10 w-10 items-center justify-center rounded-2xl text-xl"
+              :class="ACCENT_CLASSES[svc.accent].tile"
+              aria-hidden="true"
+            >{{ svc.icon }}</div>
 
-        <!-- Shops -->
-        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '56ms' }">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-500/10">
-            <AppIcon name="tag" class="h-5 w-5 text-indigo-400" aria-hidden="true" />
-          </div>
-          <div class="flex-1 space-y-1.5">
-            <p class="text-sm font-semibold text-white">{{ t('home.verticalShopsTitle') }}</p>
-            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalShopsDesc') }}</p>
-          </div>
-          <RouterLink
-            :to="{ name: 'marketplace', query: { type: 'shop' } }"
-            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/8 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 transition-colors hover:border-indigo-500/70 hover:bg-indigo-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
-            :aria-label="t('home.verticalShopsTitle')"
-          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
-        </article>
+            <!-- Text -->
+            <div class="flex-1 space-y-1.5">
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-semibold text-white">{{ t('services.' + svc.id + 'Title') }}</p>
+                <span
+                  v-if="svc.status === 'coming_soon'"
+                  class="rounded-full border border-slate-600/60 bg-slate-800/60 px-2 py-0.5 text-[10px] font-medium text-slate-400"
+                >{{ t('services.comingSoon') }}</span>
+              </div>
+              <p class="text-sm leading-relaxed text-slate-400">{{ t('services.' + svc.id + 'Desc') }}</p>
+            </div>
 
-        <!-- Rides -->
-        <article class="ui-glass ui-reveal flex flex-col gap-4 p-5 md:p-6" :style="{ '--ui-delay': '112ms' }">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-500/30 bg-teal-500/10">
-            <AppIcon name="truck" class="h-5 w-5 text-teal-400" aria-hidden="true" />
-          </div>
-          <div class="flex-1 space-y-1.5">
-            <p class="text-sm font-semibold text-white">{{ t('home.verticalRidesTitle') }}</p>
-            <p class="text-sm leading-relaxed text-slate-400">{{ t('home.verticalRidesDesc') }}</p>
-          </div>
-          <RouterLink
-            to="/ride"
-            class="ui-press inline-flex w-fit items-center gap-1.5 rounded-full border border-teal-500/40 bg-teal-500/8 px-3.5 py-1.5 text-xs font-semibold text-teal-300 transition-colors hover:border-teal-500/70 hover:bg-teal-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50"
-            :aria-label="t('home.verticalRidesTitle')"
-          >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></RouterLink>
-        </article>
+            <!-- CTA pill — live only -->
+            <span
+              v-if="svc.status === 'live'"
+              class="inline-flex w-fit items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors"
+              :class="ACCENT_CLASSES[svc.accent].pill"
+              aria-hidden="true"
+            >{{ t('home.verticalCta') }}<AppIcon name="arrowRight" class="h-3 w-3 rtl:scale-x-[-1]" aria-hidden="true" /></span>
+          </component>
+        </template>
       </div>
     </section>
 
@@ -410,6 +405,17 @@ import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
+import { SERVICES } from "../lib/services";
+
+// Full literal Tailwind class strings per accent — never compute by string concat
+// so that the Tailwind scanner can reliably detect these classes.
+const ACCENT_CLASSES = {
+  amber:   { tile: 'border border-amber-500/30 bg-amber-500/10',   pill: 'border-amber-500/40 bg-amber-500/8 text-amber-300 hover:border-amber-500/70 hover:bg-amber-500/15 focus-visible:ring-amber-500/50'   },
+  indigo:  { tile: 'border border-indigo-500/30 bg-indigo-500/10', pill: 'border-indigo-500/40 bg-indigo-500/8 text-indigo-300 hover:border-indigo-500/70 hover:bg-indigo-500/15 focus-visible:ring-indigo-500/50' },
+  emerald: { tile: 'border border-emerald-500/30 bg-emerald-500/10', pill: 'border-emerald-500/40 bg-emerald-500/8 text-emerald-300 hover:border-emerald-500/70 hover:bg-emerald-500/15 focus-visible:ring-emerald-500/50' },
+  rose:    { tile: 'border border-rose-500/30 bg-rose-500/10',     pill: 'border-rose-500/40 bg-rose-500/8 text-rose-300 hover:border-rose-500/70 hover:bg-rose-500/15 focus-visible:ring-rose-500/50'     },
+  sky:     { tile: 'border border-sky-500/30 bg-sky-500/10',       pill: 'border-sky-500/40 bg-sky-500/8 text-sky-300 hover:border-sky-500/70 hover:bg-sky-500/15 focus-visible:ring-sky-500/50'       },
+};
 
 const route = useRoute();
 const router = useRouter();

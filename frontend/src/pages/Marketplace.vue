@@ -13,6 +13,49 @@
         </div>
       </header>
 
+      <!-- ── Service hub rail (one card per registry entry) ───────────────── -->
+      <div
+        class="flex gap-2.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="group"
+        :aria-label="t('marketplace.filterType')"
+      >
+        <button
+          v-for="svc in SERVICES"
+          :key="svc.id"
+          type="button"
+          :aria-pressed="svc.kind === 'lens' && svc.status === 'live' ? selectedBusinessType === svc.lens : undefined"
+          :aria-disabled="svc.status === 'coming_soon' ? 'true' : undefined"
+          :disabled="svc.status === 'coming_soon'"
+          class="ui-press flex shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-4 py-3 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          :class="[
+            svc.status === 'coming_soon'
+              ? 'cursor-default border-slate-700/40 bg-slate-950/40 opacity-50'
+              : (svc.kind === 'lens' && selectedBusinessType === svc.lens)
+                  ? HUB_ACCENT_CLASSES[svc.accent].active
+                  : HUB_ACCENT_CLASSES[svc.accent].idle,
+          ]"
+          @click="svc.status === 'live' && onServiceClick(svc)"
+        >
+          <span class="text-xl leading-none" aria-hidden="true">{{ svc.icon }}</span>
+          <span class="text-[11px] font-semibold leading-tight">{{ t('services.' + svc.id + 'Title') }}</span>
+          <span
+            v-if="svc.status === 'coming_soon'"
+            class="rounded-full border border-slate-600/50 bg-slate-800/60 px-1.5 py-px text-[9px] font-medium text-slate-500"
+          >{{ t('services.comingSoon') }}</span>
+          <svg
+            v-else
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-2.5 w-2.5 opacity-60"
+          ><path d="M6 12l4-4-4-4"/></svg>
+        </button>
+      </div>
+
       <!-- Category tab strip (All · Restaurants · Shops) -->
       <div
         class="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -28,11 +71,31 @@
           :class="selectedBusinessType === tab.key
             ? 'border-[var(--color-secondary)]/70 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
             : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:border-slate-600/80 hover:text-slate-300'"
-          @click="selectedBusinessType = tab.key"
+          @click="setBusinessType(tab.key)"
         >
           <span aria-hidden="true" class="text-sm leading-none">{{ tab.icon }}</span>
           {{ tab.label }}
         </button>
+      </div>
+
+      <!-- Shop sub-type chips — visible only when 'shop' lens is active -->
+      <div
+        v-if="selectedBusinessType === 'shop'"
+        class="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="group"
+        :aria-label="t('marketplace.typeShop')"
+      >
+        <button
+          v-for="sub in SHOP_SUBTYPES"
+          :key="sub.key"
+          type="button"
+          :aria-pressed="selectedShopSubtype === sub.key"
+          class="ui-press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+          :class="selectedShopSubtype === sub.key
+            ? 'border-indigo-500/70 bg-indigo-500/15 text-indigo-300'
+            : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:border-slate-600/80 hover:text-slate-300'"
+          @click="selectedShopSubtype = sub.key"
+        >{{ sub.label }}</button>
       </div>
 
       <!-- Filter bar -->
@@ -538,10 +601,20 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { getNextOpenInfo } from '../lib/businessHours';
+import { SERVICES } from '../lib/services';
+
+// ── Hub rail accent classes (full literal strings — never concat) ─────────────
+const HUB_ACCENT_CLASSES = {
+  amber:   { active: 'border-amber-500/70 bg-amber-500/15 text-amber-300',   idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-amber-500/40 hover:text-amber-200'   },
+  indigo:  { active: 'border-indigo-500/70 bg-indigo-500/15 text-indigo-300', idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-indigo-500/40 hover:text-indigo-200' },
+  emerald: { active: 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300', idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-200' },
+  rose:    { active: 'border-rose-500/70 bg-rose-500/15 text-rose-300',       idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-rose-500/40 hover:text-rose-200'     },
+  sky:     { active: 'border-sky-500/70 bg-sky-500/15 text-sky-300',         idle: 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:border-sky-500/40 hover:text-sky-200'       },
+};
 
 const FAVOURITES_KEY = 'marketplace:favourites';
 const loadFavourites = () => {
@@ -589,6 +662,14 @@ const BUSINESS_TYPE_TABS = computed(() => [
   { key: 'shop', icon: '🛍️', label: t('marketplace.typeShop') },
 ]);
 
+// ── Shop sub-type chips ───────────────────────────────────────────────────────
+const SHOP_SUBTYPES = computed(() => [
+  { key: '',        label: t('marketplace.typeShop') },
+  { key: 'grocery', label: t('stepPublish.businessTypeGrocery') },
+  { key: 'bakery',  label: t('stepPublish.businessTypeBakery') },
+  { key: 'retail',  label: t('stepPublish.businessTypeRetail') },
+]);
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const loading = ref(true);
 const fetchError = ref(false);
@@ -605,8 +686,32 @@ const selectedMinRating = ref('');
 // '' = all | 'food' (restaurant/cafe) | 'shop' (retail/grocery/bakery).
 // Seeded from ?type= so the landing-page vertical cards deep-link to a lens.
 const route = useRoute();
+const router = useRouter();
 const _initialType = ['food', 'shop'].includes(String(route.query.type || '')) ? String(route.query.type) : '';
 const selectedBusinessType = ref(_initialType);
+
+// ── Shop sub-type chips ───────────────────────────────────────────────────────
+// '' = all shops | 'grocery' | 'bakery' | 'retail'
+const selectedShopSubtype = ref('');
+
+// Set business-type lens and mirror into ?type= query param (shareable URL).
+const setBusinessType = (key) => {
+  selectedBusinessType.value = key;
+  selectedShopSubtype.value = '';
+  const q = { ...route.query };
+  if (key) { q.type = key; } else { delete q.type; }
+  router.replace({ query: q });
+};
+
+// Handle a click on the hub rail service card.
+const onServiceClick = (svc) => {
+  if (svc.kind === 'lens') {
+    setBusinessType(svc.lens);
+  } else if (svc.kind === 'route') {
+    router.push({ name: svc.routeName });
+  }
+};
+
 const openOnly = ref(false);
 const selectedTags = ref([]);
 
@@ -702,9 +807,13 @@ const clearFilters = () => {
   selectedPriceTier.value = '';
   selectedMinRating.value = '';
   selectedBusinessType.value = '';
+  selectedShopSubtype.value = '';
   openOnly.value = false;
   selectedTags.value = [];
   showFavouritesOnly.value = false;
+  const q = { ...route.query };
+  delete q.type;
+  router.replace({ query: q });
 };
 
 // Favourites + business-type filtering are client-side (favourites live in
@@ -717,6 +826,9 @@ const displayedRestaurants = computed(() => {
   }
   if (selectedBusinessType.value === 'shop') {
     list = list.filter((r) => isShopBusiness(r));
+    if (selectedShopSubtype.value) {
+      list = list.filter((r) => r.business_type === selectedShopSubtype.value);
+    }
   } else if (selectedBusinessType.value === 'food') {
     list = list.filter((r) => !isShopBusiness(r));
   }
@@ -808,6 +920,14 @@ watch(
     _debounce = setTimeout(fetchRestaurants, 350);
   }
 );
+
+// Keep selectedBusinessType in sync with browser back/forward navigation.
+// Without this, pressing Back/Forward updates the URL but leaves the chip
+// highlight and displayed list stale.
+watch(() => route.query.type, (val) => {
+  selectedBusinessType.value = ['food', 'shop'].includes(String(val || '')) ? String(val) : '';
+  selectedShopSubtype.value = '';
+});
 
 onMounted(fetchRestaurants);
 </script>

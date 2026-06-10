@@ -135,7 +135,23 @@ Stripe (or a Morocco-friendly PSP) as a wallet **top-up** funding source only â€
 key. Orders/trips still settle from the wallet. No PSP keys are entered by the
 assistant; only the seam is built.
 
-## 6. Non-negotiables when extending
+## 6. Service registry (how new services are added)
+
+The customer-facing super-app surfaces render from ONE registry:
+`frontend/src/lib/services.js` (SERVICES array). Each entry: id, emoji icon,
+status (live | coming_soon), kind ('lens' = a marketplace business-type lens,
+'route' = a dedicated page), accent token. Consumers: Home.vue verticals strip
+and the Marketplace.vue hub rail. i18n convention: services.<id>Title /
+services.<id>Desc (+ services.comingSoon) in EN/FR/AR.
+
+To add service N: (1) add the registry entry (status coming_soon until built),
+(2) add the three i18n keys per locale, (3) when live, point kind/route at the
+new page or lens. NO Tailwind classes in services.js (purge safety) â€” accent
+class maps live inside the consuming .vue files. The marketplace lens state is
+URL-synced (?type=food|shop): seeded on load, watched on back/forward, written
+on chip/hub clicks, cleared by clearFilters.
+
+## 7. Non-negotiables when extending
 
 - **Non-breaking first.** New columns nullable/defaulted; capabilities default to
   the restaurant (full) set. Never silently disable an existing tenant.
