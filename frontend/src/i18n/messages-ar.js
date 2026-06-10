@@ -2213,6 +2213,7 @@ const arabicMessages = {
     "loyaltyDiscount": "خصم الولاء",
     "justPlacedTitle": "تم تقديم الطلب!",
     "justPlacedSubtitle": "استلمنا طلبك. استرخِ بينما نعدّه لك.",
+    "orderAgain": "اطلب مرة أخرى",
     "pointsEarned": "نقاط الولاء المكتسبة",
     "pointsEarnedHint": "أُضيفت إلى حسابك"
   },

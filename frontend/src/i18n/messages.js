@@ -583,6 +583,7 @@ export const messages = {
       pointsEarned: "Loyalty points earned",
       justPlacedTitle: "Order placed!",
       justPlacedSubtitle: "We've received your order. Sit back while we prepare it.",
+      orderAgain: "Order again",
     },
     contactPage: {
       kicker: "Support",
@@ -4610,6 +4611,7 @@ export const messages = {
       pointsEarned: "Points de fidelite gagnes",
       justPlacedTitle: "Commande passee !",
       justPlacedSubtitle: "Votre commande a bien ete recue. Detendez-vous, nous nous en occupons.",
+      orderAgain: "Commander a nouveau",
     },
     contactPage: {
       kicker: "Support",

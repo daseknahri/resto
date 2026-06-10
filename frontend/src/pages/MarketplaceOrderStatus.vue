@@ -287,7 +287,19 @@
               <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums">
                 {{ item.qty }}
               </span>
-              <span class="min-w-0 flex-1 text-slate-200">{{ item.dish_name }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-slate-200 leading-snug">{{ item.dish_name }}</p>
+                <!-- Selected option modifiers (from snapshot) -->
+                <p
+                  v-if="item.options?.length"
+                  class="mt-0.5 text-[11px] text-slate-500 leading-snug"
+                >{{ item.options.map(o => o.name).join(' · ') }}</p>
+                <!-- Customer note on this item -->
+                <p
+                  v-if="item.note"
+                  class="mt-0.5 text-[11px] italic text-slate-500 leading-snug"
+                >{{ item.note }}</p>
+              </div>
               <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.subtotal, order.currency) }}</span>
             </li>
           </ul>
@@ -329,6 +341,20 @@
             </div>
           </div>
         </div>
+
+        <!-- Order again — shown on terminal states -->
+        <button
+          v-if="order.status === 'completed' || order.status === 'cancelled'"
+          type="button"
+          class="ui-press ui-reveal mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/8 py-3 text-sm font-semibold text-[var(--color-secondary)] transition-colors hover:bg-[var(--color-secondary)]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+          :style="{ '--ui-delay': '180ms' }"
+          @click="reorder"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/>
+          </svg>
+          {{ t('mktOrderStatus.orderAgain') }}
+        </button>
       </template>
     </main>
   </div>
@@ -336,7 +362,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
@@ -344,6 +370,7 @@ import DeliveryTracker from '../components/DeliveryTracker.vue';
 
 const { t, currentLocale } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const toast = useToastStore();
 
 const fmtPrice = (amount, currency) => {
@@ -404,6 +431,23 @@ const fetchDelivery = async () => {
 };
 
 // Driver rating now lives in <DeliveryTracker> (shared by both order pages).
+
+// ── Reorder ───────────────────────────────────────────────────────────────────
+const reorder = () => {
+  if (!order.value?.items?.length) return;
+  router.push({
+    name: 'marketplace-menu',
+    params: { slug },
+    state: {
+      reorderItems: order.value.items.map((i) => ({
+        slug: i.dish_slug,
+        name: i.dish_name,
+        price: Number(i.unit_price),
+        qty: i.qty,
+      })),
+    },
+  });
+};
 
 const formatScheduledFor = (iso) => {
   if (!iso) return '';
