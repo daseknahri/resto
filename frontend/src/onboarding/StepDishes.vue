@@ -141,6 +141,12 @@
                 <AppIcon name="pencil" class="h-3.5 w-3.5" />
               </button>
               <button
+                class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-slate-700 text-slate-400 transition hover:border-slate-500 hover:text-white"
+                type="button" :aria-label="t('stepDishes.cloneDish')" :title="t('stepDishes.cloneDish')" @click="cloneDish(dish.local_id)"
+              >
+                <AppIcon name="copy" class="h-3.5 w-3.5" />
+              </button>
+              <button
                 class="ui-press ui-touch-target flex items-center justify-center rounded-lg border border-red-400/25 text-red-300 transition hover:border-red-400/50 hover:text-red-200"
                 type="button" :aria-label="t('stepDishes.removeDish')" @click="removeDishByLocalId(dish.local_id)"
               >
@@ -2123,6 +2129,30 @@ const remove = async (idx) => {
   if (dish?.category) {
     renumberDishesForCategory(dish.category);
   }
+};
+
+const cloneDish = (localId) => {
+  const original = dishes.find((d) => d.local_id === localId);
+  if (!original) return;
+  const clone = normalize({
+    ...original,
+    id: undefined,                        // new dish — no backend id yet
+    name: t("stepDishes.cloneDishName", { name: original.name || t("stepDishes.dishNamePlaceholder") }),
+    name_i18n: {},                        // don't copy translations — name changed
+    slug: "",                             // auto-generated on save
+    options: original.options.map((o) => ({ ...o, id: undefined, local_id: crypto.randomUUID() })),
+    option_groups: original.option_groups.map((g) => ({
+      ...g,
+      id: undefined,
+      local_id: crypto.randomUUID(),
+      options: (g.options || []).map((o) => ({ ...o, id: undefined, local_id: crypto.randomUUID() })),
+    })),
+  });
+  // Insert right after the original
+  const idx = dishes.findIndex((d) => d.local_id === localId);
+  dishes.splice(idx + 1, 0, clone);
+  // Open the editor so the owner can tweak before saving
+  nextTick(() => openDishEditor(clone.local_id));
 };
 
 const removeDishByLocalId = async (localId) => {

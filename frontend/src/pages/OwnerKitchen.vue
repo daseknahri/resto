@@ -76,6 +76,22 @@
       </button>
     </nav>
 
+    <!-- Search -->
+    <div class="px-3 pb-1 pt-0.5 sm:px-4">
+      <div class="relative">
+        <input
+          v-model="kitchenSearch"
+          type="search"
+          class="w-full rounded-xl border border-slate-700 bg-slate-800/70 py-2 ps-9 pe-4 text-sm text-slate-200 placeholder-slate-500 transition focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          :placeholder="t('kitchen.search')"
+          :aria-label="t('kitchen.search')"
+        />
+        <svg class="absolute start-3 top-2.5 h-4 w-4 text-slate-500 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
+        </svg>
+      </div>
+    </div>
+
     <!-- Loading: skeleton cards matching the kitchen-grid layout -->
     <div v-if="waiter.loading" class="kitchen-grid" aria-busy="true" :aria-label="t('kitchen.activeCount', { n: 0 })">
       <div v-for="i in 3" :key="i" class="kitchen-card animate-pulse border-slate-700/40 bg-slate-800/20">
@@ -297,16 +313,26 @@ const nowMs = ref(Date.now());
 const newOrderFlash = ref(false);
 let flashTimer = null;
 
-// Active orders — exclude completed/cancelled, apply station filter
+// Active orders — exclude completed/cancelled, apply station filter + search
 const ACTIVE_STATUSES = new Set(["pending", "confirmed", "preparing", "ready"]);
+const kitchenSearch = ref("");
 
 const allActiveOrders = computed(() =>
   waiter.orders.filter((o) => ACTIVE_STATUSES.has(o.status))
 );
 
 const activeOrders = computed(() => {
-  if (stationFilter.value === "all") return allActiveOrders.value;
-  return allActiveOrders.value.filter((o) => o.fulfillment_type === stationFilter.value);
+  let orders = allActiveOrders.value;
+  if (stationFilter.value !== "all") {
+    orders = orders.filter((o) => o.fulfillment_type === stationFilter.value);
+  }
+  const q = kitchenSearch.value.trim().toLowerCase();
+  if (!q) return orders;
+  return orders.filter((o) =>
+    (o.order_number || "").toLowerCase().includes(q) ||
+    (o.customer_name || "").toLowerCase().includes(q) ||
+    (o.table_label || "").toLowerCase().includes(q)
+  );
 });
 
 // Station filter options with live counts.
