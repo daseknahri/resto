@@ -154,6 +154,15 @@ class ApplyTemplateViewTests(SimpleTestCase):
         self.assertEqual(prof.business_type, "cafe")
         self.assertEqual(prof.primary_color, TEMPLATES["cafe"]["theme"]["primary_color"])
         prof.save.assert_called_once()
+        # The mocked save() accepts anything — validate update_fields against the
+        # real model so a nonexistent field name fails here instead of raising
+        # ValueError (→ HTTP 500) in production.
+        update_fields = prof.save.call_args.kwargs.get("update_fields") or []
+        concrete = {f.name for f in Profile._meta.concrete_fields}
+        self.assertLessEqual(
+            set(update_fields), concrete,
+            f"update_fields not on Profile: {set(update_fields) - concrete}",
+        )
 
     def test_post_with_content_creates_sample_menu(self):
         prof = MagicMock()

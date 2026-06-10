@@ -6791,9 +6791,11 @@ class ApplyTemplateView(APIView):
                 profile.menu_theme = theme["menu_theme"]
                 profile.menu_card_layout = theme["menu_card_layout"]
                 profile.business_type = tpl["business_type"]
+                # NOTE: Profile has no updated_at field — listing one here makes
+                # Django's save() raise ValueError and 500 the whole apply.
                 profile.save(update_fields=[
                     "primary_color", "secondary_color", "menu_theme",
-                    "menu_card_layout", "business_type", "updated_at",
+                    "menu_card_layout", "business_type",
                 ])
 
             # 2. Optionally seed the sample menu (idempotent by name).
