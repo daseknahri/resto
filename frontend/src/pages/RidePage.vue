@@ -319,7 +319,7 @@
             <AppIcon name="check" class="h-3 w-3" aria-hidden="true" />
             {{ dropoffLatLng.lat.toFixed(5) }}, {{ dropoffLatLng.lng.toFixed(5) }}
           </p>
-          <p v-else class="text-[11px] text-slate-500">Tap the map to set your drop-off point.</p>
+          <p v-else class="text-[11px] text-slate-500">{{ t("ridePage.dropoffMapHint") }}</p>
         </section>
 
         <!-- ── Estimate ── -->
@@ -341,6 +341,10 @@
             <div>
               <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.distanceLabel') }}</p>
               <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ estimate.distance_km }} km</p>
+            </div>
+            <div v-if="estimate.duration_min" class="text-center">
+              <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.durationLabel') }}</p>
+              <p class="mt-0.5 text-lg font-bold tabular-nums text-slate-200">{{ t('ridePage.durationValue', { min: estimate.duration_min }) }}</p>
             </div>
             <div class="text-end">
               <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('ridePage.fareLabel') }}</p>
@@ -720,7 +724,7 @@ const destroyTrackingMap = () => {
 
 // Re-render tracking map when driver pos changes
 watch(
-  () => [activeRide.value?.driver?.lat, activeRide.value?.driver?.lng],
+  () => [activeRide.value?.driver?.driver_lat, activeRide.value?.driver?.driver_lng],
   () => { if (hasDriverPos.value) nextTick(renderTrackingMap); },
   { immediate: true },
 );

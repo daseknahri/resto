@@ -872,7 +872,15 @@ const arabicMessages = {
     "onTrack": "ضمن المسار",
     "sla": "اتفاقية مستوى الخدمة",
     "action": "إجراء",
-    "navMobile": "تنقل المسؤول"
+    "navMobile": "تنقل المسؤول",
+    "carDocs": "وثائق السيارة",
+    "carApprove": "اعتماد السيارة",
+    "carReject": "سحب اعتماد السيارة",
+    "carApproved": "السيارة معتمدة",
+    "carPending": "وثائق قيد المراجعة",
+    "carMissing": "لا توجد وثائق",
+    "licenceLink": "الرخصة",
+    "insuranceLink": "التأمين"
   },
   "ownerReservations": {
     "kicker": "صندوق المالك",
@@ -2871,6 +2879,18 @@ Object.assign(arabicMessages, {
     geoUnavailable: "الموقع غير متاح على هذا الجهاز.",
     errorGeneric: "حدث خطأ. يرجى المحاولة مجدداً.",
   },
+  driverDocs: {
+    title: "وثائق السيارة",
+    hint: "ارفع رخصة القيادة والتأمين لاستقبال طلبات الرحلات.",
+    licence: "رخصة القيادة",
+    insurance: "وثيقة التأمين",
+    upload: "رفع",
+    replace: "استبدال",
+    submitted: "مُرسَل — بانتظار المراجعة",
+    approved: "مُعتمَد للرحلات",
+    uploadFailed: "فشل الرفع. حاول مجدداً.",
+    uploaded: "تم رفع المستند.",
+  },
   driverRides: {
     tab: "الرحلات",
     offersTitle: "طلبات الرحلة",
@@ -2889,6 +2909,10 @@ Object.assign(arabicMessages, {
     vehicleCar: "سيارة",
     vehicleMotorbike: "دراجة نارية",
     vehicleBicycle: "دراجة هوائية",
+    rateRider: "قيّم راكبك",
+    rateThanks: "تم حفظ التقييم.",
+    lastRideTitle: "آخر رحلة",
+    waitingCarApproval: "تُفتح طلبات الرحلات بعد الموافقة على وثائق سيارتك.",
   },
   walletCharge: {
     kicker: "المحفظة",
@@ -4052,6 +4076,9 @@ Object.assign(arabicMessages, {
     errorActive: "\u0644\u062f\u064a\u0643 \u0631\u062d\u0644\u0629 \u062c\u0627\u0631\u064a\u0629 \u0628\u0627\u0644\u0641\u0639\u0644.",
     insufficientWallet: "\u0631\u0635\u064a\u062f \u0627\u0644\u0645\u062d\u0641\u0638\u0629 \u063a\u064a\u0631 \u0643\u0627\u0641\u064d \u2014 \u0627\u062e\u062a\u0631 \u0627\u0644\u062f\u0641\u0639 \u0646\u0642\u062f\u0627\u064b \u0623\u0648 \u0623\u0639\u062f \u0627\u0644\u0634\u062d\u0646.",
     signInFirst: "\u0633\u062c\u0651\u0644 \u062f\u062e\u0648\u0644\u0643 \u0644\u062d\u062c\u0632 \u062a\u0648\u0635\u064a\u0644\u0629.",
+    durationLabel: "\u0627\u0644\u0648\u0642\u062a \u0627\u0644\u062a\u0642\u062f\u064a\u0631\u064a",
+    durationValue: "~{min} \u062f\u0642\u064a\u0642\u0629",
+    dropoffMapHint: "\u0627\u0636\u063a\u0637 \u0639\u0644\u0649 \u0627\u0644\u062e\u0631\u064a\u0637\u0629 \u0644\u062a\u062d\u062f\u064a\u062f \u0648\u062c\u0647\u062a\u0643.",
   },
 });
 export default arabicMessages;

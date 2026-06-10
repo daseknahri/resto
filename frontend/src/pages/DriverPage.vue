@@ -185,6 +185,77 @@
         </div>
       </div>
 
+      <!-- Car-docs card: only for car drivers, only when not approved -->
+      <div
+        v-if="driverVehicleType === 'car'"
+        class="ui-panel p-4 space-y-3 ui-reveal"
+      >
+        <!-- Approved chip -->
+        <template v-if="driverCarApproved">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+              <AppIcon name="check" class="h-3.5 w-3.5" aria-hidden="true" />
+              {{ t('driverDocs.approved') }}
+            </span>
+          </div>
+        </template>
+        <!-- Upload UI -->
+        <template v-else>
+          <div class="space-y-1">
+            <p class="text-sm font-semibold text-slate-100">{{ t('driverDocs.title') }}</p>
+            <p class="text-xs text-slate-400">{{ t('driverDocs.hint') }}</p>
+          </div>
+          <!-- Licence row -->
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm text-slate-300">{{ t('driverDocs.licence') }}</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <span
+                v-if="driverLicenceUrl"
+                class="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300"
+              >{{ t('driverDocs.submitted') }}</span>
+              <span
+                v-else
+                class="rounded-full bg-slate-700/60 px-2.5 py-0.5 text-[11px] text-slate-400"
+              >—</span>
+              <label class="ui-btn-outline ui-press cursor-pointer px-3 py-1.5 text-xs disabled:opacity-50">
+                {{ driverLicenceUrl ? t('driverDocs.replace') : t('driverDocs.upload') }}
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="sr-only"
+                  :disabled="uploadingDoc"
+                  @change="uploadDoc('licence', $event)"
+                />
+              </label>
+            </div>
+          </div>
+          <!-- Insurance row -->
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm text-slate-300">{{ t('driverDocs.insurance') }}</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <span
+                v-if="driverInsuranceUrl"
+                class="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300"
+              >{{ t('driverDocs.submitted') }}</span>
+              <span
+                v-else
+                class="rounded-full bg-slate-700/60 px-2.5 py-0.5 text-[11px] text-slate-400"
+              >—</span>
+              <label class="ui-btn-outline ui-press cursor-pointer px-3 py-1.5 text-xs disabled:opacity-50">
+                {{ driverInsuranceUrl ? t('driverDocs.replace') : t('driverDocs.upload') }}
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="sr-only"
+                  :disabled="uploadingDoc"
+                  @change="uploadDoc('insurance', $event)"
+                />
+              </label>
+            </div>
+          </div>
+        </template>
+      </div>
+
       <div v-if="errorMsg" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
         <p class="flex-1 text-sm text-red-300">{{ errorMsg }}</p>
@@ -500,6 +571,42 @@
 
       <!-- ── Rides section (car drivers only, while online and no active delivery) ── -->
       <template v-if="online && !activeJob && driverVehicleType === 'car'">
+        <!-- Waiting-for-car-approval notice -->
+        <div
+          v-if="!driverCarApproved && (driverLicenceUrl || driverInsuranceUrl)"
+          class="ui-panel p-4 flex items-start gap-3 ui-reveal"
+        >
+          <AppIcon name="info" class="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+          <p class="text-sm text-amber-200">{{ t('driverRides.waitingCarApproval') }}</p>
+        </div>
+
+        <!-- Rate last passenger inline card -->
+        <div
+          v-if="lastCompleted && lastCompleted.driver_rider_rating == null && !riderRateDone"
+          class="ui-panel p-4 space-y-3 ui-reveal"
+        >
+          <p class="text-sm font-semibold text-slate-100">{{ t('driverRides.lastRideTitle') }}</p>
+          <p class="text-xs text-slate-400">{{ t('driverRides.rateRider') }}</p>
+          <div class="flex items-center gap-1" role="group" :aria-label="t('driverRides.rateRider')">
+            <button
+              v-for="n in 5" :key="n" type="button"
+              class="ui-press text-3xl leading-none transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+              :class="n <= riderRatingScore ? 'text-amber-400' : 'text-slate-600'"
+              :aria-label="t('common.rateNStars', { n })"
+              @click="riderRatingScore = n"
+            >★</button>
+          </div>
+          <button
+            class="ui-btn-primary ui-press inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+            :disabled="!riderRatingScore || submittingRiderRating"
+            :aria-busy="submittingRiderRating"
+            @click="submitRiderRating"
+          >
+            <svg v-if="submittingRiderRating" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            {{ submittingRiderRating ? t('common.loading') : t('driver.rateSubmit') }}
+          </button>
+        </div>
+
         <!-- Active ride card -->
         <div v-if="activeRide" class="ui-panel p-0 overflow-hidden ui-reveal">
           <div class="flex items-center justify-between gap-2 border-b border-slate-700/40 px-4 py-3">
@@ -914,6 +1021,18 @@ const activeRide = ref(null);
 const loadingRides = ref(false);
 const releaseRideConfirmOpen = ref(false);
 
+// ── Car documents ─────────────────────────────────────────────────────────────
+const driverCarApproved = ref(false);
+const driverLicenceUrl = ref('');
+const driverInsuranceUrl = ref('');
+const uploadingDoc = ref(false);
+
+// ── Rate last passenger (from last_completed window) ──────────────────────────
+const lastCompleted = ref(null);
+const riderRatingScore = ref(0);
+const riderRateDone = ref(false);
+const submittingRiderRating = ref(false);
+
 const VEHICLE_TYPES = [
   { value: 'car', label: 'driverRides.vehicleCar' },
   { value: 'motorbike', label: 'driverRides.vehicleMotorbike' },
@@ -1165,6 +1284,9 @@ const fetchStatus = async () => {
     approved.value = Boolean(data.driver_approved);
     online.value = Boolean(data.is_driver_online);
     if (data.driver_vehicle_type) driverVehicleType.value = data.driver_vehicle_type;
+    driverCarApproved.value = Boolean(data.driver_car_approved);
+    driverLicenceUrl.value = data.driver_licence_url || '';
+    driverInsuranceUrl.value = data.driver_insurance_url || '';
   } catch {
     isDriver.value = Boolean(customerStore.customer?.is_driver);
   }
@@ -1278,6 +1400,16 @@ const fetchRides = async () => {
     const { data } = await api.get('/driver/rides/');
     rideOffers.value = data.open_rides || [];
     activeRide.value = data.active_ride || null;
+    if (data.last_completed) {
+      lastCompleted.value = data.last_completed;
+      // Reset the rating UI if a new last_completed arrived with no rating yet
+      if (data.last_completed.driver_rider_rating == null) {
+        riderRateDone.value = false;
+        riderRatingScore.value = 0;
+      }
+    } else {
+      lastCompleted.value = null;
+    }
   } catch {
     /* keep last */
   } finally {
@@ -1356,6 +1488,47 @@ const releaseRide = async () => {
     errorMsg.value = err?.response?.data?.detail || t('driver.errorGeneric');
   } finally {
     busy.value = false;
+  }
+};
+
+// ── Car-document upload ───────────────────────────────────────────────────────
+const uploadDoc = async (kind, event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  uploadingDoc.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('kind', kind);
+    fd.append('image', file);
+    const { data } = await api.post('/driver/docs/', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    // Reflect returned urls immediately
+    driverCarApproved.value = Boolean(data.driver_car_approved);
+    driverLicenceUrl.value = data.driver_licence_url || '';
+    driverInsuranceUrl.value = data.driver_insurance_url || '';
+    toast.show(t('driverDocs.uploaded'), 'success');
+  } catch {
+    toast.show(t('driverDocs.uploadFailed'), 'error');
+  } finally {
+    uploadingDoc.value = false;
+    // Reset the file input so the same file can be re-selected after Replace
+    event.target.value = '';
+  }
+};
+
+// ── Rate last passenger ───────────────────────────────────────────────────────
+const submitRiderRating = async () => {
+  if (!lastCompleted.value || !riderRatingScore.value || submittingRiderRating.value) return;
+  submittingRiderRating.value = true;
+  try {
+    await api.post(`/driver/rides/${lastCompleted.value.id}/rate/`, { rating: riderRatingScore.value });
+    riderRateDone.value = true;
+    toast.show(t('driverRides.rateThanks'), 'success');
+  } catch {
+    toast.show(t('driver.ratingFailed'), 'error');
+  } finally {
+    submittingRiderRating.value = false;
   }
 };
 

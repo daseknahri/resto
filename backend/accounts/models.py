@@ -48,6 +48,14 @@ class Customer(models.Model):
         choices=VEHICLE_TYPE_CHOICES,
         help_text="Structured vehicle type for ride dispatch (motorbike|car|bicycle).",
     )
+    driver_licence_url = models.URLField(blank=True)
+    driver_insurance_url = models.URLField(blank=True)
+    driver_car_approved = models.BooleanField(
+        default=False,
+        help_text=(
+            "Admin verified licence+insurance; gates RIDE offers only — deliveries unaffected."
+        ),
+    )
     is_driver_online = models.BooleanField(default=False)
     driver_lat = models.FloatField(null=True, blank=True)
     driver_lng = models.FloatField(null=True, blank=True)
@@ -284,6 +292,8 @@ class PlatformConfig(models.Model):
     ride_minimum_fare = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("12.00"))
     # Platform commission on ride earnings (0 = driver keeps 100%).
     ride_commission_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
+    # Per-minute surcharge (0 = disabled — fully backward compatible).
+    ride_per_minute = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

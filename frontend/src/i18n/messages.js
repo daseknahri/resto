@@ -656,6 +656,9 @@ export const messages = {
       errorActive: "You already have a ride in progress.",
       insufficientWallet: "Wallet balance is too low for this fare — choose cash or top up.",
       signInFirst: "Sign in to book a ride.",
+      durationLabel: "Est. time",
+      durationValue: "~{min} min",
+      dropoffMapHint: "Tap the map to set your drop-off point.",
     },
     router: {
       orderingDisabled: "Ordering features are not enabled for this tenant plan.",
@@ -1136,6 +1139,18 @@ export const messages = {
       geoUnavailable: "Location isn't available on this device.",
       errorGeneric: "Something went wrong. Please try again.",
     },
+    driverDocs: {
+      title: "Car documents",
+      hint: "Upload your driving licence and insurance to receive ride requests.",
+      licence: "Driving licence",
+      insurance: "Insurance certificate",
+      upload: "Upload",
+      replace: "Replace",
+      submitted: "Submitted — pending review",
+      approved: "Approved for rides",
+      uploadFailed: "Upload failed. Try again.",
+      uploaded: "Document uploaded.",
+    },
     driverRides: {
       tab: "Rides",
       offersTitle: "Ride requests",
@@ -1154,6 +1169,10 @@ export const messages = {
       vehicleCar: "Car",
       vehicleMotorbike: "Motorbike",
       vehicleBicycle: "Bicycle",
+      rateRider: "Rate your passenger",
+      rateThanks: "Rating saved.",
+      lastRideTitle: "Last ride",
+      waitingCarApproval: "Ride requests unlock once your car documents are approved.",
     },
     walletCharge: {
       kicker: "Wallet",
@@ -3252,7 +3271,15 @@ export const messages = {
         saveFailed: "Unable to save delivery pricing",
         loadFailed: "Unable to load delivery config",
         close: "Close"
-      }
+      },
+      carDocs: "Car documents",
+      carApprove: "Approve car",
+      carReject: "Revoke car",
+      carApproved: "Car approved",
+      carPending: "Docs pending review",
+      carMissing: "No docs",
+      licenceLink: "Licence",
+      insuranceLink: "Insurance",
     },
     ownerReservations: {
       kicker: "Owner inbox",
@@ -4952,6 +4979,9 @@ export const messages = {
       errorActive: "Vous avez deja une course en cours.",
       insufficientWallet: "Solde insuffisant pour ce tarif — choisissez especes ou rechargez.",
       signInFirst: "Connectez-vous pour reserver une course.",
+      durationLabel: "Duree estimee",
+      durationValue: "~{min} min",
+      dropoffMapHint: "Touchez la carte pour definir votre destination.",
     },
     router: {
       orderingDisabled: "Les fonctions de commande ne sont pas activees pour cette offre.",
@@ -5432,6 +5462,18 @@ export const messages = {
       geoUnavailable: "La localisation n'est pas disponible sur cet appareil.",
       errorGeneric: "Une erreur est survenue. Veuillez reessayer.",
     },
+    driverDocs: {
+      title: "Documents vehicule",
+      hint: "Deposez votre permis de conduire et votre assurance pour recevoir des demandes de course.",
+      licence: "Permis de conduire",
+      insurance: "Attestation d'assurance",
+      upload: "Deposer",
+      replace: "Remplacer",
+      submitted: "Soumis — en attente de validation",
+      approved: "Approuve pour les courses",
+      uploadFailed: "Echec du depot. Reessayez.",
+      uploaded: "Document depose.",
+    },
     driverRides: {
       tab: "Courses",
       offersTitle: "Demandes de course",
@@ -5450,6 +5492,10 @@ export const messages = {
       vehicleCar: "Voiture",
       vehicleMotorbike: "Moto",
       vehicleBicycle: "Velo",
+      rateRider: "Notez votre passager",
+      rateThanks: "Note enregistree.",
+      lastRideTitle: "Derniere course",
+      waitingCarApproval: "Les demandes de course se debloqueront une fois vos documents approuves.",
     },
     walletCharge: {
       kicker: "Portefeuille",
@@ -7515,7 +7561,15 @@ export const messages = {
         saveFailed: "Impossible d enregistrer la tarification livraison",
         loadFailed: "Impossible de charger la configuration livraison",
         close: "Fermer"
-      }
+      },
+      carDocs: "Documents vehicule",
+      carApprove: "Approuver vehicule",
+      carReject: "Revoquer vehicule",
+      carApproved: "Vehicule approuve",
+      carPending: "Documents en attente",
+      carMissing: "Aucun document",
+      licenceLink: "Permis",
+      insuranceLink: "Assurance",
     },
     ownerReservations: {
       kicker: "Boite proprietaire",

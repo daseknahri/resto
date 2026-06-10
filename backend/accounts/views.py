@@ -3987,6 +3987,10 @@ class DriverStatusView(APIView):
             "driver_status": ("approved" if customer.driver_approved else "pending") if customer.is_driver else "none",
             "driver_vehicle": customer.driver_vehicle or "",
             "is_driver_online": bool(customer.is_driver_online),
+            "driver_car_approved": bool(customer.driver_car_approved),
+            "driver_licence_url": customer.driver_licence_url or "",
+            "driver_insurance_url": customer.driver_insurance_url or "",
+            "driver_vehicle_type": customer.driver_vehicle_type or "",
         })
 
     def patch(self, request, *args, **kwargs):
@@ -4894,6 +4898,10 @@ class AdminDriverListView(APIView):
                 "email": d.email or "",
                 "approved": bool(d.driver_approved),
                 "vehicle": d.driver_vehicle or "",
+                "driver_vehicle_type": d.driver_vehicle_type or "",
+                "driver_licence_url": d.driver_licence_url or "",
+                "driver_insurance_url": d.driver_insurance_url or "",
+                "driver_car_approved": bool(d.driver_car_approved),
                 "is_online": d.is_driver_online,
                 "driver_lat": d.driver_lat,
                 "driver_lng": d.driver_lng,

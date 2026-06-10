@@ -23,6 +23,8 @@ from .wallet_service import debit_wallet, credit_wallet, InsufficientFunds
 
 _CENT = Decimal("0.01")
 
+AVG_CITY_SPEED_KMH = 24  # used to estimate trip duration for the per-minute fare component
+
 
 def _dec(value) -> Decimal:
     try:
@@ -36,8 +38,15 @@ def _dec(value) -> Decimal:
 def estimate_ride(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng) -> dict:
     """Estimate ride fare.
 
-    Returns {"distance_km": float, "fare": Decimal}.
+    Returns {"distance_km": float, "fare": Decimal, "duration_min": int}.
     Raises ValueError for bad or implausible coordinates.
+
+    UPFRONT/FIXED quote: the returned fare is locked in at ride creation.
+    Completion never recomputes — settle_ride uses the stored ride.fare.
+
+    Per-minute component:
+        est_minutes = round(dist_km / AVG_CITY_SPEED_KMH * 60)
+        When ride_per_minute == 0 the component is zero (fully backward compatible).
     """
     if not valid_coord(pickup_lat, pickup_lng):
         raise ValueError("invalid pickup coordinates")
@@ -56,12 +65,18 @@ def estimate_ride(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng) -> dict:
     cfg = PlatformConfig.get_solo()
     base = _dec(cfg.ride_base_fare)
     per_km = _dec(cfg.ride_per_km)
+    per_minute = _dec(cfg.ride_per_minute)
     minimum = _dec(cfg.ride_minimum_fare)
 
-    raw = base + per_km * Decimal(str(round(dist_km, 4)))
+    est_minutes = int(round(dist_km / AVG_CITY_SPEED_KMH * 60))
+    raw = (
+        base
+        + per_km * Decimal(str(round(dist_km, 4)))
+        + per_minute * Decimal(str(est_minutes))
+    )
     fare = max(minimum, raw).quantize(_CENT, rounding=ROUND_HALF_UP)
 
-    return {"distance_km": dist_km, "fare": fare}
+    return {"distance_km": dist_km, "fare": fare, "duration_min": est_minutes}
 
 
 def settle_ride(ride) -> None:
@@ -101,14 +116,14 @@ def _do_settle(ride) -> None:
         )
     except InsufficientFunds:
         # Flip to cash — driver will collect from passenger.
+        # Mutate in memory only; the outer atomic transaction saves once.
         ride.payment_method = "cash"
-        ride.save(update_fields=["payment_method"])
         return
     except Exception:
         raise
 
+    # Mutate in memory only; the outer atomic transaction saves once.
     ride.paid_with_wallet = True
-    ride.save(update_fields=["paid_with_wallet"])
 
     # Credit driver (minus commission)
     if not getattr(ride, "driver_id", None):

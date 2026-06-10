@@ -290,6 +290,65 @@
                   </div>
                 </div>
 
+                <!-- Car documents (car vehicle type only) -->
+                <div
+                  v-if="selected.driver_vehicle_type === 'car'"
+                  class="rounded-xl border p-3 space-y-2.5"
+                  :class="selected.driver_car_approved
+                    ? 'border-emerald-500/30 bg-emerald-500/8'
+                    : (selected.driver_licence_url && selected.driver_insurance_url)
+                      ? 'border-amber-500/40 bg-amber-500/8'
+                      : 'border-slate-700/60 bg-slate-800/30'"
+                >
+                  <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <p class="text-sm font-semibold text-slate-200">{{ t('adminConsole.carDocs') }}</p>
+                    <span
+                      class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      :class="selected.driver_car_approved
+                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                        : (selected.driver_licence_url && selected.driver_insurance_url)
+                          ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+                          : 'bg-slate-700/50 border border-slate-600 text-slate-400'"
+                    >
+                      {{ selected.driver_car_approved
+                        ? t('adminConsole.carApproved')
+                        : (selected.driver_licence_url && selected.driver_insurance_url)
+                          ? t('adminConsole.carPending')
+                          : t('adminConsole.carMissing') }}
+                    </span>
+                  </div>
+                  <div v-if="selected.driver_licence_url || selected.driver_insurance_url" class="flex gap-3 flex-wrap text-xs">
+                    <a
+                      v-if="selected.driver_licence_url"
+                      :href="selected.driver_licence_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-sky-400 hover:text-sky-300 underline underline-offset-2"
+                    >{{ t('adminConsole.licenceLink') }}</a>
+                    <a
+                      v-if="selected.driver_insurance_url"
+                      :href="selected.driver_insurance_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-sky-400 hover:text-sky-300 underline underline-offset-2"
+                    >{{ t('adminConsole.insuranceLink') }}</a>
+                  </div>
+                  <div v-if="selected.driver_licence_url && selected.driver_insurance_url" class="flex gap-2">
+                    <button
+                      v-if="!selected.driver_car_approved"
+                      class="flex-1 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      :disabled="vettingCar"
+                      @click="setCarApproval(true)"
+                    >{{ t('adminConsole.carApprove') }}</button>
+                    <button
+                      v-if="selected.driver_car_approved"
+                      class="flex-1 rounded-xl border border-red-400/40 py-2 text-sm font-semibold text-red-300 hover:border-red-400/70 disabled:opacity-50"
+                      :disabled="vettingCar"
+                      @click="setCarApproval(false)"
+                    >{{ t('adminConsole.carReject') }}</button>
+                  </div>
+                </div>
+
                 <!-- Payout form -->
                 <div v-if="Number(detail.owed) > 0" class="rounded-xl border border-slate-700/60 bg-slate-800/30 p-3 space-y-2.5">
                   <p class="text-sm font-semibold text-slate-200">{{ t('adminDrivers.recordPayout') }}</p>
@@ -372,6 +431,7 @@ const payMethod = ref('cash');
 const paying = ref(false);
 const payError = ref('');
 const vetting = ref(false);
+const vettingCar = ref(false);
 
 const openDriver = async (d) => {
   selected.value = d;
@@ -432,6 +492,22 @@ const setApproval = async (approve) => {
     toast.show(err?.response?.data?.detail || t('adminDrivers.actionFailed'), 'error');
   } finally {
     vetting.value = false;
+  }
+};
+
+const setCarApproval = async (approve) => {
+  if (!selected.value || vettingCar.value) return;
+  vettingCar.value = true;
+  try {
+    await api.post(`/admin/drivers/${selected.value.id}/${approve ? 'car-approve' : 'car-reject'}/`, {});
+    toast.show(approve ? t('adminConsole.carApproved') : t('adminConsole.carReject'), 'success');
+    selected.value.driver_car_approved = approve;
+    const row = drivers.value.find((d) => d.id === selected.value.id);
+    if (row) row.driver_car_approved = approve;
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t('adminDrivers.actionFailed'), 'error');
+  } finally {
+    vettingCar.value = false;
   }
 };
 
