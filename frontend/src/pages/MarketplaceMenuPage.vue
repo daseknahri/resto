@@ -66,7 +66,7 @@
             <!-- Logo -->
             <div class="h-16 w-16 shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
               <img v-if="restaurant.logo_url" :src="restaurant.logo_url" :alt="restaurant.name" loading="eager" decoding="async" class="h-full w-full object-cover" @error="$event.target.style.display='none'" />
-              <span v-else aria-hidden="true" class="text-2xl">🍽️</span>
+              <span v-else aria-hidden="true" class="text-2xl">{{ businessIcon(restaurant) }}</span>
             </div>
             <!-- Info -->
             <div class="flex-1 min-w-0">
@@ -315,6 +315,10 @@
                       <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                       {{ t('mktMenu.addToCart') }}
                     </button>
+                    <span
+                      v-else
+                      class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
+                    >{{ t('mktMenu.soldOut') }}</span>
                   </div>
                 </div>
               </article>
@@ -443,6 +447,10 @@
                         <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                         {{ t('mktMenu.addToCart') }}
                       </button>
+                      <span
+                        v-else
+                        class="inline-flex items-center rounded-full border border-slate-700/50 bg-slate-800/60 px-2.5 py-1 text-[10px] font-semibold text-slate-500"
+                      >{{ t('mktMenu.soldOut') }}</span>
                     </div>
                   </div>
                 </article>
@@ -931,6 +939,15 @@ const slug = route.params.slug;
 const loading = ref(true);
 const fetchError = ref(false);
 const restaurant = ref(null);
+
+// Returns an emoji placeholder icon appropriate for the restaurant's business_type.
+const businessIcon = (r) => {
+  const type = r?.business_type || 'restaurant';
+  if (type === 'cafe') return '☕';
+  if (type === 'bakery') return '🥖';
+  if (type === 'retail' || type === 'grocery') return '🛍️';
+  return '🍽️';
+};
 
 // ── Flash sale countdown ───────────────────────────────────────────────────────
 const flashSaleCountdown = ref('');

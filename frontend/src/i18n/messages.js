@@ -474,6 +474,7 @@ export const messages = {
       allergen_sulphites: "Sulphites",
       allergen_lupin: "Lupin",
       allergen_molluscs: "Molluscs",
+      soldOut: "Sold out",
     },
     reservationManage: {
       kicker: "Reservation",
@@ -4508,6 +4509,7 @@ export const messages = {
       allergen_sulphites: "Sulfites",
       allergen_lupin: "Lupin",
       allergen_molluscs: "Mollusques",
+      soldOut: "Rupture de stock",
     },
     reservationManage: {
       kicker: "Reservation",

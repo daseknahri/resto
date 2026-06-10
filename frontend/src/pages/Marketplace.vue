@@ -239,7 +239,7 @@
                 @error="$event.target.style.display='none'"
               />
               <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-900/20 to-slate-900">
-                <span aria-hidden="true" class="text-4xl opacity-40">🍽️</span>
+                <span aria-hidden="true" class="text-4xl opacity-40">{{ businessIcon(r) }}</span>
               </div>
               <div class="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
               <span class="absolute start-2 top-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-black leading-none">
@@ -278,7 +278,7 @@
                 class="h-full w-full object-cover"
                 @error="$event.target.style.display='none'"
               />
-              <span v-else aria-hidden="true" class="text-xl">🍽️</span>
+              <span v-else aria-hidden="true" class="text-xl">{{ businessIcon(r) }}</span>
             </div>
             <div class="min-w-0 max-w-[110px]">
               <p class="truncate text-[12px] font-semibold leading-tight text-slate-200 group-hover:text-white">{{ r.name }}</p>
@@ -391,7 +391,7 @@
                 class="h-full w-full object-cover opacity-80 transition-all duration-500 group-hover:scale-105 group-hover:opacity-90"
                 @error="$event.target.style.display='none'"
               />
-              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">🍽️</span>
+              <span v-else class="absolute inset-0 flex items-center justify-center text-5xl text-slate-700" aria-hidden="true">{{ businessIcon(r) }}</span>
             </div>
             <!-- Bottom gradient: name + rating overlaid -->
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
@@ -406,6 +406,18 @@
                 <span v-if="r.price_tier" class="text-slate-400">{{ '€'.repeat(r.price_tier) }}</span>
                 <span v-if="r.cuisine_type" class="text-slate-500">· {{ r.cuisine_type }}</span>
               </div>
+            </div>
+
+            <!-- Closed frosted overlay — appears over the hero image when the restaurant is closed -->
+            <div
+              v-if="!r.is_open"
+              class="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-slate-950/55 backdrop-blur-[2px]"
+              aria-hidden="true"
+            >
+              <span class="rounded-full border border-slate-600/50 bg-slate-900/90 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-300">
+                {{ t('marketplace.closed') }}
+              </span>
+              <span v-if="nextOpenLabel(r)" class="px-4 text-center text-[10px] leading-snug text-slate-400">{{ nextOpenLabel(r) }}</span>
             </div>
 
             <!-- Favourite toggle (top-right) -->
@@ -571,6 +583,16 @@ const selectedTags = ref([]);
 // Buckets the fine-grained business_type into the two marketplace lenses.
 const SHOP_BUSINESS_TYPES = ['retail', 'grocery', 'bakery'];
 const isShopBusiness = (r) => SHOP_BUSINESS_TYPES.includes(r?.business_type || 'restaurant');
+
+// Returns an emoji placeholder icon appropriate for the business type.
+// Used when a restaurant/shop has no logo image set.
+const businessIcon = (r) => {
+  const t = r?.business_type || 'restaurant';
+  if (t === 'cafe') return '☕';
+  if (t === 'bakery') return '🥖';
+  if (t === 'retail' || t === 'grocery') return '🛍️';
+  return '🍽️';
+};
 
 // Location
 const locating = ref(false);
