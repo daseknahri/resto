@@ -573,6 +573,349 @@ TEMPLATES = {
             },
         ],
     },
+    "burger": {
+        "label": "Burger joint / Smashburger",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#1C1917",
+            "secondary_color": "#F59E0B",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Burgers",
+                "dishes": [
+                    {"name": "Classic Smash", "price": "55", "description": "Double smash patty, american cheese, pickles, special sauce."},
+                    {"name": "Crispy Chicken Burger", "price": "58", "description": "Crispy chicken thigh, coleslaw, sriracha mayo."},
+                    {"name": "BBQ Bacon Burger", "price": "68", "description": "Double patty, crispy bacon, cheddar, BBQ sauce."},
+                    {"name": "Veggie Burger", "price": "50", "description": "Black bean & quinoa patty, lettuce, avocado, chipotle mayo."},
+                    {"name": "The Monster", "price": "80", "description": "Triple smash, triple cheese, caramelised onions, mushrooms."},
+                ],
+            },
+            {
+                "name": "Sides",
+                "dishes": [
+                    {"name": "Smash Fries", "price": "22", "description": "Golden crispy fries, signature seasoning."},
+                    {"name": "Onion Rings", "price": "25", "description": "Beer-battered, golden and crispy."},
+                    {"name": "Chicken Nuggets (6 pcs)", "price": "30", "description": "All-breast, hand-breaded, dipping sauce."},
+                    {"name": "Loaded Fries", "price": "38", "description": "Fries, cheddar sauce, jalapeños, bacon bits."},
+                ],
+            },
+            {
+                "name": "Drinks",
+                "dishes": [
+                    {"name": "Classic Milkshake", "price": "35", "description": "Vanilla, chocolate, or strawberry — thick and creamy."},
+                    {"name": "Fresh Lemonade", "price": "22", "description": "Hand-squeezed, lightly sweet."},
+                    {"name": "Soft Drink", "price": "15", "description": "Pepsi, 7-Up, or water."},
+                ],
+            },
+        ],
+    },
+    "bubble_tea": {
+        "label": "Bubble tea / Boba bar",
+        "business_type": "cafe",
+        "theme": {
+            "primary_color": "#3B1F5E",
+            "secondary_color": "#F472B6",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Milk Teas",
+                "dishes": [
+                    {"name": "Classic Milk Tea", "price": "28", "description": "Black tea, creamy milk, tapioca pearls. Sugar level adjustable."},
+                    {"name": "Taro Milk Tea", "price": "32", "description": "Purple taro, sweet milk, black pearls."},
+                    {"name": "Matcha Latte Boba", "price": "35", "description": "Japanese matcha, oat milk, tapioca pearls."},
+                    {"name": "Brown Sugar Boba", "price": "38", "description": "Tiger-striped brown sugar, fresh milk, black pearls."},
+                    {"name": "Oolong Milk Tea", "price": "30", "description": "Fragrant oolong, creamy milk, chewy pearls."},
+                ],
+            },
+            {
+                "name": "Fruit Teas",
+                "dishes": [
+                    {"name": "Passion Fruit Tea", "price": "30", "description": "Passion fruit, green tea, popping boba."},
+                    {"name": "Lychee Slush", "price": "32", "description": "Lychee, crushed ice, coconut jelly."},
+                    {"name": "Mango Green Tea", "price": "30", "description": "Jasmine green tea, fresh mango, tapioca."},
+                    {"name": "Strawberry Yogurt", "price": "35", "description": "Strawberry, yogurt base, strawberry popping boba."},
+                ],
+            },
+            {
+                "name": "Extras",
+                "dishes": [
+                    {"name": "Extra Pearls", "price": "5", "description": "Add another serving of tapioca pearls."},
+                    {"name": "Coconut Jelly", "price": "6", "description": "Cubed coconut jelly topping."},
+                    {"name": "Pudding Topping", "price": "8", "description": "Egg or taro pudding topping."},
+                ],
+            },
+        ],
+    },
+    "juice_bar": {
+        "label": "Juice bar / Smoothies",
+        "business_type": "cafe",
+        "theme": {
+            "primary_color": "#1B4332",
+            "secondary_color": "#F97316",
+            "menu_theme": "dark",
+            "menu_card_layout": "list",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Fresh Juices",
+                "dishes": [
+                    {"name": "Fresh Orange Juice", "price": "22", "description": "Hand-squeezed Moroccan oranges, 500ml."},
+                    {"name": "Carrot Apple Ginger", "price": "25", "description": "Cold-pressed carrot, apple, fresh ginger."},
+                    {"name": "Watermelon Mint", "price": "22", "description": "Fresh watermelon, spearmint, squeeze of lime."},
+                    {"name": "Mixed Citrus", "price": "25", "description": "Orange, grapefruit, lemon — immune booster."},
+                    {"name": "Beet & Apple", "price": "28", "description": "Red beet, apple, lemon, ginger."},
+                ],
+            },
+            {
+                "name": "Smoothies",
+                "dishes": [
+                    {"name": "Mango Paradise", "price": "35", "description": "Mango, banana, coconut milk, passion fruit."},
+                    {"name": "Green Power", "price": "38", "description": "Spinach, cucumber, apple, ginger, lemon."},
+                    {"name": "Strawberry Banana", "price": "32", "description": "Fresh strawberry, banana, yogurt, honey."},
+                    {"name": "Avocado Smoothie", "price": "38", "description": "Avocado, banana, almond milk, maple syrup."},
+                    {"name": "Peanut Butter Boost", "price": "40", "description": "Banana, peanut butter, oat milk, protein powder."},
+                ],
+            },
+            {
+                "name": "Shots & Boosters",
+                "dishes": [
+                    {"name": "Ginger Immunity Shot (60ml)", "price": "18", "description": "Ginger, lemon, turmeric, black pepper."},
+                    {"name": "Wheatgrass Shot (60ml)", "price": "20", "description": "Pure cold-pressed wheatgrass."},
+                    {"name": "Add-On: Protein Powder", "price": "10", "description": "25g scoop — vanilla or chocolate."},
+                ],
+            },
+        ],
+    },
+    "ice_cream": {
+        "label": "Ice cream / Gelato",
+        "business_type": "cafe",
+        "theme": {
+            "primary_color": "#1E3A8A",
+            "secondary_color": "#FB7185",
+            "menu_theme": "light",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Scoops",
+                "dishes": [
+                    {"name": "Single Scoop", "price": "18", "description": "Choose one flavour: vanilla, chocolate, strawberry, pistachio, caramel."},
+                    {"name": "Double Scoop", "price": "30", "description": "Two flavours in a wafer cone or cup."},
+                    {"name": "Triple Scoop", "price": "42", "description": "Three flavours — the full tour."},
+                ],
+            },
+            {
+                "name": "Sundaes",
+                "dishes": [
+                    {"name": "Classic Sundae", "price": "40", "description": "Two scoops, chocolate or caramel sauce, whipped cream, cherry."},
+                    {"name": "Banana Split", "price": "55", "description": "Banana, three scoops, three sauces, whipped cream, sprinkles."},
+                    {"name": "Brownie Sundae", "price": "60", "description": "Warm brownie, vanilla scoop, hot fudge, whipped cream."},
+                    {"name": "Fruit Sorbet Plate", "price": "45", "description": "Three scoops of fruit sorbet, fresh seasonal fruit."},
+                ],
+            },
+            {
+                "name": "Milkshakes",
+                "dishes": [
+                    {"name": "Classic Milkshake", "price": "38", "description": "Thick shake — vanilla, chocolate, strawberry, or pistachio."},
+                    {"name": "Oreo Milkshake", "price": "45", "description": "Vanilla, crushed Oreos, whipped cream."},
+                    {"name": "Nutella Milkshake", "price": "48", "description": "Chocolate, Nutella swirl, hazelnut crumble."},
+                ],
+            },
+        ],
+    },
+    "seafood": {
+        "label": "Seafood restaurant",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#0A2342",
+            "secondary_color": "#06B6D4",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Starters",
+                "dishes": [
+                    {"name": "Oysters (6 pcs)", "price": "90", "description": "Fresh local oysters, mignonette sauce, lemon."},
+                    {"name": "Shrimp Cocktail", "price": "75", "description": "Chilled tiger prawns, house cocktail sauce."},
+                    {"name": "Calamari Fritti", "price": "55", "description": "Crispy fried squid rings, aioli, lemon."},
+                    {"name": "Fish Soup", "price": "45", "description": "Rich tomato-saffron broth, crusty bread, rouille."},
+                ],
+            },
+            {
+                "name": "Grills & Platters",
+                "dishes": [
+                    {"name": "Grilled Sea Bass", "price": "130", "description": "Whole sea bass, chargrilled, herbs, lemon butter."},
+                    {"name": "Lobster Thermidor (half)", "price": "180", "description": "Half lobster, cream, mustard, gruyère."},
+                    {"name": "Mixed Seafood Platter (2 pax)", "price": "250", "description": "Prawns, squid, mussels, fish fillet, fries, salad."},
+                    {"name": "Grilled King Prawns (4 pcs)", "price": "110", "description": "Garlic butter, chilli, parsley."},
+                ],
+            },
+            {
+                "name": "Sides & Drinks",
+                "dishes": [
+                    {"name": "Hand-cut Fries", "price": "22", "description": "Fresh potatoes, seasoned salt."},
+                    {"name": "Grilled Vegetables", "price": "28", "description": "Seasonal veg, olive oil, herbs."},
+                    {"name": "House Salad", "price": "25", "description": "Mixed leaves, cherry tomatoes, vinaigrette."},
+                    {"name": "Fresh Lemonade", "price": "22", "description": "Hand-squeezed, mint, lightly sweet."},
+                ],
+            },
+        ],
+    },
+    "steakhouse": {
+        "label": "Steakhouse / Grill",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#1A0A00",
+            "secondary_color": "#DC2626",
+            "menu_theme": "dark",
+            "menu_card_layout": "list",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Starters",
+                "dishes": [
+                    {"name": "Shrimp Cocktail", "price": "65", "description": "Chilled prawns, house cocktail sauce, lemon wedge."},
+                    {"name": "Bone Marrow", "price": "75", "description": "Roasted marrow bones, herb salsa, toast."},
+                    {"name": "Burrata", "price": "60", "description": "Creamy burrata, heirloom tomatoes, basil, olive oil."},
+                    {"name": "French Onion Soup", "price": "45", "description": "Slow-cooked, gruyère crouton."},
+                ],
+            },
+            {
+                "name": "Steaks",
+                "dishes": [
+                    {"name": "Entrecôte 300g", "price": "180", "description": "Grass-fed ribeye, pepper sauce or béarnaise."},
+                    {"name": "Filet Mignon 250g", "price": "220", "description": "Tenderloin centre-cut, truffle butter."},
+                    {"name": "Tomahawk 1kg (to share)", "price": "490", "description": "Aged 30 days, served with 3 sauces."},
+                    {"name": "New York Strip 350g", "price": "200", "description": "Well-marbled, classic char."},
+                ],
+            },
+            {
+                "name": "Sides",
+                "dishes": [
+                    {"name": "Truffle Fries", "price": "35", "description": "Hand-cut, truffle oil, parmesan."},
+                    {"name": "Creamed Spinach", "price": "28", "description": "Wilted spinach, cream, nutmeg."},
+                    {"name": "Mac & Cheese", "price": "35", "description": "Three cheeses, golden breadcrumb crust."},
+                    {"name": "Asparagus", "price": "30", "description": "Charred asparagus, hollandaise."},
+                ],
+            },
+            {
+                "name": "Desserts",
+                "dishes": [
+                    {"name": "Crème Brûlée", "price": "45", "description": "Classic vanilla, caramelised sugar."},
+                    {"name": "Chocolate Lava Cake", "price": "50", "description": "Warm dark chocolate, vanilla ice cream."},
+                ],
+            },
+        ],
+    },
+    "indian": {
+        "label": "Indian / Curry house",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#78350F",
+            "secondary_color": "#F59E0B",
+            "menu_theme": "dark",
+            "menu_card_layout": "list",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Starters",
+                "dishes": [
+                    {"name": "Samosa (2 pcs)", "price": "22", "description": "Crispy pastry, spiced potato & peas, tamarind chutney."},
+                    {"name": "Onion Bhaji (3 pcs)", "price": "25", "description": "Crispy onion fritters, mint raita."},
+                    {"name": "Chicken Tikka Starter", "price": "45", "description": "Tandoor-marinated chicken, cumin raita, salad."},
+                    {"name": "Aloo Tikki", "price": "28", "description": "Spiced potato patties, coriander chutney."},
+                ],
+            },
+            {
+                "name": "Curries",
+                "dishes": [
+                    {"name": "Chicken Tikka Masala", "price": "70", "description": "Tender chicken, creamy tomato-spice sauce — the classic."},
+                    {"name": "Lamb Rogan Josh", "price": "80", "description": "Slow-braised lamb, Kashmiri spices, rich gravy."},
+                    {"name": "Palak Paneer", "price": "60", "description": "Fresh spinach, cottage cheese, garlic, garam masala. Vegetarian."},
+                    {"name": "Prawn Masala", "price": "85", "description": "Tiger prawns, coastal spice gravy, coconut undertone."},
+                    {"name": "Chana Dal", "price": "50", "description": "Yellow lentils, cumin, turmeric. Vegan."},
+                ],
+            },
+            {
+                "name": "Breads & Rice",
+                "dishes": [
+                    {"name": "Garlic Naan", "price": "18", "description": "Tandoor-baked, butter, fresh garlic."},
+                    {"name": "Peshwari Naan", "price": "22", "description": "Coconut, almond, sultana stuffed naan."},
+                    {"name": "Basmati Rice", "price": "15", "description": "Steamed long-grain basmati."},
+                    {"name": "Vegetable Biryani", "price": "60", "description": "Aromatic rice, seasonal vegetables, fried onions, raita."},
+                ],
+            },
+            {
+                "name": "Desserts & Drinks",
+                "dishes": [
+                    {"name": "Gulab Jamun (2 pcs)", "price": "22", "description": "Milk dumplings, rose syrup, pistachio."},
+                    {"name": "Mango Lassi", "price": "28", "description": "Chilled yogurt, Alphonso mango, cardamom."},
+                    {"name": "Masala Chai", "price": "18", "description": "Spiced milk tea, ginger, cardamom, cinnamon."},
+                ],
+            },
+        ],
+    },
+    "chinese": {
+        "label": "Chinese / Dim sum",
+        "business_type": "restaurant",
+        "theme": {
+            "primary_color": "#7F1D1D",
+            "secondary_color": "#EAB308",
+            "menu_theme": "dark",
+            "menu_card_layout": "grid",
+        },
+        "super_category": "Menu",
+        "categories": [
+            {
+                "name": "Dim Sum",
+                "dishes": [
+                    {"name": "Har Gow (4 pcs)", "price": "35", "description": "Steamed shrimp dumplings, thin translucent skin."},
+                    {"name": "Siu Mai (4 pcs)", "price": "32", "description": "Open-top pork & shrimp dumplings."},
+                    {"name": "Char Siu Bao (3 pcs)", "price": "30", "description": "Steamed BBQ pork buns, fluffy pillowy dough."},
+                    {"name": "Cheung Fun (Shrimp)", "price": "35", "description": "Rice noodle rolls, shrimp, oyster sauce."},
+                    {"name": "Turnip Cake", "price": "28", "description": "Pan-fried radish cake, XO sauce."},
+                ],
+            },
+            {
+                "name": "Mains",
+                "dishes": [
+                    {"name": "Peking Duck (half)", "price": "180", "description": "Crispy skin duck, pancakes, spring onion, hoisin sauce."},
+                    {"name": "Sweet & Sour Pork", "price": "70", "description": "Crispy pork, bell peppers, pineapple, classic sauce."},
+                    {"name": "Kung Pao Chicken", "price": "65", "description": "Wok-fried chicken, peanuts, dried chillies, Sichuan pepper."},
+                    {"name": "Steamed Sea Bass", "price": "120", "description": "Whole sea bass, ginger, scallion, soy oil."},
+                ],
+            },
+            {
+                "name": "Noodles & Rice",
+                "dishes": [
+                    {"name": "Wonton Noodle Soup", "price": "45", "description": "Pork & shrimp wontons, egg noodles, clear broth."},
+                    {"name": "Beef Chow Fun", "price": "55", "description": "Flat rice noodles, tender beef, bean sprouts, soy."},
+                    {"name": "Yangzhou Fried Rice", "price": "45", "description": "Egg, BBQ pork, shrimp, spring onion."},
+                ],
+            },
+            {
+                "name": "Desserts",
+                "dishes": [
+                    {"name": "Mango Pudding", "price": "25", "description": "Silky mango pudding, evaporated milk."},
+                    {"name": "Egg Tart", "price": "18", "description": "Flaky pastry shell, smooth egg custard."},
+                    {"name": "Sesame Balls (3 pcs)", "price": "22", "description": "Fried glutinous rice balls, lotus paste, sesame crust."},
+                ],
+            },
+        ],
+    },
     "retail": {
         "label": "Retail / Shop",
         "business_type": "retail",

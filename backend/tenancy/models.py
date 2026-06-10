@@ -381,6 +381,13 @@ class Profile(models.Model):
     is_menu_temporarily_disabled = models.BooleanField(default=False)
     menu_disabled_note = models.CharField(max_length=180, blank=True)
     is_menu_published = models.BooleanField(default=False)
+    daily_revenue_goal = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Owner-set daily revenue target. Shown as a progress bar on the home dashboard.",
+    )
     published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

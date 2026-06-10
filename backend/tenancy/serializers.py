@@ -249,6 +249,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "lng",
             "price_tier",
             "tags",
+            "daily_revenue_goal",
             "is_open",
             "is_open_now",
             "is_menu_temporarily_disabled",

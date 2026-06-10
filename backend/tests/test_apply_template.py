@@ -65,6 +65,8 @@ class TemplateDataTests(SimpleTestCase):
             {
                 "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
                 "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+                "burger", "bubble_tea", "juice_bar", "ice_cream",
+                "seafood", "steakhouse", "indian", "chinese",
             },
         )
 
@@ -126,6 +128,8 @@ class ApplyTemplateViewTests(SimpleTestCase):
             {
                 "cafe", "hotel", "fine_dining", "fast_casual", "bakery", "bar",
                 "grocery", "retail", "pizza", "sushi", "moroccan", "health",
+                "burger", "bubble_tea", "juice_bar", "ice_cream",
+                "seafood", "steakhouse", "indian", "chinese",
             },
         )
 

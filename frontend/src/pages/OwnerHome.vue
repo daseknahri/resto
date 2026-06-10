@@ -181,6 +181,59 @@
         </div>
       </div>
 
+      <!-- Daily revenue goal -->
+      <div v-if="goalValue > 0 || editingGoal" class="rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <p class="ui-stat-label">{{ t('ownerHome.goalTitle') }}</p>
+          <button
+            class="text-[11px] font-medium text-slate-500 hover:text-slate-300 transition-colors"
+            @click="editingGoal ? cancelGoalEdit() : startGoalEdit()"
+          >{{ editingGoal ? t('common.cancel') : t('ownerHome.goalEdit') }}</button>
+        </div>
+        <template v-if="!editingGoal">
+          <div class="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
+            <div
+              class="h-full rounded-full transition-all duration-700"
+              :class="goalProgress >= 100 ? 'bg-emerald-500' : 'bg-[var(--color-secondary)]'"
+              :style="{ width: Math.min(100, goalProgress) + '%' }"
+            />
+          </div>
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-slate-400 tabular-nums">{{ todayStats.revenue }}</span>
+            <span class="font-bold tabular-nums" :class="goalProgress >= 100 ? 'text-emerald-400' : 'text-slate-400'">
+              {{ goalProgress >= 100 ? t('ownerHome.goalReached') : `${Math.round(goalProgress)}%` }}
+            </span>
+            <span class="text-slate-500 tabular-nums">{{ goalFormattedTarget }}</span>
+          </div>
+        </template>
+        <div v-else class="flex items-center gap-2">
+          <input
+            v-model.number="goalInput"
+            type="number"
+            min="0"
+            step="100"
+            :placeholder="t('ownerHome.goalPlaceholder')"
+            class="ui-input flex-1 text-sm"
+            :disabled="savingGoal"
+            @keyup.enter="saveGoal"
+            @keyup.escape="cancelGoalEdit"
+          />
+          <button class="ui-btn-primary shrink-0 px-3 py-2 text-xs" :disabled="savingGoal" @click="saveGoal">
+            <svg v-if="savingGoal" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="h-3.5 w-3.5 animate-spin shrink-0"><path d="M3 8a5 5 0 1 0 1.2-3.2M3 5v3h3"/></svg>
+            <span v-else>{{ t('common.save') }}</span>
+          </button>
+          <button v-if="goalValue > 0" class="shrink-0 text-[11px] text-red-400/80 hover:text-red-400 transition-colors" @click="clearGoal">{{ t('ownerHome.goalClear') }}</button>
+        </div>
+      </div>
+      <button
+        v-else
+        class="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-800 bg-transparent px-4 py-2.5 text-left transition hover:border-slate-700 ui-press"
+        @click="startGoalEdit"
+      >
+        <span class="text-xs text-slate-600">{{ t('ownerHome.goalNone') }}</span>
+        <span class="shrink-0 text-xs font-semibold text-[var(--color-secondary)]/70 hover:text-[var(--color-secondary)]">{{ t('ownerHome.goalSet') }}</span>
+      </button>
+
       <!-- Alerts strip — shown below KPIs, above ratings -->
       <OwnerDashboardAlerts
         :sold-out-count="soldOutCount"
@@ -451,6 +504,45 @@ const acceptingDelivery = computed(() => profile.value?.delivery_enabled !== fal
 const menuActive = computed(() => profile.value?.is_menu_temporarily_disabled !== true);
 const togglingDelivery = ref(false);
 const togglingMenu = ref(false);
+
+// ── Daily revenue goal ─────────────────────────────────────────────────────────
+const goalInput = ref(0);
+const editingGoal = ref(false);
+const savingGoal = ref(false);
+
+const goalValue = computed(() => parseFloat(profile.value.daily_revenue_goal || 0) || 0);
+const goalCurrency = computed(() => order.orders.find((o) => o.currency)?.currency || "MAD");
+const goalProgress = computed(() => {
+  if (!goalValue.value) return 0;
+  return (todayStats.value.revenueRaw / goalValue.value) * 100;
+});
+const goalFormattedTarget = computed(() => {
+  if (!goalValue.value) return "—";
+  try {
+    return formatNumber(goalValue.value, { style: "currency", currency: goalCurrency.value, maximumFractionDigits: 0 });
+  } catch {
+    return goalValue.value.toFixed(0);
+  }
+});
+
+const startGoalEdit = () => { goalInput.value = goalValue.value || 0; editingGoal.value = true; };
+const cancelGoalEdit = () => { editingGoal.value = false; };
+const saveGoal = async () => {
+  const val = Number(goalInput.value) || null;
+  if (val !== null && val < 0) return;
+  savingGoal.value = true;
+  try {
+    await api.patch("/profile/", { daily_revenue_goal: val });
+    tenant.mergeProfile({ daily_revenue_goal: val });
+    editingGoal.value = false;
+    toast.show(t("ownerHome.goalSaved"), "success");
+  } catch {
+    toast.show(t("ownerHome.goalSaveFailed"), "error");
+  } finally {
+    savingGoal.value = false;
+  }
+};
+const clearGoal = async () => { goalInput.value = 0; await saveGoal(); };
 
 const canCheckout = computed(() => tenant.entitlements?.can_checkout === true);
 const canWhatsapp = computed(() => tenant.entitlements?.can_whatsapp_order === true);
