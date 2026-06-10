@@ -6107,13 +6107,15 @@ class OwnerCustomerListView(APIView):
         # ── 4. Fetch platform account emails + wallet balance for linked customers
         email_map = {}
         wallet_map = {}  # customer_id → wallet_balance string
+        loyalty_map = {}  # customer_id → loyalty_points int
         if linked_customer_ids:
             try:
                 from accounts.models import Customer as PlatformCustomer
-                accounts = PlatformCustomer.objects.filter(id__in=linked_customer_ids).values("id", "email", "wallet_balance")
+                accounts = PlatformCustomer.objects.filter(id__in=linked_customer_ids).values("id", "email", "wallet_balance", "loyalty_points")
                 for a in accounts:
                     email_map[a["id"]] = a["email"]
                     wallet_map[a["id"]] = str(a["wallet_balance"] or "0.00")
+                    loyalty_map[a["id"]] = int(a["loyalty_points"] or 0)
             except Exception:
                 pass
 
@@ -6142,6 +6144,7 @@ class OwnerCustomerListView(APIView):
                 "phone": (row["last_phone"] or "").strip(),
                 "email": email_map.get(cid, ""),
                 "wallet_balance": wallet_map.get(cid, "0.00"),
+                "loyalty_points": loyalty_map.get(cid, 0),
                 "order_count": row["order_count"],
                 "total_spend": float(row["total_spend"]),
                 "avg_order_value": float(row["avg_order_value"]),

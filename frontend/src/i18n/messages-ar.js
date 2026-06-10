@@ -548,7 +548,9 @@ const arabicMessages = {
     "ariaIncrease": "ارتفاع",
     "ariaDecrease": "انخفاض",
     "ariaNoChange": "لا تغيير",
-    "ariaChangeLabel": "{pct}% {dir} مقارنة بالفترة السابقة"
+    "ariaChangeLabel": "{pct}% {dir} مقارنة بالفترة السابقة",
+    "todayReservations": "حجوزات اليوم",
+    "viewReservations": "عرض التقويم"
   },
   "ownerSections": {
     "kicker": "إدارة القاعة",
@@ -3115,6 +3117,11 @@ Object.assign(arabicMessages, {
     grantPointsSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0644\u0627\u0621.",
     grantPointsError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0646\u0642\u0627\u0637.",
     grantPointsInvalid: "\u0627\u0644\u0631\u062c\u0627\u0621 \u0625\u062f\u062e\u0627\u0644 \u0631\u0642\u0645 \u0635\u062d\u064a\u062d.",
+    tierVIP: "VIP",
+    tierRegular: "\u0645\u0646\u062a\u0638\u0645",
+    tierNew: "\u062c\u062f\u064a\u062f",
+    tierFilterLabel: "\u0627\u0644\u0645\u0633\u062a\u0648\u0649",
+    loyaltyBadge: "\u0646\u0642\u0637\u0629",
   },
   ownerStaff: {
     kicker: "\u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646",

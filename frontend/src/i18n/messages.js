@@ -1421,6 +1421,11 @@ export const messages = {
       grantPointsSuccess: "Loyalty points updated.",
       grantPointsError: "Could not update loyalty points.",
       grantPointsInvalid: "Please enter a whole number.",
+      tierVIP: "VIP",
+      tierRegular: "Regular",
+      tierNew: "New",
+      tierFilterLabel: "Tier",
+      loyaltyBadge: "pts",
     },
     ownerStaff: {
       kicker: "Staff",
@@ -5627,6 +5632,11 @@ export const messages = {
       grantPointsSuccess: "Points de fidelite mis a jour.",
       grantPointsError: "Impossible de mettre a jour les points.",
       grantPointsInvalid: "Veuillez saisir un nombre entier.",
+      tierVIP: "VIP",
+      tierRegular: "Regulier",
+      tierNew: "Nouveau",
+      tierFilterLabel: "Niveau",
+      loyaltyBadge: "pts",
     },
     ownerStaff: {
       kicker: "Personnel",

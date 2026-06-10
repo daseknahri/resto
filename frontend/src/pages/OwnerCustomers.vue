@@ -80,6 +80,29 @@
       </button>
     </div>
 
+    <!-- ── Tier filter chips ──────────────────────────────────────────────────── -->
+    <div class="ui-reveal flex flex-wrap items-center gap-1.5" style="--ui-delay: 60ms">
+      <span class="shrink-0 text-[11px] uppercase tracking-wider text-slate-500 me-0.5" aria-hidden="true">{{ t('ownerCustomers.tierFilterLabel') }}</span>
+      <button
+        v-for="tier in tierTabs"
+        :key="tier.value"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-secondary)]/60"
+        :class="activeTier === tier.value
+          ? 'border-[var(--color-secondary)]/60 bg-[var(--color-secondary)]/15 text-[var(--color-secondary)]'
+          : 'border-slate-700/60 bg-slate-900/40 text-slate-400 hover:border-slate-600 hover:text-slate-200'"
+        :aria-pressed="activeTier === tier.value"
+        @click="activeTier = tier.value"
+      >
+        {{ tier.label }}
+        <span
+          v-if="tier.count !== null"
+          class="tabular-nums"
+          :class="activeTier === tier.value ? 'text-[var(--color-secondary)]/70' : 'text-slate-600'"
+        >({{ tier.count }})</span>
+      </button>
+    </div>
+
     <!-- ── Segment filter chips ─────────────────────────────────────────────── -->
     <div class="ui-reveal flex flex-wrap gap-1.5" role="group" :aria-label="t('ownerCustomers.segmentFilterLabel')" style="--ui-delay: 80ms">
       <button
@@ -189,6 +212,14 @@
               >
                 {{ segmentLabel(c.segment) }}
               </span>
+              <!-- Tier badge -->
+              <span
+                v-if="c.order_count > 0"
+                class="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                :class="customerTierClass(c)"
+              >
+                {{ customerTierLabel(c) }}
+              </span>
             </div>
           </div>
         </div>
@@ -245,6 +276,18 @@
           >
             <AppIcon name="wallet" class="h-3 w-3 shrink-0" aria-hidden="true" />
             {{ formatAmount(parseFloat(c.wallet_balance || 0), c.currency) }}
+          </span>
+          <!-- Loyalty points (account type only) -->
+          <span
+            v-if="c.type === 'account' && c.loyalty_points > 0"
+            class="flex items-center gap-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/8 px-2 py-0.5 text-indigo-300"
+            :title="t('ownerCustomers.loyaltyBadge')"
+          >
+            <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3 shrink-0" aria-hidden="true">
+              <path d="M8 1l1.6 3.2L13 5l-2.5 2.4.6 3.6L8 9.4l-3.1 1.6.6-3.6L3 5l3.4-.8z"/>
+            </svg>
+            <span class="tabular-nums font-medium">{{ c.loyalty_points }}</span>
+            <span class="text-indigo-400/60">{{ t('ownerCustomers.loyaltyBadge') }}</span>
           </span>
           <!-- Avg review -->
           <span v-if="c.avg_review !== null && c.avg_review !== undefined" class="flex items-center gap-0.5">
@@ -395,6 +438,7 @@ const customers = ref([]);
 const summary = ref(null);
 const searchQuery = ref("");
 const activeSegment = ref("");
+const activeTier = ref("");
 const sortKey = ref("last_order");
 
 const CACHE_KEY = "ownerCustomers";
@@ -445,9 +489,43 @@ const segments = computed(() => {
   ];
 });
 
+// ── Tiers ─────────────────────────────────────────────────────────────────────
+const _tierKey = (c) => c.order_count >= 10 ? "vip" : c.order_count >= 3 ? "regular" : "new";
+
+const customerTierLabel = (c) => {
+  const k = _tierKey(c);
+  if (k === "vip") return t("ownerCustomers.tierVIP");
+  if (k === "regular") return t("ownerCustomers.tierRegular");
+  return t("ownerCustomers.tierNew");
+};
+
+const customerTierClass = (c) => {
+  const k = _tierKey(c);
+  if (k === "vip") return "border-amber-500/50 bg-amber-500/10 text-amber-400";
+  if (k === "regular") return "border-sky-500/40 bg-sky-500/10 text-sky-400";
+  return "border-slate-600/50 bg-slate-800/40 text-slate-500";
+};
+
+const tierTabs = computed(() => {
+  const all = customers.value;
+  const counts = { vip: 0, regular: 0, new: 0 };
+  all.forEach((c) => { if (c.order_count > 0) counts[_tierKey(c)]++; });
+  return [
+    { value: "",        label: t("ownerCustomers.segmentAll"),   count: all.length },
+    { value: "vip",     label: t("ownerCustomers.tierVIP"),      count: counts.vip },
+    { value: "regular", label: t("ownerCustomers.tierRegular"),  count: counts.regular },
+    { value: "new",     label: t("ownerCustomers.tierNew"),      count: counts.new },
+  ];
+});
+
 // ── Filtering + sorting ───────────────────────────────────────────────────────
 const filteredCustomers = computed(() => {
   let list = customers.value;
+
+  // Tier filter
+  if (activeTier.value) {
+    list = list.filter((c) => _tierKey(c) === activeTier.value);
+  }
 
   // Segment filter
   if (activeSegment.value) {

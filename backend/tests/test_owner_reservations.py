@@ -136,6 +136,7 @@ class OwnerReservationListViewTests(SimpleTestCase):
             search="demo",
             from_date=date(2026, 3, 1),
             to_date=date(2026, 3, 7),
+            booked_for_date=None,
         )
 
     def test_returns_403_when_tenant_missing(self):
@@ -190,6 +191,7 @@ class OwnerReservationListViewTests(SimpleTestCase):
             search="",
             from_date=None,
             to_date=None,
+            booked_for_date=None,
         )
 
 

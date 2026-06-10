@@ -117,7 +117,7 @@ def _parse_iso_date(value: str):
         return None
 
 
-def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None):
+def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None):
     queryset = _with_reservation_reminder_metrics(
         Lead.objects.filter(
             tenant_id=tenant_id,
@@ -145,6 +145,8 @@ def _owner_reservations_queryset(tenant_id, *, status_filter="", reminder_filter
         queryset = queryset.filter(created_at__date__gte=from_date)
     if to_date:
         queryset = queryset.filter(created_at__date__lte=to_date)
+    if booked_for_date:
+        queryset = queryset.filter(booked_for__date=booked_for_date)
     return queryset
 
 
@@ -474,7 +476,7 @@ def _apply_tenant_settings_import(*, tenant, payload, commit: bool = True):
     return summary
 
 
-def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_date=None, to_date=None):
+def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_date=None, to_date=None, booked_for_date=None):
     counts = {
         "total": 0,
         Lead.Status.NEW: 0,
@@ -490,6 +492,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
         search=search,
         from_date=from_date,
         to_date=to_date,
+        booked_for_date=booked_for_date,
     ).count()
     for status_code in (Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.WON, Lead.Status.LOST, Lead.Status.NO_SHOW):
         counts[status_code] = _owner_reservations_queryset(
@@ -499,6 +502,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
             search=search,
             from_date=from_date,
             to_date=to_date,
+            booked_for_date=booked_for_date,
         ).count()
     counts["overdue_new"] = (
         _owner_reservations_queryset(
@@ -508,6 +512,7 @@ def _owner_reservation_counts(tenant_id, *, reminder_filter="", search="", from_
             search=search,
             from_date=from_date,
             to_date=to_date,
+            booked_for_date=booked_for_date,
         )
         .filter(created_at__lte=reservation_overdue_cutoff())
         .count()
@@ -1626,12 +1631,16 @@ class OwnerReservationListView(APIView):
         search = (request.query_params.get("q") or "").strip()
         from_date_raw = request.query_params.get("from")
         to_date_raw = request.query_params.get("to")
+        booked_for_date_raw = request.query_params.get("booked_for_date")
         from_date = _parse_iso_date(from_date_raw or "")
         to_date = _parse_iso_date(to_date_raw or "")
+        booked_for_date = _parse_iso_date(booked_for_date_raw or "")
         if from_date_raw and from_date is None:
             return Response({"detail": "Invalid 'from' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
         if to_date_raw and to_date is None:
             return Response({"detail": "Invalid 'to' date. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if booked_for_date_raw and booked_for_date is None:
+            return Response({"detail": "Invalid 'booked_for_date'. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
         if from_date and to_date and from_date > to_date:
             return Response({"detail": "'from' date cannot be after 'to' date."}, status=status.HTTP_400_BAD_REQUEST)
         page = _parse_positive_int(
@@ -1654,6 +1663,7 @@ class OwnerReservationListView(APIView):
                 search=search,
                 from_date=from_date,
                 to_date=to_date,
+                booked_for_date=booked_for_date,
             )
             total = queryset.count()
             pages = max(1, ceil(total / page_size)) if total else 1
@@ -1668,6 +1678,7 @@ class OwnerReservationListView(APIView):
                 search=search,
                 from_date=from_date,
                 to_date=to_date,
+                booked_for_date=booked_for_date,
             )
         return Response(
             {

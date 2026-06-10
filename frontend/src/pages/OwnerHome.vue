@@ -221,6 +221,37 @@
       </template>
       <div v-else class="h-11 animate-pulse rounded-2xl bg-slate-800/30" aria-hidden="true" />
 
+      <!-- Today's reservations — lazy-fetched after ratings ───────────────── -->
+      <RouterLink
+        v-if="todayReservations !== null"
+        :to="{ name: 'owner-reservations' }"
+        class="ui-surface-lift flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50"
+        :class="todayReservations > 0 ? 'border-sky-500/25 bg-sky-500/5 hover:border-sky-500/40 hover:bg-sky-500/8' : 'border-slate-700/60 bg-slate-950/30 hover:border-slate-600'"
+        :aria-label="`${t('ownerHome.todayReservations')}: ${todayReservations}`"
+      >
+        <div class="flex items-center gap-3">
+          <svg
+            viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+            class="h-4 w-4 shrink-0 flex-none"
+            :class="todayReservations > 0 ? 'text-sky-400' : 'text-slate-600'"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="14" height="14" rx="2" />
+            <path d="M3 9h14M7 2v4M13 2v4" />
+          </svg>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-sm font-bold tabular-nums" :class="todayReservations > 0 ? 'text-white' : 'text-slate-400'">{{ todayReservations }}</span>
+            <span class="text-xs text-slate-500">{{ t("ownerHome.todayReservations").toLowerCase() }}</span>
+          </div>
+          <span v-if="todayReservationsNew > 0" class="rounded-full bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-sky-300">{{ todayReservationsNew }} {{ t("ownerOrders.statusPending").toLowerCase() }}</span>
+        </div>
+        <span class="flex items-center gap-0.5 text-[11px] font-semibold" :class="todayReservations > 0 ? 'text-sky-400/80' : 'text-slate-600'">
+          {{ t("ownerHome.viewReservations") }}
+          <AppIcon name="chevronRight" class="h-3.5 w-3.5 rtl:scale-x-[-1]" aria-hidden="true" />
+        </span>
+      </RouterLink>
+      <div v-else-if="todayReservations === null" class="h-11 animate-pulse rounded-2xl bg-slate-800/30" aria-hidden="true" />
+
       <!-- Quick actions (Analytics lives in the top nav now, so it's not duplicated here) -->
       <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
         <RouterLink :to="{ name: 'owner-menu-builder' }" class="ui-btn-primary ui-press col-span-2 w-full gap-2 px-5 py-2.5 text-sm sm:w-auto">
@@ -389,6 +420,24 @@ const fetchRatings = async () => {
     ratingsSummary.value = { count: data?.count ?? 0, average: data?.average ?? null };
   } catch {
     ratingsSummary.value = { count: 0, average: null };
+  }
+};
+
+// ── Today's reservations — fetched lazily after ratings ──────────────────────
+const todayReservations = ref(null);   // null = loading skeleton
+const todayReservationsNew = ref(0);
+
+const fetchTodayReservations = async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const { data } = await api.get("/owner/reservations/", {
+      params: { booked_for_date: today, page_size: 1 },
+      timeout: 5000,
+    });
+    todayReservations.value = data?.pagination?.total ?? 0;
+    todayReservationsNew.value = data?.counts?.new ?? 0;
+  } catch {
+    todayReservations.value = 0;
   }
 };
 
@@ -596,6 +645,7 @@ const manualRefresh = () => {
   void order.fetchOrders("", { silent: false });
   void tenant.fetchMeta();
   void fetchRatings();
+  void fetchTodayReservations();
   // Re-fetch readiness data (counts, sold-out count) so the readiness card and
   // the alerts that depend on it stay in sync.
   readinessRef.value?.load();
@@ -624,6 +674,7 @@ onMounted(async () => {
   //    before these additional calls hit the network.
   nextTick(() => {
     void fetchRatings();
+    void fetchTodayReservations();
   });
 
   // 3. Background poll setup
