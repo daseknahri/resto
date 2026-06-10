@@ -1777,7 +1777,9 @@ const arabicMessages = {
     "tableCustomerNameOptional": "اسمك (اختياري)",
     "tableCustomerNamePlaceholder": "اسمك",
     "tipCustomPlaceholder": "مبلغ مخصص",
-    "tipLabel": "إضافة بقشيش"
+    "tipLabel": "إضافة بقشيش",
+    "tipHighWarning": "هذه البقشيش تتجاوز إجمالي طلبك — تحقق من المبلغ.",
+    "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط)."
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",

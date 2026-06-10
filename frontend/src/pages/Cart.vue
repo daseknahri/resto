@@ -521,18 +521,23 @@
               >+{{ formatPrice(tipAmount) }}</span>
             </div>
             <!-- Custom tip input -->
-            <div v-if="tipPercent === 'custom'" class="flex items-center gap-2">
-              <span class="text-xs text-slate-400 shrink-0">{{ currencyStore.selected }}</span>
-              <input
-                v-model="customTipInput"
-                type="number"
-                min="0"
-                step="0.01"
-                class="ui-input flex-1 text-sm"
-                :aria-label="t('cartPage.tipCustomPlaceholder')"
-                :placeholder="t('cartPage.tipCustomPlaceholder')"
-                @blur="clampCustomTip"
-              />
+            <div v-if="tipPercent === 'custom'" class="space-y-1.5">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400 shrink-0">{{ currencyStore.selected }}</span>
+                <input
+                  v-model="customTipInput"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="ui-input flex-1 text-sm"
+                  :aria-label="t('cartPage.tipCustomPlaceholder')"
+                  :placeholder="t('cartPage.tipCustomPlaceholder')"
+                  @blur="clampCustomTip"
+                />
+              </div>
+              <p v-if="tipHighWarning" class="text-[10px] text-amber-400/80 ps-0.5">
+                ⚠ {{ t('cartPage.tipHighWarning') }}
+              </p>
             </div>
           </div>
 
@@ -986,6 +991,14 @@ const clampCustomTip = () => {
   const v = parseFloat(customTipInput.value);
   if (!Number.isFinite(v) || v < 0) customTipInput.value = '';
 };
+
+// Warn if custom tip exceeds the order total (generous but probably a typo)
+const tipHighWarning = computed(() => {
+  if (tipPercent.value !== 'custom') return false;
+  const tip = tipAmount.value;
+  const base = Number(cart.total) || 0;
+  return tip > 0 && base > 0 && tip > base;
+});
 
 // Promo code
 const promoCode = ref('');
@@ -1585,6 +1598,13 @@ watch(fulfillmentType, (value) => {
     clearFieldError('delivery_location_url');
     clearFieldError('delivery_lat');
     clearFieldError('delivery_lng');
+    // Invalidate a "free delivery" promo when switching away from delivery —
+    // it would be rejected at checkout anyway since it's delivery-only.
+    if (promoApplied.value?.promo_type === 'free_delivery') {
+      promoApplied.value = null;
+      promoCode.value = '';
+      toast.show(t('cartPage.promoFreeDeliveryRemoved'), 'info');
+    }
   }
 });
 

@@ -2281,6 +2281,8 @@ export const messages = {
       addressDeleteFailed: "Could not remove address.",
       tipLabel: "Add a tip",
       tipCustomPlaceholder: "Custom amount",
+      tipHighWarning: "That tip exceeds your order total — double-check the amount.",
+      promoFreeDeliveryRemoved: "Free delivery promo removed (pickup only).",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -6279,6 +6281,8 @@ export const messages = {
       addressDeleteFailed: "Impossible de supprimer l'adresse.",
       tipLabel: "Ajouter un pourboire",
       tipCustomPlaceholder: "Montant libre",
+      tipHighWarning: "Ce pourboire dépasse le total de votre commande — vérifiez le montant.",
+      promoFreeDeliveryRemoved: "Code livraison gratuite retiré (valable uniquement en livraison).",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
