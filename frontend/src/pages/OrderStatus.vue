@@ -153,7 +153,7 @@
       >
         <p class="text-2xl font-bold text-red-200">{{ t("orderStatus.cancelledTitle") }}</p>
         <p class="mt-1.5 text-sm text-red-100/80">{{ t("orderStatus.cancelledBody") }}</p>
-        <RouterLink :to="{ name: 'menu' }" class="mt-4 ui-btn-outline inline-flex px-5 py-2 text-sm">
+        <RouterLink :to="{ name: 'menu' }" class="mt-4 ui-btn-primary inline-flex items-center justify-center px-5 py-2 text-sm">
           {{ t("orderStatus.backToMenu") }}
         </RouterLink>
       </div>
@@ -171,6 +171,7 @@
                 {{ statusLabel(orderData.status) }}
               </span>
               <span v-if="orderData.fulfillment_type" class="ui-chip">{{ fulfillmentLabel(orderData) }}</span>
+              <span v-if="orderData.can_cancel" class="ui-chip border-red-400/30 bg-red-500/8 text-red-300 text-[11px]">{{ t('orderStatus.cancelAvailable') }}</span>
             </div>
           </div>
           <div class="text-end space-y-1 shrink-0">
