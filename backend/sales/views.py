@@ -2558,6 +2558,17 @@ class OwnerDashboardView(APIView):
         weekday_map = {row["weekday"]: row["orders"] for row in weekday_rows}
         orders_by_weekday = [weekday_map.get(d, 0) for d in range(1, 8)]
 
+        # 2D heatmap: (weekday 1-7) × (hour 0-23) → order count
+        day_hour_rows = (
+            revenue_qs
+            .annotate(weekday=ExtractWeekDay("created_at"), hour=ExtractHour("created_at"))
+            .values("weekday", "hour")
+            .annotate(orders=Count("id"))
+        )
+        dh_map = {(int(r["weekday"]), int(r["hour"])): int(r["orders"]) for r in day_hour_rows}
+        # Result: list[7 days][24 hours], index 0 = Sunday
+        orders_by_day_hour = [[dh_map.get((d, h), 0) for h in range(24)] for d in range(1, 8)]
+
         popular_dish_rows = (
             OrderItem.objects.filter(order__in=revenue_qs)
             .exclude(dish_slug="")
@@ -2679,6 +2690,7 @@ class OwnerDashboardView(APIView):
                     "peak_hours": {
                         "by_hour": orders_by_hour,
                         "by_weekday": orders_by_weekday,
+                        "by_day_hour": orders_by_day_hour,
                     },
                     "popular_dishes": popular_dishes,
                     "customer_return": {

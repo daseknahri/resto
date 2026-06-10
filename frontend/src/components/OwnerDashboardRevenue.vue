@@ -148,6 +148,43 @@
           </div>
         </div>
       </div>
+
+      <!-- 2D heatmap: day-of-week × hour-of-day ─────────────────────────── -->
+      <div v-if="heatmapData.length && heatmapMax > 0" class="space-y-1.5">
+        <h4 class="ui-stat-label">{{ t("ownerHome.peakHoursHeatmapTitle") }}</h4>
+        <!-- Hour axis labels -->
+        <div class="ms-6 flex justify-between pe-0.5 text-[9px] tabular-nums text-slate-500" aria-hidden="true">
+          <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span>
+        </div>
+        <!-- Grid rows: 7 days × 24 hours -->
+        <div role="img" :aria-label="t('ownerHome.peakHoursHeatmapAriaLabel')">
+          <div v-for="(row, d) in heatmapData" :key="d" class="mb-0.5 flex items-center gap-1.5">
+            <span class="w-4 shrink-0 text-end text-[9px] leading-none text-slate-500" aria-hidden="true">{{ heatmapDayLabels[d] }}</span>
+            <div class="flex flex-1 gap-px">
+              <div
+                v-for="(count, h) in row"
+                :key="h"
+                class="h-3 flex-1 rounded-[2px]"
+                :style="{ backgroundColor: heatColor(count) }"
+                :title="`${heatmapDayLabels[d]} ${h}:00–${h}:59 — ${count}`"
+              />
+            </div>
+          </div>
+        </div>
+        <!-- Legend -->
+        <div class="ms-6 flex items-center gap-2 pe-0.5 text-[9px] text-slate-500" aria-hidden="true">
+          <span>{{ t("ownerHome.peakHoursHeatmapLow") }}</span>
+          <div class="flex gap-px">
+            <div
+              v-for="i in 5"
+              :key="i"
+              class="h-2 w-5 rounded-[2px]"
+              :style="{ backgroundColor: `rgba(99,102,241,${(0.1 + (i - 1) * 0.2).toFixed(2)})` }"
+            />
+          </div>
+          <span>{{ t("ownerHome.peakHoursHeatmapHigh") }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Popular dishes -->
@@ -214,7 +251,7 @@ import PeriodBadge from "./PeriodBadge.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 
-const { t, formatNumber } = useI18n();
+const { t, formatNumber, currentLocale } = useI18n();
 const tenant = useTenantStore();
 
 const props = defineProps({
@@ -275,6 +312,31 @@ const peakWeekdayBars = computed(() => {
   });
   return days.map((count, idx) => ({ label: labels[idx] || String(idx), count, heightPct: Math.round((count / max) * 100) }));
 });
+
+// ── Day×Hour heatmap ──────────────────────────────────────────────────────────
+const heatmapData = computed(() => props.data?.peak_hours?.by_day_hour || []);
+
+const heatmapMax = computed(() => {
+  if (!heatmapData.value.length) return 0;
+  return Math.max(...heatmapData.value.flat(), 1);
+});
+
+const heatmapDayLabels = computed(() => {
+  // Jan 1 2023 was a Sunday → index 0-6 maps to Sun-Sat
+  return Array.from({ length: 7 }, (_, i) => {
+    try {
+      return new Intl.DateTimeFormat(currentLocale.value, { weekday: "short" }).format(new Date(2023, 0, 1 + i));
+    } catch {
+      return ["Su","Mo","Tu","We","Th","Fr","Sa"][i];
+    }
+  });
+});
+
+const heatColor = (count) => {
+  if (!heatmapMax.value || count === 0) return "rgba(30,41,59,0.6)";
+  const alpha = 0.1 + (count / heatmapMax.value) * 0.82;
+  return `rgba(99,102,241,${alpha.toFixed(3)})`;
+};
 
 const popularDishes = computed(() => {
   const dishes = props.data?.popular_dishes || [];

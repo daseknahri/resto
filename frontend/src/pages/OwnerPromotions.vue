@@ -134,7 +134,12 @@
       </div>
       <!-- Fetch error -->
       <div v-if="flashSalesError" class="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-2.5 text-xs text-amber-300">
-        {{ t('ownerPromotions.flashFetchError') }}
+        <span class="flex-1">{{ t('ownerPromotions.flashFetchError') }}</span>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg border border-amber-500/40 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          @click="fetchFlashSales"
+        >{{ t('ownerPromotions.retry') }}</button>
       </div>
       <!-- Sale cards -->
       <article
