@@ -57,6 +57,26 @@
       </button>
     </div>
 
+    <!-- Ordering-disabled notice: restaurant closed or browse-only plan -->
+    <div
+      v-if="quickAddDisabled"
+      class="ui-reveal flex items-center gap-3 rounded-2xl border px-4 py-3.5"
+      :class="isBrowseOnlyPlan
+        ? 'border-sky-500/30 bg-sky-500/8 text-sky-300'
+        : 'border-amber-500/30 bg-amber-500/8 text-amber-300'"
+      role="status"
+    >
+      <AppIcon
+        name="info"
+        class="h-4 w-4 shrink-0"
+        :class="isBrowseOnlyPlan ? 'text-sky-400' : 'text-amber-400'"
+        aria-hidden="true"
+      />
+      <p class="text-sm font-medium">
+        {{ isBrowseOnlyPlan ? t('customerLayout.browseOnlyNotice') : t('customerLayout.closedNotice') }}
+      </p>
+    </div>
+
     <!-- Dish grid – loading skeletons -->
     <div v-if="menu.loading && !filteredDishes.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading dishes">
       <div v-for="n in 6" :key="`loading-${n}`" class="ui-skeleton h-80 rounded-[1.8rem]"></div>
