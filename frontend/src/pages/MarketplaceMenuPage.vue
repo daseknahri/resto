@@ -244,8 +244,22 @@
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
                   <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
+                  <!-- Dietary tags -->
+                  <div v-if="dish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+                    <span
+                      v-for="tag in dish.tags.slice(0, 3)"
+                      :key="tag"
+                      class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
+                      :class="tagBadgeClass(tag)"
+                    >{{ tag }}</span>
+                  </div>
                   <div class="mt-2 flex items-center justify-between gap-2">
-                    <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                    <!-- Price: flash-sale strikethrough when active -->
+                    <span v-if="flashSalePct" class="flex items-baseline gap-1.5">
+                      <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
+                      <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
+                    </span>
+                    <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                     <button
                       v-if="dish.is_available"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
@@ -320,10 +334,22 @@
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-semibold text-slate-100 leading-snug" :title="dish.name">{{ dish.name }}</p>
                     <p v-if="dish.description" class="mt-0.5 text-xs text-slate-500 line-clamp-2 leading-relaxed" :title="dish.description">{{ dish.description }}</p>
+                    <!-- Dietary tags -->
+                    <div v-if="dish.tags?.length" class="mt-1.5 flex flex-wrap gap-1">
+                      <span
+                        v-for="tag in dish.tags.slice(0, 3)"
+                        :key="tag"
+                        class="rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
+                        :class="tagBadgeClass(tag)"
+                      >{{ tag }}</span>
+                    </div>
                     <div class="mt-2 flex items-center justify-between gap-2">
-                      <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">
-                        {{ fmtPrice(dish.price) }}
+                      <!-- Price: flash-sale strikethrough when active -->
+                      <span v-if="flashSalePct" class="flex items-baseline gap-1.5">
+                        <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
+                        <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
                       </span>
+                      <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
                       <button
                         v-if="dish.is_available"
                         class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
@@ -838,6 +864,26 @@ const flashSaleDiscount = computed(() => {
   const pct = Number(restaurant.value.flash_sale.discount_pct);
   return pct > 0 ? Math.round(cartTotal.value * pct) / 100 : 0;
 });
+
+// Per-dish flash-sale helpers
+const flashSalePct = computed(() => Number(restaurant.value?.flash_sale?.discount_pct) || 0);
+const dishSalePrice = (price) => {
+  const pct = flashSalePct.value;
+  if (!pct) return null;
+  return Math.round(Number(price) * (100 - pct)) / 100;
+};
+
+// Dietary tag badge colours (mirrors DishCard.vue)
+const TAG_COLOURS = {
+  vegan:       'border-green-500/40 bg-green-500/10 text-green-300',
+  vegetarian:  'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  spicy:       'border-red-500/40 bg-red-500/10 text-red-300',
+  gluten_free: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+  halal:       'border-teal-500/40 bg-teal-500/10 text-teal-300',
+  kosher:      'border-violet-500/40 bg-violet-500/10 text-violet-300',
+  nuts:        'border-amber-500/40 bg-amber-500/10 text-amber-300',
+};
+const tagBadgeClass = (tag) => TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate-900/60 text-slate-400';
 
 // ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
 // Straight-line→road multiplier, mirrors backend tenancy/routing road factor
