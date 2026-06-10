@@ -245,7 +245,7 @@
           <button
             v-if="waiter.nextStatus(order)"
             class="ui-btn-primary ui-touch-target w-full rounded-xl py-3 text-sm font-bold tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
-            :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '']"
+            :class="[actionBtnClass(order.status), waiter.updatingOrderIds.has(order.id) ? 'opacity-50 pointer-events-none' : '', allItemsReady(order) && !waiter.updatingOrderIds.has(order.id) ? 'ring-2 ring-emerald-300/40 shadow-md shadow-emerald-500/20' : '']"
             :disabled="waiter.updatingOrderIds.has(order.id)"
             :aria-busy="waiter.updatingOrderIds.has(order.id)"
             :aria-label="`${actionLabel(order)} — #${order.order_number}`"
@@ -452,6 +452,11 @@ const orderReadyCount = (order) => {
 
 const hasUnreadyItems = (order) =>
   order.items.some((i) => i.id != null && !i.is_ready);
+
+const allItemsReady = (order) => {
+  const rc = orderReadyCount(order);
+  return rc.total > 0 && rc.done === rc.total;
+};
 
 const markAllReady = (order) => {
   order.items

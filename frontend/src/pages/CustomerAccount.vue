@@ -1371,20 +1371,36 @@
               <div v-else-if="!savedAddresses.length && !addingAddress" class="rounded-xl border border-dashed border-slate-700/50 px-4 py-4 text-center text-xs text-slate-500">
                 {{ t('customerAccount.savedAddressesEmpty') }}
               </div>
-              <ul v-else class="space-y-1.5">
+              <ul class="space-y-1.5">
                 <li
                   v-for="addr in savedAddresses"
                   :key="addr.id"
-                  class="flex items-start gap-3 rounded-xl border border-slate-700/60 bg-slate-900/40 px-3 py-2.5 text-xs"
+                  class="rounded-xl border bg-slate-900/40 px-3 py-2.5 text-xs transition-colors"
+                  :class="deletingAddressId === addr.id ? 'border-red-500/30' : 'border-slate-700/60'"
                 >
-                  <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
-                  <div class="min-w-0 flex-1 space-y-0.5">
-                    <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
-                    <p class="text-slate-400" :title="addr.address">{{ addr.address }}</p>
+                  <div class="flex items-start gap-3">
+                    <AppIcon name="location" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <p v-if="addr.label" class="font-semibold text-slate-200">{{ addr.label }}</p>
+                      <p class="text-slate-400" :title="addr.address">{{ addr.address }}</p>
+                    </div>
+                    <button
+                      class="ui-touch-target ui-press shrink-0 flex items-center justify-center transition"
+                      :class="deletingAddressId === addr.id ? 'text-red-400' : 'text-slate-500 hover:text-red-400'"
+                      :aria-label="t('common.remove')"
+                      @click="deletingAddressId = addr.id"
+                    >
+                      <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
                   </div>
-                  <button class="ui-touch-target ui-press shrink-0 flex items-center justify-center text-slate-500 transition hover:text-red-400" :aria-label="t('common.remove')" @click="deleteAddress(addr.id)">
-                    <AppIcon name="close" class="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
+                  <!-- Inline delete confirmation -->
+                  <Transition name="ui-fade">
+                    <div v-if="deletingAddressId === addr.id" class="mt-2 flex items-center gap-3 border-t border-red-500/15 pt-2">
+                      <span class="flex-1 text-red-300/80">{{ t('customerAccount.savedAddressConfirmDelete') }}</span>
+                      <button class="text-slate-400 transition hover:text-slate-200" @click.stop="deletingAddressId = null">{{ t('common.back') }}</button>
+                      <button class="font-semibold text-red-300 transition hover:text-red-200" @click.stop="deleteAddress(addr.id); deletingAddressId = null">{{ t('common.remove') }}</button>
+                    </div>
+                  </Transition>
                 </li>
               </ul>
             </div>
@@ -1597,6 +1613,11 @@ const cancelEmailInput = () => {
 const saveEmail = async () => {
   emailError.value = '';
   if (!editableEmail.value) return;
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(editableEmail.value.trim())) {
+    emailError.value = t('customerAccount.emailInvalid');
+    return;
+  }
   savingEmail.value = true;
   try {
     const res = await api.patch('/customer/profile/', { email: editableEmail.value });
@@ -1732,6 +1753,7 @@ const loyaltyUnlockCredit = computed(() => {
 
 // ── Saved addresses ───────────────────────────────────────────────────────────
 const savedAddresses = ref([]);
+const deletingAddressId = ref(null);
 const loadingAddresses = ref(false);
 
 const fetchAddresses = async () => {
