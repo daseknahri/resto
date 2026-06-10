@@ -214,6 +214,26 @@
             </button>
           </div>
         </div>
+        <!-- Allergen "Free from" strip — only shown when at least one dish has allergen data -->
+        <div
+          v-if="availableAllergens.length"
+          role="group"
+          :aria-label="t('mktMenu.allergenFilter')"
+          class="flex items-center gap-2 overflow-x-auto border-t border-slate-800/40 px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <span class="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{{ t('mktMenu.freeFrom') }}</span>
+          <button
+            v-for="allergen in availableAllergens"
+            :key="allergen"
+            type="button"
+            :aria-pressed="selectedAllergenFilter.includes(allergen)"
+            class="ui-touch-target shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+            :class="selectedAllergenFilter.includes(allergen)
+              ? 'border-amber-400/70 bg-amber-500/20 text-amber-200'
+              : 'border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-600 hover:text-slate-300'"
+            @click="toggleAllergenFilter(allergen)"
+          >{{ t(`mktMenu.allergen_${allergen}`) }}</button>
+        </div>
       </nav>
 
       <!-- Menu -->
@@ -287,7 +307,7 @@
 
         <!-- ── Normal category sections (search inactive) ─────────────────── -->
         <template v-else>
-          <!-- Empty menu state -->
+          <!-- Empty menu state (no dishes at all) -->
           <div
             v-if="!restaurant.super_categories?.length"
             class="ui-empty-state text-center space-y-1"
@@ -295,9 +315,22 @@
             <p class="text-sm font-semibold text-slate-100">{{ t('mktMenu.menuEmpty') }}</p>
             <p class="text-xs text-slate-400">{{ t('mktMenu.menuEmptyBody') }}</p>
           </div>
+          <!-- No dishes pass the active allergen filter -->
+          <div
+            v-else-if="selectedAllergenFilter.length && !filteredSuperCategories.length"
+            class="flex flex-col items-center gap-3 rounded-2xl border border-slate-800/50 bg-slate-900/30 px-4 py-12 text-center"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" class="h-10 w-10 text-slate-700" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M7 10h6M10 7v6"/><path d="M14 6 6 14" stroke-width="1.8"/></svg>
+            <p class="text-sm font-medium text-slate-400">{{ t('mktMenu.noMatchDish') }}</p>
+            <button
+              type="button"
+              class="text-xs text-slate-500 underline transition-colors hover:text-slate-300"
+              @click="selectedAllergenFilter = []"
+            >{{ t('mktMenu.searchClear') }}</button>
+          </div>
 
           <div
-            v-for="sc in restaurant.super_categories"
+            v-for="sc in filteredSuperCategories"
             :key="sc.id"
           >
             <p class="ui-kicker mb-2">{{ sc.name }}</p>
@@ -885,6 +918,45 @@ const TAG_COLOURS = {
 };
 const tagBadgeClass = (tag) => TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate-900/60 text-slate-400';
 
+// ── Allergen "Free from" filter ───────────────────────────────────────────────
+const selectedAllergenFilter = ref([]);
+
+const availableAllergens = computed(() => {
+  const seen = new Set();
+  for (const sc of restaurant.value?.super_categories || []) {
+    for (const cat of sc.categories || []) {
+      for (const dish of cat.dishes || []) {
+        for (const a of dish.allergens || []) seen.add(a);
+      }
+    }
+  }
+  return [...seen].sort();
+});
+
+const toggleAllergenFilter = (allergen) => {
+  const idx = selectedAllergenFilter.value.indexOf(allergen);
+  if (idx >= 0) selectedAllergenFilter.value.splice(idx, 1);
+  else selectedAllergenFilter.value.push(allergen);
+};
+
+/** Returns true when the dish is safe for the active allergen exclusions. */
+const dishPassesAllergenFilter = (dish) => {
+  if (!selectedAllergenFilter.value.length) return true;
+  return !selectedAllergenFilter.value.some(a => (dish.allergens || []).includes(a));
+};
+
+/** Super-categories with allergen-filtered dish lists (empty cats/SCs hidden). */
+const filteredSuperCategories = computed(() => {
+  if (!selectedAllergenFilter.value.length) return restaurant.value?.super_categories || [];
+  return (restaurant.value?.super_categories || []).map(sc => ({
+    ...sc,
+    categories: (sc.categories || []).map(cat => ({
+      ...cat,
+      dishes: (cat.dishes || []).filter(dishPassesAllergenFilter),
+    })).filter(cat => cat.dishes.length > 0),
+  })).filter(sc => sc.categories.length > 0);
+});
+
 // ── Distance-based delivery pricing (mirrors backend compute_delivery_fee) ────
 // Straight-line→road multiplier, mirrors backend tenancy/routing road factor
 // (DELIVERY_ROAD_FACTOR, default 1.3). Server figure is authoritative.
@@ -1118,7 +1190,7 @@ const activeCatId = ref(null);
 
 const allCategories = computed(() => {
   const cats = [];
-  for (const sc of restaurant.value?.super_categories || []) {
+  for (const sc of filteredSuperCategories.value) {
     for (const cat of sc.categories || []) {
       if (cat.dishes?.length) cats.push({ id: cat.id, name: cat.name });
     }
@@ -1141,7 +1213,7 @@ const scrollToCategory = (catId) => {
 const mktSearchQuery = ref('');
 const isMktSearchActive = computed(() => mktSearchQuery.value.trim().length > 0);
 
-/** Search results grouped by category across all super-categories */
+/** Search results grouped by category across all super-categories (also respects allergen filter). */
 const mktSearchResults = computed(() => {
   const q = mktSearchQuery.value.trim().toLowerCase();
   if (!q) return [];
@@ -1149,8 +1221,10 @@ const mktSearchResults = computed(() => {
   for (const sc of restaurant.value?.super_categories || []) {
     for (const cat of sc.categories || []) {
       const matched = (cat.dishes || []).filter(d =>
-        (d.name || '').toLowerCase().includes(q) ||
-        (d.description || '').toLowerCase().includes(q)
+        dishPassesAllergenFilter(d) && (
+          (d.name || '').toLowerCase().includes(q) ||
+          (d.description || '').toLowerCase().includes(q)
+        )
       );
       if (matched.length) groups.push({ catName: cat.name, dishes: matched });
     }
