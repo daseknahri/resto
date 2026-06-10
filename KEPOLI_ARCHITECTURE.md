@@ -107,7 +107,14 @@ Goal: a non-restaurant shop can list products and sell with pickup/delivery.
 - Still deferred by design: the hard `Dish→Item` schema rename — wait for proven
   retail demand; when done, run on a schema clone first (see §3).
 
-### Phase 2 — Ride-hailing (car drivers / Uber-like)
+### Phase 2 — Ride-hailing ✅ MVP (shipped 2026-06-10, commit 9aed4b2)
+Shipped: `accounts.RideRequest` + migration 0035 (+ `Customer.driver_vehicle_type`,
+PlatformConfig ride fares base/per-km/min/commission); `ride_service.py` estimate +
+atomic idempotent settle (wallet w/ cash fallback); rider endpoints (estimate/create/
+active/cancel/rate) + driver endpoints (offers/accept/status, car-only, first-accept-
+wins); RidePage.vue (/ride) + DriverPage rides section; EN/FR/AR. Still deferred:
+car-document vetting tier (licence/insurance uploads), time-based fare component,
+driver-rates-rider UI. Original plan follows:
 Reuse the rider pool + live GPS + wallet; the new primitive is a **trip** (no
 tenant, no menu).
 - New public-schema `RideRequest` (rider=Customer, pickup/dropoff coords, fare
