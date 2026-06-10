@@ -891,6 +891,18 @@
               <div v-if="loadingWallet" class="space-y-2">
                 <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-xl bg-slate-800/50" />
               </div>
+              <div
+                v-else-if="walletError"
+                class="flex items-center justify-between gap-2 rounded-xl border border-red-500/25 bg-red-500/8 px-4 py-3 text-xs text-red-300"
+                role="alert"
+              >
+                <span>{{ t('customerAccount.walletLoadFailed') }}</span>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-lg border border-red-500/35 px-2.5 py-1 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+                  @click="fetchWallet"
+                >{{ t('common.retry') }}</button>
+              </div>
               <div v-else-if="!walletTransactions.length" class="ui-empty-state text-center p-5 space-y-2">
                 <AppIcon name="tag" class="mx-auto h-7 w-7 text-slate-600" aria-hidden="true" />
                 <p class="text-sm font-semibold text-slate-300">{{ t('customerAccount.walletNoTransactions') }}</p>
@@ -1747,6 +1759,7 @@ const submitReview = async (order) => {
 };
 
 const loadingWallet = ref(false);
+const walletError = ref(false);
 const walletTransactions = ref([]);
 const walletBalance = computed(() => {
   const raw = customerStore.customer?.wallet_balance;
@@ -2062,6 +2075,7 @@ const sendCredit = async () => {
 const fetchWallet = async () => {
   if (!customerStore.isAuthenticated) return;
   loadingWallet.value = true;
+  walletError.value = false;
   try {
     const res = await api.get('/customer/wallet/');
     walletTransactions.value = res.data.transactions || [];
@@ -2070,7 +2084,7 @@ const fetchWallet = async () => {
       customerStore.setCustomer({ ...customerStore.customer, wallet_balance: res.data.balance });
     }
   } catch {
-    toast.show(t('customerAccount.walletLoadFailed'), 'error');
+    walletError.value = true;
   } finally {
     loadingWallet.value = false;
   }

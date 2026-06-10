@@ -478,10 +478,17 @@ const allItemsReady = (order) => {
   return rc.total > 0 && rc.done === rc.total;
 };
 
-const markAllReady = (order) => {
-  order.items
-    .filter((i) => i.id != null && !i.is_ready)
-    .forEach((i) => waiter.toggleItemReady(order.id, i.id, true));
+const markAllReady = async (order) => {
+  const unready = order.items.filter((i) => i.id != null && !i.is_ready);
+  let failed = 0;
+  for (const item of unready) {
+    try {
+      await waiter.toggleItemReady(order.id, item.id, true);
+    } catch {
+      failed++;
+    }
+  }
+  if (failed > 0) toast.show(t("kitchen.markAllFailed"), "error");
 };
 
 // ── Display helpers ────────────────────────────────────────────────────────────

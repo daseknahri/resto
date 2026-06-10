@@ -3764,6 +3764,7 @@ export const messages = {
       driverPickedUp: "Out for delivery",
       driverFailed: "Delivery failed",
       itemToggleFailed: "Couldn't mark item ready — please try again.",
+      markAllFailed: "Some items couldn't be marked ready — please check and retry.",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -7896,6 +7897,7 @@ export const messages = {
       driverPickedUp: "En livraison",
       driverFailed: "Livraison echouee",
       itemToggleFailed: "Impossible de marquer l'article pret — reessayez.",
+      markAllFailed: "Certains articles n ont pas pu etre marques prets — verifiez et reessayez.",
     },
     stepSuperCategories: {
       title: "Groupes de menu",
