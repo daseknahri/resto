@@ -45,6 +45,24 @@
           <option value="">{{ t('directory.filterCuisine') }}: {{ t('directory.filterAll') }}</option>
           <option v-for="cuisine in filters.cuisines" :key="cuisine" :value="cuisine">{{ cuisine }}</option>
         </select>
+        <!-- Open now toggle -->
+        <button
+          v-if="restaurants.length"
+          type="button"
+          class="ui-press shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+          :class="openOnly
+            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+            : 'border-slate-700/70 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+          :aria-pressed="openOnly"
+          @click="openOnly = !openOnly"
+        >
+          <span
+            class="block h-1.5 w-1.5 rounded-full transition-colors"
+            :class="openOnly ? 'bg-emerald-400 motion-safe:animate-pulse' : 'bg-slate-600'"
+            aria-hidden="true"
+          />
+          {{ t('directory.filterOpenNow') }}
+        </button>
       </div>
 
       <!-- Loading: skeleton card grid -->
@@ -202,6 +220,7 @@ const filters = ref({ cities: [], cuisines: [] });
 const searchQuery = ref('');
 const selectedCity = ref('');
 const selectedCuisine = ref('');
+const openOnly = ref(false);
 
 const filteredRestaurants = computed(() => {
   let list = restaurants.value;
@@ -221,7 +240,11 @@ const filteredRestaurants = computed(() => {
   if (selectedCuisine.value) {
     list = list.filter((r) => r.cuisine_type === selectedCuisine.value);
   }
-  return list;
+  if (openOnly.value) {
+    list = list.filter((r) => r.is_open);
+  }
+  // Open restaurants float to the top even when not filtering by open-only
+  return [...list].sort((a, b) => (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0));
 });
 
 // Returns an emoji placeholder icon appropriate for the restaurant's business_type.
