@@ -1654,7 +1654,14 @@ const arabicMessages = {
     "bulkPriceApplying": "جارٍ التطبيق...",
     "bulkPriceApplied": "تم تحديث الأسعار لـ {count} عنصر",
     "bulkPriceValueError": "أدخل رقماً موجباً",
-    "bulkPriceError": "فشل تحديث الأسعار"
+    "bulkPriceError": "فشل تحديث الأسعار",
+    "productDetails": "تفاصيل المنتج",
+    "productDetailsHint": "حقول المتجر — تظهر في الكتالوج وقابلة للبحث برمز SKU أو الباركود.",
+    "attrSku": "رمز SKU",
+    "attrBarcode": "الباركود",
+    "attrBrand": "الماركة",
+    "attrUnit": "حجم العبوة / الوحدة",
+    "attrUnitPlaceholder": "مثال: 500 غ، 1 ل، x6"
   },
   "onboardingWizard": {
     "kicker": "الإعداد",

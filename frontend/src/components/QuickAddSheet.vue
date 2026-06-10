@@ -11,6 +11,7 @@
       <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
         <div class="min-w-0">
           <h2 id="qa-sheet-title" class="truncate text-base font-semibold text-white" :title="dish.name">{{ dish.name }}</h2>
+          <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="mt-0.5 text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
           <p v-if="dish.description" class="mt-0.5 line-clamp-2 text-xs text-slate-400" :title="dish.description">{{ dish.description }}</p>
         </div>
         <button

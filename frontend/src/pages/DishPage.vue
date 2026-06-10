@@ -103,6 +103,9 @@
           </span>
         </div>
 
+        <!-- Brand / pack-size (retail attributes) -->
+        <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
+
         <!-- Description -->
         <p v-if="dish.description" class="text-[15px] leading-relaxed text-slate-300/90">{{ dish.description }}</p>
 

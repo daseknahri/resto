@@ -115,6 +115,7 @@
                 <span class="font-semibold tabular-nums text-slate-300">{{ Number(dish.price || 0).toFixed(2) }}</span>
                 <span v-if="Array.isArray(dish.options) && dish.options.length">· {{ dish.options.length }} {{ t("stepDishes.variantsTitle") }}</span>
                 <span v-if="dish.option_groups?.length" class="text-sky-300">· {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
+                <span v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">· {{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(" · ") }}</span>
               </div>
             </button>
 
@@ -417,6 +418,56 @@
                     <input type="checkbox" class="sr-only" :checked="editingDish.allergens?.includes(allergen)" @change="toggleAllergen(editingDish, allergen, $event.target.checked)" />
                     {{ t(`stepDishes.allergen_${allergen}`) }}
                   </label>
+                </div>
+              </div>
+
+              <!-- Product details (retail only) -->
+              <div v-if="isShop" class="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+                <div>
+                  <p class="text-sm font-semibold text-slate-100">{{ t("stepDishes.productDetails") }}</p>
+                  <p class="text-xs text-slate-500">{{ t("stepDishes.productDetailsHint") }}</p>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <div class="space-y-1">
+                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.attrSku") }}</p>
+                    <input
+                      v-model.trim="editingDish.attributes.sku"
+                      type="text"
+                      class="ui-input border-slate-700"
+                      :aria-label="t('stepDishes.attrSku')"
+                      :placeholder="t('stepDishes.attrSku')"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.attrBarcode") }}</p>
+                    <input
+                      v-model.trim="editingDish.attributes.barcode"
+                      type="text"
+                      class="ui-input border-slate-700"
+                      :aria-label="t('stepDishes.attrBarcode')"
+                      :placeholder="t('stepDishes.attrBarcode')"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.attrBrand") }}</p>
+                    <input
+                      v-model.trim="editingDish.attributes.brand"
+                      type="text"
+                      class="ui-input border-slate-700"
+                      :aria-label="t('stepDishes.attrBrand')"
+                      :placeholder="t('stepDishes.attrBrand')"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <p class="text-[11px] text-slate-400">{{ t("stepDishes.attrUnit") }}</p>
+                    <input
+                      v-model.trim="editingDish.attributes.unit"
+                      type="text"
+                      class="ui-input border-slate-700"
+                      :aria-label="t('stepDishes.attrUnit')"
+                      :placeholder="t('stepDishes.attrUnitPlaceholder')"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1209,6 +1260,7 @@ import api from "../lib/api";
 import { useI18n } from "../composables/useI18n";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useTranslate } from "../composables/useTranslate";
+import { useVocabulary } from "../composables/useVocabulary";
 import { LOCALE_OPTIONS, normalizeLocale } from "../i18n/config";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
@@ -1229,6 +1281,7 @@ const dishSearch = ref("");
 const toast = useToastStore();
 const { confirm } = useConfirmModal();
 const tenant = useTenantStore();
+const { isShop } = useVocabulary();
 const { t } = useI18n();
 const { translating: dishTranslating, translateError: dishTranslateError, translateField } = useTranslate();
 const emit = defineEmits(["next", "back"]);
@@ -1328,7 +1381,7 @@ const activeCategoryDishesFiltered = computed(() => {
   const query = dishSearch.value.trim().toLowerCase();
   if (!query) return activeCategoryDishes.value;
   return activeCategoryDishes.value.filter((dish) =>
-    [dish.name, dish.description, dish.slug]
+    [dish.name, dish.description, dish.slug, dish.attributes?.sku, dish.attributes?.barcode, dish.attributes?.brand]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query))
   );
@@ -1710,6 +1763,7 @@ const normalize = (dish = {}) => ({
   option_groups: Array.isArray(dish.option_groups) ? dish.option_groups.map(normalizeOptionGroup) : [],
   tags: Array.isArray(dish.tags) ? [...dish.tags] : [],
   allergens: Array.isArray(dish.allergens) ? [...dish.allergens] : [],
+  attributes: dish.attributes && typeof dish.attributes === "object" ? { ...dish.attributes } : {},
 });
 
 const toggleDishAvailabilitySchedule = (dish, enabled) => {
@@ -2233,6 +2287,12 @@ const saveAndNext = async () => {
       .filter((locale) => locale !== defaultLocale.value);
     for (const dish of validDishes) {
       try {
+        const rawAttrs = dish.attributes && typeof dish.attributes === "object" ? dish.attributes : {};
+        const cleanedAttrs = Object.fromEntries(
+          Object.entries(rawAttrs)
+            .map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])
+            .filter(([, v]) => v !== "" && v != null)
+        );
         const saved = await dishApi.upsert({
           ...dish,
           category: Number(dish.category) || dish.category,
@@ -2240,6 +2300,7 @@ const saveAndNext = async () => {
           currency: normalizeCurrency(dish.currency),
           name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
           description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
+          attributes: cleanedAttrs,
         });
         dish.id = saved.id;
         dish.slug = saved.slug;

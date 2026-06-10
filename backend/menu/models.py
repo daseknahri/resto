@@ -100,6 +100,14 @@ class Dish(models.Model):
             "null = always available. Empty days list = any day."
         ),
     )
+    attributes = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Retail product attributes (sku, barcode, brand, unit). "
+            "Empty for restaurant dishes. Kepoli Phase 1 seam — see KEPOLI_ARCHITECTURE.md."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

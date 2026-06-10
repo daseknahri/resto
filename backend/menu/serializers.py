@@ -270,6 +270,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     super_category_name = serializers.SerializerMethodField()
     tags = serializers.JSONField(default=list, required=False)
     allergens = serializers.JSONField(default=list, required=False)
+    attributes = serializers.JSONField(default=dict, required=False)
     is_schedule_available = serializers.SerializerMethodField()
 
     class Meta:
@@ -291,6 +292,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "image_url",
             "tags",
             "allergens",
+            "attributes",
             "position",
             "is_published",
             "is_available",
@@ -400,6 +402,38 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             if key in allowed and key not in seen:
                 seen.add(key)
                 cleaned.append(key)
+        return cleaned
+
+    def validate_attributes(self, value):
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("attributes must be an object.")
+        _ALLOWED = {
+            "sku": 64,
+            "barcode": 64,
+            "brand": 80,
+            "unit": 40,
+        }
+        cleaned = {}
+        for key, raw in value.items():
+            if key not in _ALLOWED:
+                # Silently drop unknown keys per spec.
+                continue
+            if isinstance(raw, (list, dict)):
+                raise serializers.ValidationError(
+                    f"attributes['{key}'] must be a string, not a list or object."
+                )
+            text = str(raw).strip() if raw is not None else ""
+            if not text:
+                # Drop empty/whitespace values.
+                continue
+            max_len = _ALLOWED[key]
+            if len(text) > max_len:
+                raise serializers.ValidationError(
+                    f"attributes['{key}'] must be {max_len} characters or fewer."
+                )
+            cleaned[key] = text
         return cleaned
 
     def validate_currency(self, value):

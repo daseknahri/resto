@@ -29,6 +29,7 @@
     <div class="flex min-w-0 flex-1 flex-col justify-between gap-2 py-3 ps-3.5 pe-2.5">
       <div class="space-y-1">
         <h3 class="line-clamp-2 text-sm font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
+        <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
         <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90" :title="dish.description">{{ dish.description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
@@ -192,6 +193,7 @@
     <div class="space-y-3 p-4" @click.stop>
       <div class="space-y-1">
         <h3 class="text-base font-semibold leading-snug text-white" :title="dish.name">{{ dish.name }}</h3>
+        <p v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">{{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(' · ') }}</p>
         <p v-if="dish.description" class="line-clamp-2 text-[13px] text-slate-400" :title="dish.description">{{ dish.description }}</p>
       </div>
       <!-- Qty stepper or Add -->

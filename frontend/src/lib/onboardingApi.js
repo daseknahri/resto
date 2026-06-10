@@ -270,6 +270,7 @@ export const dishApi = {
       allergens: Array.isArray(dish.allergens) ? dish.allergens : [],
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
+      attributes: dish.attributes && typeof dish.attributes === 'object' ? dish.attributes : {},
     };
     try {
       let result;
