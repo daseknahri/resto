@@ -458,9 +458,10 @@ const advance = async (orderId) => {
   const ok = await waiter.advanceStatus(orderId);
   if (!ok) toast.show(t('kitchen.updateFailed'), 'error');
 };
-const toggleItem = (order, item) => {
+const toggleItem = async (order, item) => {
   if (item?.id == null) return; // older payloads without item ids → no-op
-  waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+  const ok = await waiter.toggleItemReady(order.id, item.id, !item.is_ready);
+  if (!ok) toast.show(t('kitchen.itemToggleFailed'), 'error');
 };
 
 // ── Bulk item-readiness helpers ────────────────────────────────────────────────

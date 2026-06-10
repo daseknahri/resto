@@ -233,8 +233,10 @@ export const useWaiterStore = defineStore("waiter", {
       if (item) item.is_ready = ready; // optimistic
       try {
         await api.patch(`/staff/order-items/${itemId}/ready/`, { ready });
+        return true;
       } catch {
         if (item) item.is_ready = !ready; // revert on failure
+        return false;
       }
     },
 

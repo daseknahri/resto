@@ -696,6 +696,14 @@ const load = async () => {
 };
 
 const saveAndNext = async () => {
+  // Validate business hours: closing must be after opening for every enabled day.
+  for (const day of WEEKDAY_KEYS) {
+    const entry = form.business_hours_schedule?.[day];
+    if (entry?.enabled && entry.open && entry.close && entry.open >= entry.close) {
+      toast.show(t('stepBrand.businessHoursTimeOrder', { day: t(`stepBrand.weekdays.${day}`) }), 'error');
+      return;
+    }
+  }
   saving.value = true;
   status.value = "";
   errors.value = {};

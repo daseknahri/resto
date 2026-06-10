@@ -1011,6 +1011,7 @@ const decline = async (jobId) => {
     // Drop it from view right away; the next poll reflects the cascade.
     pendingJobs.value = pendingJobs.value.filter((j) => j.id !== jobId);
   } catch {
+    errorMsg.value = t('driver.errorGeneric');
     await fetchJobs();
   } finally {
     busy.value = false;

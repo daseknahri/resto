@@ -1611,7 +1611,8 @@ export const messages = {
       statusLoadFailed: "Load failed",
       statusSaveFailed: "Save failed",
       toastSaved: "Brand & contact saved",
-      toastFailed: "Brand save failed"
+      toastFailed: "Brand save failed",
+      businessHoursTimeOrder: "Closing time must be after opening time for {day}."
     },
     stepTheme: {
       title: "Theme",
@@ -3731,6 +3732,7 @@ export const messages = {
       driverAtDoor: "Driver at door",
       driverPickedUp: "Out for delivery",
       driverFailed: "Delivery failed",
+      itemToggleFailed: "Couldn't mark item ready — please try again.",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -5692,7 +5694,8 @@ export const messages = {
       statusLoadFailed: "Chargement impossible",
       statusSaveFailed: "Enregistrement impossible",
       toastSaved: "Marque et contact enregistres",
-      toastFailed: "Echec de l'enregistrement de la marque"
+      toastFailed: "Echec de l'enregistrement de la marque",
+      businessHoursTimeOrder: "L'heure de fermeture doit etre apres l'heure d'ouverture pour {day}."
     },
     stepTheme: {
       title: "Theme",
@@ -7827,6 +7830,7 @@ export const messages = {
       driverAtDoor: "Conducteur a la porte",
       driverPickedUp: "En livraison",
       driverFailed: "Livraison echouee",
+      itemToggleFailed: "Impossible de marquer l'article pret — reessayez.",
     },
     stepSuperCategories: {
       title: "Groupes de menu",
