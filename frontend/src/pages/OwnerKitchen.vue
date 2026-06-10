@@ -275,6 +275,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
+import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
@@ -283,6 +284,7 @@ defineOptions({ name: "OwnerKitchen" });
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
+const toast = useToastStore();
 const { printTicket } = usePrintTicket();
 
 const isFullscreen = ref(false);
@@ -438,7 +440,10 @@ onUnmounted(() => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 });
 
-const advance = (orderId) => waiter.advanceStatus(orderId);
+const advance = async (orderId) => {
+  const ok = await waiter.advanceStatus(orderId);
+  if (!ok) toast.show(t('kitchen.updateFailed'), 'error');
+};
 const toggleItem = (order, item) => {
   if (item?.id == null) return; // older payloads without item ids → no-op
   waiter.toggleItemReady(order.id, item.id, !item.is_ready);

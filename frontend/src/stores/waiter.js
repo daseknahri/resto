@@ -140,12 +140,14 @@ export const useWaiterStore = defineStore("waiter", {
         return;
       }
 
+      let success = false;
       try {
         await api.patch(`/owner/orders/${orderId}/status/`, { status: next });
         // On success, remove from active list if completed
         if (next === "completed") {
           this.orders = this.orders.filter((o) => o.id !== orderId);
         }
+        success = true;
       } catch {
         // Revert optimistic update and queue for retry
         order.status = prev;
@@ -153,6 +155,7 @@ export const useWaiterStore = defineStore("waiter", {
       } finally {
         this.updatingOrderIds = new Set([...this.updatingOrderIds].filter((id) => id !== orderId));
       }
+      return success;
     },
 
     // -------------------------------------------------------

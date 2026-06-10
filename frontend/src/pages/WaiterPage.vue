@@ -611,6 +611,7 @@ import { ref, computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, watch
 import { useI18n } from "../composables/useI18n";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
 import { useWaiterStore } from "../stores/waiter";
+import { useToastStore } from "../stores/toast";
 import { useTenantStore } from "../stores/tenant";
 import { useSessionStore } from "../stores/session";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
@@ -620,6 +621,7 @@ const { t, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
 const installDismissed = ref(false);
 const waiter = useWaiterStore();
+const toast = useToastStore();
 const tenant = useTenantStore();
 const session = useSessionStore();
 // Staff need the 'manage orders' permission to mutate orders or take payment;
@@ -965,7 +967,10 @@ onUnmounted(() => {
 const reload = () => waiter.fetchOrders();
 
 // ── Actions ────────────────────────────────────────────────────────────────────
-const advance = (orderId) => waiter.advanceStatus(orderId);
+const advance = async (orderId) => {
+  const ok = await waiter.advanceStatus(orderId);
+  if (!ok) toast.show(t('waiterPage.updateFailed'), 'error');
+};
 
 // Customer trust rating — only the server who handled the order may submit it.
 // (ratingOrder is declared above, next to its focus-trap watcher.)
