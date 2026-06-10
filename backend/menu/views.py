@@ -50,7 +50,7 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, CurrencyRate, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from .models import AnalyticsEvent, Category, CurrencyRate, CustomerNote, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .tax import order_vat_fields
 from .serializers import (
@@ -6117,6 +6117,17 @@ class OwnerCustomerListView(APIView):
             except Exception:
                 pass
 
+        # ── 4b. Fetch per-tenant owner notes for linked customers ─────────────
+        notes_map = {}  # customer_id → notes string
+        if linked_customer_ids:
+            try:
+                note_rows = CustomerNote.objects.filter(
+                    customer_id__in=linked_customer_ids
+                ).values("customer_id", "notes")
+                notes_map = {n["customer_id"]: n["notes"] for n in note_rows}
+            except Exception:
+                pass
+
         # ── 5. Build unified list ─────────────────────────────────────────────
         customers = []
 
@@ -6139,6 +6150,7 @@ class OwnerCustomerListView(APIView):
                 "trust_score": rating_map.get(cid),
                 "review_count": rv.get("review_count", 0),
                 "avg_review": rv.get("avg_review"),
+                "owner_notes": notes_map.get(cid, ""),
             })
 
         for row in anon_qs:
@@ -6247,6 +6259,80 @@ class OwnerCustomerListView(APIView):
             },
             "customers": customers,
         })
+
+
+class OwnerCustomerNotesView(APIView):
+    """PATCH /api/owner/customers/<customer_id>/notes/
+
+    Upsert the restaurant's private note for a specific customer.
+    Body: { "notes": "<text>" }
+    Response: { "customer_id": N, "notes": "<text>" }
+
+    The note lives in the tenant schema (CustomerNote) and is never shared
+    with other restaurants that may have served the same customer.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, customer_id, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        notes_text = (request.data.get("notes") or "").strip()
+        obj, _ = CustomerNote.objects.update_or_create(
+            customer_id=customer_id,
+            defaults={"notes": notes_text},
+        )
+        return Response({"customer_id": customer_id, "notes": obj.notes})
+
+
+class OwnerCustomerLoyaltyGrantView(APIView):
+    """POST /api/owner/customers/<customer_id>/loyalty-grant/
+
+    Manually adjust a customer's loyalty-points balance.
+    Body: { "delta": <int>, "reason": "<text>" }
+      delta > 0  → grant points
+      delta < 0  → deduct points  (balance is floored at 0)
+      delta == 0 → no-op (returns current balance)
+
+    Response: { "customer_id": N, "loyalty_points": <new balance> }
+    """
+
+    permission_classes = [IsAuthenticated]
+    _MAX_DELTA = 100_000   # sanity cap per single grant
+
+    def post(self, request, customer_id, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        raw_delta = request.data.get("delta")
+        try:
+            delta = int(raw_delta)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "'delta' must be an integer.", "code": "invalid_delta"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if abs(delta) > self._MAX_DELTA:
+            return Response(
+                {"detail": f"Adjustment magnitude exceeds the per-call cap of {self._MAX_DELTA} points."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from accounts.models import Customer as _PlatformCustomer
+        from django.db import transaction as _tx
+
+        try:
+            with _tx.atomic():
+                cust = _PlatformCustomer.objects.select_for_update().get(pk=customer_id)
+                new_balance = max(0, cust.loyalty_points + delta)
+                cust.loyalty_points = new_balance
+                cust.save(update_fields=["loyalty_points", "updated_at"])
+        except _PlatformCustomer.DoesNotExist:
+            return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            return Response({"detail": f"Could not update loyalty points: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"customer_id": customer_id, "loyalty_points": new_balance})
 
 
 class OwnerLoyaltyView(APIView):

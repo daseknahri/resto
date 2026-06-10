@@ -7,18 +7,32 @@
           <p class="ui-kicker">{{ t("ownerAnalytics.kicker") }}</p>
           <h2 id="analytics-heading" class="ui-display text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">{{ t("ownerAnalytics.title") }}</h2>
         </div>
-        <div class="flex shrink-0 flex-wrap items-center gap-1.5" role="group" :aria-label="t('ownerHome.periodLabel')">
+        <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+          <!-- Period buttons -->
+          <div role="group" :aria-label="t('ownerHome.periodLabel')" class="flex flex-wrap items-center gap-1.5">
+            <button
+              v-for="d in PERIOD_OPTIONS"
+              :key="d"
+              class="ui-press inline-flex items-center justify-center rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
+              :class="insightsPeriod === d
+                ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] shadow-sm shadow-[var(--color-secondary)]/10'
+                : 'border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
+              :aria-pressed="insightsPeriod === d"
+              :aria-label="d + ' ' + t('ownerAnalytics.daysSuffix')"
+              @click="insightsPeriod = d"
+            >{{ d }}d</button>
+          </div>
+          <!-- Export CSV -->
           <button
-            v-for="d in PERIOD_OPTIONS"
-            :key="d"
-            class="ui-press inline-flex items-center justify-center rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
-            :class="insightsPeriod === d
-              ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] shadow-sm shadow-[var(--color-secondary)]/10'
-              : 'border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'"
-            :aria-pressed="insightsPeriod === d"
-            :aria-label="d + ' ' + t('ownerAnalytics.daysSuffix')"
-            @click="insightsPeriod = d"
-          >{{ d }}d</button>
+            type="button"
+            class="ui-press inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 px-3 py-1.5 text-[11px] font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 disabled:opacity-50"
+            :disabled="analyticsExporting"
+            :aria-label="t('ownerAnalytics.exportCsv')"
+            @click="exportAnalyticsCsv"
+          >
+            <AppIcon name="download" class="h-3 w-3 shrink-0" aria-hidden="true" />
+            {{ analyticsExporting ? t("common.loading") : t("ownerAnalytics.exportCsv") }}
+          </button>
         </div>
       </div>
 
@@ -148,6 +162,7 @@ import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
+import api from "../lib/api";
 
 defineOptions({ name: "OwnerAnalytics" });
 
@@ -236,4 +251,28 @@ const chartDays = computed(() => {
   return days.map((d) => ({ date: d.date, revenue: d.revenue, order_count: d.orders ?? 0 }));
 });
 const chartCurrency = computed(() => revenueSummary.value?.currency ?? null);
+
+// ── Analytics CSV export ─────────────────────────────────────────────────────
+const analyticsExporting = ref(false);
+const exportAnalyticsCsv = async () => {
+  if (analyticsExporting.value) return;
+  analyticsExporting.value = true;
+  try {
+    const resp = await api.get("/owner/analytics/export/", {
+      params: { days: insightsPeriod.value },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(new Blob([resp.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analytics-${insightsPeriod.value}d.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch { /* silent — server may not have data */ }
+  finally {
+    analyticsExporting.value = false;
+  }
+};
 </script>

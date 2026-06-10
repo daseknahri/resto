@@ -264,8 +264,110 @@
             {{ c.last_order_at ? formatDate(c.last_order_at) : t("ownerCustomers.lastOrderNever") }}
           </span>
         </div>
+
+        <!-- Private notes row -->
+        <div class="space-y-1.5">
+          <!-- Notes display / edit toggle -->
+          <div v-if="!notesEditingId || notesEditingId !== c.id" class="flex items-start gap-1.5">
+            <p
+              v-if="c.owner_notes"
+              class="flex-1 rounded-lg border border-slate-700/40 bg-slate-800/30 px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-400 whitespace-pre-line"
+            >{{ c.owner_notes }}</p>
+            <button
+              type="button"
+              class="shrink-0 rounded-md border border-slate-700/50 px-2 py-1 text-[10px] font-medium text-slate-500 hover:border-slate-600 hover:text-slate-300 transition-colors"
+              @click="startEditingNotes(c)"
+            >
+              {{ c.owner_notes ? t("ownerCustomers.notesEdit") : t("ownerCustomers.notesAdd") }}
+            </button>
+          </div>
+          <!-- Inline editor -->
+          <div v-else class="space-y-1.5">
+            <textarea
+              v-model="notesDraft"
+              rows="2"
+              class="ui-input w-full resize-none text-[11px]"
+              :placeholder="t('ownerCustomers.notesPlaceholder')"
+              @keydown.esc="cancelNotesEdit"
+            />
+            <div class="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                class="px-2.5 py-1 text-[10px] font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                @click="cancelNotesEdit"
+              >{{ t("common.cancel") }}</button>
+              <button
+                type="button"
+                class="rounded-md border border-[var(--color-secondary)]/50 bg-[var(--color-secondary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/20 transition-colors disabled:opacity-50"
+                :disabled="notesSaving"
+                @click="saveNotes(c)"
+              >{{ notesSaving ? t("common.loading") : t("ownerCustomers.notesSave") }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action row: loyalty grant (account-type only) -->
+        <div v-if="c.type === 'account'" class="flex items-center justify-end">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/8 px-2.5 py-1 text-[10px] font-semibold text-indigo-400 hover:border-indigo-500/50 hover:bg-indigo-500/15 transition-colors"
+            @click="openGrantPoints(c)"
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3">
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M8 5v6M5.5 7.5l2.5-2.5 2.5 2.5" />
+            </svg>
+            {{ t("ownerCustomers.grantPointsBtn") }}
+          </button>
+        </div>
       </li>
     </ul>
+
+    <!-- Grant points modal -->
+    <Teleport to="body">
+      <div v-if="grantModal.open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" @click.self="closeGrantModal" @keydown.esc="closeGrantModal">
+        <div class="ui-panel-soft w-full max-w-xs space-y-4 p-5" role="dialog" aria-modal="true" :aria-labelledby="`grant-modal-title-${grantModal.customerId}`">
+          <div class="flex items-center justify-between">
+            <h2 :id="`grant-modal-title-${grantModal.customerId}`" class="text-sm font-bold text-white">{{ t("ownerCustomers.grantPointsTitle") }}</h2>
+            <button type="button" class="ui-icon-btn" :aria-label="t('common.close')" @click="closeGrantModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+          <p class="text-xs text-slate-400">{{ grantModal.customerName }}</p>
+          <div class="space-y-3">
+            <div class="space-y-1">
+              <label :for="`grant-delta-${grantModal.customerId}`" class="block text-xs font-semibold text-slate-300">{{ t("ownerCustomers.grantPointsDeltaLabel") }}</label>
+              <input
+                :id="`grant-delta-${grantModal.customerId}`"
+                v-model="grantModal.delta"
+                type="number"
+                step="1"
+                class="ui-input w-full"
+              />
+            </div>
+            <div class="space-y-1">
+              <label :for="`grant-reason-${grantModal.customerId}`" class="block text-xs font-semibold text-slate-300">{{ t("ownerCustomers.grantPointsReasonLabel") }}</label>
+              <input
+                :id="`grant-reason-${grantModal.customerId}`"
+                v-model="grantModal.reason"
+                type="text"
+                class="ui-input w-full"
+              />
+            </div>
+            <div v-if="grantModal.error" class="rounded-lg border border-red-500/30 bg-red-500/8 px-3 py-2 text-xs text-red-300" role="alert">{{ grantModal.error }}</div>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" class="flex-1 rounded-xl border border-slate-700/60 px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors" @click="closeGrantModal">{{ t("common.cancel") }}</button>
+            <button
+              type="button"
+              class="flex-1 ui-btn-primary justify-center text-xs disabled:opacity-50"
+              :disabled="grantModal.loading"
+              @click="submitGrantPoints"
+            >{{ grantModal.loading ? t("common.loading") : t("ownerCustomers.grantPointsSubmit") }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Result count -->
     <p v-if="!loading && !fetchError && filteredCustomers.length > 0" class="text-center text-xs text-slate-600 pb-2">
@@ -275,13 +377,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
 import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t } = useI18n();
+const toast = useToastStore();
 
 // ── State ────────────────────────────────────────────────────────────────────
 const loading = ref(true);
@@ -439,6 +543,83 @@ const formatDate = (iso, full = false) => {
 const whatsappUrl = (phone) => {
   const digits = String(phone).replace(/\D/g, "");
   return `https://wa.me/${digits}`;
+};
+
+// ── Customer notes ────────────────────────────────────────────────────────────
+const notesEditingId = ref(null);  // card id currently being edited
+const notesDraft = ref("");
+const notesSaving = ref(false);
+
+const startEditingNotes = (c) => {
+  notesEditingId.value = c.id;
+  notesDraft.value = c.owner_notes || "";
+};
+const cancelNotesEdit = () => {
+  notesEditingId.value = null;
+  notesDraft.value = "";
+};
+const saveNotes = async (c) => {
+  if (notesSaving.value) return;
+  if (!c.customer_id) { cancelNotesEdit(); return; }
+  notesSaving.value = true;
+  try {
+    const res = await api.patch(`/owner/customers/${c.customer_id}/notes/`, { notes: notesDraft.value });
+    // update in-place so the card reflects the saved note immediately
+    const idx = customers.value.findIndex((x) => x.id === c.id);
+    if (idx >= 0) customers.value[idx] = { ...customers.value[idx], owner_notes: res.data.notes };
+    writeCache(CACHE_KEY, { customers: customers.value, summary: summary.value });
+    toast.show(t("ownerCustomers.notesSaved"), "success");
+    cancelNotesEdit();
+  } catch {
+    toast.show(t("ownerCustomers.notesError"), "error");
+  } finally {
+    notesSaving.value = false;
+  }
+};
+
+// ── Loyalty point grant ───────────────────────────────────────────────────────
+const grantModal = reactive({
+  open: false,
+  customerId: null,
+  customerName: "",
+  delta: "",
+  reason: "",
+  loading: false,
+  error: "",
+});
+
+const openGrantPoints = (c) => {
+  grantModal.open = true;
+  grantModal.customerId = c.customer_id;
+  grantModal.customerName = c.name;
+  grantModal.delta = "";
+  grantModal.reason = "";
+  grantModal.loading = false;
+  grantModal.error = "";
+};
+const closeGrantModal = () => {
+  grantModal.open = false;
+};
+const submitGrantPoints = async () => {
+  if (grantModal.loading) return;
+  const delta = parseInt(grantModal.delta, 10);
+  if (Number.isNaN(delta)) {
+    grantModal.error = t("ownerCustomers.grantPointsInvalid");
+    return;
+  }
+  grantModal.loading = true;
+  grantModal.error = "";
+  try {
+    await api.post(`/owner/customers/${grantModal.customerId}/loyalty-grant/`, {
+      delta,
+      reason: grantModal.reason.trim(),
+    });
+    toast.show(t("ownerCustomers.grantPointsSuccess"), "success");
+    closeGrantModal();
+  } catch {
+    grantModal.error = t("ownerCustomers.grantPointsError");
+    grantModal.loading = false;
+  }
 };
 
 // ── Segment classes ───────────────────────────────────────────────────────────

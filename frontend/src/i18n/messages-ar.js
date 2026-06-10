@@ -376,7 +376,8 @@ const arabicMessages = {
     "deltaLabel": "التغيير مقارنة بالأمس: {delta}",
     "sparklineOrders": "اتجاه الطلبات خلال الأيام السبعة الماضية",
     "sparklineRevenue": "اتجاه الإيرادات خلال الأيام السبعة الماضية",
-    "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية"
+    "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية",
+    "exportCsv": "تصدير CSV"
   },
   "ownerHome": {
     "platformFeeNote": "عمولة المنصة 10%",
@@ -3099,6 +3100,21 @@ Object.assign(arabicMessages, {
     loadError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0639\u0645\u0644\u0627\u0621.",
     trustNa: "\u2014",
     reviewNa: "\u2014",
+    notesLabel: "\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u062e\u0627\u0635\u0629",
+    notesPlaceholder: "\u0639\u0645\u064a\u0644 \u0645\u0645\u064a\u0632\u060c \u062d\u0633\u0627\u0633\u064a\u0629 \u063a\u0630\u0627\u0626\u064a\u0629\u060c \u062a\u0641\u0636\u064a\u0644\u0627\u062a\u2026",
+    notesSave: "\u062d\u0641\u0638",
+    notesSaved: "\u062a\u0645 \u062d\u0641\u0638 \u0627\u0644\u0645\u0644\u0627\u062d\u0638\u0629.",
+    notesError: "\u062a\u0639\u0630\u0651\u0631 \u062d\u0641\u0638 \u0627\u0644\u0645\u0644\u0627\u062d\u0638\u0629.",
+    notesEdit: "\u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0645\u0644\u0627\u062d\u0638\u0629",
+    notesAdd: "\u0625\u0636\u0627\u0641\u0629 \u0645\u0644\u0627\u062d\u0638\u0629",
+    grantPointsBtn: "\u0645\u0646\u062d \u0646\u0642\u0627\u0637",
+    grantPointsTitle: "\u062a\u0639\u062f\u064a\u0644 \u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0644\u0627\u0621",
+    grantPointsDeltaLabel: "\u0627\u0644\u0646\u0642\u0627\u0637 (\u0645\u0648\u062c\u0628 = \u0645\u0646\u062d\u060c \u0633\u0627\u0644\u0628 = \u062e\u0635\u0645)",
+    grantPointsReasonLabel: "\u0627\u0644\u0633\u0628\u0628 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a\u060c \u0644\u0633\u062c\u0644\u0627\u062a\u0643)",
+    grantPointsSubmit: "\u062a\u0637\u0628\u064a\u0642",
+    grantPointsSuccess: "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0646\u0642\u0627\u0637 \u0627\u0644\u0648\u0644\u0627\u0621.",
+    grantPointsError: "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0646\u0642\u0627\u0637.",
+    grantPointsInvalid: "\u0627\u0644\u0631\u062c\u0627\u0621 \u0625\u062f\u062e\u0627\u0644 \u0631\u0642\u0645 \u0635\u062d\u064a\u062d.",
   },
   ownerStaff: {
     kicker: "\u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646",

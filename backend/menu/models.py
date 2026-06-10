@@ -803,3 +803,28 @@ class CurrencyRate(models.Model):
 
     def __str__(self) -> str:
         return f"{self.code} — 1 {self.code} = {self.mad_per_unit} MAD"
+
+
+class CustomerNote(models.Model):
+    """Private, per-tenant note about a customer.
+
+    Lives in the tenant schema so it is never shared across restaurants.
+    ``customer_id`` is a bare integer reference to the public-schema
+    ``accounts.Customer.id`` (no FK constraint across schemas).
+
+    At most one row per customer per tenant (enforced by unique_together).
+    """
+
+    customer_id = models.IntegerField(
+        db_index=True,
+        help_text="Refers to accounts.Customer.id (public schema) — no DB-level FK.",
+    )
+    notes = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("customer_id",)]
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"CustomerNote customer_id={self.customer_id}"
