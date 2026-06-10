@@ -280,15 +280,32 @@
                       <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
                     </span>
                     <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                    <!-- Inline qty stepper once in cart, plain add button otherwise -->
+                    <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
+                      <button
+                        class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                        :aria-label="`${t('dishPage.decreaseQuantity')} ${dish.name}`"
+                        @click="removeFromCart(dish.slug)"
+                      >
+                        <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M2 6h8"/></svg>
+                      </button>
+                      <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ cartQty(dish.slug) }}</span>
+                      <button
+                        class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                        :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
+                        @click="addToCart(dish)"
+                      >
+                        <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
+                      </button>
+                    </div>
                     <button
-                      v-if="dish.is_available"
+                      v-else-if="dish.is_available"
                       class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                       :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                       @click="addToCart(dish)"
                     >
                       <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                       {{ t('mktMenu.addToCart') }}
-                      <span v-if="cartQty(dish.slug)" class="ms-0.5 rounded-full bg-slate-950/25 px-1.5 tabular-nums text-[10px]" aria-hidden="true">{{ cartQty(dish.slug) }}</span>
                     </button>
                   </div>
                 </div>
@@ -383,15 +400,32 @@
                         <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
                       </span>
                       <span v-else class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.price) }}</span>
+                      <!-- Inline qty stepper once in cart, plain add button otherwise -->
+                      <div v-if="cartQty(dish.slug)" class="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-700/60 bg-slate-900/70 px-0.5">
+                        <button
+                          class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                          :aria-label="`${t('dishPage.decreaseQuantity')} ${dish.name}`"
+                          @click="removeFromCart(dish.slug)"
+                        >
+                          <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M2 6h8"/></svg>
+                        </button>
+                        <span class="min-w-[1.25rem] text-center text-sm font-bold tabular-nums text-white" aria-live="polite" aria-atomic="true">{{ cartQty(dish.slug) }}</span>
+                        <button
+                          class="ui-press flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-secondary)] transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-secondary)]/60"
+                          :aria-label="`${t('dishPage.increaseQuantity')} ${dish.name}`"
+                          @click="addToCart(dish)"
+                        >
+                          <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
+                        </button>
+                      </div>
                       <button
-                        v-if="dish.is_available"
+                        v-else-if="dish.is_available"
                         class="ui-press inline-flex items-center gap-1.5 rounded-full bg-[var(--color-secondary)] px-3.5 py-1.5 text-xs font-bold text-slate-950 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/50 ui-touch-target"
                         :aria-label="`${t('mktMenu.addToCart')} ${dish.name}`"
                         @click="addToCart(dish)"
                       >
                         <svg viewBox="0 0 12 12" class="h-3 w-3 shrink-0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg>
                         {{ t('mktMenu.addToCart') }}
-                        <span v-if="cartQty(dish.slug)" class="ms-0.5 rounded-full bg-slate-950/25 px-1.5 tabular-nums text-[10px]" aria-hidden="true">{{ cartQty(dish.slug) }}</span>
                       </button>
                     </div>
                   </div>
