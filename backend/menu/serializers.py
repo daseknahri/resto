@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, ComboComponent, Dish, DishOption, OptionGroup, SuperCategory, TableLink
+from .models import Category, ComboComponent, Dish, DishOption, HappyHour, OptionGroup, SuperCategory, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
@@ -279,6 +279,13 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     combo_components = serializers.SerializerMethodField()
     is_combo = serializers.SerializerMethodField()
     combo_unavailable = serializers.SerializerMethodField()
+    # Happy-hour pricing fields — always present in customer-facing payloads.
+    # context["happy_hours"] must be a list of active HappyHour rules (computed once
+    # per request by the viewset and passed via get_serializer_context).  When the
+    # key is absent (e.g. owner-admin reads) effective_price falls back to dish.price
+    # and happy_hour is null — no per-dish N+1 query is ever issued.
+    effective_price = serializers.SerializerMethodField()
+    happy_hour = serializers.SerializerMethodField()
 
     class Meta:
         model = Dish
@@ -295,6 +302,8 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "description",
             "description_i18n",
             "price",
+            "effective_price",
+            "happy_hour",
             "currency",
             "image_url",
             "tags",
@@ -317,6 +326,28 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     def get_options(self, instance):
         ungrouped = [opt for opt in instance.options.all() if opt.group_id is None]
         return DishOptionSerializer(ungrouped, many=True, context=self.context).data
+
+    def get_effective_price(self, instance) -> str:
+        """Effective unit price after the best active happy-hour discount (string decimal).
+
+        Falls back to dish.price when no happy_hours context is provided (owner reads)
+        so that no N+1 DB query is ever issued per dish.
+        """
+        active_rules = self.context.get("happy_hours")
+        if active_rules is None:
+            return str(instance.price)
+        from .pricing import effective_unit_price
+        price, _ = effective_unit_price(instance, active_rules)
+        return str(price)
+
+    def get_happy_hour(self, instance) -> dict | None:
+        """Active happy-hour metadata for this dish, or null when none applies."""
+        active_rules = self.context.get("happy_hours")
+        if active_rules is None:
+            return None
+        from .pricing import effective_unit_price, happy_hour_payload
+        _, rule = effective_unit_price(instance, active_rules)
+        return happy_hour_payload(rule)
 
     def get_is_schedule_available(self, obj) -> bool | None:
         """
@@ -772,3 +803,104 @@ class TableLinkSerializer(serializers.ModelSerializer):
             base = slugify(validated_data["label"]) or "table"
             validated_data["slug"] = self._resolve_unique_slug(base_slug=base, instance_id=instance.id)
         return super().update(instance, validated_data)
+
+
+class HappyHourSerializer(serializers.ModelSerializer):
+    """Owner-facing serializer for HappyHour CRUD.
+
+    Validation rules (enforced here, not in the model):
+    - name >= 2 chars.
+    - days: non-empty list of unique ints in [0, 6].
+    - percent_off: 1–90.
+    - start_time != end_time.
+    - At most 8 HappyHour rows per tenant on create.
+    """
+
+    category_ids = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HappyHour
+        fields = [
+            "id",
+            "name",
+            "days",
+            "start_time",
+            "end_time",
+            "percent_off",
+            "category_ids",
+            "is_active",
+        ]
+
+    def get_category_ids(self, instance) -> list:
+        return list(instance.categories.values_list("id", flat=True))
+
+    def to_internal_value(self, data):
+        # Extract category_ids before DRF processes the rest (it is not a model field).
+        self._category_ids_input = None
+        if "category_ids" in data:
+            self._category_ids_input = data.get("category_ids")
+        return super().to_internal_value(data)
+
+    def validate_name(self, value):
+        value = (value or "").strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("name must be at least 2 characters.")
+        return value
+
+    def validate_days(self, value):
+        if not isinstance(value, list) or len(value) == 0:
+            raise serializers.ValidationError("days must be a non-empty list.")
+        for d in value:
+            if not isinstance(d, int) or d < 0 or d > 6:
+                raise serializers.ValidationError("Each day must be an integer 0–6.")
+        if len(set(value)) != len(value):
+            raise serializers.ValidationError("days must not contain duplicates.")
+        return value
+
+    def validate_percent_off(self, value):
+        if value < 1 or value > 90:
+            raise serializers.ValidationError("percent_off must be between 1 and 90.")
+        return value
+
+    def validate(self, attrs):
+        start = attrs.get("start_time")
+        end = attrs.get("end_time")
+        if start is not None and end is not None and start == end:
+            raise serializers.ValidationError(
+                {"end_time": "start_time and end_time must differ."}
+            )
+        # Validate category_ids when provided.
+        cat_ids = getattr(self, "_category_ids_input", None)
+        if cat_ids is not None:
+            if not isinstance(cat_ids, list):
+                raise serializers.ValidationError({"category_ids": "category_ids must be a list."})
+            from .models import Category as _Cat
+            valid_ids = set(_Cat.objects.filter(id__in=cat_ids).values_list("id", flat=True))
+            bad = [i for i in cat_ids if i not in valid_ids]
+            if bad:
+                raise serializers.ValidationError({"category_ids": f"Unknown category ids: {bad}."})
+        return attrs
+
+    def validate_create_limit(self):
+        """Call on create only. Raises ValidationError when the tenant already has 8 rules."""
+        if HappyHour.objects.count() >= 8:
+            raise serializers.ValidationError(
+                {"non_field_errors": "Maximum of 8 happy-hour rules allowed per tenant."}
+            )
+
+    def create(self, validated_data):
+        self.validate_create_limit()
+        cat_ids = getattr(self, "_category_ids_input", None) or []
+        instance = super().create(validated_data)
+        if cat_ids:
+            from .models import Category as _Cat
+            instance.categories.set(_Cat.objects.filter(id__in=cat_ids))
+        return instance
+
+    def update(self, instance, validated_data):
+        cat_ids = getattr(self, "_category_ids_input", None)
+        instance = super().update(instance, validated_data)
+        if cat_ids is not None:
+            from .models import Category as _Cat
+            instance.categories.set(_Cat.objects.filter(id__in=cat_ids))
+        return instance

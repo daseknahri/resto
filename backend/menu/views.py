@@ -52,13 +52,15 @@ from tenancy.models import Profile
 
 from django_tenants.utils import schema_context
 
-from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
+from .pricing import get_active_happy_hours, effective_unit_price, happy_hour_payload
 from .tax import order_vat_fields
 from .serializers import (
     CategorySerializer,
     DishOptionSerializer,
     DishSerializer,
+    HappyHourSerializer,
     OptionGroupSerializer,
     SuperCategorySerializer,
     TableLinkSerializer,
@@ -440,6 +442,24 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
             return [AllowAny()]
         return super().get_permissions()
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        # Inject active happy-hour rules ONCE per request so the nested DishSerializer
+        # instances (in CategorySerializer's dishes field) never issue per-dish queries.
+        # Use self._profile() (filters by tenant) instead of Profile.objects.get() which
+        # raises MultipleObjectsReturned in multi-tenant deployments.
+        if "happy_hours" not in ctx:
+            try:
+                profile = self._profile()
+                if profile is not None:
+                    now_local = _profile_now(profile)
+                    ctx["happy_hours"] = get_active_happy_hours(now_local)
+                else:
+                    ctx["happy_hours"] = []
+            except Exception:
+                ctx["happy_hours"] = []
+        return ctx
+
 
 class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     serializer_class = DishSerializer
@@ -477,6 +497,20 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         ctx = super().get_serializer_context()
         # Pass can_preview flag so serializer/UI can distinguish owners vs. guests
         ctx["can_preview"] = self._can_preview_unpublished()
+        # Compute active happy-hour rules ONCE per request and cache in context so
+        # DishSerializer never issues a per-dish N+1 query.
+        # Use self._profile() (filters by tenant) instead of Profile.objects.get() which
+        # raises MultipleObjectsReturned in multi-tenant deployments.
+        if "happy_hours" not in ctx:
+            try:
+                profile = self._profile()
+                if profile is not None:
+                    now_local = _profile_now(profile)
+                    ctx["happy_hours"] = get_active_happy_hours(now_local)
+                else:
+                    ctx["happy_hours"] = []
+            except Exception:
+                ctx["happy_hours"] = []
         return ctx
 
     def perform_create(self, serializer):
@@ -598,6 +632,31 @@ class OptionGroupViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         super().perform_destroy(instance)
         self._bust()
+
+
+class HappyHourViewSet(viewsets.ModelViewSet):
+    """Owner CRUD for time-based pricing rules (happy hours).
+
+    All actions require tenant-editor authentication — there is no public read
+    override (unlike DishViewSet / CategoryViewSet which expose AllowAny for GET).
+    Clients must pass owner credentials for every request.
+
+    GET    /api/happy-hours/          — list all rules for this tenant.
+    POST   /api/happy-hours/          — create a new rule (max 8 per tenant).
+    PATCH  /api/happy-hours/<id>/     — partial update.
+    DELETE /api/happy-hours/<id>/     — remove a rule.
+    """
+
+    serializer_class = HappyHourSerializer
+    permission_classes = [IsAuthenticated, IsTenantEditorOrReadOnly]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return HappyHour.objects.prefetch_related("categories").order_by("id")
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
 
 class TableLinkViewSet(viewsets.ModelViewSet):
@@ -1884,7 +1943,14 @@ class OrderEligibilityView(APIView):
 
 
 class PlaceOrderView(APIView):
-    """POST /api/place-order/ — customer submits an in-app order."""
+    """POST /api/place-order/ — customer submits an in-app order.
+
+    Pricing note: happy-hour discounts are evaluated at PLACEMENT time (the moment the
+    customer submits the request), not at scheduled_for.  Advance/scheduled orders are
+    prepaid at placement, so the price lock at placement time is the defensible choice —
+    the discount was offered and accepted at submission, not at the future pick-up/delivery
+    slot.
+    """
     permission_classes = [AllowAny]
     throttle_classes = [PlaceOrderThrottle]
 
@@ -1946,6 +2012,16 @@ class PlaceOrderView(APIView):
         if all_option_ids:
             options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids).select_related("dish")}
 
+        # Compute active happy-hour rules ONCE for this request (placement-time lock).
+        # Price is evaluated at submission time, not at scheduled_for — see class docstring.
+        # Graceful fallback: if HappyHour table is unavailable (e.g. during tests that
+        # don't patch HappyHour.objects), skip discount entirely.
+        try:
+            _place_now_local = _profile_now(profile)
+            _active_happy_hours = get_active_happy_hours(_place_now_local)
+        except Exception:
+            _active_happy_hours = []
+
         # Build order items and compute total
         order_items_data = []
         _food_subtotal = Decimal("0")
@@ -1954,7 +2030,8 @@ class PlaceOrderView(APIView):
         for item_input in items_input:
             dish = dishes_map[item_input["slug"]]
             currency = dish.currency or "USD"
-            unit_price = Decimal(str(dish.price))
+            # Apply happy-hour discount (largest percent_off wins; option price_delta unchanged).
+            unit_price, _ = effective_unit_price(dish, _active_happy_hours)
 
             option_snapshots = []
             _invalid_oids: list[int] = []
@@ -3604,6 +3681,23 @@ class StaffAppendOrderItemsView(APIView):
         if all_option_ids:
             options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids).select_related("dish")}
 
+        # ── Happy-hour pricing (compute once, charge effective price per item) ──
+        # Price locked at the moment the staff member appends — same semantics as
+        # PlaceOrderView.  Option price_delta is added on top unchanged.
+        # Graceful fallback: if the profile lookup or HH query fails (e.g. in unit
+        # tests that don't patch Profile.objects / HappyHour.objects), skip discount.
+        try:
+            _staff_profile = Profile.objects.filter(
+                tenant=getattr(request, "tenant", None)
+            ).first()
+            _staff_now_local = _profile_now(_staff_profile) if _staff_profile else None
+            if _staff_now_local is None:
+                from datetime import datetime as _dt, timezone as _tz
+                _staff_now_local = _dt.now(_tz.utc)
+            _staff_active_hh = get_active_happy_hours(_staff_now_local)
+        except Exception:
+            _staff_active_hh = []
+
         # ── Build new OrderItem records + collect stock updates ───────────────
         new_items_data = []
         _stock_updates = []   # list of (dish_pk, qty)
@@ -3613,7 +3707,8 @@ class StaffAppendOrderItemsView(APIView):
 
         for p in parsed:
             dish = dishes_map[p["slug"]]
-            unit_price = Decimal(str(dish.price))
+            # Apply happy-hour discount (option price_delta added on top below).
+            unit_price, _ = effective_unit_price(dish, _staff_active_hh)
             option_snapshots = []
             _invalid_oids = []
             for oid in p["option_ids"]:

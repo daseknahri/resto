@@ -137,10 +137,12 @@
               </span>
             </div>
             <!-- Price badge -->
-            <div class="absolute end-3 top-3 z-10">
+            <div class="absolute end-3 top-3 z-10 flex flex-col items-end gap-0.5">
+              <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="rounded-full border border-emerald-500/40 bg-emerald-900/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">{{ dish.happy_hour.percent_off }}%</span>
               <span class="rounded-full bg-slate-950/75 px-3 py-1 text-xs font-bold tabular-nums text-[var(--color-secondary)] shadow-md ring-1 ring-[var(--color-secondary)]/30 backdrop-blur-sm">
-                {{ formatPrice(dish.price) }}
+                {{ dish.happy_hour && Number(dish.effective_price) < Number(dish.price) ? formatPrice(dish.effective_price) : formatPrice(dish.price) }}
               </span>
+              <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="rounded-full bg-slate-950/75 px-2 py-0.5 text-[10px] tabular-nums text-slate-400 line-through backdrop-blur-sm">{{ formatPrice(dish.price) }}</span>
             </div>
           </div>
         </RouterLink>
@@ -309,21 +311,26 @@ const addDishQuick = (dish) => {
     .sort((a, b) => a - b);
   const optionSig = optionIds.join(",");
   const extras = requiredOptions.reduce((sum, opt) => sum + Number(opt.price_delta || 0), 0);
-  const unitPrice = Number(dish.price || 0) + extras;
+  const basePrice = (dish.happy_hour && Number(dish.effective_price) < Number(dish.price))
+    ? Number(dish.effective_price)
+    : Number(dish.price || 0);
+  const unitPrice = basePrice + extras;
   const note = requiredOptions.length
     ? `${t("dishPage.options")}: ${requiredOptions.map((opt) => opt.name).join(", ")}`
     : "";
 
   cart.add({
-    key: `${dish.slug}::${optionSig}`,
-    slug: dish.slug,
-    name: dish.name,
-    price: Number(unitPrice),
-    currency: dish.currency,
-    qty: 1,
+    key:              `${dish.slug}::${optionSig}`,
+    slug:             dish.slug,
+    name:             dish.name,
+    price:            Number(unitPrice),
+    currency:         dish.currency,
+    qty:              1,
     note,
-    option_ids: optionIds,
-    option_labels: requiredOptions.map((opt) => opt.name),
+    option_ids:       optionIds,
+    option_labels:    requiredOptions.map((opt) => opt.name),
+    happy_hour_ends_at: dish.happy_hour?.ends_at ?? null,
+    happy_hour_starts_at: dish.happy_hour?.starts_at ?? null,
   });
 
   toast.show(t("dishPage.addedToCart"), "success");

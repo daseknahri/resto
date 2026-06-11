@@ -36,6 +36,7 @@ from menu.views import (
     OwnerOrderBulkStatusView,
     DishOptionViewSet,
     DishViewSet,
+    HappyHourViewSet,
     OptionGroupViewSet,
     OrderHandoffView,
     OwnerAnalyticsExportView,
@@ -119,6 +120,7 @@ tenant_router.register(r"dishes", DishViewSet, basename="dish")
 tenant_router.register(r"dish-options", DishOptionViewSet, basename="dish-option")
 tenant_router.register(r"option-groups", OptionGroupViewSet, basename="option-group")
 tenant_router.register(r"tables", TableLinkViewSet, basename="table-link")
+tenant_router.register(r"happy-hours", HappyHourViewSet, basename="happy-hour")
 
 urlpatterns = [
     *shared_api_urlpatterns,

@@ -30,6 +30,12 @@ const normalizeCartItem = (item) => ({
   note: typeof item?.note === "string" ? item.note.trim() : "",
   option_ids: normalizeOptionIds(item?.option_ids),
   option_labels: Array.isArray(item?.option_labels) ? item.option_labels.map((x) => String(x)).filter(Boolean) : [],
+  // "HH:MM" end-of-window if this line was priced during a happy hour, null otherwise.
+  // Used at checkout to detect stale happy-hour prices after the window closes.
+  happy_hour_ends_at: typeof item?.happy_hour_ends_at === "string" ? item.happy_hour_ends_at : null,
+  // "HH:MM" start-of-window — stored so the stale-price guard can distinguish
+  // overnight windows (starts_at > ends_at) from normal windows (starts_at < ends_at).
+  happy_hour_starts_at: typeof item?.happy_hour_starts_at === "string" ? item.happy_hour_starts_at : null,
 });
 
 const loadStoredCartItems = () => {

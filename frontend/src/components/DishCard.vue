@@ -33,8 +33,14 @@
         <p v-if="dish.description" class="line-clamp-2 text-[12px] leading-relaxed text-slate-400/90" :title="dish.description">{{ dish.description }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
-        <!-- Price pill -->
+        <!-- Price pill (happy hour or regular) -->
+        <template v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)">
+          <span class="ui-chip-strong tabular-nums" style="color:var(--color-secondary); background: rgba(245,158,11,0.10)">{{ formatPrice(dish.effective_price) }}</span>
+          <span class="tabular-nums text-[11px] text-slate-500 line-through">{{ formatPrice(dish.price) }}</span>
+          <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">{{ t('happyHour.percentOff', { pct: dish.happy_hour.percent_off }) }} {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+        </template>
         <span
+          v-else
           class="ui-chip-strong tabular-nums"
           style="color:var(--color-secondary); background: rgba(245,158,11,0.10)"
         >{{ formatPrice(dish.price) }}</span>
@@ -175,10 +181,12 @@
       </div>
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/88 via-slate-950/15 to-transparent" />
       <!-- Price badge — repositioned bottom-start for visual harmony -->
-      <div class="absolute start-3 bottom-3">
+      <div class="absolute start-3 bottom-3 flex flex-col items-start gap-0.5">
+        <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="rounded-full border border-emerald-500/50 bg-emerald-900/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">{{ t('happyHour.percentOff', { pct: dish.happy_hour.percent_off }) }}</span>
         <span class="rounded-full px-3 py-1 text-xs font-bold tabular-nums shadow-lg" style="background-color:var(--color-secondary); color: #0f172a">
-          {{ formatPrice(dish.price) }}
+          {{ dish.happy_hour && Number(dish.effective_price) < Number(dish.price) ? formatPrice(dish.effective_price) : formatPrice(dish.price) }}
         </span>
+        <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="rounded-full bg-slate-950/70 px-2 py-0.5 text-[10px] tabular-nums text-slate-400 line-through backdrop-blur-sm">{{ formatPrice(dish.price) }}</span>
       </div>
       <!-- Tags top-start -->
       <div v-if="dish.tags?.length" class="absolute start-3 top-3 flex flex-wrap gap-1">
@@ -255,7 +263,11 @@
         <span v-if="isSoldOut" class="shrink-0 text-[10px] text-red-400">{{ t('menu.soldOut') }}</span>
         <span v-else-if="isScheduleUnavailable" class="shrink-0 text-[10px] text-slate-500">{{ t('menu.notAvailableNow') }}</span>
       </div>
-      <span class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.price) }}</span>
+      <template v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)">
+        <span class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.effective_price) }}</span>
+        <span class="text-[10px] tabular-nums text-slate-500 line-through">{{ formatPrice(dish.price) }}</span>
+      </template>
+      <span v-else class="text-xs font-semibold" style="color:var(--color-secondary)">{{ formatPrice(dish.price) }}</span>
     </div>
     <!-- Compact qty controls -->
     <div class="shrink-0" @click.stop>
@@ -366,16 +378,21 @@ const handleAdd = () => {
     if (useQuickAdd.value) { showQuickAdd.value = true } else { handleOpen() }
     return
   }
+  const effectivePrice = (props.dish.happy_hour && Number(props.dish.effective_price) < Number(props.dish.price))
+    ? Number(props.dish.effective_price)
+    : Number(props.dish.price || 0)
   cart.add({
-    key:           lineKey.value,
-    slug:          props.dish.slug,
-    name:          props.dish.name,
-    price:         Number(props.dish.price || 0),
-    currency:      props.dish.currency || props.currency,
-    qty:           1,
-    note:          '',
-    option_ids:    [],
-    option_labels: [],
+    key:              lineKey.value,
+    slug:             props.dish.slug,
+    name:             props.dish.name,
+    price:            effectivePrice,
+    currency:         props.dish.currency || props.currency,
+    qty:              1,
+    note:             '',
+    option_ids:       [],
+    option_labels:    [],
+    happy_hour_ends_at: props.dish.happy_hour?.ends_at ?? null,
+    happy_hour_starts_at: props.dish.happy_hour?.starts_at ?? null,
   })
   try { navigator.vibrate?.(12) } catch { /* not supported */ }
   toast.show(t('dishPage.addedToCart'), 'success')

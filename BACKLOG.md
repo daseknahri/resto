@@ -18,8 +18,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       Source: R5 review follow-on thought.
 - [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but
       earned points aren't clawed back per-item. Documented MVP in R2 view docstring.
-- [ ] **Happy-hour / time-based pricing** — availability_schedule exists per dish;
-      price scheduling does not. Audit growth item.
 - [ ] **Win-back automation** — auto-nudge customers inactive N weeks (the
       automated half of the campaigns feature; manual announcements shipped).
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
@@ -85,6 +83,13 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Happy-hour / time-based pricing: menu.HappyHour rules (menu/0052; days/window/
+      percent 1–90/category scope/max 8, overnight wrap), menu/pricing.py effective-price
+      helper used by EVERY price surface — Dish serialization (context-injected, no N+1),
+      marketplace menu, and all 3 placement paths (customer/marketplace/staff append,
+      tenant-local time, price locked at placement for scheduled orders) — owner manager
+      on Promotions page, customer strikethrough + "−N% until HH:MM" chip, cart
+      stale-price guard (overnight-aware via starts_at), EN/FR/AR — happy-hour commit.
 - [x] Combos / meal deals: ComboComponent (CASCADE/PROTECT, max 8, no nesting either
       direction), OrderItem.combo_components placement snapshot, all-or-nothing component
       stock decrement in tenant + marketplace checkout + staff append (single merged lock),

@@ -947,6 +947,7 @@ import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import { useI18n } from '../composables/useI18n';
 import { useCartStore } from '../stores/cart';
 import { useCustomerStore } from '../stores/customer';
+import { useMenuStore } from '../stores/menu';
 import { useOrderStore } from '../stores/order';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
@@ -959,6 +960,7 @@ import { addTileLayer } from '../lib/mapTiles';
 const router = useRouter();
 const cart = useCartStore();
 const customerStore = useCustomerStore();
+const menu = useMenuStore();
 const order = useOrderStore();
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -2118,6 +2120,44 @@ const placeInAppOrder = async () => {
     return;
   }
   if (!validateForm()) return;
+
+  // Stale happy-hour guard: if any cart line was priced during a happy-hour
+  // window that has since ended, refetch menu prices, update lines, and let the
+  // user re-confirm.
+  // Overnight windows (starts_at > ends_at, e.g. 22:00–02:00) are handled
+  // correctly: a line with ends_at='02:00' at 23:30 is NOT stale, because the
+  // gap where the window is inactive is 02:00–22:00, not 22:00–02:00.
+  {
+    const nowHHMM = new Date().toTimeString().slice(0, 5); // "HH:MM"
+    const hasStaleHH = cart.items.some((i) => {
+      const endsAt = i.happy_hour_ends_at;
+      if (typeof endsAt !== 'string') return false;
+      const startsAt = i.happy_hour_starts_at;
+      const isOvernight = typeof startsAt === 'string' && startsAt > endsAt;
+      // Overnight: stale only in the gap between end and next start (daytime).
+      if (isOvernight) return nowHHMM >= endsAt && nowHHMM < startsAt;
+      // Normal window: stale when current time has passed ends_at.
+      return nowHHMM >= endsAt;
+    });
+    if (hasStaleHH) {
+      await menu.fetchCategories(true);
+      const allDishes = Object.values(menu.dishes).flat();
+      const dishMap = new Map(allDishes.map((d) => [d.slug, d]));
+      for (const line of cart.items) {
+        const live = dishMap.get(line.slug);
+        if (!live) continue;
+        const liveEffective = (live.happy_hour && Number(live.effective_price) < Number(live.price))
+          ? Number(live.effective_price)
+          : Number(live.price);
+        line.price = liveEffective;
+        line.happy_hour_ends_at = live.happy_hour?.ends_at ?? null;
+        line.happy_hour_starts_at = live.happy_hour?.starts_at ?? null;
+      }
+      cart.persist();
+      toast.show(t('happyHour.ended'), 'info');
+      return; // let user re-confirm with updated prices
+    }
+  }
 
   placingOrder.value = true;
   try {

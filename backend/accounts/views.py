@@ -2552,6 +2552,16 @@ class MarketplaceMenuView(APIView):
                     .order_by("position", "name")
                 )
 
+                # Happy-hour pricing — compute active rules ONCE per menu request.
+                from menu.pricing import (
+                    get_active_happy_hours as _mkt_get_hh,
+                    effective_unit_price as _mkt_eff_price,
+                    happy_hour_payload as _mkt_hh_payload,
+                )
+                from menu.views import _profile_now as _mkt_profile_now
+                _mkt_menu_now = _mkt_profile_now(profile)
+                _mkt_menu_active_hh = _mkt_get_hh(_mkt_menu_now)
+
                 sc_map: dict = {}
                 for dish in dishes_qs:
                     cat = dish.category
@@ -2595,6 +2605,7 @@ class MarketplaceMenuView(APIView):
                             ],
                         })
 
+                    _mkt_eff, _mkt_rule = _mkt_eff_price(dish, _mkt_menu_active_hh)
                     sc_map[sc.id]["categories"][cat.id]["dishes"].append({
                         "id": dish.id,
                         "slug": dish.slug,
@@ -2603,6 +2614,8 @@ class MarketplaceMenuView(APIView):
                         "description": dish.description or "",
                         "description_i18n": dish.description_i18n or {},
                         "price": str(dish.price),
+                        "effective_price": str(_mkt_eff),
+                        "happy_hour": _mkt_hh_payload(_mkt_rule),
                         "currency": dish.currency or "USD",
                         "image_url": dish.image_url or "",
                         "tags": dish.tags or [],
@@ -2841,6 +2854,17 @@ class MarketplacePlaceOrderView(APIView):
                 all_option_ids = [int(oid) for it in items_raw for oid in (it.get("option_ids") or []) if str(oid).isdigit()]
                 options_map = {o.id: o for o in _DO.objects.filter(id__in=all_option_ids)} if all_option_ids else {}
 
+                # Compute active happy-hour rules ONCE (placement-time price lock —
+                # for scheduled orders price is locked at submission, not scheduled_for;
+                # the customer is prepaid at placement so this is defensible).
+                from menu.pricing import (
+                    get_active_happy_hours as _get_hh,
+                    effective_unit_price as _eff_price,
+                )
+                from menu.views import _profile_now as _pnow
+                _mkt_now_local = _pnow(profile)
+                _mkt_active_hh = _get_hh(_mkt_now_local)
+
                 order_items_data = []
                 food_subtotal = Decimal("0")
                 currency = "USD"
@@ -2850,7 +2874,8 @@ class MarketplacePlaceOrderView(APIView):
                 for it in items_raw:
                     dish = dishes_map[it["slug"]]
                     currency = dish.currency or "USD"
-                    unit_price = Decimal(str(dish.price))
+                    # Apply happy-hour discount; option price_delta added below unchanged.
+                    unit_price, _ = _eff_price(dish, _mkt_active_hh)
                     option_snapshots = []
                     for oid in (it.get("option_ids") or []):
                         opt = options_map.get(int(oid)) if str(oid).isdigit() else None

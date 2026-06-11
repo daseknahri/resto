@@ -100,9 +100,15 @@
         <!-- Title + price -->
         <div class="flex items-start gap-4">
           <h1 class="ui-display flex-1 text-2xl font-extrabold leading-snug tracking-tight text-slate-50 sm:text-3xl">{{ dish.name }}</h1>
-          <span class="mt-0.5 shrink-0 rounded-full bg-[var(--color-secondary)] px-4 py-1.5 text-sm font-extrabold tabular-nums text-slate-900 shadow-lg shadow-[var(--color-secondary)]/30">
-            {{ formatPrice(dish.price) }}
-          </span>
+          <div class="mt-0.5 shrink-0 flex flex-col items-end gap-0.5">
+            <span class="rounded-full bg-[var(--color-secondary)] px-4 py-1.5 text-sm font-extrabold tabular-nums text-slate-900 shadow-lg shadow-[var(--color-secondary)]/30">
+              {{ dish.happy_hour && Number(dish.effective_price) < Number(dish.price) ? formatPrice(dish.effective_price) : formatPrice(dish.price) }}
+            </span>
+            <template v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)">
+              <span class="tabular-nums text-xs text-slate-500 line-through">{{ formatPrice(dish.price) }}</span>
+              <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">{{ t('happyHour.percentOff', { pct: dish.happy_hour.percent_off }) }} {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+            </template>
+          </div>
         </div>
 
         <!-- Brand / pack-size (retail attributes) -->
@@ -473,7 +479,13 @@ const selectedOptionNote = computed(() => {
 });
 
 const unitOptionTotal      = computed(() => selectedOptionObjects.value.reduce((sum, opt) => sum + Number(opt.price_delta || 0), 0));
-const unitPriceWithOptions = computed(() => (Number(dish.value?.price) || 0) + unitOptionTotal.value);
+// Use effective_price (happy-hour discounted base) when active; option deltas are never discounted.
+const dishBasePrice        = computed(() => {
+  const d = dish.value;
+  if (d?.happy_hour && Number(d.effective_price) < Number(d.price)) return Number(d.effective_price);
+  return Number(d?.price) || 0;
+});
+const unitPriceWithOptions = computed(() => dishBasePrice.value + unitOptionTotal.value);
 const totalWithOptions     = computed(() => unitPriceWithOptions.value * (qty.value || 1));
 
 const groupSelectedCount = (groupId) => {
@@ -510,15 +522,17 @@ const addToCart = () => {
   const quantity = qty.value > 0 ? qty.value : 1;
   const optionSig = allSelectedOptionIdsSorted.value.join(',');
   cart.add({
-    key: `${dish.value.slug}::${optionSig}`,
-    slug: dish.value.slug,
-    name: dish.value.name,
-    price: Number(unitPriceWithOptions.value),
-    currency: dish.value.currency,
-    qty: quantity,
-    note: selectedOptionNote.value,
-    option_ids: allSelectedOptionIdsSorted.value,
-    option_labels: selectedOptionObjects.value.map((opt) => opt.name),
+    key:              `${dish.value.slug}::${optionSig}`,
+    slug:             dish.value.slug,
+    name:             dish.value.name,
+    price:            Number(unitPriceWithOptions.value),
+    currency:         dish.value.currency,
+    qty:              quantity,
+    note:             selectedOptionNote.value,
+    option_ids:       allSelectedOptionIdsSorted.value,
+    option_labels:    selectedOptionObjects.value.map((opt) => opt.name),
+    happy_hour_ends_at: dish.value.happy_hour?.ends_at ?? null,
+    happy_hour_starts_at: dish.value.happy_hour?.starts_at ?? null,
   });
   toast.show(t('dishPage.addedToCart'), 'success');
 };

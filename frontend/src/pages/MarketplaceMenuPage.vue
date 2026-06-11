@@ -292,8 +292,15 @@
                     >{{ tag }}</span>
                   </div>
                   <div class="mt-2 flex items-center justify-between gap-2">
-                    <!-- Price: flash-sale strikethrough when active -->
-                    <span v-if="flashSalePct" class="flex items-baseline gap-1.5">
+                    <!-- Price: happy-hour > flash-sale > regular -->
+                    <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="flex flex-col items-start gap-0.5">
+                      <span class="flex items-baseline gap-1.5">
+                        <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.effective_price) }}</span>
+                        <span class="text-[11px] tabular-nums text-slate-500 line-through">{{ fmtPrice(dish.price) }}</span>
+                      </span>
+                      <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+                    </span>
+                    <span v-else-if="flashSalePct" class="flex items-baseline gap-1.5">
                       <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
                       <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
                     </span>
@@ -438,8 +445,15 @@
                       >{{ tag }}</span>
                     </div>
                     <div class="mt-2 flex items-center justify-between gap-2">
-                      <!-- Price: flash-sale strikethrough when active -->
-                      <span v-if="flashSalePct" class="flex items-baseline gap-1.5">
+                      <!-- Price: happy-hour > flash-sale > regular -->
+                      <span v-if="dish.happy_hour && Number(dish.effective_price) < Number(dish.price)" class="flex flex-col items-start gap-0.5">
+                        <span class="flex items-baseline gap-1.5">
+                          <span class="text-sm font-bold tabular-nums text-[var(--color-secondary)]">{{ fmtPrice(dish.effective_price) }}</span>
+                          <span class="text-[11px] tabular-nums text-slate-500 line-through">{{ fmtPrice(dish.price) }}</span>
+                        </span>
+                        <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">-{{ dish.happy_hour.percent_off }}% {{ t('happyHour.until', { time: dish.happy_hour.ends_at }) }}</span>
+                      </span>
+                      <span v-else-if="flashSalePct" class="flex items-baseline gap-1.5">
                         <span class="text-[11px] tabular-nums text-amber-200/50 line-through">{{ fmtPrice(dish.price) }}</span>
                         <span class="text-sm font-bold tabular-nums text-amber-400">{{ fmtPrice(dishSalePrice(dish.price)) }}</span>
                       </span>
@@ -1160,11 +1174,26 @@ const addToCart = (dish) => {
     openOptionPanel(dish);
     return;
   }
+  const effectivePrice = (dish.happy_hour && Number(dish.effective_price) < Number(dish.price))
+    ? Number(dish.effective_price)
+    : Number(dish.price);
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
     existing.qty++;
+    // refresh happy_hour_ends_at / happy_hour_starts_at in case window changed
+    existing.happy_hour_ends_at = dish.happy_hour?.ends_at ?? null;
+    existing.happy_hour_starts_at = dish.happy_hour?.starts_at ?? null;
   } else {
-    cart.value.push({ slug: dish.slug, name: dish.name, price: dish.price, unitPrice: Number(dish.price), qty: 1, options: [] });
+    cart.value.push({
+      slug: dish.slug,
+      name: dish.name,
+      price: dish.price,
+      unitPrice: effectivePrice,
+      qty: 1,
+      options: [],
+      happy_hour_ends_at: dish.happy_hour?.ends_at ?? null,
+      happy_hour_starts_at: dish.happy_hour?.starts_at ?? null,
+    });
   }
 };
 
@@ -1303,8 +1332,12 @@ const optionPanelValid = computed(() => {
 
 const optionPanelUnitPrice = computed(() => {
   if (!activeOptionDish.value) return 0;
-  let price = Number(activeOptionDish.value.price) || 0;
-  for (const grp of activeOptionDish.value.option_groups || []) {
+  const d = activeOptionDish.value;
+  // Use happy-hour effective price as base; option deltas are never discounted.
+  let price = (d.happy_hour && Number(d.effective_price) < Number(d.price))
+    ? Number(d.effective_price)
+    : Number(d.price) || 0;
+  for (const grp of d.option_groups || []) {
     for (const opt of grp.options || []) {
       if (isOptionSelected(grp.id, opt.id)) price += Number(opt.price_delta) || 0;
     }
@@ -1328,12 +1361,17 @@ const confirmOptionSelection = () => {
       }
     }
   }
-  const unitPrice = dish.option_groups?.length ? optionPanelUnitPrice.value : Number(dish.price);
+  const dishEffectiveBase = (dish.happy_hour && Number(dish.effective_price) < Number(dish.price))
+    ? Number(dish.effective_price)
+    : Number(dish.price);
+  const unitPrice = dish.option_groups?.length ? optionPanelUnitPrice.value : dishEffectiveBase;
   const existing = cart.value.find((i) => i.slug === dish.slug);
   if (existing) {
     existing.qty++;
     existing.unitPrice = unitPrice;
     existing.options = selectedOptions;
+    existing.happy_hour_ends_at = dish.happy_hour?.ends_at ?? null;
+    existing.happy_hour_starts_at = dish.happy_hour?.starts_at ?? null;
   } else {
     cart.value.push({
       slug: dish.slug,
@@ -1342,6 +1380,8 @@ const confirmOptionSelection = () => {
       unitPrice,
       qty: 1,
       options: selectedOptions,
+      happy_hour_ends_at: dish.happy_hour?.ends_at ?? null,
+      happy_hour_starts_at: dish.happy_hour?.starts_at ?? null,
     });
   }
   closeOptionPanel();
@@ -1532,6 +1572,43 @@ const placeOrder = async () => {
     });
     return;
   }
+
+  // Stale happy-hour guard: if any cart line was priced during a happy-hour window
+  // that has since ended, refetch prices and let the user re-confirm.
+  // Overnight windows (starts_at > ends_at, e.g. 22:00–02:00) are handled
+  // correctly: ends_at='02:00' at 23:30 is NOT stale — the inactive gap is 02:00–22:00.
+  const nowHHMM = new Date().toTimeString().slice(0, 5); // "HH:MM"
+  const hasStaleHH = cart.value.some((i) => {
+    const endsAt = i.happy_hour_ends_at;
+    if (typeof endsAt !== 'string') return false;
+    const startsAt = i.happy_hour_starts_at;
+    const isOvernight = typeof startsAt === 'string' && startsAt > endsAt;
+    // Overnight: stale only in the gap between end and next start (daytime).
+    if (isOvernight) return nowHHMM >= endsAt && nowHHMM < startsAt;
+    // Normal window: stale when current time has passed ends_at.
+    return nowHHMM >= endsAt;
+  });
+  if (hasStaleHH) {
+    await fetchMenu();
+    // Re-sync prices: for each cart line find the current effective_price
+    const allDishes = (restaurant.value?.super_categories || [])
+      .flatMap((sc) => sc.categories || [])
+      .flatMap((c) => c.dishes || []);
+    const dishMap = new Map(allDishes.map((d) => [d.slug, d]));
+    for (const line of cart.value) {
+      const live = dishMap.get(line.slug);
+      if (!live) continue;
+      const liveEffective = (live.happy_hour && Number(live.effective_price) < Number(live.price))
+        ? Number(live.effective_price)
+        : Number(live.price);
+      line.unitPrice = liveEffective;
+      line.happy_hour_ends_at = live.happy_hour?.ends_at ?? null;
+      line.happy_hour_starts_at = live.happy_hour?.starts_at ?? null;
+    }
+    toastStore.show(t('happyHour.ended'), 'info');
+    return; // let user re-confirm
+  }
+
   placing.value = true;
   try {
     const items = cart.value.map((i) => ({

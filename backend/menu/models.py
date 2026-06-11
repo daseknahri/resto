@@ -947,6 +947,44 @@ class CurrencyRate(models.Model):
         return f"{self.code} — 1 {self.code} = {self.mad_per_unit} MAD"
 
 
+class HappyHour(models.Model):
+    """Time-based pricing rule: discount *percent_off* % from dish.price during the window.
+
+    Semantics (enforced in menu/pricing.py):
+    - percent_off applies to dish.price ONLY; option price_delta is never discounted.
+    - When several active rules match a dish, the LARGEST percent_off wins.
+    - Empty categories M2M = rule covers ALL categories.
+    - Overnight windows: start_time > end_time → wraps midnight.
+    - Time source = tenant-local wall-clock (_profile_now in menu/views.py).
+    - Max 8 rows per tenant (validated in HappyHourSerializer on create).
+    """
+
+    name = models.CharField(max_length=80)
+    days = models.JSONField(
+        default=list,
+        help_text="List of weekday ints — 0=Monday … 6=Sunday (Python weekday() convention).",
+    )
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    percent_off = models.PositiveSmallIntegerField(
+        help_text="Percentage discount applied to dish.price (1–90).",
+    )
+    categories = models.ManyToManyField(
+        Category,
+        blank=True,
+        related_name="happy_hours",
+        help_text="Restrict rule to these categories. Empty = all categories.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return f"HappyHour({self.name!r}, -{self.percent_off}%)"
+
+
 class CustomerNote(models.Model):
     """Private, per-tenant note about a customer.
 
