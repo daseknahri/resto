@@ -1449,8 +1449,8 @@ class OrderHandoffView(APIView):
             if invalid_option_ids:
                 return Response(
                     {
-                        "detail": "Some selected options are unavailable for this dish.",
-                        "code": "invalid_options",
+                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+                        "code": "stale_options",
                         "dish_slug": dish.slug,
                         "invalid_option_ids": invalid_option_ids,
                     },
@@ -1612,8 +1612,8 @@ class CheckoutIntentView(OrderHandoffView):
             if invalid_option_ids:
                 return Response(
                     {
-                        "detail": "Some selected options are unavailable for this dish.",
-                        "code": "invalid_options",
+                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+                        "code": "stale_options",
                         "dish_slug": dish.slug,
                         "invalid_option_ids": invalid_option_ids,
                     },
@@ -1914,7 +1914,7 @@ class PlaceOrderView(APIView):
 
         options_map = {}
         if all_option_ids:
-            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids)}
+            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids).select_related("dish")}
 
         # Build order items and compute total
         order_items_data = []
@@ -1927,11 +1927,25 @@ class PlaceOrderView(APIView):
             unit_price = Decimal(str(dish.price))
 
             option_snapshots = []
+            _invalid_oids: list[int] = []
             for oid in item_input.get("option_ids", []):
                 opt = options_map.get(oid)
-                if opt:
-                    unit_price += Decimal(str(opt.price_delta))
-                    option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+                _opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
+                if opt is None or _opt_dish_slug != dish.slug:
+                    _invalid_oids.append(oid)
+                    continue
+                unit_price += Decimal(str(opt.price_delta))
+                option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+            if _invalid_oids:
+                return Response(
+                    {
+                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+                        "code": "stale_options",
+                        "dish_slug": dish.slug,
+                        "invalid_option_ids": _invalid_oids,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             qty = item_input["qty"]
             subtotal = unit_price * qty
@@ -3513,7 +3527,7 @@ class StaffAppendOrderItemsView(APIView):
 
         options_map = {}
         if all_option_ids:
-            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids)}
+            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids).select_related("dish")}
 
         # ── Build new OrderItem records + collect stock updates ───────────────
         new_items_data = []
@@ -3524,11 +3538,25 @@ class StaffAppendOrderItemsView(APIView):
             dish = dishes_map[p["slug"]]
             unit_price = Decimal(str(dish.price))
             option_snapshots = []
+            _invalid_oids = []
             for oid in p["option_ids"]:
                 opt = options_map.get(oid)
-                if opt:
-                    unit_price += Decimal(str(opt.price_delta))
-                    option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+                _opt_dish_slug = getattr(getattr(opt, "dish", None), "slug", None) if opt is not None else None
+                if opt is None or _opt_dish_slug != dish.slug:
+                    _invalid_oids.append(oid)
+                    continue
+                unit_price += Decimal(str(opt.price_delta))
+                option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+            if _invalid_oids:
+                return Response(
+                    {
+                        "detail": f"Some selected options are no longer valid for '{dish.name}'.",
+                        "code": "stale_options",
+                        "dish_slug": dish.slug,
+                        "invalid_option_ids": _invalid_oids,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             qty = p["qty"]
             subtotal = unit_price * qty
             new_items_data.append({
@@ -3939,6 +3967,7 @@ class StaffOrderPaymentView(APIView):
                 )
 
                 # ── Wallet debit (raises InsufficientFunds → rolls back row) ─
+                _wallet_save_fields: list[str] = []
                 if method == "wallet":
                     debit_wallet(
                         order.customer_id,
@@ -3951,13 +3980,20 @@ class StaffOrderPaymentView(APIView):
                     order.wallet_amount_paid = (
                         Decimal(str(order.wallet_amount_paid or "0")) + amount
                     ).quantize(self._CENT)
-                    order.save(update_fields=["wallet_amount_paid", "updated_at"])
+                    _wallet_save_fields = ["wallet_amount_paid"]
 
                 # ── Flip to PAID if fully settled ─────────────────────────────
                 new_paid = (existing_paid + amount).quantize(self._CENT)
+                _paid_save_fields: list[str] = []
                 if new_paid >= order_total:
                     order.mark_paid(save=False)
-                    order.save(update_fields=["payment_status", "paid_at", "updated_at"])
+                    _paid_save_fields = ["payment_status", "paid_at"]
+
+                # ── Single save: union of all dirty fields ────────────────────
+                _all_save_fields = list(dict.fromkeys(
+                    _wallet_save_fields + _paid_save_fields + ["updated_at"]
+                ))
+                order.save(update_fields=_all_save_fields)
 
         except InsufficientFunds:
             return Response(
@@ -8469,37 +8505,51 @@ class OwnerCampaignView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ── Daily cap check ───────────────────────────────────────────────────
+        # ── Daily cap check (with cache mutex to close TOCTOU) ───────────────
         tenant = request.tenant
-        day_start, day_end = _campaign_day_window(tenant)
-        today_count = Campaign.objects.filter(
-            created_at__gte=day_start, created_at__lt=day_end,
-        ).count()
-        if today_count >= _CAMPAIGN_DAILY_CAP:
+        _lock_key = f"campaign_lock:{getattr(tenant, 'schema_name', None) or tenant.id}"
+        if not cache.add(_lock_key, 1, 10):
+            # A concurrent request holds the mutex — this is a transient lock,
+            # NOT the daily cap; the caller can simply retry in a moment.
             return Response(
                 {
-                    "detail": f"Daily campaign limit of {_CAMPAIGN_DAILY_CAP} reached. Try again tomorrow.",
-                    "code": "campaign_cap",
+                    "detail": "Another announcement is being sent — try again in a moment.",
+                    "code": "campaign_locked",
                 },
                 status=status.HTTP_409_CONFLICT,
             )
+        try:
+            day_start, day_end = _campaign_day_window(tenant)
+            today_count = Campaign.objects.filter(
+                created_at__gte=day_start, created_at__lt=day_end,
+            ).count()
+            if today_count >= _CAMPAIGN_DAILY_CAP:
+                return Response(
+                    {
+                        "detail": f"Daily campaign limit of {_CAMPAIGN_DAILY_CAP} reached. Try again tomorrow.",
+                        "code": "campaign_cap",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
-        # ── Audience ──────────────────────────────────────────────────────────
-        audience_ids = self._audience_ids()
-        if not audience_ids:
-            return Response(
-                {"detail": "No opted-in subscribers found among your past customers.", "code": "no_audience"},
-                status=status.HTTP_409_CONFLICT,
+            # ── Audience ──────────────────────────────────────────────────────
+            audience_ids = self._audience_ids()
+            if not audience_ids:
+                return Response(
+                    {"detail": "No opted-in subscribers found among your past customers.", "code": "no_audience"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # ── Create campaign row ───────────────────────────────────────────
+            campaign = Campaign.objects.create(
+                title=title,
+                message=message,
+                created_by_user_id=request.user.pk,
+                audience_count=len(audience_ids),
+                sent_count=len(audience_ids),  # fire-and-forget: equals audience_count at enqueue
             )
-
-        # ── Create campaign row ───────────────────────────────────────────────
-        campaign = Campaign.objects.create(
-            title=title,
-            message=message,
-            created_by_user_id=request.user.pk,
-            audience_count=len(audience_ids),
-            sent_count=len(audience_ids),  # fire-and-forget: equals audience_count at enqueue
-        )
+        finally:
+            cache.delete(_lock_key)
 
         # ── Dispatch one push per audience customer ───────────────────────────
         tenant_name = getattr(tenant, "name", "") or getattr(tenant, "slug", "")

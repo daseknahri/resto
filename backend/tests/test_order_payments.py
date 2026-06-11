@@ -224,7 +224,8 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         # mark_paid must NOT have been called (not fully settled yet)
         order.mark_paid.assert_not_called()
-        order.save.assert_not_called()  # no wallet, no mark_paid
+        # merged save always fires with at least updated_at (even cash-only partial)
+        order.save.assert_called_once_with(update_fields=["updated_at"])
         broadcast_mock.assert_called_once()
 
     # ── Happy path: amount omitted → full outstanding → PAID ─────────────────
@@ -301,9 +302,9 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         self.assertEqual(call_kwargs[0][0], 42)  # customer_id
         self.assertEqual(call_kwargs[0][1], Decimal("20.00"))
         self.assertEqual(call_kwargs[1]["idempotency_key"], "orderpay:99")
-        # wallet_amount_paid incremented and saved
-        order.save.assert_any_call(
-            update_fields=["wallet_amount_paid", "updated_at"]
+        # merged single save: wallet_amount_paid + mark_paid fields in one call
+        order.save.assert_called_once_with(
+            update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"]
         )
         # mark_paid called once (30 total = 10+20)
         order.mark_paid.assert_called_once_with(save=False)

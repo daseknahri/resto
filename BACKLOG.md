@@ -16,31 +16,11 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       fix flips such orders to PAID at void time, but a direct API path that
       creates the state would still strand; consider a reconcile sweep assertion.
       Source: R5 review follow-on thought.
-- [ ] **Receipt shows split payments** — printed receipt should list the OrderPayment
-      ledger rows (paid cash 120 / wallet 80). Source: R4 scope cut.
 - [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but
       earned points aren't clawed back per-item. Documented MVP in R2 view docstring.
-- [ ] **option_ids silent-drop** — invalid option ids are skipped (item lands at base
-      price) in both PlaceOrderView and the R2 append view. Consider strict 400 in both
-      at once. Source: R2 review minor.
-- [ ] **Per-INTENT idempotency key in waiter settle** — postPayment now sends a key
-      per call (protects transport retries; double-taps blocked by UI guards), but a
-      user who manually retries after a timeout-that-committed gets a NEW key and can
-      record a duplicate equal-amount partial. Per-intent keying (key minted when the
-      settle chooser opens) closes it. Source: R4 review major, refined.
-- [ ] **Merge the two order.save() calls in StaffOrderPaymentView** when a wallet
-      partial also flips PAID (cosmetic in-memory inconsistency inside the atomic
-      block). Source: R4 review minor.
 - [ ] **Combos / meal deals** (bundle pricing) — audit growth item, not in top-8.
 - [ ] **Happy-hour / time-based pricing** — availability_schedule exists per dish;
       price scheduling does not. Audit growth item.
-- [ ] **Campaign cap TOCTOU** — two concurrent POSTs can both pass the 2/day count
-      check (owner double-click) and land a 3rd campaign. Owner-only, low blast
-      radius; fix with a short cache-mutex around count+create. Source: campaigns
-      review minor.
-- [ ] **Digest mixed-day regression test** — ledger+legacy orders in the same day
-      is computed correctly but untested as a combined case. Source: campaigns
-      review minor.
 - [ ] **Win-back automation** — auto-nudge customers inactive N weeks (the
       automated half of the campaigns feature; manual announcements shipped).
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
@@ -98,6 +78,12 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Receipt shows split payments (ledger lines + paid/remaining on thermal) — sweep-1.
+- [x] Strict stale_options 400 in checkout + append (incl. cross-dish ids; cart toast) — sweep-1.
+- [x] Per-intent settle idempotency key (minted at chooser open, cleared on success incl. charge-sheet path) — sweep-1.
+- [x] Merged order.save in StaffOrderPaymentView — sweep-1.
+- [x] Campaign cap mutex (cache.add lock; transient case now campaign_locked) — sweep-1.
+- [x] Digest mixed-day (ledger+legacy) regression test — sweep-1.
 - [x] Payments endpoint request-level idempotency (backend mechanism: client key →
       cache short-circuit + cache.set after commit) — R4 split-bill commit.
 - [x] Owner→customers announcements (manual campaigns: opt-out pref, 2/day cap,

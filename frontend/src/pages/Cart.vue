@@ -1993,6 +1993,11 @@ const mapOrderApiError = (err, fallback) => {
   if (code === 'mixed_currency') {
     return t('cartPage.mixedCurrency');
   }
+  if (code === 'stale_options') {
+    // Menu changed under the cart (option prices/availability changed).
+    // The toast is the primary action signal; the customer can review and retry.
+    return t('cartPage.staleOptions');
+  }
   if (code === 'menu_temporarily_disabled') {
     return note
       ? t('cartPage.menuTemporarilyUnavailableWithNote', { note })

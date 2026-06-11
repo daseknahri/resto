@@ -1575,6 +1575,9 @@ const placeOrder = async () => {
       showAuthModal.value = true;
     } else if (code === 'wallet_insufficient') {
       checkoutError.value = t('mktMenu.walletInsufficientError');
+    } else if (code === 'stale_options') {
+      checkoutError.value = t('cartPage.staleOptions');
+      toastStore.show(t('cartPage.staleOptions'), 'error');
     } else if (code === 'restaurant_closed') {
       checkoutError.value = t('mktMenu.restaurantClosed');
     } else if (code === 'items_unavailable') {

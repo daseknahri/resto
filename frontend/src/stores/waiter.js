@@ -217,16 +217,20 @@ export const useWaiterStore = defineStore("waiter", {
     // -------------------------------------------------------
     // Partial / full payment via the new payments ledger endpoint.
     // Returns { data, errorCode } — errorCode is the 409 `code` string or null.
+    // intentKey: caller-provided idempotency key (minted when the chooser opens so
+    // that retries of the same settle attempt reuse the same key and cannot
+    // double-record). Falls back to per-call generation when not provided.
     // -------------------------------------------------------
-    async postPayment(orderId, method, amount) {
+    async postPayment(orderId, method, amount, intentKey = null) {
       this.updatingOrderIds = new Set([...this.updatingOrderIds, orderId]);
       try {
         const body = { method };
         if (amount !== null && amount !== undefined) body.amount = amount;
-        // One key per payment intent: the backend short-circuits a retry of the
-        // same key (5-min window), so a double-tap or timeout-retry can never
-        // record the same physical payment twice.
-        body.idempotency_key = (crypto.randomUUID && crypto.randomUUID()) || `${orderId}-${method}-${amount ?? 'full'}-${performance.now()}`;
+        // Use caller-supplied key (one-per-settle-intent) when available; otherwise
+        // generate a fresh key per call as before.
+        body.idempotency_key = intentKey
+          || (crypto.randomUUID && crypto.randomUUID())
+          || `${orderId}-${method}-${amount ?? 'full'}-${performance.now()}`;
         const res = await api.post(`/staff/orders/${orderId}/payments/`, body);
         // Patch the in-memory order with the updated fields from the response.
         const order = this.orders.find((o) => o.id === orderId);

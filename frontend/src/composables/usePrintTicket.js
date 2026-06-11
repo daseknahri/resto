@@ -76,6 +76,42 @@ export function usePrintTicket() {
     const line = (label, value, color = "#444") =>
       `<tr><td style="padding:2px 0;font-size:12px;color:${color}">${label}</td><td style="text-align:right;font-size:12px;color:${color}">${value}</td></tr>`;
 
+    // ── Split-payments block (rendered when the order has a payments ledger) ─────
+    const payments = Array.isArray(o.payments) ? o.payments : [];
+    const hasPayments = payments.length > 0;
+    const amountPaid = Number(o.amount_paid) || 0;
+    const outstanding = o.outstanding != null ? Number(o.outstanding) : null;
+    const isPartial = o.payment_status !== "paid" && amountPaid > 0;
+
+    const methodLabel = (method) => {
+      if (method === "cash") return t("ownerOrders.paymentCash");
+      if (method === "wallet") return t("ownerOrders.paymentWallet");
+      return method || "";
+    };
+
+    const paymentsHtml = hasPayments
+      ? `<div style="border-top:1px dashed #000;margin-top:8px;padding-top:6px">
+          <div style="font-size:11px;font-weight:bold;margin-bottom:4px">${escapeHtml(t("ownerOrders.paymentsTitle"))}</div>
+          ${payments.map((p) =>
+            `<div style="display:flex;justify-content:space-between;font-size:11px">
+              <span>${escapeHtml(methodLabel(p.method))}</span>
+              <span>${fmt(p.amount, cur)}</span>
+            </div>`
+          ).join("")}
+          ${isPartial
+            ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+                <span>${escapeHtml(t("ownerOrders.paidLine"))}</span>
+                <span>${fmt(amountPaid, cur)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#b45309">
+                <span>${escapeHtml(t("ownerOrders.outstandingLine"))}</span>
+                <span>${fmt(outstanding !== null ? outstanding : Math.max(0, Number(o.total) - amountPaid), cur)}</span>
+              </div>`
+            : `<div style="font-size:11px;color:#16a34a">${escapeHtml(t("ownerOrders.paidLine"))}</div>`
+          }
+        </div>`
+      : "";
+
     const thankYou = (tenant.meta?.profile?.receipt_message || "").trim();
     const thankYouHtml = thankYou
       ? `<div style="text-align:center;font-size:11px;margin-top:10px;border-top:1px dashed #000;padding-top:8px">${escapeHtml(thankYou)}</div>`
@@ -109,6 +145,7 @@ export function usePrintTicket() {
         ${hasWallet ? line(`💰 ${t("ownerOrders.walletPaid")}`, `−${fmt(o.wallet_amount_paid, cur)}`, "#16a34a") : ""}
       </table>
       ${note}
+      ${paymentsHtml}
       ${thankYouHtml}
       <div class="footer">${t("ownerOrders.ticketPrinted")} ${new Intl.DateTimeFormat(currentLocale.value, { timeStyle: 'short' }).format(new Date())}</div>
     </body></html>`;

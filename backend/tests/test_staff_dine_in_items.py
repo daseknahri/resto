@@ -393,6 +393,32 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
             self.assertIn("is_voided", item)
 
 
+    @patch("menu.views.Order.objects")
+    def test_stale_option_ids_return_400(self, order_om):
+        """An option_id that does not belong to the requested dish must return 400
+        stale_options — stale cart must surface, not silently order at base price."""
+        from types import SimpleNamespace
+        order = _make_order()
+        order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
+
+        # Two dishes; option 99 belongs to sushi, not burger.
+        burger = _make_dish(slug="burger", name="Burger", price=Decimal("10.00"), pk=1)
+        bad_opt = SimpleNamespace(id=99, name="Soy", price_delta=Decimal("1.00"),
+                                  dish=SimpleNamespace(slug="sushi"))
+
+        with patch("menu.views.Dish.objects") as dish_om, \
+             patch("menu.views.DishOption.objects") as opt_om:
+            dish_om.filter.return_value.select_related.return_value = [burger]
+            opt_om.filter.return_value.select_related.return_value = [bad_opt]
+
+            resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 1, "option_ids": [99]}]})
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "stale_options")
+        self.assertIn("Burger", resp.data["detail"])
+        self.assertEqual(resp.data["invalid_option_ids"], [99])
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # StaffVoidOrderItemView — POST /api/staff/orders/<order_id>/items/<item_id>/void/
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -200,7 +200,7 @@ class OrderHandoffTests(SimpleTestCase):
             self._non_table_payload(items=[{"slug": "burger", "qty": 1, "option_ids": [9]}])
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "invalid_options")
+        self.assertEqual(response.data["code"], "stale_options")
         self.assertEqual(response.data["invalid_option_ids"], [9])
 
     def test_mixed_currency_cart_is_rejected(self):

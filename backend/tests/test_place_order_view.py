@@ -670,3 +670,33 @@ class PlaceOrderViewTests(SimpleTestCase):
 
         # Ordering the last unit should be ALLOWED (stock >= qty)
         self.assertNotEqual(resp.data.get("code"), "items_unavailable")
+
+    @patch("menu.views.DishOption.objects")
+    @patch("menu.views.Dish.objects")
+    @patch("menu.views.Profile.objects")
+    def test_stale_option_id_returns_400(self, profile_mock, dish_mock, option_mock):
+        """An option_id that belongs to a different dish must return 400 stale_options,
+        not silently order at base price (stale-cart guard, R4 item 4)."""
+        profile_mock.filter.return_value.first.return_value = _profile()
+
+        burger = _dish(slug="burger")
+        dish_mock.filter.return_value.select_related.return_value = [burger]
+
+        # option 77 belongs to "sushi", not "burger"
+        bad_opt = MagicMock()
+        bad_opt.id = 77
+        bad_opt.name = "Soy sauce"
+        bad_opt.price_delta = Decimal("1.00")
+        bad_opt.dish = MagicMock()
+        bad_opt.dish.slug = "sushi"
+        option_mock.filter.return_value.select_related.return_value = [bad_opt]
+
+        payload = {"items": [{"slug": "burger", "qty": 1, "option_ids": [77]}], "fulfillment_type": "pickup"}
+        req = self._post(data=payload)
+
+        resp = self.view(req)
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["code"], "stale_options")
+        self.assertIn("Burger", resp.data["detail"])
+        self.assertEqual(resp.data["invalid_option_ids"], [77])

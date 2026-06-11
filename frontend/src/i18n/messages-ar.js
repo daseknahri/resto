@@ -1930,7 +1930,8 @@ const arabicMessages = {
     "tipLabel": "إضافة بقشيش",
     "tipHighWarning": "هذه البقشيش تتجاوز إجمالي طلبك — تحقق من المبلغ.",
     "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط).",
-    "reorderPriceNote": "تم تحديث الأسعار وفق قائمة اليوم."
+    "reorderPriceNote": "تم تحديث الأسعار وفق قائمة اليوم.",
+    "staleOptions": "تغيّرت القائمة — يرجى مراجعة سلّتك والمحاولة مجدداً."
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",
@@ -2203,6 +2204,11 @@ const arabicMessages = {
     "ticketPhone": "الهاتف",
     "ticketEmail": "البريد الإلكتروني",
     "ticketAddress": "العنوان",
+    "paymentsTitle": "المدفوعات",
+    "paymentCash": "نقداً",
+    "paymentWallet": "محفظة",
+    "paidLine": "مدفوع",
+    "outstandingLine": "المتبقي",
     "paid": "مدفوع",
     "unpaid": "غير مدفوع",
     "markPaid": "تحديد كمدفوع",

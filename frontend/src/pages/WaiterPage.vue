@@ -1146,6 +1146,7 @@ const showGrouped = computed(() =>
 const showCharge = ref(false);
 const chargeContext = ref({ amount: '', orderNumber: '' });
 const settleChooser = ref(null);        // order awaiting a cash/wallet choice
+const settleIntentKey = ref(null);      // idempotency key minted when the chooser opens
 const pendingWalletSettle = ref(null);  // order being settled via the wallet charge sheet
 // If the backend provides `outstanding` (new ledger), use it; otherwise fall back to total-wallet.
 const settleOutstanding = (order) => {
@@ -1280,10 +1281,21 @@ const trapSettleFocus = (e) => {
   }
 };
 
+// Track which order the current intent key belongs to, so switching orders gets a fresh key.
+const settleIntentOrderId = ref(null);
+
 watch(settleChooser, async (val) => {
   if (val) {
     // Pre-fill with the full outstanding amount; the user can edit it down.
     splitAmount.value = settleOutstanding(val).toFixed(2);
+    // Mint a fresh idempotency key when the chooser opens for a NEW order.
+    // Reuse the existing key when reopening for the SAME order after a failed/
+    // timed-out attempt — so the backend can deduplicate and never double-record.
+    if (!settleIntentKey.value || settleIntentOrderId.value !== val.id) {
+      settleIntentKey.value = (crypto.randomUUID && crypto.randomUUID())
+        || `settle-${val.id}-${Date.now()}`;
+      settleIntentOrderId.value = val.id;
+    }
     await nextTick();
     settleDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
     document.addEventListener('keydown', trapSettleFocus);
@@ -1533,6 +1545,10 @@ const _finishSettle = async (order) => {
     toast.show(t("waiterPage.markPaidFailed"), "error");
     return;
   }
+  // The full-wallet charge-sheet path settles via markPaid (not postPayment),
+  // so the settle-intent key must be cleared here too on success.
+  settleIntentKey.value = null;
+  settleIntentOrderId.value = null;
   if (res.completed && eligibleToRate) {
     openCustomerRating(order);
   } else if (res.completed) {
@@ -1552,14 +1568,18 @@ const _resolvedSplitAmount = (order) => {
 
 // Cash: POST to payments endpoint; partial stays open, full settles.
 const payCash = async (order) => {
+  const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);
-  const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount);
+  const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount, intentKey);
   if (!data) {
     if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
     toast.show(t('waiterPage.markPaidFailed'), 'error');
     return;
   }
+  // Clear the intent key on success so the next settle gets a fresh key.
+  settleIntentKey.value = null;
+  settleIntentOrderId.value = null;
   if (data.completed) {
     const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
     if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
@@ -1570,17 +1590,21 @@ const payCash = async (order) => {
 
 // Wallet: charge the customer's wallet via their pay-code, then close out.
 const payWallet = async (order) => {
+  const intentKey = settleIntentKey.value;
   settleChooser.value = null;
   const amount = _resolvedSplitAmount(order);
   // If a specific partial amount is requested, try to post directly.
   if (amount !== null) {
-    const { data, errorCode } = await waiter.postPayment(order.id, 'wallet', amount);
+    const { data, errorCode } = await waiter.postPayment(order.id, 'wallet', amount, intentKey);
     if (!data) {
       if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
       if (errorCode === 'insufficient_wallet') { toast.show(t('waiterPage.insufficientWallet'), 'error'); return; }
       toast.show(t('waiterPage.markPaidFailed'), 'error');
       return;
     }
+    // Clear on success.
+    settleIntentKey.value = null;
+    settleIntentOrderId.value = null;
     if (data.completed) {
       const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
       if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
@@ -1590,6 +1614,7 @@ const payWallet = async (order) => {
     return;
   }
   // Full amount: use the existing wallet charge-sheet flow (pay-code entry).
+  // The intent key will be cleared when onWalletCharged → _finishSettle succeeds.
   pendingWalletSettle.value = order;
   openCharge({ amount: settleOutstanding(order).toFixed(2), orderNumber: order.order_number });
 };

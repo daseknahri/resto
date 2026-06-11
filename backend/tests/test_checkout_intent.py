@@ -107,7 +107,7 @@ class CheckoutIntentTests(SimpleTestCase):
         }
         response = self._request(self._non_table_payload(items=[{"slug": "burger", "qty": 1, "option_ids": [9]}]))
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "invalid_options")
+        self.assertEqual(response.data["code"], "stale_options")
 
     def test_accepts_checkout_intent_when_plan_allows(self):
         response = self._request(self._non_table_payload(items=[{"slug": "burger", "qty": 2}]))

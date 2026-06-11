@@ -102,11 +102,23 @@ class OwnerCampaignGetTests(SimpleTestCase):
 
 class OwnerCampaignCapTests(SimpleTestCase):
 
-    def _post(self, today_count, audience_override=None):
+    def _post(self, today_count, audience_override=None, lock_held=False):
+        """Post a campaign request with mocked DB and cache.
+
+        lock_held=True simulates a concurrent request already holding the mutex
+        (cache.add returns False) — triggers the concurrent-cap path.
+        """
+        # cache.add returns False when the lock is already held (concurrent request),
+        # True when the key was freshly set (this request holds the lock).
+        mock_cache = MagicMock()
+        mock_cache.add.return_value = not lock_held  # True = acquired, False = blocked
+        mock_cache.delete = MagicMock()
+
         with (
             patch("menu.views._is_tenant_owner", return_value=True),
             patch("menu.views._campaign_day_window", return_value=(MagicMock(), MagicMock())),
             patch("menu.views.Campaign") as mock_campaign,
+            patch("menu.views.cache", mock_cache),
         ):
             mock_campaign.objects.filter.return_value.count.return_value = today_count
             if audience_override is not None:
@@ -135,6 +147,14 @@ class OwnerCampaignCapTests(SimpleTestCase):
         resp = self._post(today_count=2)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data.get("code"), "campaign_cap")
+
+    def test_concurrent_request_returns_campaign_locked(self):
+        """When a concurrent POST already holds the lock (cache.add returns False),
+        the view returns 409 campaign_locked — a transient retry-in-a-moment
+        condition, distinct from the true daily cap."""
+        resp = self._post(today_count=0, lock_held=True)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data.get("code"), "campaign_locked")
 
 
 # ─── 3 & 4. Opted-out / sub-less customers excluded ─────────────────────────
@@ -224,10 +244,14 @@ class OwnerCampaignTenantIsolationTests(SimpleTestCase):
 class OwnerCampaignLengthValidationTests(SimpleTestCase):
 
     def _post_raw(self, title, message):
+        mock_cache = MagicMock()
+        mock_cache.add.return_value = True   # always acquire the lock
+        mock_cache.delete = MagicMock()
         with (
             patch("menu.views._is_tenant_owner", return_value=True),
             patch("menu.views._campaign_day_window", return_value=(MagicMock(), MagicMock())),
             patch("menu.views.Campaign") as mock_campaign,
+            patch("menu.views.cache", mock_cache),
         ):
             mock_campaign.objects.filter.return_value.count.return_value = 0
             req = _make_campaign_view_request("post", {"title": title, "message": message})
@@ -444,3 +468,24 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
         self.assertIsNotNone(result)
         for key in ("order_count", "total_revenue", "wallet_revenue", "cash_revenue", "top_dishes"):
             self.assertIn(key, result, f"Missing key: {key}")
+
+    def test_mixed_day_ledger_and_legacy_combined(self):
+        """Same day has BOTH a ledger order (has OrderPayment rows) and a legacy order
+        (no rows — only wallet_amount_paid).  wallet/cash must equal the sum of both
+        paths combined: ledger sums + legacy fallback sums."""
+        # order 1: ledger → wallet=20, cash=30 (total=50)
+        # order 2: legacy → wallet_amount_paid=15, total=40 → cash=25
+        # combined wallet = 20+15=35, combined cash = 30+25=55
+        result = self._run_compute(
+            order_ids=[1, 2],
+            ledger_order_ids=[1],      # only order 1 has ledger rows
+            ledger_wallet=20.0,
+            ledger_cash=30.0,
+            legacy_wallet=15.0,        # order 2 wallet_amount_paid
+            legacy_total=40.0,         # order 2 total (cash = 40-15=25)
+            total_revenue=90.0,        # 50 + 40
+            order_count=2,
+        )
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result["wallet_revenue"], 35.0, places=2)
+        self.assertAlmostEqual(result["cash_revenue"], 55.0, places=2)
