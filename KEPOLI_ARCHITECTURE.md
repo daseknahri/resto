@@ -101,6 +101,29 @@ receive only fixes until the restaurant experience is finished. New deep
 vertical features (store pick-flow/substitutions, pharmacy-specific flows,
 ride extras) are deliberately parked behind restaurant completeness.
 
+## 4c. Restaurant completion plan (from the 2026-06-11 completeness audit)
+R1 ✅ (f716d97): daily close digest + cash/wallet split; category pause; live reorder prices.
+R2 (next): DINE-IN SERVICE ARCHITECTURE — one designed batch:
+  - OrderItem.is_voided/voided_at/void_reason (migration menu/0047)
+  - POST /api/staff/orders/<id>/items/  — append items to an OPEN TABLE order
+    (statuses pending/confirmed/preparing, fulfillment=table, payment != PAID;
+    reuses PlaceOrderView item-building + locked stock decrement; new items enter
+    kitchen flow is_ready=False; totals recomputed; broadcast)
+  - POST /api/staff/orders/<id>/items/<item_id>/void/ — void one item: restock
+    (locked), recompute totals; if order PAID with wallet -> partial wallet refund
+    of the line total (idempotency voiditem:{item_id}); cash-paid -> record only
+  - is_voided in every item payload; struck-through in waiter/owner/customer views
+  - Waiter UI: add-items (WaiterNewOrder append mode), item void w/ reason,
+    client-side TABLE GROUPING with combined outstanding total per table
+R3: WhatsApp/OG link previews — served HTML has zero og: tags (bots get a blank
+  shell). Bot-serving branch (nginx UA detection -> Django OG view per tenant menu).
+R4: SPLIT-BILL by amount (partial settle ledger) — deliberately separated from R2;
+  needs a payment-records model, not a flag. Plus any audit re-run findings.
+R5: Final pass — full-journey adversarial review + manual smoke checklist + tag
+  restaurant v1.0 complete; then production deploy + real-tenant onboarding.
+Token discipline: Sonnet workers, 1 backend + 1 frontend agent per batch, single
+focused reviewer, fix-loop max 1.
+
 ## 5. Phased roadmap
 
 ### Phase 0 — Super-app foundation ✅ (shipped 2026-06-08)
