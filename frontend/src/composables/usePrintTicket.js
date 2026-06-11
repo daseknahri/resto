@@ -42,8 +42,13 @@ export function usePrintTicket() {
       const note = item.note
         ? `<div style="font-size:11px;color:#555;font-style:italic">${escapeHtml(item.note)}</div>`
         : "";
+      const comboLines = Array.isArray(item.combo_components) && item.combo_components.length
+        ? item.combo_components.map((comp) =>
+            `<div style="font-size:10px;color:#888;padding-left:8px">↳ ${escapeHtml(comp.name)} ×${comp.qty * item.qty}</div>`
+          ).join("")
+        : "";
       return `<tr>
-        <td style="padding:3px 0;vertical-align:top"><strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${opts}${note}</td>
+        <td style="padding:3px 0;vertical-align:top"><strong>${item.qty}×</strong> ${escapeHtml(item.dish_name)}${opts}${note}${comboLines}</td>
         <td style="padding:3px 0;text-align:right;white-space:nowrap;vertical-align:top">${fmt(item.subtotal, cur)}</td>
       </tr>`;
     }).join("");

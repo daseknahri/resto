@@ -2832,7 +2832,7 @@ class MarketplacePlaceOrderView(APIView):
                     for d in _Dish.objects.filter(
                         slug__in=slugs, is_published=True, is_available=True,
                         category__is_published=True, category__is_temporarily_disabled=False,
-                    ).select_related("category")
+                    ).select_related("category").prefetch_related("combo_components__component")
                 }
                 missing = [s for s in slugs if s not in dishes_map]
                 if missing:
@@ -2844,6 +2844,8 @@ class MarketplacePlaceOrderView(APIView):
                 order_items_data = []
                 food_subtotal = Decimal("0")
                 currency = "USD"
+                # combo component stock updates: (component_pk, total_qty, name)
+                _mkt_component_stock_updates = []
 
                 for it in items_raw:
                     dish = dishes_map[it["slug"]]
@@ -2858,6 +2860,11 @@ class MarketplacePlaceOrderView(APIView):
                     qty = max(1, min(99, int(it.get("qty", 1))))
                     subtotal = unit_price * qty
                     food_subtotal += subtotal
+                    # Build combo snapshot (per-unit qty, not pre-multiplied)
+                    _mkt_combo_snapshot = [
+                        {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
+                        for cc in dish.combo_components.all()
+                    ]
                     order_items_data.append({
                         "dish_slug": dish.slug,
                         "dish_name": dish.name,
@@ -2866,7 +2873,12 @@ class MarketplacePlaceOrderView(APIView):
                         "note": str(it.get("note") or "")[:120],
                         "options": option_snapshots,
                         "subtotal": subtotal,
+                        "combo_components": _mkt_combo_snapshot,
                     })
+                    for _cc_snap in _mkt_combo_snapshot:
+                        _mkt_component_stock_updates.append(
+                            (_cc_snap["dish_id"], _cc_snap["qty"] * qty, _cc_snap["name"])
+                        )
 
                 # Delivery fee — distance-based (base + per-km) when configured,
                 # else the flat fallback fee. Driver keeps 100% of it.
@@ -3008,6 +3020,15 @@ class MarketplacePlaceOrderView(APIView):
                     if _d.stock_qty is not None:
                         _stock_updates.append((_d.pk, _item_d["qty"]))
 
+                # Aggregate component stock updates from the snapshots
+                _mkt_comp_pk_to_name: dict = {}
+                _mkt_comp_stock_agg: dict = {}
+                for _cpk, _cqty, _cname in _mkt_component_stock_updates:
+                    _mkt_comp_stock_agg[_cpk] = _mkt_comp_stock_agg.get(_cpk, 0) + _cqty
+                    _mkt_comp_pk_to_name[_cpk] = _cname
+                _mkt_all_stock_pks = [pk for pk, _ in _stock_updates]
+                _mkt_all_stock_pks += [pk for pk in _mkt_comp_stock_agg if pk not in _mkt_all_stock_pks]
+
                 _wallet_deduction = Decimal("0")
                 if use_wallet and _linked_customer:
                     _available = Decimal(str(_linked_customer.wallet_balance or "0"))
@@ -3031,13 +3052,15 @@ class MarketplacePlaceOrderView(APIView):
 
                 try:
                     with _dbtx.atomic():
-                        if _stock_updates:
+                        if _mkt_all_stock_pks:
                             _locked = {
                                 d.pk: d
-                                for d in _Dish.objects.select_for_update().filter(
-                                    pk__in=[pk for pk, _ in _stock_updates]
-                                )
+                                for d in _Dish.objects.select_for_update().filter(pk__in=_mkt_all_stock_pks)
                             }
+                        else:
+                            _locked = {}
+
+                        if _stock_updates:
                             for _dish_pk, _ordered_qty in _stock_updates:
                                 _ld = _locked.get(_dish_pk)
                                 if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
@@ -3048,6 +3071,20 @@ class MarketplacePlaceOrderView(APIView):
                                     _new_qty = max(0, _ld.stock_qty - _ordered_qty)
                                     _Dish.objects.filter(pk=_dish_pk).update(
                                         **{"stock_qty": _new_qty, **({"is_available": False} if _new_qty == 0 else {})}
+                                    )
+
+                        # Component stock: validate then decrement
+                        if _mkt_comp_stock_agg:
+                            for _cpk, _cqty in _mkt_comp_stock_agg.items():
+                                _ld = _locked.get(_cpk)
+                                if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
+                                    raise _OutOfStock(_mkt_comp_pk_to_name.get(_cpk, ""))
+                            for _cpk, _cqty in _mkt_comp_stock_agg.items():
+                                _ld = _locked.get(_cpk)
+                                if _ld and _ld.stock_qty is not None:
+                                    _cnew = max(0, _ld.stock_qty - _cqty)
+                                    _Dish.objects.filter(pk=_cpk).update(
+                                        **{"stock_qty": _cnew, **({"is_available": False} if _cnew == 0 else {})}
                                     )
 
                         for _attempt in range(10):
@@ -3280,6 +3317,7 @@ class MarketplaceOrderStatusView(APIView):
                         "options": item.options,
                         "note": item.note,
                         "is_voided": item.is_voided,
+                        "combo_components": item.combo_components,
                     }
                     for item in order.items.all()
                 ]

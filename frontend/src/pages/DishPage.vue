@@ -89,10 +89,12 @@
         <!-- Chips / status badges -->
         <div class="flex flex-wrap gap-2">
           <span class="ui-chip-strong text-[11px] tracking-wide uppercase">{{ categoryName }}</span>
+          <span v-if="dish.is_combo" class="ui-chip border-violet-500/40 bg-violet-500/10 text-violet-300 text-[11px] font-semibold">{{ t('combos.badge') }}</span>
           <span v-for="tag in dish.tags" :key="tag" class="ui-chip text-[11px]">{{ t(`dishPage.tag_${tag}`) }}</span>
           <span v-if="isBrowseOnlyPlan" class="ui-chip bg-sky-500/20 text-sky-200 text-[11px]">{{ t('dishPage.menuOnly') }}</span>
           <span v-if="dish.is_available === false" class="ui-chip border-red-500/40 bg-red-500/10 text-red-300 text-[11px]">{{ t('menu.soldOut') }}</span>
           <span v-if="dish.is_schedule_available === false" class="ui-chip border-slate-600/50 bg-slate-800/60 text-slate-400 text-[11px]">{{ t('menu.notAvailableNow') }}</span>
+          <span v-if="dish.combo_unavailable" class="ui-chip border-amber-500/40 bg-amber-500/10 text-amber-300 text-[11px]">{{ t('combos.unavailable') }}</span>
         </div>
 
         <!-- Title + price -->
@@ -108,6 +110,18 @@
 
         <!-- Description -->
         <p v-if="dish.description" class="text-[15px] leading-relaxed text-slate-300/90">{{ dish.description }}</p>
+
+        <!-- Combo includes -->
+        <div v-if="dish.is_combo && dish.combo_components?.length" class="rounded-xl border border-violet-900/40 bg-violet-950/15 px-4 py-3 space-y-1.5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-violet-300">{{ t('combos.includes') }}</p>
+          <ul class="space-y-1">
+            <li v-for="comp in dish.combo_components" :key="comp.component_id" class="flex items-center gap-2 text-sm text-slate-300">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400/60" aria-hidden="true" />
+              <span>{{ comp.name }}</span>
+              <span class="text-slate-500">×{{ comp.qty }}</span>
+            </li>
+          </ul>
+        </div>
 
         <!-- Option groups -->
         <div v-if="dish.option_groups?.length" class="ui-section-band space-y-5">
@@ -476,7 +490,8 @@ const hasGroupMissing = computed(() =>
 const hasRequiredMissing  = computed(() => hasUngroupedRequiredMissing.value || hasGroupMissing.value);
 const isDishSoldOut       = computed(() => dish.value?.is_available === false);
 const isDishScheduleUnavailable = computed(() => dish.value?.is_schedule_available === false);
-const orderingDisabled    = computed(() => hasRequiredMissing.value || !isRestaurantOpen.value || isBrowseOnlyPlan.value || isDishSoldOut.value || isDishScheduleUnavailable.value);
+const isComboUnavailable  = computed(() => dish.value?.combo_unavailable === true);
+const orderingDisabled    = computed(() => hasRequiredMissing.value || !isRestaurantOpen.value || isBrowseOnlyPlan.value || isDishSoldOut.value || isDishScheduleUnavailable.value || isComboUnavailable.value);
 const isOptionSelected    = (optionId) => selectedOptionIds.value.includes(optionId);
 
 // ── Qty ───────────────────────────────────────────────────────────────────────

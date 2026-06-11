@@ -247,7 +247,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
         tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        dish_om.filter.return_value.select_related.return_value = [dish]
+        dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         # All dishes are now locked via select_for_update().filter(pk__in=...)
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
@@ -301,7 +301,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         first_order = _make_order()
         order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
 
-        dish_om.filter.return_value.select_related.return_value = [dish]
+        dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         option_om.filter.return_value = []
         # The view calls Dish.objects.select_for_update().filter(pk__in=...)
         # so the mock chain is: dish_om.select_for_update().filter() -> [locked_dish]
@@ -344,7 +344,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         first_order = _make_order()
         order_om.prefetch_related.return_value.filter.return_value.first.return_value = first_order
 
-        dish_om.filter.return_value.select_related.return_value = [dish]
+        dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         option_om.filter.return_value = []
         dish_om.select_for_update.return_value.filter.return_value = [locked_dish]
 
@@ -379,7 +379,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
         tx_mock.atomic.return_value.__enter__ = MagicMock(return_value=None)
         tx_mock.atomic.return_value.__exit__ = MagicMock(return_value=False)
 
-        dish_om.filter.return_value.select_related.return_value = [dish]
+        dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         # All dishes are now locked via select_for_update().filter(pk__in=...)
         dish_om.select_for_update.return_value.filter.return_value = [dish]
         option_om.filter.return_value = []
@@ -408,7 +408,7 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
 
         with patch("menu.views.Dish.objects") as dish_om, \
              patch("menu.views.DishOption.objects") as opt_om:
-            dish_om.filter.return_value.select_related.return_value = [burger]
+            dish_om.filter.return_value.select_related.return_value.prefetch_related.return_value = [burger]
             opt_om.filter.return_value.select_related.return_value = [bad_opt]
 
             resp = self._post(body={"items": [{"dish_slug": "burger", "qty": 1, "option_ids": [99]}]})

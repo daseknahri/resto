@@ -57,6 +57,7 @@ def _make_order(
         note="",
         is_ready=False,
         is_voided=False,
+        combo_components=[],
     )
     items_qs = MagicMock()
     items_qs.all.return_value = [item]

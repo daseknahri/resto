@@ -417,7 +417,7 @@ class CategoryViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             Category.objects.select_related("super_category")
-            .prefetch_related("dishes__options", "dishes__option_groups__options")
+            .prefetch_related("dishes__options", "dishes__option_groups__options", "dishes__combo_components__component")
             .all()
         )
         qs = _filter_by_reference(
@@ -446,7 +446,9 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
     permission_classes = [IsTenantEditorOrReadOnly]
 
     def get_queryset(self):
-        qs = Dish.objects.select_related("category", "category__super_category").prefetch_related("options", "option_groups__options").all()
+        qs = Dish.objects.select_related("category", "category__super_category").prefetch_related(
+            "options", "option_groups__options", "combo_components__component"
+        ).all()
         category_slug = self.request.query_params.get("category")
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
@@ -506,6 +508,34 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                 if getattr(exc, "detail", None):
                     raise
         serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete a dish. Returns 409 if the dish is a component of a combo
+        (ProtectedError from ComboComponent.component on_delete=PROTECT)."""
+        from django.db import ProtectedError
+        from django.db.models import RestrictedError
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except (ProtectedError, RestrictedError) as exc:
+            # Find the first combo that references this dish as a component
+            # so we can name it in the error.
+            instance = self.get_object()
+            combo_name = ""
+            try:
+                first_cc = instance.part_of_combos.select_related("dish").first()
+                if first_cc is not None:
+                    combo_name = first_cc.dish.name
+            except Exception:
+                pass
+            detail = (
+                f"Cannot delete '{instance.name}': it is a component of combo '{combo_name}'."
+                if combo_name
+                else f"Cannot delete '{instance.name}': it is used as a combo component."
+            )
+            return Response(
+                {"detail": detail, "code": "dish_is_combo_component"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class DishOptionViewSet(PublishAccessMixin, viewsets.ModelViewSet):
@@ -1906,7 +1936,7 @@ class PlaceOrderView(APIView):
         dishes_map = {d.slug: d for d in Dish.objects.filter(
             slug__in=slugs, is_published=True, is_available=True,
             category__is_published=True, category__is_temporarily_disabled=False,
-        ).select_related("category")}
+        ).select_related("category").prefetch_related("combo_components__component")}
 
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -1950,6 +1980,11 @@ class PlaceOrderView(APIView):
             qty = item_input["qty"]
             subtotal = unit_price * qty
             _food_subtotal += subtotal
+            # Build combo snapshot (per-unit qty, not pre-multiplied)
+            _combo_snapshot = [
+                {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
+                for cc in dish.combo_components.all()
+            ]
             order_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -1958,16 +1993,26 @@ class PlaceOrderView(APIView):
                 "note": item_input.get("note", ""),
                 "options": option_snapshots,
                 "subtotal": subtotal,
+                "combo_components": _combo_snapshot,
             })
 
-        # Collect dishes that track stock so we can decrement inside the transaction
+        # Collect dishes that track stock so we can decrement inside the transaction.
+        # Also collect combo-component stock updates (component.qty × ordered_qty per combo item).
         _stock_updates = []  # list of (dish_pk, ordered_qty)
         _pk_to_slug = {}
+        # combo component updates: list of (component_pk, total_qty_to_decrement, component_name)
+        _component_stock_updates = []
         for _item_d in order_items_data:
             _d = dishes_map[_item_d["dish_slug"]]
             _pk_to_slug[_d.pk] = _d.slug
             if _d.stock_qty is not None:
                 _stock_updates.append((_d.pk, _item_d["qty"]))
+            # Component stock: decrement each component by (component.qty × ordered_qty)
+            for _cc_snap in _item_d["combo_components"]:
+                _comp_total = _cc_snap["qty"] * _item_d["qty"]
+                _component_stock_updates.append(
+                    (_cc_snap["dish_id"], _comp_total, _cc_snap["name"])
+                )
 
         table_slug = (validated.get("table_slug") or "").strip()
         fulfillment_type = (validated.get("fulfillment_type") or "")
@@ -2238,8 +2283,8 @@ class PlaceOrderView(APIView):
 
         class _OutOfStock(Exception):
             """Raised inside the atomic block when a dish's stock is exhausted."""
-            def __init__(self, slug):
-                self.slug = slug
+            def __init__(self, slug_or_name):
+                self.slug = slug_or_name
 
         class _LoyaltyShort(Exception):
             """Raised inside the atomic block when the customer no longer has enough
@@ -2249,14 +2294,26 @@ class PlaceOrderView(APIView):
             with transaction.atomic():
                 # --- Stock check + decrement (before creating the order so a failed
                 #     stock check never leaves a dangling order row) ---
-                if _stock_updates:
+                # Lock combo-dish stock AND component stock in a single query so we
+                # can validate and decrement them atomically in the same block.
+                _all_stock_pks = [pk for pk, _ in _stock_updates]
+                _comp_pk_to_name = {}
+                _comp_stock_agg: dict[int, int] = {}  # component_pk → total qty to decrement
+                for _cpk, _cqty, _cname in _component_stock_updates:
+                    _comp_stock_agg[_cpk] = _comp_stock_agg.get(_cpk, 0) + _cqty
+                    _comp_pk_to_name[_cpk] = _cname
+                _all_stock_pks += [pk for pk in _comp_stock_agg if pk not in _all_stock_pks]
+
+                if _all_stock_pks:
                     _locked_dishes = {
                         d.pk: d
-                        for d in Dish.objects.select_for_update().filter(
-                            pk__in=[pk for pk, _ in _stock_updates]
-                        )
+                        for d in Dish.objects.select_for_update().filter(pk__in=_all_stock_pks)
                     }
-                    # Validate sufficient stock for every item in this order
+                else:
+                    _locked_dishes = {}
+
+                if _stock_updates:
+                    # Validate sufficient stock for every combo-dish in this order
                     for _dish_pk, _ordered_qty in _stock_updates:
                         _ld = _locked_dishes.get(_dish_pk)
                         if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
@@ -2272,6 +2329,21 @@ class PlaceOrderView(APIView):
                                 )
                             else:
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
+
+                # Component stock: validate then decrement each component
+                if _comp_stock_agg:
+                    for _cpk, _cqty in _comp_stock_agg.items():
+                        _ld = _locked_dishes.get(_cpk)
+                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
+                            raise _OutOfStock(_comp_pk_to_name.get(_cpk, ""))
+                    for _cpk, _cqty in _comp_stock_agg.items():
+                        _ld = _locked_dishes.get(_cpk)
+                        if _ld and _ld.stock_qty is not None:
+                            _cnew = max(0, _ld.stock_qty - _cqty)
+                            if _cnew == 0:
+                                Dish.objects.filter(pk=_cpk).update(stock_qty=0, is_available=False)
+                            else:
+                                Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
                 order_number = _generate_order_number()
                 # Attribute waiter-created orders to the staff member who took them. The
@@ -2530,6 +2602,7 @@ class CustomerOrderStatusView(APIView):
                 "options": item.options,
                 "note": item.note,
                 "is_voided": item.is_voided,
+                "combo_components": item.combo_components,
             }
             for item in order.items.all()
         ]
@@ -3173,6 +3246,7 @@ class StaffOrderListView(APIView):
                         "note": i.note,
                         "is_ready": i.is_ready,
                         "is_voided": i.is_voided,
+                        "combo_components": i.combo_components,
                     }
                     for i in order.items.all()
                 ],
@@ -3388,6 +3462,7 @@ def _staff_order_payload(order):
                 "note": i.note,
                 "is_ready": i.is_ready,
                 "is_voided": i.is_voided,
+                "combo_components": i.combo_components,
             }
             for i in order.items.all()
         ],
@@ -3516,7 +3591,7 @@ class StaffAppendOrderItemsView(APIView):
                 is_available=True,
                 category__is_published=True,
                 category__is_temporarily_disabled=False,
-            ).select_related("category")
+            ).select_related("category").prefetch_related("combo_components__component")
         }
         missing = [s for s in slugs if s not in dishes_map]
         if missing:
@@ -3533,6 +3608,8 @@ class StaffAppendOrderItemsView(APIView):
         new_items_data = []
         _stock_updates = []   # list of (dish_pk, qty)
         _pk_to_slug = {}
+        # combo component updates: list of (component_pk, total_qty_to_decrement, component_name)
+        _component_stock_updates = []
 
         for p in parsed:
             dish = dishes_map[p["slug"]]
@@ -3559,6 +3636,11 @@ class StaffAppendOrderItemsView(APIView):
                 )
             qty = p["qty"]
             subtotal = unit_price * qty
+            # Build combo snapshot (per-unit qty, not pre-multiplied)
+            _combo_snapshot = [
+                {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
+                for cc in dish.combo_components.all()
+            ]
             new_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -3568,10 +3650,17 @@ class StaffAppendOrderItemsView(APIView):
                 "options": option_snapshots,
                 "subtotal": subtotal,
                 "is_ready": False,
+                "combo_components": _combo_snapshot,
             })
             _pk_to_slug[dish.pk] = dish.slug
             if dish.stock_qty is not None:
                 _stock_updates.append((dish.pk, qty))
+            # Component stock: decrement each component by (component.qty × ordered_qty)
+            for _cc_snap in _combo_snapshot:
+                _comp_total = _cc_snap["qty"] * qty
+                _component_stock_updates.append(
+                    (_cc_snap["dish_id"], _comp_total, _cc_snap["name"])
+                )
 
         # ── Atomic: stock check + decrement + create items + recompute totals ─
         class _OutOfStock(Exception):
@@ -3583,20 +3672,29 @@ class StaffAppendOrderItemsView(APIView):
         # _stock_updates but must still be locked so a concurrent disable
         # (is_available=False) between the outer query and the insert is caught.
         _all_dish_pks = list(_pk_to_slug.keys())
+        # Aggregate component stock updates: component_pk → (total_qty, name)
+        _comp_pk_to_name: dict = {}
+        _comp_stock_agg: dict = {}
+        for _cpk, _cqty, _cname in _component_stock_updates:
+            _comp_stock_agg[_cpk] = _comp_stock_agg.get(_cpk, 0) + _cqty
+            _comp_pk_to_name[_cpk] = _cname
+        # Include component PKs in the lock set (skip any that are already combo dishes)
+        _all_lock_pks = list(_all_dish_pks) + [pk for pk in _comp_stock_agg if pk not in _all_dish_pks]
 
         try:
             with transaction.atomic():
-                # Lock ALL appended dishes so we can re-validate is_available and
-                # stock_qty atomically, regardless of whether they track stock.
+                # Lock ALL appended dishes + combo components so we can re-validate
+                # is_available and stock_qty atomically.
                 _locked = {
                     d.pk: d
-                    for d in Dish.objects.select_for_update().filter(pk__in=_all_dish_pks)
+                    for d in Dish.objects.select_for_update().filter(pk__in=_all_lock_pks)
                 }
 
                 # Re-validate availability under the lock (catches concurrent disables
                 # of unlimited-stock items that the outer query couldn't see).
-                for _dish_pk, _ld in _locked.items():
-                    if not _ld.is_available:
+                for _dish_pk in _all_dish_pks:
+                    _ld = _locked.get(_dish_pk)
+                    if _ld and not _ld.is_available:
                         raise _OutOfStock(_ld.name)
 
                 if _stock_updates:
@@ -3612,6 +3710,21 @@ class StaffAppendOrderItemsView(APIView):
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=0, is_available=False)
                             else:
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
+
+                # Component stock: validate then decrement
+                if _comp_stock_agg:
+                    for _cpk, _cqty in _comp_stock_agg.items():
+                        _ld = _locked.get(_cpk)
+                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _cqty:
+                            raise _OutOfStock(_comp_pk_to_name.get(_cpk, ""))
+                    for _cpk, _cqty in _comp_stock_agg.items():
+                        _ld = _locked.get(_cpk)
+                        if _ld and _ld.stock_qty is not None:
+                            _cnew = max(0, _ld.stock_qty - _cqty)
+                            if _cnew == 0:
+                                Dish.objects.filter(pk=_cpk).update(stock_qty=0, is_available=False)
+                            else:
+                                Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
                 for item_data in new_items_data:
                     OrderItem.objects.create(order=order, **item_data)
@@ -3708,16 +3821,41 @@ class StaffVoidOrderItemView(APIView):
             item.void_reason = reason
             item.save(update_fields=["is_voided", "voided_at", "void_reason"])
 
-            # Restock — same locked pattern as _restock_cancelled_order but per-item
+            # Restock — same locked pattern as _restock_cancelled_order but per-item.
+            # For combo items, also restock each component (component.qty × item.qty).
             from django.db.models import F as _F
+            _void_slugs_to_restock = []
             if item.dish_slug:
+                _void_slugs_to_restock.append((item.dish_slug, item.qty))
+            # Build component restock list from snapshot (component qty per unit × item.qty)
+            _void_component_pks: dict = {}  # pk → qty
+            if item.combo_components:
+                for _cc_snap in item.combo_components:
+                    _c_pk = _cc_snap.get("dish_id")
+                    _c_per_unit = int(_cc_snap.get("qty", 1))
+                    if _c_pk is not None and _c_per_unit > 0:
+                        _void_component_pks[_c_pk] = _void_component_pks.get(_c_pk, 0) + _c_per_unit * int(item.qty or 0)
+
+            if _void_slugs_to_restock:
                 _locked_list = list(
-                    Dish.objects.select_for_update().filter(slug=item.dish_slug)
+                    Dish.objects.select_for_update().filter(slug__in=[s for s, _ in _void_slugs_to_restock])
                 )
                 for _d in _locked_list:
-                    if _d.stock_qty is not None and item.qty > 0:
+                    _restock_qty = next((q for s, q in _void_slugs_to_restock if s == _d.slug), 0)
+                    if _d.stock_qty is not None and _restock_qty > 0:
                         Dish.objects.filter(pk=_d.pk).update(
-                            stock_qty=_F("stock_qty") + item.qty,
+                            stock_qty=_F("stock_qty") + _restock_qty,
+                            is_available=True,
+                        )
+            if _void_component_pks:
+                _locked_comps = list(
+                    Dish.objects.select_for_update().filter(pk__in=list(_void_component_pks.keys()))
+                )
+                for _cd in _locked_comps:
+                    _c_qty = _void_component_pks.get(_cd.pk, 0)
+                    if _cd.stock_qty is not None and _c_qty > 0:
+                        Dish.objects.filter(pk=_cd.pk).update(
+                            stock_qty=_F("stock_qty") + _c_qty,
                             is_available=True,
                         )
 
@@ -4469,6 +4607,7 @@ class OwnerOrderListView(APIView):
                         "options": i.options,
                         "note": i.note,
                         "is_voided": i.is_voided,
+                        "combo_components": i.combo_components,
                     }
                     for i in order.items.all()
                 ],
@@ -4606,6 +4745,7 @@ class OwnerOrderDetailView(APIView):
                     "options": i.options,
                     "note": i.note,
                     "is_voided": i.is_voided,
+                    "combo_components": i.combo_components,
                 }
                 for i in order.items.all()
             ],
@@ -4984,25 +5124,46 @@ def _reverse_loyalty_for_cancelled_order(order) -> None:
 def _restock_cancelled_order(order) -> None:
     """Return reserved stock to inventory when an order is cancelled. Only affects
     dishes that track stock (stock_qty is not None); re-enables a dish that had gone
-    sold-out. Best-effort. Called once per order (cancel is a one-way transition)."""
+    sold-out. For combo items, also restocks each component (per-unit qty × item.qty).
+    Best-effort. Called once per order (cancel is a one-way transition)."""
     from django.db import transaction as _dbtx
     from django.db.models import F as _F
     try:
         by_slug = {}
+        # component restock: pk → total qty to return
+        by_component_pk: dict = {}
         for it in order.items.all():
             if it.dish_slug:
                 by_slug[it.dish_slug] = by_slug.get(it.dish_slug, 0) + int(it.qty or 0)
-        if not by_slug:
+            # Combo component restock from the placement snapshot
+            if it.combo_components:
+                for _cc in it.combo_components:
+                    _c_pk = _cc.get("dish_id")
+                    _c_per_unit = int(_cc.get("qty", 1))
+                    _item_qty = int(it.qty or 0)
+                    if _c_pk is not None and _c_per_unit > 0 and _item_qty > 0:
+                        by_component_pk[_c_pk] = by_component_pk.get(_c_pk, 0) + _c_per_unit * _item_qty
+        if not by_slug and not by_component_pk:
             return
         with _dbtx.atomic():
-            locked = {
-                d.slug: d
-                for d in Dish.objects.select_for_update().filter(slug__in=list(by_slug.keys()))
-            }
-            for slug, qty in by_slug.items():
-                d = locked.get(slug)
-                if d is not None and d.stock_qty is not None and qty > 0:
-                    Dish.objects.filter(pk=d.pk).update(stock_qty=_F("stock_qty") + qty, is_available=True)
+            if by_slug:
+                locked = {
+                    d.slug: d
+                    for d in Dish.objects.select_for_update().filter(slug__in=list(by_slug.keys()))
+                }
+                for slug, qty in by_slug.items():
+                    d = locked.get(slug)
+                    if d is not None and d.stock_qty is not None and qty > 0:
+                        Dish.objects.filter(pk=d.pk).update(stock_qty=_F("stock_qty") + qty, is_available=True)
+            if by_component_pk:
+                locked_comps = {
+                    d.pk: d
+                    for d in Dish.objects.select_for_update().filter(pk__in=list(by_component_pk.keys()))
+                }
+                for cpk, cqty in by_component_pk.items():
+                    cd = locked_comps.get(cpk)
+                    if cd is not None and cd.stock_qty is not None and cqty > 0:
+                        Dish.objects.filter(pk=cd.pk).update(stock_qty=_F("stock_qty") + cqty, is_available=True)
     except Exception:
         pass  # restock is best-effort — never block a cancellation
 

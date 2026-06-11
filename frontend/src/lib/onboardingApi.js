@@ -272,6 +272,7 @@ export const dishApi = {
       is_published: dish.is_published ?? true,
       attributes: dish.attributes && typeof dish.attributes === 'object' ? dish.attributes : {},
       ...(dish.low_stock_threshold !== undefined && { low_stock_threshold: dish.low_stock_threshold }),
+      ...(Array.isArray(dish.combo_components) && { combo_components: dish.combo_components.map(c => ({ component_id: Number(c.component_id), qty: Math.max(1, Number(c.qty) || 1) })) }),
     };
     try {
       let result;
@@ -297,8 +298,12 @@ export const dishApi = {
     }
   },
   async remove(id) {
-    await api.delete(`/dishes/${id}/`);
-    bustCache(MENU_CACHE);
+    try {
+      await api.delete(`/dishes/${id}/`);
+      bustCache(MENU_CACHE);
+    } catch (err) {
+      throw asValidationError(err, translate("onboardingApi.saveDishFailed"));
+    }
   },
 };
 

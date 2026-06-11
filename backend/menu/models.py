@@ -133,6 +133,47 @@ class Dish(models.Model):
         return self.name
 
 
+class ComboComponent(models.Model):
+    """A fixed component of a combo dish.
+
+    A combo IS a Dish (price, category, image, stock_qty, i18n names all inherited)
+    that has one or more fixed component dishes (e.g. a burger + fries + drink combo).
+    "Choose your drink" style choices use the EXISTING OptionGroup/DishOption mechanism
+    on the combo dish itself — no per-component choice modelling is needed here.
+
+    Constraints:
+    - A component may NOT itself have combo_components (no nesting). Validated in the
+      serializer's validate_combo_components; the DB on_delete=PROTECT on the component FK
+      surfaces as a clear 409 "dish is part of combo X" if you try to delete a component dish.
+    - Max 8 components per combo (validated in DishSerializer).
+    """
+
+    dish = models.ForeignKey(
+        Dish,
+        on_delete=models.CASCADE,
+        related_name="combo_components",
+        help_text="The combo dish that owns this component.",
+    )
+    component = models.ForeignKey(
+        Dish,
+        on_delete=models.PROTECT,
+        related_name="part_of_combos",
+        help_text="The component dish included in this combo.",
+    )
+    qty = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="How many units of this component are included per combo ordered.",
+    )
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+        unique_together = ("dish", "component")
+
+    def __str__(self) -> str:
+        return f"{self.dish.name} → {self.component.name} ×{self.qty}"
+
+
 class OptionGroup(models.Model):
     dish = models.ForeignKey(Dish, on_delete=models.CASCADE, related_name="option_groups")
     name = models.CharField(max_length=150)
@@ -516,6 +557,20 @@ class OrderItem(models.Model):
     is_voided = models.BooleanField(default=False)
     voided_at = models.DateTimeField(null=True, blank=True)
     void_reason = models.CharField(max_length=120, blank=True)
+    # Combo snapshot — when the ordered dish is a combo, this captures the fixed
+    # components at placement time so receipt/kitchen views can render sub-lines
+    # even if the combo definition changes later. Empty list for non-combo dishes.
+    # Schema: [{dish_id, name, qty}] where qty is the per-unit component qty
+    # (not pre-multiplied by item.qty — restock math multiplies by item.qty).
+    combo_components = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Placement snapshot of combo components. "
+            "Each entry: {dish_id, name, qty} where qty is per-unit (×item.qty to get total). "
+            "Empty for non-combo dishes."
+        ),
+    )
 
     class Meta:
         ordering = ("id",)

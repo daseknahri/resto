@@ -1724,6 +1724,20 @@ const arabicMessages = {
     "attrUnit": "حجم العبوة / الوحدة",
     "attrUnitPlaceholder": "مثال: 500 غ، 1 ل، x6"
   },
+  "combos": {
+    "badge": "كومبو",
+    "builderToggle": "هذا كومبو / وجبة مشتركة",
+    "builderHint": "اختر العناصر المشمولة. للخيارات (مثل اختيار المشروب)، أضف مجموعة خيارات لهذا العنصر بدلاً من ذلك.",
+    "addComponent": "إضافة عنصر",
+    "componentQty": "الكمية",
+    "savings": "توفير {amount}",
+    "includes": "يشمل",
+    "unavailable": "غير متوفر مؤقتاً (أحد العناصر المشمولة نفد)",
+    "removeComponent": "إزالة",
+    "maxComponents": "حتى 8 عناصر.",
+    "nestingError": "لا يمكن أن يحتوي الكومبو على كومبو آخر.",
+    "protectedDelete": "هذا العنصر جزء من كومبو — أزله من الكومبو أولاً."
+  },
   "onboardingWizard": {
     "kicker": "الإعداد",
     "title": "أطلق قائمتك",

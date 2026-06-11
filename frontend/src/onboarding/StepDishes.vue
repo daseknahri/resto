@@ -115,6 +115,7 @@
                 <span class="font-semibold tabular-nums text-slate-300">{{ Number(dish.price || 0).toFixed(2) }}</span>
                 <span v-if="Array.isArray(dish.options) && dish.options.length">· {{ dish.options.length }} {{ t("stepDishes.variantsTitle") }}</span>
                 <span v-if="dish.option_groups?.length" class="text-sky-300">· {{ dish.option_groups.length }} {{ t("stepDishes.optionGroupsTitle") }}</span>
+                <span v-if="dish.combo_components?.length" class="rounded-full border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">{{ t("combos.badge") }}</span>
                 <span v-if="dish.attributes?.brand || dish.attributes?.unit" class="text-[11px] text-slate-500">· {{ [dish.attributes?.brand, dish.attributes?.unit].filter(Boolean).join(" · ") }}</span>
               </div>
             </button>
@@ -787,6 +788,86 @@
                   </div>
                 </div>
                 <p v-else class="text-xs text-slate-500">{{ t("stepDishes.noGroups") }}</p>
+              </div>
+
+              <!-- Combo builder -->
+              <div class="rounded-xl border border-violet-900/40 bg-violet-950/15 p-3 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-100">{{ t("combos.builderToggle") }}</p>
+                    <p class="text-xs text-slate-500">{{ t("combos.builderHint") }}</p>
+                  </div>
+                  <label class="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300 select-none">
+                    <input
+                      type="checkbox"
+                      :checked="editingDish.combo_components?.length > 0"
+                      class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500"
+                      @change="toggleComboMode(editingDish, $event.target.checked)"
+                    />
+                    {{ t("combos.badge") }}
+                  </label>
+                </div>
+
+                <template v-if="editingDish.combo_components?.length > 0">
+                  <!-- Savings hint -->
+                  <p v-if="comboSavings(editingDish) > 0" class="text-xs font-semibold text-emerald-400">
+                    {{ t("combos.savings", { amount: Number(comboSavings(editingDish)).toFixed(2) }) }}
+                  </p>
+
+                  <!-- Component rows -->
+                  <ul class="space-y-2">
+                    <li
+                      v-for="(comp, compIdx) in editingDish.combo_components"
+                      :key="compIdx"
+                      class="flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm"
+                    >
+                      <span class="min-w-0 flex-1 text-slate-200">{{ comp.name || comp.component_id }}</span>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <span class="text-[11px] text-slate-400">{{ t("combos.componentQty") }}</span>
+                        <input
+                          :value="comp.qty"
+                          type="number"
+                          min="1"
+                          max="9"
+                          step="1"
+                          class="ui-input w-14 border-slate-700 text-xs"
+                          :aria-label="t('combos.componentQty')"
+                          @change="comp.qty = Math.min(9, Math.max(1, parseInt($event.target.value, 10) || 1))"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        class="shrink-0 rounded-full border border-slate-700 px-2.5 py-1 text-xs text-red-300 hover:border-red-400/50"
+                        :aria-label="t('combos.removeComponent')"
+                        @click="removeComboComponent(editingDish, compIdx)"
+                      >
+                        {{ t("combos.removeComponent") }}
+                      </button>
+                    </li>
+                  </ul>
+
+                  <!-- Add component picker -->
+                  <div v-if="editingDish.combo_components.length < 8" class="flex flex-wrap items-center gap-2">
+                    <select
+                      v-model="comboPicker[editingDish.local_id]"
+                      class="ui-input flex-1 border-slate-700 text-sm"
+                      :aria-label="t('combos.addComponent')"
+                    >
+                      <option value="">{{ t("combos.addComponent") }}</option>
+                      <option
+                        v-for="d in availableComboComponents(editingDish)"
+                        :key="d.id"
+                        :value="String(d.id)"
+                      >{{ d.name }}</option>
+                    </select>
+                    <button
+                      type="button"
+                      class="ui-btn-outline px-3 py-2 text-xs"
+                      @click="addComboComponent(editingDish)"
+                    >{{ t("combos.addComponent") }}</button>
+                  </div>
+                  <p v-else class="text-[11px] text-slate-500">{{ t("combos.maxComponents") }}</p>
+                </template>
               </div>
 
               <p v-if="rowError(editingDish, 'image_url')" :id="`step-dishes-image-error-${editingDish.local_id}`" class="text-xs text-red-300" role="alert">{{ rowError(editingDish, "image_url") }}</p>
@@ -1743,6 +1824,16 @@ const WEEKDAYS = [
   { key: "fri" }, { key: "sat" }, { key: "sun" },
 ];
 
+const normalizeComboComponents = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map((c) => ({
+    component_id: Number(c.component_id),
+    name: String(c.name || ""),
+    qty: Math.max(1, Number(c.qty) || 1),
+    position: Number(c.position || 0),
+  }));
+};
+
 const normalize = (dish = {}) => ({
   id: dish.id,
   local_id: dish.id || crypto.randomUUID(),
@@ -1764,6 +1855,7 @@ const normalize = (dish = {}) => ({
   tags: Array.isArray(dish.tags) ? [...dish.tags] : [],
   allergens: Array.isArray(dish.allergens) ? [...dish.allergens] : [],
   attributes: dish.attributes && typeof dish.attributes === "object" ? { ...dish.attributes } : {},
+  combo_components: normalizeComboComponents(dish.combo_components),
 });
 
 const toggleDishAvailabilitySchedule = (dish, enabled) => {
@@ -2209,6 +2301,71 @@ const cloneDish = (localId) => {
   nextTick(() => openDishEditor(clone.local_id));
 };
 
+// ── Combo builder ─────────────────────────────────────────────────────────────
+const comboPicker = reactive({}); // localId -> selected component id string
+
+/** Dishes that are valid as combo components for the given dish (no combos, no self, has id) */
+const availableComboComponents = (dish) => {
+  const existingIds = new Set((dish.combo_components || []).map((c) => c.component_id));
+  return dishes.filter(
+    (d) =>
+      d.id &&
+      d.id !== dish.id &&
+      !existingIds.has(d.id) &&
+      (!Array.isArray(d.combo_components) || d.combo_components.length === 0)
+  );
+};
+
+/** Sum of component prices using the current loaded dish list */
+const comboComponentsTotal = (dish) => {
+  let total = 0;
+  for (const comp of dish.combo_components || []) {
+    const found = dishes.find((d) => d.id === comp.component_id);
+    if (found) total += Number(found.price || 0) * comp.qty;
+  }
+  return total;
+};
+
+/** How much the combo saves vs buying components individually */
+const comboSavings = (dish) => {
+  const componentTotal = comboComponentsTotal(dish);
+  const comboPrice = Number(dish.price || 0);
+  return componentTotal > comboPrice ? componentTotal - comboPrice : 0;
+};
+
+const toggleComboMode = (dish, enabled) => {
+  if (!dish) return;
+  if (!enabled) {
+    dish.combo_components = [];
+    delete comboPicker[dish.local_id];
+  } else {
+    if (!Array.isArray(dish.combo_components)) dish.combo_components = [];
+    comboPicker[dish.local_id] = "";
+  }
+};
+
+const addComboComponent = (dish) => {
+  const idStr = comboPicker[dish.local_id];
+  if (!idStr) return;
+  const id = Number(idStr);
+  const found = dishes.find((d) => d.id === id);
+  if (!found) return;
+  if (!Array.isArray(dish.combo_components)) dish.combo_components = [];
+  if (dish.combo_components.length >= 8) return;
+  if (found.combo_components?.length) {
+    toast.show(t("combos.nestingError"), "error");
+    return;
+  }
+  if (dish.combo_components.some((c) => c.component_id === id)) return;
+  dish.combo_components.push({ component_id: id, name: found.name, qty: 1, position: dish.combo_components.length });
+  comboPicker[dish.local_id] = "";
+};
+
+const removeComboComponent = (dish, idx) => {
+  if (!Array.isArray(dish.combo_components)) return;
+  dish.combo_components.splice(idx, 1);
+};
+
 const removeDishByLocalId = async (localId) => {
   const dish = dishes.find((d) => d.local_id === localId);
   const ok = await confirm({
@@ -2218,7 +2375,32 @@ const removeDishByLocalId = async (localId) => {
   });
   if (!ok) return;
   const index = dishes.findIndex((d) => d.local_id === localId);
-  if (index >= 0) await remove(index);
+  if (index < 0) return;
+  // If the dish has a backend id, attempt the delete first so we catch 409 early.
+  if (dish?.id) {
+    try {
+      await dishApi.remove(dish.id);
+    } catch (e) {
+      if (e?.status === 409 || e?.raw?.response?.status === 409) {
+        toast.show(t("combos.protectedDelete"), "error");
+        return;
+      }
+      toast.show(e?.message || t("common.saveFailed"), "error");
+      return;
+    }
+    // Remove from removedIds if it was queued (shouldn't be, but guard)
+    removedIds.value = removedIds.value.filter((id) => id !== dish.id);
+    dishes.splice(index, 1);
+    if (dish.category) renumberDishesForCategory(dish.category);
+    queueCleanup(dish.image_url || "");
+    delete rowErrors[dish.local_id];
+    delete uploadingRows[dish.local_id];
+    delete uploadProgressRows[dish.local_id];
+    delete draggingRows[dish.local_id];
+    if (String(dishEditorLocalId.value) === String(dish.local_id)) closeDishEditor();
+  } else {
+    await remove(index);
+  }
 };
 
 const clearImage = async (dish) => {
@@ -2336,7 +2518,15 @@ const saveAndNext = async () => {
       }
     }
     for (const id of removedIds.value) {
-      await dishApi.remove(id);
+      try {
+        await dishApi.remove(id);
+      } catch (e) {
+        if (e?.status === 409 || e?.raw?.response?.status === 409) {
+          toast.show(t("combos.protectedDelete"), "error");
+          continue;
+        }
+        throw e;
+      }
     }
     await flushPendingCleanup();
     removedIds.value = [];

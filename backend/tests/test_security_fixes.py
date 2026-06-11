@@ -204,9 +204,9 @@ class PlaceOrderRuntimeErrorTests(SimpleTestCase):
         dish.price.__str__ = lambda s: "10.00"
         dish.currency = "MAD"
         dish.stock_qty = None
-        # Make Dish.objects.filter(...).select_related("category") iterable → [dish]
+        # Make Dish.objects.filter(...).select_related("category").prefetch_related(...) iterable → [dish]
         filter_mock = MagicMock()
-        filter_mock.select_related.return_value = [dish]
+        filter_mock.select_related.return_value.prefetch_related.return_value = [dish]
         filter_mock.select_for_update.return_value = [dish]
         filter_mock.first.return_value = dish
         mock_dish_objects.filter.return_value = filter_mock

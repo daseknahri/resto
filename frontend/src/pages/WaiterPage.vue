@@ -379,6 +379,17 @@ class="min-w-0 flex-1 leading-snug"
                     <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
                   </button>
                 </li>
+                <!-- Combo sub-lines -->
+                <template v-if="item.combo_components?.length">
+                  <li
+                    v-for="comp in item.combo_components"
+                    :key="comp.dish_id"
+                    class="flex items-center gap-2 ps-6 py-0.5 text-[11px] text-slate-500"
+                  >
+                    <span aria-hidden="true">↳</span>
+                    <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
+                  </li>
+                </template>
               </ul>
               <!-- Notes row -->
               <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
@@ -544,6 +555,17 @@ class="min-w-0 flex-1 leading-snug"
                   <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true"><path d="M3.75 7.25a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
                 </button>
               </li>
+              <!-- Combo sub-lines -->
+              <template v-if="item.combo_components?.length">
+                <li
+                  v-for="comp in item.combo_components"
+                  :key="comp.dish_id"
+                  class="flex items-center gap-2 ps-6 py-0.5 text-[11px] text-slate-500"
+                >
+                  <span aria-hidden="true">↳</span>
+                  <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
+                </li>
+              </template>
             </ul>
             <!-- Notes row -->
             <div v-if="order.customer_note || order.owner_note" class="space-y-1 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">

@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Category, Dish, DishOption, OptionGroup, SuperCategory, TableLink
+from .models import Category, ComboComponent, Dish, DishOption, OptionGroup, SuperCategory, TableLink
 
 
 _LOCALE_RE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
@@ -272,6 +272,13 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
     allergens = serializers.JSONField(default=list, required=False)
     attributes = serializers.JSONField(default=dict, required=False)
     is_schedule_available = serializers.SerializerMethodField()
+    # Combo fields.
+    # Read: combo_components -> [{component_id, name, qty, position}] via SerializerMethodField.
+    # Write: combo_components key in payload is extracted in to_internal_value and stored in
+    #   validated_data["_combo_components_write"] so create/update can act on it.
+    combo_components = serializers.SerializerMethodField()
+    is_combo = serializers.SerializerMethodField()
+    combo_unavailable = serializers.SerializerMethodField()
 
     class Meta:
         model = Dish
@@ -302,6 +309,9 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "is_schedule_available",
             "options",
             "option_groups",
+            "is_combo",
+            "combo_unavailable",
+            "combo_components",
         ]
 
     def get_options(self, instance):
@@ -348,6 +358,137 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
                 pass
 
         return True
+
+    def get_combo_components(self, instance) -> list:
+        """Read shape: [{component_id, name, qty, position}].
+
+        Relies on combo_components being prefetched with select_related("component").
+        Call the queryset with .prefetch_related("combo_components__component") for
+        efficient reads.
+        """
+        try:
+            components = instance.combo_components.all()
+        except Exception:
+            return []
+        return [
+            {
+                "component_id": cc.component_id,
+                "name": cc.component.name,
+                "qty": cc.qty,
+                "position": cc.position,
+            }
+            for cc in components
+        ]
+
+    def get_is_combo(self, instance) -> bool:
+        """True when the dish has at least one combo component."""
+        try:
+            comps = instance.combo_components.all()
+            return len(comps) > 0
+        except Exception:
+            return False
+
+    def get_combo_unavailable(self, instance) -> bool:
+        """True when ANY component is unavailable (is_available=False) or has
+        finite stock that is zero. Cheap when combo_components__component is prefetched."""
+        try:
+            comps = instance.combo_components.all()
+            if not comps:
+                return False
+            for cc in comps:
+                comp = cc.component
+                if not comp.is_available:
+                    return True
+                if comp.stock_qty is not None and comp.stock_qty <= 0:
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def validate_combo_components(self, value):
+        """Write shape: [{component_id, qty}]. At most 8 components.
+
+        Validates:
+        - Each component_id references an existing, published Dish.
+        - No component is itself a combo (no nesting).
+        - No component is the dish itself (self-reference).
+        - Max 8 components.
+
+        This validator is called only when combo_components is present in the
+        write payload; it does NOT replace the DB set on its own — that happens
+        in update()/create().
+        """
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("combo_components must be a list.")
+        if len(value) > 8:
+            raise serializers.ValidationError("A combo may have at most 8 components.")
+
+        cleaned = []
+        seen_ids = set()
+        # Collect all referenced component_ids so we can fetch in one query.
+        component_ids = []
+        raw_entries = []
+        for idx, entry in enumerate(value):
+            if not isinstance(entry, dict):
+                raise serializers.ValidationError(f"combo_components[{idx}] must be an object.")
+            try:
+                component_id = int(entry["component_id"])
+            except (KeyError, TypeError, ValueError):
+                raise serializers.ValidationError(f"combo_components[{idx}].component_id is required and must be an integer.")
+            try:
+                qty = int(entry.get("qty", 1))
+                if qty < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"combo_components[{idx}].qty must be a positive integer.")
+            if component_id in seen_ids:
+                raise serializers.ValidationError(f"Duplicate component_id {component_id} in combo_components.")
+            seen_ids.add(component_id)
+            component_ids.append(component_id)
+            raw_entries.append({"component_id": component_id, "qty": qty})
+
+        if not component_ids:
+            return []
+
+        # Self-reference check (instance.pk is None on create — no self-ref possible)
+        instance = self.instance
+        if instance is not None and instance.pk in seen_ids:
+            raise serializers.ValidationError("A dish cannot be a component of itself.")
+
+        # Reverse-nesting check: a dish that is already a component of another
+        # combo may not become a combo itself (would nest retroactively — the
+        # forward check below only blocks adding an existing combo AS a component).
+        if instance is not None and instance.pk is not None:
+            try:
+                first_parent = instance.part_of_combos.select_related("dish").first()
+            except Exception:
+                first_parent = None
+            if first_parent is not None:
+                raise serializers.ValidationError(
+                    f"This dish is a component of combo '{first_parent.dish.name}'. "
+                    "A component cannot itself become a combo (nested combos are not allowed)."
+                )
+
+        # Fetch all referenced dishes in one query
+        dishes = {d.pk: d for d in Dish.objects.filter(pk__in=component_ids).prefetch_related("combo_components")}
+
+        for entry in raw_entries:
+            cid = entry["component_id"]
+            if cid not in dishes:
+                raise serializers.ValidationError(f"Component dish id={cid} does not exist.")
+            comp = dishes[cid]
+            if not comp.is_published:
+                raise serializers.ValidationError(f"Component '{comp.name}' (id={cid}) is not published.")
+            # No nesting — component must not itself be a combo
+            if comp.combo_components.exists():
+                raise serializers.ValidationError(
+                    f"Component '{comp.name}' (id={cid}) is itself a combo. Nested combos are not allowed."
+                )
+            cleaned.append(entry)
+
+        return cleaned
 
     def validate_name(self, value):
         cleaned = (value or "").strip()
@@ -462,6 +603,49 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
         if super_category is None:
             return ""
         return self._localized_text(super_category.name, super_category.name_i18n)
+
+    def to_internal_value(self, data):
+        """Extract combo_components from the write payload before standard field
+        validation so we can validate it ourselves and pass it to create/update."""
+        # Pop before DRF processes fields (combo_components is a read-only
+        # SerializerMethodField so DRF ignores it in writes by default).
+        raw_combo = data.get("combo_components")  # may be absent
+        result = super().to_internal_value(data)
+        if "combo_components" in data:
+            # validate_combo_components handles all validation; store in private key.
+            validated = self.validate_combo_components(raw_combo)
+            result["_combo_components_write"] = validated
+        return result
+
+    def _apply_combo_components(self, instance, entries: list):
+        """Replace the combo_components set for this dish with the given validated entries.
+
+        entries: [{component_id, qty}] — from validated_data["_combo_components_write"].
+        Runs in whatever transaction the caller is in.
+        """
+        # Delete existing set, then bulk-create the new one.
+        instance.combo_components.all().delete()
+        for position, entry in enumerate(entries):
+            ComboComponent.objects.create(
+                dish=instance,
+                component_id=entry["component_id"],
+                qty=entry["qty"],
+                position=position,
+            )
+
+    def create(self, validated_data):
+        combo_entries = validated_data.pop("_combo_components_write", None)
+        instance = super().create(validated_data)
+        if combo_entries is not None:
+            self._apply_combo_components(instance, combo_entries)
+        return instance
+
+    def update(self, instance, validated_data):
+        combo_entries = validated_data.pop("_combo_components_write", None)
+        instance = super().update(instance, validated_data)
+        if combo_entries is not None:
+            self._apply_combo_components(instance, combo_entries)
+        return instance
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

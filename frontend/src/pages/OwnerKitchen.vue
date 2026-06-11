@@ -247,6 +247,17 @@
               <span class="kitchen-name font-medium py-2">{{ item.dish_name }}</span>
               <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
             </template>
+            <!-- Combo sub-lines -->
+            <template v-if="item.combo_components?.length">
+              <div
+                v-for="comp in item.combo_components"
+                :key="comp.dish_id"
+                class="flex items-baseline gap-1.5 ps-6 py-0.5 text-[11px] text-slate-500"
+              >
+                <span aria-hidden="true">↳</span>
+                <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
+              </div>
+            </template>
           </li>
         </ul>
 

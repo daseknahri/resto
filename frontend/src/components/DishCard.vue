@@ -38,6 +38,7 @@
           class="ui-chip-strong tabular-nums"
           style="color:var(--color-secondary); background: rgba(245,158,11,0.10)"
         >{{ formatPrice(dish.price) }}</span>
+        <span v-if="dish.is_combo" class="rounded-full border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300">{{ t('combos.badge') }}</span>
         <span
           v-for="tag in (dish.tags || []).slice(0, 2)"
           :key="tag"
@@ -52,6 +53,11 @@
           class="rounded-full border border-slate-700/40 px-1.5 py-0.5 text-[10px] text-slate-500"
         >{{ t('dishPage.customisable') }}</span>
       </div>
+      <!-- Combo includes line -->
+      <p
+        v-if="dish.is_combo && dish.combo_components?.length"
+        class="truncate text-[11px] leading-tight text-slate-500 mt-0.5"
+      >{{ t('combos.includes') }}: {{ dish.combo_components.map(c => `${c.name} ×${c.qty}`).join(', ') }}</p>
       <!-- Allergen micro-line (up to 3, then +N) -->
       <p
         v-if="dish.allergens?.length"
@@ -321,7 +327,7 @@ const tagBadgeClass = (tag) =>
   TAG_COLOURS[tag] ?? 'border-slate-700/50 bg-slate-900/60 text-slate-400'
 
 // ── Availability states ─────────────────────────────────────────────────────
-const isSoldOut          = computed(() => props.dish.is_available === false)
+const isSoldOut          = computed(() => props.dish.is_available === false || props.dish.combo_unavailable === true)
 const isScheduleUnavailable = computed(() => props.dish.is_schedule_available === false)
 
 /** True when the customer can actually add this item */

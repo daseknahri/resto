@@ -148,7 +148,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         req.user = owner
         # Will fail at serializer/dish stage — not at the closed check
         with patch("menu.views.Dish.objects") as dish_mock:
-            dish_mock.filter.return_value.select_related.return_value = []
+            dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = []
             resp = self.view(req)
         # Should NOT be 409 (closed) — should be 400 (items unavailable) or similar
         self.assertNotEqual(resp.status_code, status.HTTP_409_CONFLICT)
@@ -161,7 +161,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """Delivery without a session customer should return 403 auth_required."""
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         payload = {
             "items": [{"slug": "burger", "qty": 1}],
@@ -182,7 +182,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """Delivery with an unverified customer returns 403 not_verified."""
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         customer = MagicMock()
         customer.phone_verified = False
@@ -225,7 +225,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """PlaceOrderView must return 400 table_unavailable for an inactive/missing table slug."""
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         table_mock.filter.return_value.first.return_value = None  # table not found
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "table_slug": "table-99"}
@@ -245,7 +245,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
         table = SimpleNamespace(label="Table 5", slug="table-5")
         table_mock.filter.return_value.first.return_value = table
 
@@ -286,7 +286,7 @@ class PlaceOrderViewTests(SimpleTestCase):
     @patch("menu.views.Profile.objects")
     def test_rejects_unavailable_items(self, profile_mock, dish_mock):
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = []  # none found
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = []  # none found
 
         req = self._post()
         with patch("menu.views.DishOption.objects") as opt_mock:
@@ -303,7 +303,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """Delivery with a verified customer but no phone should return 403 phone_required."""
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         # Verified via email but no phone number set
         customer = MagicMock()
@@ -336,7 +336,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
         dish = _dish()
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         customer = MagicMock()
         customer.phone_verified = True
@@ -393,7 +393,7 @@ class PlaceOrderViewTests(SimpleTestCase):
 
         # Dish has 1 unit remaining; customer orders 2
         dish = _dish(stock_qty=1)
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         # The locked row (select_for_update) reflects the same stock
         locked_dish = MagicMock()
@@ -433,7 +433,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """A pay-now (pickup) order with no session customer is rejected up front."""
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish()]
 
         payload = {"items": [{"slug": "burger", "qty": 1}], "fulfillment_type": "pickup"}
         req = self._post(data=payload)  # no session customer
@@ -452,7 +452,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """A pay-now order whose wallet can't cover the total is rejected (wallet_insufficient)."""
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = [_dish(price="10.00")]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish(price="10.00")]
 
         customer = MagicMock()
         customer.wallet_balance = Decimal("3.00")  # < 10.00 total
@@ -478,7 +478,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         from accounts.models import User
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish()]
 
         staff = MagicMock()
         staff.is_authenticated = True
@@ -521,7 +521,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         wallet prepayment (created unpaid, settled later)."""
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = [_dish()]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish()]
 
         customer = MagicMock()
         customer.wallet_balance = "0"  # no wallet funds, but COD-eligible
@@ -562,7 +562,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         """Choosing cash when NOT COD-eligible falls back to the wallet requirement."""
         promo_mock.filter.return_value = []
         profile_mock.filter.return_value.first.return_value = _profile()
-        dish_mock.filter.return_value.select_related.return_value = [_dish(price="10.00")]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [_dish(price="10.00")]
 
         customer = MagicMock()
         customer.wallet_balance = Decimal("2.00")  # < 10.00 total, not COD-eligible
@@ -590,7 +590,7 @@ class PlaceOrderViewTests(SimpleTestCase):
 
         # Dish has 5 units; customer orders 2 — should succeed
         dish = _dish(stock_qty=5)
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         locked_dish = MagicMock()
         locked_dish.pk = dish.pk
@@ -635,7 +635,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         profile_mock.filter.return_value.first.return_value = _profile()
 
         dish = _dish(stock_qty=1)
-        dish_mock.filter.return_value.select_related.return_value = [dish]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [dish]
 
         # Stock was 1, but we're ordering 1 — this is fine; stock would hit 0 and auto-disable.
         # Only reject if ordered qty EXCEEDS available stock.
@@ -680,7 +680,7 @@ class PlaceOrderViewTests(SimpleTestCase):
         profile_mock.filter.return_value.first.return_value = _profile()
 
         burger = _dish(slug="burger")
-        dish_mock.filter.return_value.select_related.return_value = [burger]
+        dish_mock.filter.return_value.select_related.return_value.prefetch_related.return_value = [burger]
 
         # option 77 belongs to "sushi", not "burger"
         bad_opt = MagicMock()

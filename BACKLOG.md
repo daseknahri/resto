@@ -18,7 +18,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       Source: R5 review follow-on thought.
 - [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but
       earned points aren't clawed back per-item. Documented MVP in R2 view docstring.
-- [ ] **Combos / meal deals** (bundle pricing) — audit growth item, not in top-8.
 - [ ] **Happy-hour / time-based pricing** — availability_schedule exists per dish;
       price scheduling does not. Audit growth item.
 - [ ] **Win-back automation** — auto-nudge customers inactive N weeks (the
@@ -30,6 +29,14 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **Course sequencing** (fire starters before mains) — audit service-flow item,
       below top-8 cut.
 
+- [ ] **Void/cancel restock lock merge** — StaffVoidOrderItemView + _restock_cancelled_order
+      each issue two sequential select_for_update queries (combo dish by slug, components
+      by pk) inside one atomic block; placement/append use a single merged query. Merge
+      into one Q(slug__in)|Q(pk__in) lock to be fully deadlock-safe. Low practical risk
+      (components can't be combos; void slug set is size 1). Source: combos review minor.
+- [ ] **DishViewSet.destroy double-fetch on ProtectedError path** — get_object() called
+      again in the except block; could use exc.protected_objects instead. Cosmetic.
+      Source: combos review minor.
 - [ ] **revenue.py order_ids materialization** — split helper pulls all period order
       PKs into Python; switch to a subquery join for 90-day windows on busy tenants.
       Source: rev/stock review minor.
@@ -78,6 +85,12 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Combos / meal deals: ComboComponent (CASCADE/PROTECT, max 8, no nesting either
+      direction), OrderItem.combo_components placement snapshot, all-or-nothing component
+      stock decrement in tenant + marketplace checkout + staff append (single merged lock),
+      snapshot-based restock on void + cancel, combo_unavailable + delete→409, builder in
+      StepDishes, customer badge/Includes/savings chip, kitchen/waiter/receipt sub-lines,
+      EN/FR/AR — combos commit.
 - [x] Receipt shows split payments (ledger lines + paid/remaining on thermal) — sweep-1.
 - [x] Strict stale_options 400 in checkout + append (incl. cross-dish ids; cart toast) — sweep-1.
 - [x] Per-intent settle idempotency key (minted at chooser open, cleared on success incl. charge-sheet path) — sweep-1.

@@ -606,6 +606,17 @@
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}
               </p>
               <p v-if="item.note" class="italic text-slate-400">{{ item.note }}</p>
+              <!-- Combo sub-lines -->
+              <ul v-if="item.combo_components?.length" class="mt-0.5 space-y-0">
+                <li
+                  v-for="comp in item.combo_components"
+                  :key="comp.dish_id"
+                  class="flex items-center gap-1.5 text-[11px] text-slate-500"
+                >
+                  <span aria-hidden="true">↳</span>
+                  <span>{{ comp.name }} ×{{ comp.qty * item.qty }}</span>
+                </li>
+              </ul>
             </div>
             <p class="shrink-0 font-semibold tabular-nums" :class="item.is_voided ? 'line-through text-slate-500' : 'text-slate-200'">{{ formatCurrency(item.subtotal, o.currency) }}</p>
           </div>
