@@ -119,7 +119,7 @@ R3: WhatsApp/OG link previews — served HTML has zero og: tags (bots get a blan
   shell). Bot-serving branch (nginx UA detection -> Django OG view per tenant menu).
 R4: SPLIT-BILL by amount (partial settle ledger) — deliberately separated from R2;
   needs a payment-records model, not a flag. Plus any audit re-run findings.
-R5: Final pass — full-journey adversarial review + manual smoke checklist + tag
+R5 ✅ (2026-06-11): Final pass — full-journey adversarial review + manual smoke checklist + tag
   restaurant v1.0 complete; then production deploy + real-tenant onboarding.
 Token discipline: Sonnet workers, 1 backend + 1 frontend agent per batch, single
 focused reviewer, fix-loop max 1.

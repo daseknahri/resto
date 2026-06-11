@@ -145,6 +145,10 @@ class StaffAppendOrderItemsViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffAppendOrderItemsView.as_view()
+        # Patch _can_access_order so unit tests don't hit the DB for section lookups.
+        _patcher = patch("menu.views._can_access_order", return_value=True)
+        self._access_mock = _patcher.start()
+        self.addCleanup(_patcher.stop)
 
     def _post(self, order_id=10, body=None, user=None):
         body = body or {"items": [{"dish_slug": "burger", "qty": 1}]}
@@ -397,6 +401,10 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffVoidOrderItemView.as_view()
+        # Patch _can_access_order so unit tests don't hit the DB for section lookups.
+        _patcher = patch("menu.views._can_access_order", return_value=True)
+        self._access_mock = _patcher.start()
+        self.addCleanup(_patcher.stop)
 
     def _post(self, order_id=10, item_id=901, body=None, user=None):
         body = body or {}

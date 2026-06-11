@@ -2943,6 +2943,43 @@ def _can_edit_tenant_order(request) -> bool:
             and user.effective_perm_manage_orders())
 
 
+def _can_access_order(request, order) -> bool:
+    """Check that a waiter is allowed to mutate *order*.
+
+    Owners (and superusers) may access any order. Staff are restricted to orders
+    whose table belongs to one of their assigned sections — exactly the same
+    rule applied by StaffOrderListView's hard section filter.
+
+    Non-table orders (pickup / delivery) are shared: any waiter may handle them.
+    Tables that have no assigned section server are also unowned and accessible
+    to all waiters (pre-section behaviour).
+    """
+    if _is_tenant_owner(request):
+        return True
+    if order.fulfillment_type != Order.FulfillmentType.TABLE:
+        return True  # pickup/delivery are shared
+    if not order.table_slug:
+        return True  # no table → not a section table
+
+    uid = getattr(request.user, "id", None)
+    my_section_ids = list(
+        SectionServer.objects.filter(user_id=uid).values_list("section_id", flat=True)
+    )
+    my_slugs = set(
+        TableLink.objects.filter(section_id__in=my_section_ids).values_list("slug", flat=True)
+    ) if my_section_ids else set()
+    claimed_slugs = set(
+        TableLink.objects.filter(
+            section_id__in=SectionServer.objects.values_list("section_id", flat=True)
+        ).values_list("slug", flat=True)
+    )
+    if not claimed_slugs:
+        return True  # floor not yet divided — any waiter can see everything
+    if order.table_slug not in claimed_slugs:
+        return True  # orphan table (no server assigned) — shared
+    return order.table_slug in my_slugs
+
+
 def _can_view_revenue(request) -> bool:
     """Owner, or staff with the 'view revenue' permission, on this tenant."""
     user = getattr(request, "user", None)
@@ -3246,6 +3283,12 @@ class StaffOrderItemReadyView(APIView):
         item = OrderItem.objects.select_related("order").filter(id=item_id).first()
         if item is None:
             return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        if not _can_access_order(request, item.order):
+            return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                            status=status.HTTP_403_FORBIDDEN)
+        if item.is_voided:
+            return Response({"detail": "Voided items cannot be marked ready.", "code": "item_voided"},
+                            status=status.HTTP_409_CONFLICT)
         _raw = request.data.get("ready", True)
         ready = _raw.strip().lower() in ("1", "true", "yes") if isinstance(_raw, str) else bool(_raw)
         item.is_ready = ready
@@ -3392,6 +3435,10 @@ class StaffAppendOrderItemsView(APIView):
         order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_access_order(request, order):
+            return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                            status=status.HTTP_403_FORBIDDEN)
 
         # ── Guards ────────────────────────────────────────────────────────────
         if order.fulfillment_type != Order.FulfillmentType.TABLE:
@@ -3601,6 +3648,10 @@ class StaffVoidOrderItemView(APIView):
         if order is None:
             return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
+        if not _can_access_order(request, order):
+            return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                            status=status.HTTP_403_FORBIDDEN)
+
         # Item must belong to this order
         item = order.items.filter(pk=item_id).first()
         if item is None:
@@ -3647,29 +3698,51 @@ class StaffVoidOrderItemView(APIView):
             order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
             _recompute_order_totals(order)
 
-            # Partial wallet refund (PAID + wallet_amount_paid > 0 only).
+            # Partial wallet refund — two cases:
+            #   A. PAID order: refund min(line_total, wallet_amount_paid); status stays PAID.
+            #   B. UNPAID order with wallet_amount_paid > new total (split-bill overpayment):
+            #      refund the overpay and flip the order to PAID so the payment flow
+            #      doesn't get stuck (ledger now fully covers the reduced total).
             # We save the order BEFORE calling credit_wallet so that the
             # wallet_amount_paid decrement and the wallet credit are atomic with
             # respect to failures: if order.save() raises, credit_wallet is never
             # called; if credit_wallet raises, the outer transaction rolls back
             # order.save() via savepoint (fixing the non-atomicity risk).
             _refunded = Decimal("0")
-            if (
-                order.payment_status == Order.PaymentStatus.PAID
-                and Decimal(str(order.wallet_amount_paid or "0")) > Decimal("0")
-                and order.customer_id
-            ):
+            _extra_save_fields: list = []
+            wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+            new_total = Decimal(str(order.total or "0"))
+            if order.payment_status == Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
+                # Case A — PAID order void
                 line_total = Decimal(str(item.subtotal))
-                wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
                 refund_amount = min(line_total, wallet_paid)
                 if refund_amount > Decimal("0"):
                     _refunded = refund_amount
                     order.wallet_amount_paid = wallet_paid - _refunded
+            elif order.payment_status != Order.PaymentStatus.PAID and wallet_paid > Decimal("0") and order.customer_id:
+                # Case B — UNPAID order: check if the ledger-plus-wallet now covers the
+                # reduced total and / or if wallet overpays the new total.
+                from menu.models import OrderPayment as _OP
+                ledger_paid = sum(
+                    (Decimal(str(p.amount)) for p in order.payments.all()), Decimal("0")
+                )
+                total_collected = ledger_paid  # wallet debits are in WalletTransaction, not OrderPayment
+                # Overpayment = how much wallet_amount_paid exceeds the new total after void
+                overpay = max(Decimal("0"), wallet_paid - new_total)
+                if overpay > Decimal("0"):
+                    _refunded = overpay
+                    order.wallet_amount_paid = wallet_paid - _refunded
+                # Flip to PAID if total collected via ledger (cash+wallet OrderPayment rows)
+                # plus remaining wallet_amount_paid now covers the new total.
+                remaining_wallet = wallet_paid - _refunded
+                if ledger_paid + remaining_wallet >= new_total:
+                    order.mark_paid(save=False)
+                    _extra_save_fields = ["payment_status", "paid_at"]
 
             # Persist total update and (conditionally) wallet_amount_paid before
             # issuing any wallet credit so the DB is consistent if credit_wallet fails.
             _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
-            order.save(update_fields=["total", "updated_at"] + _wallet_fields)
+            order.save(update_fields=["total", "updated_at"] + _wallet_fields + _extra_save_fields)
 
             if _refunded > Decimal("0"):
                 from accounts.wallet_service import credit_wallet
@@ -3797,6 +3870,9 @@ class StaffOrderPaymentView(APIView):
                     )
 
                 # ── Guards ────────────────────────────────────────────────────
+                if not _can_access_order(request, order):
+                    return Response({"detail": "Access denied — not your section.", "code": "section_denied"},
+                                    status=status.HTTP_403_FORBIDDEN)
                 if order.status in self._TERMINAL_STATUSES:
                     return Response(
                         {"detail": "Order is in a terminal state.", "code": "bad_status"},
@@ -4808,10 +4884,13 @@ def _refund_wallet_for_cancelled_order(order) -> None:
         return
 
     def _already_refunded():
+        # Scope to the cancel-refund note so void-item REFUND rows (which share
+        # the same type + reference) don't falsely short-circuit the cancel refund.
         return _WTM.objects.filter(
             customer_id=order.customer_id,
             type=_WTM.Type.REFUND,
             reference=order.order_number,
+            note="Refund for cancelled order",
         ).exists()
 
     # Fast path: skip locking when a refund already exists (the common replay case).
@@ -4968,7 +5047,47 @@ class OwnerOrderStatusUpdateView(APIView):
             except (TypeError, ValueError):
                 order.estimated_ready_minutes = None
 
-        order.save(update_fields=update_fields)
+        # For the cancel transition: re-fetch under a row lock and wrap the save +
+        # side-effects atomically so (a) a concurrent void can't race wallet_amount_paid,
+        # and (b) a refund failure rolls back the status-to-CANCELLED update instead of
+        # silently leaving the order cancelled with no wallet credit.
+        if new_status == Order.Status.CANCELLED:
+            from django.db import transaction as _cancel_tx
+            with _cancel_tx.atomic():
+                # Re-read with lock to get the latest wallet_amount_paid (concurrent
+                # StaffVoidOrderItemView may have decremented it between our initial
+                # select_related load above and now).
+                order = Order.objects.select_for_update().select_related("customer").get(pk=order_id)
+                order.status = new_status
+                order.status_updated_at = timezone.now()
+                if not order.handled_by_user_id:
+                    _uid = getattr(request.user, "id", None)
+                    if _uid:
+                        order.handled_by_user_id = _uid
+                        if "handled_by_user_id" not in update_fields:
+                            update_fields.append("handled_by_user_id")
+                if owner_note is not None:
+                    order.owner_note = str(owner_note).strip()[:500]
+                if estimated_ready_minutes is not None:
+                    try:
+                        mins = int(estimated_ready_minutes)
+                        order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
+                    except (TypeError, ValueError):
+                        order.estimated_ready_minutes = None
+                order.save(update_fields=update_fields)
+                _refund_wallet_for_cancelled_order(order)
+                _reverse_loyalty_for_cancelled_order(order)
+                _restock_cancelled_order(order)
+            # Stand down any assigned delivery driver (public-schema job; best-effort).
+            try:
+                from accounts.delivery_service import cancel_delivery_job_for_order
+                _ct = getattr(request, "tenant", None)
+                if _ct:
+                    cancel_delivery_job_for_order(_ct.id, order.order_number)
+            except Exception:
+                pass
+        else:
+            order.save(update_fields=update_fields)
 
         # Mirror the prep ETA onto the platform delivery job so the assigned/searching
         # driver knows when the food will be ready (pre-dispatch timing). Best-effort.
@@ -5002,23 +5121,6 @@ class OwnerOrderStatusUpdateView(APIView):
         except Exception:
             pass
 
-        # Auto-refund wallet credits + return reserved stock when an order is cancelled
-        if new_status == Order.Status.CANCELLED:
-            try:
-                _refund_wallet_for_cancelled_order(order)
-                _reverse_loyalty_for_cancelled_order(order)
-                _restock_cancelled_order(order)
-            except Exception:
-                pass  # Non-fatal — refund/restock failure must not block the status update response
-            # Stand down any assigned delivery driver (public-schema job; best-effort).
-            try:
-                from accounts.delivery_service import cancel_delivery_job_for_order
-                _ct = getattr(request, "tenant", None)
-                if _ct:
-                    cancel_delivery_job_for_order(_ct.id, order.order_number)
-            except Exception:
-                pass
-
         tenant = getattr(request, "tenant", None)
         if new_status in {Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY, Order.Status.OUT_FOR_DELIVERY, Order.Status.CANCELLED}:
             if tenant:
@@ -5040,7 +5142,22 @@ class OwnerOrderStatusUpdateView(APIView):
                         order.order_number, getattr(tenant, "id", None),
                     )
 
-        return Response({
+        # Warn when cancelling an order that had cash payments collected — staff
+        # must return the money manually; the system cannot do this automatically.
+        cash_collected = None
+        if new_status == Order.Status.CANCELLED:
+            try:
+                from menu.models import OrderPayment as _OP
+                _cash_total = sum(
+                    Decimal(str(p.amount))
+                    for p in _OP.objects.filter(order_id=order.id, method="cash")
+                )
+                if _cash_total > Decimal("0"):
+                    cash_collected = str(_cash_total)
+            except Exception:
+                pass
+
+        resp = {
             "id": order.id,
             "order_number": order.order_number,
             "status": order.status,
@@ -5048,7 +5165,10 @@ class OwnerOrderStatusUpdateView(APIView):
             "estimated_ready_minutes": order.estimated_ready_minutes,
             "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
             "payment_status": order.payment_status,
-        })
+        }
+        if cash_collected is not None:
+            resp["cash_collected"] = cash_collected
+        return Response(resp)
 
 
 class OwnerOrderBulkStatusView(APIView):

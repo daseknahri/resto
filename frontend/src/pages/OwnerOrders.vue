@@ -1130,8 +1130,16 @@ const updateStatus = async (o, newStatus) => {
     if (!ok) return;
   }
   try {
-    await order.updateOrderStatus(o.id, { status: newStatus });
+    const result = await order.updateOrderStatus(o.id, { status: newStatus });
     toast.show(t("ownerOrders.updated"), "success");
+    // Warn the owner if cash was already collected — they must return it manually.
+    if (newStatus === "cancelled" && result?.cash_collected) {
+      toast.show(
+        t("ownerOrders.cancelCashWarning", { amount: result.cash_collected }),
+        "warning",
+        8000,
+      );
+    }
     // After confirming, immediately open the note/ETA panel so the owner can
     // set an estimated ready time in the same action without a second click.
     if (newStatus === "confirmed") {

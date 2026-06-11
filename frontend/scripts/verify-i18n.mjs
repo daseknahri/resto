@@ -22,8 +22,12 @@ const flattenLocale = (locale) => Object.fromEntries(flatten(locale));
 
 const english = flattenLocale(messages.en);
 const arabic = flattenLocale(messages.ar);
+const french = flattenLocale(messages.fr);
 
 const missingArabic = Object.keys(english).filter((key) => !(key in arabic));
+// French has NO merge-fallback (unlike Arabic, which is overlaid onto a clone of
+// EN) — a missing FR key renders as a raw key token in the UI, so it must fail.
+const missingFrench = Object.keys(english).filter((key) => !(key in french));
 const brokenArabic = Object.entries(arabic).filter(
   ([, value]) =>
     typeof value === "string" &&
@@ -48,6 +52,11 @@ const sourceIssues = sourceFiles.flatMap((filePath) => {
   return issues;
 });
 
+console.log(`French missing keys: ${missingFrench.length}`);
+if (missingFrench.length) {
+  console.log("Missing French keys:");
+  missingFrench.slice(0, 50).forEach((key) => console.log(`- ${key}`));
+}
 console.log(`Arabic missing keys: ${missingArabic.length}`);
 console.log(`Arabic broken strings: ${brokenArabic.length}`);
 console.log(`Arabic source issues: ${sourceIssues.length}`);
@@ -67,8 +76,8 @@ if (sourceIssues.length) {
   sourceIssues.slice(0, 50).forEach((issue) => console.log(`- ${issue}`));
 }
 
-if (missingArabic.length || brokenArabic.length || sourceIssues.length) {
+if (missingArabic.length || missingFrench.length || brokenArabic.length || sourceIssues.length) {
   process.exitCode = 1;
 } else {
-  console.log("Arabic locale verification passed.");
+  console.log("Locale verification passed (FR complete, AR complete).");
 }

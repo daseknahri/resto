@@ -24,6 +24,7 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         item = MagicMock()
         item.id = kw.get("id", 11)
         item.is_ready = kw.get("is_ready", False)
+        item.is_voided = kw.get("is_voided", False)
         item.ready_at = kw.get("ready_at", None)
         item.order = MagicMock()
         item.save = MagicMock()
@@ -49,18 +50,20 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         resp = self.view(self._patch(), item_id=11)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_unknown_item_404(self, objects_mock, _gate):
+    def test_unknown_item_404(self, objects_mock, _gate, _access):
         self._set(objects_mock, None)
         resp = self.view(self._patch(), item_id=999)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
 
     @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_mark_ready_default_true(self, objects_mock, _gate, broadcast_mock):
+    def test_mark_ready_default_true(self, objects_mock, _gate, _access, broadcast_mock):
         item = self._item(is_ready=False)
         self._set(objects_mock, item)
         resp = self.view(self._patch(), item_id=11)  # no body → defaults to ready=True
@@ -72,9 +75,10 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         broadcast_mock.assert_called_once_with(item.order)
 
     @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_mark_not_ready_clears_ready_at(self, objects_mock, _gate, _broadcast):
+    def test_mark_not_ready_clears_ready_at(self, objects_mock, _gate, _access, _broadcast):
         item = self._item(is_ready=True, ready_at="2026-01-01T00:00:00Z")
         self._set(objects_mock, item)
         resp = self.view(self._patch({"ready": False}), item_id=11)
@@ -84,29 +88,54 @@ class StaffOrderItemReadyViewTests(SimpleTestCase):
         self.assertIsNone(item.ready_at)
 
     @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_string_true_coerces(self, objects_mock, _gate, _broadcast):
+    def test_string_true_coerces(self, objects_mock, _gate, _access, _broadcast):
         item = self._item(is_ready=False)
         self._set(objects_mock, item)
         resp = self.view(self._patch({"ready": "true"}), item_id=11)
         self.assertTrue(resp.data["is_ready"])
 
     @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_string_zero_coerces_false(self, objects_mock, _gate, _broadcast):
+    def test_string_zero_coerces_false(self, objects_mock, _gate, _access, _broadcast):
         item = self._item(is_ready=True)
         self._set(objects_mock, item)
         resp = self.view(self._patch({"ready": "0"}), item_id=11)
         self.assertFalse(resp.data["is_ready"])
 
     @patch("menu.views._broadcast_order_change", side_effect=RuntimeError("ws down"))
+    @patch("menu.views._can_access_order", return_value=True)
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.OrderItem.objects")
-    def test_broadcast_failure_is_swallowed(self, objects_mock, _gate, _broadcast):
+    def test_broadcast_failure_is_swallowed(self, objects_mock, _gate, _access, _broadcast):
         item = self._item(is_ready=False)
         self._set(objects_mock, item)
         resp = self.view(self._patch(), item_id=11)  # broadcast raises → must still 200
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["is_ready"])
+
+    @patch("menu.views._can_access_order", return_value=True)
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.OrderItem.objects")
+    def test_voided_item_rejected(self, objects_mock, _gate, _access):
+        """PATCH on a voided item must return 409 item_voided."""
+        item = self._item(is_voided=True)
+        self._set(objects_mock, item)
+        resp = self.view(self._patch(), item_id=11)
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(resp.data["code"], "item_voided")
+
+    @patch("menu.views._can_access_order", return_value=False)
+    @patch("menu.views._can_edit_tenant_order", return_value=True)
+    @patch("menu.views.OrderItem.objects")
+    def test_section_denied(self, objects_mock, _gate, _access):
+        """PATCH by a waiter who doesn't own that table's section returns 403."""
+        item = self._item()
+        self._set(objects_mock, item)
+        resp = self.view(self._patch(), item_id=11)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "section_denied")

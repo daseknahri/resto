@@ -204,8 +204,17 @@
             :key="item.id ?? idx"
             class="kitchen-item select-none"
           >
+            <!-- Voided items: show struck-out label only, no toggle interaction -->
+            <div
+              v-if="item.is_voided"
+              class="flex items-baseline gap-2.5 px-2 py-2 opacity-30 line-through"
+              :aria-label="t('kitchen.itemVoided', { name: item.dish_name })"
+            >
+              <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
+              <span class="kitchen-name font-medium">{{ item.dish_name }}</span>
+            </div>
             <button
-              v-if="item.id != null"
+              v-else-if="item.id != null"
               type="button"
               class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2 -mx-2 transition-colors hover:bg-slate-700/30"
               :class="item.is_ready ? 'opacity-40 line-through' : ''"
@@ -492,12 +501,12 @@ const toggleItem = async (order, item) => {
 
 // ── Bulk item-readiness helpers ────────────────────────────────────────────────
 const orderReadyCount = (order) => {
-  const trackable = order.items.filter((i) => i.id != null);
+  const trackable = order.items.filter((i) => i.id != null && !i.is_voided);
   return { done: trackable.filter((i) => i.is_ready).length, total: trackable.length };
 };
 
 const hasUnreadyItems = (order) =>
-  order.items.some((i) => i.id != null && !i.is_ready);
+  order.items.some((i) => i.id != null && !i.is_voided && !i.is_ready);
 
 const allItemsReady = (order) => {
   const rc = orderReadyCount(order);
@@ -505,7 +514,7 @@ const allItemsReady = (order) => {
 };
 
 const markAllReady = async (order) => {
-  const unready = order.items.filter((i) => i.id != null && !i.is_ready);
+  const unready = order.items.filter((i) => i.id != null && !i.is_voided && !i.is_ready);
   let failed = 0;
   for (const item of unready) {
     try {

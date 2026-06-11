@@ -3781,6 +3781,7 @@ export const messages = {
       clearFilters: "Clear filters",
       cancelConfirmTitle: "Cancel this order?",
       cancelConfirmBody: "The customer will not be automatically notified. Make sure to inform them separately if needed.",
+      cancelCashWarning: "Cash collected ({amount} MAD) must be returned to the customer manually.",
       voidedBadge: "Voided",
     },
     ownerPromotions: {
@@ -4139,6 +4140,7 @@ export const messages = {
       driverFailed: "Delivery failed",
       itemToggleFailed: "Couldn't mark item ready — please try again.",
       markAllFailed: "Some items couldn't be marked ready — please check and retry.",
+      itemVoided: "{name} (voided)",
     },
     orderStatus: {
       kicker: "Order tracking",
@@ -6524,6 +6526,7 @@ export const messages = {
       refreshChecksFailed: "Impossible d'actualiser les controles",
       deliverySettings: "Parametres de livraison",
       deliverySettingsHint: "Configurez l'option de livraison affichee aux clients lors du paiement.",
+      deliveryPricingAdminNote: "La tarification de livraison (par km, frais, rayon) et l'inscription au reseau de la plateforme sont gerees par l'equipe Kepoli. Vous pouvez suspendre ou reactiver les commandes en livraison a tout moment depuis votre tableau de bord.",
       deliveryEnabled: "Livraison disponible",
       deliveryEnabledHint: "Affichez l'option de livraison au moment du paiement. Decochez pour la masquer entierement.",
       platformDelivery: "Utiliser le reseau de livreurs",
@@ -8295,6 +8298,7 @@ export const messages = {
       clearFilters: "Effacer les filtres",
       cancelConfirmTitle: "Annuler cette commande ?",
       cancelConfirmBody: "Le client ne sera pas notifie automatiquement. Pensez a le prevenir si necessaire.",
+      cancelCashWarning: "Les especes collectees ({amount} MAD) doivent etre rendues au client manuellement.",
       voidedBadge: "Annule",
     },
     ownerPromotions: {
@@ -8653,6 +8657,7 @@ export const messages = {
       driverFailed: "Livraison echouee",
       itemToggleFailed: "Impossible de marquer l'article pret — reessayez.",
       markAllFailed: "Certains articles n ont pas pu etre marques prets — verifiez et reessayez.",
+      itemVoided: "{name} (annule)",
     },
     stepSuperCategories: {
       title: "Groupes de menu",

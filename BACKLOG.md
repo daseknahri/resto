@@ -5,7 +5,21 @@ audit leftovers, MVP decisions that need revisiting, ideas out of current scope.
 Each item: source + why deferred. Reviewed in full during R5 (and periodically after).
 Done items get moved to the bottom section with the commit hash, not deleted.
 
+> **v1.0 triage (2026-06-11):** full backlog reviewed before tagging restaurant-v1.0.
+> No item below blocks the release — every entry is a conscious deferral with a
+> workaround or limited blast radius. The R5 review's 1 critical + 5 majors were
+> all FIXED pre-tag (void×cancel refund block, split-bill×void stranding, owner
+> cancel atomicity, kitchen voided-items, cash-cancel warning, section bypass).
+
 ## Restaurant (current focus — candidates for post-v1.0)
+- [ ] **Digest cash formula for split-bill + void edge** — cash = SUM(total) -
+      SUM(wallet_amount_paid) can drift for orders that mix ledger cash partials
+      with post-payment voids; the ledger is the truth for reconciliation. Make
+      the digest read the OrderPayment ledger when rows exist. Source: R5 minor.
+- [ ] **`amount <= 0` guard in payments endpoint when ledger > total** — the R5
+      fix flips such orders to PAID at void time, but a direct API path that
+      creates the state would still strand; consider a reconcile sweep assertion.
+      Source: R5 review follow-on thought.
 - [ ] **Receipt shows split payments** — printed receipt should list the OrderPayment
       ledger rows (paid cash 120 / wallet 80). Source: R4 scope cut.
 - [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but

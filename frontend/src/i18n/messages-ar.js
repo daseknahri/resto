@@ -2224,6 +2224,7 @@ const arabicMessages = {
     "clearFilters": "مسح الفلاتر",
     "cancelConfirmTitle": "إلغاء هذا الطلب؟",
     "cancelConfirmBody": "لن يتم إشعار العميل تلقائياً. تأكد من إبلاغه بشكل منفصل إن لزم الأمر.",
+    "cancelCashWarning": "المبلغ النقدي المحصّل ({amount} درهم) يجب إعادته للعميل يدوياً.",
     "djRefundCancel": "استرداد وإلغاء",
     "djRefundCancelConfirm": "استرداد وإلغاء هذا الطلب؟",
     "djRefundCancelBody": "سيُسترد رصيد محفظة العميل. هذا الإجراء لا يمكن التراجع عنه.",
@@ -3945,6 +3946,7 @@ Object.assign(arabicMessages, {
     orderItems: "\u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0637\u0644\u0628",
     newOrderAlert: "\u0637\u0644\u0628 \u062c\u062f\u064a\u062f!",
     markAllReady: "\u062a\u062d\u062f\u064a\u062f \u0627\u0644\u062c\u0645\u064a\u0639 \u062c\u0627\u0647\u0632\u0627\u064b",
+    itemVoided: "{name} (\u0645\u0644\u063a\u0649)",
   },
   customerAuth: {
     kicker: "\u062a\u0633\u062c\u064a\u0644 \u062f\u062e\u0648\u0644 \u0633\u0631\u064a\u0639",

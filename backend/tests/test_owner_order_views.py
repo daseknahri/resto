@@ -308,6 +308,33 @@ class OwnerOrderStatusUpdateViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = OwnerOrderStatusUpdateView.as_view()
+        # The cancel path now wraps save+refund in an atomic block and re-fetches
+        # the order with select_for_update().  Patch both so unit tests (no DB)
+        # continue to work without a real transaction or select_for_update call.
+        from unittest.mock import patch as _patch, MagicMock as _MM
+        import contextlib
+
+        @contextlib.contextmanager
+        def _noop_atomic():
+            yield
+
+        _tx_patcher = _patch("menu.views._cancel_tx", autospec=False)  # noqa: not imported this way
+        # Patch via the module-level import path actually used inside the view.
+        _atomic_patcher = _patch("django.db.transaction.atomic", side_effect=_noop_atomic)
+        self._atomic_mock = _atomic_patcher.start()
+        self.addCleanup(_atomic_patcher.stop)
+
+        _refund_patcher = _patch("menu.views._refund_wallet_for_cancelled_order")
+        self._refund_mock = _refund_patcher.start()
+        self.addCleanup(_refund_patcher.stop)
+
+        _loyalty_patcher = _patch("menu.views._reverse_loyalty_for_cancelled_order")
+        self._loyalty_mock = _loyalty_patcher.start()
+        self.addCleanup(_loyalty_patcher.stop)
+
+        _restock_patcher = _patch("menu.views._restock_cancelled_order")
+        self._restock_mock = _restock_patcher.start()
+        self.addCleanup(_restock_patcher.stop)
 
     def _patch(self, order_id=1, data=None, user=None, tenant=None):
         req = self.factory.patch(

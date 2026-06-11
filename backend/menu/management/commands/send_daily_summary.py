@@ -104,7 +104,9 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
     # Top 3 dishes by qty
     top_dishes = list(
         OrderItem.objects
-        .filter(order__in=qs)
+        # Voided items (wrong dish, customer refused) were not consumed —
+        # excluding them keeps the top-items list honest. R5 review minor.
+        .filter(order__in=qs, is_voided=False)
         .values("dish_name")
         .annotate(qty=Sum("qty"))
         .order_by("-qty")[:3]
