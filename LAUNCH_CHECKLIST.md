@@ -144,3 +144,12 @@ App falls back to English gracefully in the meantime.
 - Verify OTP emails arrive (test phone/email sign-in flows)
 - Place a test order through the marketplace
 - Test the owner dashboard on mobile
+
+## Social link previews (OG)
+After each deploy, verify WhatsApp unfurls work — the nginx bot branch must route
+crawler user-agents to the backend OG view:
+```
+curl -s -A "WhatsApp/2.23" https://<tenant-host>/ | grep og:title     # tenant name
+curl -s -A "facebookexternalhit/1.1" https://<platform-host>/order/<slug> | grep og:image
+```
+Humans must still get the SPA: `curl -s -A "Mozilla/5.0" https://<tenant-host>/ | grep '<div id="app">'`

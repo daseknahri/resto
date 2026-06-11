@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework import routers
 
+from accounts.og_views import OGView
 from accounts.ride_views import (
     RideEstimateView,
     RideCreateView,
@@ -114,6 +115,7 @@ shared_api_router.register(r"provision-jobs", ProvisioningJobViewSet, basename="
 shared_api_router.register(r"admin-audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 
 shared_api_urlpatterns = [
+    path("api/og/", OGView.as_view(), name="og"),
     path("api/health/", health_view, name="health"),
     path("api/activate/", ActivationView.as_view(), name="activate"),
     path("api/login/", LoginView.as_view(), name="login"),

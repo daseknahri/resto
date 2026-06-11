@@ -24,6 +24,14 @@
          the fallback font while the web fonts download, so render isn't blocked. -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Noto+Naskh+Arabic:wght@500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <title>Kepoli — Order. Delivered. Earn.</title>
+    <!-- Static OG defaults — text-only baseline for crawlers that slip past the
+         nginx bot branch. Rich per-tenant previews (name, photo) come from the
+         backend /api/og/ view, which social-bot user agents are routed to. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kepoli" />
+    <meta property="og:title" content="Kepoli — Order food, shop local, ride" />
+    <meta property="og:description" content="Order food, shop from local stores, send packages and book rides — one app, one wallet." />
+    <meta name="description" content="Order food, shop from local stores, send packages and book rides — one app, one wallet." />
   </head>
   <body class="bg-slate-950 text-slate-50">
     <div id="app"></div>
