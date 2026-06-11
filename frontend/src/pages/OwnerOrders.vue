@@ -343,6 +343,9 @@
             <p v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="text-[10px] tabular-nums text-emerald-300">
               <span aria-hidden="true">💰</span> {{ t('ownerOrders.walletPaid') }} {{ formatCurrency(o.wallet_amount_paid, o.currency) }}
             </p>
+            <p v-if="Number(o.amount_paid) > 0 && o.payment_status !== 'paid'" class="text-[10px] tabular-nums text-amber-400">
+              {{ t('waiterPage.paidSoFar', { paid: formatCurrency(o.amount_paid, o.currency), left: formatCurrency(o.outstanding, o.currency) }) }}
+            </p>
           </div>
         </div>
 
@@ -410,6 +413,9 @@
           <div v-if="o.wallet_amount_paid && Number(o.wallet_amount_paid) > 0" class="sm:col-span-2">
             <span class="text-slate-500">💰 {{ t("ownerOrders.walletPaid") }}</span>
             <span class="ms-1.5 font-medium text-emerald-300">{{ formatCurrency(o.wallet_amount_paid, o.currency) }}</span>
+          </div>
+          <div v-if="Number(o.amount_paid) > 0 && o.payment_status !== 'paid'" class="sm:col-span-2">
+            <span class="text-slate-500">{{ t('waiterPage.paidSoFar', { paid: formatCurrency(o.amount_paid, o.currency), left: formatCurrency(o.outstanding, o.currency) }) }}</span>
           </div>
           <div v-if="o.delivery_address" class="sm:col-span-2">
             <div class="flex flex-wrap items-start gap-x-2 gap-y-1">

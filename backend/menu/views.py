@@ -3261,14 +3261,37 @@ class StaffOrderItemReadyView(APIView):
 def _staff_order_payload(order):
     """Return the refreshed staff-list order dict for a single order.
 
-    Reused by the append-items and void-item views so both endpoints return the
-    same shape the staff list uses, making frontend state updates trivial.
+    Reused by the append-items, void-item, and split-bill payment views so all
+    endpoints return the same shape the staff list uses, making frontend state
+    updates trivial.
+
+    Split-bill fields (R4):
+      amount_paid   — sum of OrderPayment.amount rows (str decimal).
+      outstanding   — max(0, total - amount_paid) (str decimal).
+      payments      — list of OrderPayment rows in chronological order.
+
+    Note: legacy one-shot settle endpoints do not write OrderPayment rows, so
+    for those orders `payments` will be empty while `wallet_amount_paid` on the
+    Order row reflects what was charged.  The `amount_paid` figure here is
+    computed from the payments ledger only; callers that need the legacy total
+    can still read `wallet_amount_paid` directly from the order fields.
     """
+    from menu.models import OrderPayment as _OP
+    _CENT = Decimal("0.01")
+
+    # Payment ledger totals (R4)
+    payment_rows = list(order.payments.all()) if hasattr(order, "payments") else []
+    ledger_paid = sum(
+        (Decimal(str(p.amount)) for p in payment_rows), Decimal("0")
+    ).quantize(_CENT)
+    outstanding = max(Decimal("0"), Decimal(str(order.total or "0")) - ledger_paid).quantize(_CENT)
+
     return {
         "id": order.id,
         "order_number": order.order_number,
         "status": order.status,
         "payment_status": order.payment_status,
+        "completed": order.payment_status == Order.PaymentStatus.PAID,
         "fulfillment_type": order.fulfillment_type,
         "table_label": order.table_label,
         "customer_name": order.customer_name,
@@ -3280,6 +3303,19 @@ def _staff_order_payload(order):
         "delivery_fee": str(order.delivery_fee),
         "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
         "currency": order.currency,
+        # R4 split-bill fields
+        "amount_paid": str(ledger_paid),
+        "outstanding": str(outstanding),
+        "payments": [
+            {
+                "amount": str(p.amount),
+                "method": p.method,
+                "created_at": p.created_at.isoformat() if hasattr(p.created_at, "isoformat") else str(p.created_at),
+                "recorded_by_name": p.recorded_by_name,
+                "note": p.note,
+            }
+            for p in payment_rows
+        ],
         "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
         "items": [
             {
@@ -3656,6 +3692,220 @@ class StaffVoidOrderItemView(APIView):
         return Response(_staff_order_payload(order))
 
 
+class StaffOrderPaymentView(APIView):
+    """POST /api/staff/orders/<order_id>/payments/
+
+    Record a single payment instalment toward a dine-in (or any open) order.
+    Supports partial cash and partial wallet payments so a table can be settled
+    incrementally by multiple payers (split-bill / R4).
+
+    Auth: same _can_edit_tenant_order gate as StaffAppendOrderItemsView and
+    StaffVoidOrderItemView (owner or staff with perm_manage_orders).
+
+    Request body:
+      {
+        "method": "wallet" | "cash",   # required
+        "amount": decimal,             # optional — omit/null for full outstanding
+        "note":   str                  # optional, max 120 chars
+      }
+
+    Guards — all 409 unless noted:
+      bad_status      — order is in a terminal status (COMPLETED / CANCELLED)
+      already_paid    — order.payment_status is already PAID
+      bad_amount (400)— amount present but <= 0 or not parseable
+      overpay         — amount > outstanding (outstanding = total - sum of ledger rows)
+      no_customer     — method=wallet but order has no customer_id
+      insufficient_wallet — debit_wallet raised InsufficientFunds
+                            (payment row NOT persisted — rolled back inside atomic)
+
+    Response: refreshed _staff_order_payload (same shape as append/void).
+
+    NOTE: Legacy one-shot settle endpoints (StaffSettleView, WalletSettleView,
+    etc.) do NOT write OrderPayment rows — they simply flip payment_status to
+    PAID and, for wallet, increment wallet_amount_paid.  For those orders the
+    `payments` list in the payload will be empty; `amount_paid` comes from the
+    ledger and will therefore be "0.00" even though the order is PAID.  This is
+    intentional: the split-bill endpoint is additive-only and is NOT meant to
+    back-fill legacy settled orders.
+    """
+    permission_classes = [IsAuthenticated]
+
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+    _CENT = Decimal("0.01")
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        # ── Parse body ────────────────────────────────────────────────────────
+        method = str(request.data.get("method") or "").strip().lower()
+        if method not in {"wallet", "cash"}:
+            return Response(
+                {"detail": "method must be 'wallet' or 'cash'.", "code": "bad_method"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_amount = request.data.get("amount")
+        requested_amount = None  # None means "full outstanding"
+        if raw_amount is not None:
+            try:
+                requested_amount = Decimal(str(raw_amount)).quantize(self._CENT)
+                if requested_amount <= Decimal("0"):
+                    raise ValueError("non-positive")
+            except (Exception,):
+                return Response(
+                    {"detail": "amount must be a positive decimal.", "code": "bad_amount"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        note = str(request.data.get("note") or "")[:120]
+        # Optional client-supplied idempotency key (max 128 chars).
+        # If provided and a payment row for this order with that key was already
+        # committed, the retry is short-circuited here and the current order
+        # payload is returned without creating a duplicate row.  The cache TTL
+        # is 5 minutes — long enough to cover any realistic network-retry window.
+        idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
+        if idempotency_key:
+            _idem_cache_key = f"staff_pay_idem:{order_id}:{idempotency_key}"
+            if cache.get(_idem_cache_key):
+                # Duplicate request: reload and return the current state.
+                idem_order = (
+                    Order.objects
+                    .prefetch_related("items", "payments")
+                    .get(pk=order_id)
+                )
+                return Response(_staff_order_payload(idem_order), status=status.HTTP_201_CREATED)
+
+        # ── Atomic: lock order, validate, create payment row, maybe mark paid ─
+        from menu.models import OrderPayment
+        from accounts.wallet_service import debit_wallet, InsufficientFunds
+        from accounts.models import WalletTransaction as _WTx
+
+        try:
+            with transaction.atomic():
+                order = (
+                    Order.objects
+                    .select_for_update()
+                    .prefetch_related("items", "payments")
+                    .filter(pk=order_id)
+                    .first()
+                )
+                if order is None:
+                    return Response(
+                        {"detail": "Order not found.", "code": "not_found"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+
+                # ── Guards ────────────────────────────────────────────────────
+                if order.status in self._TERMINAL_STATUSES:
+                    return Response(
+                        {"detail": "Order is in a terminal state.", "code": "bad_status"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if order.payment_status == Order.PaymentStatus.PAID:
+                    return Response(
+                        {"detail": "Order is already paid.", "code": "already_paid"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                # Compute outstanding under the lock
+                order_total = Decimal(str(order.total or "0")).quantize(self._CENT)
+                existing_paid = sum(
+                    (Decimal(str(p.amount)) for p in order.payments.all()),
+                    Decimal("0"),
+                ).quantize(self._CENT)
+                outstanding = max(Decimal("0"), order_total - existing_paid).quantize(self._CENT)
+
+                # Resolve amount
+                amount = requested_amount if requested_amount is not None else outstanding
+                if amount <= Decimal("0"):
+                    return Response(
+                        {"detail": "amount must be a positive decimal.", "code": "bad_amount"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if amount > outstanding:
+                    return Response(
+                        {
+                            "detail": f"Amount {amount} exceeds outstanding {outstanding}.",
+                            "code": "overpay",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                if method == "wallet" and not order.customer_id:
+                    return Response(
+                        {"detail": "Wallet payment requires a customer on the order.", "code": "no_customer"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                # ── Create payment row ────────────────────────────────────────
+                recorder_name = ""
+                recorder_id = None
+                _user = getattr(request, "user", None)
+                if _user and _user.is_authenticated:
+                    recorder_id = getattr(_user, "id", None)
+                    recorder_name = (
+                        getattr(_user, "get_full_name", lambda: "")() or
+                        getattr(_user, "username", "") or
+                        getattr(_user, "email", "") or
+                        ""
+                    )[:80]
+
+                payment = OrderPayment.objects.create(
+                    order=order,
+                    amount=amount,
+                    method=method,
+                    recorded_by_user_id=recorder_id,
+                    recorded_by_name=recorder_name,
+                    note=note,
+                )
+
+                # ── Wallet debit (raises InsufficientFunds → rolls back row) ─
+                if method == "wallet":
+                    debit_wallet(
+                        order.customer_id,
+                        amount,
+                        tx_type=_WTx.Type.PAYMENT,
+                        idempotency_key=f"orderpay:{payment.id}",
+                        reference=order.order_number,
+                    )
+                    # Keep wallet_amount_paid consistent with dashboards
+                    order.wallet_amount_paid = (
+                        Decimal(str(order.wallet_amount_paid or "0")) + amount
+                    ).quantize(self._CENT)
+                    order.save(update_fields=["wallet_amount_paid", "updated_at"])
+
+                # ── Flip to PAID if fully settled ─────────────────────────────
+                new_paid = (existing_paid + amount).quantize(self._CENT)
+                if new_paid >= order_total:
+                    order.mark_paid(save=False)
+                    order.save(update_fields=["payment_status", "paid_at", "updated_at"])
+
+        except InsufficientFunds:
+            return Response(
+                {"detail": "Wallet balance is insufficient.", "code": "insufficient_wallet"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Reload with payments for the response (outside the atomic block)
+        order = (
+            Order.objects
+            .prefetch_related("items", "payments")
+            .get(pk=order_id)
+        )
+
+        # Mark this idempotency key as committed so retries are short-circuited.
+        if idempotency_key:
+            cache.set(_idem_cache_key, True, timeout=300)  # 5 minutes
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order), status=status.HTTP_201_CREATED)
+
+
 class OwnerDriverCashoutLookupView(APIView):
     """GET /api/owner/driver-cashout/?code=XXXXXX — preview a driver's pending cash-out
     request by code (owner/manager only) before handing over cash."""
@@ -3925,7 +4175,27 @@ class OwnerOrderListView(APIView):
         status_filter = request.query_params.get("status", "").strip().lower()
         valid_statuses = {s.value for s in Order.Status}
 
-        qs = Order.objects.select_related("customer").prefetch_related("items").order_by("-created_at")
+        from django.db.models import Sum as _LSum
+
+        def _safe_ledger(value):
+            """Coerce the payments-Sum annotation to a quantized Decimal.
+
+            Returns 0.00 for None (no payment rows) and for anything that is not
+            Decimal-convertible (mocked Order objects in unit tests).
+            """
+            try:
+                return Decimal(str(value)).quantize(Decimal("0.01")) if value is not None else Decimal("0.00")
+            except Exception:
+                return Decimal("0.00")
+
+        qs = (
+            Order.objects.select_related("customer")
+            .prefetch_related("items")
+            # Split-bill ledger total (R4) — annotated so the owner list can show
+            # partial-payment progress without an N+1 over OrderPayment rows.
+            .annotate(_ledger_paid=_LSum("payments__amount"))
+            .order_by("-created_at")
+        )
         if status_filter and status_filter in valid_statuses:
             qs = qs.filter(status=status_filter)
 
@@ -4096,6 +4366,17 @@ class OwnerOrderListView(APIView):
                 "my_customer_rating": my_rating_map.get(order.order_number),
                 # Wallet payment
                 "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
+                # Split-bill ledger (R4): partial-payment progress for the owner list.
+                # _safe_ledger guards non-Decimal values (mock objects in unit tests,
+                # NULL from the Sum annotation when an order has no payment rows).
+                "amount_paid": str(_safe_ledger(getattr(order, "_ledger_paid", None))),
+                "outstanding": str(
+                    max(
+                        Decimal("0"),
+                        _safe_ledger(getattr(order, "total", None))
+                        - _safe_ledger(getattr(order, "_ledger_paid", None)),
+                    ).quantize(Decimal("0.01"))
+                ),
                 # Order source, commission & promotion
                 "source": order.source,
                 "commission_amount": str(order.commission_amount),

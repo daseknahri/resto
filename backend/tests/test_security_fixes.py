@@ -285,7 +285,7 @@ class OwnerOrderListTotalTests(SimpleTestCase):
         # Slice qs[:200] must yield 3 items so len(orders)==3 and has_more==False
         mock_qs.__getitem__ = lambda s, sl: [self._mock_order() for _ in range(3)]
         mock_qs.__iter__ = lambda s: iter([self._mock_order() for _ in range(3)])
-        mock_objects.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
+        mock_objects.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = mock_qs
 
         user = self._user()
         req = self.factory.get("/api/owner/orders/")
@@ -309,7 +309,7 @@ class OwnerOrderListTotalTests(SimpleTestCase):
         mock_qs.count.return_value = 847
         mock_qs.__getitem__ = lambda s, sl: []
         mock_qs.__iter__ = lambda s: iter([])
-        mock_objects.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
+        mock_objects.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = mock_qs
 
         user = self._user()
         req = self.factory.get("/api/owner/orders/")

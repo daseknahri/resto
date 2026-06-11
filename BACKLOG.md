@@ -13,9 +13,14 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **option_ids silent-drop** — invalid option ids are skipped (item lands at base
       price) in both PlaceOrderView and the R2 append view. Consider strict 400 in both
       at once. Source: R2 review minor.
-- [ ] **Payments endpoint request-level idempotency** — a client retry after a network
-      blip could record a duplicate partial payment. Assess after R4 review verdict;
-      add an Idempotency-Key header convention if real.
+- [ ] **Per-INTENT idempotency key in waiter settle** — postPayment now sends a key
+      per call (protects transport retries; double-taps blocked by UI guards), but a
+      user who manually retries after a timeout-that-committed gets a NEW key and can
+      record a duplicate equal-amount partial. Per-intent keying (key minted when the
+      settle chooser opens) closes it. Source: R4 review major, refined.
+- [ ] **Merge the two order.save() calls in StaffOrderPaymentView** when a wallet
+      partial also flips PAID (cosmetic in-memory inconsistency inside the atomic
+      block). Source: R4 review minor.
 - [ ] **Combos / meal deals** (bundle pricing) — audit growth item, not in top-8.
 - [ ] **Happy-hour / time-based pricing** — availability_schedule exists per dish;
       price scheduling does not. Audit growth item.
@@ -68,3 +73,5 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Payments endpoint request-level idempotency (backend mechanism: client key →
+      cache short-circuit + cache.set after commit) — R4 split-bill commit.

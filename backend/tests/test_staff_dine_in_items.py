@@ -114,6 +114,12 @@ def _make_order(
     items_qs.all.return_value = _items
     items_qs.filter.return_value.first.return_value = _items[0] if _items else None
     order.items = items_qs
+
+    # R4: payments ledger (empty by default for existing tests — no split-bill rows)
+    payments_qs = MagicMock()
+    payments_qs.all.return_value = []
+    order.payments = payments_qs
+
     return order
 
 

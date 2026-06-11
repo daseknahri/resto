@@ -156,7 +156,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_mock.count.return_value = 1
         qs_mock.__iter__ = lambda s: iter([order])
         qs_mock.__getitem__ = lambda s, sl: [order]
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
 
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -170,7 +170,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
 
         resp = self._get(user=_user(role=User.Roles.TENANT_STAFF))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -187,7 +187,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_mock.count.return_value = 1
         qs_mock.__iter__ = lambda s: iter([order])
         qs_mock.__getitem__ = lambda s, sl: [order]
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
 
         resp = self._get()
         result = resp.data["results"][0]
@@ -202,7 +202,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_filtered.count.return_value = 0
         qs_filtered.__iter__ = lambda s: iter([])
         qs_filtered.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_base
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_base
         qs_base.filter.return_value = qs_filtered
 
         self._get(params={"status": "pending"})
@@ -214,7 +214,7 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
 
         resp = self._get(params={"status": "not-a-status"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -227,10 +227,10 @@ class OwnerOrderListViewTests(SimpleTestCase):
         qs_mock.count.return_value = 0
         qs_mock.__iter__ = lambda s: iter([])
         qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
+        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
 
         self._get()
-        order_by_arg = objects_mock.select_related.return_value.prefetch_related.return_value.order_by.call_args[0][0]
+        order_by_arg = objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.call_args[0][0]
         self.assertEqual(order_by_arg, "-created_at")
 
 

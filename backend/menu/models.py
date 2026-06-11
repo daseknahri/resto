@@ -517,6 +517,43 @@ class OrderItem(models.Model):
         return f"{self.qty}x {self.dish_name}"
 
 
+class OrderPayment(models.Model):
+    """Individual payment instalment toward an Order (split-bill / partial settle).
+
+    A single order can carry multiple OrderPayment rows — one per cash or wallet
+    instalment.  The authoritative paid total is sum(payments.amount); the legacy
+    order.wallet_amount_paid field is kept in sync for wallet payments so that
+    daily-digest queries and dashboards that read that column continue to work.
+
+    Note: the one-shot settle endpoints (StaffSettleView, WalletSettleView, etc.)
+    do NOT write ledger rows — they simply flip order.payment_status to PAID and
+    (for wallet) increment wallet_amount_paid.  For those orders amount_paid
+    derives from wallet_amount_paid alone and the payments list is empty.  The
+    split-bill endpoint (StaffOrderPaymentView) always writes a row here AND
+    keeps wallet_amount_paid consistent, so both read paths remain accurate.
+    """
+
+    class Method(models.TextChoices):
+        WALLET = "wallet", "Wallet"
+        CASH = "cash", "Cash"
+
+    order = models.ForeignKey(
+        "Order", on_delete=models.CASCADE, related_name="payments"
+    )
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    method = models.CharField(max_length=8, choices=Method.choices)
+    recorded_by_user_id = models.IntegerField(null=True, blank=True)
+    recorded_by_name = models.CharField(max_length=80, blank=True)
+    note = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.method} {self.amount} for order {self.order_id}"
+
+
 class AnalyticsEvent(models.Model):
     event_type = models.CharField(max_length=48, db_index=True)
     path = models.CharField(max_length=320, blank=True)

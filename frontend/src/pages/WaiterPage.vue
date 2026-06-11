@@ -392,17 +392,22 @@ class="min-w-0 flex-1 leading-snug"
                 </p>
               </div>
               <!-- ETA + total + payment status -->
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2" :class="statusBorderClass(order.status)">
-                <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-                  {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-                </span>
-                <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-                <span
-                  class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                  :class="order.payment_status === 'paid'
-                    ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-                    : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-                >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+              <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
+                    {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
+                  </span>
+                  <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
+                  <span
+                    class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                    :class="order.payment_status === 'paid'
+                      ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
+                      : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
+                  >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+                </div>
+                <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
+                  {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
+                </p>
               </div>
               <!-- Action footer -->
               <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
@@ -545,17 +550,22 @@ class="min-w-0 flex-1 leading-snug"
               </p>
             </div>
             <!-- ETA + total + payment status -->
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2" :class="statusBorderClass(order.status)">
-              <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-                {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-              </span>
-              <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-              <span
-                class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                :class="order.payment_status === 'paid'
-                  ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-                  : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-              >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+            <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
+                  {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
+                </span>
+                <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
+                <span
+                  class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                  :class="order.payment_status === 'paid'
+                    ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
+                    : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
+                >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+              </div>
+              <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
+                {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
+              </p>
             </div>
             <!-- Action footer -->
             <div class="flex flex-wrap items-center gap-2 border-t px-4 py-3" :class="statusBorderClass(order.status)">
@@ -702,17 +712,22 @@ class="min-w-0 flex-1 leading-snug"
         </div>
 
         <!-- ETA + total + payment status -->
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2" :class="statusBorderClass(order.status)">
-          <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
-            {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
-          </span>
-          <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
-          <span
-            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-            :class="order.payment_status === 'paid'
-              ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
-              : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
-          >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+        <div class="border-t px-4 py-2" :class="statusBorderClass(order.status)">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span v-if="order.estimated_ready_minutes" class="tabular-nums text-xs text-slate-500">
+              {{ t('waiterPage.eta', { minutes: order.estimated_ready_minutes }) }}
+            </span>
+            <span class="tabular-nums text-sm font-bold text-white">{{ fmtOrderPrice(order.total, order.currency) }}</span>
+            <span
+              class="rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+              :class="order.payment_status === 'paid'
+                ? 'border-emerald-500/30 bg-emerald-500/12 text-emerald-300'
+                : 'border-amber-500/30 bg-amber-500/12 text-amber-300'"
+            >{{ order.payment_status === 'paid' ? t('ownerOrders.paid') : t('ownerOrders.unpaid') }}</span>
+          </div>
+          <p v-if="Number(order.amount_paid) > 0 && order.payment_status !== 'paid'" class="mt-0.5 text-[11px] tabular-nums text-amber-400">
+            {{ t('waiterPage.paidSoFar', { paid: fmtOrderPrice(order.amount_paid, order.currency), left: fmtOrderPrice(order.outstanding, order.currency) }) }}
+          </p>
         </div>
 
         <!-- Action footer -->
@@ -870,6 +885,23 @@ class="min-w-0 flex-1 leading-snug"
               <span class="shrink-0 tabular-nums text-slate-400">{{ fmtOrderPrice((item.subtotal ?? item.unit_price * item.qty), settleChooser.currency) }}</span>
             </li>
           </ul>
+          <!-- Split-payment amount input -->
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-slate-300" :for="'settle-amount-' + settleChooser.id">
+              {{ t('waiterPage.splitAmount') }}
+            </label>
+            <input
+              :id="'settle-amount-' + settleChooser.id"
+              v-model="splitAmount"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0.01"
+              :max="settleOutstanding(settleChooser)"
+              class="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm tabular-nums text-slate-100 focus:border-[var(--color-secondary)] focus:outline-none"
+            />
+            <p class="text-[11px] text-slate-500">{{ t('waiterPage.splitHint') }}</p>
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <button
               class="ui-press ui-touch-target flex flex-col items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-4 text-emerald-300 transition-colors hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -1088,7 +1120,7 @@ const tableGrouping = computed(() => {
   const tableGroups = [...tableMap.values()].map((g) => ({
     ...g,
     totalOutstanding: g.orders.reduce(
-      (sum, o) => sum + Math.max(0, (Number(o.total) || 0) - (Number(o.wallet_amount_paid) || 0)),
+      (sum, o) => sum + settleOutstanding(o),
       0
     ),
   }));
@@ -1104,8 +1136,14 @@ const showCharge = ref(false);
 const chargeContext = ref({ amount: '', orderNumber: '' });
 const settleChooser = ref(null);        // order awaiting a cash/wallet choice
 const pendingWalletSettle = ref(null);  // order being settled via the wallet charge sheet
-const settleOutstanding = (order) =>
-  Math.max(0, +((Number(order.total) || 0) - (Number(order.wallet_amount_paid) || 0)).toFixed(2));
+// If the backend provides `outstanding` (new ledger), use it; otherwise fall back to total-wallet.
+const settleOutstanding = (order) => {
+  if (order.outstanding !== undefined && order.outstanding !== null)
+    return Math.max(0, +Number(order.outstanding).toFixed(2));
+  return Math.max(0, +((Number(order.total) || 0) - (Number(order.wallet_amount_paid) || 0)).toFixed(2));
+};
+// Tracks the amount the user typed in the settle-chooser input (empty string = full amount).
+const splitAmount = ref('');
 
 // Outstanding amount on the open bill (total minus any wallet already applied).
 const billOutstanding = computed(() => {
@@ -1233,6 +1271,8 @@ const trapSettleFocus = (e) => {
 
 watch(settleChooser, async (val) => {
   if (val) {
+    // Pre-fill with the full outstanding amount; the user can edit it down.
+    splitAmount.value = settleOutstanding(val).toFixed(2);
     await nextTick();
     settleDialogRef.value?.querySelector(FOCUSABLE_BILL)?.focus();
     document.addEventListener('keydown', trapSettleFocus);
@@ -1489,15 +1529,56 @@ const _finishSettle = async (order) => {
   }
 };
 
-// Cash: just record it as paid.
+// Resolve the numeric amount to POST — null means "full outstanding" (omit from body).
+const _resolvedSplitAmount = (order) => {
+  const outstanding = settleOutstanding(order);
+  const typed = parseFloat(splitAmount.value);
+  if (isNaN(typed) || typed <= 0) return null;
+  // If the user left the default (full amount), omit to let the backend decide.
+  if (Math.abs(typed - outstanding) < 0.005) return null;
+  return typed;
+};
+
+// Cash: POST to payments endpoint; partial stays open, full settles.
 const payCash = async (order) => {
   settleChooser.value = null;
-  await _finishSettle(order);
+  const amount = _resolvedSplitAmount(order);
+  const { data, errorCode } = await waiter.postPayment(order.id, 'cash', amount);
+  if (!data) {
+    if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
+    toast.show(t('waiterPage.markPaidFailed'), 'error');
+    return;
+  }
+  if (data.completed) {
+    const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
+    if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
+  } else {
+    toast.show(t('waiterPage.partialPaid', { left: fmtOrderPrice(data.outstanding, order.currency) }), 'success');
+  }
 };
 
 // Wallet: charge the customer's wallet via their pay-code, then close out.
-const payWallet = (order) => {
+const payWallet = async (order) => {
   settleChooser.value = null;
+  const amount = _resolvedSplitAmount(order);
+  // If a specific partial amount is requested, try to post directly.
+  if (amount !== null) {
+    const { data, errorCode } = await waiter.postPayment(order.id, 'wallet', amount);
+    if (!data) {
+      if (errorCode === 'overpay') { toast.show(t('waiterPage.overpay'), 'error'); return; }
+      if (errorCode === 'insufficient_wallet') { toast.show(t('waiterPage.insufficientWallet'), 'error'); return; }
+      toast.show(t('waiterPage.markPaidFailed'), 'error');
+      return;
+    }
+    if (data.completed) {
+      const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
+      if (eligibleToRate) { openCustomerRating(order); } else { toast.show(t('waiterPage.settledFull'), 'success'); }
+    } else {
+      toast.show(t('waiterPage.partialPaid', { left: fmtOrderPrice(data.outstanding, order.currency) }), 'success');
+    }
+    return;
+  }
+  // Full amount: use the existing wallet charge-sheet flow (pay-code entry).
   pendingWalletSettle.value = order;
   openCharge({ amount: settleOutstanding(order).toFixed(2), orderNumber: order.order_number });
 };

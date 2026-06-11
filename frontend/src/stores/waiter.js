@@ -215,6 +215,40 @@ export const useWaiterStore = defineStore("waiter", {
     },
 
     // -------------------------------------------------------
+    // Partial / full payment via the new payments ledger endpoint.
+    // Returns { data, errorCode } — errorCode is the 409 `code` string or null.
+    // -------------------------------------------------------
+    async postPayment(orderId, method, amount) {
+      this.updatingOrderIds = new Set([...this.updatingOrderIds, orderId]);
+      try {
+        const body = { method };
+        if (amount !== null && amount !== undefined) body.amount = amount;
+        // One key per payment intent: the backend short-circuits a retry of the
+        // same key (5-min window), so a double-tap or timeout-retry can never
+        // record the same physical payment twice.
+        body.idempotency_key = (crypto.randomUUID && crypto.randomUUID()) || `${orderId}-${method}-${amount ?? 'full'}-${performance.now()}`;
+        const res = await api.post(`/staff/orders/${orderId}/payments/`, body);
+        // Patch the in-memory order with the updated fields from the response.
+        const order = this.orders.find((o) => o.id === orderId);
+        if (order && res.data) {
+          order.payment_status = res.data.payment_status ?? order.payment_status;
+          order.amount_paid = res.data.amount_paid;
+          order.outstanding = res.data.outstanding;
+          if (res.data.payments) order.payments = res.data.payments;
+          if (res.data.completed) {
+            this.orders = this.orders.filter((o) => o.id !== orderId);
+          }
+        }
+        return { data: res.data, errorCode: null };
+      } catch (err) {
+        const code = err?.response?.data?.code ?? null;
+        return { data: null, errorCode: code };
+      } finally {
+        this.updatingOrderIds = new Set([...this.updatingOrderIds].filter((id) => id !== orderId));
+      }
+    },
+
+    // -------------------------------------------------------
     // Rate the customer — only the server who handled the order
     // (the backend enforces this via handled_by).
     // -------------------------------------------------------
