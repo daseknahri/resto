@@ -22,6 +22,7 @@ from menu.waiter_views import (
 )
 from menu.views import (
     AnalyticsSummaryView,
+    OwnerCampaignView,
     CategoryViewSet,
     CheckoutIntentView,
     CurrencyRateListView,
@@ -142,6 +143,7 @@ urlpatterns = [
     path("api/orders/<str:order_number>/pay-wallet/", CustomerOrderPayWalletView.as_view(), name="order-pay-wallet"),
     path("api/owner/ratings/", OwnerRatingListView.as_view(), name="owner-ratings"),
     path("api/owner/ratings/<int:pk>/reply/", OwnerRatingReplyView.as_view(), name="owner-rating-reply"),
+    path("api/owner/campaigns/", OwnerCampaignView.as_view(), name="owner-campaigns"),
     path("api/owner/closure-dates/", OwnerClosureDateListCreateView.as_view(), name="owner-closure-dates"),
     path("api/owner/closure-dates/<int:closure_id>/", OwnerClosureDateDeleteView.as_view(), name="owner-closure-date-delete"),
     path("api/staff/orders/", StaffOrderListView.as_view(), name="staff-orders"),

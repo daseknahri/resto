@@ -50,7 +50,9 @@ import qrcode
 
 from tenancy.models import Profile
 
-from .models import AnalyticsEvent, Category, CurrencyRate, CustomerNote, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
+from django_tenants.utils import schema_context
+
+from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
 from .tax import order_vat_fields
 from .serializers import (
@@ -8321,3 +8323,215 @@ class AdminWalletListView(APIView):
             "page_size": page_size,
             "results": data,
         })
+
+
+# ── Owner campaign broadcasts ────────────────────────────────────────────────
+
+_CAMPAIGN_DAILY_CAP = 2  # hard per-tenant per-day limit
+
+
+def _campaign_day_window(tenant):
+    """Return (day_start_utc, day_end_utc) for TODAY in the tenant's timezone.
+
+    Mirrors the _tenant_yesterday helper in send_daily_summary but returns the
+    CURRENT day, so the campaign cap counts campaigns already sent today.
+    """
+    from datetime import timezone as _tz
+    try:
+        from zoneinfo import ZoneInfo
+        profile = getattr(tenant, "profile", None)
+        tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = _tz.utc
+
+    from datetime import datetime as _dt, timedelta as _td
+    now_local = _dt.now(tz)
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_local = day_start_local + _td(days=1)
+    return day_start_local.astimezone(_tz.utc), day_end_local.astimezone(_tz.utc)
+
+
+class OwnerCampaignView(APIView):
+    """
+    GET  /api/owner/campaigns/  — audience estimate, today's remaining cap, last 20 campaigns.
+    POST /api/owner/campaigns/  — broadcast a push campaign to opted-in past customers.
+
+    Owner-only (same _is_tenant_owner gate as closure-date / commission-statement views).
+
+    POST body: { "title": str(<=80), "message": str(<=200) }
+
+    POST 201 response: campaign row fields.
+    POST 409 codes:
+      "campaign_cap"  — 2 campaigns already sent today.
+      "no_audience"   — zero opted-in subscribed past customers.
+    POST 400: title/message length validation.
+
+    Audience definition (strictly tenant-isolated):
+      Distinct customer_ids with >= 1 Order in this tenant schema
+      AND notify_promotions=True on the public Customer row
+      AND >= 1 CustomerPushSubscription row in the public schema.
+
+    Dispatch: one accounts.tasks.campaign_push enqueued per audience customer.
+    sent_count equals audience_count at enqueue time (fire-and-forget; delivery
+    is not guaranteed — web push may fail per-device silently).
+    ONE record_notification row written per campaign dispatch.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _audience_ids(self):
+        """Return a list of distinct customer_ids eligible for campaigns.
+
+        Three set-intersection queries — no per-customer loop.
+        Isolation: orderer_ids come ONLY from this tenant's Order rows.
+        """
+        from accounts.models import Customer, CustomerPushSubscription
+
+        # Step 1: all distinct customer_ids that have >= 1 order in this tenant.
+        # We are already inside the tenant schema (request cycle), so no context switch.
+        all_orderer_ids = set(
+            Order.objects.values_list("customer_id", flat=True)
+            .distinct()
+            .exclude(customer_id__isnull=True)
+        )
+        if not all_orderer_ids:
+            return []
+
+        # Step 2: filter to opted-in customers (public schema).
+        with schema_context("public"):
+            opted_in_ids = set(
+                Customer.objects.filter(
+                    id__in=all_orderer_ids,
+                    notify_promotions=True,
+                ).values_list("id", flat=True)
+            )
+            if not opted_in_ids:
+                return []
+
+            # Step 3: filter to customers with at least one push subscription.
+            subscribed_ids = set(
+                CustomerPushSubscription.objects.filter(
+                    customer_id__in=opted_in_ids,
+                ).values_list("customer_id", flat=True).distinct()
+            )
+
+        return list(subscribed_ids)
+
+    def get(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        tenant = request.tenant
+        day_start, day_end = _campaign_day_window(tenant)
+        today_count = Campaign.objects.filter(
+            created_at__gte=day_start, created_at__lt=day_end,
+        ).count()
+        today_remaining = max(0, _CAMPAIGN_DAILY_CAP - today_count)
+
+        audience_ids = self._audience_ids()
+        audience_estimate = len(audience_ids)
+
+        campaigns = list(Campaign.objects.order_by("-created_at")[:20])
+        campaigns_data = [
+            {
+                "id": c.id,
+                "title": c.title,
+                "message": c.message,
+                "created_by_user_id": c.created_by_user_id,
+                "audience_count": c.audience_count,
+                "sent_count": c.sent_count,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in campaigns
+        ]
+        return Response({
+            "audience_estimate": audience_estimate,
+            "today_remaining": today_remaining,
+            "campaigns": campaigns_data,
+        })
+
+    def post(self, request, *args, **kwargs):
+        if not _is_tenant_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        # ── Validate inputs ───────────────────────────────────────────────────
+        title = (request.data.get("title") or "").strip()
+        message = (request.data.get("message") or "").strip()
+        if not title or len(title) > 80:
+            return Response(
+                {"detail": "title is required and must be <= 80 characters.", "code": "invalid_title"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not message or len(message) > 200:
+            return Response(
+                {"detail": "message is required and must be <= 200 characters.", "code": "invalid_message"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Daily cap check ───────────────────────────────────────────────────
+        tenant = request.tenant
+        day_start, day_end = _campaign_day_window(tenant)
+        today_count = Campaign.objects.filter(
+            created_at__gte=day_start, created_at__lt=day_end,
+        ).count()
+        if today_count >= _CAMPAIGN_DAILY_CAP:
+            return Response(
+                {
+                    "detail": f"Daily campaign limit of {_CAMPAIGN_DAILY_CAP} reached. Try again tomorrow.",
+                    "code": "campaign_cap",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Audience ──────────────────────────────────────────────────────────
+        audience_ids = self._audience_ids()
+        if not audience_ids:
+            return Response(
+                {"detail": "No opted-in subscribers found among your past customers.", "code": "no_audience"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Create campaign row ───────────────────────────────────────────────
+        campaign = Campaign.objects.create(
+            title=title,
+            message=message,
+            created_by_user_id=request.user.pk,
+            audience_count=len(audience_ids),
+            sent_count=len(audience_ids),  # fire-and-forget: equals audience_count at enqueue
+        )
+
+        # ── Dispatch one push per audience customer ───────────────────────────
+        tenant_name = getattr(tenant, "name", "") or getattr(tenant, "slug", "")
+        tenant_slug = getattr(tenant, "slug", "")
+        push_url = f"/order/{tenant_slug}"
+        from accounts.push import push_campaign_to_customer
+        for cid in audience_ids:
+            push_campaign_to_customer(cid, tenant_name, title, message, push_url)
+
+        # ── Audit trail (one row per campaign, not per customer) ──────────────
+        try:
+            from accounts.notifications import record_notification
+            record_notification(
+                channel="push",
+                event="campaign",
+                status="sent",
+                recipient=f"{len(audience_ids)} customers",
+                detail=title,
+                tenant_id=getattr(tenant, "id", None),
+            )
+        except Exception:
+            pass
+
+        return Response(
+            {
+                "id": campaign.id,
+                "title": campaign.title,
+                "message": campaign.message,
+                "created_by_user_id": campaign.created_by_user_id,
+                "audience_count": campaign.audience_count,
+                "sent_count": campaign.sent_count,
+                "created_at": campaign.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
+        )

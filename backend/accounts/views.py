@@ -291,6 +291,7 @@ def _serialize_customer(customer: Customer) -> dict:
         "is_driver_online": bool(customer.is_driver_online),
         "notify_order_updates": bool(customer.notify_order_updates),
         "notify_review_prompts": bool(customer.notify_review_prompts),
+        "notify_promotions": bool(customer.notify_promotions),
     }
 
 
@@ -868,7 +869,7 @@ class CustomerProfileUpdateView(APIView):
             update_fields.append("locale")
 
         # Notification preferences (customer opt-outs).
-        for _pref in ("notify_order_updates", "notify_review_prompts"):
+        for _pref in ("notify_order_updates", "notify_review_prompts", "notify_promotions"):
             if _pref in request.data:
                 setattr(customer, _pref, bool(request.data.get(_pref)))
                 update_fields.append(_pref)

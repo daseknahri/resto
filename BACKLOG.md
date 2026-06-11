@@ -12,10 +12,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 > cancel atomicity, kitchen voided-items, cash-cancel warning, section bypass).
 
 ## Restaurant (current focus — candidates for post-v1.0)
-- [ ] **Digest cash formula for split-bill + void edge** — cash = SUM(total) -
-      SUM(wallet_amount_paid) can drift for orders that mix ledger cash partials
-      with post-payment voids; the ledger is the truth for reconciliation. Make
-      the digest read the OrderPayment ledger when rows exist. Source: R5 minor.
 - [ ] **`amount <= 0` guard in payments endpoint when ledger > total** — the R5
       fix flips such orders to PAID at void time, but a direct API path that
       creates the state would still strand; consider a reconcile sweep assertion.
@@ -38,8 +34,15 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **Combos / meal deals** (bundle pricing) — audit growth item, not in top-8.
 - [ ] **Happy-hour / time-based pricing** — availability_schedule exists per dish;
       price scheduling does not. Audit growth item.
-- [ ] **Owner→customers announcements / win-back campaigns** — owner-triggered push
-      broadcast to past customers ("couscous Friday"). Audit growth item.
+- [ ] **Campaign cap TOCTOU** — two concurrent POSTs can both pass the 2/day count
+      check (owner double-click) and land a 3rd campaign. Owner-only, low blast
+      radius; fix with a short cache-mutex around count+create. Source: campaigns
+      review minor.
+- [ ] **Digest mixed-day regression test** — ledger+legacy orders in the same day
+      is computed correctly but untested as a combined case. Source: campaigns
+      review minor.
+- [ ] **Win-back automation** — auto-nudge customers inactive N weeks (the
+      automated half of the campaigns feature; manual announcements shipped).
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
       tenants are single-location today.
 - [ ] **Auto-print on new order** — needs kiosk browser / local agent / network
@@ -89,3 +92,7 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 <!-- - [x] item — commit hash -->
 - [x] Payments endpoint request-level idempotency (backend mechanism: client key →
       cache short-circuit + cache.set after commit) — R4 split-bill commit.
+- [x] Owner→customers announcements (manual campaigns: opt-out pref, 2/day cap,
+      tenant-scoped audience, history) — campaigns commit.
+- [x] Digest cash formula for split-bill: ledger-derived wallet/cash with legacy
+      fallback — campaigns commit.

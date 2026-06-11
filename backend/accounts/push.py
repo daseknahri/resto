@@ -533,3 +533,43 @@ def push_ride_event_to_rider(rider_id, event) -> None:
     """Enqueue ride status push to rider. Never raises/blocks."""
     from accounts.tasks import enqueue, ride_notify_rider
     enqueue(ride_notify_rider, rider_id, event)
+
+
+# ── Owner campaign push ──────────────────────────────────────────────────────
+
+def send_campaign_push_sync(customer_id, tenant_name, title, message, url) -> int:
+    """Send a promotional campaign push to ONE customer. SYNCHRONOUS.
+
+    Respects ``notify_promotions``. Cross-schema: reads Customer + subscriptions
+    from the public schema. Returns number of pushes delivered (0 or 1+).
+    Deletes stale (gone) subscriptions as a side effect.
+    """
+    from django_tenants.utils import schema_context
+    from menu.push import _send_one
+    from .models import Customer, CustomerPushSubscription
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=customer_id).first()
+        if cust is not None and not getattr(cust, "notify_promotions", True):
+            return 0
+        subs = list(CustomerPushSubscription.objects.filter(customer_id=customer_id))
+    if not subs:
+        return 0
+
+    gone, sent = [], 0
+    for s in subs:
+        result = _send_one(s.endpoint, s.p256dh, s.auth, title, message, url)
+        if result == "gone":
+            gone.append(s.id)
+        elif result == "ok":
+            sent += 1
+    if gone:
+        with schema_context("public"):
+            CustomerPushSubscription.objects.filter(id__in=gone).delete()
+    return sent
+
+
+def push_campaign_to_customer(customer_id, tenant_name, title, message, url) -> None:
+    """Enqueue a campaign push to one customer. Never raises/blocks."""
+    from accounts.tasks import enqueue, campaign_push
+    enqueue(campaign_push, customer_id, tenant_name, title, message, url)

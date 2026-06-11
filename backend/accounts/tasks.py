@@ -118,3 +118,10 @@ def ride_notify_rider(rider_id, event):
     """Push a ride status event to the rider."""
     from accounts.push import notify_rider_sync
     notify_rider_sync(rider_id, event)
+
+
+@shared_task(name="accounts.tasks.campaign_push", **_RETRY)
+def campaign_push(customer_id, tenant_name, title, message, url):
+    """Send a promotional campaign push to one customer."""
+    from accounts.push import send_campaign_push_sync
+    send_campaign_push_sync(customer_id, tenant_name, title, message, url)

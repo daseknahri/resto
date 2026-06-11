@@ -69,6 +69,10 @@ class Customer(models.Model):
         default=True,
         help_text="Receive the post-order 'rate your order' reminder push.",
     )
+    notify_promotions = models.BooleanField(
+        default=True,
+        help_text="Receive occasional offers/announcements from restaurants you've ordered from.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -576,6 +576,28 @@ class AnalyticsEvent(models.Model):
         return f"{self.event_type} @ {self.created_at:%Y-%m-%d %H:%M:%S}"
 
 
+class Campaign(models.Model):
+    """Owner broadcast push campaign to past customers of this tenant.
+
+    ``created_by_user_id`` is a bare integer reference to the public-schema
+    accounts.User — no cross-schema FK. audience_count is set at creation;
+    sent_count is updated best-effort after dispatch (fire-and-forget).
+    """
+
+    title = models.CharField(max_length=80)
+    message = models.CharField(max_length=200)
+    created_by_user_id = models.IntegerField(null=True)
+    audience_count = models.IntegerField(default=0)
+    sent_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"Campaign({self.title!r}, {self.created_at:%Y-%m-%d})"
+
+
 class ClosureDate(models.Model):
     """
     A specific calendar date on which the restaurant is closed.
