@@ -330,22 +330,31 @@
           v-for="(item, idx) in orderData.items"
           :key="item.dish_name + item.note"
           class="ui-reveal flex items-start justify-between gap-3 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2.5 text-sm transition-colors hover:border-slate-700/60"
+          :class="item.is_voided ? 'opacity-60' : ''"
           :style="{ '--ui-delay': `${Math.min(idx, 9) * 20}ms` }"
         >
           <div class="flex items-start gap-2.5 min-w-0">
             <span
-              class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold text-slate-300 tabular-nums"
+              class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-[10px] font-bold tabular-nums"
+              :class="item.is_voided ? 'text-slate-500' : 'text-slate-300'"
               :aria-label="`${item.qty}x`"
             >{{ item.qty }}</span>
             <div class="min-w-0 space-y-0.5">
-              <p class="font-semibold text-slate-100 truncate" :title="item.dish_name">{{ item.dish_name }}</p>
+              <p class="truncate" :class="item.is_voided ? 'line-through text-slate-500' : 'font-semibold text-slate-100'" :title="item.dish_name">
+                {{ item.dish_name }}
+                <span
+                  v-if="item.is_voided"
+                  class="ms-1 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
+                  style="text-decoration:none"
+                >{{ t('waiterPage.voidedBadge') }}</span>
+              </p>
               <p v-if="item.options?.length" class="text-xs text-slate-400">
                 {{ item.options.map(o => o.name).join(" · ") }}
               </p>
               <p v-if="item.note" class="text-xs italic text-slate-500">{{ item.note }}</p>
             </div>
           </div>
-          <p class="shrink-0 font-semibold text-[var(--color-secondary)] tabular-nums">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
+          <p class="shrink-0 font-semibold tabular-nums" :class="item.is_voided ? 'line-through text-slate-500' : 'text-[var(--color-secondary)]'">{{ formatCurrency(item.subtotal, orderData.currency) }}</p>
         </div>
 
         <!-- Delivery fee breakdown — only shown for delivery orders with a fee -->

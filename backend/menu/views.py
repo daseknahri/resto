@@ -2513,6 +2513,7 @@ class CustomerOrderStatusView(APIView):
                 "currency": order.currency,
                 "options": item.options,
                 "note": item.note,
+                "is_voided": item.is_voided,
             }
             for item in order.items.all()
         ]
@@ -3118,6 +3119,7 @@ class StaffOrderListView(APIView):
                         "options": i.options,
                         "note": i.note,
                         "is_ready": i.is_ready,
+                        "is_voided": i.is_voided,
                     }
                     for i in order.items.all()
                 ],
@@ -3254,6 +3256,404 @@ class StaffOrderItemReadyView(APIView):
         except Exception:
             pass
         return Response({"id": item.id, "is_ready": item.is_ready})
+
+
+def _staff_order_payload(order):
+    """Return the refreshed staff-list order dict for a single order.
+
+    Reused by the append-items and void-item views so both endpoints return the
+    same shape the staff list uses, making frontend state updates trivial.
+    """
+    return {
+        "id": order.id,
+        "order_number": order.order_number,
+        "status": order.status,
+        "payment_status": order.payment_status,
+        "fulfillment_type": order.fulfillment_type,
+        "table_label": order.table_label,
+        "customer_name": order.customer_name,
+        "customer_id": order.customer_id,
+        "customer_note": order.customer_note,
+        "owner_note": order.owner_note,
+        "estimated_ready_minutes": order.estimated_ready_minutes,
+        "total": str(order.total),
+        "delivery_fee": str(order.delivery_fee),
+        "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
+        "currency": order.currency,
+        "items_count": sum(i.qty for i in order.items.all() if not i.is_voided),
+        "items": [
+            {
+                "id": i.id,
+                "dish_name": i.dish_name,
+                "dish_slug": i.dish_slug,
+                "qty": i.qty,
+                "unit_price": str(i.unit_price),
+                "subtotal": str(i.subtotal),
+                "options": i.options,
+                "note": i.note,
+                "is_ready": i.is_ready,
+                "is_voided": i.is_voided,
+            }
+            for i in order.items.all()
+        ],
+        "created_at": order.created_at.isoformat(),
+        "updated_at": order.updated_at.isoformat(),
+        "scheduled_for": order.scheduled_for.isoformat() if getattr(order, "scheduled_for", None) else None,
+    }
+
+
+def _recompute_order_totals(order):
+    """Recompute order.total/subtotal from non-voided items + delivery_fee/tip/discount.
+
+    Mirrors the PlaceOrderView formula: food_subtotal = sum(item.subtotal for non-voided),
+    then subtract promotion_discount and loyalty_discount, add delivery_fee and tip.
+    Does NOT save — caller must call order.save(update_fields=...).
+    """
+    non_voided = [i for i in order.items.all() if not i.is_voided]
+    food_subtotal = sum(Decimal(str(i.subtotal)) for i in non_voided)
+    promo_discount = Decimal(str(order.promotion_discount or "0"))
+    loyalty_discount = Decimal(str(order.loyalty_discount or "0"))
+    delivery_fee = Decimal(str(order.delivery_fee or "0"))
+    tip_amount = Decimal(str(order.tip_amount or "0"))
+    total = max(Decimal("0"), food_subtotal + delivery_fee - promo_discount - loyalty_discount + tip_amount)
+    order.total = total
+
+
+class StaffAppendOrderItemsView(APIView):
+    """POST /api/staff/orders/<order_id>/items/
+
+    Append one or more items to an open TABLE order (dine-in only).
+
+    Auth: same _can_edit_tenant_order gate used by all staff order views.
+
+    Guards (409):
+      not_table       — order.fulfillment_type != 'table'
+      bad_status      — order.status not in pending/confirmed/preparing
+      already_paid    — order.payment_status == PAID
+
+    Body:
+      { "items": [{"dish_slug": str, "qty": int, "note"?: str, "option_ids"?: [int]}] }
+
+    Validates and builds items exactly like PlaceOrderView does for table orders
+    (published+available dish, option pricing, per-item price snapshot).  Stock is
+    decremented inside the same select_for_update pattern; an out-of-stock condition
+    rolls back the whole request (409 out_of_stock).
+
+    Returns the refreshed staff-list payload for the order.
+    """
+    permission_classes = [IsAuthenticated]
+
+    _OPEN_STATUSES = {
+        Order.Status.PENDING,
+        Order.Status.CONFIRMED,
+        Order.Status.PREPARING,
+    }
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # ── Guards ────────────────────────────────────────────────────────────
+        if order.fulfillment_type != Order.FulfillmentType.TABLE:
+            return Response(
+                {"detail": "Items can only be appended to table orders.", "code": "not_table"},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if order.status not in self._OPEN_STATUSES:
+            return Response(
+                {"detail": "Order is not in an editable state.", "code": "bad_status"},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if order.payment_status == Order.PaymentStatus.PAID:
+            return Response(
+                {"detail": "Order is already paid.", "code": "already_paid"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # ── Input validation ──────────────────────────────────────────────────
+        raw_items = request.data.get("items")
+        if not isinstance(raw_items, list) or not raw_items:
+            return Response({"detail": "items must be a non-empty list.", "code": "invalid_items"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        parsed = []
+        for idx, entry in enumerate(raw_items):
+            if not isinstance(entry, dict):
+                return Response({"detail": f"items[{idx}] must be an object.", "code": "invalid_items"},
+                                status=status.HTTP_400_BAD_REQUEST)
+            slug = str(entry.get("dish_slug") or "").strip()
+            if not slug:
+                return Response({"detail": f"items[{idx}].dish_slug is required.", "code": "invalid_items"},
+                                status=status.HTTP_400_BAD_REQUEST)
+            try:
+                qty = int(entry.get("qty") or 1)
+                if qty < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return Response({"detail": f"items[{idx}].qty must be a positive integer.", "code": "invalid_items"},
+                                status=status.HTTP_400_BAD_REQUEST)
+            note = str(entry.get("note") or "")[:120]
+            option_ids = []
+            for oid in (entry.get("option_ids") or []):
+                try:
+                    option_ids.append(int(oid))
+                except (TypeError, ValueError):
+                    pass
+            parsed.append({"slug": slug, "qty": qty, "note": note, "option_ids": option_ids})
+
+        # ── Dish + option resolution (same criteria as PlaceOrderView) ────────
+        slugs = [p["slug"] for p in parsed]
+        all_option_ids = [oid for p in parsed for oid in p["option_ids"]]
+
+        dishes_map = {
+            d.slug: d
+            for d in Dish.objects.filter(
+                slug__in=slugs,
+                is_published=True,
+                is_available=True,
+                category__is_published=True,
+                category__is_temporarily_disabled=False,
+            ).select_related("category")
+        }
+        missing = [s for s in slugs if s not in dishes_map]
+        if missing:
+            return Response(
+                {"detail": "Some items are unavailable.", "code": "items_unavailable", "slugs": missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        options_map = {}
+        if all_option_ids:
+            options_map = {o.id: o for o in DishOption.objects.filter(id__in=all_option_ids)}
+
+        # ── Build new OrderItem records + collect stock updates ───────────────
+        new_items_data = []
+        _stock_updates = []   # list of (dish_pk, qty)
+        _pk_to_slug = {}
+
+        for p in parsed:
+            dish = dishes_map[p["slug"]]
+            unit_price = Decimal(str(dish.price))
+            option_snapshots = []
+            for oid in p["option_ids"]:
+                opt = options_map.get(oid)
+                if opt:
+                    unit_price += Decimal(str(opt.price_delta))
+                    option_snapshots.append({"id": opt.id, "name": opt.name, "price_delta": str(opt.price_delta)})
+            qty = p["qty"]
+            subtotal = unit_price * qty
+            new_items_data.append({
+                "dish_slug": dish.slug,
+                "dish_name": dish.name,
+                "unit_price": unit_price,
+                "qty": qty,
+                "note": p["note"],
+                "options": option_snapshots,
+                "subtotal": subtotal,
+                "is_ready": False,
+            })
+            _pk_to_slug[dish.pk] = dish.slug
+            if dish.stock_qty is not None:
+                _stock_updates.append((dish.pk, qty))
+
+        # ── Atomic: stock check + decrement + create items + recompute totals ─
+        class _OutOfStock(Exception):
+            def __init__(self, name):
+                self.name = name
+
+        # All dish PKs (finite- and unlimited-stock alike) for the availability
+        # re-check under the lock.  Unlimited-stock dishes are excluded from
+        # _stock_updates but must still be locked so a concurrent disable
+        # (is_available=False) between the outer query and the insert is caught.
+        _all_dish_pks = list(_pk_to_slug.keys())
+
+        try:
+            with transaction.atomic():
+                # Lock ALL appended dishes so we can re-validate is_available and
+                # stock_qty atomically, regardless of whether they track stock.
+                _locked = {
+                    d.pk: d
+                    for d in Dish.objects.select_for_update().filter(pk__in=_all_dish_pks)
+                }
+
+                # Re-validate availability under the lock (catches concurrent disables
+                # of unlimited-stock items that the outer query couldn't see).
+                for _dish_pk, _ld in _locked.items():
+                    if not _ld.is_available:
+                        raise _OutOfStock(_ld.name)
+
+                if _stock_updates:
+                    for _dish_pk, _ordered_qty in _stock_updates:
+                        _ld = _locked.get(_dish_pk)
+                        if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
+                            raise _OutOfStock(_ld.name)
+                    for _dish_pk, _ordered_qty in _stock_updates:
+                        _ld = _locked.get(_dish_pk)
+                        if _ld and _ld.stock_qty is not None:
+                            _new_qty = max(0, _ld.stock_qty - _ordered_qty)
+                            if _new_qty == 0:
+                                Dish.objects.filter(pk=_dish_pk).update(stock_qty=0, is_available=False)
+                            else:
+                                Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
+
+                for item_data in new_items_data:
+                    OrderItem.objects.create(order=order, **item_data)
+
+                # Reload items from DB so _recompute_order_totals sees the new rows
+                order = Order.objects.prefetch_related("items").get(pk=order_id)
+                _recompute_order_totals(order)
+                order.save(update_fields=["total", "updated_at"])
+
+        except _OutOfStock as exc:
+            return Response(
+                {"detail": f"'{exc.name}' is out of stock.", "code": "out_of_stock", "dish": exc.name},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order), status=status.HTTP_201_CREATED)
+
+
+class StaffVoidOrderItemView(APIView):
+    """POST /api/staff/orders/<order_id>/items/<item_id>/void/
+
+    Void (remove) a single line item from an open order without cancelling the whole
+    order.  Restocks the dish, recomputes totals, and (for wallet-paid orders) issues
+    a partial wallet refund for exactly the item's line total.
+
+    Auth: same _can_edit_tenant_order gate.
+
+    Guards (404/409):
+      404           — item does not belong to this order
+      already_voided — item.is_voided is already True (409)
+      bad_status    — order is in a terminal state (409)
+
+    Body (optional): { "reason": str }
+
+    Money rule (PAID wallet orders only):
+      refund = min(item.subtotal, order.wallet_amount_paid)
+      credit_wallet(..., tx_type=REFUND, idempotency_key=f"voiditem:{item_id}")
+      order.wallet_amount_paid decremented by refunded amount; payment_status stays PAID.
+      Cash-paid or UNPAID orders: no wallet movement.
+
+    NOTE: Loyalty points are NOT adjusted on item void (MVP). Adjust on order
+    cancel only (full reversal via _reverse_loyalty_for_cancelled_order).
+
+    Returns the refreshed staff-list payload for the order.
+    """
+    permission_classes = [IsAuthenticated]
+
+    # Deliberately looser than the append view's _OPEN_STATUSES: voiding an item
+    # off a READY order (customer refuses it at the pass, before settle) is a
+    # real service situation, while APPENDING to a READY order would silently
+    # re-open kitchen work after "ready" was announced — that stays blocked.
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+
+    def post(self, request, order_id, item_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        order = Order.objects.prefetch_related("items").filter(pk=order_id).first()
+        if order is None:
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Item must belong to this order
+        item = order.items.filter(pk=item_id).first()
+        if item is None:
+            return Response({"detail": "Item not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if item.is_voided:
+            return Response({"detail": "Item is already voided.", "code": "already_voided"},
+                            status=status.HTTP_409_CONFLICT)
+
+        if order.status in self._TERMINAL_STATUSES:
+            return Response(
+                {"detail": "Order is in a terminal state and cannot be modified.", "code": "bad_status"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        reason = str(request.data.get("reason") or "")[:120]
+
+        # ── Atomic: void + restock + recompute totals ─────────────────────────
+        with transaction.atomic():
+            # Mark voided
+            now = timezone.now()
+            item.is_voided = True
+            item.voided_at = now
+            item.void_reason = reason
+            item.save(update_fields=["is_voided", "voided_at", "void_reason"])
+
+            # Restock — same locked pattern as _restock_cancelled_order but per-item
+            from django.db.models import F as _F
+            if item.dish_slug:
+                _locked_list = list(
+                    Dish.objects.select_for_update().filter(slug=item.dish_slug)
+                )
+                for _d in _locked_list:
+                    if _d.stock_qty is not None and item.qty > 0:
+                        Dish.objects.filter(pk=_d.pk).update(
+                            stock_qty=_F("stock_qty") + item.qty,
+                            is_available=True,
+                        )
+
+            # Recompute order totals from non-voided items.
+            # select_for_update() locks the order row so concurrent void calls on
+            # different items cannot both read a stale wallet_amount_paid and each
+            # issue an independent refund (TOCTOU / double-spend fix).
+            order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
+            _recompute_order_totals(order)
+
+            # Partial wallet refund (PAID + wallet_amount_paid > 0 only).
+            # We save the order BEFORE calling credit_wallet so that the
+            # wallet_amount_paid decrement and the wallet credit are atomic with
+            # respect to failures: if order.save() raises, credit_wallet is never
+            # called; if credit_wallet raises, the outer transaction rolls back
+            # order.save() via savepoint (fixing the non-atomicity risk).
+            _refunded = Decimal("0")
+            if (
+                order.payment_status == Order.PaymentStatus.PAID
+                and Decimal(str(order.wallet_amount_paid or "0")) > Decimal("0")
+                and order.customer_id
+            ):
+                line_total = Decimal(str(item.subtotal))
+                wallet_paid = Decimal(str(order.wallet_amount_paid or "0"))
+                refund_amount = min(line_total, wallet_paid)
+                if refund_amount > Decimal("0"):
+                    _refunded = refund_amount
+                    order.wallet_amount_paid = wallet_paid - _refunded
+
+            # Persist total update and (conditionally) wallet_amount_paid before
+            # issuing any wallet credit so the DB is consistent if credit_wallet fails.
+            _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
+            order.save(update_fields=["total", "updated_at"] + _wallet_fields)
+
+            if _refunded > Decimal("0"):
+                from accounts.wallet_service import credit_wallet
+                from accounts.models import WalletTransaction as _WTx
+                credit_wallet(
+                    order.customer_id,
+                    _refunded,
+                    tx_type=_WTx.Type.REFUND,
+                    idempotency_key=f"voiditem:{item_id}",
+                    reference=order.order_number,
+                    note=f"Void item: {item.dish_name}",
+                    require_verified=False,
+                )
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order))
 
 
 class OwnerDriverCashoutLookupView(APIView):
@@ -3684,6 +4084,7 @@ class OwnerOrderListView(APIView):
                         "subtotal": str(i.subtotal),
                         "options": i.options,
                         "note": i.note,
+                        "is_voided": i.is_voided,
                     }
                     for i in order.items.all()
                 ],
@@ -3809,6 +4210,7 @@ class OwnerOrderDetailView(APIView):
                     "subtotal": str(i.subtotal),
                     "options": i.options,
                     "note": i.note,
+                    "is_voided": i.is_voided,
                 }
                 for i in order.items.all()
             ],

@@ -504,6 +504,11 @@ class OrderItem(models.Model):
     # multi-item ticket instead of an all-or-nothing order status.
     is_ready = models.BooleanField(default=False)
     ready_at = models.DateTimeField(null=True, blank=True)
+    # Dine-in item voiding — a waiter can remove a line item from an open tab
+    # (e.g. customer changes mind) without cancelling the whole order.
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.CharField(max_length=120, blank=True)
 
     class Meta:
         ordering = ("id",)

@@ -3278,6 +3278,7 @@ class MarketplaceOrderStatusView(APIView):
                         "subtotal": str(item.subtotal),
                         "options": item.options,
                         "note": item.note,
+                        "is_voided": item.is_voided,
                     }
                     for item in order.items.all()
                 ]

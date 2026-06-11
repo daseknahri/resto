@@ -2227,7 +2227,8 @@ const arabicMessages = {
     "djRefundCancel": "استرداد وإلغاء",
     "djRefundCancelConfirm": "استرداد وإلغاء هذا الطلب؟",
     "djRefundCancelBody": "سيُسترد رصيد محفظة العميل. هذا الإجراء لا يمكن التراجع عنه.",
-    "djRefundCancelYes": "نعم، استرداد وإلغاء"
+    "djRefundCancelYes": "نعم، استرداد وإلغاء",
+    "voidedBadge": "ملغي"
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",
@@ -3462,6 +3463,17 @@ Object.assign(arabicMessages, {
     billPrint: "\u0637\u0628\u0627\u0639\u0629",
     billPayWallet: "\u0627\u062f\u0641\u0639 {amount} \u0645\u0646 \u0627\u0644\u0645\u062d\u0641\u0638\u0629",
     billClose: "\u0625\u063a\u0644\u0627\u0642",
+    addItems: "\u0625\u0636\u0627\u0641\u0629 \u0639\u0646\u0627\u0635\u0631",
+    addItemsTitle: "\u0625\u0636\u0627\u0641\u0629 \u0625\u0644\u0649 \u0627\u0644\u0637\u0644\u0628 #{n}",
+    itemsAdded: "\u062a\u0645\u062a \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0639\u0646\u0627\u0635\u0631 \u2014 \u062a\u0645 \u0625\u062e\u0637\u0627\u0631 \u0627\u0644\u0645\u0637\u0628\u062e.",
+    addFailed: "\u062a\u0639\u0630\u0651\u0631 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0639\u0646\u0627\u0635\u0631.",
+    voidItem: "\u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0639\u0646\u0635\u0631",
+    voidReasonPrompt: "\u0627\u0644\u0633\u0628\u0628 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)",
+    itemVoided: "\u062a\u0645 \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0639\u0646\u0635\u0631.",
+    voidFailed: "\u062a\u0639\u0630\u0651\u0631 \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0639\u0646\u0635\u0631.",
+    voidedBadge: "\u0645\u0644\u063a\u064a",
+    tableTotal: "\u0645\u062c\u0645\u0648\u0639 \u0627\u0644\u0637\u0627\u0648\u0644\u0629",
+    tableOrders: "{n} \u0637\u0644\u0628\u0627\u062a",
   },
   closureDates: {
     addDate: "\u0625\u0636\u0627\u0641\u0629 \u062a\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642",

@@ -13,7 +13,9 @@
       <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
         <div class="min-w-0">
           <p class="ui-kicker">{{ t('waiterPage.newOrderKicker') }}</p>
-          <h2 id="waiter-new-order-title" class="text-base font-bold text-white leading-tight">{{ t('waiterPage.newOrderTitle') }}</h2>
+          <h2 id="waiter-new-order-title" class="text-base font-bold text-white leading-tight">
+            {{ props.appendToOrderId ? t('waiterPage.addItemsTitle', { n: props.appendOrderNumber }) : t('waiterPage.newOrderTitle') }}
+          </h2>
         </div>
         <button
           class="ui-press ui-touch-target flex items-center justify-center rounded-full p-1.5 text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/60"
@@ -29,46 +31,48 @@
         <div class="flex flex-1 min-w-0 flex-col overflow-hidden border-b border-slate-800 md:border-b-0 md:border-r">
           <!-- Table input + customer name + search -->
           <div class="space-y-2 p-3 border-b border-slate-800/60">
-            <!-- Fulfillment type toggle -->
-            <div class="ui-segmented" role="radiogroup" :aria-label="t('waiterPage.newOrderFulfillmentLabel')">
-              <button
-                class="ui-segmented-button flex-1"
-                :data-active="fulfillmentType === 'table'"
-                role="radio"
-                :aria-checked="String(fulfillmentType === 'table')"
-                @click="fulfillmentType = 'table'"
-              >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
-              <button
-                class="ui-segmented-button flex-1"
-                :data-active="fulfillmentType === 'pickup'"
-                role="radio"
-                :aria-checked="String(fulfillmentType === 'pickup')"
-                @click="fulfillmentType = 'pickup'"
-              >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
-            </div>
-            <div v-if="fulfillmentType === 'table'" class="flex items-center gap-2">
-              <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
-              <input
-                v-model.trim="tableLabel"
-                type="text"
-                maxlength="40"
-                class="ui-input flex-1 text-sm"
-                :aria-label="t('waiterPage.newOrderTablePlaceholder')"
-                :placeholder="t('waiterPage.newOrderTablePlaceholder')"
-              />
-            </div>
-            <div class="flex items-center gap-2">
-              <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
-              <input
-                v-model.trim="customerName"
-                type="text"
-                maxlength="80"
-                autocomplete="name"
-                :aria-label="t('waiterPage.newOrderCustomerNamePlaceholder')"
-                class="ui-input flex-1 text-sm"
-                :placeholder="t('waiterPage.newOrderCustomerNamePlaceholder')"
-              />
-            </div>
+            <!-- Fulfillment type toggle — hidden in append mode (order type already fixed) -->
+            <template v-if="!props.appendToOrderId">
+              <div class="ui-segmented" role="radiogroup" :aria-label="t('waiterPage.newOrderFulfillmentLabel')">
+                <button
+                  class="ui-segmented-button flex-1"
+                  :data-active="fulfillmentType === 'table'"
+                  role="radio"
+                  :aria-checked="String(fulfillmentType === 'table')"
+                  @click="fulfillmentType = 'table'"
+                >{{ t('waiterPage.newOrderFulfillmentTable') }}</button>
+                <button
+                  class="ui-segmented-button flex-1"
+                  :data-active="fulfillmentType === 'pickup'"
+                  role="radio"
+                  :aria-checked="String(fulfillmentType === 'pickup')"
+                  @click="fulfillmentType = 'pickup'"
+                >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
+              </div>
+              <div v-if="fulfillmentType === 'table'" class="flex items-center gap-2">
+                <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                <input
+                  v-model.trim="tableLabel"
+                  type="text"
+                  maxlength="40"
+                  class="ui-input flex-1 text-sm"
+                  :aria-label="t('waiterPage.newOrderTablePlaceholder')"
+                  :placeholder="t('waiterPage.newOrderTablePlaceholder')"
+                />
+              </div>
+              <div class="flex items-center gap-2">
+                <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                <input
+                  v-model.trim="customerName"
+                  type="text"
+                  maxlength="80"
+                  autocomplete="name"
+                  :aria-label="t('waiterPage.newOrderCustomerNamePlaceholder')"
+                  class="ui-input flex-1 text-sm"
+                  :placeholder="t('waiterPage.newOrderCustomerNamePlaceholder')"
+                />
+              </div>
+            </template>
             <div class="relative">
               <AppIcon name="search" class="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" aria-hidden="true" />
               <input
@@ -211,7 +215,7 @@
               :disabled="submitting || !cartItems.length"
               @click="submit"
             >
-              {{ submitting ? t('waiterPage.newOrderSubmitting') : t('waiterPage.newOrderSubmit') }}
+              {{ submitting ? t('waiterPage.newOrderSubmitting') : (props.appendToOrderId ? t('waiterPage.addItems') : t('waiterPage.newOrderSubmit')) }}
             </button>
           </div>
         </div>
@@ -345,7 +349,15 @@ import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 
-const emit = defineEmits(['close', 'placed']);
+const props = defineProps({
+  // When set, the component operates in "append" mode: posts items to the
+  // append endpoint instead of place-order, hides table/fulfillment inputs,
+  // and emits 'appended' instead of 'placed'.
+  appendToOrderId: { type: Number, default: null },
+  appendOrderNumber: { type: [Number, String], default: null },
+});
+
+const emit = defineEmits(['close', 'placed', 'appended']);
 const { t, currentLocale } = useI18n();
 const menu = useMenuStore();
 const tenant = useTenantStore();
@@ -587,12 +599,50 @@ const onSearch = () => {
   }
 };
 
+// Map backend 409 error codes to user-facing messages for the append endpoint.
+const _appendErrorMsg = (err) => {
+  const data = err?.response?.data || {};
+  const code = data.code || '';
+  const detail = data.detail || data.error || '';
+  if (code === 'out_of_stock') return detail || t('waiterPage.addFailed');
+  if (code === 'not_table')    return t('waiterPage.addFailed');
+  if (code === 'bad_status')   return t('waiterPage.addFailed');
+  if (code === 'already_paid') return t('waiterPage.addFailed');
+  return detail || t('waiterPage.addFailed');
+};
+
 const submit = async () => {
   submitError.value = '';
   if (!cartItems.value.length) {
     submitError.value = t('waiterPage.newOrderNoItems');
     return;
   }
+
+  // Append mode — POST to the append endpoint.
+  if (props.appendToOrderId) {
+    submitting.value = true;
+    try {
+      const payload = {
+        items: cartItems.value.map((i) => ({
+          dish_slug: i.dish_slug,
+          qty: i.qty,
+          note: i.note?.trim() || '',
+          option_ids: i.option_ids || [],
+        })),
+      };
+      await api.post(`/staff/orders/${props.appendToOrderId}/items/`, payload);
+      toast.show(t('waiterPage.itemsAdded'), 'success');
+      emit('appended');
+      emit('close');
+    } catch (err) {
+      submitError.value = _appendErrorMsg(err);
+    } finally {
+      submitting.value = false;
+    }
+    return;
+  }
+
+  // Normal new-order mode.
   if (fulfillmentType.value === 'table' && !tableLabel.value.trim()) {
     submitError.value = t('waiterPage.newOrderNoTable');
     return;

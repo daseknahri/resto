@@ -584,18 +584,24 @@
             v-for="item in o.items"
             :key="item.dish_slug + item.note"
             class="flex items-start justify-between gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 py-2 pe-3 ps-3 text-xs"
+            :class="item.is_voided ? 'opacity-60' : ''"
           >
             <div class="min-w-0 space-y-0.5">
-              <p class="flex items-start gap-2 font-semibold leading-snug text-slate-100">
-                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold text-slate-100 tabular-nums">{{ item.qty }}</span>
+              <p class="flex items-start gap-2 font-semibold leading-snug" :class="item.is_voided ? 'line-through text-slate-500' : 'text-slate-100'">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums" :class="item.is_voided ? 'text-slate-500' : 'text-slate-100'">{{ item.qty }}</span>
                 <span class="min-w-0 flex-1">{{ item.dish_name }}</span>
+                <span
+                  v-if="item.is_voided"
+                  class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
+                  style="text-decoration:none"
+                >{{ t("ownerOrders.voidedBadge") }}</span>
               </p>
               <p v-if="item.options?.length" class="text-slate-400">
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}
               </p>
               <p v-if="item.note" class="italic text-slate-400">{{ item.note }}</p>
             </div>
-            <p class="shrink-0 font-semibold tabular-nums text-slate-200">{{ formatCurrency(item.subtotal, o.currency) }}</p>
+            <p class="shrink-0 font-semibold tabular-nums" :class="item.is_voided ? 'line-through text-slate-500' : 'text-slate-200'">{{ formatCurrency(item.subtotal, o.currency) }}</p>
           </div>
           <p v-if="o.customer_note" class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300">
             <span class="font-semibold text-slate-400">{{ t("ownerOrders.note") }}:</span> {{ o.customer_note }}
