@@ -123,6 +123,9 @@ R5: Final pass — full-journey adversarial review + manual smoke checklist + ta
   restaurant v1.0 complete; then production deploy + real-tenant onboarding.
 Token discipline: Sonnet workers, 1 backend + 1 frontend agent per batch, single
 focused reviewer, fix-loop max 1.
+Catch-net: BACKLOG.md at the repo root collects everything deferred/forgotten —
+every batch APPENDS (deferred review findings, audit leftovers, MVP cuts);
+reviewed in full during R5 and periodically after. Nothing gets lost silently.
 
 ## 5. Phased roadmap
 
