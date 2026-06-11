@@ -271,6 +271,7 @@ export const dishApi = {
       position: Number(dish.position) || 0,
       is_published: dish.is_published ?? true,
       attributes: dish.attributes && typeof dish.attributes === 'object' ? dish.attributes : {},
+      ...(dish.low_stock_threshold !== undefined && { low_stock_threshold: dish.low_stock_threshold }),
     };
     try {
       let result;

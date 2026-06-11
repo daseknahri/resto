@@ -213,6 +213,7 @@ import api from "../lib/api";
 import StepSuperCategories from "../onboarding/StepSuperCategories.vue";
 import StepCategories from "../onboarding/StepCategories.vue";
 import StepDishes from "../onboarding/StepDishes.vue";
+import OwnerInventory from "../components/OwnerInventory.vue";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (editing surface — keep its data fresh and its cleanup running on unmount).
@@ -260,6 +261,13 @@ const tabs = computed(() => [
     description: t("onboardingWizard.steps.dishes.description"),
     icon: "cart",
     component: StepDishes,
+  },
+  {
+    key: "inventory",
+    label: t("inventory.tab"),
+    description: t("inventory.tab"),
+    icon: "chart",
+    component: OwnerInventory,
   },
 ]);
 

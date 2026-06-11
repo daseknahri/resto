@@ -2336,13 +2336,13 @@ class OwnerDashboardView(APIView):
         categories_count = Category.objects.count()
         dishes_count = Dish.objects.count()
 
-        # Low-stock alert: tracked dishes (stock_qty set) at/below the threshold, soonest
-        # to run out first. Operational signal (shown to all staff, not just revenue viewers).
-        _LOW_STOCK_THRESHOLD = 5
+        # Low-stock alert: tracked dishes (stock_qty set) at or below each dish's own
+        # low_stock_threshold (default 3). Soonest-to-run-out first. Operational signal
+        # (shown to all staff, not just revenue viewers).
         low_stock = [
             {"slug": d.slug, "name": d.name, "stock_qty": d.stock_qty, "is_available": d.is_available}
             for d in Dish.objects.filter(
-                stock_qty__isnull=False, stock_qty__lte=_LOW_STOCK_THRESHOLD
+                stock_qty__isnull=False, stock_qty__lte=F("low_stock_threshold")
             ).order_by("stock_qty", "name")[:20]
         ]
 
@@ -2637,6 +2637,60 @@ class OwnerDashboardView(APIView):
             "commission_total": float(_mkt_agg["mkt_commission"] or 0),
         }
 
+        # ── Payment split (ledger-aware wallet/cash) ──────────────────────────
+        from menu.revenue import split_revenue_for_orders as _split_revenue
+        _paid_qs = revenue_qs  # same status filter already applied
+        _split = _split_revenue(_paid_qs)
+        payment_split = {
+            "wallet": str(_split["wallet"]),
+            "cash": str(_split["cash"]),
+        }
+
+        # ── Top 5 items by revenue (non-voided OrderItem subtotals) ───────────
+        _top_item_rows = (
+            OrderItem.objects.filter(order__in=revenue_qs, is_voided=False)
+            .exclude(dish_name="")
+            .values("dish_name")
+            .annotate(revenue=Sum("subtotal"), qty=Sum("qty"))
+            .order_by("-revenue")[:5]
+        )
+        top_items_by_revenue = [
+            {
+                "dish_name": row["dish_name"],
+                "revenue": str(round(float(row["revenue"] or 0), 2)),
+                "qty": row["qty"] or 0,
+            }
+            for row in _top_item_rows
+        ]
+
+        # ── Financial statement ────────────────────────────────────────────────
+        _stmt_agg = revenue_qs.aggregate(
+            gross=Sum("total"),
+            promo_discounts=Sum("promotion_discount"),
+            loyalty_discounts=Sum("loyalty_discount"),
+            tips=Sum("tip_amount"),
+            commission=Sum("commission_amount"),
+        )
+        _gross = float(_stmt_agg["gross"] or 0)
+        _promo = float(_stmt_agg["promo_discounts"] or 0)
+        _loyalty = float(_stmt_agg["loyalty_discounts"] or 0)
+        _tips = float(_stmt_agg["tips"] or 0)
+        _commission = float(_stmt_agg["commission"] or 0)
+        # SEMANTICS (do not "fix" without re-reading PlaceOrderView): Order.total
+        # is computed as (subtotal - promo - loyalty) + tip at placement. So gross
+        # (Sum of total) is ALREADY net of discounts and ALREADY includes tips.
+        # The discount lines below are informational ("discounts given"), NOT
+        # subtracted again; tips belong to staff and are REMOVED to get what the
+        # house keeps:  net = gross - tips - commission.
+        statement = {
+            "gross": str(round(_gross, 2)),
+            "promo_discounts": str(round(_promo, 2)),
+            "loyalty_discounts": str(round(_loyalty, 2)),
+            "tips": str(round(_tips, 2)),
+            "commission": str(round(_commission, 2)),
+            "net": str(round(_gross - _tips - _commission, 2)),
+        }
+
         # Customer return rate — among phone-identified customers in this window,
         # what % had placed an order at least once BEFORE the window opened?
         phones_in_range = set(
@@ -2720,6 +2774,9 @@ class OwnerDashboardView(APIView):
                     "marketplace": marketplace_stats,
                     "fulfillment_breakdown": fulfillment_breakdown,
                     "loyalty_promo": loyalty_promo,
+                    "payment_split": payment_split,
+                    "top_items_by_revenue": top_items_by_revenue,
+                    "statement": statement,
                 },
                 "today_reservations": today_reservations,
                 "today_new_reservations": today_new_reservations,

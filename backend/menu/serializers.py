@@ -297,6 +297,7 @@ class DishSerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "is_published",
             "is_available",
             "stock_qty",
+            "low_stock_threshold",
             "availability_schedule",
             "is_schedule_available",
             "options",

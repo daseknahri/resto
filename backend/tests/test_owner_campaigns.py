@@ -333,14 +333,28 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
         total_revenue,
         order_count=2,
     ):
-        """Patch Order/OrderItem/OrderPayment at the module level in send_daily_summary."""
+        """Patch Order/OrderItem at the module level and OrderPayment via menu.models."""
         import menu.management.commands.send_daily_summary as _mod
         from menu.management.commands.send_daily_summary import _compute_summary
+
+        # Build a mock OrderPayment that split_revenue_for_orders will use
+        # (it does `from menu.models import OrderPayment` lazily).
+        mock_payment = MagicMock()
+        mock_payment.Method.WALLET = "wallet"
+        mock_payment.Method.CASH = "cash"
+
+        ledger_qs = MagicMock()
+        ledger_qs.values_list.return_value.distinct.return_value = list(ledger_order_ids)
+        ledger_qs.filter.return_value.aggregate.return_value = {
+            "ledger_wallet": Decimal(str(ledger_wallet)),
+            "ledger_cash": Decimal(str(ledger_cash)),
+        }
+        mock_payment.objects.filter.return_value = ledger_qs
 
         with (
             patch.object(_mod, "Order") as mock_order,
             patch.object(_mod, "OrderItem") as mock_item,
-            patch.object(_mod, "OrderPayment") as mock_payment,
+            patch("menu.models.OrderPayment", mock_payment),
         ):
             # Configure Order mock
             mock_order.Status.COMPLETED = "completed"
@@ -349,30 +363,13 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             mock_order.Status.CONFIRMED = "confirmed"
 
             qs = MagicMock()
-            # .filter(...) chaining
-            qs.filter.return_value = qs
             qs.aggregate.return_value = {
                 "order_count": order_count,
                 "total_revenue": Decimal(str(total_revenue)),
-                "wallet_revenue": Decimal(str(legacy_wallet)),
             }
-            # values_list("id", flat=True) for order_ids
-            qs.values_list.return_value = order_ids
+            # values_list("id", flat=True) for order_ids — used by split_revenue_for_orders
+            qs.values_list.return_value = list(order_ids)
             mock_order.objects.filter.return_value = qs
-
-            # Configure OrderPayment mock
-            mock_payment.Method.WALLET = "wallet"
-            mock_payment.Method.CASH = "cash"
-
-            ledger_qs = MagicMock()
-            # values_list("order_id", flat=True).distinct() → ledger_order_ids
-            ledger_qs.values_list.return_value.distinct.return_value = list(ledger_order_ids)
-            # .filter().aggregate() for ledger sums
-            ledger_qs.filter.return_value.aggregate.return_value = {
-                "ledger_wallet": Decimal(str(ledger_wallet)),
-                "ledger_cash": Decimal(str(ledger_cash)),
-            }
-            mock_payment.objects.filter.return_value = ledger_qs
 
             # For legacy orders: qs.filter(id__in=legacy_ids).aggregate(...)
             legacy_qs = MagicMock()
@@ -385,6 +382,7 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             # OrderItem top dishes — return empty list
             item_qs = MagicMock()
             item_qs.filter.return_value = item_qs
+            item_qs.exclude.return_value = item_qs
             item_qs.values.return_value.annotate.return_value.order_by.return_value.__getitem__ = MagicMock(return_value=[])
             mock_item.objects = item_qs
 
@@ -414,7 +412,6 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
         with (
             patch.object(_mod, "Order") as mock_order,
             patch.object(_mod, "OrderItem"),
-            patch.object(_mod, "OrderPayment"),
         ):
             mock_order.Status.COMPLETED = "completed"
             mock_order.Status.READY = "ready"
@@ -426,7 +423,6 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             qs.aggregate.return_value = {
                 "order_count": 0,
                 "total_revenue": None,
-                "wallet_revenue": None,
             }
             mock_order.objects.filter.return_value = qs
 

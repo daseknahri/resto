@@ -381,7 +381,41 @@ const arabicMessages = {
     "sparklineOrders": "اتجاه الطلبات خلال الأيام السبعة الماضية",
     "sparklineRevenue": "اتجاه الإيرادات خلال الأيام السبعة الماضية",
     "sparklineAvgTicket": "اتجاه متوسط الفاتورة خلال الأيام السبعة الماضية",
-    "exportCsv": "تصدير CSV"
+    "exportCsv": "تصدير CSV",
+    "statementTitle": "كشف حساب الفترة",
+    "statementGross": "الإيراد الإجمالي",
+    "statementPromo": "خصومات العروض",
+    "statementLoyalty": "خصومات الولاء",
+    "statementTips": "الإكراميات المحصلة",
+    "statementCommission": "عمولة المنصة",
+    "statementNet": "الإيراد الصافي",
+    "paySplitTitle": "طرق الدفع",
+    "paySplitLine": "{wallet} محفظة · {cash} نقدًا",
+    "topRevenueTitle": "أفضل المنتجات حسب الإيراد"
+  },
+  "inventory": {
+    "tab": "المخزون",
+    "searchPlaceholder": "البحث في المنتجات",
+    "lowOnly": "مخزون منخفض فقط",
+    "unlimited": "غير محدود",
+    "soldOut": "نفد المخزون",
+    "stockLabel": "المخزون",
+    "thresholdLabel": "تنبيه عند",
+    "saveFailed": "تعذّر تحديث المخزون.",
+    "saved": "تم تحديث المخزون.",
+    "autoResetTitle": "إعادة تعيين صباحية",
+    "autoResetHint": "إعادة تفعيل جميع المنتجات النافدة تلقائيًا حوالي الساعة 5:00 كل صباح.",
+    "empty": "لا توجد منتجات بعد."
+  },
+  "orderFlow": {
+    "elapsed": "{m} د",
+    "overdue": "{m} د — تحقق",
+    "soundOn": "الصوت مفعّل",
+    "soundOff": "الصوت معطّل",
+    "newOrder": "طلب جديد!",
+    "placedAt": "وُضع",
+    "paidAt": "دُفع",
+    "updatedAt": "حُدّث"
   },
   "ownerHome": {
     "platformFeeNote": "عمولة المنصة 10%",

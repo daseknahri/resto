@@ -313,6 +313,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=23, minute=30),
         "args": ("send_daily_summary",),
     },
+    "auto-reset-availability": {
+        "task": "accounts.tasks.run_management_command",
+        # Hourly sweep — each tenant's local 05:00 is checked inside the command.
+        "schedule": 3600.0,
+        "args": ("auto_reset_availability",),
+    },
     "prune-analytics-events": {
         "task": "accounts.tasks.run_management_command",
         "schedule": 86400.0,  # daily — delete analytics events older than 90 days

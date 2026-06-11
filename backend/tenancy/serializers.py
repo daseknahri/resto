@@ -256,6 +256,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "menu_disabled_note",
             "is_menu_published",
             "published_at",
+            "auto_reset_availability",
         ]
         # Delivery PRICING + platform enrollment are a platform-admin concern (the
         # delivery network is separate), so the restaurant owner cannot edit them

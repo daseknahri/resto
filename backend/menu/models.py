@@ -98,6 +98,13 @@ class Dish(models.Model):
             "is_available=False so the dish shows as sold-out on the menu."
         ),
     )
+    low_stock_threshold = models.PositiveSmallIntegerField(
+        default=3,
+        help_text=(
+            "Stock level at or below which this dish appears in the low-stock alert list. "
+            "Defaults to 3. Ignored when stock_qty is null (unlimited)."
+        ),
+    )
     availability_schedule = models.JSONField(
         default=None,
         null=True,

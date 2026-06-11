@@ -29,6 +29,16 @@
         </span>
         <!-- Clock -->
         <span class="font-mono text-base tabular-nums text-slate-300" aria-hidden="true">{{ clockDisplay }}</span>
+        <!-- Sound toggle (task 4) -->
+        <button
+          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :class="kitchenSoundOn ? '' : 'opacity-50'"
+          :aria-label="kitchenSoundOn ? t('orderFlow.soundOff') : t('orderFlow.soundOn')"
+          :aria-pressed="kitchenSoundOn"
+          @click="toggleKitchenSound"
+        >
+          <span aria-hidden="true" class="text-sm">{{ kitchenSoundOn ? '🔔' : '🔕' }}</span>
+        </button>
         <!-- Fullscreen toggle -->
         <button
           class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
@@ -176,9 +186,9 @@
             <!-- Elapsed timer badge -->
             <span
               class="rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums"
-              :class="elapsedBadgeClass(elapsedMinutes(order))"
-              :aria-label="`${elapsedMinutes(order)}${t('kitchen.elapsedMin')} ${t('kitchen.elapsed')}`"
-            >{{ elapsedMinutes(order) }}{{ t('kitchen.elapsedMin') }}</span>
+              :class="elapsedBadgeClass(elapsedMinutes(order), order.status)"
+              :aria-label="elapsedLabel(order)"
+            >{{ elapsedLabel(order) }}</span>
             <!-- Status chip -->
             <span
               class="rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest"
@@ -302,6 +312,8 @@ import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
+import { useNowTicker } from "../composables/useNowTicker";
+import { chipClass as statusChipClass } from "../lib/orderStatusMeta";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live kitchen display — polls and must mount & unmount normally).
@@ -315,8 +327,36 @@ const { printTicket } = usePrintTicket();
 const isFullscreen = ref(false);
 const stationFilter = ref("all");
 
-// Reactive "now" for elapsed timers — updated every tick with the clock
-const nowMs = ref(Date.now());
+// ── Sound toggle (task 4) ─────────────────────────────────────────────────────
+const KITCHEN_SOUND_KEY = "kitchen:sound";
+const kitchenSoundOn = ref((() => {
+  try { return localStorage.getItem(KITCHEN_SOUND_KEY) !== "off"; } catch { return true; }
+})());
+watch(kitchenSoundOn, (val) => {
+  try { localStorage.setItem(KITCHEN_SOUND_KEY, val ? "on" : "off"); } catch { /* ignore */ }
+});
+
+// Lazy AudioContext — created only after the first user click on the sound toggle
+// so Chrome's autoplay policy is satisfied.
+let _kitchenAudioCtx = null;
+const _ensureAudioCtx = () => {
+  if (!_kitchenAudioCtx) {
+    try { _kitchenAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* unsupported */ }
+  }
+  return _kitchenAudioCtx;
+};
+const toggleKitchenSound = () => {
+  // Prime the AudioContext on the click that enables sound (autoplay policy).
+  if (!kitchenSoundOn.value) _ensureAudioCtx();
+  kitchenSoundOn.value = !kitchenSoundOn.value;
+};
+
+// ── Seen-IDs set for new-order detection (task 4) ────────────────────────────
+// Populated after first load; any id not present on subsequent polls is "new".
+let _seenOrderIds = null; // null = not yet initialized
+
+// Elapsed badges use the shared 30-s ticker composable.
+const { now: tickerNow } = useNowTicker();
 
 // Visual flash when a new pending order arrives (supplements the audio alert)
 const newOrderFlash = ref(false);
@@ -370,14 +410,24 @@ watch(stationFilters, (filters) => {
   if (!still || still.count === 0) stationFilter.value = "all";
 });
 
-// Elapsed time helpers
-const elapsedMinutes = (order) =>
-  Math.floor((nowMs.value - new Date(order.created_at).getTime()) / 60_000);
+// Elapsed time helpers — use status_updated_at when available, else created_at
+const elapsedMinutes = (order) => {
+  const base = order.status_updated_at || order.created_at;
+  return Math.floor((tickerNow.value - new Date(base).getTime()) / 60_000);
+};
 
-const elapsedBadgeClass = (minutes) => {
+const elapsedBadgeClass = (minutes, status) => {
+  if (status === "preparing" && minutes > 15) return "border-amber-500/50 bg-amber-500/15 text-amber-300";
   if (minutes >= 20) return "border-red-500/50 bg-red-500/15 text-red-300";
   if (minutes >= 10) return "border-amber-500/50 bg-amber-500/15 text-amber-300";
   return "border-slate-600/60 bg-slate-700/40 text-slate-400";
+};
+
+// Elapsed badge label — uses orderFlow.elapsed / orderFlow.overdue keys
+const elapsedLabel = (order) => {
+  const m = elapsedMinutes(order);
+  if (order.status === "preparing" && m > 15) return t("orderFlow.overdue", { m });
+  return t("orderFlow.elapsed", { m });
 };
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
@@ -385,7 +435,6 @@ const clockDisplay = ref("");
 let clockTimer = null;
 const updateClock = () => {
   const now = new Date();
-  nowMs.value = now.getTime();
   clockDisplay.value = new Intl.DateTimeFormat(currentLocale.value, { hour: "2-digit", minute: "2-digit" }).format(now);
 };
 
@@ -426,20 +475,31 @@ let pollTimer = null;
 let prevPendingIds = new Set();
 
 const playAlert = () => {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.2].forEach((delay) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 660;
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.35);
-      osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.4);
-    });
-  } catch { /* AudioContext unavailable */ }
+  // Two-tone WebAudio beep — uses the lazy context so autoplay policy is satisfied.
+  if (kitchenSoundOn.value) {
+    try {
+      const ctx = _ensureAudioCtx();
+      if (ctx) {
+        const play = () => {
+          // Two tones: 620 Hz then 820 Hz, ~150 ms each
+          [[620, 0], [820, 0.17]].forEach(([freq, delay]) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+            osc.start(ctx.currentTime + delay);
+            osc.stop(ctx.currentTime + delay + 0.32);
+          });
+        };
+        if (ctx.state === "suspended") { ctx.resume().then(play).catch(() => {}); }
+        else { play(); }
+      }
+    } catch { /* AudioContext unavailable */ }
+  }
   // Visual flash for 4 s (supplements audio — noisy kitchen environments)
   newOrderFlash.value = true;
   clearTimeout(flashTimer);
@@ -452,9 +512,26 @@ const checkNewOrders = (orders) => {
   prevPendingIds = pendingIds;
 };
 
+// Detect truly new order IDs (any status) after first load — drives the toast.
+const checkNewOrderIds = (orders) => {
+  if (_seenOrderIds === null) {
+    // First load — seed, no toast.
+    _seenOrderIds = new Set(orders.map((o) => o.id));
+    return;
+  }
+  const newOnes = orders.filter((o) => !_seenOrderIds.has(o.id));
+  orders.forEach((o) => _seenOrderIds.add(o.id));
+  if (newOnes.length > 0) {
+    toast.show(t("orderFlow.newOrder"), "info");
+  }
+};
+
 const doPoll = async () => {
   const results = await waiter.fetchOrders({ silent: true });
-  if (Array.isArray(results)) checkNewOrders(results);
+  if (Array.isArray(results)) {
+    checkNewOrders(results);
+    checkNewOrderIds(results);
+  }
 };
 
 const onKitchenPageVisible = () => {
@@ -471,6 +548,7 @@ onMounted(async () => {
   const initial = await waiter.fetchOrders();
   if (Array.isArray(initial)) {
     prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
+    checkNewOrderIds(initial); // seeds _seenOrderIds on first load
   }
 
   pollTimer = setInterval(() => {
@@ -583,12 +661,8 @@ const headlineColorClass = (s) => ({
   ready:     "text-emerald-300",
 }[s] ?? "text-slate-200");
 
-const chipClass = (s) => ({
-  pending:   "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  confirmed: "border-sky-500/40 bg-sky-500/10 text-sky-300",
-  preparing: "border-orange-500/40 bg-orange-500/10 text-orange-300",
-  ready:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-}[s] ?? "border-slate-600 bg-slate-700/40 text-slate-300");
+// chipClass now delegates to STATUS_META (statusChipClass imported at top).
+const chipClass = (s) => statusChipClass(s);
 
 const actionBtnClass = (s) => ({
   pending:   "bg-amber-500 hover:bg-amber-400 text-white",

@@ -262,14 +262,20 @@
               >
                 <span v-if="isStepDone(step.value) && idx !== currentStepIndex">✓</span>
                 <span v-else-if="idx === currentStepIndex">
-                  <!-- spinning dot for current step -->
-                  <span class="block h-2.5 w-2.5 rounded-full bg-current" aria-hidden="true" />
+                  <!-- pulsing dot for current step -->
+                  <span class="block h-2.5 w-2.5 rounded-full bg-current motion-safe:animate-pulse" aria-hidden="true" />
                   <span class="sr-only">{{ step.label }}</span>
                 </span>
                 <span v-else>{{ idx + 1 }}</span>
               </div>
             </div>
             <p class="text-center text-[10px] leading-tight text-slate-400 sm:text-xs">{{ step.label }}</p>
+            <!-- Timestamp under reached steps (task 5) -->
+            <p
+              v-if="stepTimestamp(step.value, idx)"
+              class="text-center text-[9px] leading-none tabular-nums text-slate-600"
+              :aria-label="stepTimestamp(step.value, idx) || ''"
+            >{{ stepTimestamp(step.value, idx) }}</p>
           </li>
         </ol>
         <!-- Progress bar -->
@@ -863,6 +869,44 @@ const statusHint = computed(() => {
 const isStepDone = (stepValue) => {
   const idx = statusSteps.value.findIndex((st) => st.value === stepValue);
   return idx >= 0 && idx <= currentStepIndex.value;
+};
+
+// ── Step timestamps (task 5) ──────────────────────────────────────────────────
+const _fmtStepTime = (iso) => {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat(currentLocale.value, {
+      hour: "2-digit", minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return null;
+  }
+};
+
+const stepTimestamp = (stepValue, idx) => {
+  const d = orderData.value;
+  if (!d) return null;
+  const curr = currentStepIndex.value;
+  // Only show for steps that have been reached (idx <= curr)
+  if (idx < 0 || idx > curr) return null;
+
+  // First step (pending) → created_at with t('orderFlow.placedAt') prefix
+  if (idx === 0) {
+    const ts = _fmtStepTime(d.created_at);
+    return ts ? `${t("orderFlow.placedAt")} ${ts}` : null;
+  }
+  // Current active step → status_updated_at with t('orderFlow.updatedAt') prefix
+  if (idx === curr) {
+    // If we also have paid_at and this is a terminal paid step, prefer that
+    if (d.paid_at) {
+      const ts = _fmtStepTime(d.paid_at);
+      if (ts) return `${t("orderFlow.paidAt")} ${ts}`;
+    }
+    const ts = _fmtStepTime(d.status_updated_at);
+    return ts ? `${t("orderFlow.updatedAt")} ${ts}` : null;
+  }
+  // Intermediate done steps — no timestamp (keeps it clean)
+  return null;
 };
 
 const stepClass = (stepValue) => {

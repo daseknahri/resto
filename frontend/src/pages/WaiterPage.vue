@@ -498,10 +498,17 @@ class="min-w-0 flex-1 leading-snug"
                   {{ waiterDjChipLabel(order.delivery_job) }}
                 </span>
               </div>
-              <span
-                class="mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                :class="statusChipClass(order.status)"
-              >{{ t(`waiterPage.status_${order.status}`) }}</span>
+              <div class="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                <span
+                  class="rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                  :class="statusChipClass(order.status)"
+                >{{ t(`waiterPage.status_${order.status}`) }}</span>
+                <span
+                  v-if="orderElapsedLabel(order)"
+                  class="rounded-full border px-2 py-0.5 text-[9px] font-semibold tabular-nums"
+                  :class="orderElapsedClass(order)"
+                >{{ orderElapsedLabel(order) }}</span>
+              </div>
             </div>
             <!-- Items -->
             <ul class="space-y-0.5 border-t px-4 py-2.5" :class="statusBorderClass(order.status)">
@@ -1038,11 +1045,15 @@ import { usePromptModal } from "../composables/usePromptModal";
 import WaiterNewOrder from "../components/WaiterNewOrder.vue";
 import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 import api from "../lib/api";
+import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
+import { useNowTicker } from "../composables/useNowTicker";
 
 const { t, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
 const installDismissed = ref(false);
 const waiter = useWaiterStore();
+// 30-s ticker for elapsed-time badges on active cards (task 3)
+const { now: tickerNow } = useNowTicker();
 const toast = useToastStore();
 const tenant = useTenantStore();
 const session = useSessionStore();
@@ -1628,13 +1639,8 @@ const statusCardClass = (s) => ({
   out_for_delivery: "border-indigo-500/30 bg-indigo-500/5",
 }[s] ?? "border-slate-700/40 bg-slate-800/30");
 
-const statusChipClass = (s) => ({
-  pending:   "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  confirmed: "border-sky-500/40 bg-sky-500/10 text-sky-300",
-  preparing: "border-orange-500/40 bg-orange-500/10 text-orange-300",
-  ready:     "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-  out_for_delivery: "border-indigo-500/40 bg-indigo-500/10 text-indigo-300",
-}[s] ?? "border-slate-600 bg-slate-700/40 text-slate-300");
+// statusChipClass now delegates to STATUS_META single source of truth (task 1).
+const statusChipClass = (s) => _statusChipClass(s);
 
 const statusBorderClass = (s) => ({
   pending:   "border-amber-500/20",
@@ -1671,6 +1677,32 @@ const waiterDjChipLabel = (dj) => {
   if (status === "picked_up")     return t("kitchen.driverPickedUp");
   if (status === "failed")        return t("kitchen.driverFailed");
   return status;
+};
+
+// ── Elapsed-time badge helpers (task 3) ────────────────────────────────────────
+const ACTIVE_ELAPSED_STATUSES = new Set(["pending", "confirmed", "preparing", "ready"]);
+
+const orderElapsedMinutes = (order) => {
+  if (!ACTIVE_ELAPSED_STATUSES.has(order.status)) return null;
+  const base = order.status_updated_at || order.created_at;
+  if (!base) return null;
+  return Math.floor((tickerNow.value - new Date(base).getTime()) / 60_000);
+};
+
+const orderElapsedLabel = (order) => {
+  const m = orderElapsedMinutes(order);
+  if (m === null) return null;
+  if (order.status === "preparing" && m > 15) return t("orderFlow.overdue", { m });
+  return t("orderFlow.elapsed", { m });
+};
+
+const orderElapsedClass = (order) => {
+  const m = orderElapsedMinutes(order);
+  if (m === null) return "";
+  if (order.status === "preparing" && m > 15) return "border-amber-500/40 bg-amber-500/10 text-amber-300";
+  if (m >= 20) return "border-red-500/40 bg-red-500/10 text-red-300";
+  if (m >= 10) return "border-slate-600/50 bg-slate-700/30 text-slate-400";
+  return "border-slate-700/40 bg-slate-800/30 text-slate-500";
 };
 </script>
 

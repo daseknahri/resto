@@ -60,7 +60,12 @@ def _analytics_qs_mock():
 
 
 def _order_qs_mock_with_wallet(wallet_total=30.0, grand_total=100.0, order_count=5):
-    """Order queryset mock that returns wallet and total aggregates."""
+    """Order queryset mock that returns wallet and total aggregates.
+
+    The aggregate dict must include all keys used by the view — both the
+    original revenue/loyalty keys AND the new statement keys added in the
+    revenue-summary extension.
+    """
     daily_result = MagicMock()
     daily_result.__iter__ = lambda s: iter([])
 
@@ -69,9 +74,11 @@ def _order_qs_mock_with_wallet(wallet_total=30.0, grand_total=100.0, order_count
     qs.exclude.return_value = qs
     qs.count.return_value = order_count
     qs.aggregate.return_value = {
+        # Original revenue keys
         "total_revenue": Decimal(str(grand_total)),
         "order_count": order_count,
         "wallet_revenue": Decimal(str(wallet_total)),
+        # Loyalty/promo keys
         "mkt_count": 0,
         "mkt_revenue": None,
         "mkt_commission": None,
@@ -79,6 +86,12 @@ def _order_qs_mock_with_wallet(wallet_total=30.0, grand_total=100.0, order_count
         "loyalty_discount_total": None,
         "points_earned_total": None,
         "points_redeemed_total": None,
+        # Statement keys (new)
+        "gross": Decimal(str(grand_total)),
+        "promo_discounts": None,
+        "loyalty_discounts": None,
+        "tips": None,
+        "commission": None,
     }
     qs.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = daily_result
     qs.values_list.return_value.exclude.return_value.order_by.return_value.first.return_value = "MAD"
@@ -313,7 +326,10 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
             wallet_total=30.0, grand_total=100.0, order_count=5,
         )
 
-        resp = self.view(self._get())
+        from decimal import Decimal as _D
+        _split_rv = {"wallet": _D("30.00"), "cash": _D("70.00")}
+        with patch("menu.revenue.split_revenue_for_orders", return_value=_split_rv):
+            resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         rs = resp.data["revenue_summary"]
@@ -346,7 +362,10 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
             wallet_total=45.50, grand_total=200.0, order_count=8,
         )
 
-        resp = self.view(self._get())
+        from decimal import Decimal as _D
+        _split_rv = {"wallet": _D("45.50"), "cash": _D("154.50")}
+        with patch("menu.revenue.split_revenue_for_orders", return_value=_split_rv):
+            resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         rs = resp.data["revenue_summary"]

@@ -47,6 +47,10 @@
           <p v-if="data.cash_revenue != null && data.wallet_revenue != null" class="ui-stat-note mt-0.5 text-slate-400">
             {{ t("ownerHome.cashWalletSplit", { cash: fmt(data.cash_revenue), wallet: fmt(data.wallet_revenue) }) }}
           </p>
+          <!-- Payment-methods split (from payment_split ledger) -->
+          <p v-if="paymentSplit" class="ui-stat-note mt-0.5 text-slate-500">
+            {{ t("ownerAnalytics.paySplitLine", { wallet: fmt(paymentSplit.wallet), cash: fmt(paymentSplit.cash) }) }}
+          </p>
         </div>
         <div class="ui-stat-tile ui-reveal" :style="{ '--ui-delay': '28ms' }">
           <p class="ui-stat-label">{{ t("ownerHome.revenueOrders") }}</p>
@@ -190,23 +194,86 @@
       </div>
     </div>
 
-    <!-- Popular dishes -->
-    <div v-if="data && popularDishes.length" class="space-y-2 border-t border-slate-800/60 pt-2">
-      <p class="ui-kicker">{{ t("ownerHome.popularDishesTitle") }}</p>
-      <ol class="space-y-1.5">
-        <li v-for="(dish, idx) in popularDishes" :key="dish.dish_slug" class="flex items-center gap-2 text-sm">
-          <span class="w-4 shrink-0 text-end text-xs font-bold tabular-nums text-slate-600">{{ idx + 1 }}</span>
-          <div class="relative h-6 flex-1 overflow-hidden rounded-sm bg-slate-800/50">
-            <div
-              class="absolute inset-y-0 start-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
-              :style="{ width: dish.barPct + '%' }"
-            />
-            <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
-          </div>
-          <span class="shrink-0 tabular-nums text-xs text-slate-400">×{{ dish.order_count }}</span>
-          <span v-if="dish.total_revenue > 0" class="shrink-0 tabular-nums text-[10px] text-[var(--color-secondary)]/55">{{ fmt(dish.total_revenue) }}</span>
-        </li>
-      </ol>
+    <!-- Popular dishes (by qty) + Top items by revenue — side-by-side when both present -->
+    <div
+      v-if="data && (popularDishes.length || topItemsByRevenue.length)"
+      class="space-y-2 border-t border-slate-800/60 pt-2"
+      :class="popularDishes.length && topItemsByRevenue.length ? 'grid gap-4 sm:grid-cols-2 !space-y-0' : ''"
+    >
+      <!-- Popular dishes by qty -->
+      <div v-if="popularDishes.length" class="space-y-2">
+        <p class="ui-kicker">{{ t("ownerHome.popularDishesTitle") }}</p>
+        <ol class="space-y-1.5">
+          <li v-for="(dish, idx) in popularDishes" :key="dish.dish_slug" class="flex items-center gap-2 text-sm">
+            <span class="w-4 shrink-0 text-end text-xs font-bold tabular-nums text-slate-600">{{ idx + 1 }}</span>
+            <div class="relative h-6 flex-1 overflow-hidden rounded-sm bg-slate-800/50">
+              <div
+                class="absolute inset-y-0 start-0 rounded-sm bg-[var(--color-secondary)]/20 transition-all"
+                :style="{ width: dish.barPct + '%' }"
+              />
+              <span class="relative truncate px-2 leading-6 text-slate-200">{{ dish.dish_name }}</span>
+            </div>
+            <span class="shrink-0 tabular-nums text-xs text-slate-400">×{{ dish.order_count }}</span>
+            <span v-if="dish.total_revenue > 0" class="shrink-0 tabular-nums text-[10px] text-[var(--color-secondary)]/55">{{ fmt(dish.total_revenue) }}</span>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Top items by revenue -->
+      <div v-if="topItemsByRevenue.length" class="space-y-2">
+        <p class="ui-kicker">{{ t("ownerAnalytics.topRevenueTitle") }}</p>
+        <ol class="space-y-1.5">
+          <li v-for="(item, idx) in topItemsByRevenue" :key="item.dish_name + idx" class="flex items-center gap-2 text-sm">
+            <span class="w-4 shrink-0 text-end text-xs font-bold tabular-nums text-slate-600">{{ idx + 1 }}</span>
+            <span class="min-w-0 flex-1 truncate text-slate-200">{{ item.dish_name }}</span>
+            <span class="shrink-0 tabular-nums text-xs font-semibold text-[var(--color-secondary)]">{{ fmt(item.revenue) }}</span>
+            <span class="shrink-0 tabular-nums text-[10px] text-slate-500">×{{ item.qty }}</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Period statement -->
+    <div v-if="data && statement" class="space-y-2 border-t border-slate-800/60 pt-2">
+      <p class="ui-kicker">{{ t("ownerAnalytics.statementTitle") }}</p>
+      <dl class="space-y-1 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-slate-400">{{ t("ownerAnalytics.statementGross") }}</dt>
+          <dd class="tabular-nums text-slate-100">{{ fmt(statement.gross) }}</dd>
+        </div>
+        <div
+          class="flex justify-between"
+          :class="Number(statement.promo_discounts) === 0 ? 'opacity-40' : ''"
+        >
+          <dt class="text-slate-400">{{ t("ownerAnalytics.statementPromo") }}</dt>
+          <dd class="tabular-nums text-rose-400">{{ Number(statement.promo_discounts) === 0 ? '—' : `−${fmt(statement.promo_discounts)}` }}</dd>
+        </div>
+        <div
+          class="flex justify-between"
+          :class="Number(statement.loyalty_discounts) === 0 ? 'opacity-40' : ''"
+        >
+          <dt class="text-slate-400">{{ t("ownerAnalytics.statementLoyalty") }}</dt>
+          <dd class="tabular-nums text-amber-400">{{ Number(statement.loyalty_discounts) === 0 ? '—' : `−${fmt(statement.loyalty_discounts)}` }}</dd>
+        </div>
+        <div
+          class="flex justify-between"
+          :class="Number(statement.tips) === 0 ? 'opacity-40' : ''"
+        >
+          <dt class="text-slate-400">{{ t("ownerAnalytics.statementTips") }}</dt>
+          <dd class="tabular-nums text-emerald-400">{{ Number(statement.tips) === 0 ? '—' : `+${fmt(statement.tips)}` }}</dd>
+        </div>
+        <div
+          class="flex justify-between"
+          :class="Number(statement.commission) === 0 ? 'opacity-40' : ''"
+        >
+          <dt class="text-slate-400">{{ t("ownerAnalytics.statementCommission") }}</dt>
+          <dd class="tabular-nums text-rose-400">{{ Number(statement.commission) === 0 ? '—' : `−${fmt(statement.commission)}` }}</dd>
+        </div>
+        <div class="flex justify-between border-t border-slate-700/60 pt-1 mt-1">
+          <dt class="font-semibold text-slate-200">{{ t("ownerAnalytics.statementNet") }}</dt>
+          <dd class="tabular-nums font-semibold text-[var(--color-secondary)]">{{ fmt(statement.net) }}</dd>
+        </div>
+      </dl>
     </div>
 
     <!-- Marketplace commission summary — only when restaurant has marketplace orders -->
@@ -353,6 +420,35 @@ const marketplaceStats = computed(() => ({
   revenue: props.data?.marketplace?.revenue || 0,
   commission_total: props.data?.marketplace?.commission_total || 0,
 }));
+
+// ── Payment split ─────────────────────────────────────────────────────────────
+const paymentSplit = computed(() => {
+  const ps = props.data?.payment_split;
+  if (!ps) return null;
+  const w = Number(ps.wallet) || 0;
+  const c = Number(ps.cash) || 0;
+  if (w === 0 && c === 0) return null;
+  return { wallet: w, cash: c };
+});
+
+// ── Top items by revenue ───────────────────────────────────────────────────────
+const topItemsByRevenue = computed(() => {
+  const items = props.data?.top_items_by_revenue || [];
+  return items.map((item) => ({
+    dish_name: item.dish_name,
+    revenue: Number(item.revenue) || 0,
+    qty: item.qty ?? 0,
+  }));
+});
+
+// ── Period statement ───────────────────────────────────────────────────────────
+const statement = computed(() => {
+  const s = props.data?.statement;
+  if (!s) return null;
+  // Only show if gross is non-zero
+  if (Number(s.gross) === 0) return null;
+  return s;
+});
 
 // ── Return rate ───────────────────────────────────────────────────────────────
 const returnRate = computed(() => {

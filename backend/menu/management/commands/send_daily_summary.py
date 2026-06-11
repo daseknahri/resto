@@ -84,14 +84,12 @@ def _tenant_yesterday(tenant) -> tuple[datetime, datetime, date]:
 def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: datetime) -> dict | None:
     """Compute yesterday's stats for a single tenant schema. Returns None if zero orders.
 
-    Cash/wallet split uses a two-path strategy (R5 ledger fix):
-      - For orders that have OrderPayment ledger rows, derive wallet/cash from the
-        SUM of those rows per method (exact for split-bill and post-void scenarios).
-      - For orders with NO ledger rows (legacy one-shot settles), fall back to the
-        wallet_amount_paid field with total-derived cash math.
-    Both paths are clamped >= 0.
+    Cash/wallet split delegates to menu.revenue.split_revenue_for_orders which
+    uses a two-path ledger-vs-legacy strategy (see that module for details).
     """
-    from django.db.models import Count, Q, Sum
+    from django.db.models import Count, Sum
+
+    from menu.revenue import split_revenue_for_orders
 
     paid_statuses = [
         Order.Status.COMPLETED,
@@ -108,7 +106,6 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
     agg = qs.aggregate(
         order_count=Count("id"),
         total_revenue=Sum("total"),
-        wallet_revenue=Sum("wallet_amount_paid"),
     )
     order_count = agg["order_count"] or 0
     if order_count == 0:
@@ -117,39 +114,9 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
     total_revenue = float(agg["total_revenue"] or 0)
 
     # ── Ledger-aware cash/wallet split ───────────────────────────────────────
-    # Identify orders that have at least one OrderPayment ledger row.
-    order_ids = list(qs.values_list("id", flat=True))
-    ledger_qs = OrderPayment.objects.filter(order_id__in=order_ids)
-    ledger_order_ids = set(ledger_qs.values_list("order_id", flat=True).distinct())
-
-    if ledger_order_ids:
-        # Ledger orders: exact per-method sums.
-        ledger_agg = ledger_qs.filter(order_id__in=ledger_order_ids).aggregate(
-            ledger_wallet=Sum("amount", filter=Q(method=OrderPayment.Method.WALLET)),
-            ledger_cash=Sum("amount", filter=Q(method=OrderPayment.Method.CASH)),
-        )
-        ledger_wallet = float(ledger_agg["ledger_wallet"] or 0)
-        ledger_cash = float(ledger_agg["ledger_cash"] or 0)
-    else:
-        ledger_wallet = 0.0
-        ledger_cash = 0.0
-
-    # Legacy orders (no ledger rows): derive from wallet_amount_paid field.
-    legacy_ids = [i for i in order_ids if i not in ledger_order_ids]
-    if legacy_ids:
-        legacy_agg = qs.filter(id__in=legacy_ids).aggregate(
-            legacy_wallet=Sum("wallet_amount_paid"),
-            legacy_total=Sum("total"),
-        )
-        legacy_wallet = float(legacy_agg["legacy_wallet"] or 0)
-        legacy_total = float(legacy_agg["legacy_total"] or 0)
-        legacy_cash = legacy_total - legacy_wallet
-    else:
-        legacy_wallet = 0.0
-        legacy_cash = 0.0
-
-    wallet_revenue = round(max(0.0, ledger_wallet + legacy_wallet), 2)
-    cash_revenue = round(max(0.0, ledger_cash + legacy_cash), 2)
+    split = split_revenue_for_orders(qs)
+    wallet_revenue = round(float(split["wallet"]), 2)
+    cash_revenue = round(float(split["cash"]), 2)
 
     # Top 3 dishes by qty
     top_dishes = list(

@@ -50,6 +50,14 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **Course sequencing** (fire starters before mains) — audit service-flow item,
       below top-8 cut.
 
+- [ ] **revenue.py order_ids materialization** — split helper pulls all period order
+      PKs into Python; switch to a subquery join for 90-day windows on busy tenants.
+      Source: rev/stock review minor.
+- [ ] **Auto-reset clears deliberate zeros** — the 5am reset re-enables ALL stock_qty=0
+      dishes, including manually-zeroed ones (same semantics as the manual button, and
+      the cron is opt-in — acceptable; a stock_auto_zeroed marker would distinguish).
+      Source: rev/stock review minor.
+
 ## Verticals (parked by strategy — doc §4b)
 - [ ] **Store pick-flow**: substitutions + out-of-stock at pick time + refund deltas.
       THE grocery feature. Doc §5c deferred list.
