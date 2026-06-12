@@ -875,8 +875,11 @@
             </div>
           </div>
 
-          <div class="sticky bottom-0 z-10 flex justify-end border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
-            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" @click="closeDishEditor">{{ t("common.done") }}</button>
+          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4 sm:px-5">
+            <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="closeDishEditor">{{ t("common.close") }}</button>
+            <button type="button" class="ui-btn-primary px-4 py-2 text-sm" :disabled="savingDishNow" @click="saveDishNow">
+              {{ savingDishNow ? t("common.saving") : t("common.save") }}
+            </button>
           </div>
         </div>
       </div>
@@ -2118,6 +2121,60 @@ const rememberSaved = (dish) => {
 const isDishDirty = (dish) =>
   !dish.id || savedSnapshots.get(dish.local_id) !== dishSnapshot(dish);
 
+const allowedTranslationLocalesNow = () =>
+  availableContentLocales.value
+    .map((locale) => locale.code)
+    .filter((locale) => locale !== defaultLocale.value);
+
+// Persist ONE dish (create/update + options sync + option-groups sync) and
+// refresh its dirty-tracking snapshot. Throws on failure — callers map the
+// error onto the row. Used by the editor-form Save, quick-add, and the
+// page-level save loop.
+const persistDish = async (dish, allowedTranslationLocales) => {
+  const rawAttrs = dish.attributes && typeof dish.attributes === "object" ? dish.attributes : {};
+  const cleanedAttrs = Object.fromEntries(
+    Object.entries(rawAttrs)
+      .map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])
+      .filter(([, v]) => v !== "" && v != null)
+  );
+  const saved = await dishApi.upsert({
+    ...dish,
+    category: Number(dish.category) || dish.category,
+    price: Number(dish.price) || 0,
+    currency: normalizeCurrency(dish.currency),
+    name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
+    description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
+    attributes: cleanedAttrs,
+  });
+  dish.id = saved.id;
+  dish.slug = saved.slug;
+  const desiredOptions = Array.isArray(dish.options) ? dish.options : [];
+  const savedOptions = await dishOptionApi.syncForDish(
+    dish.id,
+    desiredOptions.map((option) => ({
+      ...option,
+      name_i18n: pickI18nMap(option.name_i18n, allowedTranslationLocales),
+    }))
+  );
+  dish.options = savedOptions.map((option) => normalizeOption(option));
+
+  const desiredGroups = Array.isArray(dish.option_groups) ? dish.option_groups : [];
+  const savedGroups = await optionGroupApi.syncForDish(
+    dish.id,
+    desiredGroups.map((group) => ({
+      ...group,
+      name_i18n: pickI18nMap(group.name_i18n, allowedTranslationLocales),
+      options: (group.options || []).map((opt) => ({
+        ...opt,
+        name_i18n: pickI18nMap(opt.name_i18n, allowedTranslationLocales),
+      })),
+    }))
+  );
+  dish.option_groups = savedGroups.map(normalizeOptionGroup);
+  // Snapshot the post-save state so an unchanged row is skipped next time.
+  rememberSaved(dish);
+};
+
 const load = async () => {
   try {
     categoryOptions.value = await categoryApi.list();
@@ -2163,6 +2220,36 @@ const openDishEditor = (localId) => {
 const closeDishEditor = () => {
   dishEditorModalOpen.value = false;
   dishEditorLocalId.value = "";
+};
+
+// Form-level save: persist ONLY the dish open in the editor dialog.
+const savingDishNow = ref(false);
+const saveDishNow = async () => {
+  const dish = editingDish.value;
+  if (!dish || savingDishNow.value) return;
+  if (String(dish.name || "").trim().length < 2) {
+    setRowError(dish.local_id, "name", t("stepDishes.nameMin"));
+    toast.show(t("stepDishes.fixValidation"), "error");
+    return;
+  }
+  if (!dish.category) {
+    setRowError(dish.local_id, "category", t("stepDishes.selectCategoryError"));
+    toast.show(t("stepDishes.fixValidation"), "error");
+    return;
+  }
+  savingDishNow.value = true;
+  try {
+    await persistDish(dish, allowedTranslationLocalesNow());
+    delete rowErrors[dish.local_id];
+    toast.show(t("stepDishes.savedToast"), "success");
+    closeDishEditor();
+  } catch (e) {
+    mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
+    if (e?.message) setRowError(dish.local_id, "options", e.message);
+    toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+  } finally {
+    savingDishNow.value = false;
+  }
 };
 
 const resolveQuickDishCategory = (candidate = activeCategoryId.value) => {
@@ -2230,7 +2317,7 @@ const removeQuickOption = (idx) => {
   quickDish.options.splice(idx, 1);
 };
 
-const quickAddDish = () => {
+const quickAddDish = async () => {
   quickDishErrors.category = "";
   quickDishErrors.name = "";
   const name = String(quickDish.name || "").trim();
@@ -2247,39 +2334,46 @@ const quickAddDish = () => {
     nextTick(() => quickDishNameInputRef.value?.focus());
     return;
   }
-  dishes.push(
-    normalize({
-      category,
-      name,
-      name_i18n: pickI18nMap(quickDish.name_i18n, allowedTranslationLocales),
-      description: String(quickDish.description || "").trim(),
-      description_i18n: pickI18nMap(quickDish.description_i18n, allowedTranslationLocales),
-      price: Number(quickDish.price) || 0,
-      image_url: String(quickDish.image_url || "").trim(),
-      position: activeCategoryDishes.value.length,
-      options: (Array.isArray(quickDish.options) ? quickDish.options : [])
-        .map((option) =>
-          normalizeOption({
-            ...option,
-            name_i18n: pickI18nMap(option?.name_i18n, allowedTranslationLocales),
-          })
-        )
-        .filter(
-          (option) =>
-            String(option.name || "").trim() ||
-            Number(option.price_delta || 0) !== 0 ||
-            option.is_required === true ||
-            Number(option.max_select || 1) !== 1
-        ),
-      option_groups: (Array.isArray(quickDish.option_groups) ? quickDish.option_groups : [])
-        .map(normalizeOptionGroup)
-        .filter((g) => String(g.name || "").trim()),
-    })
-  );
+  const row = normalize({
+    category,
+    name,
+    name_i18n: pickI18nMap(quickDish.name_i18n, allowedTranslationLocales),
+    description: String(quickDish.description || "").trim(),
+    description_i18n: pickI18nMap(quickDish.description_i18n, allowedTranslationLocales),
+    price: Number(quickDish.price) || 0,
+    image_url: String(quickDish.image_url || "").trim(),
+    position: activeCategoryDishes.value.length,
+    options: (Array.isArray(quickDish.options) ? quickDish.options : [])
+      .map((option) =>
+        normalizeOption({
+          ...option,
+          name_i18n: pickI18nMap(option?.name_i18n, allowedTranslationLocales),
+        })
+      )
+      .filter(
+        (option) =>
+          String(option.name || "").trim() ||
+          Number(option.price_delta || 0) !== 0 ||
+          option.is_required === true ||
+          Number(option.max_select || 1) !== 1
+      ),
+    option_groups: (Array.isArray(quickDish.option_groups) ? quickDish.option_groups : [])
+      .map(normalizeOptionGroup)
+      .filter((g) => String(g.name || "").trim()),
+  });
+  dishes.push(row);
   setActiveCategory(category);
   renumberDishesForCategory(category);
   closeQuickDishModal();
-  toast.show(t("stepDishes.savedToast"), "success");
+  // Persist the new dish immediately (form-level save). On failure the row
+  // stays local and dirty — the page-level Save will retry it.
+  try {
+    await persistDish(row, allowedTranslationLocales);
+    toast.show(t("stepDishes.savedToast"), "success");
+  } catch (e) {
+    mapServerErrorsToRow(row.local_id, e?.fieldErrors || {});
+    toast.show(e?.message || t("stepDishes.saveFailed"), "error");
+  }
 };
 
 const remove = async (idx) => {
@@ -2493,48 +2587,7 @@ const saveAndNext = async () => {
       .filter((locale) => locale !== defaultLocale.value);
     for (const dish of dirtyDishes) {
       try {
-        const rawAttrs = dish.attributes && typeof dish.attributes === "object" ? dish.attributes : {};
-        const cleanedAttrs = Object.fromEntries(
-          Object.entries(rawAttrs)
-            .map(([k, v]) => [k, typeof v === "string" ? v.trim() : v])
-            .filter(([, v]) => v !== "" && v != null)
-        );
-        const saved = await dishApi.upsert({
-          ...dish,
-          category: Number(dish.category) || dish.category,
-          price: Number(dish.price) || 0,
-          currency: normalizeCurrency(dish.currency),
-          name_i18n: pickI18nMap(dish.name_i18n, allowedTranslationLocales),
-          description_i18n: pickI18nMap(dish.description_i18n, allowedTranslationLocales),
-          attributes: cleanedAttrs,
-        });
-        dish.id = saved.id;
-        dish.slug = saved.slug;
-        const desiredOptions = Array.isArray(dish.options) ? dish.options : [];
-        const savedOptions = await dishOptionApi.syncForDish(
-          dish.id,
-          desiredOptions.map((option) => ({
-            ...option,
-            name_i18n: pickI18nMap(option.name_i18n, allowedTranslationLocales),
-          }))
-        );
-        dish.options = savedOptions.map((option) => normalizeOption(option));
-
-        const desiredGroups = Array.isArray(dish.option_groups) ? dish.option_groups : [];
-        const savedGroups = await optionGroupApi.syncForDish(
-          dish.id,
-          desiredGroups.map((group) => ({
-            ...group,
-            name_i18n: pickI18nMap(group.name_i18n, allowedTranslationLocales),
-            options: (group.options || []).map((opt) => ({
-              ...opt,
-              name_i18n: pickI18nMap(opt.name_i18n, allowedTranslationLocales),
-            })),
-          }))
-        );
-        dish.option_groups = savedGroups.map(normalizeOptionGroup);
-        // Snapshot the post-save state so an unchanged row is skipped next time.
-        rememberSaved(dish);
+        await persistDish(dish, allowedTranslationLocales);
       } catch (e) {
         mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
         if (e?.message) {
