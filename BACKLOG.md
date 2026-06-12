@@ -64,6 +64,10 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Menu-builder save fired 500+ requests (user-reported): saveAndNext re-saved
+      EVERY dish (PUT + options GET/sync + groups GET/sync each) on every click.
+      Now dirty-tracked via per-dish JSON snapshots taken at load + after save —
+      only changed rows persist. — dirty-save commit.
 - [x] Course sequencing (dine-in fire control): Category.course 0–4 default →
       OrderItem.course snapshot at all 3 placement paths → Order.fired_course cursor
       (default 1) + POST /api/staff/orders/<id>/fire-course/ (section-gated, monotonic,

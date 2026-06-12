@@ -2100,6 +2100,24 @@ const validateClient = () => {
   return valid;
 };
 
+// ── Dirty tracking ───────────────────────────────────────────────────────────
+// Save used to re-save EVERY dish (PUT + options GET/sync + groups GET/sync =
+// 3+ requests each) on every click — 500+ requests on a large menu. Snapshot
+// each dish's saved state and only persist rows that actually changed.
+const savedSnapshots = new Map(); // local_id → serialized saved state
+
+const dishSnapshot = (dish) => {
+  const { local_id, ...rest } = dish; // eslint-disable-line no-unused-vars
+  return JSON.stringify(rest);
+};
+
+const rememberSaved = (dish) => {
+  savedSnapshots.set(dish.local_id, dishSnapshot(dish));
+};
+
+const isDishDirty = (dish) =>
+  !dish.id || savedSnapshots.get(dish.local_id) !== dishSnapshot(dish);
+
 const load = async () => {
   try {
     categoryOptions.value = await categoryApi.list();
@@ -2110,9 +2128,12 @@ const load = async () => {
     const data = await dishApi.list();
     const rows = data.length ? data.map(normalize) : [];
     dishes.splice(0, dishes.length, ...rows);
+    savedSnapshots.clear();
+    rows.forEach(rememberSaved);
   } catch {
     status.value = t("common.loadFailed");
     dishes.splice(0, dishes.length);
+    savedSnapshots.clear();
   }
   syncActiveCategory();
 };
@@ -2464,10 +2485,13 @@ const saveAndNext = async () => {
   }
   try {
     const validDishes = dishes.filter((d) => d.name?.trim() && d.category);
+    // Only persist rows that changed since load / last save — re-saving the
+    // whole menu fired hundreds of requests on large menus.
+    const dirtyDishes = validDishes.filter(isDishDirty);
     const allowedTranslationLocales = availableContentLocales.value
       .map((locale) => locale.code)
       .filter((locale) => locale !== defaultLocale.value);
-    for (const dish of validDishes) {
+    for (const dish of dirtyDishes) {
       try {
         const rawAttrs = dish.attributes && typeof dish.attributes === "object" ? dish.attributes : {};
         const cleanedAttrs = Object.fromEntries(
@@ -2509,6 +2533,8 @@ const saveAndNext = async () => {
           }))
         );
         dish.option_groups = savedGroups.map(normalizeOptionGroup);
+        // Snapshot the post-save state so an unchanged row is skipped next time.
+        rememberSaved(dish);
       } catch (e) {
         mapServerErrorsToRow(dish.local_id, e?.fieldErrors || {});
         if (e?.message) {
