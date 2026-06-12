@@ -5,7 +5,7 @@ Tests:
   1. Inactivity boundary — exactly N weeks vs N weeks - 1 day
   2. opt-out (notify_promotions=False) excluded
   3. No push subscription excluded
-  4. 90-day dedupe blocks resend
+  4. 90-day dedupe blocks resend (batched WinbackNudge query)
   5. Cap 50 enforced
   6. winback_enabled=False skips tenant
   7. Wrong local hour skips
@@ -15,6 +15,8 @@ Tests:
  11. Settings serializer round-trips the 3 winback_* fields
  12. _record_nudge called BEFORE _send_nudge (spam-safety ordering)
  13. Suppressed send (returns 0) reclaims the WinbackNudge row
+ 14. winback_inactive_weeks=0 defaults to 4 with a warning
+ 15. winback_inactive_weeks=None defaults to 4 silently
 
 House style: SimpleTestCase + MagicMock, no local DB.
 """
@@ -78,6 +80,7 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
         """
         Patch Order.objects to return a single customer (id=99) whose
         most-recent order was at last_order_dt, then run _build_audience.
+        Uses the batched WinbackNudge query (no _already_nudged per-customer call).
         """
         from menu.management.commands.send_winback_nudges import _build_audience
 
@@ -96,12 +99,16 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
         mock_sub_qs = MagicMock()
         mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = [99]
 
+        # Mock batched WinbackNudge query — no recently-nudged customers.
+        mock_winback_qs = MagicMock()
+        mock_winback_qs.filter.return_value.values_list.return_value = []
+
         patches = [
             patch("menu.management.commands.send_winback_nudges.schema_context"),
             patch("menu.models.Order.objects", mock_order_qs),
             patch("accounts.models.Customer.objects", mock_customer_qs),
             patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs),
-            patch("menu.management.commands.send_winback_nudges._already_nudged", return_value=False),
+            patch("accounts.models.WinbackNudge.objects", mock_winback_qs),
         ]
         with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4]:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
@@ -201,31 +208,45 @@ class WinbackNoPushSubTests(SimpleTestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. 90-day dedupe blocks resend
+# 4. 90-day dedupe blocks resend (batched WinbackNudge query)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class WinbackDedupeTests(SimpleTestCase):
-    def test_already_nudged_within_90_days_excluded(self):
-        """Customer nudged within 90 days is excluded by _already_nudged."""
-        from menu.management.commands.send_winback_nudges import _build_audience
+def _make_winback_nudge_qs_mock(recently_nudged_ids):
+    """Return a WinbackNudge.objects mock whose batched filter returns recently_nudged_ids."""
+    mock_qs = MagicMock()
+    mock_qs.filter.return_value.values_list.return_value = list(recently_nudged_ids)
+    return mock_qs
 
+
+class WinbackDedupeTests(SimpleTestCase):
+    def _base_mocks(self, customer_id=99):
         cutoff = datetime.now(_tz.utc) - timedelta(weeks=4)
         last_order = cutoff - timedelta(days=1)
-        row = {"customer_id": 99, "last_order": last_order}
+        row = {"customer_id": customer_id, "last_order": last_order}
 
         mock_order_qs = MagicMock()
         mock_order_qs.values.return_value.annotate.return_value.filter.return_value = [row]
 
         mock_customer_qs = MagicMock()
-        mock_customer_qs.filter.return_value.values_list.return_value = [99]
+        mock_customer_qs.filter.return_value.values_list.return_value = [customer_id]
 
         mock_sub_qs = MagicMock()
-        mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = [99]
+        mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = [customer_id]
+
+        return mock_order_qs, mock_customer_qs, mock_sub_qs
+
+    def test_already_nudged_within_90_days_excluded(self):
+        """Customer present in the batched WinbackNudge query is excluded."""
+        from menu.management.commands.send_winback_nudges import _build_audience
+
+        mock_order_qs, mock_customer_qs, mock_sub_qs = self._base_mocks(99)
+        # Batch query returns [99] → customer was recently nudged
+        mock_winback_qs = _make_winback_nudge_qs_mock([99])
 
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
-             patch("menu.management.commands.send_winback_nudges._already_nudged", return_value=True), \
+             patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -234,26 +255,17 @@ class WinbackDedupeTests(SimpleTestCase):
         self.assertEqual(result, [])
 
     def test_not_nudged_within_90_days_included(self):
-        """Customer not nudged within 90 days is included."""
+        """Customer absent from the batched WinbackNudge query is included."""
         from menu.management.commands.send_winback_nudges import _build_audience
 
-        cutoff = datetime.now(_tz.utc) - timedelta(weeks=4)
-        last_order = cutoff - timedelta(days=1)
-        row = {"customer_id": 99, "last_order": last_order}
-
-        mock_order_qs = MagicMock()
-        mock_order_qs.values.return_value.annotate.return_value.filter.return_value = [row]
-
-        mock_customer_qs = MagicMock()
-        mock_customer_qs.filter.return_value.values_list.return_value = [99]
-
-        mock_sub_qs = MagicMock()
-        mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = [99]
+        mock_order_qs, mock_customer_qs, mock_sub_qs = self._base_mocks(99)
+        # Batch query returns [] → no recently nudged customers
+        mock_winback_qs = _make_winback_nudge_qs_mock([])
 
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
-             patch("menu.management.commands.send_winback_nudges._already_nudged", return_value=False), \
+             patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -286,10 +298,13 @@ class WinbackCapTests(SimpleTestCase):
         mock_sub_qs = MagicMock()
         mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = all_ids
 
+        # Batched WinbackNudge query returns no recently-nudged customers
+        mock_winback_qs = _make_winback_nudge_qs_mock([])
+
         with patch("menu.models.Order.objects", mock_order_qs), \
              patch("accounts.models.Customer.objects", mock_customer_qs), \
              patch("accounts.models.CustomerPushSubscription.objects", mock_sub_qs), \
-             patch("menu.management.commands.send_winback_nudges._already_nudged", return_value=False), \
+             patch("accounts.models.WinbackNudge.objects", mock_winback_qs), \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -746,3 +761,77 @@ class WinbackSuppressedSendReclamationTests(SimpleTestCase):
 
         # WinbackNudge.objects should NOT be touched for deletion
         mock_winback_qs.filter.assert_not_called()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14 & 15. winback_inactive_weeks coercion (B2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class WinbackInactiveWeeksCoercionTests(SimpleTestCase):
+    """Command.handle uses inactive_weeks=4 for non-positive winback_inactive_weeks values."""
+
+    def _run_handle(self, weeks_value):
+        """Run handle() for a tenant with the given winback_inactive_weeks and capture
+        the inactive_weeks that was passed to _build_audience."""
+        tenant = _make_tenant()
+        tenant.profile.winback_enabled = True
+        tenant.profile.winback_inactive_weeks = weeks_value
+
+        mock_tenant_qs = MagicMock()
+        mock_tenant_qs.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
+
+        captured = {}
+
+        def capture_build(tenant_id, inactive_weeks, cap):
+            captured["inactive_weeks"] = inactive_weeks
+            return []
+
+        cmd = _make_command()
+        with patch("menu.management.commands.send_winback_nudges.Tenant.objects", mock_tenant_qs), \
+             patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
+             patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
+             patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
+             patch("menu.management.commands.send_winback_nudges._build_audience", side_effect=capture_build):
+            mock_cache.add.return_value = True
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+            cmd.handle(dry_run=False)
+
+        return captured.get("inactive_weeks")
+
+    def test_zero_value_defaults_to_4(self):
+        """winback_inactive_weeks=0 must be treated as invalid and default to 4."""
+        result = self._run_handle(0)
+        self.assertEqual(result, 4)
+
+    def test_zero_value_logs_warning(self):
+        """winback_inactive_weeks=0 emits a logger.warning."""
+        import logging
+        tenant = _make_tenant()
+        tenant.profile.winback_enabled = True
+        tenant.profile.winback_inactive_weeks = 0
+
+        mock_tenant_qs = MagicMock()
+        mock_tenant_qs.filter.return_value.exclude.return_value.select_related.return_value = [tenant]
+
+        cmd = _make_command()
+        with patch("menu.management.commands.send_winback_nudges.Tenant.objects", mock_tenant_qs), \
+             patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
+             patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
+             patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[]), \
+             self.assertLogs("menu.management.commands.send_winback_nudges", level=logging.WARNING):
+            mock_cache.add.return_value = True
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+            cmd.handle(dry_run=False)
+
+    def test_none_value_defaults_to_4_silently(self):
+        """winback_inactive_weeks=None must default to 4 without a warning."""
+        result = self._run_handle(None)
+        self.assertEqual(result, 4)
+
+    def test_positive_value_used_as_is(self):
+        """winback_inactive_weeks=6 must be passed through unchanged."""
+        result = self._run_handle(6)
+        self.assertEqual(result, 6)

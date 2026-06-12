@@ -561,6 +561,73 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         )
 
 
+    # ── A2: reconcile guard ───────────────────────────────────────────────────
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_reconcile_when_outstanding_zero_flips_paid_200(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        """If the ledger already covers the total but payment_status is UNPAID,
+        the view must flip to PAID and return 200 with code='reconciled'."""
+        # Payments already sum to the full total (10+10=20)
+        existing_p1 = _make_payment_row(amount=Decimal("10.00"), method="cash")
+        existing_p2 = _make_payment_row(amount=Decimal("10.00"), method="cash")
+        order = _make_order(
+            total=Decimal("20.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            payments=[existing_p1, existing_p2],
+        )
+        reload_order = _make_order(
+            total=Decimal("20.00"),
+            payment_status=Order.PaymentStatus.PAID,
+            payments=[existing_p1, existing_p2],
+        )
+        _setup_atomic_and_lock(tx_mock, order_om, order)
+        order_om.prefetch_related.return_value.get.return_value = reload_order
+
+        resp = self._post(body={"method": "cash", "amount": "5.00"})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data.get("code"), "reconciled")
+        # mark_paid called to flip the status
+        order.mark_paid.assert_called_once_with(save=False)
+        order.save.assert_called_once_with(
+            update_fields=["payment_status", "paid_at", "updated_at"]
+        )
+        broadcast_mock.assert_called_once()
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views.transaction")
+    @patch("menu.views.Order.objects")
+    def test_reconcile_zero_outstanding_no_new_payment_row(
+        self, order_om, tx_mock, broadcast_mock
+    ):
+        """When outstanding is 0, no new OrderPayment row must be created."""
+        existing_p = _make_payment_row(amount=Decimal("30.00"), method="cash")
+        order = _make_order(
+            total=Decimal("30.00"),
+            payment_status=Order.PaymentStatus.UNPAID,
+            payments=[existing_p],
+        )
+        reload_order = _make_order(
+            total=Decimal("30.00"),
+            payment_status=Order.PaymentStatus.PAID,
+            payments=[existing_p],
+        )
+        _setup_atomic_and_lock(tx_mock, order_om, order)
+        order_om.prefetch_related.return_value.get.return_value = reload_order
+
+        with patch("menu.models.OrderPayment.objects") as op_om:
+            resp = self._post(body={"method": "cash", "amount": "5.00"})
+            # No new OrderPayment row created
+            op_om.create.assert_not_called()
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data.get("code"), "reconciled")
+
+
 # ── Test helper ────────────────────────────────────────────────────────────────
 
 def _setup_atomic_and_lock(tx_mock, order_om, order):

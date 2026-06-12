@@ -133,15 +133,22 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> list[int]:
         if not subscribed:
             return []
 
-    # Step 4: not nudged within 90 days.
+    # Step 4: not nudged within 90 days — ONE batched query instead of one
+    # EXISTS per customer.  _already_nudged is kept for external callers.
+    from accounts.models import WinbackNudge
+    cutoff = datetime.now(_tz.utc) - timedelta(days=_DEDUPE_DAYS)
+    with schema_context("public"):
+        recently_nudged = set(
+            WinbackNudge.objects.filter(
+                tenant_id=tenant_id,
+                customer_id__in=subscribed,
+                sent_at__gte=cutoff,
+            ).values_list("customer_id", flat=True)
+        )
+
     # Sort the set for deterministic iteration order so the capped slice is
     # stable across calls (avoids misleading remaining-count logs).
-    eligible = []
-    for cid in sorted(subscribed):
-        if len(eligible) >= cap:
-            break
-        if not _already_nudged(tenant_id, cid):
-            eligible.append(cid)
+    eligible = [cid for cid in sorted(subscribed) if cid not in recently_nudged][:cap]
 
     return eligible
 
@@ -206,7 +213,17 @@ class Command(BaseCommand):
                     total_skipped_hour += 1
                     continue
 
-                inactive_weeks = profile.winback_inactive_weeks or 4
+                _raw_weeks = profile.winback_inactive_weeks
+                if isinstance(_raw_weeks, int) and _raw_weeks > 0:
+                    inactive_weeks = _raw_weeks
+                else:
+                    if _raw_weeks is not None:
+                        logger.warning(
+                            "send_winback_nudges: tenant %s has non-positive "
+                            "winback_inactive_weeks=%r — defaulting to 4",
+                            tenant.slug, _raw_weeks,
+                        )
+                    inactive_weeks = 4
                 tenant_name = getattr(tenant, "name", "") or tenant.slug
 
                 # Build audience inside the tenant schema.

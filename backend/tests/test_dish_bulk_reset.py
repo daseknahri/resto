@@ -127,3 +127,21 @@ class DishBulkAvailabilityResetViewTests(SimpleTestCase):
         second_call_kwargs = dish_objects.filter.call_args_list[1][1]
         self.assertIn("stock_qty", second_call_kwargs)
         self.assertEqual(second_call_kwargs["stock_qty"], 0)
+
+    @patch("menu.views.Dish.objects")
+    def test_availability_reset_clears_stock_auto_zeroed(self, dish_objects):
+        """The availability-restore update must also clear stock_auto_zeroed=False.
+
+        Without this, the 5am cron (auto_reset_availability) will find dishes
+        with stock_auto_zeroed=True and zero out any stock_qty the owner set
+        between the bulk reset and the cron run.
+        """
+        avail_filter_mock = _filter_mock(3)
+        dish_objects.filter.side_effect = [avail_filter_mock, _filter_mock(0)]
+        self._post()
+
+        # First filter().update() must include stock_auto_zeroed=False
+        update_kwargs = avail_filter_mock.update.call_args[1]
+        self.assertIn("stock_auto_zeroed", update_kwargs,
+                      "availability reset must clear stock_auto_zeroed to prevent cron re-zero")
+        self.assertFalse(update_kwargs["stock_auto_zeroed"])

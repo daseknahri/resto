@@ -206,7 +206,12 @@ class RestockCancelledOrderComboTests(SimpleTestCase):
 
     def test_restock_restores_combo_dish_and_components(self):
         """Cancelling an order with a 2×combo-meal (1 fries + 1 drink each)
-        should update the combo dish AND both component dishes."""
+        should update the combo dish AND both component dishes.
+
+        After A3 merge: _restock_cancelled_order issues ONE select_for_update()
+        call with a Q(slug__in=[...])|Q(pk__in=[...]) filter, returning all
+        relevant dishes in a single round-trip.
+        """
         combo_snap = [
             {"dish_id": 10, "name": "Fries", "qty": 1},
             {"dish_id": 11, "name": "Drink", "qty": 1},
@@ -221,38 +226,36 @@ class RestockCancelledOrderComboTests(SimpleTestCase):
 
         fries_dish = MagicMock()
         fries_dish.pk = 10
+        fries_dish.slug = None  # not a combo-dish slug match
         fries_dish.stock_qty = 5
 
         drink_dish = MagicMock()
         drink_dish.pk = 11
+        drink_dish.slug = None
         drink_dish.stock_qty = 4
 
         dish_om = MagicMock()
-        # select_for_update().filter(slug__in=[...]) -> [combo_dish]
-        # select_for_update().filter(pk__in=[...]) -> [fries, drink]
-        call_n = {"n": 0}
-        def _su_filter(**kwargs):
-            call_n["n"] += 1
-            mock_qs = MagicMock()
-            if "slug__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([combo_dish])
-            elif "pk__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([fries_dish, drink_dish])
-            else:
-                mock_qs.__iter__ = lambda s: iter([])
-            return mock_qs
-
+        # Single merged lock: select_for_update().filter(Q(slug__in=...)|Q(pk__in=...))
+        # returns all three dishes together.
         su_mock = MagicMock()
-        su_mock.filter.side_effect = _su_filter
+        su_mock.filter.return_value = [combo_dish, fries_dish, drink_dish]
         dish_om.select_for_update.return_value = su_mock
 
         self._run_restock(order, dish_om)
 
+        # ONE select_for_update() call (the merged query)
+        dish_om.select_for_update.assert_called_once()
+        # select_for_update().filter() called once (not twice)
+        self.assertEqual(su_mock.filter.call_count, 1,
+                         "Expected single merged filter call, not separate slug/pk queries")
         # Dish.objects.filter(pk=...).update() must have been called for all three dishes
         self.assertTrue(dish_om.filter.called, "Expected Dish.objects.filter to be called for restock updates")
 
     def test_restock_skips_components_with_null_stock(self):
-        """Components with stock_qty=None (unlimited) should not have update() called."""
+        """Components with stock_qty=None (unlimited) should not have update() called.
+
+        After A3 merge: single merged select_for_update call returns both dishes.
+        """
         combo_snap = [{"dish_id": 20, "name": "Unlimited Side", "qty": 1}]
         item = _make_item(dish_slug="combo", qty=1, combo_components=combo_snap)
         order = _make_order(items=[item])
@@ -264,35 +267,23 @@ class RestockCancelledOrderComboTests(SimpleTestCase):
 
         comp_dish = MagicMock()
         comp_dish.pk = 20
+        comp_dish.slug = None
         comp_dish.stock_qty = None  # unlimited
 
         dish_om = MagicMock()
-
-        def _su_filter(**kwargs):
-            mock_qs = MagicMock()
-            if "slug__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([combo_dish])
-            elif "pk__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([comp_dish])
-            else:
-                mock_qs.__iter__ = lambda s: iter([])
-            return mock_qs
-
+        # Single merged lock returns both dishes together
         su_mock = MagicMock()
-        su_mock.filter.side_effect = _su_filter
+        su_mock.filter.return_value = [combo_dish, comp_dish]
         dish_om.select_for_update.return_value = su_mock
 
         self._run_restock(order, dish_om)
 
+        # ONE merged select_for_update().filter() call
+        dish_om.select_for_update.assert_called_once()
+        self.assertEqual(su_mock.filter.call_count, 1)
         # The mock for Dish.objects.filter(pk=...).update() should NOT have been called
         # (all stock_qty are None, so the `if d.stock_qty is not None` branch is skipped)
-        filter_mock = dish_om.filter
-        for c in filter_mock.call_args_list:
-            # None of the .update() calls should have happened
-            self.assertFalse(
-                filter_mock.return_value.update.called,
-                "update() should not be called when stock_qty is None"
-            )
+        dish_om.filter.return_value.update.assert_not_called()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -325,7 +316,11 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
     def test_void_restocks_combo_components(
         self, order_om, tx_mock, dish_om, broadcast_mock
     ):
-        """Voiding a combo item must restock each component (per-unit qty × item.qty)."""
+        """Voiding a combo item must restock each component (per-unit qty × item.qty).
+
+        After A3 merge: the void restock issues ONE select_for_update() call with a
+        Q(slug__in=[...])|Q(pk__in=[...]) filter, returning all relevant dishes.
+        """
         combo_snap = [
             {"dish_id": 10, "name": "Fries", "qty": 1},
             {"dish_id": 11, "name": "Drink", "qty": 1},
@@ -341,6 +336,7 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
             total=Decimal("50.00"),
             wallet_amount_paid=Decimal("0"),
         )
+        order.points_earned = 0  # no loyalty — clawback branch skipped
 
         # Both pre-lock and locked order
         order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
@@ -352,7 +348,7 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
             def __exit__(self, *a): return False
         tx_mock.atomic.return_value = _FakeAtomic()
 
-        # Locked dishes returned for slug-based and pk-based queries
+        # All three dishes returned by the single merged lock
         combo_locked = MagicMock()
         combo_locked.pk = 1
         combo_locked.slug = "combo-meal"
@@ -360,24 +356,17 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
 
         fries_locked = MagicMock()
         fries_locked.pk = 10
+        fries_locked.slug = None
         fries_locked.stock_qty = 5
 
         drink_locked = MagicMock()
         drink_locked.pk = 11
+        drink_locked.slug = None
         drink_locked.stock_qty = 4
 
-        def _su_filter(**kwargs):
-            mock_qs = MagicMock()
-            if "slug__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([combo_locked])
-                return mock_qs
-            elif "pk__in" in kwargs:
-                mock_qs.__iter__ = lambda s: iter([fries_locked, drink_locked])
-                return mock_qs
-            return mock_qs
-
+        # Single merged select_for_update().filter() call returns all dishes
         su_mock = MagicMock()
-        su_mock.filter.side_effect = _su_filter
+        su_mock.filter.return_value = [combo_locked, fries_locked, drink_locked]
         dish_om.select_for_update.return_value = su_mock
 
         # order.save mock returns correctly
@@ -387,8 +376,12 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
 
         # No 500 or unexpected error
         self.assertIn(resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        # ONE merged select_for_update().filter() call (not two separate ones)
+        self.assertEqual(su_mock.filter.call_count, 1,
+                         "Expected single merged filter call for void restock, not separate slug/pk queries")
         # Dish.objects.filter(pk=...).update() must have been called (for restock)
-        self.assertTrue(dish_om.filter.called)
+        self.assertTrue(dish_om.filter.called,
+                        "Expected Dish.objects.filter(pk=...).update() for at least one restock")
 
     @patch("menu.views._broadcast_order_change")
     @patch("menu.views.Dish.objects")
@@ -404,6 +397,7 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
             subtotal=Decimal("12.50"),
         )
         order = _make_order(items=[item], total=Decimal("12.50"))
+        order.points_earned = 0  # no loyalty — clawback branch skipped
 
         order_om.prefetch_related.return_value.filter.return_value.first.return_value = order
         order_om.select_for_update.return_value.prefetch_related.return_value.get.return_value = order
@@ -419,7 +413,7 @@ class StaffVoidOrderItemComboTests(SimpleTestCase):
         combo_locked.stock_qty = None
 
         su_mock = MagicMock()
-        su_mock.filter.return_value.__iter__ = lambda s: iter([combo_locked])
+        su_mock.filter.return_value = [combo_locked]
         dish_om.select_for_update.return_value = su_mock
         order.save = MagicMock()
 

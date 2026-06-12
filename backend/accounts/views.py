@@ -3094,9 +3094,11 @@ class MarketplacePlaceOrderView(APIView):
                                 _ld = _locked.get(_dish_pk)
                                 if _ld and _ld.stock_qty is not None:
                                     _new_qty = max(0, _ld.stock_qty - _ordered_qty)
-                                    _Dish.objects.filter(pk=_dish_pk).update(
-                                        **{"stock_qty": _new_qty, **({"is_available": False} if _new_qty == 0 else {})}
-                                    )
+                                    _update_fields = {"stock_qty": _new_qty}
+                                    if _new_qty == 0:
+                                        _update_fields["is_available"] = False
+                                        _update_fields["stock_auto_zeroed"] = True
+                                    _Dish.objects.filter(pk=_dish_pk).update(**_update_fields)
 
                         # Component stock: validate then decrement
                         if _mkt_comp_stock_agg:
@@ -3108,9 +3110,11 @@ class MarketplacePlaceOrderView(APIView):
                                 _ld = _locked.get(_cpk)
                                 if _ld and _ld.stock_qty is not None:
                                     _cnew = max(0, _ld.stock_qty - _cqty)
-                                    _Dish.objects.filter(pk=_cpk).update(
-                                        **{"stock_qty": _cnew, **({"is_available": False} if _cnew == 0 else {})}
-                                    )
+                                    _cupdate_fields = {"stock_qty": _cnew}
+                                    if _cnew == 0:
+                                        _cupdate_fields["is_available"] = False
+                                        _cupdate_fields["stock_auto_zeroed"] = True
+                                    _Dish.objects.filter(pk=_cpk).update(**_cupdate_fields)
 
                         for _attempt in range(10):
                             _candidate = f"ORD-{_sec.token_hex(3).upper()}"

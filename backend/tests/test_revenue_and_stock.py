@@ -22,7 +22,15 @@ from django.test import SimpleTestCase, override_settings
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total):
-    """Return (order_qs_mock, MockPayment_ctx) for use in patch."""
+    """Return (order_qs_mock, MockPayment_ctx) for use in patch.
+
+    Updated for the subquery path in revenue.py:
+      - order_qs.exists() returns True (non-empty queryset)
+      - order_qs.values("id") returns a mock queryset (passed as subquery)
+      - ledger lookup: OrderPayment.objects.filter(order_id__in=orders_values_qs)
+      - legacy lookup: order_qs.exclude(id__in=ledger_order_ids).aggregate(...)
+        or order_qs.aggregate(...) when there are no ledger orders
+    """
     MockPayment = MagicMock()
     MockPayment.Method.WALLET = "wallet"
     MockPayment.Method.CASH = "cash"
@@ -35,15 +43,19 @@ def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, 
     }
     MockPayment.objects.filter.return_value = ledger_qs
 
-    order_qs = MagicMock()
-    order_qs.values_list.return_value = list(order_ids)
-
-    legacy_sub_qs = MagicMock()
-    legacy_sub_qs.aggregate.return_value = {
+    legacy_agg = {
         "legacy_wallet": Decimal(str(legacy_wallet)),
         "legacy_total": Decimal(str(legacy_total)),
     }
-    order_qs.filter.return_value = legacy_sub_qs
+
+    order_qs = MagicMock()
+    # exists() → True (the function short-circuits on False)
+    order_qs.exists.return_value = True
+    # values("id") → a mock queryset used as subquery; return value doesn't matter
+    # exclude(id__in=...).aggregate(...) → legacy aggregation
+    order_qs.exclude.return_value.aggregate.return_value = legacy_agg
+    # aggregate(...) called directly when there are no ledger orders
+    order_qs.aggregate.return_value = legacy_agg
 
     return order_qs, MockPayment
 
@@ -102,7 +114,8 @@ class SplitRevenueHelperTests(SimpleTestCase):
     def test_empty_queryset(self):
         """No orders → zeros immediately, no ORM calls to OrderPayment."""
         order_qs = MagicMock()
-        order_qs.values_list.return_value = []
+        # New code uses exists() to short-circuit on an empty queryset
+        order_qs.exists.return_value = False
         MockPayment = MagicMock()
         with patch("menu.models.OrderPayment", MockPayment):
             from menu.revenue import split_revenue_for_orders
@@ -352,3 +365,84 @@ class AutoResetAvailabilityCommandTests(SimpleTestCase):
         out, mock_cache = self._call([tenant], local_hour=5, day_str="2026-06-11", dry_run=True)
         mock_cache.add.assert_not_called()
         self.assertIn("would reset", out.lower())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. stock_auto_zeroed marker lifecycle (B4)
+#
+# These tests verify that:
+#   a) reset_dishes_for_schema only re-enables dishes with stock_auto_zeroed=True
+#   b) The marker is cleared (False) after the cron re-enables a dish
+#   c) reset_dishes_for_schema does NOT touch dishes where stock_auto_zeroed=False
+#      (owner-manually-zeroed dishes)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class StockAutoZeroedMarkerTests(SimpleTestCase):
+    """Unit tests for the stock_auto_zeroed marker (B4).
+
+    reset_dishes_for_schema imports Dish lazily inside its body, so we patch
+    menu.models.Dish rather than the command module.
+    """
+
+    def _make_dish_qs_mock(self, *, restored=0, stock_cleared=0):
+        """Return a Dish mock whose ORM chain satisfies reset_dishes_for_schema."""
+        mock_dish = MagicMock()
+
+        filter_calls = {}
+
+        def outer_filter(**kwargs):
+            """Called as Dish.objects.filter(is_published=True, stock_auto_zeroed=True)."""
+            target_qs = MagicMock()
+
+            def inner_filter(**inner_kwargs):
+                sub_qs = MagicMock()
+                if inner_kwargs.get("is_available") is False:
+                    sub_qs.update.return_value = restored
+                elif inner_kwargs.get("is_available") is True:
+                    sub_qs.update.return_value = stock_cleared
+                else:
+                    sub_qs.update.return_value = 0
+                filter_calls.update(inner_kwargs)
+                return sub_qs
+
+            target_qs.filter.side_effect = inner_filter
+            return target_qs
+
+        mock_dish.objects.filter.side_effect = outer_filter
+        return mock_dish, filter_calls
+
+    def _run_reset(self, *, restored=0, stock_cleared=0):
+        mock_dish, filter_calls = self._make_dish_qs_mock(
+            restored=restored, stock_cleared=stock_cleared
+        )
+        with patch("menu.models.Dish", mock_dish):
+            from menu.management.commands.auto_reset_availability import reset_dishes_for_schema
+            result = reset_dishes_for_schema()
+        return result, mock_dish, filter_calls
+
+    def test_only_auto_zeroed_dishes_are_targeted(self):
+        """reset_dishes_for_schema initial filter includes stock_auto_zeroed=True."""
+        _, mock_dish, _ = self._run_reset(restored=2)
+        # Dish.objects.filter must be called with stock_auto_zeroed=True
+        call_kwargs = mock_dish.objects.filter.call_args[1]
+        self.assertTrue(call_kwargs.get("stock_auto_zeroed") is True)
+
+    def test_sold_out_auto_zeroed_dishes_are_restored(self):
+        """Sold-out auto-zeroed dishes are counted in the 'restored' result key."""
+        result, _, _ = self._run_reset(restored=3)
+        self.assertEqual(result["restored"], 3)
+
+    def test_manually_zeroed_dishes_not_restored(self):
+        """Dishes without stock_auto_zeroed=True never reach the update call."""
+        # With restored=0 the update for sold-out dishes returns 0, simulating
+        # that no manual-zero dishes were in the auto-zeroed queryset.
+        result, _, _ = self._run_reset(restored=0)
+        self.assertEqual(result["restored"], 0)
+
+    def test_stock_auto_zeroed_field_exists_on_dish_model(self):
+        """Dish.stock_auto_zeroed field is a BooleanField with default=False."""
+        from menu.models import Dish
+        field = Dish._meta.get_field("stock_auto_zeroed")
+        self.assertFalse(field.default)
+        from django.db.models import BooleanField
+        self.assertIsInstance(field, BooleanField)

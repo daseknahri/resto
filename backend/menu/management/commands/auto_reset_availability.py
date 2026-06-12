@@ -59,23 +59,35 @@ def _tenant_local_hour(tenant) -> tuple[int, str]:
 
 
 def reset_dishes_for_schema() -> dict:
-    """Re-enable sold-out published dishes and clear auto-zeroed stock counts.
+    """Re-enable sold-out published dishes that were auto-zeroed by checkout.
 
-    Mirrors the DishBulkAvailabilityResetView POST logic (clear_stock=False mode):
-      - is_available=False → True for all published dishes.
-      - stock_qty=0 → None (auto-zeroed only).
+    Only touches dishes where stock_auto_zeroed=True (set by the checkout
+    decrement logic) so that owner-deliberately-zeroed dishes are left alone.
+    The re-enable clears the marker and also resets stock_qty=0 → None so the
+    dish is fully available again (unlimited until the next order).
 
     Returns {"restored": int, "stock_cleared": int}.
     """
     from menu.models import Dish
 
-    restored = Dish.objects.filter(
-        is_published=True, is_available=False
-    ).update(is_available=True)
+    # Re-enable only dishes the checkout auto-zeroed; clear the marker and
+    # reset stock_qty to None so the dish has unlimited stock again.
+    # Both is_available=False and is_available=True dishes with stock_auto_zeroed
+    # may exist (e.g. if someone manually re-enabled the dish but didn't adjust
+    # stock_qty), so we filter on stock_auto_zeroed=True regardless of
+    # is_available to handle the stock_qty cleanup too.
+    target_qs = Dish.objects.filter(is_published=True, stock_auto_zeroed=True)
 
-    stock_cleared = Dish.objects.filter(
-        is_published=True, stock_qty=0
-    ).update(stock_qty=None)
+    # Restore availability for those that are still sold-out.
+    restored = target_qs.filter(is_available=False).update(
+        is_available=True, stock_qty=None, stock_auto_zeroed=False
+    )
+
+    # Clear the marker (and reset stock_qty) for any already-available ones
+    # that still carry the flag (e.g. owner manually re-enabled mid-day).
+    stock_cleared = target_qs.filter(is_available=True).update(
+        stock_qty=None, stock_auto_zeroed=False
+    )
 
     return {"restored": restored, "stock_cleared": stock_cleared}
 

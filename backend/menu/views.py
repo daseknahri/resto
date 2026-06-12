@@ -543,17 +543,38 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
                     raise
         serializer.save()
 
+    def perform_update(self, serializer):
+        """Clear stock_auto_zeroed when the owner explicitly writes stock_qty.
+
+        An owner who types a stock_qty value into the Inventory tab is making a
+        deliberate choice — that is NOT an automatic decrement, so we must not
+        let the cron silently re-enable the dish afterwards.  We do this here
+        (on the write path) rather than in the serializer so that:
+          - The field is never writable by clients (excluded from
+            DishSerializer.Meta.fields).
+          - The clear fires for both PATCH and PUT.
+        """
+        instance = serializer.save()
+        if "stock_qty" in serializer.validated_data:
+            # stock_auto_zeroed is backend-managed and not in the serializer,
+            # so use a direct .update() call rather than serializer.save() kwargs.
+            Dish.objects.filter(pk=instance.pk).update(stock_auto_zeroed=False)
+
     def destroy(self, request, *args, **kwargs):
         """Delete a dish. Returns 409 if the dish is a component of a combo
-        (ProtectedError from ComboComponent.component on_delete=PROTECT)."""
+        (ProtectedError from ComboComponent.component on_delete=PROTECT).
+        The instance is fetched exactly once via get_object(); perform_destroy
+        receives that instance directly so DRF's DestroyModelMixin does not
+        make a redundant second get_object() call on the success path."""
         from django.db import ProtectedError
         from django.db.models import RestrictedError
+        instance = self.get_object()
         try:
-            return super().destroy(request, *args, **kwargs)
-        except (ProtectedError, RestrictedError) as exc:
+            self.perform_destroy(instance)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except (ProtectedError, RestrictedError):
             # Find the first combo that references this dish as a component
-            # so we can name it in the error.
-            instance = self.get_object()
+            # so we can name it in the error.  Use the already-fetched instance.
             combo_name = ""
             try:
                 first_cc = instance.part_of_combos.select_related("dish").first()
@@ -2396,14 +2417,17 @@ class PlaceOrderView(APIView):
                         _ld = _locked_dishes.get(_dish_pk)
                         if _ld and _ld.stock_qty is not None and _ld.stock_qty < _ordered_qty:
                             raise _OutOfStock(_pk_to_slug.get(_dish_pk, ""))
-                    # Atomically decrement; mark sold-out when stock reaches zero
+                    # Atomically decrement; mark sold-out when stock reaches zero.
+                    # stock_auto_zeroed=True marks automatic decrements so the 5am
+                    # auto_reset_availability cron can distinguish them from deliberate
+                    # owner-zeroed dishes.
                     for _dish_pk, _ordered_qty in _stock_updates:
                         _ld = _locked_dishes.get(_dish_pk)
                         if _ld and _ld.stock_qty is not None:
                             _new_qty = max(0, _ld.stock_qty - _ordered_qty)
                             if _new_qty == 0:
                                 Dish.objects.filter(pk=_dish_pk).update(
-                                    stock_qty=0, is_available=False
+                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
                                 )
                             else:
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
@@ -2419,7 +2443,9 @@ class PlaceOrderView(APIView):
                         if _ld and _ld.stock_qty is not None:
                             _cnew = max(0, _ld.stock_qty - _cqty)
                             if _cnew == 0:
-                                Dish.objects.filter(pk=_cpk).update(stock_qty=0, is_available=False)
+                                Dish.objects.filter(pk=_cpk).update(
+                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
+                                )
                             else:
                                 Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
@@ -3797,7 +3823,9 @@ class StaffAppendOrderItemsView(APIView):
                         if _ld and _ld.stock_qty is not None:
                             _new_qty = max(0, _ld.stock_qty - _ordered_qty)
                             if _new_qty == 0:
-                                Dish.objects.filter(pk=_dish_pk).update(stock_qty=0, is_available=False)
+                                Dish.objects.filter(pk=_dish_pk).update(
+                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
+                                )
                             else:
                                 Dish.objects.filter(pk=_dish_pk).update(stock_qty=_new_qty)
 
@@ -3812,7 +3840,9 @@ class StaffAppendOrderItemsView(APIView):
                         if _ld and _ld.stock_qty is not None:
                             _cnew = max(0, _ld.stock_qty - _cqty)
                             if _cnew == 0:
-                                Dish.objects.filter(pk=_cpk).update(stock_qty=0, is_available=False)
+                                Dish.objects.filter(pk=_cpk).update(
+                                    stock_qty=0, is_available=False, stock_auto_zeroed=True
+                                )
                             else:
                                 Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
@@ -3860,8 +3890,18 @@ class StaffVoidOrderItemView(APIView):
       order.wallet_amount_paid decremented by refunded amount; payment_status stays PAID.
       Cash-paid or UNPAID orders: no wallet movement.
 
-    NOTE: Loyalty points are NOT adjusted on item void (MVP). Adjust on order
-    cancel only (full reversal via _reverse_loyalty_for_cancelled_order).
+    Loyalty clawback (per-item):
+      When an order has points_earned > 0 and a linked customer, voids
+      proportionally claw back earned points using the exact same formula as
+      placement: pts = int(float(food_subtotal) * rate).  The clawback is:
+        clawback = earned_for(pre_void_food_subtotal) - earned_for(post_void_food_subtotal)
+      clamped to the remaining points_earned on the order so that multiple voids
+      never exceed what was originally awarded.  order.points_earned is decremented
+      by the clawback so a subsequent full cancel via _reverse_loyalty_for_cancelled_order
+      naturally claws only the remaining balance (no double-claw).
+
+      MVP boundary: redeemed_loyalty_points is order-level and is NOT touched
+      here.  Redemption reversal happens only on full cancel.
 
     Returns the refreshed staff-list payload for the order.
     """
@@ -3926,27 +3966,34 @@ class StaffVoidOrderItemView(APIView):
                     if _c_pk is not None and _c_per_unit > 0:
                         _void_component_pks[_c_pk] = _void_component_pks.get(_c_pk, 0) + _c_per_unit * int(item.qty or 0)
 
-            if _void_slugs_to_restock:
-                _locked_list = list(
-                    Dish.objects.select_for_update().filter(slug__in=[s for s, _ in _void_slugs_to_restock])
-                )
-                for _d in _locked_list:
+            # Merged single select_for_update across combo dish (by slug) AND
+            # components (by pk) so lock acquisition order is identical to
+            # placement/append and cannot interleave with concurrent placement.
+            if _void_slugs_to_restock or _void_component_pks:
+                from django.db.models import Q as _Q
+                _slug_list = [s for s, _ in _void_slugs_to_restock]
+                _pk_list = list(_void_component_pks.keys())
+                _lock_q = _Q()
+                if _slug_list:
+                    _lock_q |= _Q(slug__in=_slug_list)
+                if _pk_list:
+                    _lock_q |= _Q(pk__in=_pk_list)
+                _all_locked = list(Dish.objects.select_for_update().filter(_lock_q))
+                for _d in _all_locked:
+                    # Combo-dish restock (matched by slug)
                     _restock_qty = next((q for s, q in _void_slugs_to_restock if s == _d.slug), 0)
-                    if _d.stock_qty is not None and _restock_qty > 0:
+                    # Component restock (matched by pk)
+                    _c_qty = _void_component_pks.get(_d.pk, 0)
+                    # Merge both quantities into a single update to avoid double-
+                    # incrementing a dish that appears in both maps (e.g. a dish
+                    # that is simultaneously the top-level combo item AND a listed
+                    # component of that same order snapshot).
+                    _total_restock = _restock_qty + _c_qty
+                    if _total_restock > 0 and _d.stock_qty is not None:
                         Dish.objects.filter(pk=_d.pk).update(
-                            stock_qty=_F("stock_qty") + _restock_qty,
+                            stock_qty=_F("stock_qty") + _total_restock,
                             is_available=True,
-                        )
-            if _void_component_pks:
-                _locked_comps = list(
-                    Dish.objects.select_for_update().filter(pk__in=list(_void_component_pks.keys()))
-                )
-                for _cd in _locked_comps:
-                    _c_qty = _void_component_pks.get(_cd.pk, 0)
-                    if _cd.stock_qty is not None and _c_qty > 0:
-                        Dish.objects.filter(pk=_cd.pk).update(
-                            stock_qty=_F("stock_qty") + _c_qty,
-                            is_available=True,
+                            stock_auto_zeroed=False,
                         )
 
             # Recompute order totals from non-voided items.
@@ -3954,7 +4001,50 @@ class StaffVoidOrderItemView(APIView):
             # different items cannot both read a stale wallet_amount_paid and each
             # issue an independent refund (TOCTOU / double-spend fix).
             order = Order.objects.select_for_update().prefetch_related("items").get(pk=order_id)
+            # Capture pre-void food subtotal from the item being voided (already saved
+            # as voided, so non-voided list won't include it after recompute).
+            _voided_item_subtotal = Decimal(str(item.subtotal or "0"))
             _recompute_order_totals(order)
+
+            # ── Loyalty clawback ──────────────────────────────────────────────
+            # Proportionally claw back earned loyalty points for the voided item
+            # using the ratio (voided_subtotal / pre_void_total_subtotal) applied
+            # to order.points_earned (the STORED earned value at placement time).
+            # This intentionally does NOT re-read LoyaltyConfig so that a rate
+            # change between placement and void cannot produce an over-clawback.
+            # Works across any sequence of voids: clawback is bounded by the
+            # remaining points_earned, so total clawed ≤ original earned.
+            # A subsequent full cancel via _reverse_loyalty_for_cancelled_order
+            # sees the decremented points_earned and claws only the remainder —
+            # no double-claw.
+            _loyalty_clawback_pts = 0
+            try:
+                _orig_earned = int(getattr(order, "points_earned", 0) or 0)
+                if _orig_earned > 0 and order.customer_id:
+                    # Use the non-voided items subtotal (already marked voided above)
+                    _non_voided_subtotal = sum(
+                        Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided
+                    )
+                    _pre_subtotal = _non_voided_subtotal + _voided_item_subtotal
+                    if _pre_subtotal > Decimal("0"):
+                        # Proportional clawback: fraction of subtotal being removed
+                        _raw_clawback = int(
+                            round(float(_orig_earned) * float(_voided_item_subtotal) / float(_pre_subtotal))
+                        )
+                        _loyalty_clawback_pts = max(0, min(_raw_clawback, _orig_earned))
+                    if _loyalty_clawback_pts > 0:
+                        from accounts.models import Customer as _CustC
+                        _cust_locked = _CustC.objects.select_for_update().get(pk=order.customer_id)
+                        _new_pts = max(0, int(_cust_locked.loyalty_points or 0) - _loyalty_clawback_pts)
+                        _cust_locked.loyalty_points = _new_pts
+                        _cust_locked.save(update_fields=["loyalty_points", "updated_at"])
+                        # Decrement order.points_earned so cancel claws only the rest
+                        Order.objects.filter(pk=order.pk).update(
+                            points_earned=_orig_earned - _loyalty_clawback_pts
+                        )
+                        order.points_earned = _orig_earned - _loyalty_clawback_pts
+            except Exception:
+                pass  # Loyalty clawback is best-effort — never block a void
 
             # Partial wallet refund — two cases:
             #   A. PAID order: refund min(line_total, wallet_amount_paid); status stays PAID.
@@ -4149,6 +4239,27 @@ class StaffOrderPaymentView(APIView):
                     Decimal("0"),
                 ).quantize(self._CENT)
                 outstanding = max(Decimal("0"), order_total - existing_paid).quantize(self._CENT)
+
+                # ── Reconcile guard ───────────────────────────────────────────
+                # If the ledger already covers the total but payment_status is
+                # still UNPAID (e.g. rows were written out-of-band), flip to PAID
+                # and return 200 "reconciled" without recording a new payment row.
+                if outstanding <= Decimal("0"):
+                    order.mark_paid(save=False)
+                    order.save(update_fields=["payment_status", "paid_at", "updated_at"])
+                    try:
+                        _broadcast_order_change(order)
+                    except Exception:
+                        pass
+                    _rec_order = (
+                        Order.objects
+                        .prefetch_related("items", "payments")
+                        .get(pk=order_id)
+                    )
+                    return Response(
+                        {**_staff_order_payload(_rec_order), "code": "reconciled"},
+                        status=status.HTTP_200_OK,
+                    )
 
                 # Resolve amount
                 amount = requested_amount if requested_amount is not None else outstanding
@@ -5235,25 +5346,29 @@ def _restock_cancelled_order(order) -> None:
                         by_component_pk[_c_pk] = by_component_pk.get(_c_pk, 0) + _c_per_unit * _item_qty
         if not by_slug and not by_component_pk:
             return
+        # Merged single select_for_update across combo dishes (by slug) AND
+        # components (by pk) so lock acquisition order is identical to
+        # placement/void and cannot interleave with concurrent placement.
         with _dbtx.atomic():
+            from django.db.models import Q as _Q
+            _lock_q = _Q()
             if by_slug:
-                locked = {
-                    d.slug: d
-                    for d in Dish.objects.select_for_update().filter(slug__in=list(by_slug.keys()))
-                }
-                for slug, qty in by_slug.items():
-                    d = locked.get(slug)
-                    if d is not None and d.stock_qty is not None and qty > 0:
-                        Dish.objects.filter(pk=d.pk).update(stock_qty=_F("stock_qty") + qty, is_available=True)
+                _lock_q |= _Q(slug__in=list(by_slug.keys()))
             if by_component_pk:
-                locked_comps = {
-                    d.pk: d
-                    for d in Dish.objects.select_for_update().filter(pk__in=list(by_component_pk.keys()))
-                }
-                for cpk, cqty in by_component_pk.items():
-                    cd = locked_comps.get(cpk)
-                    if cd is not None and cd.stock_qty is not None and cqty > 0:
-                        Dish.objects.filter(pk=cd.pk).update(stock_qty=_F("stock_qty") + cqty, is_available=True)
+                _lock_q |= _Q(pk__in=list(by_component_pk.keys()))
+            _all_locked = list(Dish.objects.select_for_update().filter(_lock_q))
+            for d in _all_locked:
+                # Combo-dish restock (by slug)
+                qty = by_slug.get(d.slug, 0)
+                # Component restock (by pk)
+                cqty = by_component_pk.get(d.pk, 0)
+                # Merge into one update so a dish appearing in both maps (slug
+                # match AND component pk match) is not incremented twice.
+                total_qty = qty + cqty
+                if total_qty > 0 and d.stock_qty is not None:
+                    Dish.objects.filter(pk=d.pk).update(
+                        stock_qty=_F("stock_qty") + total_qty, is_available=True, stock_auto_zeroed=False
+                    )
     except Exception:
         pass  # restock is best-effort — never block a cancellation
 
@@ -5738,10 +5853,12 @@ class DishBulkAvailabilityResetView(APIView):
 
         clear_stock = bool(request.data.get("clear_stock", False))
 
-        # Re-enable all published dishes that are currently sold-out (is_available=False)
+        # Re-enable all published dishes that are currently sold-out (is_available=False).
+        # Also clear stock_auto_zeroed so the morning cron (auto_reset_availability)
+        # does not zero out any stock_qty the owner sets between now and 5am.
         restored_count = Dish.objects.filter(
             is_published=True, is_available=False
-        ).update(is_available=True)
+        ).update(is_available=True, stock_auto_zeroed=False)
 
         stock_cleared_count = 0
         if clear_stock:

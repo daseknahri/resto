@@ -12,12 +12,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 > cancel atomicity, kitchen voided-items, cash-cancel warning, section bypass).
 
 ## Restaurant (current focus — candidates for post-v1.0)
-- [ ] **`amount <= 0` guard in payments endpoint when ledger > total** — the R5
-      fix flips such orders to PAID at void time, but a direct API path that
-      creates the state would still strand; consider a reconcile sweep assertion.
-      Source: R5 review follow-on thought.
-- [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but
-      earned points aren't clawed back per-item. Documented MVP in R2 view docstring.
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
       tenants are single-location today.
 - [ ] **Auto-print on new order** — needs kiosk browser / local agent / network
@@ -25,29 +19,13 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **Course sequencing** (fire starters before mains) — audit service-flow item,
       below top-8 cut.
 
-- [ ] **Void/cancel restock lock merge** — StaffVoidOrderItemView + _restock_cancelled_order
-      each issue two sequential select_for_update queries (combo dish by slug, components
-      by pk) inside one atomic block; placement/append use a single merged query. Merge
-      into one Q(slug__in)|Q(pk__in) lock to be fully deadlock-safe. Low practical risk
-      (components can't be combos; void slug set is size 1). Source: combos review minor.
-- [ ] **DishViewSet.destroy double-fetch on ProtectedError path** — get_object() called
-      again in the except block; could use exc.protected_objects instead. Cosmetic.
-      Source: combos review minor.
-- [ ] **Winback audience dedupe batching** — _build_audience checks _already_nudged
-      per-customer (one EXISTS query each) until 50 eligible are found; a tenant with
-      thousands of recently-nudged lapsed customers pays that scan hourly at local 11:00.
-      Batch into one customer_id__in query (needs the 6 tests patching _already_nudged
-      reworked). Source: my post-review read of the winback batch.
-- [ ] **winback_inactive_weeks=0 silently coerces to 4** — `or 4` fallback swallows an
-      explicit 0 written via admin/raw DB (serializer rejects it). Cosmetic-defensive.
-      Source: winback review minor.
-- [ ] **revenue.py order_ids materialization** — split helper pulls all period order
-      PKs into Python; switch to a subquery join for 90-day windows on busy tenants.
-      Source: rev/stock review minor.
-- [ ] **Auto-reset clears deliberate zeros** — the 5am reset re-enables ALL stock_qty=0
-      dishes, including manually-zeroed ones (same semantics as the manual button, and
-      the cron is opt-in — acceptable; a stock_auto_zeroed marker would distinguish).
-      Source: rev/stock review minor.
+- [ ] **DishViewSet.perform_update marker clear not atomic** — serializer.save() and the
+      stock_auto_zeroed=False clear are two writes outside one atomic block; a checkout
+      zeroing the dish in that microsecond window loses its marker. Wrap in atomic.
+      Source: sweep-2 review minor.
+- [ ] **Clawback test asserts points_earned decrement weakly** — string-contains check on
+      update call args instead of asserting points_earned=<exact value>. Tighten.
+      Source: sweep-2 review minor.
 
 ## Verticals (parked by strategy — doc §4b)
 - [ ] **Store pick-flow**: substitutions + out-of-stock at pick time + refund deltas.
@@ -89,6 +67,15 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Correctness sweep 2 (8 items): loyalty clawback on item void (proportional from
+      stored points_earned — rate-change-proof, composes with cancel via decrement);
+      payments outstanding<=0 reconcile guard (200 "reconciled", no phantom row);
+      void/cancel restock merged into ONE Q(slug)|Q(pk) select_for_update with combined
+      single-increment per dish; DishViewSet.destroy true single-fetch; winback audience
+      dedupe batched to one query; winback weeks=0 defensive default; revenue.py
+      subquery instead of materialized PKs; Dish.stock_auto_zeroed marker (menu/0053)
+      so the 5am cron only re-enables checkout-zeroed dishes (set at all 6 auto-zero
+      sites, cleared on restock/owner-write/bulk-reset/cron) — sweep-2 commit.
 - [x] Win-back automation: Profile.winback_* (tenancy/0038) + accounts.WinbackNudge
       durable 90-day dedupe (accounts/0042) + send_winback_nudges hourly cron
       (tenant-local 11:00, mark-BEFORE-send ordering, suppressed-send slot reclaim,

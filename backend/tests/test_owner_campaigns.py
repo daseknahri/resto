@@ -391,17 +391,38 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
                 "order_count": order_count,
                 "total_revenue": Decimal(str(total_revenue)),
             }
-            # values_list("id", flat=True) for order_ids — used by split_revenue_for_orders
-            qs.values_list.return_value = list(order_ids)
+            # New subquery path: exists() signals non-empty queryset;
+            # values("id") returns a mock queryset used as DB subquery.
+            qs.exists.return_value = True
+
             mock_order.objects.filter.return_value = qs
 
-            # For legacy orders: qs.filter(id__in=legacy_ids).aggregate(...)
-            legacy_qs = MagicMock()
-            legacy_qs.aggregate.return_value = {
+            # For legacy orders: qs.exclude(id__in=ledger_ids).aggregate(...)
+            # and qs.aggregate(...) when there are no ledger orders.
+            legacy_agg = {
                 "legacy_wallet": Decimal(str(legacy_wallet)),
                 "legacy_total": Decimal(str(legacy_total)),
             }
-            qs.filter.return_value = legacy_qs
+            legacy_qs = MagicMock()
+            legacy_qs.aggregate.return_value = legacy_agg
+            qs.exclude.return_value = legacy_qs
+            qs.aggregate.side_effect = None  # used by _compute_summary aggregate
+            # aggregate is called twice: once for order stats, once for legacy path
+            # Use a call-count side-effect to return the right value each time.
+            _aggregate_calls = [0]
+            _order_stats_agg = {
+                "order_count": order_count,
+                "total_revenue": Decimal(str(total_revenue)),
+            }
+
+            def _aggregate_side_effect(**kwargs):
+                _aggregate_calls[0] += 1
+                if _aggregate_calls[0] == 1:
+                    return _order_stats_agg
+                # second call is the legacy all-orders aggregate (no ledger_ids case)
+                return legacy_agg
+
+            qs.aggregate.side_effect = _aggregate_side_effect
 
             # OrderItem top dishes — return empty list
             item_qs = MagicMock()
