@@ -53,6 +53,13 @@ class Category(models.Model):
             "(e.g. a section is sold out for the evening). Set back to False to restore."
         ),
     )
+    course = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Course number for dine-in sequencing (0 = no course / fire immediately; "
+            "1–4 = starter → main → cheese → dessert). Dishes inherit this at order time."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -503,6 +510,15 @@ class Order(models.Model):
         db_index=True,
         help_text="accounts.User pk of the staff/owner who last advanced this order.",
     )
+    fired_course = models.PositiveSmallIntegerField(
+        default=1,
+        help_text=(
+            "Highest course number that has been fired (sent to kitchen). "
+            "Items with course <= fired_course are considered fired; items with course > fired_course "
+            "are held. Course 0 items are always fired immediately. "
+            "Default 1 means course-1 items fire on placement."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     status_updated_at = models.DateTimeField(null=True, blank=True)
@@ -567,6 +583,15 @@ class OrderItem(models.Model):
     is_voided = models.BooleanField(default=False)
     voided_at = models.DateTimeField(null=True, blank=True)
     void_reason = models.CharField(max_length=120, blank=True)
+    # Course sequencing — snapshot of dish.category.course at placement/append time.
+    # 0 = no course / fire immediately; 1–4 = course number held until staff fires it.
+    course = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Course snapshot captured at order placement. 0 = fire immediately; "
+            "1–4 = held until Order.fired_course reaches this value."
+        ),
+    )
     # Combo snapshot — when the ordered dish is a combo, this captures the fixed
     # components at placement time so receipt/kitchen views can render sub-lines
     # even if the combo definition changes later. Empty list for non-combo dishes.

@@ -227,7 +227,7 @@
               v-else-if="item.id != null"
               type="button"
               class="flex w-full items-baseline gap-2.5 cursor-pointer ui-press text-start rounded-lg px-2 py-2 -mx-2 transition-colors hover:bg-slate-700/30"
-              :class="item.is_ready ? 'opacity-40 line-through' : ''"
+              :class="[item.is_ready ? 'opacity-40 line-through' : '', isItemHeld(item, order) ? 'opacity-50' : '']"
               :title="t('kitchen.tapItemReady')"
               :aria-pressed="item.is_ready"
               @click="toggleItem(order, item)"
@@ -235,7 +235,15 @@
               <span class="kitchen-qty" :class="headlineColorClass(order.status)" aria-hidden="true">{{ item.qty }}×</span>
               <span class="kitchen-name font-medium">{{ item.dish_name }}</span>
               <span v-if="item.note" class="ms-1 shrink-0 text-[11px] italic text-slate-500">({{ item.note }})</span>
-              <span v-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
+              <!-- Course chip for kitchen -->
+              <span
+                v-if="(item.course ?? 0) > 0 && !item.is_ready"
+                class="ms-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold leading-none"
+                :class="isItemHeld(item, order)
+                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                  : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+              >{{ isItemHeld(item, order) ? `${t('waiterPage.heldChip')} · ${t('waiterPage.courseChip', { n: item.course })}` : t('waiterPage.courseChip', { n: item.course }) }}</span>
+              <span v-else-if="item.is_ready" class="ms-auto shrink-0 text-emerald-400" aria-hidden="true">
                 <!-- Checkmark icon -->
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4" aria-hidden="true">
                   <path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/>
@@ -275,6 +283,14 @@
 
         <!-- Action button -->
         <div class="mt-auto space-y-2 px-4 pb-4 pt-4">
+          <!-- Fire course button (owner/expediter) -->
+          <button
+            v-if="lowestHeldCourse(order) !== null"
+            type="button"
+            class="ui-btn-outline ui-press w-full gap-1.5 border-amber-500/30 text-amber-300/90 hover:border-amber-400/50 hover:text-amber-200 text-xs"
+            :disabled="firingCourseOrderId === order.id"
+            @click="fireCourse(order)"
+          >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
           <!-- Mark all items ready at once -->
           <button
             v-if="hasUnreadyItems(order)"
@@ -325,6 +341,7 @@ import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { useNowTicker } from "../composables/useNowTicker";
 import { chipClass as statusChipClass } from "../lib/orderStatusMeta";
+import api from "../lib/api";
 
 // Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
 // (live kitchen display — polls and must mount & unmount normally).
@@ -577,6 +594,51 @@ onUnmounted(() => {
   waiter.teardownConnectivityListeners();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 });
+
+// ── Course sequencing helpers ──────────────────────────────────────────────────
+const firingCourseOrderId = ref(null);
+
+const isItemHeld = (item, order) => {
+  const c = item.course ?? 0;
+  if (c === 0) return false;
+  return c > (order.fired_course ?? 1);
+};
+
+const lowestHeldCourse = (order) => {
+  if (order.fulfillment_type !== 'table') return null;
+  const firedCourse = order.fired_course ?? 1;
+  let lowest = null;
+  for (const item of (order.items || [])) {
+    const c = item.course ?? 0;
+    if (c > 0 && c > firedCourse) {
+      if (lowest === null || c < lowest) lowest = c;
+    }
+  }
+  return lowest;
+};
+
+const fireCourse = async (order) => {
+  const course = lowestHeldCourse(order);
+  if (!course || firingCourseOrderId.value === order.id) return;
+  firingCourseOrderId.value = order.id;
+  try {
+    const { data } = await api.post(`/staff/orders/${order.id}/fire-course/`, { course });
+    const o = waiter.orders.find((x) => x.id === order.id);
+    if (o) o.fired_course = data.fired_course ?? course;
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    const keyMap = {
+      already_fired: 'fireCourseError_already_fired',
+      not_table: 'fireCourseError_not_table',
+      bad_status: 'fireCourseError_bad_status',
+      invalid_course: 'fireCourseError_invalid_course',
+    };
+    const msgKey = keyMap[code] || 'fireCourseError_default';
+    toast.show(t(`waiterPage.${msgKey}`, { n: course }), 'error');
+  } finally {
+    firingCourseOrderId.value = null;
+  }
+};
 
 const advance = async (orderId) => {
   const ok = await waiter.advanceStatus(orderId);

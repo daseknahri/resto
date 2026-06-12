@@ -16,9 +16,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       tenants are single-location today.
 - [ ] **Auto-print on new order** — needs kiosk browser / local agent / network
       ESC-POS printer. Manual print button shipped long ago.
-- [ ] **Course sequencing** (fire starters before mains) — audit service-flow item,
-      below top-8 cut.
-
 - [ ] **DishViewSet.perform_update marker clear not atomic** — serializer.save() and the
       stock_auto_zeroed=False clear are two writes outside one atomic block; a checkout
       zeroing the dish in that microsecond window loses its marker. Wrap in atomic.
@@ -67,6 +64,12 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Course sequencing (dine-in fire control): Category.course 0–4 default →
+      OrderItem.course snapshot at all 3 placement paths → Order.fired_course cursor
+      (default 1) + POST /api/staff/orders/<id>/fire-course/ (section-gated, monotonic,
+      select_for_update); waiter + kitchen fire buttons with HELD·C2 amber chips,
+      owner orders consistent display; categoryApi whitelist carried course;
+      display+control only (no blocking of void/ready/payment) — courses commit.
 - [x] Correctness sweep 2 (8 items): loyalty clawback on item void (proportional from
       stored points_earned — rate-change-proof, composes with cancel via decrement);
       payments outstanding<=0 reconcile guard (200 "reconciled", no phantom row);

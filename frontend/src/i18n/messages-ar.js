@@ -1556,7 +1556,11 @@ const arabicMessages = {
     "resumeToggle": "استئناف",
     "pausedBadge": "موقوف",
     "pausedHint": "مخفي من القائمة حتى تستأنفه.",
-    "pauseFailed": "تعذّر تحديث التصنيف."
+    "pauseFailed": "تعذّر تحديث التصنيف.",
+    "courseLabel": "الخدمة (تسلسل الدايني)",
+    "courseNone": "بدون خدمة — إرسال فوري",
+    "courseN": "خدمة {n}",
+    "courseHint": "يتم تأجيل عناصر هذه الفئة حتى يقوم الموظف بإطلاق هذه الخدمة على الطاولة."
   },
   "stepDishes": {
     "title": "الأطباق",
@@ -3536,6 +3540,15 @@ Object.assign(arabicMessages, {
     settledFull: "\u062a\u0645 \u0633\u062f\u0627\u062f \u0627\u0644\u0637\u0644\u0628 \u0628\u0627\u0644\u0643\u0627\u0645\u0644.",
     overpay: "\u0627\u0644\u0645\u0628\u0644\u063a \u064a\u062a\u062c\u0627\u0648\u0632 \u0627\u0644\u0645\u062a\u0628\u0642\u064a \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628.",
     insufficientWallet: "\u0631\u0635\u064a\u062f \u0645\u062d\u0641\u0638\u0629 \u0627\u0644\u0639\u0645\u064a\u0644 \u063a\u064a\u0631 \u0643\u0627\u0641\u064d \u0644\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0644\u063a.",
+    courseChip: "\u062e{n}",
+    heldChip: "\u0645\u0624\u062c\u0644",
+    fireCourse: "\u0625\u0637\u0644\u0627\u0642 \u0627\u0644\u062e\u062f\u0645\u0629 {n}",
+    firingCourse: "\u062c\u0627\u0631\u064d \u0627\u0644\u0625\u0637\u0644\u0627\u0642\u2026",
+    fireCourseError_already_fired: "\u0627\u0644\u062e\u062f\u0645\u0629 {n} \u0623\u064f\u0637\u0644\u0642\u062a \u0628\u0627\u0644\u0641\u0639\u0644.",
+    fireCourseError_not_table: "\u062a\u0633\u0644\u0633\u0644 \u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0645\u062e\u0635\u0635 \u0644\u0637\u0644\u0628\u0627\u062a \u0627\u0644\u062f\u0627\u064a\u0646\u064a \u0641\u0642\u0637.",
+    fireCourseError_bad_status: "\u0627\u0644\u0637\u0644\u0628 \u0644\u0645 \u064a\u0639\u062f \u0646\u0634\u0637\u0627\u064b.",
+    fireCourseError_invalid_course: "\u0631\u0642\u0645 \u062e\u062f\u0645\u0629 \u063a\u064a\u0631 \u0635\u0627\u0644\u062d.",
+    fireCourseError_default: "\u062a\u0639\u0630\u0651\u0631 \u0625\u0637\u0644\u0627\u0642 \u0627\u0644\u062e\u062f\u0645\u0629 \u2014 \u062d\u0627\u0648\u0644 \u0645\u062c\u062f\u062f\u0627\u064b.",
   },
   closureDates: {
     addDate: "\u0625\u0636\u0627\u0641\u0629 \u062a\u0627\u0631\u064a\u062e \u0625\u063a\u0644\u0627\u0642",

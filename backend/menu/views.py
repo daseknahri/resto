@@ -2084,6 +2084,8 @@ class PlaceOrderView(APIView):
                 {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                 for cc in dish.combo_components.all()
             ]
+            # Snapshot course from category at placement time (0 when category missing)
+            _course_snap = int(getattr(getattr(dish, "category", None), "course", 0) or 0)
             order_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -2093,6 +2095,7 @@ class PlaceOrderView(APIView):
                 "options": option_snapshots,
                 "subtotal": subtotal,
                 "combo_components": _combo_snapshot,
+                "course": _course_snap,
             })
 
         # Collect dishes that track stock so we can decrement inside the transaction.
@@ -3339,6 +3342,7 @@ class StaffOrderListView(APIView):
                 "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 "currency": order.currency,
                 "items_count": sum(i.qty for i in order.items.all()),
+                "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
                         "id": i.id,
@@ -3351,12 +3355,13 @@ class StaffOrderListView(APIView):
                         "is_ready": i.is_ready,
                         "is_voided": i.is_voided,
                         "combo_components": i.combo_components,
+                        "course": getattr(i, "course", 0),
                     }
                     for i in order.items.all()
                 ],
                 "created_at": order.created_at.isoformat(),
                 "updated_at": order.updated_at.isoformat(),
-                # Scheduled advance orders — drives the violet 🗓️ badge in the
+                # Scheduled advance orders — drives the violet badge in the
                 # kitchen display so staff know to hold the order until release time.
                 "scheduled_for": order.scheduled_for.isoformat() if getattr(order, "scheduled_for", None) else None,
                 # Delivery job: compact status chip for kitchen staff awareness.
@@ -3540,6 +3545,8 @@ def _staff_order_payload(order):
         "delivery_fee": str(order.delivery_fee),
         "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
         "currency": order.currency,
+        # Course sequencing
+        "fired_course": getattr(order, "fired_course", 1),
         # R4 split-bill fields
         "amount_paid": str(ledger_paid),
         "outstanding": str(outstanding),
@@ -3567,6 +3574,7 @@ def _staff_order_payload(order):
                 "is_ready": i.is_ready,
                 "is_voided": i.is_voided,
                 "combo_components": i.combo_components,
+                "course": getattr(i, "course", 0),
             }
             for i in order.items.all()
         ],
@@ -3757,6 +3765,8 @@ class StaffAppendOrderItemsView(APIView):
                 {"dish_id": cc.component_id, "name": cc.component.name, "qty": cc.qty}
                 for cc in dish.combo_components.all()
             ]
+            # Snapshot course from category at append time (0 when category missing)
+            _staff_course_snap = int(getattr(getattr(dish, "category", None), "course", 0) or 0)
             new_items_data.append({
                 "dish_slug": dish.slug,
                 "dish_name": dish.name,
@@ -3767,6 +3777,7 @@ class StaffAppendOrderItemsView(APIView):
                 "subtotal": subtotal,
                 "is_ready": False,
                 "combo_components": _combo_snapshot,
+                "course": _staff_course_snap,
             })
             _pk_to_slug[dish.pk] = dish.slug
             if dish.stock_qty is not None:
@@ -4104,6 +4115,108 @@ class StaffVoidOrderItemView(APIView):
                     note=f"Void item: {item.dish_name}",
                     require_verified=False,
                 )
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order))
+
+
+class StaffFireCourseView(APIView):
+    """POST /api/staff/orders/<order_id>/fire-course/
+
+    Fire the next course for a dine-in table order: mark all items up to and
+    including `course` as ready to be sent from the kitchen.
+
+    Auth + section gating: identical to the other 4 staff mutation endpoints
+    (_can_edit_tenant_order + _can_access_order).
+
+    Body:
+      { "course": <int 1..4> }
+
+    Error codes (all 409 or 400):
+      bad_status      — order is terminal (completed/cancelled)
+      not_table       — order.fulfillment_type != "table"
+      invalid_course  — course not in 1..4 (400)
+      already_fired   — course <= order.fired_course (monotonic — no un-fire)
+
+    Success: sets fired_course = course (monotonic), broadcasts, returns the
+    full _staff_order_payload so the SPA can refresh in place.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Quick existence check before acquiring the write lock — avoids a
+        # lock wait on a non-existent row and gives a clean 404.
+        if not Order.objects.filter(pk=order_id).exists():
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # ── Input validation (before the lock) ───────────────────────────────
+        raw_course = request.data.get("course")
+        try:
+            course = int(raw_course)
+            if course < 1 or course > 4:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "course must be an integer between 1 and 4.", "code": "invalid_course"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Atomic fire with row-level lock ───────────────────────────────────
+        # select_for_update() prevents two concurrent fire requests from both
+        # reading fired_course=N, both passing the monotonicity guard, and both
+        # writing the same value — the second request will block on the lock and
+        # re-read the value already written by the first.
+        with transaction.atomic():
+            order = (
+                Order.objects
+                .select_for_update()
+                .prefetch_related("items", "payments")
+                .filter(pk=order_id)
+                .first()
+            )
+            if order is None:
+                return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if not _can_access_order(request, order):
+                return Response(
+                    {"detail": "Access denied — not your section.", "code": "section_denied"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # ── Guards ────────────────────────────────────────────────────────────
+            if order.status in self._TERMINAL_STATUSES:
+                return Response(
+                    {"detail": "Order is already completed or cancelled.", "code": "bad_status"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if order.fulfillment_type != Order.FulfillmentType.TABLE:
+                return Response(
+                    {"detail": "Course firing is only available for table orders.", "code": "not_table"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if course <= order.fired_course:
+                return Response(
+                    {"detail": f"Course {course} has already been fired.", "code": "already_fired"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # ── Fire ──────────────────────────────────────────────────────────────
+            order.fired_course = course
+            order.save(update_fields=["fired_course", "updated_at"])
+
+        # Reload so _staff_order_payload sees fresh items
+        order = Order.objects.prefetch_related("items", "payments").get(pk=order_id)
 
         try:
             _broadcast_order_change(order)
@@ -4798,6 +4911,7 @@ class OwnerOrderListView(APIView):
                 "estimated_ready_minutes": order.estimated_ready_minutes,
                 "scheduled_for": order.scheduled_for.isoformat() if order.scheduled_for else None,
                 "items_count": sum(i.qty for i in order.items.all()),
+                "fired_course": getattr(order, "fired_course", 1),
                 "items": [
                     {
                         "dish_name": i.dish_name,
@@ -4809,6 +4923,7 @@ class OwnerOrderListView(APIView):
                         "note": i.note,
                         "is_voided": i.is_voided,
                         "combo_components": i.combo_components,
+                        "course": getattr(i, "course", 0),
                     }
                     for i in order.items.all()
                 ],
@@ -4935,6 +5050,7 @@ class OwnerOrderDetailView(APIView):
             "currency": order.currency,
             "owner_note": order.owner_note,
             "estimated_ready_minutes": order.estimated_ready_minutes,
+            "fired_course": getattr(order, "fired_course", 1),
             "items": [
                 {
                     "id": i.id,
@@ -4947,6 +5063,7 @@ class OwnerOrderDetailView(APIView):
                     "note": i.note,
                     "is_voided": i.is_voided,
                     "combo_components": i.combo_components,
+                    "course": getattr(i, "course", 0),
                 }
                 for i in order.items.all()
             ],

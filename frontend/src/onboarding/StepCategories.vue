@@ -257,6 +257,18 @@
                   </select>
                 </label>
               </div>
+              <!-- Course sequencing -->
+              <label class="space-y-1 text-sm text-slate-300">
+                <span class="text-xs text-slate-400">{{ t("stepCategories.courseLabel") }}</span>
+                <select v-model.number="editingCategory.course" class="ui-input">
+                  <option :value="0">{{ t("stepCategories.courseNone") }}</option>
+                  <option :value="1">{{ t("stepCategories.courseN", { n: 1 }) }}</option>
+                  <option :value="2">{{ t("stepCategories.courseN", { n: 2 }) }}</option>
+                  <option :value="3">{{ t("stepCategories.courseN", { n: 3 }) }}</option>
+                  <option :value="4">{{ t("stepCategories.courseN", { n: 4 }) }}</option>
+                </select>
+                <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
+              </label>
             </div>
           </div>
 
@@ -358,6 +370,18 @@
                   <option :value="false">{{ t("common.soon") }}</option>
                 </select>
               </div>
+              <!-- Course sequencing -->
+              <label class="space-y-1 text-sm text-slate-300">
+                <span class="text-xs text-slate-400">{{ t("stepCategories.courseLabel") }}</span>
+                <select v-model.number="quickCategory.course" class="ui-input">
+                  <option :value="0">{{ t("stepCategories.courseNone") }}</option>
+                  <option :value="1">{{ t("stepCategories.courseN", { n: 1 }) }}</option>
+                  <option :value="2">{{ t("stepCategories.courseN", { n: 2 }) }}</option>
+                  <option :value="3">{{ t("stepCategories.courseN", { n: 3 }) }}</option>
+                  <option :value="4">{{ t("stepCategories.courseN", { n: 4 }) }}</option>
+                </select>
+                <p class="text-[11px] text-slate-500">{{ t("stepCategories.courseHint") }}</p>
+              </label>
             </div>
           </div>
           <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-800 bg-slate-950/95 px-4 py-4">
@@ -440,6 +464,7 @@ const quickCategory = reactive({
   description_i18n: {},
   position: 0,
   is_published: true,
+  course: 0,
 });
 
 const maxTranslationLocales = computed(() => Math.max(0, Number(tenant.entitlements?.max_languages || 1) - 1));
@@ -484,6 +509,7 @@ const normalizeCategory = (cat = {}) => ({
   position: cat.position ?? categories.length,
   is_published: cat.is_published ?? true,
   is_temporarily_disabled: cat.is_temporarily_disabled ?? false,
+  course: Number(cat.course) || 0,
 });
 
 const superCategoryLabel = (group) => {
@@ -689,6 +715,7 @@ const openQuickModal = () => {
   quickCategory.description_i18n = {};
   quickCategory.position = activeCategories.value.length;
   quickCategory.is_published = true;
+  quickCategory.course = 0;
   quickFieldLocales.name = defaultLocale.value;
   quickFieldLocales.description = defaultLocale.value;
   quickAddErrors.name = "";
@@ -721,6 +748,7 @@ const quickAdd = () => {
     description_i18n: pickI18nMap(quickCategory.description_i18n, allowedTranslationLocales),
     position: orderedActiveCategories.value.length,
     is_published: quickCategory.is_published,
+    course: Number(quickCategory.course) || 0,
   }));
   activeSuperCategoryId.value = String(quickCategory.super_category);
   renumberCategoriesForGroup(quickCategory.super_category);

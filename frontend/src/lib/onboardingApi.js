@@ -219,6 +219,7 @@ export const categoryApi = {
       super_category: Number(cat.super_category) || cat.super_category || null,
       position: Number(cat.position) || 0,
       is_published: cat.is_published ?? true,
+      course: Number(cat.course) || 0,
     };
     try {
       let result;

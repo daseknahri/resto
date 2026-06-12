@@ -351,7 +351,7 @@
                   v-for="(item, idx) in order.items"
                   :key="idx"
                   class="flex items-start gap-2.5 py-0.5 text-sm"
-                  :class="item.is_voided ? 'text-slate-500' : 'text-slate-300'"
+                  :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
                 >
                   <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
@@ -364,6 +364,14 @@ class="min-w-0 flex-1 leading-snug"
                     {{ item.dish_name }}
                   </span>
                   <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
+                  <!-- Course chip -->
+                  <span
+                    v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                    class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
+                    :class="isItemHeld(item, order)
+                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                      : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+                  >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
                   <span
                     v-if="item.is_voided"
                     class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
@@ -436,6 +444,13 @@ class="min-w-0 flex-1 leading-snug"
                   <span v-else>{{ actionLabel(order) }}</span>
                 </button>
                 <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+                <!-- Fire course button -->
+                <button
+                  v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                  class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                  :disabled="firingCourseOrderId === order.id"
+                  @click="fireCourse(order)"
+                >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
                 <button
                   v-if="canManageOrders && order.payment_status !== 'paid'"
                   class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -527,7 +542,7 @@ class="min-w-0 flex-1 leading-snug"
                 v-for="(item, idx) in order.items"
                 :key="idx"
                 class="flex items-start gap-2.5 py-0.5 text-sm"
-                :class="item.is_voided ? 'text-slate-500' : 'text-slate-300'"
+                :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
               >
                 <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
@@ -540,6 +555,14 @@ class="min-w-0 flex-1 leading-snug"
                   {{ item.dish_name }}
                 </span>
                 <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
+                <!-- Course chip -->
+                <span
+                  v-if="(item.course ?? 0) > 0 && !item.is_voided"
+                  class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
+                  :class="isItemHeld(item, order)
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                    : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+                >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
                 <span
                   v-if="item.is_voided"
                   class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
@@ -612,6 +635,13 @@ class="min-w-0 flex-1 leading-snug"
                 <span v-else>{{ actionLabel(order) }}</span>
               </button>
               <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+              <!-- Fire course button -->
+              <button
+                v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+                class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                :disabled="firingCourseOrderId === order.id"
+                @click="fireCourse(order)"
+              >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
               <button
                 v-if="canManageOrders && order.payment_status !== 'paid'"
                 class="ui-press ui-touch-target shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:border-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
@@ -696,7 +726,7 @@ class="min-w-0 flex-1 leading-snug"
             v-for="(item, idx) in order.items"
             :key="idx"
             class="flex items-start gap-2.5 py-0.5 text-sm"
-            :class="item.is_voided ? 'text-slate-500' : 'text-slate-300'"
+            :class="item.is_voided ? 'text-slate-500' : (isItemHeld(item, order) ? 'opacity-60 text-amber-300/70' : 'text-slate-300')"
           >
             <span
 class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-700/80 bg-slate-800/70 text-[10px] font-bold tabular-nums"
@@ -709,6 +739,14 @@ class="min-w-0 flex-1 leading-snug"
               {{ item.dish_name }}
             </span>
             <span v-if="item.note" class="shrink-0 text-[10px] italic text-slate-500 leading-snug">({{ item.note }})</span>
+            <!-- Course chip -->
+            <span
+              v-if="(item.course ?? 0) > 0 && !item.is_voided"
+              class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
+              :class="isItemHeld(item, order)
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+            >{{ isItemHeld(item, order) ? t('waiterPage.heldChip') : t('waiterPage.courseChip', { n: item.course }) }}</span>
             <!-- Voided badge -->
             <span
               v-if="item.is_voided"
@@ -775,6 +813,14 @@ class="min-w-0 flex-1 leading-snug"
             <span v-else>{{ actionLabel(order) }}</span>
           </button>
           <span v-else-if="canManageOrders" class="text-xs italic text-slate-500">{{ t('waiterPage.handedOff') }}</span>
+
+          <!-- Fire course button -->
+          <button
+            v-if="canManageOrders && lowestHeldCourse(order) !== null && !TERMINAL_STATUSES.has(order.status)"
+            class="ui-press ui-touch-target shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition-colors hover:border-amber-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+            :disabled="firingCourseOrderId === order.id"
+            @click="fireCourse(order)"
+          >{{ firingCourseOrderId === order.id ? t('waiterPage.firingCourse') : t('waiterPage.fireCourse', { n: lowestHeldCourse(order) }) }}</button>
 
           <!-- Settle — opens a Cash / Wallet chooser, then marks paid (and closes
                a ready dine-in order). -->
@@ -1091,6 +1137,52 @@ const { prompt } = usePromptModal();
 
 // Void item
 const voidingItemId = ref(null);
+
+// Fire course
+const firingCourseOrderId = ref(null);
+
+const lowestHeldCourse = (order) => {
+  if (order.fulfillment_type !== 'table') return null;
+  const firedCourse = order.fired_course ?? 1;
+  let lowest = null;
+  for (const item of (order.items || [])) {
+    const c = item.course ?? 0;
+    if (c > 0 && c > firedCourse) {
+      if (lowest === null || c < lowest) lowest = c;
+    }
+  }
+  return lowest;
+};
+
+const isItemHeld = (item, order) => {
+  const c = item.course ?? 0;
+  if (c === 0) return false;
+  return c > (order.fired_course ?? 1);
+};
+
+const fireCourse = async (order) => {
+  const course = lowestHeldCourse(order);
+  if (!course || firingCourseOrderId.value === order.id) return;
+  firingCourseOrderId.value = order.id;
+  try {
+    const { data } = await api.post(`/staff/orders/${order.id}/fire-course/`, { course });
+    // Optimistically patch the order in the store list so cards update instantly.
+    const o = waiter.orders.find((x) => x.id === order.id);
+    if (o) o.fired_course = data.fired_course ?? course;
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    const keyMap = {
+      already_fired: 'fireCourseError_already_fired',
+      not_table: 'fireCourseError_not_table',
+      bad_status: 'fireCourseError_bad_status',
+      invalid_course: 'fireCourseError_invalid_course',
+    };
+    const msgKey = keyMap[code] || 'fireCourseError_default';
+    toast.show(t(`waiterPage.${msgKey}`, { n: course }), 'error');
+  } finally {
+    firingCourseOrderId.value = null;
+  }
+};
 
 const openAppend = (order) => {
   appendOrder.value = { id: order.id, order_number: order.order_number };

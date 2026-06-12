@@ -707,8 +707,20 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "position",
             "is_published",
             "is_temporarily_disabled",
+            "course",
             "dishes",
         ]
+
+    def validate_course(self, value):
+        if value is None:
+            return 0
+        try:
+            v = int(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("course must be an integer between 0 and 4.")
+        if v < 0 or v > 4:
+            raise serializers.ValidationError("course must be between 0 (no course) and 4.")
+        return v
 
     def validate_name(self, value):
         cleaned = (value or "").strip()

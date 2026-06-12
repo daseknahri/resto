@@ -601,6 +601,14 @@
                   class="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-400 leading-none"
                   style="text-decoration:none"
                 >{{ t("ownerOrders.voidedBadge") }}</span>
+                <span
+                  v-else-if="(item.course ?? 0) > 0"
+                  class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none"
+                  :class="item.course > (o.fired_course ?? 1)
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                    : 'border-slate-600/50 bg-slate-700/30 text-slate-400'"
+                  style="text-decoration:none"
+                >{{ item.course > (o.fired_course ?? 1) ? t("waiterPage.heldChip") : t("waiterPage.courseChip", { n: item.course }) }}</span>
               </p>
               <p v-if="item.options?.length" class="text-slate-400">
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}
