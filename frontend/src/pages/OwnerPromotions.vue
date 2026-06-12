@@ -279,6 +279,87 @@
       </article>
     </section>
 
+    <!-- ── Win-back automation card ──────────────────────────────────────────── -->
+    <section class="space-y-2 pb-2">
+      <div class="px-1">
+        <p class="ui-kicker">{{ t('winback.kicker') }}</p>
+      </div>
+      <div class="ui-panel ui-surface-lift p-4 space-y-4">
+        <!-- Explainer + toggle row -->
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0 space-y-1">
+            <p class="text-sm font-semibold text-white leading-snug">{{ t('winback.title') }}</p>
+            <p class="text-xs text-slate-400">
+              {{ t('winback.explainer', { weeks: winbackForm.inactive_weeks }) }}
+            </p>
+          </div>
+          <!-- Enabled toggle -->
+          <label class="relative inline-flex shrink-0 cursor-pointer items-center" :aria-label="t('winback.enabledLabel')">
+            <input
+              v-model="winbackForm.enabled"
+              type="checkbox"
+              class="sr-only peer"
+              @change="saveWinback"
+            />
+            <div class="h-5 w-9 rounded-full border border-slate-600 bg-slate-700 transition peer-checked:border-[var(--color-secondary)] peer-checked:bg-[var(--color-secondary)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--color-secondary)]/60 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+
+        <!-- Fields (collapsed when disabled) -->
+        <template v-if="winbackForm.enabled">
+          <div class="border-t border-slate-700/40" />
+
+          <!-- Inactive weeks -->
+          <div class="space-y-1.5">
+            <label for="winback-weeks" class="block text-xs font-semibold text-slate-300">{{ t('winback.weeksLabel') }}</label>
+            <div class="flex items-center gap-2">
+              <input
+                id="winback-weeks"
+                v-model.number="winbackForm.inactive_weeks"
+                type="number"
+                min="1"
+                max="52"
+                step="1"
+                class="ui-input w-24"
+                @change="saveWinback"
+              />
+              <span class="text-xs text-slate-500">{{ t('winback.weeksUnit') }}</span>
+            </div>
+            <p class="text-[11px] text-slate-500">{{ t('winback.weeksHint') }}</p>
+          </div>
+
+          <!-- Custom message -->
+          <div class="space-y-1.5">
+            <label for="winback-msg" class="block text-xs font-semibold text-slate-300">{{ t('winback.messageLabel') }}</label>
+            <textarea
+              id="winback-msg"
+              v-model="winbackForm.message"
+              rows="2"
+              maxlength="200"
+              class="ui-input w-full resize-none text-sm"
+              :placeholder="t('winback.messagePlaceholder')"
+              @change="saveWinback"
+            />
+            <p class="text-[11px] text-slate-500 text-right tabular-nums">{{ winbackForm.message.length }}/200</p>
+          </div>
+
+          <!-- Save error -->
+          <div v-if="winbackSaveError" class="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2 text-xs text-red-300" role="alert">
+            {{ winbackSaveError }}
+          </div>
+
+          <!-- Save button -->
+          <button
+            class="ui-btn-primary w-full justify-center text-sm"
+            :disabled="winbackSaving"
+            @click="saveWinback"
+          >
+            {{ winbackSaving ? t('winback.saving') : t('winback.save') }}
+          </button>
+        </template>
+      </div>
+    </section>
+
     <!-- Happy Hour create/edit drawer -->
     <Teleport to="body">
       <div v-if="hhDrawerOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-3 pb-3 sm:pb-0" @keydown.esc="hhDrawerOpen = false" @click.self="hhDrawerOpen = false">
@@ -601,6 +682,7 @@ import { nextTick, onBeforeUnmount, onMounted, reactive, ref, computed, watch } 
 import { useConfirmModal } from '../composables/useConfirmModal';
 import { useI18n } from '../composables/useI18n';
 import { useToastStore } from '../stores/toast';
+import { useTenantStore } from '../stores/tenant';
 import api from '../lib/api';
 import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
@@ -610,6 +692,7 @@ defineOptions({ name: "OwnerPromotions" });
 
 const { t, currentLocale } = useI18n();
 const toast = useToastStore();
+const tenant = useTenantStore();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Day keys — labels resolved via i18n (reuses stepDishes.weekday_* keys)
@@ -944,6 +1027,43 @@ const toggleFlashOptIn = async (fs) => {
     toast.show(t('ownerPromotions.flashToggleFailed'), 'error');
   } finally {
     flashBusyId.value = null;
+  }
+};
+
+// ── Win-back automation ───────────────────────────────────────────────────────
+
+const winbackForm = reactive({
+  enabled: tenant.meta?.profile?.winback_enabled ?? false,
+  inactive_weeks: tenant.meta?.profile?.winback_inactive_weeks ?? 4,
+  message: tenant.meta?.profile?.winback_message ?? '',
+});
+const winbackSaving = ref(false);
+const winbackSaveError = ref('');
+
+const saveWinback = async () => {
+  winbackSaveError.value = '';
+  const weeks = Number(winbackForm.inactive_weeks);
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) {
+    winbackSaveError.value = t('winback.weeksInvalid');
+    return;
+  }
+  winbackSaving.value = true;
+  try {
+    await api.patch('/profile/', {
+      winback_enabled: winbackForm.enabled,
+      winback_inactive_weeks: weeks,
+      winback_message: winbackForm.message.trim(),
+    });
+    tenant.mergeProfile({
+      winback_enabled: winbackForm.enabled,
+      winback_inactive_weeks: weeks,
+      winback_message: winbackForm.message.trim(),
+    });
+    toast.show(t('winback.saved'), 'success');
+  } catch {
+    winbackSaveError.value = t('winback.saveFailed');
+  } finally {
+    winbackSaving.value = false;
   }
 };
 

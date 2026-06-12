@@ -18,8 +18,6 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       Source: R5 review follow-on thought.
 - [ ] **Loyalty not adjusted on item void** — voiding a paid item refunds wallet but
       earned points aren't clawed back per-item. Documented MVP in R2 view docstring.
-- [ ] **Win-back automation** — auto-nudge customers inactive N weeks (the
-      automated half of the campaigns feature; manual announcements shipped).
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
       tenants are single-location today.
 - [ ] **Auto-print on new order** — needs kiosk browser / local agent / network
@@ -35,6 +33,14 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **DishViewSet.destroy double-fetch on ProtectedError path** — get_object() called
       again in the except block; could use exc.protected_objects instead. Cosmetic.
       Source: combos review minor.
+- [ ] **Winback audience dedupe batching** — _build_audience checks _already_nudged
+      per-customer (one EXISTS query each) until 50 eligible are found; a tenant with
+      thousands of recently-nudged lapsed customers pays that scan hourly at local 11:00.
+      Batch into one customer_id__in query (needs the 6 tests patching _already_nudged
+      reworked). Source: my post-review read of the winback batch.
+- [ ] **winback_inactive_weeks=0 silently coerces to 4** — `or 4` fallback swallows an
+      explicit 0 written via admin/raw DB (serializer rejects it). Cosmetic-defensive.
+      Source: winback review minor.
 - [ ] **revenue.py order_ids materialization** — split helper pulls all period order
       PKs into Python; switch to a subquery join for 90-day windows on busy tenants.
       Source: rev/stock review minor.
@@ -83,6 +89,11 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] Win-back automation: Profile.winback_* (tenancy/0038) + accounts.WinbackNudge
+      durable 90-day dedupe (accounts/0042) + send_winback_nudges hourly cron
+      (tenant-local 11:00, mark-BEFORE-send ordering, suppressed-send slot reclaim,
+      50/run cap, campaigns-format /order/<slug> deep link) + owner card on
+      Promotions + EN/FR/AR — winback commit.
 - [x] Happy-hour / time-based pricing: menu.HappyHour rules (menu/0052; days/window/
       percent 1–90/category scope/max 8, overnight wrap), menu/pricing.py effective-price
       helper used by EVERY price surface — Dish serialization (context-injected, no N+1),

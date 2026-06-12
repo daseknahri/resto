@@ -384,6 +384,21 @@ class Profile(models.Model):
         help_text="Automatically re-enable all sold-out dishes at ~05:00 local time each day.",
     )
 
+    # ── Win-back automation ────────────────────────────────────────────────────
+    winback_enabled = models.BooleanField(
+        default=False,
+        help_text="Send a single re-engagement push to customers who haven't ordered recently.",
+    )
+    winback_inactive_weeks = models.PositiveSmallIntegerField(
+        default=4,
+        help_text="Nudge customers whose most-recent order is older than this many weeks (1–52).",
+    )
+    winback_message = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Push body text. Leave blank to use the default message.",
+    )
+
     is_open = models.BooleanField(default=True)
     is_menu_temporarily_disabled = models.BooleanField(default=False)
     menu_disabled_note = models.CharField(max_length=180, blank=True)

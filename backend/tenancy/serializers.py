@@ -257,6 +257,9 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "is_menu_published",
             "published_at",
             "auto_reset_availability",
+            "winback_enabled",
+            "winback_inactive_weeks",
+            "winback_message",
         ]
         # Delivery PRICING + platform enrollment are a platform-admin concern (the
         # delivery network is separate), so the restaurant owner cannot edit them
@@ -379,6 +382,12 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
 
     def validate_receipt_message(self, value):
         return str(value or "").strip()[:300]
+
+    def validate_winback_inactive_weeks(self, value):
+        v = int(value) if value is not None else 4
+        if not (1 <= v <= 52):
+            raise serializers.ValidationError("winback_inactive_weeks must be between 1 and 52.")
+        return v
 
     def validate_business_hours_schedule(self, value):
         if value in (None, ""):

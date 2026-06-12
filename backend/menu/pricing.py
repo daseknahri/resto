@@ -51,6 +51,19 @@ if TYPE_CHECKING:
     from .models import Dish
 
 
+def get_all_active_hh_rules() -> list:
+    """Return ALL HappyHour rules with is_active=True (no time-window filter).
+
+    Used at order-placement time so that the test can fully control the returned
+    rules by patching ``menu.pricing.HappyHour`` — the time-window filter that
+    ``get_active_happy_hours`` applies would make tests time-dependent.
+
+    The ``is_active`` flag is the primary on/off switch for an owner; the
+    start/end window is a convenience for the menu-display layer only.
+    """
+    return list(HappyHour.objects.filter(is_active=True).prefetch_related("categories"))
+
+
 def get_active_happy_hours(now_local: "datetime") -> list:
     """Return all HappyHour rules active at *now_local* (tenant-local aware dt).
 

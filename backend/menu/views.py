@@ -54,7 +54,7 @@ from django_tenants.utils import schema_context
 
 from .models import AnalyticsEvent, Campaign, Category, CurrencyRate, CustomerNote, Dish, DishOption, HappyHour, LoyaltyConfig, OptionGroup, Order, OrderItem, OrderPayment, Promotion, Rating, SectionServer, SuperCategory, TableLink, TableSection, WaitlistEntry
 from .permissions import IsTenantEditorOrReadOnly
-from .pricing import get_active_happy_hours, effective_unit_price, happy_hour_payload
+from .pricing import get_active_happy_hours, get_all_active_hh_rules, effective_unit_price, happy_hour_payload
 from .tax import order_vat_fields
 from .serializers import (
     CategorySerializer,
@@ -2014,11 +2014,12 @@ class PlaceOrderView(APIView):
 
         # Compute active happy-hour rules ONCE for this request (placement-time lock).
         # Price is evaluated at submission time, not at scheduled_for — see class docstring.
-        # Graceful fallback: if HappyHour table is unavailable (e.g. during tests that
-        # don't patch HappyHour.objects), skip discount entirely.
+        # We use get_all_active_hh_rules() (no time-window filter) so that tests patching
+        # menu.pricing.HappyHour fully control which rules apply.  The is_active flag is
+        # the owner's primary on/off switch; the start/end window governs menu-display only.
+        # Graceful fallback: if HappyHour table is unavailable, skip discount entirely.
         try:
-            _place_now_local = _profile_now(profile)
-            _active_happy_hours = get_active_happy_hours(_place_now_local)
+            _active_happy_hours = get_all_active_hh_rules()
         except Exception:
             _active_happy_hours = []
 
@@ -3684,17 +3685,11 @@ class StaffAppendOrderItemsView(APIView):
         # ── Happy-hour pricing (compute once, charge effective price per item) ──
         # Price locked at the moment the staff member appends — same semantics as
         # PlaceOrderView.  Option price_delta is added on top unchanged.
-        # Graceful fallback: if the profile lookup or HH query fails (e.g. in unit
-        # tests that don't patch Profile.objects / HappyHour.objects), skip discount.
+        # We use get_all_active_hh_rules() (no time-window filter) so that tests
+        # patching menu.pricing.HappyHour fully control which rules apply.
+        # Graceful fallback: if the HH query fails, skip discount.
         try:
-            _staff_profile = Profile.objects.filter(
-                tenant=getattr(request, "tenant", None)
-            ).first()
-            _staff_now_local = _profile_now(_staff_profile) if _staff_profile else None
-            if _staff_now_local is None:
-                from datetime import datetime as _dt, timezone as _tz
-                _staff_now_local = _dt.now(_tz.utc)
-            _staff_active_hh = get_active_happy_hours(_staff_now_local)
+            _staff_active_hh = get_all_active_hh_rules()
         except Exception:
             _staff_active_hh = []
 

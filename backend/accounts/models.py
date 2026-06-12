@@ -1015,3 +1015,39 @@ class NotificationLog(models.Model):
 
     def __str__(self) -> str:
         return f"{self.channel}/{self.status} {self.event} {self.reference}".strip()
+
+
+class WinbackNudge(models.Model):
+    """
+    Durable dedupe record for the win-back automation cron.
+
+    One row per (tenant, customer) nudge that was actually sent. The command
+    checks this table before sending to ensure at most one nudge per 90 days,
+    surviving cache flushes and process restarts.
+
+    Lives in the public schema (accounts app) so it can be queried from any
+    schema_context. Intentionally loose FKs (IntegerField) to avoid cross-schema
+    FK constraint issues with django-tenants.
+    """
+
+    tenant_id = models.IntegerField(
+        db_index=True,
+        help_text="FK to tenancy.Tenant (loose — no FK constraint for cross-schema safety).",
+    )
+    customer_id = models.BigIntegerField(
+        db_index=True,
+        help_text="FK to accounts.Customer.",
+    )
+    sent_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-sent_at",)
+        indexes = [
+            models.Index(
+                fields=("tenant_id", "customer_id", "sent_at"),
+                name="winbacknudge_tenant_cust_sent",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"WinbackNudge tenant={self.tenant_id} customer={self.customer_id} @ {self.sent_at}"
