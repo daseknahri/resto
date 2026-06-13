@@ -127,6 +127,118 @@ Catch-net: BACKLOG.md at the repo root collects everything deferred/forgotten �
 every batch APPENDS (deferred review findings, audit leftovers, MVP cuts);
 reviewed in full during R5 and periodically after. Nothing gets lost silently.
 
+## 4d. OPS program — operator-grade hardening (owner directive 2026-06-13)
+
+**Goal: a restaurant manager opens this at 11:00 and runs every service on it, every
+day, and prefers it to their old POS.** Grounded in the 8-lens operator audit
+(2026-06-13, ~70 file:line-evidenced findings; full clustered output preserved in the
+audit run). Verdict: the service core IS a daily driver; what's missing is the
+operator-grade shell around it. Feature backlog is closed — this program is the work.
+
+Execution protocol (unchanged, proven over R1–R5 + post-v1.0 batches): one Workflow
+batch per OPS item — Sonnet agents, gates, one focused adversarial reviewer, fix loop,
+then personal verification of every critical/major in code, full gates, BACKLOG update,
+commit, push. Catch-net: BACKLOG.md.
+
+### OPS-1 — The kitchen never goes dark (service-speed, every-shift wins)
+- Screen Wake Lock API on kitchen (+ waiter) with re-acquire on visibilitychange;
+  poll must keep running when document hidden (OwnerKitchen.vue:582 skips it today).
+- Manifest: drop portrait-primary lock for staff personas (kitchen tablets are
+  landscape; manifest.json:8) — per-persona manifest like the driver app already has.
+- 86-from-kitchen: sold-out toggle directly on the kitchen screen (today: 5-step
+  navigation away to OwnerHome panel).
+- Bulk mark-ready endpoint (today: N serial PATCHes per order, OwnerKitchen.vue:667).
+- Table picker: TableLink dropdown instead of free-text label (typos split table
+  groups + mis-target course firing; WaiterNewOrder.vue:52).
+- Realtime quick wins (NOT the full WS rebuild): require/verify Redis channel layer in
+  prod (InMemoryChannelLayer is per-process — broadcasts silently lost multi-worker),
+  reconnect-forever with a visible "live/polling" indicator (today gives up after 6
+  tries), targeted single-order patch on WS event instead of full refetch ×N devices.
+- Kitchen in KeepAlive (refresh mid-rush = 1-3s blind skeleton today).
+
+### OPS-2 — Money truth: Z-report & shift close (end-of-day blocker)
+- Owner Z-REPORT view: tenant-local SERVICE-DAY window (configurable day-end hour —
+  restaurants close at 2am), discrete snapshot: gross, cash vs wallet collected (from
+  the ledger), refunds issued, voids (count+value+reasons+who), tips, per-staff
+  collected totals. Print stylesheet + CSV export.
+- Fix revenue truth: dashboard/digest count COMPLETED(+out_for_delivery delivered)
+  only — today PREPARING/READY/CONFIRMED inflate the drawer total
+  (sales/views.py:2466); surface a refunds_issued line (today invisible).
+- Payment-method correction flow (wrong cash/wallet recording is permanent today)
+  with audit trail.
+- Surface the audit data that already exists: void_reason, recorded_by_name, payment
+  ledger rows → owner order detail + CSV export columns.
+- Timezone truth: TruncDate uses UTC (charts bucket late-night orders on the wrong
+  day); owner/waiter "today" stats bucket by DEVICE timezone (OwnerOrders.vue:931).
+  One tenant-local day helper everywhere.
+- Waiter shift summary gains cash/wallet split (handover-usable).
+
+### OPS-3 — Integrity on flaky wifi (the restaurant reality)
+- Persist the waiter offline queue (localStorage/IndexedDB) — today a refresh during
+  an outage silently discards queued transitions (waiter.js:37).
+- Idempotency completion: status-advance PATCH (client key + select_for_update — today
+  unlocked last-write-wins), wallet mark-paid (cash path has a key, wallet does not),
+  waiter order placement (timeout+resubmit = duplicate kitchen ticket).
+- DB-level backstop: unique (order, idempotency_key) on OrderPayment (Redis-down
+  currently nullifies cache-based idempotency silently).
+- Queue flush hygiene: backoff, discriminate permanent 4xx (drop+surface) from
+  transient (retry) — today 400s loop forever; refetch-on-409 so the losing device
+  self-heals instead of showing a dead error.
+- Staff throttle scoped per-user (shared restaurant NAT exhausts per-IP caps on
+  reconnect bursts).
+
+### OPS-4 — Scale fences (year-one data)
+- Order list: date-fence active view (service day + open older), drop the JOIN-heavy
+  COUNT, real load-more (today: silent 200 cap, full-table scan + COUNT every 15s).
+- Customer list: server-side pagination + search (today: one 3k-row JSON, double
+  GROUP BY).
+- Indexes: Order.customer_phone (4 query paths scan today) + verify filters used by
+  sweeps/CRM against Meta.indexes.
+- Retention crons: prune NotificationLog (+ WinbackNudge >90d) — analytics/audit
+  already pruned, these two grow unbounded.
+- revenue.py return-rate subquery (Python IN-list today).
+
+### OPS-5 — Platform cockpit (run the SaaS, not just build it)
+- Sentry tenant tagging backend (middleware scope) + frontend (setTag on tenant load)
+  — today errors are unattributable to a restaurant.
+- /api/health/ checks Celery (beat heartbeat), channel layer, media storage — today
+  DB+cache only; a dead worker queues notifications forever silently.
+- Admin support view: read-only live order queue per tenant (today support is blind
+  over the phone).
+- Billing ops: renewal-date column in AdminConsole, invoice_amount set on approve
+  (today requires Django /admin/ edit), receipt download reliability.
+- Backups: pg_dump sidecar/cron + tested per-tenant-schema restore runbook + rollback
+  section in LAUNCH_CHECKLIST (today: one checklist sentence).
+
+### OPS-6 — First impressions & onboarding polish
+- Marketing page: NO hardcoded dev domain (config-driven brand domain; today
+  'doro.menu.ibnbatoutaweb.com' renders in the hero), real pricing section
+  (owner provides prices — config-driven), distinct badge semantics, empty-state CTAs
+  (published tenant with 0 orders sees a dead refresh icon today).
+- Onboarding friction: CSV import surfaced INSIDE the wizard (exists but hidden
+  post-wizard), category-delete shows dish count + offers reassign (silent CASCADE
+  today), in-app staff password change (today: delete+recreate for shared-phone
+  waiters), per-table QR PDF export, price-0 publish warning.
+- Polish sweep: currency-formatter fallbacks (raw toFixed(2) paths), RTL gaps in
+  charts/tables, toLocaleString(undefined) → app locale (5 sites), raw backend
+  `detail` strings reaching customers (Cart.vue:2008), report print stylesheet,
+  maskable PWA icons.
+
+### Decision-gated (owner input needed — NOT scheduled)
+- **PSP / online wallet top-up** — THE marketplace blocker per the audit (first-time
+  customers must visit in person to load a wallet). Blocked on the owner obtaining a
+  PSP account (CMI / Payzone / Stripe-when-available). START THE APPLICATION NOW —
+  external lead time dominates. The seam is ready (wallet_service idempotent credits).
+- **Self-service signup** vs deliberate manual provisioning — a sales-motion choice,
+  not a bug. Decide when tenant volume warrants it.
+- **Recurring billing automation** — depends on how subscriptions are actually
+  collected (cash vs PSP); revisit with the PSP decision.
+- **Plan prices** for the marketing page — owner supplies numbers.
+
+Order: OPS-1 → OPS-2 → OPS-3 → OPS-4 → OPS-5 → OPS-6 (value-first; 1 and 2 are
+every-shift operator pain, 3 protects data, 4 protects year-one, 5 protects the
+platform, 6 sells it). Each batch ships independently; "continue" = next batch.
+
 ## 5. Phased roadmap
 
 ### Phase 0 — Super-app foundation ✅ (shipped 2026-06-08)

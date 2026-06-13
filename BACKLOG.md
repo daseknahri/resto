@@ -11,6 +11,11 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 > all FIXED pre-tag (void×cancel refund block, split-bill×void stranding, owner
 > cancel atomicity, kitchen voided-items, cash-cancel warning, section bypass).
 
+> **2026-06-13: the OPS program supersedes ad-hoc backlog pulls.** Next work comes
+> from KEPOLI_ARCHITECTURE.md §4d (OPS-1 → OPS-6), evidence base in OPS_AUDIT.md.
+> Items below stay as the catch-net; several are absorbed by OPS batches
+> (revenue.py materialization → OPS-4; perform_update atomicity → OPS-3).
+
 ## Restaurant (current focus — candidates for post-v1.0)
 - [ ] **Multi-branch** (one owner, several locations under one account) — large;
       tenants are single-location today.
