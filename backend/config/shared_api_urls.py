@@ -93,6 +93,7 @@ from sales.views import (
     AdminTenantDeliveryView,
     AdminTenantLifecycleView,
     AdminTenantListView,
+    AdminTenantLiveOrdersView,
     AdminTenantSettingsExportView,
     AdminTenantSettingsImportView,
     AdminTenantTimelineView,
@@ -216,6 +217,7 @@ shared_api_urlpatterns = [
     path("api/admin-tenants/<int:tenant_id>/lifecycle/", AdminTenantLifecycleView.as_view(), name="admin-tenant-lifecycle"),
     path("api/admin-tenants/<int:tenant_id>/delivery/", AdminTenantDeliveryView.as_view(), name="admin-tenant-delivery"),
     path("api/admin-tenants/<int:tenant_id>/timeline/", AdminTenantTimelineView.as_view(), name="admin-tenant-timeline"),
+    path("api/admin/tenants/<int:tenant_id>/live-orders/", AdminTenantLiveOrdersView.as_view(), name="admin-tenant-live-orders"),
     path(
         "api/admin-tenants/<int:tenant_id>/settings-export/",
         AdminTenantSettingsExportView.as_view(),

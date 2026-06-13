@@ -91,10 +91,16 @@ class OwnerSectionDetailTests(SimpleTestCase):
         section.servers.all.return_value = []
         TS.objects.filter.return_value.first.return_value = section
         SS.objects.filter.return_value.values_list.return_value = []
-        resp = self.view(
-            _req(self.factory, "patch", "/api/owner/sections/1/", {"table_ids": [3, 4], "server_user_ids": [9]}),
-            section_id=1,
-        )
+        # OPS-5-C: the whitelist filter now queries accounts.models.User to
+        # confirm the requested user_id belongs to this tenant.  Mock it so
+        # user 9 is returned as a valid tenant member (no real DB needed).
+        mock_user_cls = MagicMock()
+        mock_user_cls.objects.filter.return_value.values_list.return_value = [9]
+        with patch.dict("sys.modules", {"accounts.models": MagicMock(User=mock_user_cls)}):
+            resp = self.view(
+                _req(self.factory, "patch", "/api/owner/sections/1/", {"table_ids": [3, 4], "server_user_ids": [9]}),
+                section_id=1,
+            )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # Tables reassigned to this section; a server row created for user 9.
         TL.objects.filter.return_value.update.assert_called()  # set membership

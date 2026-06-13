@@ -584,6 +584,12 @@ class TierUpgradeDecisionSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=("approve", "reject"))
     admin_note = serializers.CharField(required=False, allow_blank=True, max_length=1500)
     payment_reference = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    # invoice_amount: set when approving so the owner can download a receipt without a
+    # manual Django-admin edit (OPS-5 G). Optional; ignored on reject.
+    invoice_amount = serializers.DecimalField(
+        required=False, allow_null=True, max_digits=10, decimal_places=2
+    )
+    invoice_currency = serializers.CharField(required=False, allow_blank=True, max_length=8)
 
 
 class TierUpgradeTargetSerializer(serializers.Serializer):

@@ -136,49 +136,84 @@ class HealthViewTests(SimpleTestCase):
         req = SimpleNamespace(tenant=tenant)
         return req
 
-    def _patch_both_ok(self):
+    # OPS-5-B: health_view now has five checks: db, cache, celery, channel_layer, media.
+    # Tests that need all-ok must patch all five so env-specific probes don't leak in.
+    _CELERY_OK = {"ok": True, "detail": "celery_off: CELERY_BROKER_URL not set (by design)"}
+    _CHANNEL_OK = {"ok": True, "detail": "ok"}
+    _MEDIA_OK = {"ok": True, "detail": "/media"}
+
+    def _patch_all_ok(self):
+        """Context-manager stack that makes all five probes return ok."""
         return (
             patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 5}),
             patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 2}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
         )
 
     def test_all_ok_returns_200(self):
-        with patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 5}):
-            with patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 2}):
-                response = config_api.health_view(self._request())
+        with (
+            patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 5}),
+            patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 2}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
+        ):
+            response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 200)
         body = json.loads(response.content)
         self.assertEqual(body["status"], "ok")
 
     def test_db_down_returns_503(self):
-        with patch.object(config_api, "_check_db", return_value={"ok": False, "latency_ms": None}):
-            with patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 2}):
-                response = config_api.health_view(self._request())
+        with (
+            patch.object(config_api, "_check_db", return_value={"ok": False, "latency_ms": None}),
+            patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 2}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
+        ):
+            response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 503)
         body = json.loads(response.content)
         self.assertEqual(body["status"], "down")
 
     def test_cache_down_returns_200_degraded(self):
-        with patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 5}):
-            with patch.object(config_api, "_check_cache", return_value={"ok": False, "latency_ms": None}):
-                response = config_api.health_view(self._request())
+        with (
+            patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 5}),
+            patch.object(config_api, "_check_cache", return_value={"ok": False, "latency_ms": None}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
+        ):
+            response = config_api.health_view(self._request())
         self.assertEqual(response.status_code, 200)
         body = json.loads(response.content)
         self.assertEqual(body["status"], "degraded")
 
     def test_response_includes_checks_key(self):
-        with patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 1}):
-            with patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 1}):
-                response = config_api.health_view(self._request())
+        with (
+            patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 1}),
+            patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 1}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
+        ):
+            response = config_api.health_view(self._request())
         body = json.loads(response.content)
         self.assertIn("db", body["checks"])
         self.assertIn("cache", body["checks"])
 
     def test_tenant_included_when_present(self):
         tenant = SimpleNamespace(id=42, slug="demo", name="Demo Resto")
-        with patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 1}):
-            with patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 1}):
-                response = config_api.health_view(self._request(tenant=tenant))
+        with (
+            patch.object(config_api, "_check_db", return_value={"ok": True, "latency_ms": 1}),
+            patch.object(config_api, "_check_cache", return_value={"ok": True, "latency_ms": 1}),
+            patch.object(config_api, "_check_celery", return_value=self._CELERY_OK),
+            patch.object(config_api, "_check_channel_layer", return_value=self._CHANNEL_OK),
+            patch.object(config_api, "_check_media", return_value=self._MEDIA_OK),
+        ):
+            response = config_api.health_view(self._request(tenant=tenant))
         body = json.loads(response.content)
         self.assertEqual(body["tenant"]["id"], 42)
         self.assertEqual(body["tenant"]["slug"], "demo")

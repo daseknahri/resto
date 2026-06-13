@@ -584,6 +584,8 @@ def decide_tier_upgrade_request(
     actor,
     admin_note: str = "",
     payment_reference: str = "",
+    invoice_amount=None,
+    invoice_currency: str = "",
 ) -> TierUpgradeDecisionResult:
     normalized_decision = (decision or "").strip().lower()
     if normalized_decision not in {"approve", "reject"}:
@@ -659,16 +661,27 @@ def decide_tier_upgrade_request(
                 upgrade_request.payment_reference = payment_reference.strip()
             upgrade_request.approved_by = actor if getattr(actor, "is_authenticated", False) else None
             upgrade_request.decided_at = timezone.now()
-            upgrade_request.save(
-                update_fields=[
-                    "status",
-                    "admin_note",
-                    "payment_reference",
-                    "approved_by",
-                    "decided_at",
-                    "updated_at",
-                ]
-            )
+            # Persist invoice_amount so the owner can download a receipt without a manual
+            # Django-admin edit. None leaves it unchanged (no amount provided yet).
+            _save_fields = [
+                "status",
+                "admin_note",
+                "payment_reference",
+                "approved_by",
+                "decided_at",
+                "updated_at",
+            ]
+            if invoice_amount is not None:
+                from decimal import Decimal as _Dec, InvalidOperation
+                try:
+                    upgrade_request.invoice_amount = _Dec(str(invoice_amount)).quantize(_Dec("0.01"))
+                    _save_fields.append("invoice_amount")
+                except (InvalidOperation, TypeError, ValueError):
+                    pass  # ignore malformed amounts — do not crash the approval
+            if invoice_currency:
+                upgrade_request.invoice_currency = str(invoice_currency).strip().upper()[:8]
+                _save_fields.append("invoice_currency")
+            upgrade_request.save(update_fields=_save_fields)
 
             return TierUpgradeDecisionResult(
                 upgrade_request=upgrade_request,

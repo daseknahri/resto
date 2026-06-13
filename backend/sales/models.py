@@ -300,6 +300,7 @@ class AdminAuditLog(models.Model):
         DRIVER_REJECTED = "driver_rejected", "Driver rejected"
         DRIVER_PAYOUT_RECORDED = "driver_payout_recorded", "Driver payout recorded"
         PLATFORM_SETTINGS_UPDATED = "platform_settings_updated", "Platform settings updated"
+        TENANT_LIVE_ORDERS_VIEWED = "tenant_live_orders_viewed", "Tenant live orders viewed"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

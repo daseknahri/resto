@@ -156,6 +156,86 @@ App falls back to English gracefully in the meantime.
 - Place a test order through the marketplace
 - Test the owner dashboard on mobile
 
+---
+
+## 9 — Backups, restore, and deploy rollback (OPS-5 H)
+
+### 9a — Automated PostgreSQL backups
+
+Coolify exposes a **Backup** tab on the Postgres resource. Enable it:
+
+- Frequency: daily (0 2 * * * recommended — 2 AM UTC, before the daily digest).
+- Retention: at least 30 days.
+- Test: after the first automated backup completes, use Coolify's restore UI or run the
+  manual restore procedure below to confirm the dump is valid.
+
+Alternatively, add a Coolify **Scheduled Task** on the `api` container:
+
+```
+pg_dump $DATABASE_URL -Fc -f /app/backups/kepoli_$(date +%Y%m%d).dump
+```
+
+(Mount a persistent volume at `/app/backups` so dumps survive container restarts.)
+
+### 9b — Per-tenant-schema restore (django-tenants)
+
+django-tenants stores each restaurant in its own Postgres schema (e.g. `tenant_abc`).
+To restore one tenant without touching others:
+
+1. Dump the individual schema from a full backup:
+   ```bash
+   pg_restore -Fc --schema=tenant_abc --no-owner -d $DATABASE_URL kepoli_YYYYMMDD.dump
+   ```
+   This overwrites only the `tenant_abc` schema. All other schemas are untouched.
+
+2. If the schema does not yet exist (e.g. re-provisioning a deleted tenant), create it first:
+   ```bash
+   psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS tenant_abc;"
+   pg_restore -Fc --schema=tenant_abc --no-owner -d $DATABASE_URL kepoli_YYYYMMDD.dump
+   ```
+
+3. Verify with a sanity check:
+   ```bash
+   python manage.py shell -c "
+   from django_tenants.utils import schema_context
+   with schema_context('tenant_abc'):
+       from menu.models import Order; print(Order.objects.count(), 'orders')
+   "
+   ```
+
+The public schema (shared tables: accounts, tenancy, sales) is separate. Only restore it
+from a backup if the shared data is corrupted — doing so overwrites ALL tenant references.
+
+### 9c — Deploy rollback (migrations auto-run on deploy)
+
+`docker/entrypoint.sh` runs `python manage.py migrate` on every deploy. If a migration
+ships a breaking schema change you need to roll back:
+
+1. **Revert the code** in Coolify by deploying the previous Git commit (Coolify keeps
+   deployment history). The entrypoint will not re-run the migration (Django skips
+   already-applied migrations). The schema and the old code are now in sync.
+
+2. **If you also need to unapply the migration** (the schema change is incompatible with
+   the running code), unapply it before reverting the code:
+   ```bash
+   # In the Coolify api container terminal:
+   python manage.py migrate <app_label> <previous_migration_number>
+   # Example: python manage.py migrate menu 0057_orderpayment_idempotency_key
+   ```
+   Then deploy the previous commit. Django will skip the already-unapplied migration.
+
+3. **Data-loss risk**: `RunPython` migrations that delete or transform data are
+   irreversible without a backup. Always take a manual pg_dump before deploying a
+   migration that drops columns or rewrites rows, and test the rollback procedure in a
+   staging environment first.
+
+4. **Zero-downtime**: Coolify deploys with a rolling restart; there is a brief window
+   during which both the old and new code run against the new schema. Design migrations
+   to be backward-compatible (add-only) before a subsequent cleanup migration removes
+   old columns.
+
+---
+
 ## Social link previews (OG)
 After each deploy, verify WhatsApp unfurls work — the nginx bot branch must route
 crawler user-agents to the backend OG view:

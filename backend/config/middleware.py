@@ -99,6 +99,15 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
         request.tenant = tenant
         connection.set_tenant(request.tenant)
         self.setup_url_routing(request)
+        # OPS-5-A: tag every Sentry event with the resolved tenant so errors
+        # are attributable to a specific restaurant. No-op when sentry_sdk is
+        # absent or not yet initialised (DSN was not configured).
+        try:
+            import sentry_sdk
+            sentry_sdk.set_tag("tenant_slug", getattr(tenant, "slug", None))
+            sentry_sdk.set_tag("tenant_id", getattr(tenant, "id", None))
+        except Exception:
+            pass
 
 
 class RequestLoggingMiddleware:
