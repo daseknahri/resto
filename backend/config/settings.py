@@ -335,6 +335,22 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 86400.0,  # daily — honour ADMIN_AUDIT_RETENTION_DAYS (default 180)
         "args": ("prune_admin_audit_logs",),
     },
+    # OPS-4 E: retention crons for unbounded shared/tenant tables.
+    "prune-notification-logs": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — delete NotificationLog rows older than 180 days
+        "args": ("prune_notification_logs",),
+    },
+    "prune-winback-nudges": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — delete WinbackNudge rows older than 120 days
+        "args": ("prune_winback_nudges",),
+    },
+    "prune-staff-messages": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — delete StaffMessage rows older than 90 days
+        "args": ("prune_staff_messages",),
+    },
 }
 
 # ── Session store ──────────────────────────────────────────────────────────────

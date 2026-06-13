@@ -170,9 +170,9 @@
         <AppIcon name="users" class="h-6 w-6 text-slate-500" aria-hidden="true" />
       </div>
       <p class="text-sm font-semibold text-slate-300">
-        {{ searchQuery || activeSegment ? t("ownerCustomers.noResults") : t("ownerCustomers.emptyState") }}
+        {{ searchQuery || activeSegment || activeTier ? t("ownerCustomers.noResults") : t("ownerCustomers.emptyState") }}
       </p>
-      <p v-if="!searchQuery && !activeSegment" class="text-xs text-slate-500">{{ t("ownerCustomers.emptyStateHint") }}</p>
+      <p v-if="!searchQuery && !activeSegment && !activeTier" class="text-xs text-slate-500">{{ t("ownerCustomers.emptyStateHint") }}</p>
     </div>
 
     <!-- ── Customer cards ───────────────────────────────────────────────────── -->
@@ -412,84 +412,130 @@
       </div>
     </Teleport>
 
-    <!-- Result count -->
-    <p v-if="!loading && !fetchError && filteredCustomers.length > 0" class="text-center text-xs text-slate-600 pb-2">
-      {{ t("ownerCustomers.resultCount", { n: filteredCustomers.length }) }}
-    </p>
+    <!-- Load more / end-of-list -->
+    <div v-if="!loading && !fetchError && customers.length" class="py-2 text-center space-y-2">
+      <button
+        v-if="hasMore"
+        type="button"
+        class="ui-btn-outline ui-press inline-flex items-center gap-2 px-5 py-2 text-sm"
+        :disabled="loadingMore"
+        :aria-busy="loadingMore"
+        @click="loadMore"
+      >
+        <span v-if="loadingMore" class="inline-block h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+        {{ loadingMore ? t("ownerCustomers.loadingMore") : t("ownerCustomers.loadMore") }}
+      </button>
+      <p v-else class="text-xs text-slate-600">
+        {{ t("ownerCustomers.resultCount", { n: filteredCustomers.length }) }}
+        <span v-if="!hasMore && currentOffset > filteredCustomers.length" class="ms-1">· {{ t("ownerCustomers.noMore") }}</span>
+      </p>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useToastStore } from "../stores/toast";
 import api from "../lib/api";
-import { isFresh, readCache, writeCache } from "../lib/staleCache";
 
 const { t } = useI18n();
 const toast = useToastStore();
 
 // ── State ────────────────────────────────────────────────────────────────────
-const loading = ref(true);
+const loading = ref(true);          // initial / reset load
+const loadingMore = ref(false);     // "Load more" spinner
 const fetchError = ref(false);
 const exporting = ref(false);
 const customers = ref([]);
 const summary = ref(null);
+const hasMore = ref(false);
+const currentOffset = ref(0);
+const PAGE_LIMIT = 100;
+
+// Filters — changes trigger a server reload (not a JS filter)
 const searchQuery = ref("");
 const activeSegment = ref("");
 const activeTier = ref("");
 const sortKey = ref("last_order");
 
-const CACHE_KEY = "ownerCustomers";
-const CACHE_TTL = 2 * 60 * 1000; // 2 min
+// ── Debounced search ──────────────────────────────────────────────────────────
+let _searchTimer = null;
+watch(searchQuery, () => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => {
+    loadCustomers(true);
+  }, 350);
+});
+
+// ── Params builder ────────────────────────────────────────────────────────────
+const _buildParams = (offset = 0) => {
+  const params = { limit: PAGE_LIMIT, offset };
+  if (searchQuery.value.trim()) params.search = searchQuery.value.trim();
+  if (activeSegment.value) params.segment = activeSegment.value;
+  if (sortKey.value) params.sort = sortKey.value;
+  return params;
+};
 
 // ── Data loading ─────────────────────────────────────────────────────────────
-const loadCustomers = async (force = false) => {
-  if (!force) {
-    const cached = readCache(CACHE_KEY);
-    if (cached && isFresh(CACHE_KEY, CACHE_TTL)) {
-      customers.value = cached.customers || [];
-      summary.value = cached.summary || null;
-      loading.value = false;
-      return;
-    }
-    if (cached) {
-      customers.value = cached.customers || [];
-      summary.value = cached.summary || null;
-      loading.value = false;
-      // refresh in background
-    }
+// reset=true: start from page 0, clear the list (used when filters change).
+// reset=false: append the next page (Load more).
+const loadCustomers = async (reset = false) => {
+  if (reset) {
+    loading.value = true;
+    fetchError.value = false;
+    currentOffset.value = 0;
+    customers.value = [];
+    hasMore.value = false;
+  } else {
+    loadingMore.value = true;
   }
   try {
-    fetchError.value = false;
-    const { data } = await api.get("/api/owner/customers/");
-    customers.value = data.customers || [];
-    summary.value = data.summary || null;
-    writeCache(CACHE_KEY, data);
+    const { data } = await api.get("/api/owner/customers/", {
+      params: _buildParams(currentOffset.value),
+    });
+    // Backend returns { results, has_more, limit, offset } plus optional summary
+    const page = Array.isArray(data.results) ? data.results : [];
+    if (reset) {
+      customers.value = page;
+      // Summary is returned on first page only (it's a global aggregate)
+      if (data.summary !== undefined) summary.value = data.summary;
+    } else {
+      customers.value = [...customers.value, ...page];
+    }
+    hasMore.value = Boolean(data.has_more);
+    currentOffset.value += page.length;
   } catch {
     if (!customers.value.length) fetchError.value = true;
   } finally {
     loading.value = false;
+    loadingMore.value = false;
   }
 };
 
-onMounted(() => loadCustomers());
+const loadMore = () => {
+  if (loadingMore.value || !hasMore.value) return;
+  loadCustomers(false);
+};
+
+onMounted(() => loadCustomers(true));
+
+// Reload when segment, tier, or sort changes
+watch([activeSegment, sortKey], () => loadCustomers(true));
+// Tier filter is client-side only (no backend param), don't reload for it
 
 // ── Segments ─────────────────────────────────────────────────────────────────
-const segments = computed(() => {
-  const all = customers.value;
-  const counts = { new: 0, returning: 0, at_risk: 0 };
-  all.forEach((c) => { if (counts[c.segment] !== undefined) counts[c.segment]++; });
-  return [
-    { value: "",          label: t("ownerCustomers.segmentAll"),      count: all.length },
-    { value: "new",       label: t("ownerCustomers.segmentNew"),      count: counts.new },
-    { value: "returning", label: t("ownerCustomers.segmentReturning"), count: counts.returning },
-    { value: "at_risk",   label: t("ownerCustomers.segmentAtRisk"),   count: counts.at_risk },
-  ];
-});
+// Segment counts come from the summary object (returned by backend)
+const segments = computed(() => [
+  { value: "",          label: t("ownerCustomers.segmentAll"),       count: summary.value?.total ?? customers.value.length },
+  { value: "new",       label: t("ownerCustomers.segmentNew"),       count: summary.value?.new ?? null },
+  { value: "returning", label: t("ownerCustomers.segmentReturning"), count: summary.value?.returning ?? null },
+  { value: "at_risk",   label: t("ownerCustomers.segmentAtRisk"),    count: summary.value?.at_risk ?? null },
+]);
 
 // ── Tiers ─────────────────────────────────────────────────────────────────────
+// Tier is still client-side — computed from order_count on loaded rows
 const _tierKey = (c) => c.order_count >= 10 ? "vip" : c.order_count >= 3 ? "regular" : "new";
 
 const customerTierLabel = (c) => {
@@ -518,46 +564,13 @@ const tierTabs = computed(() => {
   ];
 });
 
-// ── Filtering + sorting ───────────────────────────────────────────────────────
+// ── Client-side filtering (tier only — search/segment/sort are server-side) ──
 const filteredCustomers = computed(() => {
   let list = customers.value;
-
-  // Tier filter
+  // Tier filter is client-side so no extra round-trip for a simple count threshold
   if (activeTier.value) {
     list = list.filter((c) => _tierKey(c) === activeTier.value);
   }
-
-  // Segment filter
-  if (activeSegment.value) {
-    list = list.filter((c) => c.segment === activeSegment.value);
-  }
-
-  // Search filter
-  const q = searchQuery.value.trim().toLowerCase();
-  if (q) {
-    list = list.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.phone.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q)
-    );
-  }
-
-  // Sort
-  const key =
-    sortKey.value === "last_order"
-      ? "last_order_at"
-      : sortKey.value === "total_spend"
-      ? "total_spend"
-      : "order_count";
-  list = [...list].sort((a, b) => {
-    const av = a[key] ?? "";
-    const bv = b[key] ?? "";
-    if (av < bv) return 1;
-    if (av > bv) return -1;
-    return 0;
-  });
-
   return list;
 });
 
@@ -567,7 +580,7 @@ const exportCsv = async () => {
   exporting.value = true;
   try {
     const resp = await api.get("/api/owner/customers/", {
-      params: { format: "csv" },
+      params: { format: "csv", search: searchQuery.value.trim() || undefined, segment: activeSegment.value || undefined },
       responseType: "blob",
     });
     const url = URL.createObjectURL(new Blob([resp.data]));
@@ -645,7 +658,6 @@ const saveNotes = async (c) => {
     // update in-place so the card reflects the saved note immediately
     const idx = customers.value.findIndex((x) => x.id === c.id);
     if (idx >= 0) customers.value[idx] = { ...customers.value[idx], owner_notes: res.data.notes };
-    writeCache(CACHE_KEY, { customers: customers.value, summary: summary.value });
     toast.show(t("ownerCustomers.notesSaved"), "success");
     cancelNotesEdit();
   } catch {

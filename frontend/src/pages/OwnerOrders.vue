@@ -185,10 +185,26 @@
       <p v-if="filteredOrders.length !== order.orders.length" class="text-xs text-slate-500">
         {{ t("ownerOrders.showingFiltered", { shown: filteredOrders.length, total: order.orders.length }) }}
       </p>
-      <!-- Truncation notice when server has more orders than the 200-row display cap -->
-      <p v-if="order.ordersHasMore" class="text-xs text-amber-400/80">
-        {{ t("ownerOrders.hasMore", { total: order.ordersTotal }) }}
-      </p>
+
+      <!-- Tab bar: Active | Past orders -->
+      <div class="flex gap-1 rounded-xl border border-slate-800 bg-slate-950/50 p-1" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'active'"
+          class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+          :class="activeTab === 'active' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
+          @click="activeTab = 'active'"
+        >{{ t("ownerOrders.tabActive") }}</button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'history'"
+          class="flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+          :class="activeTab === 'history' ? 'bg-[var(--color-secondary)] text-slate-950' : 'text-slate-400 hover:text-slate-200'"
+          @click="switchToHistory"
+        >{{ t("ownerOrders.tabHistory") }}</button>
+      </div>
 
       <!-- Batch action: confirm all pending (hidden when search/date filters are narrowing the view) -->
       <div v-if="pendingOrdersList.length > 1 && !activeStatus && !searchQuery && activeDateFilter !== 'yesterday'" class="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5" role="status">
@@ -206,6 +222,8 @@
       </div>
     </header>
 
+    <!-- ── ACTIVE TAB: loading / error / empty / list ─────────────────── -->
+    <template v-if="activeTab === 'active'">
     <!-- Loading: skeleton order cards -->
     <div v-if="order.ordersLoading && !order.orders.length" class="space-y-3">
       <div v-for="i in 3" :key="i" class="ui-panel animate-pulse space-y-3 p-4">
@@ -268,9 +286,135 @@
       </div>
       <p class="mt-4 text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrdersYet") }}</p>
     </div>
+    </template>
 
-    <!-- Order list -->
-    <div v-else class="space-y-2.5">
+    <!-- ── HISTORY TAB ──────────────────────────────────────────────────── -->
+    <template v-if="activeTab === 'history'">
+      <!-- History date-range controls -->
+      <div class="flex flex-wrap items-center gap-2 px-1">
+        <label class="text-xs text-slate-400">{{ t("ownerOrders.dateFrom") }}</label>
+        <input
+          v-model="historyFrom"
+          type="date"
+          class="ui-input py-1 text-xs"
+          :max="historyTo || undefined"
+          @change="reloadHistory"
+        />
+        <label class="text-xs text-slate-400">{{ t("ownerOrders.dateTo") }}</label>
+        <input
+          v-model="historyTo"
+          type="date"
+          class="ui-input py-1 text-xs"
+          :min="historyFrom || undefined"
+          @change="reloadHistory"
+        />
+        <button
+          v-if="historyFrom || historyTo"
+          class="ui-press rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+          @click="historyFrom = ''; historyTo = ''; reloadHistory()"
+        >✕</button>
+      </div>
+
+      <!-- History loading skeleton -->
+      <div v-if="order.historyLoading && !order.historyOrders.length" class="space-y-3">
+        <div v-for="i in 3" :key="i" class="ui-panel animate-pulse space-y-3 p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-2">
+              <div class="h-4 w-20 rounded bg-slate-700/60" />
+              <div class="h-3 w-24 rounded bg-slate-800/50" />
+            </div>
+            <div class="h-5 w-16 rounded bg-slate-700/60" />
+          </div>
+        </div>
+      </div>
+
+      <!-- History error -->
+      <div v-else-if="order.historyError && !order.historyOrders.length" class="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/8 px-4 py-3" role="alert">
+        <p class="flex-1 text-sm text-red-300">{{ order.historyError }}</p>
+        <button class="shrink-0 rounded-lg border border-red-500/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-500/10" @click="reloadHistory">{{ t("common.retry") }}</button>
+      </div>
+
+      <!-- History empty -->
+      <div v-else-if="!order.historyLoading && !order.historyOrders.length" class="ui-empty-state p-10 text-center" role="status">
+        <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.historyEmpty") }}</p>
+      </div>
+
+      <!-- History order cards (reuse same rendering logic) -->
+      <div v-else class="space-y-2.5">
+        <article
+          v-for="(o, index) in order.historyOrders"
+          :key="o.id"
+          class="ui-panel ui-surface-lift ui-reveal space-y-3 p-4 transition-colors"
+          :class="orderCardClass(o)"
+          :aria-label="o.order_number"
+          :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms`, 'content-visibility': 'auto', 'contain-intrinsic-size': 'auto 200px' }"
+        >
+          <!-- Order header -->
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="space-y-1.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-base font-bold tracking-tight text-white">{{ o.order_number }}</span>
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="statusClass(o.status)">{{ statusLabel(o.status) }}</span>
+                <span class="ui-data-strip font-medium">{{ fulfillmentLabel(o) }}</span>
+                <span v-if="o.source === 'marketplace'" class="rounded-full bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+                  <span aria-hidden="true">🛒</span> {{ t("ownerOrders.sourceMarketplace") }}
+                </span>
+              </div>
+              <p class="text-xs font-medium tabular-nums text-slate-400">{{ formatTime(o.created_at) }}</p>
+            </div>
+            <div class="shrink-0 text-end">
+              <p class="text-xl font-bold tabular-nums text-[var(--color-secondary)] leading-none">{{ formatCurrency(o.total, o.currency) }}</p>
+              <p class="mt-1 text-xs tabular-nums text-slate-400">{{ itemCountLabel(o.items_count) }}</p>
+            </div>
+          </div>
+
+          <!-- Customer info (compact) -->
+          <div v-if="o.customer_name || o.customer_phone" class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+            <span v-if="o.customer_name" class="font-medium text-slate-200">{{ o.customer_name }}</span>
+            <a v-if="o.customer_phone" :href="`tel:${o.customer_phone}`" class="text-sky-400 hover:text-sky-300">{{ o.customer_phone }}</a>
+          </div>
+
+          <!-- Items (compact) -->
+          <div class="space-y-1">
+            <div
+              v-for="item in o.items"
+              :key="item.dish_slug + item.note"
+              class="flex items-center justify-between gap-2 rounded-xl border border-slate-800/70 bg-slate-950/30 py-1.5 pe-3 ps-3 text-xs"
+            >
+              <span class="font-semibold text-slate-100">{{ item.qty }}× {{ item.dish_name }}</span>
+              <span class="tabular-nums text-slate-200">{{ formatCurrency(item.subtotal, o.currency) }}</span>
+            </div>
+          </div>
+
+          <!-- Print button for historical orders -->
+          <div class="flex gap-2">
+            <button class="ui-btn-outline ui-press inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" @click="printTicket(o)">
+              <span aria-hidden="true">🖨</span> {{ t("ownerOrders.printTicket") }}
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <!-- Load more -->
+      <div class="py-2 text-center">
+        <button
+          v-if="order.historyHasMore"
+          type="button"
+          class="ui-btn-outline ui-press inline-flex items-center gap-2 px-5 py-2 text-sm"
+          :disabled="order.historyLoading"
+          :aria-busy="order.historyLoading"
+          @click="loadMoreHistory"
+        >
+          <span v-if="order.historyLoading" class="inline-block h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden="true" />
+          {{ order.historyLoading ? t("ownerOrders.loadingMore") : t("ownerOrders.loadMore") }}
+        </button>
+        <p v-else-if="order.historyOrders.length && !order.historyLoading" class="text-xs text-slate-600">{{ t("ownerOrders.noMoreOrders") }}</p>
+      </div>
+    </template>
+
+    <!-- ── ACTIVE TAB: order list ───────────────────────────────────────── -->
+    <!-- Order list (shown when active tab and there are filtered orders) -->
+    <div v-if="activeTab === 'active' && filteredOrders.length" class="space-y-2.5">
       <article
         v-for="(o, index) in filteredOrders"
         :key="o.id"
@@ -916,6 +1060,28 @@ const toast = useToastStore();
 const tenant = useTenantStore();
 const { confirm } = useConfirmModal();
 const route = useRoute();
+
+// ── Tab: "active" (hot poll) | "history" (paginated terminal orders) ──────────
+const activeTab = ref("active");
+
+const historyFrom = ref("");
+const historyTo = ref("");
+
+const switchToHistory = () => {
+  activeTab.value = "history";
+  // Load first page if not yet loaded or previously errored
+  if (!order.historyOrders.length && !order.historyLoading) {
+    order.fetchHistory({ reset: true, from: historyFrom.value, to: historyTo.value });
+  }
+};
+
+const reloadHistory = () => {
+  order.fetchHistory({ reset: true, from: historyFrom.value, to: historyTo.value });
+};
+
+const loadMoreHistory = () => {
+  order.fetchHistory({ reset: false, from: historyFrom.value, to: historyTo.value });
+};
 
 const activeStatus = ref("");
 const activeDateFilter = ref("all");

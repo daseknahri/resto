@@ -122,6 +122,14 @@ class WalletTransaction(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        indexes = [
+            # OPS-4 C: refund aggregate (OPS-2 cancel-refund EXISTS check + OPS-3 statement)
+            # filters on (tenant_id, type, created_at) — keep PKs server-side.
+            models.Index(
+                fields=("tenant_id", "type", "created_at"),
+                name="wallettx_tid_type_cat_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.get_type_display()} {self.amount} — {self.customer}"

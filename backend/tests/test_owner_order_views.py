@@ -151,28 +151,35 @@ class OwnerOrderListViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_owner_gets_200_with_results_shape(self, objects_mock):
+        # OPS-4 A: chain is now select_related → prefetch_related → order_by (no annotate)
         order = _make_order()
         qs_mock = MagicMock()
-        qs_mock.count.return_value = 1
+        qs_mock.filter.return_value = qs_mock
         qs_mock.__iter__ = lambda s: iter([order])
-        qs_mock.__getitem__ = lambda s, sl: [order]
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
 
-        resp = self._get()
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("results", resp.data)
-        self.assertIn("count", resp.data)
-        self.assertEqual(resp.data["count"], 1)
+        # OPS-4 A: new envelope — has_more/limit/offset instead of count
+        self.assertIn("has_more", resp.data)
+        self.assertIn("limit", resp.data)
+        self.assertIn("offset", resp.data)
 
     @patch("menu.views.Order.objects")
     def test_staff_can_access_owner_list(self, objects_mock):
         qs_mock = MagicMock()
-        qs_mock.count.return_value = 0
+        qs_mock.filter.return_value = qs_mock
         qs_mock.__iter__ = lambda s: iter([])
-        qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
+        qs_mock.__getitem__ = lambda s, sl: [][sl.start:sl.stop] if isinstance(sl, slice) else [][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
 
-        resp = self._get(user=_user(role=User.Roles.TENANT_STAFF))
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get(user=_user(role=User.Roles.TENANT_STAFF))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     @patch("menu.views.Order.objects")
@@ -184,12 +191,14 @@ class OwnerOrderListViewTests(SimpleTestCase):
             delivery_lng=-6.85,
         )
         qs_mock = MagicMock()
-        qs_mock.count.return_value = 1
+        qs_mock.filter.return_value = qs_mock
         qs_mock.__iter__ = lambda s: iter([order])
-        qs_mock.__getitem__ = lambda s, sl: [order]
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
+        qs_mock.__getitem__ = lambda s, sl: [order][sl.start:sl.stop] if isinstance(sl, slice) else [order][sl]
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
 
-        resp = self._get()
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get()
         result = resp.data["results"][0]
         for present_field in ("delivery_address", "delivery_lat", "delivery_lng", "customer_email"):
             self.assertIn(present_field, result)
@@ -197,40 +206,54 @@ class OwnerOrderListViewTests(SimpleTestCase):
 
     @patch("menu.views.Order.objects")
     def test_status_filter_applied_when_valid(self, objects_mock):
+        # OPS-4 A: when ?status=pending the view calls qs.filter(status="pending")
+        # after the base chain (select_related → prefetch_related → order_by).
         qs_base = MagicMock()
         qs_filtered = MagicMock()
-        qs_filtered.count.return_value = 0
         qs_filtered.__iter__ = lambda s: iter([])
-        qs_filtered.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_base
+        qs_filtered.__getitem__ = lambda s, sl: [][sl.start:sl.stop] if isinstance(sl, slice) else []
         qs_base.filter.return_value = qs_filtered
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_base
 
-        self._get(params={"status": "pending"})
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            self._get(params={"status": "pending"})
+        # filter() is called with status="pending" for the explicit status path
         qs_base.filter.assert_called_once_with(status="pending")
 
     @patch("menu.views.Order.objects")
     def test_invalid_status_filter_ignored(self, objects_mock):
         qs_mock = MagicMock()
-        qs_mock.count.return_value = 0
+        qs_mock.filter.return_value = qs_mock
         qs_mock.__iter__ = lambda s: iter([])
-        qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
+        qs_mock.__getitem__ = lambda s, sl: [][sl.start:sl.stop] if isinstance(sl, slice) else []
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
 
-        resp = self._get(params={"status": "not-a-status"})
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            resp = self._get(params={"status": "not-a-status"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        # secondary .filter() should NOT have been called with the invalid value
-        qs_mock.filter.assert_not_called()
+        # On active hot path (invalid status → ignored) filter is called with
+        # status__in=ACTIVE_STATUSES, NOT with the invalid value.
+        call_kwargs_list = [str(c) for c in qs_mock.filter.call_args_list]
+        self.assertFalse(
+            any("not-a-status" in s for s in call_kwargs_list),
+            "filter() must not be called with the invalid status value",
+        )
 
     @patch("menu.views.Order.objects")
     def test_orders_sorted_newest_first(self, objects_mock):
         qs_mock = MagicMock()
-        qs_mock.count.return_value = 0
+        qs_mock.filter.return_value = qs_mock
         qs_mock.__iter__ = lambda s: iter([])
-        qs_mock.__getitem__ = lambda s, sl: []
-        objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = qs_mock
+        qs_mock.__getitem__ = lambda s, sl: [][sl.start:sl.stop] if isinstance(sl, slice) else []
+        objects_mock.select_related.return_value.prefetch_related.return_value.order_by.return_value = qs_mock
 
-        self._get()
-        order_by_arg = objects_mock.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.call_args[0][0]
+        with patch("menu.models.OrderPayment") as MockOP:
+            MockOP.objects.filter.return_value.values.return_value = []
+            self._get()
+        # OPS-4 A: chain is select_related → prefetch_related → order_by (no annotate)
+        order_by_arg = objects_mock.select_related.return_value.prefetch_related.return_value.order_by.call_args[0][0]
         self.assertEqual(order_by_arg, "-created_at")
 
 

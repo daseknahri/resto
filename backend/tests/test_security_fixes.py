@@ -275,17 +275,22 @@ class OwnerOrderListTotalTests(SimpleTestCase):
         u.tenant_id = 1
         return u
 
+    @patch("menu.models.OrderPayment")
     @patch("menu.views.Order.objects")
-    def test_response_includes_total_and_has_more_false(self, mock_objects):
-        """When all results fit within 200, has_more must be False."""
+    def test_response_includes_results_and_has_more_false(self, mock_objects, mock_op):
+        """OPS-4 A: active hot path returns results envelope with has_more=False."""
         from menu.views import OwnerOrderListView
 
+        # OPS-4 A: new chain is select_related → prefetch_related → order_by (no annotate).
+        # The hot path then calls .filter(status__in=ACTIVE_STATUSES) and list(qs).
         mock_qs = MagicMock()
-        mock_qs.count.return_value = 3
-        # Slice qs[:200] must yield 3 items so len(orders)==3 and has_more==False
-        mock_qs.__getitem__ = lambda s, sl: [self._mock_order() for _ in range(3)]
-        mock_qs.__iter__ = lambda s: iter([self._mock_order() for _ in range(3)])
-        mock_objects.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = mock_qs
+        _orders = [self._mock_order() for _ in range(3)]
+        mock_qs.filter.return_value.__iter__ = MagicMock(return_value=iter(_orders))
+        mock_qs.filter.return_value.__getitem__ = lambda s, sl: _orders[sl]
+        mock_objects.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
+
+        # Per-page ledger fetch — return no payments so the view doesn't crash.
+        mock_op.objects.filter.return_value.values.return_value = []
 
         user = self._user()
         req = self.factory.get("/api/owner/orders/")
@@ -296,20 +301,23 @@ class OwnerOrderListTotalTests(SimpleTestCase):
         response = OwnerOrderListView.as_view()(req)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("total", response.data)
-        self.assertEqual(response.data["total"], 3)
+        self.assertIn("results", response.data)
         self.assertFalse(response.data["has_more"])
 
+    @patch("menu.models.OrderPayment")
     @patch("menu.views.Order.objects")
-    def test_has_more_true_when_total_exceeds_display_cap(self, mock_objects):
-        """When server total exceeds 200 displayed rows, has_more must be True."""
+    def test_has_more_false_on_active_hot_path(self, mock_objects, mock_op):
+        """OPS-4 A: active hot path never sets has_more=True (no COUNT)."""
         from menu.views import OwnerOrderListView
 
+        # The hot path returns ALL active orders without pagination, so has_more is always False.
         mock_qs = MagicMock()
-        mock_qs.count.return_value = 847
-        mock_qs.__getitem__ = lambda s, sl: []
-        mock_qs.__iter__ = lambda s: iter([])
-        mock_objects.select_related.return_value.prefetch_related.return_value.annotate.return_value.order_by.return_value = mock_qs
+        mock_qs.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        mock_qs.filter.return_value.__getitem__ = lambda s, sl: []
+        mock_objects.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
+
+        # Per-page ledger fetch
+        mock_op.objects.filter.return_value.values.return_value = []
 
         user = self._user()
         req = self.factory.get("/api/owner/orders/")
@@ -320,5 +328,5 @@ class OwnerOrderListTotalTests(SimpleTestCase):
         response = OwnerOrderListView.as_view()(req)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["total"], 847)
-        self.assertTrue(response.data["has_more"])
+        self.assertIn("has_more", response.data)
+        self.assertFalse(response.data["has_more"])

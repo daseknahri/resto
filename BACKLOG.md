@@ -180,8 +180,57 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
       (added OPS-3) now covers replay. Document the DB constraint as the primary backstop so a
       future refactor doesn't drop it. LOW. (menu/views.py:4796). [scout OPS-3]
 
+- [ ] **customer_phone btree index is dead for icontains search** — OPS-4 added a plain
+      btree on Order.customer_phone but the two search paths use `customer_phone__icontains`
+      (LIKE '%..%'), which a btree can't serve; only the exact-match CRM/win-back paths
+      benefit. Fix: pg_trgm GIN trigram index, OR rewrite search to digits[-9:] exact-match
+      (CustomerOrdersByPhoneView already does this at menu/views.py:3184). (migration 0058).
+      → OPS-4 follow-up / search-perf. [scout OPS-4]
+- [ ] **OrderItem.voided_at unindexed — Z-report full-scans items every shift close** — add
+      partial Index(voided_at) WHERE is_voided=True to OrderItem.Meta. (models.py:608/635;
+      Z-report query menu/views.py:6730). → next OrderItem migration. [scout OPS-4]
+- [ ] **DirectoryView/MarketplaceView N+1 cross-schema** — per-tenant schema switch + rating
+      aggregate + promo scan inside the serialization loop (100+ cross-schema queries/cold
+      request; 90s cache is a bandage). Denormalize Profile.rating_avg/rating_count via
+      post_save signal/cron. (accounts/views.py:2243/2418). → marketplace-perf batch. [scout OPS-4]
+- [ ] **OwnerRatingListView no pagination** — qs[:500] JSON (silently truncates, exposes a
+      COUNT that diverges) + uncapped CSV. Add cursor/offset pagination + CSV date fence.
+      (menu/views.py:7431/7466). → OPS-4 follow-up. [scout OPS-4]
+- [ ] **CustomerRating (public) no retention prune** — write-only, grows with platform order
+      volume; add a prune cron like the OPS-4 ones. (accounts/models.py:506). → retention. [scout OPS-4]
+- [ ] **OwnerCustomerListView still materializes all customers before paginating** — segment
+      label is Python-derived so segment filter + sort + pagination happen in Python over the
+      full 3k-row aggregate; push the segment predicate (last_order_at < cutoff) to SQL for
+      true DB-level pagination. (menu/views.py:8458/8601/8670). → customer-perf follow-up. [scout OPS-4]
+- [ ] **Z-report by_staff = 2 OrderPayment queries** — amount + count can collapse to one
+      .annotate(Sum, Count(distinct)). (menu/views.py:6761/6783). → perf. [scout OPS-4]
+- [ ] **_staff_order_payload calls order.items.all() twice** — materialize once
+      (list(order.items.all())) to remove a latent double-query for unprefetched callers.
+      (menu/views.py:3789/3805). → perf. [scout OPS-4]
+- [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
+      add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
+
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-4 "scale fences": OwnerOrderListView two-mode (active hot path = status-fenced,
+      no full-table scan / no JOIN-COUNT; history = paginated {results,has_more,limit,offset}
+      envelope, date-fenced) — date fence kept OFF the active path (review-major fixed);
+      OwnerCustomerListView server-side pagination + DB search (name/phone/email — email
+      restore was a review-major) + single GROUP BY; indexes Order(customer_phone),
+      Order(status,paid_at), WalletTransaction(tenant_id,type,created_at) (menu/0058,
+      accounts/0043); revenue.py + return-rate Python-set → subquery (results byte-identical,
+      the FALSE sweep-2 claim now actually true); retention crons prune_notification_logs
+      (180d) / prune_winback_nudges (120d > 90d dedupe) / prune_staff_messages (90d +
+      created_at index) + beat + LAUNCH_CHECKLIST; **PROMOTION max_uses OVERSPEND RACE fixed
+      (money): atomic filter(use_count__lt=max_uses).update(F+1) in BOTH PlaceOrderView +
+      MarketplacePlaceOrderView, code-promo→400 / auto-promo→strip+full-price on cap; I
+      verified the unlimited sentinel is null (not 0) so unlimited promos take the
+      unconditional branch — no use_count<0 trap**; PlaceOrderThrottle per-user (staff) / IP
+      (anon); frontend Orders active/history tabs + Customers paginated search. Review: 2
+      majors (date fence, email search) fixed + verified by me; promo race + both paths +
+      sentinel verified in code. Scout: 9 → Scout notes (notably the customer_phone btree is
+      DEAD for icontains — needs trigram). NOTE: first launch died on a backtick-in-contract
+      script bug (0 agents) — fixed + re-ran. Backend 3360 green; frontend 90. — ops4 commit.
 - [x] OPS-3 "integrity on flaky wifi": DB-backed idempotency — Order.idempotency_key
       (menu/0056) + OrderPayment.idempotency_key (menu/0057), both conditional-unique
       (NULLs allowed); PlaceOrderView AND MarketplacePlaceOrderView pre-check + persist +

@@ -2492,6 +2492,18 @@ class PlaceOrderView(APIView):
             """Raised inside the atomic block when the customer no longer has enough
             loyalty points to cover the redemption — rolls the whole order back."""
 
+        class _PromoCapped(Exception):
+            """Raised inside the atomic block when a code-based promo's max_uses cap is
+            hit concurrently (bounded counter returned 0 rows).  Rolls back the order and
+            returns a 400 so the customer knows to retry without the code.
+
+            OPS-4 F: Atomic bounded counter closes the max_uses overspend race.
+            Pre-check (use_count >= max_uses) outside the lock is not safe for concurrent
+            checkouts — both can pass the pre-check and then both increment past the cap.
+            Fix: Promotion.objects.filter(pk=..., use_count__lt=max_uses).update(F+1) and
+            treat a 0-rows result as cap-reached inside the atomic transaction.
+            """
+
         try:
             with transaction.atomic():
                 # --- Stock check + decrement (before creating the order so a failed
@@ -2552,6 +2564,47 @@ class PlaceOrderView(APIView):
                             else:
                                 Dish.objects.filter(pk=_cpk).update(stock_qty=_cnew)
 
+                # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create() so
+                # a failed increment never leaves a discounted order in the DB.
+                #
+                # max_uses=None → unlimited → always safe to increment unconditionally.
+                # max_uses>0    → bounded:   use filter(use_count__lt=max_uses) + F()+1;
+                #                            0 rows = cap already reached concurrently.
+                #   Code promo (customer explicitly chose it): reject order → 400.
+                #   Auto promo (best available): strip the discount from this order;
+                #                               the order still places at full price.
+                if _best_promo is not None:
+                    if _best_promo.max_uses is not None:
+                        # Bounded update — safe under concurrent checkouts
+                        _promo_rows = Promotion.objects.filter(
+                            pk=_best_promo.pk,
+                            use_count__lt=_best_promo.max_uses,
+                        ).update(use_count=models.F("use_count") + 1)
+                        if not _promo_rows:
+                            if _promo_code_input:
+                                # Explicit code: cap hit concurrently → reject
+                                raise _PromoCapped()
+                            else:
+                                # Auto promo: strip discount, re-check wallet
+                                total = max(Decimal("0"), total + _promo_discount - _tip_amount)
+                                total = total + _tip_amount  # re-apply tip
+                                _promo_discount = Decimal("0")
+                                _best_promo = None
+                                # Wallet deduction must not exceed the corrected total
+                                if _use_wallet:
+                                    _wallet_deduction = min(_wallet_deduction, total)
+                                    if _requires_prepay and not _cod_order:
+                                        _available_now = Decimal(str(
+                                            getattr(_linked_customer, "wallet_balance", "0") or "0"
+                                        ))
+                                        if _available_now < total:
+                                            raise _PrepayUnpaid()
+                    else:
+                        # max_uses is None → unlimited → no cap to enforce
+                        Promotion.objects.filter(pk=_best_promo.pk).update(
+                            use_count=models.F("use_count") + 1
+                        )
+
                 order_number = _generate_order_number()
                 # Attribute waiter-created orders to the staff member who took them. The
                 # waiter app posts here authenticated as tenant staff/owner; a customer
@@ -2605,11 +2658,7 @@ class PlaceOrderView(APIView):
                 for item_data in order_items_data:
                     OrderItem.objects.create(order=order, **item_data)
 
-                # Increment promo use_count atomically
-                if _best_promo is not None:
-                    Promotion.objects.filter(pk=_best_promo.pk).update(
-                        use_count=models.F("use_count") + 1
-                    )
+                # (Promo use_count increment was performed before Order.create() — see OPS-4 F.)
 
                 # Deduct wallet balance (select_for_update prevents race conditions)
                 _paid_by_wallet = Decimal("0")
@@ -2679,6 +2728,15 @@ class PlaceOrderView(APIView):
                 {"detail": "Your loyalty points balance changed — please review and try again.",
                  "code": "loyalty_insufficient_points"},
                 status=status.HTTP_409_CONFLICT,
+            )
+        except _PromoCapped:
+            # OPS-4 F: Bounded promo counter returned 0 rows — the cap was reached
+            # concurrently by another checkout.  Match the existing "promo invalid"
+            # contract: return 400 so the customer knows to try without the code.
+            return Response(
+                {"detail": "Promo code is no longer available (usage limit reached).",
+                 "code": "promo_capped"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except IntegrityError:
             # Two cases:
@@ -5064,42 +5122,157 @@ class OwnerNotificationsView(APIView):
 
 
 class OwnerOrderListView(APIView):
-    """GET /api/owner/orders/ — owner lists all orders, optionally filtered by status."""
+    """GET /api/owner/orders/ — owner lists all orders.
+
+    OPS-4 A — two-mode design to avoid full-table scan on every 15-second poll:
+
+    HOT path (default, ?mode=active or no mode):
+      Returns only non-terminal orders (pending / confirmed / preparing / ready /
+      out_for_delivery / scheduled). These are naturally bounded (a few dozen at
+      most at any given time) so no COUNT and no date fence is needed.
+      Response: { results, has_more: false, limit: null, offset: null }
+      (has_more is always false on the hot path — the set is always complete.)
+
+    HISTORY path (?mode=history):
+      Returns terminal orders (completed / cancelled), paginated with limit/offset.
+      Supports ?from= and ?to= date fences (YYYY-MM-DD) and ?status= to narrow
+      to a single terminal status.
+      Response: { results, has_more: bool, limit: int, offset: int }
+      (count is omitted on this path to avoid an expensive COUNT(*) every call.)
+
+    EXPLICIT STATUS FILTER (?status=<any>):
+      When ?status= is supplied the mode param is ignored; returns all orders with
+      that status using limit/offset pagination — this covers the legacy case where
+      the SPA requests a specific status directly.
+
+    Per-row ledger totals (amount_paid / outstanding): fetched via a per-page
+    prefetch on OrderPayment — no JOIN-heavy annotate that forces a COUNT.
+    """
     permission_classes = [IsAuthenticated]
+
+    # Statuses that are considered "active" (non-terminal) for the hot poll path.
+    ACTIVE_STATUSES = [
+        Order.Status.SCHEDULED,
+        Order.Status.PENDING,
+        Order.Status.CONFIRMED,
+        Order.Status.PREPARING,
+        Order.Status.READY,
+        Order.Status.OUT_FOR_DELIVERY,
+    ]
+    # Terminal statuses served via the history path.
+    TERMINAL_STATUSES = [
+        Order.Status.COMPLETED,
+        Order.Status.CANCELLED,
+    ]
+    # Default page size for history / explicit-status paginated responses.
+    DEFAULT_LIMIT = 50
+    MAX_LIMIT = 200
 
     def get(self, request, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
         status_filter = request.query_params.get("status", "").strip().lower()
+        mode = request.query_params.get("mode", "active").strip().lower()
         valid_statuses = {s.value for s in Order.Status}
 
-        from django.db.models import Sum as _LSum
+        # ── Parse limit / offset for paginated paths ──────────────────────────
+        try:
+            _limit = int(request.query_params.get("limit") or self.DEFAULT_LIMIT)
+            _limit = max(1, min(_limit, self.MAX_LIMIT))
+        except (ValueError, TypeError):
+            _limit = self.DEFAULT_LIMIT
+        try:
+            _offset = int(request.query_params.get("offset") or 0)
+            _offset = max(0, _offset)
+        except (ValueError, TypeError):
+            _offset = 0
+
+        # ── Build base queryset (no annotate, no COUNT) ───────────────────────
+        qs = (
+            Order.objects
+            .select_related("customer")
+            .prefetch_related("items")
+            .order_by("-created_at")
+        )
+
+        # ── Route to correct status filter / pagination mode ──────────────────
+        # NOTE: date-fence (?from= / ?to=) is intentionally parsed and applied
+        # INSIDE the non-active branches only.  The active hot-path must never
+        # be date-fenced: a scheduled order placed days ago but still in an
+        # active status (pending/scheduled/…) would otherwise be silently
+        # dropped from every 15-second poll.
+        if status_filter and status_filter in valid_statuses:
+            # Explicit single-status filter — paginated, date-fenced.
+            from_date = request.query_params.get("from", "").strip()
+            to_date = request.query_params.get("to", "").strip()
+            if from_date:
+                try:
+                    from datetime import date as _date
+                    _from_dt = _date.fromisoformat(from_date)
+                    qs = qs.filter(created_at__date__gte=_from_dt)
+                except ValueError:
+                    pass
+            if to_date:
+                try:
+                    from datetime import date as _date
+                    _to_dt = _date.fromisoformat(to_date)
+                    qs = qs.filter(created_at__date__lte=_to_dt)
+                except ValueError:
+                    pass
+            qs = qs.filter(status=status_filter)
+            all_orders = list(qs[_offset: _offset + _limit + 1])
+            has_more = len(all_orders) > _limit
+            all_orders = all_orders[:_limit]
+            return_limit, return_offset = _limit, _offset
+        elif mode == "history":
+            # Terminal orders — paginated, date-fenced.
+            from_date = request.query_params.get("from", "").strip()
+            to_date = request.query_params.get("to", "").strip()
+            if from_date:
+                try:
+                    from datetime import date as _date
+                    _from_dt = _date.fromisoformat(from_date)
+                    qs = qs.filter(created_at__date__gte=_from_dt)
+                except ValueError:
+                    pass
+            if to_date:
+                try:
+                    from datetime import date as _date
+                    _to_dt = _date.fromisoformat(to_date)
+                    qs = qs.filter(created_at__date__lte=_to_dt)
+                except ValueError:
+                    pass
+            qs = qs.filter(status__in=self.TERMINAL_STATUSES)
+            all_orders = list(qs[_offset: _offset + _limit + 1])
+            has_more = len(all_orders) > _limit
+            all_orders = all_orders[:_limit]
+            return_limit, return_offset = _limit, _offset
+        else:
+            # Default hot path — active/non-terminal orders only, no COUNT.
+            # Date-fence params are IGNORED here by design: the active path
+            # must surface every non-terminal order regardless of age.
+            qs = qs.filter(status__in=self.ACTIVE_STATUSES)
+            all_orders = list(qs)
+            has_more = False
+            return_limit, return_offset = None, None
+
+        # ── Per-page ledger totals (no JOIN-heavy annotate, no full-table scan) ─
+        # Fetch OrderPayment rows only for the orders in this page.
+        from menu.models import OrderPayment as _OP
+        _order_ids_page = [o.id for o in all_orders]
+        _payments_by_order: dict = {}
+        if _order_ids_page:
+            for _pay in _OP.objects.filter(order_id__in=_order_ids_page).values("order_id", "amount"):
+                _payments_by_order.setdefault(_pay["order_id"], Decimal("0"))
+                _payments_by_order[_pay["order_id"]] += Decimal(str(_pay["amount"] or 0))
 
         def _safe_ledger(value):
-            """Coerce the payments-Sum annotation to a quantized Decimal.
-
-            Returns 0.00 for None (no payment rows) and for anything that is not
-            Decimal-convertible (mocked Order objects in unit tests).
-            """
+            """Coerce to quantized Decimal; returns 0.00 for None/non-numeric."""
             try:
                 return Decimal(str(value)).quantize(Decimal("0.01")) if value is not None else Decimal("0.00")
             except Exception:
                 return Decimal("0.00")
-
-        qs = (
-            Order.objects.select_related("customer")
-            .prefetch_related("items")
-            # Split-bill ledger total (R4) — annotated so the owner list can show
-            # partial-payment progress without an N+1 over OrderPayment rows.
-            .annotate(_ledger_paid=_LSum("payments__amount"))
-            .order_by("-created_at")
-        )
-        if status_filter and status_filter in valid_statuses:
-            qs = qs.filter(status=status_filter)
-
-        total = qs.count()
-        all_orders = list(qs[:200])
 
         # ── Batch-load customer trust scores ─────────────────────────────────
         from accounts.models import CustomerRating as _CR
@@ -5269,14 +5442,14 @@ class OwnerOrderListView(APIView):
                 # Wallet payment
                 "wallet_amount_paid": str(order.wallet_amount_paid) if order.wallet_amount_paid else "0",
                 # Split-bill ledger (R4): partial-payment progress for the owner list.
-                # _safe_ledger guards non-Decimal values (mock objects in unit tests,
-                # NULL from the Sum annotation when an order has no payment rows).
-                "amount_paid": str(_safe_ledger(getattr(order, "_ledger_paid", None))),
+                # OPS-4 A: fetched per-page via _payments_by_order, NOT via an annotate
+                # that forces a JOIN-COUNT over the entire table on every poll.
+                "amount_paid": str(_safe_ledger(_payments_by_order.get(order.id))),
                 "outstanding": str(
                     max(
                         Decimal("0"),
                         _safe_ledger(getattr(order, "total", None))
-                        - _safe_ledger(getattr(order, "_ledger_paid", None)),
+                        - _safe_ledger(_payments_by_order.get(order.id)),
                     ).quantize(Decimal("0.01"))
                 ),
                 # Order source, commission & promotion
@@ -5288,7 +5461,12 @@ class OwnerOrderListView(APIView):
                 "delivery_job": delivery_job_map.get(order.order_number),
             })
 
-        return Response({"results": orders, "count": len(orders), "total": total, "has_more": total > len(orders)})
+        return Response({
+            "results": orders,
+            "has_more": has_more,
+            "limit": return_limit,
+            "offset": return_offset,
+        })
 
 
 class OwnerOrderDetailView(APIView):
@@ -8266,11 +8444,15 @@ class OwnerCustomerListView(APIView):
     _AT_RISK_DAYS = 30   # days since last order before considered at-risk
     _NEW_THRESHOLD = 1   # ≤ this many orders → "new"
 
+    # Default page size for the paginated JSON response (CSV is always full).
+    _DEFAULT_LIMIT = 100
+    _MAX_LIMIT = 500
+
     def get(self, request, *args, **kwargs):
         if not _is_tenant_owner(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        from django.db.models import Count, Sum, Max, Avg, FloatField
+        from django.db.models import Count, Sum, Max, Avg, FloatField, Q
         from django.db.models.functions import Coalesce
         from django.utils import timezone as _tz
         import datetime, csv
@@ -8279,10 +8461,35 @@ class OwnerCustomerListView(APIView):
         now = _tz.now()
         at_risk_cutoff = now - datetime.timedelta(days=self._AT_RISK_DAYS)
 
+        # ── OPS-4 B: server-side search filter (name / phone / email) ───────────
+        # Applied at the DB layer so only matching rows are aggregated, avoiding
+        # the previous pattern of fetching all 3k customers and filtering in Python.
+        #
+        # Email is NOT stored on Order — it belongs to the platform Customer
+        # account (public schema, FK from Order.customer).  For linked customers
+        # we can reach it via the FK join (customer__email__icontains); for
+        # anonymous orders (no FK) there is no email to search.
+        search = (request.query_params.get("search") or "").strip().lower()
+        _linked_base_q = Q(customer_id__isnull=False, status__in=self._COUNTED)
+        _anon_base_q = Q(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
+        if search:
+            # Linked: name OR phone OR email (via FK join to platform Customer).
+            _linked_search_q = (
+                Q(customer_name__icontains=search)
+                | Q(customer_phone__icontains=search)
+                | Q(customer__email__icontains=search)
+            )
+            _linked_base_q &= _linked_search_q
+            # Anon: name OR phone only (no customer account → no email).
+            _anon_base_q &= Q(customer_name__icontains=search) | Q(customer_phone__icontains=search)
+
         # ── 1. Aggregate linked orders (customer_id is set) ──────────────────
-        linked_qs = (
+        # OPS-4 B: evaluate once into a list — prevents the double GROUP BY that
+        # occurred when the queryset was iterated once for linked_customer_ids
+        # then again for the build loop (two separate DB round-trips, same GROUP BY).
+        linked_rows = list(
             Order.objects
-            .filter(customer_id__isnull=False, status__in=self._COUNTED)
+            .filter(_linked_base_q)
             .values("customer_id")
             .annotate(
                 order_count=Count("id"),
@@ -8296,9 +8503,9 @@ class OwnerCustomerListView(APIView):
         )
 
         # ── 2. Aggregate anonymous orders (no customer_id, phone only) ───────
-        anon_qs = (
+        anon_rows = list(
             Order.objects
-            .filter(customer_id__isnull=True, customer_phone__gt="", status__in=self._COUNTED)
+            .filter(_anon_base_q)
             .values("customer_phone")
             .annotate(
                 order_count=Count("id"),
@@ -8311,7 +8518,7 @@ class OwnerCustomerListView(APIView):
         )
 
         # ── 3. Fetch CustomerRating for linked customers (public schema) ──────
-        linked_customer_ids = [r["customer_id"] for r in linked_qs]
+        linked_customer_ids = [r["customer_id"] for r in linked_rows]
         rating_map = {}  # customer_id → avg_score
         if linked_customer_ids:
             try:
@@ -8376,10 +8583,12 @@ class OwnerCustomerListView(APIView):
             except Exception:
                 pass
 
-        # ── 5. Build unified list ─────────────────────────────────────────────
+        # ── 5. Build unified list — single pass over already-evaluated lists ────
+        # OPS-4 B: linked_rows and anon_rows are already Python lists (evaluated
+        # once above). Iterating them here does NOT re-trigger the GROUP BY query.
         customers = []
 
-        for row in linked_qs:
+        for row in linked_rows:
             cid = row["customer_id"]
             rv = review_map.get(cid, {})
             customers.append({
@@ -8402,7 +8611,7 @@ class OwnerCustomerListView(APIView):
                 "owner_notes": notes_map.get(cid, ""),
             })
 
-        for row in anon_qs:
+        for row in anon_rows:
             phone = (row["customer_phone"] or "").strip()
             customers.append({
                 "id": f"anon-{phone}",
@@ -8440,19 +8649,10 @@ class OwnerCustomerListView(APIView):
             else:
                 c["segment"] = "returning"
 
-        # ── 7. Filter — segment & search ─────────────────────────────────────
+        # ── 7. Filter — segment (name/phone/email search applied at DB layer) ──
         segment = (request.query_params.get("segment") or "all").strip().lower()
         if segment in ("new", "returning", "at_risk"):
             customers = [c for c in customers if c["segment"] == segment]
-
-        search = (request.query_params.get("search") or "").strip().lower()
-        if search:
-            customers = [
-                c for c in customers
-                if search in c["name"].lower()
-                or search in c["phone"].lower()
-                or search in c["email"].lower()
-            ]
 
         # ── 8. Sort ───────────────────────────────────────────────────────────
         sort_field_map = {
@@ -8499,14 +8699,31 @@ class OwnerCustomerListView(APIView):
             response["Content-Disposition"] = 'attachment; filename="customers.csv"'
             return response
 
+        # ── 10b. Pagination (JSON path only; CSV always returns full list) ──────
+        try:
+            _c_limit = int(request.query_params.get("limit") or self._DEFAULT_LIMIT)
+            _c_limit = max(1, min(_c_limit, self._MAX_LIMIT))
+        except (ValueError, TypeError):
+            _c_limit = self._DEFAULT_LIMIT
+        try:
+            _c_offset = int(request.query_params.get("offset") or 0)
+            _c_offset = max(0, _c_offset)
+        except (ValueError, TypeError):
+            _c_offset = 0
+        _page = customers[_c_offset: _c_offset + _c_limit]
+        _has_more = total_count > _c_offset + _c_limit
+
         return Response({
+            "results": _page,
+            "has_more": _has_more,
+            "limit": _c_limit,
+            "offset": _c_offset,
             "summary": {
                 "total": total_count,
                 "new": new_count,
                 "returning": returning_count,
                 "at_risk": at_risk_count,
             },
-            "customers": customers,
         })
 
 

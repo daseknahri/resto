@@ -22,8 +22,34 @@ class AnalyticsEventThrottle(_IPThrottle):
     scope = "analytics_events"
 
 
-class PlaceOrderThrottle(_IPThrottle):
+class PlaceOrderThrottle(SimpleRateThrottle):
+    """OPS-4 G: per-user for authenticated staff/owner, IP for anonymous customers.
+
+    Staff place orders via the waiter app from devices that share a NAT IP.
+    Keying on IP means all devices in a restaurant share one bucket, so a
+    burst of waiter-created orders can 429 the legitimate customer checkout
+    on the same network.  Authenticated TENANT_STAFF/OWNER requests key on
+    user.pk; anonymous customer checkouts fall back to the standard IP key.
+    """
+
     scope = "place_order"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            from accounts.models import User as _U
+            if getattr(user, "role", None) in (_U.Roles.TENANT_OWNER, _U.Roles.TENANT_STAFF):
+                pk = getattr(user, "pk", None) or getattr(user, "id", None)
+                if pk is not None:
+                    return self.cache_format % {
+                        "scope": self.scope,
+                        "ident": f"user:{pk}",
+                    }
+        # Anonymous customers → IP-based (standard behaviour)
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }
 
 
 class StaffOrderListThrottle(SimpleRateThrottle):

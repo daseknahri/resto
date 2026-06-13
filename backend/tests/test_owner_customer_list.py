@@ -103,25 +103,26 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         return self.view(req)
 
     def _patched_get(self, linked=None, anon=None, user=None, tenant=None, params=None):
-        """Helper that patches Order ORM and returns response."""
+        """Helper that patches Order ORM and returns response.
+
+        OPS-4 B: the new code uses Order.objects.filter(Q(...)) with positional Q
+        objects (not keyword args).  We route by call order: first call → linked
+        queryset, second call → anon queryset.  Both querysets are already Python
+        lists after list() is called in the view — iteration does not re-trigger
+        the GROUP BY.
+        """
         linked = linked if linked is not None else []
         anon = anon if anon is not None else []
 
         with patch("menu.views.Order") as mock_order:
             linked_qs = _make_qs(linked)
             anon_qs = _make_qs(anon)
-            # linked orders chain: filter(customer_id__isnull=False...).values(...).annotate(...)
-            # anon orders chain:  filter(customer_id__isnull=True...).values(...).annotate(...)
+            # Route by call order: call 1 → linked, call 2 → anon.
             call_count = [0]
 
             def mock_filter(*args, **kwargs):
                 call_count[0] += 1
-                if "customer_id__isnull" in kwargs:
-                    if kwargs["customer_id__isnull"] is False:
-                        return linked_qs
-                    else:
-                        return anon_qs
-                return MagicMock()
+                return linked_qs if call_count[0] == 1 else anon_qs
 
             mock_order.objects.filter.side_effect = mock_filter
 
@@ -138,15 +139,16 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         resp = self._patched_get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("summary", resp.data)
-        self.assertIn("customers", resp.data)
-        self.assertEqual(resp.data["customers"], [])
+        # OPS-4 B: key changed from "customers" to "results" (pagination envelope)
+        self.assertIn("results", resp.data)
+        self.assertEqual(resp.data["results"], [])
 
     def test_linked_customer_included(self):
         linked = [_linked_row(customer_id=1, order_count=3, days_ago=5)]
         resp = self._patched_get(linked=linked)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["customers"]), 1)
-        c = resp.data["customers"][0]
+        self.assertEqual(len(resp.data["results"]), 1)
+        c = resp.data["results"][0]
         self.assertEqual(c["type"], "account")
         self.assertEqual(c["customer_id"], 1)
 
@@ -154,8 +156,8 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         anon = [_anon_row(phone="+33600000009", order_count=1, days_ago=5)]
         resp = self._patched_get(anon=anon)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["customers"]), 1)
-        c = resp.data["customers"][0]
+        self.assertEqual(len(resp.data["results"]), 1)
+        c = resp.data["results"][0]
         self.assertEqual(c["type"], "anonymous")
         self.assertIsNone(c["customer_id"])
 
@@ -180,8 +182,8 @@ class OwnerCustomerListViewTests(SimpleTestCase):
         ]
         resp = self._patched_get(linked=linked, params={"segment": "new"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data["customers"]), 1)
-        self.assertEqual(resp.data["customers"][0]["segment"], "new")
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["segment"], "new")
 
     def test_segment_filter_at_risk(self):
         linked = [
@@ -189,8 +191,8 @@ class OwnerCustomerListViewTests(SimpleTestCase):
             _linked_row(customer_id=2, order_count=3, days_ago=45),  # at_risk
         ]
         resp = self._patched_get(linked=linked, params={"segment": "at_risk"})
-        self.assertEqual(len(resp.data["customers"]), 1)
-        self.assertEqual(resp.data["customers"][0]["segment"], "at_risk")
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["segment"], "at_risk")
 
     def test_segment_all_returns_all_customers(self):
         linked = [
@@ -198,19 +200,126 @@ class OwnerCustomerListViewTests(SimpleTestCase):
             _linked_row(customer_id=2, order_count=5, days_ago=3),
         ]
         resp = self._patched_get(linked=linked, params={"segment": "all"})
-        self.assertEqual(len(resp.data["customers"]), 2)
+        self.assertEqual(len(resp.data["results"]), 2)
 
     def test_search_by_name(self):
+        # OPS-4 B: search is applied at the DB level (Q object in filter).
+        # The mock returns the test row regardless of the Q filter; we verify
+        # that the DB-side search doesn't crash and the result key is correct.
         linked = [
             _linked_row(customer_id=1, order_count=3, days_ago=5),   # last_name = "Hassan"
         ]
         resp = self._patched_get(linked=linked, params={"search": "hassan"})
-        self.assertEqual(len(resp.data["customers"]), 1)
+        # Mock returns the row; DB-level filter is on the queryset not in Python.
+        self.assertEqual(len(resp.data["results"]), 1)
 
     def test_search_no_match_returns_empty(self):
+        # OPS-4 B: when the DB-level search finds no rows, the view returns empty.
+        # The mock returning no rows models a real "no match" DB response.
+        resp = self._patched_get(linked=[], anon=[], params={"search": "zzznomatch"})
+        self.assertEqual(len(resp.data["results"]), 0)
+
+    def test_search_linked_q_includes_email(self):
+        """OPS-4 B fix: the linked Q must include customer__email__icontains so
+        searching by email address returns the matching linked customer.
+
+        The mock captures the Q passed to Order.objects.filter and verifies it
+        references the customer__email field (via its children).
+        """
+        from django.db.models import Q as DjangoQ
+
         linked = [_linked_row(customer_id=1, order_count=3, days_ago=5)]
-        resp = self._patched_get(linked=linked, params={"search": "zzznomatch"})
-        self.assertEqual(len(resp.data["customers"]), 0)
+
+        captured_q_args: list = []
+
+        with patch("menu.views.Order") as mock_order:
+            linked_qs = _make_qs(linked)
+            anon_qs = _make_qs([])
+            call_count = [0]
+
+            def mock_filter(*args, **kwargs):
+                # Capture positional Q arguments for the first (linked) call.
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    captured_q_args.extend(args)
+                    return linked_qs
+                return anon_qs
+
+            mock_order.objects.filter.side_effect = mock_filter
+
+            with patch("menu.views.Rating") as mock_rating:
+                mock_rating.objects.filter.return_value.values.return_value.annotate.return_value = []
+                with patch("django.utils.timezone.now", return_value=_now()):
+                    self._get(params={"search": "test@example.com"})
+
+        # Flatten all children from the captured Q objects and check for email.
+        def _collect_lookup_strings(q_node):
+            """Recursively collect all lookup strings from Q children."""
+            lookups = []
+            for child in q_node.children:
+                if isinstance(child, DjangoQ):
+                    lookups.extend(_collect_lookup_strings(child))
+                elif isinstance(child, tuple):
+                    lookups.append(child[0])  # (lookup_string, value)
+            return lookups
+
+        all_lookups = []
+        for q in captured_q_args:
+            if isinstance(q, DjangoQ):
+                all_lookups.extend(_collect_lookup_strings(q))
+
+        self.assertTrue(
+            any("customer__email" in lk for lk in all_lookups),
+            f"Linked Q must include customer__email__icontains for email search; "
+            f"got lookups: {all_lookups}",
+        )
+
+    def test_search_anon_q_excludes_email(self):
+        """OPS-4 B: the anon Q must NOT include customer__email (anonymous orders
+        have no FK to a Customer account, so the JOIN would return nothing or error).
+        """
+        from django.db.models import Q as DjangoQ
+
+        captured_anon_q_args: list = []
+
+        with patch("menu.views.Order") as mock_order:
+            linked_qs = _make_qs([])
+            anon_qs = _make_qs([])
+            call_count = [0]
+
+            def mock_filter(*args, **kwargs):
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return linked_qs
+                # Capture anon call.
+                captured_anon_q_args.extend(args)
+                return anon_qs
+
+            mock_order.objects.filter.side_effect = mock_filter
+
+            with patch("menu.views.Rating") as mock_rating:
+                mock_rating.objects.filter.return_value.values.return_value.annotate.return_value = []
+                with patch("django.utils.timezone.now", return_value=_now()):
+                    self._get(params={"search": "nobody@example.com"})
+
+        def _collect_lookup_strings(q_node):
+            lookups = []
+            for child in q_node.children:
+                if isinstance(child, DjangoQ):
+                    lookups.extend(_collect_lookup_strings(child))
+                elif isinstance(child, tuple):
+                    lookups.append(child[0])
+            return lookups
+
+        all_anon_lookups = []
+        for q in captured_anon_q_args:
+            if isinstance(q, DjangoQ):
+                all_anon_lookups.extend(_collect_lookup_strings(q))
+
+        self.assertFalse(
+            any("customer__email" in lk for lk in all_anon_lookups),
+            f"Anon Q must NOT include customer__email; got lookups: {all_anon_lookups}",
+        )
 
     def test_sort_by_total_spend(self):
         linked = [
@@ -218,7 +327,7 @@ class OwnerCustomerListViewTests(SimpleTestCase):
             _linked_row(customer_id=2, order_count=3, total_spend=200.0, days_ago=3),
         ]
         resp = self._patched_get(linked=linked, params={"sort": "total_spend", "order": "desc"})
-        spends = [c["total_spend"] for c in resp.data["customers"]]
+        spends = [c["total_spend"] for c in resp.data["results"]]
         self.assertEqual(spends, sorted(spends, reverse=True))
 
     def test_sort_ascending(self):
@@ -227,7 +336,7 @@ class OwnerCustomerListViewTests(SimpleTestCase):
             _linked_row(customer_id=2, order_count=5, total_spend=500.0, days_ago=3),
         ]
         resp = self._patched_get(linked=linked, params={"sort": "total_spend", "order": "asc"})
-        spends = [c["total_spend"] for c in resp.data["customers"]]
+        spends = [c["total_spend"] for c in resp.data["results"]]
         self.assertEqual(spends, sorted(spends))
 
     def test_csv_format_returns_csv_response(self):
@@ -245,10 +354,12 @@ class OwnerCustomerListViewTests(SimpleTestCase):
             linked_qs = _make_qs(linked)
             anon_qs = _make_qs([])
 
+            # OPS-4 B: new code uses positional Q objects — route by call order.
+            _call_count = [0]
+
             def mock_filter(*args, **kwargs):
-                if "customer_id__isnull" in kwargs:
-                    return linked_qs if not kwargs["customer_id__isnull"] else anon_qs
-                return MagicMock()
+                _call_count[0] += 1
+                return linked_qs if _call_count[0] == 1 else anon_qs
 
             mock_order.objects.filter.side_effect = mock_filter
 

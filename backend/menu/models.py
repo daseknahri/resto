@@ -545,6 +545,12 @@ class Order(models.Model):
             # Staff "?since=" delta-poll filters status + orders by updated_at (~300 req/min);
             # without this it scans all active rows every tick.
             models.Index(fields=("status", "updated_at")),
+            # OPS-4 C: customer_phone used in CRM GROUP BY, win-back, return-rate, search
+            # (4 scan paths). A plain db_index on the field alone conflicts with the field
+            # definition, so it is expressed as a Meta index instead.
+            models.Index(fields=("customer_phone",), name="order_customer_phone_idx"),
+            # OPS-4 C: Z-report / digest paid_at range queries filter on (status, paid_at).
+            models.Index(fields=("status", "paid_at"), name="order_status_paid_at_idx"),
         ]
         constraints = [
             models.UniqueConstraint(

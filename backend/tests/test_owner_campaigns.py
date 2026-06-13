@@ -368,8 +368,12 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
         mock_payment.Method.CASH = "cash"
 
         ledger_qs = MagicMock()
-        ledger_qs.values_list.return_value.distinct.return_value = list(ledger_order_ids)
-        ledger_qs.filter.return_value.aggregate.return_value = {
+        # OPS-4 D: new subquery path — exists() signals non-empty set; values("order_id")
+        # returns a queryset mock used as a DB subquery (not a Python set).
+        has_ledger = bool(ledger_order_ids)
+        ledger_qs.exists.return_value = has_ledger
+        ledger_qs.values.return_value = MagicMock()  # subquery passed to exclude(id__in=...)
+        ledger_qs.aggregate.return_value = {
             "ledger_wallet": Decimal(str(ledger_wallet)),
             "ledger_cash": Decimal(str(ledger_cash)),
         }

@@ -66,6 +66,9 @@ or advance/scheduled orders never reach the kitchen.
 | `python manage.py send_daily_summary` | daily at 23:30 UTC | End-of-day owner digest: order count, total revenue, cash/wallet split, top 3 dishes. Idempotent (skips zero-order tenants and re-runs on same day). |
 | `python manage.py prune_analytics_events` | daily | Delete analytics events older than 90 days — bounds tenant table growth. |
 | `python manage.py prune_admin_audit_logs` | daily | Delete admin audit logs past `ADMIN_AUDIT_RETENTION_DAYS` (default 180) — bounds growth. |
+| `python manage.py prune_notification_logs` | daily | Delete NotificationLog rows older than 180 days — bounds shared-schema table growth (OPS-4). |
+| `python manage.py prune_winback_nudges` | daily | Delete WinbackNudge rows older than 120 days — beyond the 90-day dedupe window + margin (OPS-4). |
+| `python manage.py prune_staff_messages` | daily | Delete StaffMessage rows older than 90 days per tenant — bounds per-tenant table growth (OPS-4). |
 | `python manage.py send_winback_nudges` | hourly | Win-back push to lapsed customers at ~11:00 local time for opted-in tenants (at most 1 nudge/customer/90 days). |
 
 > `sweep_unverified_wallets` is a **manual one-off**, not a recurring cron — new unverified

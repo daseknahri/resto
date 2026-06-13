@@ -2305,7 +2305,13 @@ const arabicMessages = {
     "correctMethodConfirm": "تطبيق التصحيح",
     "correctMethodSuccess": "تم تصحيح طريقة الدفع.",
     "correctMethodFailed": "تعذّر تصحيح طريقة الدفع.",
-    "you": "أنت"
+    "you": "أنت",
+    "tabActive": "الطلبات النشطة",
+    "tabHistory": "الطلبات السابقة",
+    "historyEmpty": "لا توجد طلبات في هذه الفترة.",
+    "loadMore": "تحميل المزيد",
+    "loadingMore": "جارٍ التحميل…",
+    "noMoreOrders": "لا توجد طلبات أخرى."
   },
   "orderStatus": {
     "kicker": "تتبع الطلب",
@@ -3392,6 +3398,10 @@ Object.assign(arabicMessages, {
     tierNew: "\u062c\u062f\u064a\u062f",
     tierFilterLabel: "\u0627\u0644\u0645\u0633\u062a\u0648\u0649",
     loyaltyBadge: "\u0646\u0642\u0637\u0629",
+    loadMore: "\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0632\u064a\u062f \u0645\u0646 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
+    loadingMore: "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026",
+    noMore: "\u062a\u0645 \u062a\u062d\u0645\u064a\u0644 \u062c\u0645\u064a\u0639 \u0627\u0644\u0639\u0645\u0644\u0627\u0621.",
+    searching: "\u062c\u0627\u0631\u064d \u0627\u0644\u0628\u062d\u062b\u2026",
   },
   ownerStaff: {
     kicker: "\u0627\u0644\u0645\u0648\u0638\u0641\u0648\u0646",

@@ -24,20 +24,29 @@ from django.test import SimpleTestCase, override_settings
 def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, legacy_wallet, legacy_total):
     """Return (order_qs_mock, MockPayment_ctx) for use in patch.
 
-    Updated for the subquery path in revenue.py:
-      - order_qs.exists() returns True (non-empty queryset)
-      - order_qs.values("id") returns a mock queryset (passed as subquery)
-      - ledger lookup: OrderPayment.objects.filter(order_id__in=orders_values_qs)
-      - legacy lookup: order_qs.exclude(id__in=ledger_order_ids).aggregate(...)
-        or order_qs.aggregate(...) when there are no ledger orders
+    Models the OPS-4 D subquery path in revenue.py:
+      - order_qs.exists()         → True (non-empty queryset, short-circuit guard)
+      - order_qs.values("id")     → orders_values_qs (sub-SELECT, not iterated)
+      - OrderPayment.objects.filter(order_id__in=orders_values_qs) → ledger_qs
+      - ledger_qs.exists()        → True/False (whether any ledger rows exist)
+      - ledger_qs.values("order_id") → ledger_order_ids_sq (subquery, not iterated)
+      - ledger_qs.aggregate(...)  → {ledger_wallet, ledger_cash}  (direct call)
+      - order_qs.exclude(id__in=ledger_order_ids_sq).aggregate(...)  → legacy agg
+      - order_qs.aggregate(...)   → legacy agg (when no ledger rows exist)
     """
     MockPayment = MagicMock()
     MockPayment.Method.WALLET = "wallet"
     MockPayment.Method.CASH = "cash"
 
+    has_ledger = bool(ledger_order_ids)
+
     ledger_qs = MagicMock()
-    ledger_qs.values_list.return_value.distinct.return_value = list(ledger_order_ids)
-    ledger_qs.filter.return_value.aggregate.return_value = {
+    # OPS-4 D: exists() controls which branch (ledger vs legacy-only)
+    ledger_qs.exists.return_value = has_ledger
+    # values("order_id") → subquery object (passed to exclude, never iterated)
+    ledger_qs.values.return_value = MagicMock()
+    # Direct aggregate call on ledger_qs (new code path — no extra .filter() step)
+    ledger_qs.aggregate.return_value = {
         "ledger_wallet": Decimal(str(ledger_wallet)),
         "ledger_cash": Decimal(str(ledger_cash)),
     }
@@ -51,8 +60,9 @@ def _build_split_mocks(order_ids, ledger_order_ids, ledger_wallet, ledger_cash, 
     order_qs = MagicMock()
     # exists() → True (the function short-circuits on False)
     order_qs.exists.return_value = True
-    # values("id") → a mock queryset used as subquery; return value doesn't matter
-    # exclude(id__in=...).aggregate(...) → legacy aggregation
+    # values("id") → a mock queryset used as the sub-SELECT passed to OrderPayment.filter
+    order_qs.values.return_value = MagicMock()
+    # exclude(id__in=subquery).aggregate(...) → legacy aggregation
     order_qs.exclude.return_value.aggregate.return_value = legacy_agg
     # aggregate(...) called directly when there are no ledger orders
     order_qs.aggregate.return_value = legacy_agg

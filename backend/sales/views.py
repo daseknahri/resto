@@ -2752,25 +2752,27 @@ class OwnerDashboardView(APIView):
 
         # Customer return rate — among phone-identified customers in this window,
         # what % had placed an order at least once BEFORE the window opened?
-        phones_in_range = set(
+        # OPS-4 D: use a subquery instead of materialising a Python set of 2000+
+        # phones.  phones_sq is a queryset (sub-SELECT); Order.objects.filter(
+        # customer_phone__in=phones_sq) keeps all PKs server-side.
+        phones_sq = (
             revenue_qs
             .exclude(customer_phone="")
-            .values_list("customer_phone", flat=True)
+            .values("customer_phone")
             .distinct()
         )
-        if phones_in_range:
+        total_phone_customers = phones_sq.count()
+        if total_phone_customers:
             returning_count = (
                 Order.objects
-                .filter(customer_phone__in=phones_in_range, created_at__lt=since)
+                .filter(customer_phone__in=phones_sq, created_at__lt=since)
                 .values("customer_phone")
                 .distinct()
                 .count()
             )
-            total_phone_customers = len(phones_in_range)
             return_rate_pct = round(returning_count / total_phone_customers * 100, 1)
         else:
             returning_count = 0
-            total_phone_customers = 0
             return_rate_pct = None  # null = insufficient data to compute
 
         return Response(

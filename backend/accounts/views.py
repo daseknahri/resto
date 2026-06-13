@@ -3108,6 +3108,17 @@ class MarketplacePlaceOrderView(APIView):
                 class _LoyaltyShort(Exception):
                     """Loyalty balance no longer covers the redemption — roll the order back."""
 
+                class _PromoCapped(Exception):
+                    """OPS-4 F: Bounded promo counter returned 0 rows — cap reached concurrently.
+                    Marketplace always auto-applies promos (no code input), so strip the discount
+                    from this order: total is corrected and the order places without a discount.
+                    This exception is never raised in the marketplace path — the inline handler
+                    strips the discount and continues rather than aborting.  The class is retained
+                    for symmetry with the direct checkout and for the PromoCapped re-raise path
+                    (code-based promos on marketplace are not currently supported, but if added
+                    later, raising _PromoCapped would propagate to the outer handler).
+                    """
+
                 if fulfillment_type == "delivery" and _linked_customer:
                     customer_name = _linked_customer.name or customer_name
                     customer_phone = _linked_customer.phone or customer_phone
@@ -3152,6 +3163,36 @@ class MarketplacePlaceOrderView(APIView):
                                         _cupdate_fields["is_available"] = False
                                         _cupdate_fields["stock_auto_zeroed"] = True
                                     _Dish.objects.filter(pk=_cpk).update(**_cupdate_fields)
+
+                        # OPS-4 F: Atomic bounded promo counter — must run BEFORE Order.create().
+                        # Marketplace only auto-applies promos (no customer code input), so a
+                        # concurrent cap hit strips the discount and the order places at full price.
+                        # max_uses=None → unlimited → no cap to enforce, safe to increment.
+                        from django.db.models import F as _F
+                        if _best_promo is not None:
+                            if _best_promo.max_uses is not None:
+                                _mkt_promo_rows = _Promo.objects.filter(
+                                    pk=_best_promo.pk,
+                                    use_count__lt=_best_promo.max_uses,
+                                ).update(use_count=_F("use_count") + 1)
+                                if not _mkt_promo_rows:
+                                    # Cap reached concurrently — strip discount, place at full price
+                                    total = max(Decimal("0"), food_subtotal + _delivery_fee)
+                                    _promo_discount = Decimal("0")
+                                    _best_promo = None
+                                    _applied_promo_name = ""
+                                    # Re-check wallet balance for pay-now orders
+                                    if use_wallet and _linked_customer and _requires_prepay:
+                                        _wallet_avail_now = Decimal(str(_linked_customer.wallet_balance or "0"))
+                                        if _wallet_avail_now < total:
+                                            raise _PrepayUnpaid()
+                                    # Recalculate wallet deduction cap
+                                    if use_wallet and _linked_customer:
+                                        _available_now = Decimal(str(_linked_customer.wallet_balance or "0"))
+                                        _wallet_deduction = min(_available_now, total)
+                            else:
+                                # max_uses is None → unlimited → no cap to enforce
+                                _Promo.objects.filter(pk=_best_promo.pk).update(use_count=_F("use_count") + 1)
 
                         for _attempt in range(10):
                             _candidate = f"ORD-{_sec.token_hex(3).upper()}"
@@ -3201,10 +3242,7 @@ class MarketplacePlaceOrderView(APIView):
                             if not _ok:
                                 raise _LoyaltyShort()
 
-                        # Increment restaurant promo use_count atomically
-                        if _best_promo is not None:
-                            from django.db.models import F as _F
-                            _Promo.objects.filter(pk=_best_promo.pk).update(use_count=_F("use_count") + 1)
+                        # (Restaurant promo use_count was incremented before Order.create() — see OPS-4 F.)
 
                         # Increment platform flash sale redemption_count atomically
                         if _flash_sale_used is not None:

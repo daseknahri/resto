@@ -45,11 +45,23 @@ def split_revenue_for_orders(order_qs) -> dict:
     if not order_qs.exists():
         return {"wallet": Decimal("0.00"), "cash": Decimal("0.00")}
 
+    # OPS-4 D: keep order PKs server-side — use a subquery for all filter/exclude
+    # calls instead of materialising a Python set.  The subquery is constructed
+    # from a .values('order_id') queryset which the ORM translates to a sub-SELECT.
     ledger_qs = OrderPayment.objects.filter(order_id__in=orders_values_qs)
-    ledger_order_ids = set(ledger_qs.values_list("order_id", flat=True).distinct())
 
-    if ledger_order_ids:
-        ledger_agg = ledger_qs.filter(order_id__in=ledger_order_ids).aggregate(
+    # Subquery of order_ids that have at least one ledger row.  Used for:
+    #   • aggregating ledger payments (filter)
+    #   • excluding ledger orders from the legacy path (exclude)
+    # Both .filter() and .exclude() accept a queryset; no Python materialisation.
+    ledger_order_ids_sq = ledger_qs.values("order_id")
+
+    # Determine whether ANY ledger rows exist for this order set — a cheap EXISTS
+    # check that avoids materialising the full id list.
+    has_ledger = ledger_qs.exists()
+
+    if has_ledger:
+        ledger_agg = ledger_qs.aggregate(
             ledger_wallet=Sum("amount", filter=Q(method=OrderPayment.Method.WALLET)),
             ledger_cash=Sum("amount", filter=Q(method=OrderPayment.Method.CASH)),
         )
@@ -59,8 +71,8 @@ def split_revenue_for_orders(order_qs) -> dict:
         ledger_wallet = Decimal("0")
         ledger_cash = Decimal("0")
 
-    if ledger_order_ids:
-        legacy_agg = order_qs.exclude(id__in=ledger_order_ids).aggregate(
+    if has_ledger:
+        legacy_agg = order_qs.exclude(id__in=ledger_order_ids_sq).aggregate(
             legacy_wallet=Sum("wallet_amount_paid"),
             legacy_total=Sum("total"),
         )
