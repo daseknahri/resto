@@ -67,8 +67,58 @@ Done items get moved to the bottom section with the commit hash, not deleted.
       serves social bots only; googlebot isn't routed to it by design — decide whether
       it should be).
 
+## Scout notes (SaaS-expert audit — every OPS batch appends; triage at ship)
+These are an expert-lens scout's findings (not batch reviews). Each maps to a future
+OPS batch or a security pass. file:line in the scout output; verify before acting.
+- [ ] **Section assignment accepts any user_id (no tenant-membership check)** — PATCH
+      /api/owner/sections/<id>/ inserts arbitrary user_ids into SectionServer; a foreign
+      id taints _can_access_order routing. Fix = whitelist filter(id__in, tenant_id).
+      SECURITY. (menu/views.py ~6444). → OPS-5 / security pass. [scout OPS-1]
+- [ ] **CustomerOrderConsumer accepts any order_number (enumeration)** — ws/order/<n>/
+      joins the group with no ownership check; exposes live payment_status flips by
+      guessing order numbers. Low-sensitivity (status pings) but real. Mitigation:
+      require delivery_code / customer-session credential. (realtime/consumers.py:64).
+      SECURITY. → OPS-5 / security pass. [scout OPS-1]
+- [ ] **Plan limits unenforced on write** — Plan.max_dishes / max_staff_accounts checked
+      only by the periodic enforce_subscriptions sweep, not at DishViewSet.create /
+      StaffCreateView. A tenant can exceed plan caps until the sweep runs. Monetization
+      boundary. (tenancy/models.py:12). → OPS-5 (billing ops). [scout OPS-1]
+- [ ] **_can_access_order = 3 serial queries inside select_for_update** — held row lock
+      spans the section-resolution queries on every staff mutation; lock-queue at rush.
+      Cache section assignment per-request or single combined query. (menu/views.py:3160).
+      → OPS-4 (scale). [scout OPS-1]
+- [ ] **Section-access logic copy-pasted 3×** — StaffOrderListView inline, _can_access_order,
+      waiter_views._section_slugs_for all reimplement (my_slugs, claimed_slugs) differently;
+      a future section-semantics change will miss one. Extract one helper. (menu/views.py
+      :3160/:3268; waiter_views.py:85). → fold into whichever OPS batch next touches sections.
+      [scout OPS-1]
+- [ ] **WaiterCall throttle is per-IP** — shared restaurant NAT collapses the 10/min bucket
+      across all tables → real customers get 429. Key on (tenant + table_slug) instead.
+      (waiter_views.py:45; throttles.py:32). → OPS-3 (throttle scoping). [scout OPS-1]
+- [ ] **StaffMessage unbounded + no created_at index** — staff chat grows forever, Meta
+      ordering ('-created_at') has no index. Add prune cron + db_index. (menu/models.py:341).
+      → OPS-4 (retention). [scout OPS-1]
+- [ ] **StaffShiftSummaryView materializes orders in Python for avg prep** — 3 round-trips
+      (aggregate, per-row iterate, currency) where ExpressionWrapper+Avg is one query.
+      (menu/views.py:3419). → OPS-2 (shift summary is already in scope there). [scout OPS-1]
+- [ ] **Order.table_slug vs table_label dual keys** — waiter UI groups by label, routing
+      uses slug; renaming a TableLink splits historical orders into two groups. No migration
+      on rename, no rename warning. Partially mitigated by OPS-1 table dropdown. (models.py
+      :401; WaiterPage.vue:1238). → OPS-6 (onboarding/table mgmt). [scout OPS-1]
+
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-1 "kitchen never goes dark": StaffBulkReadyView (kitchen-cap gated, atomic
+      +select_for_update) + StaffTableListView; useWakeLock (KeepAlive-correct release/
+      re-acquire) on kitchen+waiter; reconnect-forever WS with live/polling chip + idle
+      state; targeted single-order refresh (full-poll fallback for new orders); 86 board
+      in kitchen topbar (refetches every open); bulk mark-ready; table dropdown w/ custom
+      escape hatch; manifest landscape (owner+waiter); kitchen KeepAlive w/ onActivated/
+      onDeactivated lifecycle (poll+clock+WS+wakelock paused while parked). Review found
+      8 majors+3 minors; fix agent died on network → I applied all in code (kitchen-cap
+      guard+test, wakelock deactivate-release, disconnect idle+attempts-reset, single
+      connect path, clock pause, 86 refetch, modal close, waiter manifest). Scout: 1
+      resolved (waiter manifest), 9 → Scout notes above. Backend 3244 green. — ops1 commit.
 - [x] Menu-builder save fired 500+ requests (user-reported): saveAndNext re-saved
       EVERY dish (PUT + options GET/sync + groups GET/sync each) on every click.
       Now dirty-tracked via per-dish JSON snapshots taken at load + after save —

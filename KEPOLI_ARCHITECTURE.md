@@ -140,6 +140,16 @@ batch per OPS item — Sonnet agents, gates, one focused adversarial reviewer, f
 then personal verification of every critical/major in code, full gates, BACKLOG update,
 commit, push. Catch-net: BACKLOG.md.
 
+**Scout (owner directive 2026-06-13): every OPS batch also runs a SaaS-expert scout
+agent** — a veteran-multi-tenant-SaaS-architect lens that does NOT review the batch;
+it walks the touched area + neighbors and takes working notes on gaps nobody asked
+about (tenancy isolation habits, authz consistency, API design debt, ops blind spots,
+data-model smells, staff-screen accessibility). Rules: file:line evidence required;
+must read OPS_AUDIT.md + §4d + BACKLOG.md first and never repeat them; ≤10 notes,
+staff-design-review quality. Notes are triaged into BACKLOG.md ("Scout notes"
+section) at ship time — accepted ones become future batch material, rejected ones
+are recorded with the reason so they aren't re-flagged.
+
 ### OPS-1 — The kitchen never goes dark (service-speed, every-shift wins)
 - Screen Wake Lock API on kitchen (+ waiter) with re-acquire on visibilitychange;
   poll must keep running when document hidden (OwnerKitchen.vue:582 skips it today).

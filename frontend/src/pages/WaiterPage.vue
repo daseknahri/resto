@@ -1115,11 +1115,14 @@ import WalletChargeSheet from "../components/WalletChargeSheet.vue";
 import api from "../lib/api";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
+import { useWakeLock } from "../composables/useWakeLock";
 
 const { t, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
 const installDismissed = ref(false);
 const waiter = useWaiterStore();
+// Screen Wake Lock — prevents the waiter tablet from sleeping during service
+useWakeLock();
 // 30-s ticker for elapsed-time badges on active cards (task 3)
 const { now: tickerNow } = useNowTicker();
 const toast = useToastStore();
@@ -1603,7 +1606,8 @@ onMounted(async () => {
   if (Array.isArray(initial)) prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
   document.addEventListener("visibilitychange", onVisible);
   pollTimer = setInterval(() => {
-    if (document.visibilityState === "hidden") return;
+    // Do NOT skip when hidden — browser throttles hidden timers which is
+    // acceptable; an explicit skip would mean ZERO updates and no beep.
     doPoll();
   }, 15000);
 });

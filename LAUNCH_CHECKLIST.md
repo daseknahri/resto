@@ -34,6 +34,13 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 | `DELIVERY_OSRM_URL` | Optional. Point at a self-hosted OSRM instance (e.g. `http://osrm:5000`) for **real** driving distances + map route lines + ETAs (cached, falls back to the road factor on any error). Unset = use the road factor. **Copy-paste setup: see `OSRM_SELF_HOST.md`.** |
 | `VITE_MAP_TILE_URL` / `VITE_MAP_TILE_ATTRIBUTION` | Optional **build-time** (frontend) vars for the map image tiles. Default = OpenStreetMap public tiles (dev only — not licensed for heavy production). Set a MapTiler/Mapbox/Stadia free-tier URL+key before real volume. Must be present when the frontend image is built. See `frontend/src/lib/mapTiles.js`. |
 
+> **Channel layer (real-time):** set `REDIS_URL` in prod — the backend automatically uses
+> `channels_redis` when it is set, so WebSocket broadcasts reach every gunicorn/daphne worker.
+> Without it, the channel layer is process-scoped (InMemoryChannelLayer) and a broadcast from
+> worker A never reaches clients connected to worker B, making real-time kitchen/waiter updates
+> unreliable in a multi-worker deployment.  Verify: `REDIS_URL=redis://... python manage.py shell
+> -c "from channels.layers import get_channel_layer; cl=get_channel_layer(); print(type(cl).__name__)"` should print `RedisChannelLayer`.
+
 > **Note on CSRF:** leave `DJANGO_CSRF_COOKIE_HTTPONLY` unset/`False`. The SPA reads the
 > `csrftoken` cookie in JS and echoes it in the `X-CSRFToken` header (Django double-submit) —
 > setting it `True` would 403 every POST/PATCH/DELETE. See the comment in `config/settings.py`.

@@ -4226,6 +4226,143 @@ class StaffFireCourseView(APIView):
         return Response(_staff_order_payload(order))
 
 
+class StaffBulkReadyView(APIView):
+    """POST /api/staff/orders/<order_id>/items/ready-all/
+
+    Mark every non-voided, not-yet-ready item on the order as ready
+    (is_ready=True, ready_at=now).  Already-ready and voided items are
+    silently skipped so the call is idempotent.
+
+    Auth + section gating: identical to all other staff mutation endpoints
+    (_can_edit_tenant_order + _can_access_order).
+
+    Error codes:
+      bad_status — order is terminal (completed / cancelled)
+
+    Success: exactly ONE _broadcast_order_change, then the full
+    _staff_order_payload (same shape as append / void / fire-course).
+
+    Empty order (no qualifying items) is a no-op → 200 with payload.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    _TERMINAL_STATUSES = {Order.Status.COMPLETED, Order.Status.CANCELLED}
+
+    def post(self, request, order_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        # Kitchen readiness is a restaurant-only capability (shops have no
+        # kitchen). Mirror the single-item StaffOrderItemReadyView gate so the
+        # bulk path can't bypass it for retail/grocery tenants.
+        from tenancy.capabilities import tenant_capability_enabled
+        if not tenant_capability_enabled(getattr(request, "tenant", None), "kitchen"):
+            return Response(
+                {"detail": "Kitchen features are not available for this business.",
+                 "code": "kitchen_unavailable"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Existence pre-check before acquiring the write lock (clean 404).
+        if not Order.objects.filter(pk=order_id).exists():
+            return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Atomic + row lock so two kitchen devices bulk-readying the same order
+        # don't both read a stale item set and double-broadcast (same discipline
+        # as StaffFireCourseView).
+        with transaction.atomic():
+            order = (
+                Order.objects
+                .select_for_update()
+                .prefetch_related("items", "payments")
+                .filter(pk=order_id)
+                .first()
+            )
+            if order is None:
+                return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if not _can_access_order(request, order):
+                return Response(
+                    {"detail": "Access denied — not your section.", "code": "section_denied"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            if order.status in self._TERMINAL_STATUSES:
+                return Response(
+                    {"detail": "Order is already completed or cancelled.", "code": "bad_status"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Mark every non-voided, not-yet-ready item ready in bulk.
+            now = timezone.now()
+            to_update = [
+                i for i in order.items.all()
+                if not i.is_voided and not i.is_ready
+            ]
+            for item in to_update:
+                item.is_ready = True
+                item.ready_at = now
+                item.save(update_fields=["is_ready", "ready_at"])
+
+        # Reload for fresh payload regardless of whether anything changed.
+        order = Order.objects.prefetch_related("items", "payments").get(pk=order_id)
+
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
+
+        return Response(_staff_order_payload(order))
+
+
+class StaffTableListView(APIView):
+    """GET /api/staff/tables/
+
+    Minimal read-only list of the tenant's active tables for use by the
+    waiter new-order form (table picker dropdown).  Returns every active
+    TableLink with its section name so the frontend can group them.
+
+    Auth: same _can_edit_tenant_order gate (owner or staff with
+    perm_manage_orders — i.e. any waiter who can place orders).
+
+    Response shape (list):
+      [
+        {
+          "id": int,
+          "slug": str,
+          "label": str,
+          "section": str | null   // section name, null when unassigned
+        },
+        …
+      ]
+
+    Ordered by (position, label, id) — same as TableLink.Meta.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        tables = (
+            TableLink.objects
+            .select_related("section")
+            .filter(is_active=True)
+            .order_by("position", "label", "id")
+        )
+        data = [
+            {
+                "id": t.id,
+                "slug": t.slug,
+                "label": t.label,
+                "section": t.section.name if t.section_id else None,
+            }
+            for t in tables
+        ]
+        return Response(data)
+
+
 class StaffOrderPaymentView(APIView):
     """POST /api/staff/orders/<order_id>/payments/
 

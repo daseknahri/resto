@@ -23,6 +23,27 @@
       </div>
 
       <div class="flex items-center gap-4">
+        <!-- WS live / polling indicator (contract 6c) -->
+        <span
+          v-if="wsState === 'live'"
+          class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-emerald-400"
+          role="status"
+          aria-live="polite"
+        >{{ t("kitchen.live") }}</span>
+        <span
+          v-else-if="wsState === 'polling'"
+          class="rounded-full border border-slate-600/40 bg-slate-700/30 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-slate-400"
+          role="status"
+          aria-live="polite"
+        >{{ t("kitchen.pollingMode") }}</span>
+        <!-- 86 board button (contract 7) -->
+        <button
+          class="kitchen-fs-btn ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          :aria-label="t('kitchen.eightySixOpen')"
+          @click="open86Board"
+        >
+          <span aria-hidden="true" class="text-sm font-bold">86</span>
+        </button>
         <!-- Active order count -->
         <span class="rounded-full border border-slate-600/60 bg-slate-700/50 px-3 py-1 text-sm font-bold tabular-nums text-slate-100" aria-live="polite" aria-atomic="true">
           {{ t("kitchen.activeCount", { n: activeOrders.length }) }}
@@ -331,26 +352,199 @@
       </article>
     </div>
   </div>
+
+  <!-- 86 Board modal (contract 7) — Teleported to body so it sits above fullscreen -->
+  <Teleport to="body">
+    <Transition name="ui-fade">
+      <div
+        v-if="eightySixOpen"
+        class="fixed inset-0 z-[9998] flex items-end justify-center sm:items-center"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('kitchen.eightySixTitle')"
+        @keydown.esc="eightySixOpen = false"
+      >
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" @click="eightySixOpen = false" />
+        <!-- Panel -->
+        <div class="relative z-10 w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-slate-900 border border-slate-700/60 shadow-2xl flex flex-col max-h-[85dvh]">
+          <!-- Header -->
+          <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 shrink-0">
+            <h2 class="text-base font-bold text-white">{{ t('kitchen.eightySixTitle') }}</h2>
+            <button
+              class="ui-press flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+              :aria-label="t('common.close')"
+              @click="eightySixOpen = false"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
+              </svg>
+            </button>
+          </div>
+          <!-- Search -->
+          <div class="px-4 pt-3 pb-2 shrink-0">
+            <div class="relative">
+              <svg class="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
+              </svg>
+              <input
+                v-model.trim="eightySixSearch"
+                type="search"
+                autofocus
+                class="w-full rounded-xl border border-slate-700 bg-slate-800/70 py-2.5 ps-9 pe-4 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                :placeholder="t('kitchen.eightySixSearch')"
+                :aria-label="t('kitchen.eightySixSearch')"
+              />
+            </div>
+          </div>
+          <!-- List -->
+          <div class="overflow-y-auto flex-1 px-4 pb-4">
+            <!-- Loading skeleton -->
+            <div v-if="eightySixFetching" class="space-y-2 pt-1">
+              <div v-for="i in 6" :key="i" class="flex animate-pulse items-center justify-between gap-2 rounded-xl px-2 py-3">
+                <div class="h-4 w-36 rounded bg-slate-700/60" />
+                <div class="h-9 w-24 rounded-xl bg-slate-700/40" />
+              </div>
+            </div>
+            <div v-else-if="!eightySixFiltered.length" class="py-8 text-center text-sm text-slate-500">{{ t('kitchen.eightySixEmpty') }}</div>
+            <ul v-else role="list" class="list-none space-y-1 pt-1">
+              <li
+                v-for="dish in eightySixFiltered"
+                :key="dish.id"
+                class="flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-slate-800/50"
+                :class="!dish.is_available ? 'opacity-70' : ''"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-slate-100">{{ dish.name }}</p>
+                  <p class="truncate text-[11px] text-slate-500">{{ dish.category_name || dish.category_slug }}</p>
+                </div>
+                <!-- Big touch target toggle — usable with greasy thumbs -->
+                <button
+                  role="switch"
+                  class="ui-press shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 min-w-[5.5rem] text-center"
+                  :class="dish.is_available
+                    ? 'border-emerald-500/40 text-emerald-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-300'
+                    : 'border-red-500/40 bg-red-500/10 text-red-300 hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-emerald-300'"
+                  :disabled="eightySixTogglingId === dish.id"
+                  :aria-checked="dish.is_available"
+                  :aria-busy="eightySixTogglingId === dish.id"
+                  :aria-label="`${dish.name} — ${dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')}`"
+                  @click="toggle86Dish(dish)"
+                >
+                  {{ eightySixTogglingId === dish.id ? '…' : (dish.is_available ? t('kitchen.eightySixAvailable') : t('kitchen.eightySixSoldOut')) }}
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useWaiterStore } from "../stores/waiter";
 import { useToastStore } from "../stores/toast";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { useNowTicker } from "../composables/useNowTicker";
 import { chipClass as statusChipClass } from "../lib/orderStatusMeta";
+import { useWakeLock } from "../composables/useWakeLock";
+import { useOwnerRealtime } from "../composables/useOwnerRealtime";
 import api from "../lib/api";
+import { bustCache } from "../lib/staleCache";
 
-// Explicit name so <KeepAlive :exclude> in OwnerLayout reliably skips this page
-// (live kitchen display — polls and must mount & unmount normally).
+// Under KeepAlive the kitchen page stays alive across navigation — poll timer,
+// wake lock and WS handlers start on activated, stop on deactivated.
 defineOptions({ name: "OwnerKitchen" });
 
 const { t, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 const toast = useToastStore();
 const { printTicket } = usePrintTicket();
+
+// ── Wake lock (contract 3) ────────────────────────────────────────────────────
+// useWakeLock manages its own onMounted/onUnmounted — no return value needed.
+useWakeLock();
+
+// ── Realtime channel (contract 6c — kitchen-local WS for instant updates) ────
+// The kitchen has its own WS subscription so it reacts to order events even
+// when the OwnerLayout WS is also running. Connecting in onActivated.
+const kitchenRealtime = useOwnerRealtime((event) => {
+  if (typeof event === "string" && event.startsWith("order.")) {
+    doPoll();
+  }
+});
+
+// ── Connection state chip (contract 6c) ───────────────────────────────────────
+const wsState = computed(() => kitchenRealtime.connectionState?.value ?? "connecting");
+
+// ── 86 board state (contract 7) ───────────────────────────────────────────────
+const eightySixOpen = ref(false);
+const eightySixDishes = ref([]);
+const eightySixFetching = ref(false);
+const eightySixSearch = ref("");
+const eightySixTogglingId = ref(null);
+
+const eightySixFiltered = computed(() => {
+  const q = eightySixSearch.value.toLowerCase();
+  const list = [...eightySixDishes.value]
+    .filter((d) => d.is_published)
+    .sort((a, b) => {
+      // 86'd (unavailable) pinned on top
+      if (!a.is_available && b.is_available) return -1;
+      if (a.is_available && !b.is_available) return 1;
+      return 0;
+    });
+  if (!q) return list;
+  return list.filter(
+    (d) =>
+      (d.name || "").toLowerCase().includes(q) ||
+      (d.category_name || "").toLowerCase().includes(q)
+  );
+});
+
+// Always refetch on open: another device (owner panel, second kitchen tablet)
+// may have 86'd a dish since the board was last shown. The existing list stays
+// visible while the refetch is in flight so the board never flashes empty.
+const fetch86Dishes = async () => {
+  if (eightySixFetching.value) return;
+  eightySixFetching.value = true;
+  try {
+    const { data } = await api.get("/dishes/", { timeout: 6000 });
+    eightySixDishes.value = Array.isArray(data) ? data : [];
+  } catch {
+    toast.show(t("ownerHome.noDishesLoaded"), "error");
+  } finally {
+    eightySixFetching.value = false;
+  }
+};
+
+const toggle86Dish = async (dish) => {
+  if (eightySixTogglingId.value === dish.id) return;
+  eightySixTogglingId.value = dish.id;
+  const newVal = !dish.is_available;
+  try {
+    await api.patch(`/dishes/${dish.id}/`, { is_available: newVal });
+    dish.is_available = newVal;
+    bustCache("menu.categories");
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 403) {
+      toast.show(t("kitchen.eightySixToggleFailed403"), "error");
+    } else {
+      toast.show(t("kitchen.eightySixToggleFailed"), "error");
+    }
+  } finally {
+    eightySixTogglingId.value = null;
+  }
+};
+
+const open86Board = () => {
+  eightySixOpen.value = true;
+  fetch86Dishes();
+};
 
 const isFullscreen = ref(false);
 const stationFilter = ref("all");
@@ -566,10 +760,37 @@ const onKitchenPageVisible = () => {
   if (document.visibilityState === "visible") doPoll();
 };
 
-onMounted(async () => {
-  waiter.setupConnectivityListeners();
+// ── Shared start/stop helpers (used by both mount and KeepAlive activate) ─────
+const startKitchenPolling = () => {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => {
+    // Do NOT skip when hidden — browser throttles hidden timers which is
+    // acceptable; an explicit skip means ZERO updates and no alert beep.
+    doPoll();
+  }, 10_000); // 10s for kitchen — faster than regular waiter view
+};
+
+const stopKitchenPolling = () => {
+  clearInterval(pollTimer);
+  pollTimer = null;
+};
+
+const startClock = () => {
+  if (clockTimer) return; // guard against double-start across activations
   updateClock();
   clockTimer = setInterval(updateClock, 1_000);
+};
+const stopClock = () => {
+  clearInterval(clockTimer);
+  clockTimer = null;
+};
+
+// One-time setup that survives KeepAlive park/unpark. Live-loop concerns
+// (clock, poll, WS, wake lock) are owned by onActivated/onDeactivated so they
+// pause while the page is parked behind another. onActivated fires right after
+// onMounted on first mount, so the live loop still starts on initial load.
+onMounted(async () => {
+  waiter.setupConnectivityListeners();
   document.addEventListener("fullscreenchange", onFullscreenChange);
   document.addEventListener("visibilitychange", onKitchenPageVisible);
 
@@ -578,20 +799,35 @@ onMounted(async () => {
     prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
     checkNewOrderIds(initial); // seeds _seenOrderIds on first load
   }
+});
 
-  pollTimer = setInterval(() => {
-    if (document.visibilityState === "hidden") return;
-    doPoll();
-  }, 10_000); // 10s for kitchen — faster than regular waiter view
+// Under KeepAlive: start the live loop when the page becomes active. This also
+// fires on the first mount (after onMounted), so connect()/poll start here only
+// — never duplicated in onMounted.
+onActivated(() => {
+  startClock();
+  doPoll(); // immediate fresh state on activation
+  startKitchenPolling();
+  kitchenRealtime.connect();
+});
+
+// Under KeepAlive: pause the whole live loop when navigating away (wake lock is
+// released by the useWakeLock composable's own onDeactivated hook).
+onDeactivated(() => {
+  stopKitchenPolling();
+  stopClock();
+  kitchenRealtime.disconnect();
+  eightySixOpen.value = false; // don't leave the 86 modal teleported over another page
 });
 
 onUnmounted(() => {
-  clearInterval(pollTimer);
-  clearInterval(clockTimer);
+  stopKitchenPolling();
+  stopClock();
   clearTimeout(flashTimer);
   document.removeEventListener("fullscreenchange", onFullscreenChange);
   document.removeEventListener("visibilitychange", onKitchenPageVisible);
   waiter.teardownConnectivityListeners();
+  kitchenRealtime.disconnect();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 });
 
@@ -665,16 +901,24 @@ const allItemsReady = (order) => {
 };
 
 const markAllReady = async (order) => {
-  const unready = order.items.filter((i) => i.id != null && !i.is_voided && !i.is_ready);
-  let failed = 0;
-  for (const item of unready) {
-    try {
-      await waiter.toggleItemReady(order.id, item.id, true);
-    } catch {
-      failed++;
+  // Use the bulk endpoint (POST /staff/orders/<id>/items/ready-all/) which
+  // marks all non-voided, not-yet-ready items in a single request.
+  try {
+    const { data } = await api.post(`/staff/orders/${order.id}/items/ready-all/`);
+    // Merge the updated order items back into the store
+    const stored = waiter.orders.find((o) => o.id === order.id);
+    if (stored && Array.isArray(data.items)) {
+      stored.items = data.items;
+    }
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code === "bad_status") {
+      // Order is terminal — show a clear message
+      toast.show(t("kitchen.markAllFailed"), "error");
+    } else {
+      toast.show(t("kitchen.markAllFailed"), "error");
     }
   }
-  if (failed > 0) toast.show(t("kitchen.markAllFailed"), "error");
 };
 
 // ── Display helpers ────────────────────────────────────────────────────────────

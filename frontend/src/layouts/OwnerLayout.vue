@@ -410,6 +410,7 @@ import { usePushNotifications } from "../composables/usePushNotifications";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
+import api from "../lib/api";
 
 const session = useSessionStore();
 const tenant = useTenantStore();
@@ -621,10 +622,41 @@ const layoutNotifyWaiterCall = (payload) => {
 
 const { handleRealtime: handleChatRealtime } = useStaffChat();
 
+// Targeted single-order refresh: fetch only the affected order by id and merge
+// it into the store. Falls back to a full refetch if the targeted fetch fails.
+const layoutDoTargetedOrderRefresh = async (payload) => {
+  // Payload carries order_number and status from _broadcast_order_change.
+  // We need the id to hit /owner/orders/<id>/ — find it in the current list first.
+  const orderNum = payload?.order_number;
+  const existing = orderNum != null
+    ? order.orders.find((o) => o.order_number === orderNum)
+    : null;
+
+  if (existing?.id) {
+    try {
+      const { data } = await api.get(`/owner/orders/${existing.id}/`);
+      const idx = order.orders.findIndex((o) => o.id === existing.id);
+      if (idx !== -1) {
+        order.orders[idx] = { ...order.orders[idx], ...data };
+      } else {
+        // Order might be new to this view — do a full poll to pick it up
+        await layoutDoSilentPoll();
+      }
+      layoutCheckNewOrders(order.orders);
+      return;
+    } catch {
+      // Fall through to full poll on any fetch error
+    }
+  }
+  // Full fallback: existing order not in list yet (new order), or fetch failed
+  await layoutDoSilentPoll();
+};
+
 const ownerRealtime = useOwnerRealtime((event, payload) => {
   if (typeof event !== "string") return;
   if (event.startsWith("order.")) {
-    layoutDoSilentPoll();
+    // Targeted refresh: pull only the affected order, fall back to full poll
+    layoutDoTargetedOrderRefresh(payload);
   } else if (event.startsWith("waiter.")) {
     // Async: the handler resyncs through the section-filtered list, so the alert
     // only fires for a call this user is actually responsible for.
@@ -647,10 +679,12 @@ const onLayoutPageVisible = () => {
 // have lifecycle cleanup that must run on unmount, or are editing surfaces that
 // must stay fresh — they keep their normal mount/unmount behaviour. Names come
 // from each page's defineOptions({ name }).
+// NOTE: OwnerKitchen is intentionally NOT in this list. It now uses
+// onActivated/onDeactivated to lifecycle-correctly pause/resume polling and
+// wake lock under KeepAlive (contract 8).
 const KEEPALIVE_EXCLUDE = [
   "OwnerHome",
   "OwnerOrders",
-  "OwnerKitchen",
   "OwnerMenuBuilder",
   "OwnerPromotions",
   "OwnerTables",

@@ -49,16 +49,39 @@
                   @click="fulfillmentType = 'pickup'"
                 >{{ t('waiterPage.newOrderFulfillmentPickup') }}</button>
               </div>
-              <div v-if="fulfillmentType === 'table'" class="flex items-center gap-2">
-                <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
-                <input
-                  v-model.trim="tableLabel"
-                  type="text"
-                  maxlength="40"
-                  class="ui-input flex-1 text-sm"
-                  :aria-label="t('waiterPage.newOrderTablePlaceholder')"
-                  :placeholder="t('waiterPage.newOrderTablePlaceholder')"
-                />
+              <div v-if="fulfillmentType === 'table'" class="flex flex-col gap-1.5">
+                <!-- Table dropdown -->
+                <div class="flex items-center gap-2">
+                  <AppIcon name="table" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                  <select
+                    v-model="tableSlug"
+                    class="ui-input flex-1 text-sm"
+                    :aria-label="t('waiterPage.newOrderTableSelect')"
+                    @change="onTableSelect"
+                  >
+                    <option value="">{{ t('waiterPage.newOrderTableSelect') }}</option>
+                    <option
+                      v-for="tbl in availableTables"
+                      :key="tbl.slug"
+                      :value="tbl.slug"
+                    >{{ tbl.section ? `${tbl.label} — ${tbl.section}` : tbl.label }}</option>
+                    <option value="__custom__">{{ t('waiterPage.newOrderTableCustom') }}</option>
+                  </select>
+                </div>
+                <!-- Custom label escape-hatch: revealed when "__custom__" is selected -->
+                <div v-if="tableSlug === '__custom__'" class="flex items-center gap-2 ps-5">
+                  <input
+                    v-model.trim="tableLabel"
+                    type="text"
+                    maxlength="40"
+                    class="ui-input flex-1 text-sm"
+                    :aria-label="t('waiterPage.newOrderTableCustomLabel')"
+                    :placeholder="t('waiterPage.newOrderTablePlaceholder')"
+                    autofocus
+                  />
+                </div>
+                <!-- Load error notice -->
+                <p v-if="tablesLoadError" class="ps-5 text-[11px] text-amber-400">{{ t('waiterPage.newOrderTableLoadError') }}</p>
               </div>
               <div class="flex items-center gap-2">
                 <AppIcon name="user" class="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden="true" />
@@ -365,8 +388,35 @@ const toast = useToastStore();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const fulfillmentType = ref('table');
+// tableSlug: the selected table slug, or '' (none), or '__custom__' for free-text
+const tableSlug = ref('');
+// tableLabel: the display label — set automatically from dropdown, or typed manually
 const tableLabel = ref('');
 const customerName = ref('');
+
+// ── Table list (sourced from GET /api/staff/tables/) ─────────────────────────
+const availableTables = ref([]);
+const tablesLoadError = ref(false);
+
+const loadTables = async () => {
+  tablesLoadError.value = false;
+  try {
+    const { data } = await api.get('/staff/tables/');
+    availableTables.value = Array.isArray(data) ? data : [];
+  } catch {
+    tablesLoadError.value = true;
+  }
+};
+
+// When a real table is selected from the dropdown, sync tableLabel with its label
+const onTableSelect = () => {
+  if (tableSlug.value === '' || tableSlug.value === '__custom__') {
+    if (tableSlug.value === '') tableLabel.value = '';
+    return;
+  }
+  const found = availableTables.value.find((t) => t.slug === tableSlug.value);
+  if (found) tableLabel.value = found.label;
+};
 const search = ref('');
 const activeCat = ref('');
 const cartItems = ref([]);   // [{line_key, dish_slug, dish_name, unit_price, qty, note, option_ids, options_label}]
@@ -643,13 +693,24 @@ const submit = async () => {
   }
 
   // Normal new-order mode.
-  if (fulfillmentType.value === 'table' && !tableLabel.value.trim()) {
-    submitError.value = t('waiterPage.newOrderNoTable');
-    return;
+  if (fulfillmentType.value === 'table') {
+    // Must have a real table selected or a custom label typed
+    const hasTable = (tableSlug.value && tableSlug.value !== '__custom__') ||
+                     (tableSlug.value === '__custom__' && tableLabel.value.trim());
+    if (!hasTable) {
+      submitError.value = t('waiterPage.newOrderNoTable');
+      return;
+    }
   }
 
   submitting.value = true;
   try {
+    // Resolve the final slug and label to submit
+    const resolvedSlug = (fulfillmentType.value === 'table' && tableSlug.value !== '__custom__')
+      ? tableSlug.value
+      : '';
+    const resolvedLabel = fulfillmentType.value === 'table' ? tableLabel.value.trim() : '';
+
     const payload = {
       items: cartItems.value.map((i) => ({
         slug: i.dish_slug,
@@ -658,7 +719,8 @@ const submit = async () => {
         option_ids: i.option_ids || [],
       })),
       fulfillment_type: fulfillmentType.value,
-      table_label: fulfillmentType.value === 'table' ? tableLabel.value.trim() : '',
+      table_slug: resolvedSlug || undefined,
+      table_label: resolvedLabel,
       customer_name: customerName.value.trim(),
       customer_note: '',
     };
@@ -701,6 +763,8 @@ onUnmounted(() => document.removeEventListener('keydown', trapFocus));
 onMounted(async () => {
   document.addEventListener('keydown', trapFocus);
   dialogRef.value?.querySelector(FOCUSABLE_SEL)?.focus();
+  // Load tables for the dropdown (parallel with categories fetch)
+  loadTables();
   if (!categories.value.length) {
     loadingDishes.value = true;
     await menu.fetchCategories();
