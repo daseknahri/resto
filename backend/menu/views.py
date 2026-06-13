@@ -2081,6 +2081,35 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # OPS-3 contract A: idempotency-key pre-check (before serializer so a
+        # retry with a valid key never fails on a stale/missing items body).
+        # The SPA mints a UUIDv4 when the checkout modal opens and clears it on
+        # confirmed success.  If an Order with that key already exists, return it
+        # immediately without decrementing stock or charging the wallet again.
+        _idem_key = str(request.data.get("idempotency_key") or "").strip()[:64] or None
+        if _idem_key:
+            try:
+                _existing = Order.objects.filter(idempotency_key=_idem_key).first()
+                if _existing is not None:
+                    _existing.refresh_from_db(fields=["points_earned"])
+                    return Response({
+                        "order_number": _existing.order_number,
+                        "status": _existing.status,
+                        "total": str(_existing.total),
+                        "delivery_fee": str(_existing.delivery_fee),
+                        "tip_amount": str(_existing.tip_amount),
+                        "wallet_amount_paid": str(_existing.wallet_amount_paid),
+                        "currency": _existing.currency,
+                        "estimated_ready_minutes": _existing.estimated_ready_minutes,
+                        "points_earned": _existing.points_earned,
+                        "loyalty_discount": str(_existing.loyalty_discount),
+                        "redeemed_loyalty_points": _existing.redeemed_loyalty_points,
+                        "scheduled_for": _existing.scheduled_for.isoformat() if _existing.scheduled_for else None,
+                        "idempotent_replay": True,
+                    }, status=status.HTTP_201_CREATED)
+            except Exception:
+                pass  # If the lookup itself errors, proceed with normal placement
+
         serializer = OrderHandoffSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -2559,6 +2588,7 @@ class PlaceOrderView(APIView):
                     applied_promotion_name=_best_promo.name if _best_promo else "",
                     loyalty_discount=_loyalty_discount,
                     redeemed_loyalty_points=(_loyalty_points_spent or None),
+                    idempotency_key=_idem_key,
                 )
 
                 # Debit redeemed loyalty points atomically. The conditional UPDATE only
@@ -2651,8 +2681,34 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         except IntegrityError:
-            # Rare TOCTOU race: two requests generated the same order number.
-            # Return 503 so the client can retry; a fresh number will be picked.
+            # Two cases:
+            # 1. Two concurrent requests generated the same order_number (very rare).
+            #    Return 503 so the client can retry.
+            # 2. Two concurrent requests raced on the same idempotency_key — the DB
+            #    unique constraint fired.  Re-fetch the winner and return it as a
+            #    successful idempotent replay (same as the pre-check path above).
+            if _idem_key:
+                try:
+                    _race_winner = Order.objects.filter(idempotency_key=_idem_key).first()
+                    if _race_winner is not None:
+                        _race_winner.refresh_from_db(fields=["points_earned"])
+                        return Response({
+                            "order_number": _race_winner.order_number,
+                            "status": _race_winner.status,
+                            "total": str(_race_winner.total),
+                            "delivery_fee": str(_race_winner.delivery_fee),
+                            "tip_amount": str(_race_winner.tip_amount),
+                            "wallet_amount_paid": str(_race_winner.wallet_amount_paid),
+                            "currency": _race_winner.currency,
+                            "estimated_ready_minutes": _race_winner.estimated_ready_minutes,
+                            "points_earned": _race_winner.points_earned,
+                            "loyalty_discount": str(_race_winner.loyalty_discount),
+                            "redeemed_loyalty_points": _race_winner.redeemed_loyalty_points,
+                            "scheduled_for": _race_winner.scheduled_for.isoformat() if _race_winner.scheduled_for else None,
+                            "idempotent_replay": True,
+                        }, status=status.HTTP_201_CREATED)
+                except Exception:
+                    pass
             return Response(
                 {"detail": "Order could not be placed due to a conflict. Please try again."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -4670,6 +4726,7 @@ class StaffOrderPaymentView(APIView):
                     recorded_by_user_id=recorder_id,
                     recorded_by_name=recorder_name,
                     note=note,
+                    idempotency_key=idempotency_key,
                 )
 
                 # ── Wallet debit (raises InsufficientFunds → rolls back row) ─
@@ -4705,6 +4762,28 @@ class StaffOrderPaymentView(APIView):
             return Response(
                 {"detail": "Wallet balance is insufficient.", "code": "insufficient_wallet"},
                 status=status.HTTP_409_CONFLICT,
+            )
+        except IntegrityError:
+            # OPS-3 contract D: DB-level backstop for the unique idempotency_key
+            # constraint.  Redis was down (cache miss) AND two concurrent requests
+            # raced on the same key — the second INSERT violated the unique constraint.
+            # Re-fetch the winner's order and return it as a successful replay.
+            if idempotency_key:
+                try:
+                    from menu.models import OrderPayment as _OPRace
+                    _existing_pay = _OPRace.objects.filter(idempotency_key=idempotency_key).first()
+                    if _existing_pay is not None:
+                        _replay_order = (
+                            Order.objects
+                            .prefetch_related("items", "payments")
+                            .get(pk=_existing_pay.order_id)
+                        )
+                        return Response(_staff_order_payload(_replay_order), status=status.HTTP_201_CREATED)
+                except Exception:
+                    pass
+            return Response(
+                {"detail": "Payment could not be recorded due to a conflict. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         # Reload with payments for the response (outside the atomic block)
@@ -5812,78 +5891,132 @@ class OwnerOrderStatusUpdateView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        order = Order.objects.select_related("customer").filter(id=order_id).first()
-        if order is None:
-            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
-
         new_status = (request.data.get("status") or "").strip().lower()
         owner_note = request.data.get("owner_note")
         estimated_ready_minutes = request.data.get("estimated_ready_minutes")
 
-        if new_status:
-            allowed = self._allowed_transitions(order)
-            if new_status not in {s.value for s in allowed}:
-                return Response(
-                    {"detail": f"Cannot transition from '{order.status}' to '{new_status}'.", "code": "invalid_transition"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            order.status = new_status
-            order.status_updated_at = timezone.now()
+        # OPS-3 contract B: wrap the read-mutate-write in transaction.atomic() +
+        # select_for_update() for ALL transitions (not only cancel).  This prevents
+        # last-write-wins races when two devices (or a retry) PATCH simultaneously.
+        with transaction.atomic():
+            order = Order.objects.select_for_update().select_related("customer").filter(id=order_id).first()
+            if order is None:
+                return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
+            if new_status:
+                # Idempotent-by-target: already at the requested status → 200 no-op.
+                if order.status == new_status:
+                    return Response({
+                        "id": order.id,
+                        "order_number": order.order_number,
+                        "status": order.status,
+                        "owner_note": order.owner_note,
+                        "estimated_ready_minutes": order.estimated_ready_minutes,
+                        "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+                        "payment_status": order.payment_status,
+                        "code": "already_at_target",
+                    })
 
-        # Attribute the order for per-staff work stats. The waiter who TOOK the order keeps
-        # the credit, so we only fill this when it isn't already set (e.g. a customer-placed
-        # order that a staff member is now handling).
-        if new_status and not order.handled_by_user_id:
-            _uid = getattr(request.user, "id", None)
-            if _uid:
-                order.handled_by_user_id = _uid
-                update_fields.append("handled_by_user_id")
+                # Detect regression: target is a past status (the order has already
+                # moved past it on another device).  Do NOT regress — return the
+                # current state with a clear code so the SPA can self-heal.
+                allowed = self._allowed_transitions(order)
+                if new_status not in {s.value for s in allowed}:
+                    # Distinguish "already past" from "genuinely invalid".
+                    # "already_advanced" = the target is a valid Order.Status value AND
+                    # the current order CAN reach order.status FROM new_status (meaning
+                    # the order has legitimately advanced past the target).
+                    # Build a fake order stub at the target status to get its transitions.
+                    _valid_status_values = {s.value for s in Order.Status}
+                    if new_status in _valid_status_values:
+                        # BFS from new_status through the transition graph.
+                        # If order.status is reachable from new_status (directly or
+                        # multi-hop) AND the order is not in CANCELLED state (which is
+                        # a side exit, not a forward advance), then the order has
+                        # already legitimately advanced past the target — return
+                        # "already_advanced" so the SPA can self-heal without 400s.
+                        class _Stub:
+                            def __init__(self, s, ft):
+                                self.status = s
+                                self.fulfillment_type = ft
 
-        if owner_note is not None:
-            order.owner_note = str(owner_note).strip()[:500]
-
-        if estimated_ready_minutes is not None:
-            try:
-                mins = int(estimated_ready_minutes)
-                order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
-            except (TypeError, ValueError):
-                order.estimated_ready_minutes = None
-
-        # For the cancel transition: re-fetch under a row lock and wrap the save +
-        # side-effects atomically so (a) a concurrent void can't race wallet_amount_paid,
-        # and (b) a refund failure rolls back the status-to-CANCELLED update instead of
-        # silently leaving the order cancelled with no wallet credit.
-        if new_status == Order.Status.CANCELLED:
-            from django.db import transaction as _cancel_tx
-            with _cancel_tx.atomic():
-                # Re-read with lock to get the latest wallet_amount_paid (concurrent
-                # StaffVoidOrderItemView may have decremented it between our initial
-                # select_related load above and now).
-                order = Order.objects.select_for_update().select_related("customer").get(pk=order_id)
+                        _visited = set()
+                        _queue = [new_status]
+                        _is_past = False
+                        # Only check for "already_advanced" when the current state is
+                        # a FORWARD state (not CANCELLED — can't "advance" to cancelled).
+                        if order.status != Order.Status.CANCELLED.value:
+                            while _queue:
+                                _cur = _queue.pop(0)
+                                if _cur in _visited:
+                                    continue
+                                _visited.add(_cur)
+                                _stub = _Stub(_cur, order.fulfillment_type)
+                                # Exclude CANCELLED from BFS so we don't falsely claim
+                                # an order "advanced past" a state via the cancel side-exit.
+                                _nexts = {
+                                    s.value for s in self._allowed_transitions(_stub)
+                                    if s != Order.Status.CANCELLED
+                                }
+                                if order.status in _nexts:
+                                    _is_past = True
+                                    break
+                                _queue.extend(_nexts - _visited)
+                        if _is_past:
+                            return Response({
+                                "id": order.id,
+                                "order_number": order.order_number,
+                                "status": order.status,
+                                "owner_note": order.owner_note,
+                                "estimated_ready_minutes": order.estimated_ready_minutes,
+                                "status_updated_at": order.status_updated_at.isoformat() if order.status_updated_at else None,
+                                "payment_status": order.payment_status,
+                                "code": "already_advanced",
+                            })
+                    return Response(
+                        {"detail": f"Cannot transition from '{order.status}' to '{new_status}'.", "code": "invalid_transition"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 order.status = new_status
                 order.status_updated_at = timezone.now()
-                if not order.handled_by_user_id:
-                    _uid = getattr(request.user, "id", None)
-                    if _uid:
-                        order.handled_by_user_id = _uid
-                        if "handled_by_user_id" not in update_fields:
-                            update_fields.append("handled_by_user_id")
-                if owner_note is not None:
-                    order.owner_note = str(owner_note).strip()[:500]
-                if estimated_ready_minutes is not None:
-                    try:
-                        mins = int(estimated_ready_minutes)
-                        order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
-                    except (TypeError, ValueError):
-                        order.estimated_ready_minutes = None
+
+            update_fields = ["status", "status_updated_at", "owner_note", "estimated_ready_minutes", "updated_at"]
+
+            # Attribute the order for per-staff work stats. The waiter who TOOK the order keeps
+            # the credit, so we only fill this when it isn't already set (e.g. a customer-placed
+            # order that a staff member is now handling).
+            if new_status and not order.handled_by_user_id:
+                _uid = getattr(request.user, "id", None)
+                if _uid:
+                    order.handled_by_user_id = _uid
+                    update_fields.append("handled_by_user_id")
+
+            if owner_note is not None:
+                order.owner_note = str(owner_note).strip()[:500]
+
+            if estimated_ready_minutes is not None:
+                try:
+                    mins = int(estimated_ready_minutes)
+                    order.estimated_ready_minutes = max(0, mins) if mins >= 0 else None
+                except (TypeError, ValueError):
+                    order.estimated_ready_minutes = None
+
+            # For the cancel transition: wrap the save + side-effects atomically so
+            # (a) a concurrent void can't race wallet_amount_paid, and (b) a refund
+            # failure rolls back the status-to-CANCELLED update.
+            # (The outer atomic block already holds the lock from select_for_update.)
+            if new_status == Order.Status.CANCELLED:
                 order.save(update_fields=update_fields)
                 _ct = getattr(request, "tenant", None)
                 _refund_wallet_for_cancelled_order(order, tenant_id=_ct.id if _ct else None)
                 _reverse_loyalty_for_cancelled_order(order)
                 _restock_cancelled_order(order)
-            # Stand down any assigned delivery driver (public-schema job; best-effort).
+            else:
+                order.save(update_fields=update_fields)
+
+        # Stand down any assigned delivery driver (public-schema job; best-effort,
+        # outside the lock so a hiccup doesn't roll back the status change).
+        if new_status == Order.Status.CANCELLED:
             try:
                 from accounts.delivery_service import cancel_delivery_job_for_order
                 _ct = getattr(request, "tenant", None)
@@ -5891,8 +6024,6 @@ class OwnerOrderStatusUpdateView(APIView):
                     cancel_delivery_job_for_order(_ct.id, order.order_number)
             except Exception:
                 pass
-        else:
-            order.save(update_fields=update_fields)
 
         # Mirror the prep ETA onto the platform delivery job so the assigned/searching
         # driver knows when the food will be ready (pre-dispatch timing). Best-effort.
@@ -6019,37 +6150,43 @@ class OwnerOrderBulkStatusView(APIView):
         handler_id = getattr(request.user, "id", None)
         tenant = getattr(request, "tenant", None)
 
-        # Fetch only orders in PENDING status (the only valid source for bulk confirm)
-        orders = list(
-            Order.objects.filter(
-                id__in=order_ids,
-                status=Order.Status.PENDING,
-            ).select_related("customer")[:self._MAX]
-        )
+        # OPS-3: wrap the fetch + bulk_update in an atomic block with
+        # select_for_update() so a concurrent cancel or status advance on
+        # the same orders cannot race this confirm sweep.  Without the lock
+        # a CANCEL committed between our read and bulk_update would be
+        # silently overwritten back to CONFIRMED.
+        with transaction.atomic():
+            orders = list(
+                Order.objects.select_for_update().filter(
+                    id__in=order_ids,
+                    status=Order.Status.PENDING,
+                ).select_related("customer")[:self._MAX]
+            )
 
-        updated_count = 0
-        for order in orders:
-            order.status = Order.Status.CONFIRMED
-            order.status_updated_at = now
-            if not order.handled_by_user_id and handler_id:
-                order.handled_by_user_id = handler_id
-            updated_count += 1
-
-        if orders:
-            update_fields = ["status", "status_updated_at", "handled_by_user_id", "updated_at"]
-            Order.objects.bulk_update(orders, update_fields)
-
-            # Fire realtime + email for each confirmed order (best-effort)
+            updated_count = 0
             for order in orders:
-                try:
-                    _broadcast_order_change(order)
-                except Exception:
-                    pass
-                try:
-                    if tenant:
-                        _send_order_status_email(order, tenant, Order.Status.CONFIRMED)
-                except Exception:
-                    pass
+                order.status = Order.Status.CONFIRMED
+                order.status_updated_at = now
+                if not order.handled_by_user_id and handler_id:
+                    order.handled_by_user_id = handler_id
+                updated_count += 1
+
+            if orders:
+                update_fields = ["status", "status_updated_at", "handled_by_user_id", "updated_at"]
+                Order.objects.bulk_update(orders, update_fields)
+
+        # Fire realtime + email for each confirmed order (best-effort, outside
+        # the lock so slow broadcast never holds the row locks).
+        for order in orders:
+            try:
+                _broadcast_order_change(order)
+            except Exception:
+                pass
+            try:
+                if tenant:
+                    _send_order_status_email(order, tenant, Order.Status.CONFIRMED)
+            except Exception:
+                pass
 
         skipped = len(order_ids) - updated_count
         return Response({"updated": updated_count, "skipped": skipped})
@@ -6097,32 +6234,80 @@ class OwnerOrderMarkPaidView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        order = Order.objects.filter(id=order_id).first()
-        if order is None:
-            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+        # OPS-3 contract C: idempotency key mirrors the cash StaffOrderPaymentView path.
+        # The SPA mints a key when the settle action is triggered and resends it on retry.
+        # Under the lock, if the order is already PAID we return success immediately
+        # without a second wallet debit or payment row.
+        idempotency_key = str(request.data.get("idempotency_key") or "")[:128] or None
+        if idempotency_key:
+            _idem_cache_key = f"mark_paid_idem:{order_id}:{idempotency_key}"
+            if cache.get(_idem_cache_key):
+                # Fast-path cache hit: return current state without touching the DB.
+                _cached_order = Order.objects.filter(id=order_id).first()
+                if _cached_order is not None:
+                    return Response({
+                        "id": _cached_order.id,
+                        "order_number": _cached_order.order_number,
+                        "payment_status": _cached_order.payment_status,
+                        "paid_at": _cached_order.paid_at.isoformat() if _cached_order.paid_at else None,
+                        "status": _cached_order.status,
+                        "already_paid": True,
+                        "completed": False,
+                        "idempotent_replay": True,
+                    })
 
-        was_paid = order.is_paid
-        order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
+        with transaction.atomic():
+            order = Order.objects.select_for_update().filter(id=order_id).first()
+            if order is None:
+                return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Credit whoever settles the bill with handling the order, if unattributed.
-        if not order.handled_by_user_id:
-            _uid = getattr(request.user, "id", None)
-            if _uid:
-                order.handled_by_user_id = _uid
-                order.save(update_fields=["handled_by_user_id"])
+            was_paid = order.is_paid
 
-        # Optional "settle & close": settling the tab completes a READY dine-in order.
-        completed = False
-        _want_complete = str(request.data.get("complete", "")).strip().lower() in ("1", "true", "yes")
-        if _want_complete and order.status == Order.Status.READY:
-            order.status = Order.Status.COMPLETED
-            order.status_updated_at = timezone.now()
-            order.save(update_fields=["status", "status_updated_at", "updated_at"])
-            completed = True
+            # Idempotent: already PAID → return success without any side-effects.
+            if was_paid:
+                if idempotency_key:
+                    cache.set(_idem_cache_key, True, timeout=300)
+                return Response({
+                    "id": order.id,
+                    "order_number": order.order_number,
+                    "payment_status": order.payment_status,
+                    "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+                    "status": order.status,
+                    "already_paid": True,
+                    "completed": False,
+                })
+
+            order.mark_paid()  # idempotent — sets payment_status=PAID + paid_at
+
+            # Credit whoever settles the bill with handling the order, if unattributed.
+            if not order.handled_by_user_id:
+                _uid = getattr(request.user, "id", None)
+                if _uid:
+                    order.handled_by_user_id = _uid
+                    order.save(update_fields=["handled_by_user_id"])
+
+            # Optional "settle & close": settling the tab completes a READY dine-in order.
+            completed = False
+            _want_complete = str(request.data.get("complete", "")).strip().lower() in ("1", "true", "yes")
+            if _want_complete and order.status == Order.Status.READY:
+                order.status = Order.Status.COMPLETED
+                order.status_updated_at = timezone.now()
+                order.save(update_fields=["status", "status_updated_at", "updated_at"])
+                completed = True
+
+            # OPS-3: set the idempotency cache key INSIDE the atomic block so
+            # the write is committed before the cache entry becomes visible.
+            # A crash after commit but before cache.set is safe — the next
+            # retry sees order.is_paid==True (DB backstop) and returns early.
+            if idempotency_key:
+                cache.set(_idem_cache_key, True, timeout=300)  # 5 min
 
         # Live-update the customer's tracking page (and other staff screens) so the
         # "Paid" state appears on their phone immediately.
-        _broadcast_order_change(order)
+        try:
+            _broadcast_order_change(order)
+        except Exception:
+            pass
 
         return Response({
             "id": order.id,

@@ -5,6 +5,12 @@ Tests for OwnerOrderBulkStatusView.
 
 All tests are SimpleTestCase (no database).
 ORM calls are fully mocked.
+
+OPS-3: the view now wraps its fetch+update in transaction.atomic() with
+select_for_update() to close the concurrent-cancel race. Tests patch
+menu.views.transaction to a no-op passthrough (same pattern as
+test_ops1_kitchen.py) and adjust the mock chain to include
+select_for_update().
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
@@ -56,12 +62,26 @@ def _make_order(pk=1, order_number="ORD-001", status_val="pending"):
     return o
 
 
+class _Atomic:
+    """No-op context manager — replaces transaction.atomic() in SimpleTestCase tests."""
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+
 # ── Test class ─────────────────────────────────────────────────────────────────
 
 class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = OwnerOrderBulkStatusView.as_view()
+
+        # Patch transaction so atomic() never touches a real DB connection.
+        _tx_patcher = patch("menu.views.transaction")
+        self._tx_mock = _tx_patcher.start()
+        self.addCleanup(_tx_patcher.stop)
+        self._tx_mock.atomic.return_value = _Atomic()
 
     def _post(self, body=None, user=None, tenant=None):
         req = self.factory.post(
@@ -72,6 +92,17 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
         req.user = user or _owner()
         req.tenant = tenant or _tenant()
         return self.view(req)
+
+    def _wire_qs(self, mock_qs, orders):
+        """Wire the mock queryset chain for the new select_for_update path.
+
+        New call chain:
+          Order.objects.select_for_update().filter(...).select_related("customer")[:MAX]
+        """
+        # select_for_update() returns the same mock so further calls resolve.
+        mock_qs.select_for_update.return_value = mock_qs
+        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
+            MagicMock(return_value=orders)
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -117,8 +148,7 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     def test_updates_pending_orders_to_confirmed(self, mock_qs, mock_mail, mock_bcast):
         o1 = _make_order(pk=1, status_val="pending")
         o2 = _make_order(pk=2, status_val="pending")
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[o1, o2])
+        self._wire_qs(mock_qs, [o1, o2])
         resp = self._post(body={"order_ids": [1, 2], "status": "confirmed"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["updated"], 2)
@@ -129,8 +159,7 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_sets_status_confirmed_on_each_order(self, mock_qs, mock_mail, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[o])
+        self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         self.assertEqual(o.status, "confirmed")
 
@@ -139,8 +168,7 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_calls_bulk_update(self, mock_qs, mock_mail, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[o])
+        self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         mock_qs.bulk_update.assert_called_once()
 
@@ -150,8 +178,7 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     def test_fires_broadcast_for_each_order(self, mock_qs, mock_mail, mock_bcast):
         o1 = _make_order(pk=1, status_val="pending")
         o2 = _make_order(pk=2, status_val="pending")
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[o1, o2])
+        self._wire_qs(mock_qs, [o1, o2])
         self._post(body={"order_ids": [1, 2], "status": "confirmed"})
         self.assertEqual(mock_bcast.call_count, 2)
 
@@ -161,17 +188,25 @@ class OwnerOrderBulkStatusViewTests(SimpleTestCase):
     def test_sets_handler_id_when_unset(self, mock_qs, mock_mail, mock_bcast):
         o = _make_order(pk=1, status_val="pending")
         o.handled_by_user_id = None
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[o])
+        self._wire_qs(mock_qs, [o])
         self._post(body={"order_ids": [1], "status": "confirmed"})
         self.assertEqual(o.handled_by_user_id, 10)  # _owner().id == 10
+
+    @patch("menu.views._broadcast_order_change")
+    @patch("menu.views._send_order_status_email")
+    @patch("menu.views.Order.objects")
+    def test_select_for_update_called(self, mock_qs, mock_mail, mock_bcast):
+        """OPS-3: the view must call select_for_update() before filter()."""
+        o = _make_order(pk=1, status_val="pending")
+        self._wire_qs(mock_qs, [o])
+        self._post(body={"order_ids": [1], "status": "confirmed"})
+        mock_qs.select_for_update.assert_called_once()
 
     # ── Empty / all-skipped ───────────────────────────────────────────────────
 
     @patch("menu.views.Order.objects")
     def test_empty_result_returns_updated_zero(self, mock_qs):
-        mock_qs.filter.return_value.select_related.return_value.__getitem__ = \
-            MagicMock(return_value=[])
+        self._wire_qs(mock_qs, [])
         resp = self._post(body={"order_ids": [99], "status": "confirmed"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["updated"], 0)

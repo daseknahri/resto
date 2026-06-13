@@ -525,6 +525,18 @@ class Order(models.Model):
     # Set when the post-meal review push has been sent, so the scheduled command
     # that nudges customers ~30 min after completion never double-sends.
     review_prompt_sent_at = models.DateTimeField(null=True, blank=True)
+    # OPS-3: client-minted idempotency key for order placement. Allows the SPA
+    # to safely retry a timed-out POST without creating a duplicate kitchen ticket.
+    # Nullable so legacy orders (no key supplied) are unconstrained; when present
+    # the conditional unique constraint below guarantees at-most-one order per key
+    # within this tenant schema.
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Client-minted UUIDv4 sent at placement time; used for retry-safe dedup.",
+    )
 
     class Meta:
         ordering = ("-created_at",)
@@ -533,6 +545,13 @@ class Order(models.Model):
             # Staff "?since=" delta-poll filters status + orders by updated_at (~300 req/min);
             # without this it scans all active rows every tick.
             models.Index(fields=("status", "updated_at")),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="uniq_order_idempotency_key",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -644,6 +663,18 @@ class OrderPayment(models.Model):
     note = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # OPS-3 contract D: client idempotency key for the DB-level replay backstop.
+    # When present, a UniqueConstraint guarantees that the same key cannot produce
+    # two OrderPayment rows even if the Redis cache is down and the short-circuit
+    # check misses. The endpoint catches IntegrityError on a duplicate and returns
+    # the existing row instead of failing or double-charging.
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        help_text="Client-minted key; uniqueness enforced by DB constraint when non-null.",
+    )
+
     # ── Payment-method correction audit trail (OPS-2 contract D) ──────────────
     # A staff member may have recorded the wrong tender type (cash vs wallet).
     # These fields allow relabelling without touching the wallet ledger.
@@ -671,6 +702,13 @@ class OrderPayment(models.Model):
 
     class Meta:
         ordering = ("created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="uniq_orderpayment_idempotency_key",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount} for order {self.order_id}"

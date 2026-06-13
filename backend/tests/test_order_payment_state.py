@@ -51,6 +51,22 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = OwnerOrderMarkPaidView.as_view()
 
+        # OPS-3 contract C: OwnerOrderMarkPaidView now wraps the mutate path in
+        # transaction.atomic() + select_for_update().  Patch menu.views.transaction
+        # with a passthrough _Atomic so SimpleTestCase (no DB) continues to work.
+        from unittest.mock import patch as _patch
+
+        class _Atomic:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        _tx_patcher = _patch("menu.views.transaction")
+        self._tx_mock = _tx_patcher.start()
+        self.addCleanup(_tx_patcher.stop)
+        self._tx_mock.atomic.return_value = _Atomic()
+
     def _order(self, **kw):
         defaults = dict(
             id=5, order_number="ORD5",
@@ -65,7 +81,7 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     @patch("menu.views._can_edit_tenant_order", return_value=False)
     @patch("menu.views.Order.objects")
     def test_denied_for_non_editor(self, objects_mock, _gate):
-        objects_mock.filter.return_value.first.return_value = self._order()
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value =self._order()
         req = self.factory.post("/api/owner/orders/5/mark-paid/")
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=5)
@@ -75,7 +91,7 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_marks_paid(self, objects_mock, _gate):
         order = self._order()
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value =order
         req = self.factory.post("/api/owner/orders/5/mark-paid/")
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=5)
@@ -89,7 +105,7 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_settle_and_complete(self, objects_mock, _gate):
         order = self._order(status=Order.Status.READY)
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value =order
         req = self.factory.post("/api/owner/orders/5/mark-paid/", {"complete": True}, format="json")
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=5)
@@ -100,7 +116,7 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     @patch("menu.views.Order.objects")
     def test_complete_flag_ignored_when_not_ready(self, objects_mock, _gate):
         order = self._order(status=Order.Status.PREPARING)
-        objects_mock.filter.return_value.first.return_value = order
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value =order
         req = self.factory.post("/api/owner/orders/5/mark-paid/", {"complete": True}, format="json")
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=5)
@@ -110,7 +126,7 @@ class OwnerOrderMarkPaidViewTests(SimpleTestCase):
     @patch("menu.views._can_edit_tenant_order", return_value=True)
     @patch("menu.views.Order.objects")
     def test_unknown_order_404(self, objects_mock, _gate):
-        objects_mock.filter.return_value.first.return_value = None
+        objects_mock.select_for_update.return_value.filter.return_value.first.return_value =None
         req = self.factory.post("/api/owner/orders/999/mark-paid/")
         req.user = MagicMock(id=9)
         resp = self.view(req, order_id=999)

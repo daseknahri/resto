@@ -1602,6 +1602,23 @@ const onVisible = () => {
 };
 
 onMounted(async () => {
+  // Register toast callbacks so the store surfaces permanent flush errors.
+  waiter.setFlushCallbacks({
+    onPermError: (_entry, err) => {
+      const status = err?.response?.status;
+      if (status === 409) {
+        // 409 = conflict (another device already advanced this order).
+        // The store already refetches. Show the conflict notice, not a generic error.
+        toast.show(t('waiterPage.queueConflictRefetched'), 'info', 3500);
+      } else {
+        toast.show(t('waiterPage.queueOpDropped'), 'error', 4000);
+      }
+    },
+    onConflict: () => {
+      // Already handled in onPermError for 409; no extra action needed here.
+    },
+  });
+
   const initial = await waiter.fetchOrders();
   if (Array.isArray(initial)) prevPendingIds = new Set(initial.filter((o) => o.status === "pending").map((o) => o.id));
   document.addEventListener("visibilitychange", onVisible);
@@ -1658,7 +1675,8 @@ const submitCustomerRating = async () => {
 // exactly when service ends, so prompt the server to rate the customer right then.
 const _finishSettle = async (order) => {
   const eligibleToRate = order.customer_id && order.handled_by_me && !order.my_customer_rating;
-  const res = await waiter.markPaid(order.id);
+  // Pass the settle-intent key so the backend can deduplicate a lost-response retry
+  const res = await waiter.markPaid(order.id, settleIntentKey.value);
   if (!res) {
     toast.show(t("waiterPage.markPaidFailed"), "error");
     return;

@@ -148,8 +148,57 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
       but OwnerDashboard cash/wallet display should migrate to it for consistency with the
       Z-report. (OwnerDashboard*.vue). → OPS-6 (polish). [review OPS-2 major, documented]
 
+- [ ] **Promotion max_uses overspend race (REVENUE LEAK)** — PlaceOrderView checks
+      `use_count >= max_uses` OUTSIDE the lock (menu/views.py:2345), then F()-increments
+      inside atomic with no cap enforcement; N concurrent checkouts all pass the pre-check
+      and the promo is applied N times past the cap. Same in marketplace (accounts/views.py
+      ~2963/3172). Fix: `filter(pk=..., use_count__lt=max_uses).update(use_count=F+1)` and
+      treat 0-rows as cap-exceeded (single atomic op, no extra latency). HIGH — money.
+      [scout OPS-3]
+- [ ] **PlaceOrderThrottle still IP-scoped** — OPS-3 scoped StaffOrderList + WaiterCall per
+      user/table but PlaceOrderView (staff-placed orders via waiter app) still keys on IP →
+      shared restaurant NAT collapses the bucket at rush. Apply the StaffOrderListThrottle
+      pattern (user.pk for authed staff, IP for anon customers). (throttles.py:25). → OPS-4
+      or quick follow-up. [scout OPS-3]
+- [ ] **Status-advance idempotency_key sent but not consumed server-side** — client sends it
+      on the status PATCH; OwnerOrderStatusUpdateView never reads it. The target-idempotency
+      BFS ("already_advanced" 200) covers the stale-superseded-retry case (verified), so this
+      is belt-and-suspenders, not a correctness gap. Optional: cache (key→status) inside the
+      atomic for true at-least-once. LOW. (menu/views.py:5890). [scout OPS-3]
+- [ ] **Offline queue drop-policy + no TTL** — queue caps at 50 dropping OLDEST (arguably the
+      most urgent; per-order dedup limits the blast radius) and entries carry queuedAt but no
+      TTL/expiry, so a stale op could in theory replay next session (idempotency keys make
+      replay safe; only a stale cancel vs a reused integer PK is risky, and Postgres doesn't
+      reuse PKs). Add an 8h/service-day TTL drop on load + consider drop-newest. MEDIUM.
+      (waiter.js queue cap + _loadQueue). [scout OPS-3]
+- [ ] **WalletTransaction refund idempotency/aggregate scans unindexed (tenant_id,type,...)**
+      — cancel-refund EXISTS check + Z-report/digest REFUND aggregate scan WalletTransaction
+      without a covering index; fine now, a scan at 10k+ orders. Add (tenant_id, type,
+      created_at) index. → OPS-4 (scale). [scout OPS-3]
+- [ ] **StaffOrderPaymentView cache.set after atomic block** — the cache idempotency marker is
+      written post-commit; Redis-down loses it but the DB OrderPayment unique-key backstop
+      (added OPS-3) now covers replay. Document the DB constraint as the primary backstop so a
+      future refactor doesn't drop it. LOW. (menu/views.py:4796). [scout OPS-3]
+
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-3 "integrity on flaky wifi": DB-backed idempotency — Order.idempotency_key
+      (menu/0056) + OrderPayment.idempotency_key (menu/0057), both conditional-unique
+      (NULLs allowed); PlaceOrderView AND MarketplacePlaceOrderView pre-check + persist +
+      IntegrityError-refexh-winner (marketplace was MISSING — review critical, fixed);
+      OwnerOrderStatusUpdateView atomic+select_for_update + idempotent-by-target (BFS
+      "already_advanced" 200 so a stale superseded retry isn't a scary 400);
+      OwnerOrderBulkStatusView now also atomic+locked (review/scout major); mark-paid
+      idempotency (cache.set moved inside atomic; DB already-PAID guard is the real Redis-
+      down backstop); StaffOrderPaymentView persists the key + catches IntegrityError →
+      returns existing row. Frontend: waiter offline queue persisted to localStorage
+      (kepoli.waiterQueue.v1) + rehydrated, each op carries its idempotency_key; flush
+      hygiene (permanent-4xx drop+toast, 409 refetch-self-heal, transient exp-backoff) —
+      replaces re-queue-forever. Throttles scoped per-user (staff) + per (tenant+table)
+      (waiter-call). Review found a real marketplace double-charge critical + bulk-lock
+      major; fix agent applied; I verified both in code + the BFS + ran gates. Scout: BFS
+      note over-stated (verified), 6 → Scout notes (incl. a promo-overspend REVENUE LEAK).
+      Backend 3302 green; frontend 90 tests green. — ops3 commit.
 - [x] OPS-2 "end-of-day money truth": Profile.service_day_cutover_hour (tenancy/0039) +
       service_day_window helper (DST-correct local end-datetime, not +timedelta); owner
       Z-report (GET /api/owner/z-report[.csv]) — collected cash/wallet via shared

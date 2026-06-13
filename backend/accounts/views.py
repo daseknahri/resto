@@ -2734,6 +2734,12 @@ class MarketplacePlaceOrderView(APIView):
         from django_tenants.utils import schema_context as _sc
         import secrets as _sec
 
+        # OPS-3: read the client-minted idempotency key before ANY work. If a
+        # prior Order with this key already exists inside the tenant schema we
+        # return it immediately without re-decrementing stock or re-charging the
+        # wallet. This closes the timeout+retry double-order / double-charge gap.
+        _mkt_idem_key = str(request.data.get("idempotency_key") or "").strip()[:64] or None
+
         restaurant_slug = (request.data.get("restaurant") or "").strip().lower()
         if not restaurant_slug:
             return Response({"detail": "restaurant is required.", "code": "missing_restaurant"}, status=status.HTTP_400_BAD_REQUEST)
@@ -2795,6 +2801,34 @@ class MarketplacePlaceOrderView(APIView):
                     Promotion as _Promo,
                 )
                 from django.db import transaction as _dbtx, IntegrityError as _IE
+
+                # OPS-3: idempotency pre-check inside the tenant schema.
+                # If a prior Order with this key exists, return it without
+                # any stock decrement or wallet charge.
+                if _mkt_idem_key:
+                    try:
+                        _existing = _Order.objects.filter(idempotency_key=_mkt_idem_key).first()
+                        if _existing is not None:
+                            return Response({
+                                "order_number": _existing.order_number,
+                                "status": _existing.status,
+                                "total": str(_existing.total),
+                                "delivery_fee": str(_existing.delivery_fee),
+                                "wallet_amount_paid": str(_existing.wallet_amount_paid),
+                                "commission_amount": str(_existing.commission_amount),
+                                "promotion_discount": str(_existing.promotion_discount),
+                                "applied_promotion_name": _existing.applied_promotion_name,
+                                "loyalty_discount": str(_existing.loyalty_discount),
+                                "redeemed_loyalty_points": _existing.redeemed_loyalty_points,
+                                "points_earned": _existing.points_earned,
+                                "scheduled_for": _existing.scheduled_for.isoformat() if _existing.scheduled_for else None,
+                                "currency": _existing.currency,
+                                "restaurant_slug": tenant.slug,
+                                "restaurant_name": tenant.name,
+                                "idempotent_replay": True,
+                            }, status=status.HTTP_201_CREATED)
+                    except Exception:
+                        pass  # If the lookup fails, continue with normal placement
 
                 profile = _Profile.objects.filter(tenant=tenant).first()
                 if not profile or not profile.is_menu_published:
@@ -3151,6 +3185,7 @@ class MarketplacePlaceOrderView(APIView):
                             applied_promotion_name=_applied_promo_name,
                             loyalty_discount=_loyalty_discount,
                             redeemed_loyalty_points=(_loyalty_points_spent or None),
+                            idempotency_key=_mkt_idem_key,
                         )
                         for item_data in order_items_data:
                             _OI.objects.create(order=order, **item_data)
@@ -3246,6 +3281,34 @@ class MarketplacePlaceOrderView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 except _IE:
+                    # OPS-3: the unique constraint on idempotency_key fired —
+                    # a concurrent request already committed an identical order.
+                    # Re-fetch the winner and return it as a successful replay
+                    # so the client is not left with a 503 it would retry again.
+                    if _mkt_idem_key:
+                        try:
+                            _winner = _Order.objects.filter(idempotency_key=_mkt_idem_key).first()
+                            if _winner is not None:
+                                return Response({
+                                    "order_number": _winner.order_number,
+                                    "status": _winner.status,
+                                    "total": str(_winner.total),
+                                    "delivery_fee": str(_winner.delivery_fee),
+                                    "wallet_amount_paid": str(_winner.wallet_amount_paid),
+                                    "commission_amount": str(_winner.commission_amount),
+                                    "promotion_discount": str(_winner.promotion_discount),
+                                    "applied_promotion_name": _winner.applied_promotion_name,
+                                    "loyalty_discount": str(_winner.loyalty_discount),
+                                    "redeemed_loyalty_points": _winner.redeemed_loyalty_points,
+                                    "points_earned": _winner.points_earned,
+                                    "scheduled_for": _winner.scheduled_for.isoformat() if _winner.scheduled_for else None,
+                                    "currency": _winner.currency,
+                                    "restaurant_slug": tenant.slug,
+                                    "restaurant_name": tenant.name,
+                                    "idempotent_replay": True,
+                                }, status=status.HTTP_201_CREATED)
+                        except Exception:
+                            pass
                     return Response(
                         {"detail": "Order could not be placed due to a conflict. Please try again."},
                         status=status.HTTP_503_SERVICE_UNAVAILABLE,

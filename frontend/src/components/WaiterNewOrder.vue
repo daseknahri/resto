@@ -371,6 +371,7 @@ import { useMenuStore } from '../stores/menu';
 import { useTenantStore } from '../stores/tenant';
 import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
+import { newIdempotencyKey } from '../lib/idempotency';
 
 const props = defineProps({
   // When set, the component operates in "append" mode: posts items to the
@@ -393,6 +394,12 @@ const tableSlug = ref('');
 // tableLabel: the display label — set automatically from dropdown, or typed manually
 const tableLabel = ref('');
 const customerName = ref('');
+
+// Idempotency key minted when this modal opens; cleared on confirmed success so
+// a genuine second order does not deduplicate against the first.
+// A tab-crash / slow-network retry within the same modal lifecycle reuses the key,
+// so the backend deduplicates instead of creating a second kitchen ticket.
+const orderPlacementKey = ref(newIdempotencyKey());
 
 // ── Table list (sourced from GET /api/staff/tables/) ─────────────────────────
 const availableTables = ref([]);
@@ -723,8 +730,12 @@ const submit = async () => {
       table_label: resolvedLabel,
       customer_name: customerName.value.trim(),
       customer_note: '',
+      idempotency_key: orderPlacementKey.value,
     };
     await api.post('/place-order/', payload);
+    // Clear the key on confirmed success — the next order opened by this waiter
+    // must get a fresh key so it is not deduplicated against this one.
+    orderPlacementKey.value = null;
     toast.show(t('waiterPage.newOrderSuccess'), 'success');
     emit('placed');
     emit('close');
