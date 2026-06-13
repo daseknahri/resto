@@ -110,6 +110,77 @@ def _profile_now(profile):
         return _dt.now(_tz.utc)  # invalid/unknown tz → safe UTC fallback
 
 
+def service_day_window(profile, now_local=None, date=None):
+    """Return (start_aware, end_aware) for the current or a past service day.
+
+    A "service day" starts at the tenant-local hour H = profile.service_day_cutover_hour
+    (default 0 = calendar midnight). For a late-night venue with H=3, the service day
+    that starts on Monday at 03:00 runs until Tuesday 02:59:59 local time.
+
+    Math — "most recent cutover" relative to *now_local*:
+      cutover_dt = today's date @ H:00:00 local  if now_local.hour >= H
+                   yesterday's date @ H:00:00 local  otherwise
+    The end of that window is one calendar day later at H:00:00 local.
+
+    Args:
+        profile:    A Profile instance (must have .timezone and .service_day_cutover_hour).
+        now_local:  An aware datetime in the tenant's local tz (used as "now"). Defaults
+                    to the actual current time in the tenant's tz. Pass a fixed value in
+                    tests to get deterministic windows.
+        date:       A datetime.date (or ISO string) representing a PAST service day to
+                    look up instead of the current one. When given, now_local is ignored
+                    and the window [date @ H → date+1 @ H) is returned.
+
+    Returns:
+        (start_aware, end_aware) — both tz-aware datetimes in the tenant's timezone.
+    """
+    from datetime import date as _date, timedelta as _td, datetime as _dt
+    try:
+        from zoneinfo import ZoneInfo
+        tz_name = (getattr(profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        from datetime import timezone as _stdlib_tz
+        tz = _stdlib_tz.utc
+
+    H = max(0, min(11, int(getattr(profile, "service_day_cutover_hour", 0) or 0)))
+
+    if date is not None:
+        # Caller wants a specific past service day by local date.
+        # Coerce strings to date objects.
+        if isinstance(date, str):
+            date = _date.fromisoformat(date)
+        day_start = _dt(date.year, date.month, date.day, H, 0, 0, tzinfo=tz)
+        next_day = date + _td(days=1)
+        day_end = _dt(next_day.year, next_day.month, next_day.day, H, 0, 0, tzinfo=tz)
+        return day_start, day_end
+
+    # Default: the window that contains "now".
+    if now_local is None:
+        now_local = _profile_now(profile)
+
+    # Find the most recent cutover boundary ≤ now_local.
+    # If now_local is at or after H o'clock today, the window started today at H.
+    # If now_local is before H o'clock today, the window started yesterday at H.
+    today_local = now_local.date()
+    cutover_today = _dt(today_local.year, today_local.month, today_local.day, H, 0, 0, tzinfo=tz)
+    if now_local >= cutover_today:
+        day_start = cutover_today
+    else:
+        yesterday = today_local - _td(days=1)
+        day_start = _dt(yesterday.year, yesterday.month, yesterday.day, H, 0, 0, tzinfo=tz)
+
+    # Build day_end as an explicit local datetime at H:00:00 on the next calendar
+    # day — mirrors the date-param path above.  Adding timedelta(days=1) is wrong
+    # for DST-observing timezones: on a spring-forward day the result lands one
+    # hour too late; on fall-back one hour too early.  ZoneInfo fold semantics
+    # guarantee that _dt(next_day, H, 0, 0, tzinfo=tz) resolves to the correct
+    # wall-clock hour even across the DST transition.
+    next_day_local = day_start.date() + _td(days=1)
+    day_end = _dt(next_day_local.year, next_day_local.month, next_day_local.day, H, 0, 0, tzinfo=tz)
+    return day_start, day_end
+
+
 def _schedule_open(profile) -> bool | None:
     """Check *profile.business_hours_schedule* against the restaurant's LOCAL time
     (per ``profile.timezone``; see _profile_now).
@@ -2925,11 +2996,13 @@ class CustomerOrderCancelView(APIView):
             )
 
         from django.db import transaction as _tx
+        _cancel_tenant = getattr(request, "tenant", None)
+        _cancel_tenant_id = _cancel_tenant.id if _cancel_tenant else None
         with _tx.atomic():
             order.status = Order.Status.CANCELLED
             order.status_updated_at = timezone.now()
             order.save(update_fields=["status", "status_updated_at", "updated_at"])
-            _refund_wallet_for_cancelled_order(order)  # idempotent wallet credit
+            _refund_wallet_for_cancelled_order(order, tenant_id=_cancel_tenant_id)  # idempotent wallet credit
             _reverse_loyalty_for_cancelled_order(order)  # claw back earned / restore spent points
             _restock_cancelled_order(order)
 
@@ -3378,12 +3451,22 @@ class StaffShiftSummaryView(APIView):
       - since: ISO-8601 datetime marking shift start. Defaults to 8 hours ago.
 
     Returns:
-      orders_handled   — count of orders that reached 'completed' within the window
-      total_revenue    — sum of their totals (Decimal string)
-      currency         — currency code (from first order, or empty)
-      average_prep_time_minutes — mean seconds from created_at → status_updated_at (null if none)
-      since            — ISO-8601 of the window start actually used
-      period_hours     — float hours covered
+      orders_handled             — count of orders that reached 'completed' within the window
+      total_revenue              — sum of their totals (Decimal string)
+      collected_cash             — cash collected in the window (Decimal string, Contract G)
+      collected_wallet           — wallet collected in the window (Decimal string, Contract G)
+      currency                   — currency code (from first order, or empty)
+      average_prep_time_minutes  — mean (status_updated_at − created_at) in minutes, single query
+      since                      — ISO-8601 of the window start actually used
+      period_hours               — float hours covered
+
+    Contract G changes:
+      - cash/wallet split added using split_revenue_for_orders (shared helper).
+      - avg prep time collapsed into a single-query ExpressionWrapper(Avg(duration))
+        instead of the previous Python loop over qs.only("created_at","status_updated_at").
+        This avoids an N+0 extra Python iteration over all rows and is cheaper for
+        the DB (single aggregate vs. materialising the full queryset into Python).
+      - currency folded into the aggregate query instead of a second .first() query.
     """
     permission_classes = [IsAuthenticated]
 
@@ -3410,49 +3493,78 @@ class StaffShiftSummaryView(APIView):
         # Scope to the orders THIS user personally handled — their own shift, not the
         # whole restaurant. Owners using the waiter view see their own handled orders too;
         # restaurant-wide figures live in the owner dashboard.
+        # payment_status=PAID is required so the split matches the Z-report and digest
+        # (both of which filter on PAID).  Without it, COMPLETED dine-in orders that
+        # haven't been paid yet (wallet_amount_paid=0) inflate the "cash" figure via
+        # the legacy split path (cash = total − wallet_amount_paid = total).
         qs = Order.objects.filter(
             status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
             status_updated_at__gte=since_dt,
             handled_by_user_id=getattr(request.user, "id", None),
         )
 
-        from django.db.models import Avg, Count, Sum
+        # Contract G: single-query aggregate.
+        # ExpressionWrapper(F('status_updated_at') - F('created_at')) yields a
+        # DurationField; Avg() over it gives the mean duration without materialising
+        # all rows into Python.  The result is a timedelta (or None when no rows).
+        from django.db.models import Avg, Count, DurationField, ExpressionWrapper, Sum
+        from django.db.models.functions import Coalesce
+
         agg = qs.aggregate(
             total_count=Count("id"),
             total_revenue=Sum("total"),
+            # avg_prep_duration: Avg of (status_updated_at − created_at)
+            # Both fields are always set on COMPLETED orders, but we guard
+            # with a DurationField cast for safety.
+            avg_prep_duration=Avg(
+                ExpressionWrapper(
+                    F("status_updated_at") - F("created_at"),
+                    output_field=DurationField(),
+                )
+            ),
         )
 
         orders_handled = agg["total_count"] or 0
         total_revenue = agg["total_revenue"] or Decimal("0.00")
 
-        # Average prep time: mean of (status_updated_at - created_at) in minutes
+        # Convert the mean duration to minutes (round to 1 decimal).
         avg_prep_minutes = None
-        if orders_handled > 0:
-            total_seconds = 0
-            count_with_both = 0
-            for o in qs.only("created_at", "status_updated_at"):
-                if o.status_updated_at and o.created_at:
-                    delta = (o.status_updated_at - o.created_at).total_seconds()
-                    if delta >= 0:
-                        total_seconds += delta
-                        count_with_both += 1
-            if count_with_both > 0:
-                avg_prep_minutes = round(total_seconds / count_with_both / 60, 1)
+        raw_duration = agg.get("avg_prep_duration")
+        if raw_duration is not None:
+            total_secs = raw_duration.total_seconds()
+            if total_secs >= 0:
+                avg_prep_minutes = round(total_secs / 60, 1)
 
-        currency = ""
-        first = qs.only("currency").first()
-        if first:
-            currency = first.currency or ""
+        # Currency: pick from the first row without an extra .only("currency").first() query.
+        # We use qs.values_list which is a single cheap scan.
+        currency = (
+            qs.values_list("currency", flat=True)
+            .exclude(currency="")
+            .order_by()
+            .first()
+        ) or ""
 
         now = timezone.now()
         period_hours = round((now - since_dt).total_seconds() / 3600, 1)
 
-        # Revenue figures are gated by the 'view revenue' permission. Staff without it
-        # still see throughput (orders handled, prep time) but not the money totals.
+        # Contract G: cash/wallet split for drawer handover.
+        # Reuses split_revenue_for_orders (shared with Z-report and daily digest)
+        # so the three surfaces always agree.
         show_revenue = _can_view_revenue(request)
+        collected_cash = None
+        collected_wallet = None
+        if show_revenue:
+            from menu.revenue import split_revenue_for_orders
+            split = split_revenue_for_orders(qs)
+            collected_cash = str(split["cash"])
+            collected_wallet = str(split["wallet"])
+
         return Response({
             "orders_handled": orders_handled,
             "total_revenue": str(total_revenue) if show_revenue else None,
+            "collected_cash": collected_cash,
+            "collected_wallet": collected_wallet,
             "currency": currency if show_revenue else "",
             "show_revenue": show_revenue,
             "average_prep_time_minutes": avg_prep_minutes,
@@ -4106,6 +4218,7 @@ class StaffVoidOrderItemView(APIView):
             if _refunded > Decimal("0"):
                 from accounts.wallet_service import credit_wallet
                 from accounts.models import WalletTransaction as _WTx
+                _void_tenant = getattr(request, "tenant", None)
                 credit_wallet(
                     order.customer_id,
                     _refunded,
@@ -4114,6 +4227,10 @@ class StaffVoidOrderItemView(APIView):
                     reference=order.order_number,
                     note=f"Void item: {item.dish_name}",
                     require_verified=False,
+                    # tenant_id tags the row so refund queries can filter per-tenant.
+                    # WalletTransaction lives in the shared schema; without this field
+                    # the Z-report and dashboard would see refunds from all tenants.
+                    tenant_id=_void_tenant.id if _void_tenant else None,
                 )
 
         try:
@@ -4707,7 +4824,7 @@ class OwnerDeliveryJobActionView(APIView):
                     order.status = Order.Status.CANCELLED
                     order.status_updated_at = _tz.now()
                     order.save(update_fields=["status", "status_updated_at", "updated_at"])
-                _refund_wallet_for_cancelled_order(order)   # idempotent
+                _refund_wallet_for_cancelled_order(order, tenant_id=tenant.id)   # idempotent
                 _reverse_loyalty_for_cancelled_order(order)
                 _restock_cancelled_order(order)
             try:
@@ -5103,7 +5220,7 @@ class OwnerOrderDetailView(APIView):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        order = Order.objects.select_related("customer").prefetch_related("items").filter(id=order_id).first()
+        order = Order.objects.select_related("customer").prefetch_related("items", "payments").filter(id=order_id).first()
         if order is None:
             return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -5199,6 +5316,9 @@ class OwnerOrderDetailView(APIView):
                     "options": i.options,
                     "note": i.note,
                     "is_voided": i.is_voided,
+                    # Contract F: void_reason surfaced in owner order-detail payload
+                    "void_reason": i.void_reason if i.is_voided else None,
+                    "voided_at": i.voided_at.isoformat() if i.is_voided and i.voided_at else None,
                     "combo_components": i.combo_components,
                     "course": getattr(i, "course", 0),
                 }
@@ -5214,6 +5334,23 @@ class OwnerOrderDetailView(APIView):
             "promotion_discount": str(order.promotion_discount),
             "applied_promotion_name": order.applied_promotion_name,
             "delivery_job": _dj_data,
+            # Contract F: payment ledger rows surfaced in owner order-detail.
+            # recorded_by_name lets the owner see who took cash / processed wallet.
+            # Correction audit fields included so corrections are visible too.
+            "payments": [
+                {
+                    "id": p.id,
+                    "amount": str(p.amount),
+                    "method": p.method,
+                    "recorded_by_name": p.recorded_by_name or None,
+                    "note": p.note or None,
+                    "created_at": p.created_at.isoformat(),
+                    "original_method": p.original_method or None,
+                    "corrected_at": p.corrected_at.isoformat() if p.corrected_at else None,
+                    "corrected_by_name": p.corrected_by_name or None,
+                }
+                for p in order.payments.all()
+            ],
         })
 
 
@@ -5502,9 +5639,15 @@ class OwnerPromotionDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-def _refund_wallet_for_cancelled_order(order) -> None:
+def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
     """Credit the customer's wallet when a wallet-paid order is cancelled.
     Idempotent — checks for an existing refund transaction before writing.
+
+    tenant_id: the integer PK of the tenant that owns this order.  Pass it so the
+    WalletTransaction row can be filtered per-tenant in refund reports (WalletTransaction
+    lives in the shared public schema; without tenant_id the query would aggregate
+    refunds from ALL tenants).  Callers should supply ``request.tenant.id`` or the
+    local ``tenant.id`` variable — both cancel entry-points have a tenant reference.
     """
     from decimal import Decimal as _Dec
     from django.db import transaction as _dbtx
@@ -5545,6 +5688,9 @@ def _refund_wallet_for_cancelled_order(order) -> None:
             reference=order.order_number,
             note="Refund for cancelled order",
             balance_after=_cust.wallet_balance,
+            # tenant_id tags this REFUND row to the owning tenant so that refund
+            # aggregate queries in the Z-report and dashboard can filter per-tenant.
+            tenant_id=tenant_id,
         )
 
 
@@ -5733,7 +5879,8 @@ class OwnerOrderStatusUpdateView(APIView):
                     except (TypeError, ValueError):
                         order.estimated_ready_minutes = None
                 order.save(update_fields=update_fields)
-                _refund_wallet_for_cancelled_order(order)
+                _ct = getattr(request, "tenant", None)
+                _refund_wallet_for_cancelled_order(order, tenant_id=_ct.id if _ct else None)
                 _reverse_loyalty_for_cancelled_order(order)
                 _restock_cancelled_order(order)
             # Stand down any assigned delivery driver (public-schema job; best-effort).
@@ -6024,7 +6171,7 @@ class OwnerOrderExportView(APIView):
         if from_date and to_date and from_date > to_date:
             return Response({"detail": "'from' date cannot be after 'to' date."}, status=status.HTTP_400_BAD_REQUEST)
 
-        qs = Order.objects.prefetch_related("items").order_by("-created_at")
+        qs = Order.objects.prefetch_related("items", "payments").order_by("-created_at")
         if status_filter:
             qs = qs.filter(status=status_filter)
         if from_date:
@@ -6043,15 +6190,25 @@ class OwnerOrderExportView(APIView):
         response.write("﻿")  # UTF-8 BOM: signals to Excel this is a UTF-8 file
 
         writer = csv.writer(response)
+        # Contract F: void_reason + recorded_by_name are surfaced in the CSV export
+        # so owners can audit who voided items and why. Items with is_voided=True
+        # are included in the item text with a "[VOID]" prefix.
         writer.writerow([
             "order_number", "created_at", "status", "payment_status", "fulfillment_type",
             "table_label", "customer_name", "customer_phone",
             "customer_note", "owner_note", "delivery_address",
-            "items", "subtotal", "delivery_fee", "tip_amount",
+            "items", "void_items", "subtotal", "delivery_fee", "tip_amount",
             "loyalty_discount", "promotion_discount", "wallet_amount_paid", "paid_at", "total", "currency",
+            "recorded_by_names",
         ])
 
         for order in qs[:5000]:
+            # Iterate items exactly once from the prefetch cache; split into active/voided.
+            # A second call to order.items.all() would re-hit the DB (N+1).
+            _all_items = list(order.items.all())
+            active_items = [i for i in _all_items if not i.is_voided]
+            voided_items = [i for i in _all_items if i.is_voided]
+
             items_text = " | ".join(
                 f"{i.qty}x {i.dish_name}"
                 + (
@@ -6059,7 +6216,17 @@ class OwnerOrderExportView(APIView):
                     if i.options
                     else ""
                 )
-                for i in order.items.all()
+                for i in active_items
+            )
+            # Contract F: list voided items with their void_reason in a separate column
+            void_text = " | ".join(
+                f"[VOID] {i.qty}x {i.dish_name}"
+                + (f" — {i.void_reason}" if i.void_reason else "")
+                for i in voided_items
+            )
+            # Contract F: recorded_by_name from the payment ledger (may be multiple staff)
+            recorded_by_names = ", ".join(
+                sorted({p.recorded_by_name for p in order.payments.all() if p.recorded_by_name})
             )
             subtotal = order.total - order.delivery_fee
             writer.writerow([
@@ -6074,7 +6241,8 @@ class OwnerOrderExportView(APIView):
                 _csv_safe(order.customer_note or ""),        # customer-provided
                 _csv_safe(order.owner_note or ""),           # restaurant's internal note
                 _csv_safe(order.delivery_address or ""),     # customer-provided
-                _csv_safe(items_text),                       # dish names (owner-set)
+                _csv_safe(items_text),                       # active dish names
+                _csv_safe(void_text),                        # voided items + reasons (Contract F)
                 str(subtotal),
                 str(order.delivery_fee),
                 str(order.tip_amount),
@@ -6084,9 +6252,428 @@ class OwnerOrderExportView(APIView):
                 timezone.localtime(order.paid_at).isoformat() if order.paid_at else "",
                 str(order.total),
                 order.currency or "",
+                _csv_safe(recorded_by_names),                # Contract F: who recorded the payment
             ])
 
         return response
+
+
+class OwnerZReportView(APIView):
+    """GET /api/owner/z-report/?date=YYYY-MM-DD (optional)
+       GET /api/owner/z-report.csv?date=YYYY-MM-DD (CSV flat-file export)
+
+    End-of-day "Z-report" snapshot for the owner.  Covers one service-day window
+    (start inclusive, end exclusive) whose boundaries are determined by
+    Profile.service_day_cutover_hour (default 0 = calendar midnight).
+
+    Auth: owner only (IsTenantOwner check — same pattern as OwnerCommissionStatementView).
+
+    ── ORDER SELECTION PREDICATE (collected) ──────────────────────────────────
+    "Collected" money is money that physically changed hands in the window, NOT
+    orders that are still in-flight.  Only COMPLETED orders whose paid_at timestamp
+    falls within [window_start, window_end) are counted.  Rationale:
+
+      * paid_at is set exactly when cash/wallet is received (StaffSettleView,
+        WalletSettleView, StaffOrderPaymentView last-instalment logic).
+      * PREPARING/READY/CONFIRMED orders have not been paid yet; including them
+        inflates the drawer (this is the bug documented in OPS_AUDIT THEME 3).
+      * We filter on paid_at (not created_at) to handle the case where a dine-in
+        order is placed before midnight but paid after the cutover hour.
+
+    Predicate:
+        status = COMPLETED
+        paid_at >= window_start
+        paid_at < window_end
+
+    The cash/wallet split is delegated to menu.revenue.split_revenue_for_orders
+    (shared with the daily digest) so all three surfaces (Z-report, digest, dashboard)
+    agree to the cent.
+
+    ── REFUNDS PREDICATE ─────────────────────────────────────────────────────
+    Refunds are WalletTransaction rows with type=REFUND that were created in the
+    window.  Note:
+      - _refund_wallet_for_cancelled_order creates a REFUND row when a wallet-paid
+        order is cancelled (note="Refund for cancelled order").
+      - Partial void refunds also create REFUND rows (note prefix "Void refund").
+    We aggregate ALL REFUND rows created within the window regardless of note.
+
+    Limitation: cash refunds (if any) are not tracked in WalletTransaction — the
+    system has no cash-refund ledger today.  The basis field documents this.
+
+    net_cash_position = collected.cash − 0  (no cash-refund ledger exists today;
+    wallet refunds do not touch the physical drawer).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _require_owner(self, request):
+        user = request.user
+        return getattr(user, "is_tenant_owner", False) or (
+            hasattr(user, "role") and user.role == getattr(user, "Roles", type("_R", (), {"TENANT_OWNER": "owner"})).TENANT_OWNER
+        )
+
+    def _get_profile(self, request):
+        tenant = getattr(request, "tenant", None)
+        if tenant is None:
+            return None
+        try:
+            return tenant.profile
+        except Exception:
+            return None
+
+    def _build_report(self, profile, date_param, tenant_id=None):
+        """Compute the Z-report data dict for a given profile and optional date.
+
+        tenant_id: integer PK of the owning tenant.  MUST be supplied so that the
+        WalletTransaction refund query is scoped to this tenant only.  Without it the
+        query aggregates REFUND rows from every tenant in the shared schema.
+        """
+        from menu.revenue import split_revenue_for_orders
+        from accounts.models import WalletTransaction as _WTx
+        from django.db.models import Sum as _Sum, Count as _Count
+
+        # ── Service-day window ────────────────────────────────────────────────
+        window_start, window_end = service_day_window(profile, date=date_param)
+        H = int(getattr(profile, "service_day_cutover_hour", 0) or 0)
+        # Derive the service_day label: the local date on which this window STARTS.
+        service_day_date = window_start.date()
+
+        # ── Collected orders (paid in window) ─────────────────────────────────
+        # Predicate: COMPLETED + PAID status AND paid_at in [start, end).
+        # paid_at is set at the moment money is received; this is the ground truth
+        # for "money in the drawer" rather than created_at or status_updated_at.
+        # payment_status=PAID is a defence-in-depth filter: a future status-flow
+        # change that could mark an order COMPLETED without PAID would otherwise
+        # silently inflate the drawer total.
+        collected_qs = Order.objects.filter(
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            paid_at__gte=window_start,
+            paid_at__lt=window_end,
+        )
+        split = split_revenue_for_orders(collected_qs)
+        collected_cash = split["cash"]
+        collected_wallet = split["wallet"]
+        collected_total = (collected_cash + collected_wallet).quantize(Decimal("0.01"))
+
+        # ── Tips in window ────────────────────────────────────────────────────
+        tips_agg = collected_qs.aggregate(tips=_Sum("tip_amount"))
+        tips_total = Decimal(str(tips_agg["tips"] or 0)).quantize(Decimal("0.01"))
+
+        # ── Refunds in window ─────────────────────────────────────────────────
+        # WalletTransaction.REFUND rows created in the window — wallet credits only.
+        # There is no cash-refund ledger in the current data model.
+        # CRITICAL: WalletTransaction lives in the shared public schema; without a
+        # tenant_id filter this would aggregate refunds from ALL tenants.
+        # The tenant_id field is set on every REFUND row by the two creation paths:
+        #   - credit_wallet(tenant_id=...) in StaffVoidOrderItemView
+        #   - _WTM.objects.create(tenant_id=...) in _refund_wallet_for_cancelled_order
+        refund_filter = dict(
+            type=_WTx.Type.REFUND,
+            created_at__gte=window_start,
+            created_at__lt=window_end,
+        )
+        if tenant_id is not None:
+            refund_filter["tenant_id"] = tenant_id
+        refund_agg = _WTx.objects.filter(**refund_filter).aggregate(
+            refund_count=_Count("id"),
+            refund_total=_Sum("amount"),
+        )
+        refund_count = int(refund_agg["refund_count"] or 0)
+        refund_total = Decimal(str(refund_agg["refund_total"] or 0)).quantize(Decimal("0.01"))
+
+        # ── Voids in window ───────────────────────────────────────────────────
+        # OrderItem.is_voided=True AND voided_at in [start, end).
+        # voided_by: the model stores void attribution in OrderItem.void_reason only
+        # (free text) — there is no voided_by_user_id field.  We use None → null.
+        voided_items_qs = OrderItem.objects.select_related("order").filter(
+            is_voided=True,
+            voided_at__gte=window_start,
+            voided_at__lt=window_end,
+        )
+        voids_list = []
+        voids_total = Decimal("0.00")
+        for item in voided_items_qs:
+            line_total = (item.unit_price * item.qty).quantize(Decimal("0.01"))
+            voids_total += line_total
+            voids_list.append({
+                "order_number": item.order.order_number,
+                "dish_name": item.dish_name,
+                "qty": item.qty,
+                "line_total": str(line_total),
+                "reason": item.void_reason or "",
+                "voided_by": None,  # no voided_by_user_id field exists today
+            })
+
+        # ── By-staff breakdown ────────────────────────────────────────────────
+        # Source: OrderPayment.recorded_by_name for ledger-based payments.
+        # Legacy (one-shot settle) orders have no ledger row; they cannot be
+        # attributed to a specific staff member from existing data.
+        #
+        # IMPORTANT: we filter on order__paid_at (not OrderPayment.created_at) so that
+        # by_staff totals are drawn from the same service-day population as the collected
+        # header totals.  For split-bill orders the last instalment sets paid_at; earlier
+        # instalments have earlier created_at values that can land in a different service
+        # day if the order straddles the cutover hour.  Using order__paid_at ensures
+        # Sum(by_staff.collected_cash) + Sum(by_staff.collected_wallet) == collected.total.
+        from django.db.models import Q as _Q
+        staff_payments = (
+            OrderPayment.objects.filter(
+                order__status=Order.Status.COMPLETED,
+                order__payment_status=Order.PaymentStatus.PAID,
+                order__paid_at__gte=window_start,
+                order__paid_at__lt=window_end,
+            )
+            .values("recorded_by_name", "method")
+            .annotate(amount_sum=_Sum("amount"))
+        )
+        staff_map = {}
+        for row in staff_payments:
+            name = row["recorded_by_name"] or "(unknown)"
+            if name not in staff_map:
+                staff_map[name] = {"name": name, "orders": 0, "collected_cash": Decimal("0.00"), "collected_wallet": Decimal("0.00")}
+            amt = Decimal(str(row["amount_sum"] or 0))
+            if row["method"] == OrderPayment.Method.CASH:
+                staff_map[name]["collected_cash"] += amt
+            else:
+                staff_map[name]["collected_wallet"] += amt
+
+        # Count distinct orders per staff member from the payment ledger
+        staff_order_counts = (
+            OrderPayment.objects.filter(
+                order__status=Order.Status.COMPLETED,
+                order__payment_status=Order.PaymentStatus.PAID,
+                order__paid_at__gte=window_start,
+                order__paid_at__lt=window_end,
+            )
+            .values("recorded_by_name")
+            .annotate(order_count=_Count("order_id", distinct=True))
+        )
+        for row in staff_order_counts:
+            name = row["recorded_by_name"] or "(unknown)"
+            if name in staff_map:
+                staff_map[name]["orders"] = row["order_count"]
+
+        by_staff = [
+            {
+                "name": v["name"],
+                "orders": v["orders"],
+                "collected_cash": str(v["collected_cash"].quantize(Decimal("0.01"))),
+                "collected_wallet": str(v["collected_wallet"].quantize(Decimal("0.01"))),
+            }
+            for v in sorted(staff_map.values(), key=lambda x: x["name"])
+        ]
+
+        # ── Net cash position ─────────────────────────────────────────────────
+        # net_cash_position = collected.cash − cash_refunds_issued
+        # There is no cash-refund ledger (all tracked refunds are wallet credits).
+        # Therefore net_cash_position = collected.cash (cash is not reduced by wallet refunds).
+        net_cash_position = collected_cash.quantize(Decimal("0.01"))
+
+        return {
+            "window": {
+                "service_day": service_day_date.isoformat(),
+                "start": window_start.isoformat(),
+                "end": window_end.isoformat(),
+                "cutover_hour": H,
+            },
+            "collected": {
+                "cash": str(collected_cash),
+                "wallet": str(collected_wallet),
+                "total": str(collected_total),
+            },
+            "refunds": {
+                "count": refund_count,
+                "total": str(refund_total),
+                "basis": (
+                    "WalletTransaction REFUND rows created in window. "
+                    "Cash refunds not tracked (no cash-refund ledger exists)."
+                ),
+            },
+            "voids": {
+                "count": len(voids_list),
+                "total": str(voids_total.quantize(Decimal("0.01"))),
+                "items": voids_list,
+            },
+            "tips": {
+                "total": str(tips_total),
+            },
+            "by_staff": by_staff,
+            "net_cash_position": str(net_cash_position),
+            "net": str((collected_total - refund_total).quantize(Decimal("0.01"))),
+        }
+
+    def get(self, request, *args, **kwargs):
+        if not self._require_owner(request):
+            return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        profile = self._get_profile(request)
+        if profile is None:
+            return Response({"detail": "Tenant profile not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        date_param = (request.query_params.get("date") or "").strip() or None
+
+        # CSV export — same data, flat rows
+        want_csv = (
+            request.accepted_renderer.format == "csv"
+            if hasattr(request, "accepted_renderer") and hasattr(request.accepted_renderer, "format")
+            else False
+        )
+        # Also check URL path suffix (.csv) or ?format=csv
+        path = request.path or ""
+        if path.endswith(".csv") or request.query_params.get("format") == "csv":
+            want_csv = True
+
+        _z_tenant = getattr(request, "tenant", None)
+        _z_tenant_id = _z_tenant.id if _z_tenant else None
+        try:
+            data = self._build_report(profile, date_param, tenant_id=_z_tenant_id)
+        except Exception as exc:
+            return Response({"detail": f"Report generation failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if want_csv:
+            return self._csv_response(data, request)
+        return Response(data)
+
+    def _csv_response(self, data, request):
+        """Flat CSV representation of the Z-report."""
+        tenant_slug = getattr(getattr(request, "tenant", None), "slug", "report")
+        service_day = data["window"]["service_day"]
+        filename = f"{tenant_slug}-z-report-{service_day}.csv"
+
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response.write("\xef\xbb\xbf")  # UTF-8 BOM for Excel
+
+        writer = csv.writer(response)
+
+        # Summary section
+        writer.writerow(["section", "field", "value"])
+        writer.writerow(["window", "service_day", data["window"]["service_day"]])
+        writer.writerow(["window", "start", data["window"]["start"]])
+        writer.writerow(["window", "end", data["window"]["end"]])
+        writer.writerow(["window", "cutover_hour", data["window"]["cutover_hour"]])
+        writer.writerow(["collected", "cash", data["collected"]["cash"]])
+        writer.writerow(["collected", "wallet", data["collected"]["wallet"]])
+        writer.writerow(["collected", "total", data["collected"]["total"]])
+        writer.writerow(["refunds", "count", data["refunds"]["count"]])
+        writer.writerow(["refunds", "total", data["refunds"]["total"]])
+        writer.writerow(["tips", "total", data["tips"]["total"]])
+        writer.writerow(["net", "cash_position", data["net_cash_position"]])
+        writer.writerow(["net", "reconciliation", data["net"]])
+        writer.writerow([])
+
+        # By-staff section
+        writer.writerow(["staff", "name", "orders", "collected_cash", "collected_wallet"])
+        for row in data["by_staff"]:
+            writer.writerow(["staff", row["name"], row["orders"], row["collected_cash"], row["collected_wallet"]])
+        writer.writerow([])
+
+        # Voids section
+        writer.writerow(["void", "order_number", "dish_name", "qty", "line_total", "reason", "voided_by"])
+        for item in data["voids"]["items"]:
+            writer.writerow([
+                "void",
+                item["order_number"],
+                _csv_safe(item["dish_name"]),
+                item["qty"],
+                item["line_total"],
+                _csv_safe(item["reason"]),
+                item["voided_by"] or "",
+            ])
+
+        return response
+
+
+class StaffPaymentMethodCorrectionView(APIView):
+    """POST /api/staff/orders/<order_id>/payments/<payment_id>/correct-method/
+
+    Corrects the recorded tender method (cash ↔ wallet) on an OrderPayment row.
+    This is a RELABELLING operation only — it does NOT move money.
+
+    Boundary (documented and must not be crossed):
+      * OrderPayment.method is updated to the corrected value.
+      * The three correction audit fields are written: original_method (first
+        correction only), corrected_at, corrected_by_name.
+      * WalletTransaction rows, Customer.wallet_balance, and
+        Order.wallet_amount_paid are NEVER touched. The wallet ledger reflects
+        what actually moved in/out of the wallet; this endpoint only fixes a
+        mis-label in the cash-register record.
+      * The Z-report reads the (possibly corrected) method field, so the
+        drawer split will reflect the correction immediately.
+
+    Auth: _can_access_order (same gate used by StaffOrderPaymentView, StaffVoidOrderItemView).
+
+    Request body: {"method": "cash" | "wallet"}
+
+    Response: updated payment row payload.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, order_id, payment_id, *args, **kwargs):
+        if not _can_edit_tenant_order(request):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        new_method = str(request.data.get("method") or "").strip().lower()
+        if new_method not in {"cash", "wallet"}:
+            return Response(
+                {"detail": "method must be 'cash' or 'wallet'.", "code": "bad_method"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = (
+            OrderPayment.objects
+            .select_related("order")
+            .filter(pk=payment_id, order_id=order_id)
+            .first()
+        )
+        if payment is None:
+            return Response({"detail": "Payment not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _can_access_order(request, payment.order):
+            return Response(
+                {"detail": "Access denied — not your section.", "code": "section_denied"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if payment.method == new_method:
+            return Response(
+                {"detail": "Payment method is already recorded as that value.", "code": "no_change"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Write the correction with full audit trail.
+        # original_method is only captured on the FIRST correction so the chain
+        # "wallet → cash" then "cash → wallet" doesn't overwrite the original.
+        corrector_name = ""
+        user = request.user
+        if hasattr(user, "get_full_name"):
+            corrector_name = (user.get_full_name() or "").strip()
+        if not corrector_name:
+            corrector_name = getattr(user, "username", "") or getattr(user, "email", "") or "staff"
+
+        update_fields = ["method", "corrected_at", "corrected_by_name"]
+        if not payment.original_method:
+            # First correction — snapshot the original method.
+            payment.original_method = payment.method
+            update_fields.append("original_method")
+
+        payment.method = new_method
+        payment.corrected_at = timezone.now()
+        payment.corrected_by_name = corrector_name[:80]
+        payment.save(update_fields=update_fields)
+
+        return Response({
+            "id": payment.id,
+            "order_id": payment.order_id,
+            "amount": str(payment.amount),
+            "method": payment.method,
+            "recorded_by_name": payment.recorded_by_name,
+            "note": payment.note,
+            "created_at": payment.created_at.isoformat(),
+            "original_method": payment.original_method or None,
+            "corrected_at": payment.corrected_at.isoformat() if payment.corrected_at else None,
+            "corrected_by_name": payment.corrected_by_name or None,
+        })
 
 
 class DishBulkAvailabilityResetView(APIView):

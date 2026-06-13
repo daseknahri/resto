@@ -384,6 +384,22 @@ class Profile(models.Model):
         help_text="Automatically re-enable all sold-out dishes at ~05:00 local time each day.",
     )
 
+    # ── Service-day cutover hour (OPS-2 contract A) ────────────────────────────
+    # The tenant-local hour (0..11) at which one service day rolls to the next.
+    # Default 0 = calendar midnight → NO-OP, preserving existing behaviour.
+    # A late-night venue (e.g. bar that closes at 4 am) sets this to 3 or 4 so
+    # that orders placed after midnight are attributed to the *previous* service
+    # day's cash drawer, not the new calendar day.
+    # Validation: 0..11 only — no restaurant's service day rolls over at noon or later.
+    service_day_cutover_hour = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Tenant-local hour (0–11) at which one service day rolls to the next. "
+            "0 = calendar midnight (default, no behaviour change). "
+            "Set to e.g. 3 for a late-night venue so 2 am orders belong to yesterday's shift."
+        ),
+    )
+
     # ── Win-back automation ────────────────────────────────────────────────────
     winback_enabled = models.BooleanField(
         default=False,

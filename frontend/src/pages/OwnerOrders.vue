@@ -614,6 +614,8 @@
                 {{ t("ownerOrders.options") }}: {{ item.options.map(o => o.name).join(", ") }}
               </p>
               <p v-if="item.note" class="italic text-slate-400">{{ item.note }}</p>
+              <!-- Contract F: void reason surfaced -->
+              <p v-if="item.is_voided && item.void_reason" class="text-[10px] text-red-400/80 italic">{{ t("ownerOrders.voidReason") }}: {{ item.void_reason }}</p>
               <!-- Combo sub-lines -->
               <ul v-if="item.combo_components?.length" class="mt-0.5 space-y-0">
                 <li
@@ -631,6 +633,85 @@
           <p v-if="o.customer_note" class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-slate-300">
             <span class="font-semibold text-slate-400">{{ t("ownerOrders.note") }}:</span> {{ o.customer_note }}
           </p>
+        </div>
+
+        <!-- Contract F: Payment ledger rows with correction affordance -->
+        <!-- Payments are lazy-loaded on demand (list endpoint returns totals only) -->
+        <div v-if="o.payment_status === 'paid' || paymentsMap[o.id]" class="space-y-1">
+          <div class="flex items-center gap-2">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{{ t("ownerOrders.paymentsLedger") }}</p>
+            <button
+              v-if="!paymentsMap[o.id]"
+              type="button"
+              class="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2 transition"
+              @click="loadPayments(o.id)"
+            >{{ t("ownerOrders.loadPayments") }}</button>
+          </div>
+          <div
+            v-for="p in (paymentsMap[o.id] || [])"
+            :key="p.id"
+            class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800/60 bg-slate-950/30 px-3 py-1.5 text-xs"
+          >
+            <div class="flex items-center gap-2 min-w-0">
+              <span
+                class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="p.method === 'cash' ? 'bg-amber-500/15 text-amber-300' : 'bg-sky-500/15 text-sky-300'"
+              >
+                {{ p.method === 'cash' ? t("ownerOrders.methodCash") : t("ownerOrders.methodWallet") }}
+              </span>
+              <span class="font-semibold tabular-nums text-slate-200">{{ formatCurrency(p.amount, o.currency) }}</span>
+              <span v-if="p.recorded_by_name" class="text-slate-500">{{ t("ownerOrders.recordedBy") }}: {{ p.recorded_by_name }}</span>
+              <!-- Corrected indicator -->
+              <span v-if="p.original_method" class="text-[10px] text-amber-400 italic">
+                {{ t("ownerOrders.corrected", { from: p.original_method, by: p.corrected_by_name || t("ownerOrders.unknown") }) }}
+              </span>
+            </div>
+            <!-- Correct method button -->
+            <button
+              type="button"
+              class="shrink-0 rounded-full border border-slate-700/60 px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:border-slate-500 hover:text-slate-200 transition ui-press focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+              :disabled="correctingPaymentId === p.id"
+              :aria-label="t('ownerOrders.correctMethod')"
+              @click="openCorrectMethod(o, p)"
+            >
+              {{ correctingPaymentId === p.id ? t("common.saving") : t("ownerOrders.correctMethod") }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Correct-method inline panel -->
+        <div v-if="correctMethodPanel && correctMethodPanel.orderId === o.id" class="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 space-y-2 text-xs">
+          <p class="font-semibold text-amber-200">{{ t("ownerOrders.correctMethodTitle") }}</p>
+          <p class="text-slate-400">{{ t("ownerOrders.correctMethodHint") }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="method in ['cash', 'wallet']"
+              :key="method"
+              type="button"
+              class="rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400/60"
+              :class="correctMethodPanel.newMethod === method
+                ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
+                : 'border-slate-700 text-slate-300 hover:border-slate-500'"
+              @click="correctMethodPanel.newMethod = method"
+            >
+              {{ method === 'cash' ? t("ownerOrders.methodCash") : t("ownerOrders.methodWallet") }}
+            </button>
+          </div>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="ui-btn-primary px-3 py-1.5 text-xs"
+              :disabled="correctingPaymentId === correctMethodPanel.paymentId || !correctMethodPanel.newMethod"
+              @click="submitCorrectMethod"
+            >
+              {{ correctingPaymentId === correctMethodPanel.paymentId ? t("common.saving") : t("ownerOrders.correctMethodConfirm") }}
+            </button>
+            <button
+              type="button"
+              class="ui-btn-outline px-3 py-1.5 text-xs"
+              @click="correctMethodPanel = null"
+            >{{ t("common.cancel") }}</button>
+          </div>
         </div>
 
         <!-- Owner note + estimate -->
@@ -821,6 +902,7 @@ import { useConfirmModal } from "../composables/useConfirmModal";
 import api from "../lib/api";
 import { useOrderStore } from "../stores/order";
 import { useToastStore } from "../stores/toast";
+import { useTenantStore } from "../stores/tenant";
 import { usePrintTicket } from "../composables/usePrintTicket";
 import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 
@@ -831,6 +913,7 @@ defineOptions({ name: "OwnerOrders" });
 const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
+const tenant = useTenantStore();
 const { confirm } = useConfirmModal();
 const route = useRoute();
 
@@ -927,9 +1010,24 @@ const statusTabs = computed(() => {
 });
 
 // ── Today's stats ─────────────────────────────────────────────────────────────
+// Use tenant timezone so "today" is bucketed in the restaurant's local time,
+// not the owner's device timezone (Contract E: timezone "today" fix).
+const _tenantDateStr = (isoStr) => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  if (!tz) return new Date(isoStr).toDateString(); // fallback to device tz
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoStr));
+  } catch {
+    return new Date(isoStr).toDateString();
+  }
+};
+
 const todayStats = computed(() => {
-  const today = new Date().toDateString();
-  const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  const todayStr = tz
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
+    : new Date().toDateString();
+  const todayOrders = order.orders.filter((o) => _tenantDateStr(o.created_at) === todayStr);
   const pending = todayOrders.filter((o) => o.status === "pending").length;
   const revenue = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
   const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
@@ -940,11 +1038,18 @@ const todayStats = computed(() => {
 const STATUS_SORT = { scheduled: -1, pending: 0, confirmed: 1, preparing: 2, ready: 3, out_for_delivery: 4, completed: 5, cancelled: 6 };
 
 const filteredOrders = computed(() => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  const _fmt = (d) => {
+    if (!tz) return d.toDateString();
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    } catch { return d.toDateString(); }
+  };
   const now = new Date();
-  const todayStr = now.toDateString();
+  const todayStr = _fmt(now);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const yesterdayStr = yesterday.toDateString();
+  const yesterdayStr = _fmt(yesterday);
   const weekAgo = new Date(now);
   weekAgo.setDate(now.getDate() - 6);
   weekAgo.setHours(0, 0, 0, 0);
@@ -964,8 +1069,8 @@ const filteredOrders = computed(() => {
     // Date filter
     if (activeDateFilter.value !== "all") {
       const d = new Date(o.created_at);
-      if (activeDateFilter.value === "today" && d.toDateString() !== todayStr) return false;
-      if (activeDateFilter.value === "yesterday" && d.toDateString() !== yesterdayStr) return false;
+      if (activeDateFilter.value === "today" && _fmt(d) !== todayStr) return false;
+      if (activeDateFilter.value === "yesterday" && _fmt(d) !== yesterdayStr) return false;
       if (activeDateFilter.value === "week" && d < weekAgo) return false;
       if (activeDateFilter.value === "custom") {
         const dateStr = o.created_at.slice(0, 10);
@@ -1284,6 +1389,73 @@ const deliveryAction = async (o, action) => {
     djConfirmId.value = null;
   } finally {
     deliveryActing.value = null;
+  }
+};
+
+// ── Payment ledger lazy-load ──────────────────────────────────────────────────
+// The list endpoint only returns totals; payments are fetched on demand from detail.
+const paymentsMap = ref({}); // orderId → OrderPayment[]
+
+const loadPayments = async (orderId) => {
+  if (paymentsMap.value[orderId]) return; // already loaded
+  try {
+    const { data } = await api.get(`/owner/orders/${orderId}/`);
+    paymentsMap.value = { ...paymentsMap.value, [orderId]: data.payments || [] };
+  } catch {
+    // silently ignore — button stays visible
+  }
+};
+
+// ── Payment method correction ─────────────────────────────────────────────────
+const correctingPaymentId = ref(null);
+// correctMethodPanel: { orderId, paymentId, currentMethod, newMethod }
+const correctMethodPanel = ref(null);
+
+const openCorrectMethod = (o, p) => {
+  // Toggle: if already open for this payment, close it
+  if (correctMethodPanel.value?.paymentId === p.id) {
+    correctMethodPanel.value = null;
+    return;
+  }
+  correctMethodPanel.value = {
+    orderId: o.id,
+    paymentId: p.id,
+    currentMethod: p.method,
+    newMethod: p.method === "cash" ? "wallet" : "cash",
+  };
+};
+
+const submitCorrectMethod = async () => {
+  const panel = correctMethodPanel.value;
+  if (!panel || !panel.newMethod) return;
+  if (panel.newMethod === panel.currentMethod) {
+    correctMethodPanel.value = null;
+    return;
+  }
+  correctingPaymentId.value = panel.paymentId;
+  try {
+    await api.post(
+      `/staff/orders/${panel.orderId}/payments/${panel.paymentId}/correct-method/`,
+      { method: panel.newMethod },
+    );
+    // Patch the paymentsMap cache
+    const payments = paymentsMap.value[panel.orderId];
+    if (payments) {
+      const p = payments.find((x) => x.id === panel.paymentId);
+      if (p) {
+        p.original_method = p.original_method || p.method;
+        p.method = panel.newMethod;
+        p.corrected_at = new Date().toISOString();
+        p.corrected_by_name = t("ownerOrders.you");
+      }
+      paymentsMap.value = { ...paymentsMap.value, [panel.orderId]: [...payments] };
+    }
+    toast.show(t("ownerOrders.correctMethodSuccess"), "success");
+    correctMethodPanel.value = null;
+  } catch (err) {
+    toast.show(err?.response?.data?.detail || t("ownerOrders.correctMethodFailed"), "error");
+  } finally {
+    correctingPaymentId.value = null;
   }
 };
 

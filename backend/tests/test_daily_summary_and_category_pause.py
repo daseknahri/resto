@@ -301,6 +301,7 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
         req.tenant = _tenant()
         return req
 
+    @patch("accounts.models.WalletTransaction")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
@@ -315,8 +316,19 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
     def test_revenue_summary_includes_wallet_and_cash(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
+        mock_wallet_tx,
     ):
-        """wallet_revenue and cash_revenue must appear in revenue_summary."""
+        """wallet_revenue and cash_revenue must appear in revenue_summary.
+
+        Contract C: WalletTransaction is now called to aggregate refunds_issued.
+        We stub it to return zero refunds so the DB is not touched.
+        """
+        # Stub WalletTransaction.objects.filter().aggregate() → no refunds
+        wt_qs = MagicMock()
+        wt_qs.aggregate.return_value = {"refunds_total": None}
+        mock_wallet_tx.Type.REFUND = "REFUND"
+        mock_wallet_tx.objects.filter.return_value = wt_qs
+
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
@@ -338,6 +350,7 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
         self.assertAlmostEqual(float(rs["wallet_revenue"]), 30.0, places=2)
         self.assertAlmostEqual(float(rs["cash_revenue"]), 70.0, places=2)
 
+    @patch("accounts.models.WalletTransaction")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
     @patch("sales.views.TierUpgradeRequestSerializer")
@@ -352,8 +365,18 @@ class OwnerDashboardWalletCashFieldsTests(SimpleTestCase):
     def test_cash_equals_total_minus_wallet(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
+        mock_wallet_tx,
     ):
-        """cash_revenue must equal total_revenue - wallet_revenue."""
+        """cash_revenue must equal total_revenue - wallet_revenue.
+
+        Contract C: WalletTransaction is called for refunds_issued; stubbed here.
+        """
+        # Stub WalletTransaction.objects.filter().aggregate() → no refunds
+        wt_qs = MagicMock()
+        wt_qs.aggregate.return_value = {"refunds_total": None}
+        mock_wallet_tx.Type.REFUND = "REFUND"
+        mock_wallet_tx.objects.filter.return_value = wt_qs
+
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,

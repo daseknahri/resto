@@ -2476,6 +2476,14 @@ class OwnerDashboardView(APIView):
         total_revenue = float(revenue_agg["total_revenue"] or 0)
         order_count = revenue_agg["order_count"] or 0
         avg_order_value = round(total_revenue / order_count, 2) if order_count else 0.0
+        # LEGACY FIELDS — these are computed from revenue_qs which includes
+        # PREPARING/READY/CONFIRMED orders (all billable statuses).  They represent
+        # the management-accounting gross view, NOT the "money in the drawer" view.
+        # The response also contains payment_split (PAID orders only, built below)
+        # which is the drawer-accurate figure.  Do NOT use wallet_revenue/cash_revenue
+        # for reconciliation — use payment_split.wallet and payment_split.cash instead.
+        # Both figures appear in the response to avoid breaking existing consumers;
+        # new consumers should prefer payment_split.
         wallet_revenue = round(float(revenue_agg["wallet_revenue"] or 0), 2)
         cash_revenue = round(total_revenue - wallet_revenue, 2)
 
@@ -2541,8 +2549,22 @@ class OwnerDashboardView(APIView):
             )
         dashboard_currency = _order_currency or "USD"
 
+        # Contract E: TruncDate must receive the tenant's IANA timezone so that
+        # late-night orders (e.g. 00:30 UTC = 01:30 Africa/Casablanca) are bucketed
+        # on the correct local calendar day rather than the UTC day.  Without tzinfo,
+        # Django uses UTC, which disagrees with the daily-digest (which uses local tz)
+        # and causes off-by-one day errors for any restaurant outside UTC.
+        try:
+            from zoneinfo import ZoneInfo as _ZoneInfo
+            from django.conf import settings as _djsettings
+            _profile = getattr(tenant, "profile", None)
+            _tz_name = (getattr(_profile, "timezone", "") or "").strip() or getattr(_djsettings, "TIME_ZONE", "UTC")
+            _tenant_tz = _ZoneInfo(_tz_name)
+        except Exception:
+            _tenant_tz = None  # fall back to DB default (UTC) on invalid tz
+
         daily_rows = (
-            revenue_qs.annotate(day=TruncDate("created_at"))
+            revenue_qs.annotate(day=TruncDate("created_at", tzinfo=_tenant_tz))
             .values("day")
             .annotate(revenue=Sum("total"), orders=Count("id"))
             .order_by("day")
@@ -2638,8 +2660,21 @@ class OwnerDashboardView(APIView):
         }
 
         # ── Payment split (ledger-aware wallet/cash) ──────────────────────────
+        # Contract C (revenue-truth fix): the split must only include orders where
+        # money has actually been collected (payment_status=PAID).  Using the full
+        # revenue_qs (which includes PREPARING/READY/CONFIRMED dine-in orders that
+        # have not yet been paid) would inflate cash: those orders have
+        # wallet_amount_paid=0 and total>0, making the legacy path report
+        # cash = total - wallet = total, falsely inflating the cash figure.
+        #
+        # The statement.gross / statement.net above intentionally include all
+        # billable-status orders (committed revenue for management accounting);
+        # this split is the "money in the drawer" view and must be narrower.
         from menu.revenue import split_revenue_for_orders as _split_revenue
-        _paid_qs = revenue_qs  # same status filter already applied
+        from menu.models import Order as _OrderForSplit
+        _paid_qs = revenue_qs.filter(
+            payment_status=_OrderForSplit.PaymentStatus.PAID,
+        )
         _split = _split_revenue(_paid_qs)
         payment_split = {
             "wallet": str(_split["wallet"]),
@@ -2682,6 +2717,27 @@ class OwnerDashboardView(APIView):
         # The discount lines below are informational ("discounts given"), NOT
         # subtracted again; tips belong to staff and are REMOVED to get what the
         # house keeps:  net = gross - tips - commission.
+        #
+        # Contract C: add refunds_issued to the statement so the owner can see
+        # how much was credited back to customers in this period.
+        # Source: WalletTransaction.REFUND rows created within the analytics window.
+        # This covers both cancel-refunds and partial void-refunds.
+        # Cash refunds are not tracked (no cash-refund ledger exists today) — that
+        # boundary is documented here so a future cash-refund feature knows where to add it.
+        from accounts.models import WalletTransaction as _WTxS
+        # CRITICAL: WalletTransaction is in the shared public schema; without
+        # tenant_id this would aggregate REFUND rows from ALL tenants on the platform.
+        # Upper bound (created_at__lt=_stmt_now) prevents refunds created after the
+        # analytics window but before this response from inflating the figure.
+        _stmt_now = timezone.now()
+        _refund_agg = _WTxS.objects.filter(
+            type=_WTxS.Type.REFUND,
+            tenant_id=tenant.id,
+            created_at__gte=since,
+            created_at__lt=_stmt_now,
+        ).aggregate(refunds_total=Sum("amount"))
+        _refunds = float(_refund_agg["refunds_total"] or 0)
+
         statement = {
             "gross": str(round(_gross, 2)),
             "promo_discounts": str(round(_promo, 2)),
@@ -2689,6 +2745,9 @@ class OwnerDashboardView(APIView):
             "tips": str(round(_tips, 2)),
             "commission": str(round(_commission, 2)),
             "net": str(round(_gross - _tips - _commission, 2)),
+            # Contract C: wallet refunds issued in the period (informational;
+            # does not change the net formula above which is management-accounting gross).
+            "refunds_issued": str(round(_refunds, 2)),
         }
 
         # Customer return rate — among phone-identified customers in this window,

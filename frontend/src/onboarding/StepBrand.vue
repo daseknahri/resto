@@ -300,6 +300,22 @@
           </select>
           <p class="text-[11px] text-slate-500">{{ t("stepBrand.timezoneHint") }}</p>
         </label>
+
+        <!-- Service-day cutover hour (OPS-2 Contract A) -->
+        <label class="block space-y-1 text-xs font-medium text-slate-400" for="step-brand-cutover-hour">
+          {{ t("stepBrand.cutoverHourLabel") }}
+          <select
+            id="step-brand-cutover-hour"
+            v-model.number="form.service_day_cutover_hour"
+            :class="inputClass('service_day_cutover_hour')"
+          >
+            <option v-for="h in 12" :key="h - 1" :value="h - 1">
+              {{ h === 1 ? t("stepBrand.cutoverHourMidnight") : `${h - 1}:00 (${t('stepBrand.cutoverHourOclock', { h: h - 1 })})`  }}
+            </option>
+          </select>
+          <p class="text-[11px] text-slate-500">{{ t("stepBrand.cutoverHourHint") }}</p>
+          <p v-if="fieldError('service_day_cutover_hour')" role="alert" class="text-xs text-red-300">{{ fieldError("service_day_cutover_hour") }}</p>
+        </label>
       </div>
     </section>
 
@@ -466,6 +482,7 @@ const form = reactive({
   instagram_url: "",
   tiktok_url: "",
   language: "en",
+  service_day_cutover_hour: 0,
 });
 const saving = ref(false);
 const status = ref("");

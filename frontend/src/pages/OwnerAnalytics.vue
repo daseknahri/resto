@@ -162,12 +162,14 @@ import SparklineChart from "../components/SparklineChart.vue";
 import { useI18n } from "../composables/useI18n";
 import { useOrderStore } from "../stores/order";
 import { useSessionStore } from "../stores/session";
+import { useTenantStore } from "../stores/tenant";
 import api from "../lib/api";
 
 defineOptions({ name: "OwnerAnalytics" });
 
 const session = useSessionStore();
 const order = useOrderStore();
+const tenant = useTenantStore();
 const { t, formatNumber } = useI18n();
 
 const PERIOD_OPTIONS = [7, 14, 30, 90];
@@ -197,9 +199,18 @@ const onInsightsData = (data) => {
 };
 
 // ── Today's order stats — from the order store (no extra fetch) ──
+// Uses tenant timezone (Contract E) so "today" aligns with the restaurant's local day.
+const _fmtDate = (d) => {
+  const tz = tenant.resolvedMeta?.profile?.timezone;
+  if (!tz) return d.toDateString();
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  } catch { return d.toDateString(); }
+};
+
 const todayStats = computed(() => {
-  const today = new Date().toDateString();
-  const todayOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === today);
+  const today = _fmtDate(new Date());
+  const todayOrders = order.orders.filter((o) => _fmtDate(new Date(o.created_at)) === today);
   const revenue = todayOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const currency = todayOrders.find((o) => o.currency)?.currency || "MAD";
   let revenueLabel = "";
@@ -222,8 +233,8 @@ const avgTicketLabel = computed(() => {
 const yesterdayStats = computed(() => {
   const y = new Date();
   y.setDate(y.getDate() - 1);
-  const yStr = y.toDateString();
-  const yOrders = order.orders.filter((o) => new Date(o.created_at).toDateString() === yStr);
+  const yStr = _fmtDate(y);
+  const yOrders = order.orders.filter((o) => _fmtDate(new Date(o.created_at)) === yStr);
   return { count: yOrders.length, revenue: yOrders.reduce((s, o) => s + (Number(o.total) || 0), 0) };
 });
 

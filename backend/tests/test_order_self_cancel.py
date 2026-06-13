@@ -101,7 +101,9 @@ class CancelOrderTests(SimpleTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(order.status, Order.Status.CANCELLED)
         order.save.assert_called_once()
-        self.m["refund"].assert_called_once_with(order)
+        # tenant_id=7 is the mock tenant id set in _post; verifying it is forwarded
+        # ensures the cancel-refund WalletTransaction row is tagged to this tenant.
+        self.m["refund"].assert_called_once_with(order, tenant_id=7)
         self.m["restock"].assert_called_once_with(order)
         self.m["broadcast"].assert_called_once_with(order)
         self.m["email"].assert_called_once()
@@ -111,4 +113,4 @@ class CancelOrderTests(SimpleTestCase):
         self._set(order)
         resp = self.view(self._post({"customer_id": 42}), order_number="ORD-1")
         self.assertEqual(resp.status_code, 200)
-        self.m["refund"].assert_called_once_with(order)
+        self.m["refund"].assert_called_once_with(order, tenant_id=7)

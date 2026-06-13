@@ -260,6 +260,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             "winback_enabled",
             "winback_inactive_weeks",
             "winback_message",
+            "service_day_cutover_hour",
         ]
         # Delivery PRICING + platform enrollment are a platform-admin concern (the
         # delivery network is separate), so the restaurant owner cannot edit them
@@ -387,6 +388,15 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
         v = int(value) if value is not None else 4
         if not (1 <= v <= 52):
             raise serializers.ValidationError("winback_inactive_weeks must be between 1 and 52.")
+        return v
+
+    def validate_service_day_cutover_hour(self, value):
+        # Valid range is 0..11: no venue's service day rolls over at noon or later.
+        v = int(value) if value is not None else 0
+        if not (0 <= v <= 11):
+            raise serializers.ValidationError(
+                "service_day_cutover_hour must be between 0 (midnight) and 11."
+            )
         return v
 
     def validate_business_hours_schedule(self, value):

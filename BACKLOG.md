@@ -98,16 +98,76 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 - [ ] **StaffMessage unbounded + no created_at index** — staff chat grows forever, Meta
       ordering ('-created_at') has no index. Add prune cron + db_index. (menu/models.py:341).
       → OPS-4 (retention). [scout OPS-1]
-- [ ] **StaffShiftSummaryView materializes orders in Python for avg prep** — 3 round-trips
-      (aggregate, per-row iterate, currency) where ExpressionWrapper+Avg is one query.
-      (menu/views.py:3419). → OPS-2 (shift summary is already in scope there). [scout OPS-1]
+- [~] **StaffShiftSummaryView materializes orders in Python for avg prep** — RESOLVED in
+      OPS-2 (ExpressionWrapper+Avg single query; currency folded into a values_list scan).
+      [scout OPS-1 → fixed OPS-2]
 - [ ] **Order.table_slug vs table_label dual keys** — waiter UI groups by label, routing
       uses slug; renaming a TableLink splits historical orders into two groups. No migration
       on rename, no rename warning. Partially mitigated by OPS-1 table dropdown. (models.py
       :401; WaiterPage.vue:1238). → OPS-6 (onboarding/table mgmt). [scout OPS-1]
+- [ ] **revenue.py STILL materializes ledger_order_ids as a Python set** — the comment AND
+      the sweep-2 "Done" entry claim a subquery, but menu/revenue.py:49 does
+      `set(ledger_qs.values_list('order_id'))` then uses it in filter/exclude IN-lists. At
+      90-day × busy-tenant scale this is a Postgres IN-list cliff. The false "Done" claim is
+      itself the risk (next reviewer trusts it). Replace set() with a `.values('order_id')`
+      subquery. (menu/revenue.py:39/49/52/63). → OPS-4. [scout OPS-2] **(corrects a false
+      sweep-2 Done claim.)**
+- [ ] **Order.paid_at unindexed** — Z-report (menu/views.py:6347) + daily digest range-query
+      paid_at; Order.Meta.indexes has (status,created_at)/(status,updated_at) but not paid_at.
+      Add Index(status, paid_at) in the same migration as the next Order change. (models.py
+      :435/529). → OPS-4. [scout OPS-2]
+- [ ] **Marketplace commission mixed-basis** — commission = food_subtotal × 0.10 (PRE-discount
+      GMV) but the statement reports revenue as Sum(Order.total) (POST-discount), so net_payout
+      makes the effective take-rate look >10% whenever a discount applies. Document the basis
+      OR apply the rate to post-discount food. No config governs it. (accounts/views.py:3020;
+      menu/views.py:7391). → OPS-5 (billing). [scout OPS-2]
+- [ ] **Commission rate hardcoded 0.10, no per-tenant override, no rate snapshot on Order** —
+      can't offer a negotiated/promo rate without a code change for ALL tenants, and historical
+      orders can't be re-audited (no rate_applied column). (accounts/views.py:3020;
+      models.py:452). → OPS-5 (billing). [scout OPS-2]
+- [ ] **Commission statement buckets by UTC month** — created_at__year/month with no tzinfo →
+      a late-night month-boundary order lands on the wrong monthly invoice for non-UTC tenants.
+      (menu/views.py:7384). → OPS-5 / tz-cleanup. [scout OPS-2]
+- [ ] **legacy split cash = total − wallet silently clamped at 0** — if a tip is added after a
+      wallet settle, legacy_cash can go negative and max(0) hides it, so cash+wallet no longer
+      reconciles to gross. A pro ledger should assert reconciliation, not clamp. (revenue.py
+      :63/77). → OPS-4 (reconciliation assertions). [scout OPS-2]
+- [ ] **OrderItem has no voided_by_user_id** — Z-report voided_by is always null; can't surface
+      per-staff void rates / loss-prevention. Mirror Order.handled_by_user_id (1 field + 1-line
+      migration). (models.py:582). → fold into next OPS batch touching voids. [scout OPS-2]
+- [ ] **Order CSV "subtotal" column includes tip + nets discounts** — subtotal = total −
+      delivery_fee, but total includes tip; an owner summing the column to get food sales is
+      off by total tips. Also no commission_amount column. (menu/views.py:6199). → OPS-6
+      (CSV/reporting polish). [scout OPS-2]
+- [ ] **Z-report voids loop + dashboard/CSV N+1** — voids loop materializes items with a
+      select_related('order') join per row (use annotate + DB Sum for the total); OwnerOrderExport
+      iterates order.items.all() twice + payments per row without prefetch. Perf at scale.
+      (menu/views.py:6388/6184). → OPS-4. [scout OPS-2 + review-major]
+- [ ] **Dashboard SPA still shows gross wallet_revenue/cash_revenue, not payment_split** —
+      backend now documents payment_split as the drawer-accurate figure (sales/views.py:2482)
+      but OwnerDashboard cash/wallet display should migrate to it for consistency with the
+      Z-report. (OwnerDashboard*.vue). → OPS-6 (polish). [review OPS-2 major, documented]
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-2 "end-of-day money truth": Profile.service_day_cutover_hour (tenancy/0039) +
+      service_day_window helper (DST-correct local end-datetime, not +timedelta); owner
+      Z-report (GET /api/owner/z-report[.csv]) — collected cash/wallet via shared
+      split_revenue_for_orders (COMPLETED+PAID+paid_at window), refunds, voids (reason),
+      tips, per-staff (windowed on order__paid_at to reconcile), net + net_cash_position,
+      print + CSV; OrderPayment method-correction endpoint (audit fields, does NOT move
+      money — relabels only, menu/0055); revenue-truth fix (dashboard+digest cash/wallet
+      split now PAID-only, not in-flight; refunds_issued line added); TruncDate tenant-tz +
+      owner/waiter "today" tenant-tz; shift summary cash/wallet split + single-query avg
+      prep; void_reason/recorded_by surfaced in order detail + CSV. **MONEY REVIEW found 3
+      CRITICALS (cross-tenant refund leaks ×2 — WalletTransaction is shared-schema, queries
+      lacked tenant_id AND refund rows were written without it; by_staff windowed on
+      OrderPayment.created_at not paid_at) + 6 majors. Fix agent applied them; I then
+      verified EVERY fix in code personally: tenant_id now written at all 4 refund-creation
+      sites + filtered in both report queries; by_staff/collected/shift all PAID+paid_at;
+      DST window; correction moves no money.** Backend 3284 green; frontend gates green.
+      Scout: 1 resolved (shift-summary perf), 11 → Scout notes (incl. catching a FALSE
+      sweep-2 "Done" claim about revenue.py). — ops2 commit.
 - [x] OPS-1 "kitchen never goes dark": StaffBulkReadyView (kitchen-cap gated, atomic
       +select_for_update) + StaffTableListView; useWakeLock (KeepAlive-correct release/
       re-acquire) on kitchen+waiter; reconnect-forever WS with live/polling chip + idle

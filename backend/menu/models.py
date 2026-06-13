@@ -644,6 +644,31 @@ class OrderPayment(models.Model):
     note = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # ── Payment-method correction audit trail (OPS-2 contract D) ──────────────
+    # A staff member may have recorded the wrong tender type (cash vs wallet).
+    # These fields allow relabelling without touching the wallet ledger.
+    # Boundary: changing `method` here only affects the Z-report cash/wallet split
+    # and the owner order-detail view. It does NOT move money: the WalletTransaction
+    # and Customer.wallet_balance are NEVER updated by a correction.
+    original_method = models.CharField(
+        max_length=8,
+        blank=True,
+        help_text=(
+            "The method value before the first correction. "
+            "Blank = this payment has never been corrected."
+        ),
+    )
+    corrected_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the method was last corrected.",
+    )
+    corrected_by_name = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Display name of the staff member who corrected the method.",
+    )
+
     class Meta:
         ordering = ("created_at",)
 

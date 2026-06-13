@@ -385,6 +385,8 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             mock_order.Status.READY = "ready"
             mock_order.Status.PREPARING = "preparing"
             mock_order.Status.CONFIRMED = "confirmed"
+            # Contract C: _compute_summary does paid_qs = qs.filter(payment_status=PAID)
+            mock_order.PaymentStatus.PAID = "paid"
 
             qs = MagicMock()
             qs.aggregate.return_value = {
@@ -394,6 +396,9 @@ class DigestLedgerVsLegacyTests(SimpleTestCase):
             # New subquery path: exists() signals non-empty queryset;
             # values("id") returns a mock queryset used as DB subquery.
             qs.exists.return_value = True
+            # Contract C: qs.filter(payment_status=PAID) must return qs so that
+            # split_revenue_for_orders sees the correctly configured queryset mock.
+            qs.filter.return_value = qs
 
             mock_order.objects.filter.return_value = qs
 

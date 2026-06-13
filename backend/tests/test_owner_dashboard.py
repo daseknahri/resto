@@ -176,10 +176,14 @@ def _apply_common_mocks(
     mock_lead,
     mock_orderitem=None,
     mock_split=None,
+    mock_wallet_tx=None,
 ):
     """Wire up the minimum mocks needed for OwnerDashboardView to return 200.
 
     split_revenue_for_orders is patched to avoid real OrderPayment ORM queries.
+
+    Contract C: mock_wallet_tx patches accounts.models.WalletTransaction so the
+    refunds_issued aggregation (new) does not hit the real DB in SimpleTestCase.
     """
     mock_schema.return_value.__enter__ = MagicMock(return_value=None)
     mock_schema.return_value.__exit__ = MagicMock(return_value=False)
@@ -193,6 +197,12 @@ def _apply_common_mocks(
         mock_orderitem.filter.return_value = _orderitem_qs_mock()
     if mock_split is not None:
         mock_split.return_value = _SPLIT_ZERO
+    # Contract C: stub the WalletTransaction refunds aggregate to return 0.
+    if mock_wallet_tx is not None:
+        _wtx_refund_qs = MagicMock()
+        _wtx_refund_qs.aggregate.return_value = {"refunds_total": None}
+        mock_wallet_tx.Type.REFUND = "refund"
+        mock_wallet_tx.objects.filter.return_value = _wtx_refund_qs
 
     plan_obj = MagicMock()
     plan_obj.code = "basic"
@@ -221,6 +231,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         req.tenant = _tenant()
         return req
 
+    @patch("accounts.models.WalletTransaction")
     @patch("menu.revenue.split_revenue_for_orders")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
@@ -236,13 +247,13 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     def test_response_includes_required_keys(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
-        mock_split,
+        mock_split, mock_wallet_tx,
     ):
         """200 response must contain analytics_summary, upgrade_meta, upgrade_targets, and revenue_summary."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
-            mock_split=mock_split,
+            mock_split=mock_split, mock_wallet_tx=mock_wallet_tx,
         )
         resp = self.view(self._get())
 
@@ -258,6 +269,7 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
         self.assertIn("prev_counts", resp.data["analytics_summary"])
         self.assertIn("prev_interaction_rate_pct", resp.data["analytics_summary"])
 
+    @patch("accounts.models.WalletTransaction")
     @patch("menu.revenue.split_revenue_for_orders")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
@@ -273,19 +285,20 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     def test_days_param_clamped_to_90(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
-        mock_split,
+        mock_split, mock_wallet_tx,
     ):
         """?days=999 must be clamped to 90 in the response."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
-            mock_split=mock_split,
+            mock_split=mock_split, mock_wallet_tx=mock_wallet_tx,
         )
         resp = self.view(self._get({"days": 999}))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["analytics_summary"]["days"], 90)
 
+    @patch("accounts.models.WalletTransaction")
     @patch("menu.revenue.split_revenue_for_orders")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
@@ -301,19 +314,20 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     def test_days_param_defaults_to_30(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
-        mock_split,
+        mock_split, mock_wallet_tx,
     ):
         """Omitting ?days defaults to 30."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
-            mock_split=mock_split,
+            mock_split=mock_split, mock_wallet_tx=mock_wallet_tx,
         )
         resp = self.view(self._get())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["analytics_summary"]["days"], 30)
 
+    @patch("accounts.models.WalletTransaction")
     @patch("menu.revenue.split_revenue_for_orders")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
@@ -329,13 +343,13 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     def test_revenue_summary_shape(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
-        mock_split,
+        mock_split, mock_wallet_tx,
     ):
-        """revenue_summary must contain total_revenue, order_count, avg_order_value, daily list, peak_hours, popular_dishes, prev_period, and fulfillment_breakdown."""
+        """revenue_summary must contain all required keys including new statement.refunds_issued (Contract C)."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
-            mock_split=mock_split,
+            mock_split=mock_split, mock_wallet_tx=mock_wallet_tx,
         )
         resp = self.view(self._get())
 
@@ -365,10 +379,13 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
             self.assertIn(key, rs["prev_period"], f"Missing prev_period key: {key}")
         # No previous-period baseline (zero revenue) → change pct is None
         self.assertIsNone(rs["prev_period"]["revenue_change_pct"])
-        # New statement keys
-        for key in ("gross", "promo_discounts", "loyalty_discounts", "tips", "commission", "net"):
+        # Statement keys — Contract C adds refunds_issued
+        for key in ("gross", "promo_discounts", "loyalty_discounts", "tips", "commission", "net", "refunds_issued"):
             self.assertIn(key, rs["statement"], f"Missing statement key: {key}")
+        # refunds_issued = "0.0" when no refunds (mock returns None → 0)
+        self.assertEqual(rs["statement"]["refunds_issued"], "0.0")
 
+    @patch("accounts.models.WalletTransaction")
     @patch("menu.revenue.split_revenue_for_orders")
     @patch("sales.views.Lead.objects")
     @patch("sales.views.OrderItem.objects")
@@ -384,13 +401,13 @@ class OwnerDashboardViewResponseTests(SimpleTestCase):
     def test_revenue_avg_zero_when_no_orders(
         self, mock_schema, mock_cat, mock_dish, mock_order, mock_analytics,
         mock_tenant, mock_plan, mock_upgrade_req, mock_ts, mock_orderitem, mock_lead,
-        mock_split,
+        mock_split, mock_wallet_tx,
     ):
         """avg_order_value must be 0.0 when there are no orders (no division-by-zero)."""
         _apply_common_mocks(
             mock_ts, mock_upgrade_req, mock_plan, mock_tenant,
             mock_analytics, mock_order, mock_dish, mock_cat, mock_schema, mock_lead, mock_orderitem,
-            mock_split=mock_split,
+            mock_split=mock_split, mock_wallet_tx=mock_wallet_tx,
         )
         resp = self.view(self._get())
 

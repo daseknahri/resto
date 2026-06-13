@@ -91,7 +91,14 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
 
     from menu.revenue import split_revenue_for_orders
 
-    paid_statuses = [
+    # "Gross sales" statuses — orders that are committed and will be fulfilled.
+    # This is the management-accounting view (total business done yesterday) and
+    # intentionally includes in-flight PREPARING/READY/CONFIRMED orders because
+    # for a restaurant that closed last night these all represent real revenue.
+    # For a 23:30 UTC run on a just-closed venue, every in-flight order should
+    # already be COMPLETED, so the practical difference is small. We keep this
+    # behaviour to match the dashboard statement.gross semantics.
+    gross_statuses = [
         Order.Status.COMPLETED,
         Order.Status.READY,
         Order.Status.PREPARING,
@@ -101,7 +108,7 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
     qs = Order.objects.filter(
         created_at__gte=day_start_utc,
         created_at__lt=day_end_utc,
-        status__in=paid_statuses,
+        status__in=gross_statuses,
     )
     agg = qs.aggregate(
         order_count=Count("id"),
@@ -113,8 +120,15 @@ def _compute_summary(schema_name: str, day_start_utc: datetime, day_end_utc: dat
 
     total_revenue = float(agg["total_revenue"] or 0)
 
-    # ── Ledger-aware cash/wallet split ───────────────────────────────────────
-    split = split_revenue_for_orders(qs)
+    # ── Ledger-aware cash/wallet split (Contract C revenue-truth fix) ─────────
+    # IMPORTANT: the split is computed ONLY over PAID orders so that unpaid
+    # dine-in orders in PREPARING/READY/CONFIRMED don't falsely inflate cash.
+    # Those orders have wallet_amount_paid=0 and total>0; the legacy split path
+    # would report cash=total for them, overstating what's in the drawer.
+    # total_revenue above keeps the gross_statuses (management accounting);
+    # cash/wallet below are "money in the drawer" (narrower predicate).
+    paid_qs = qs.filter(payment_status=Order.PaymentStatus.PAID)
+    split = split_revenue_for_orders(paid_qs)
     wallet_revenue = round(float(split["wallet"]), 2)
     cash_revenue = round(float(split["cash"]), 2)
 

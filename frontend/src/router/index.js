@@ -48,6 +48,7 @@ const OwnerPromotions = () => import("../pages/OwnerPromotions.vue");
 const OwnerLoyalty = () => import("../pages/OwnerLoyalty.vue");
 const OwnerWallet = () => import("../pages/OwnerWallet.vue");
 const OwnerCustomers = () => import("../pages/OwnerCustomers.vue");
+const OwnerZReport = () => import("../pages/OwnerZReport.vue");
 const OrderStatus = () => import("../pages/OrderStatus.vue");
 const CustomerAccount = () => import("../pages/CustomerAccount.vue");
 const RidePage = () => import("../pages/RidePage.vue");
@@ -238,6 +239,12 @@ const routes = [
         path: "customers",
         name: "owner-customers",
         component: OwnerCustomers,
+        meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
+      },
+      {
+        path: "z-report",
+        name: "owner-z-report",
+        component: OwnerZReport,
         meta: { requiresAuth: true, tenantEditorOnly: true, interface: "owner" },
       },
     ],

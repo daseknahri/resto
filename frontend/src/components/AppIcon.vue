@@ -239,6 +239,14 @@ const ICONS = {
     viewBox: "0 0 24 24",
     paths: ["M9 5h.01", "M9 12h.01", "M9 19h.01", "M15 5h.01", "M15 12h.01", "M15 19h.01"],
   },
+  receipt: {
+    viewBox: "0 0 24 24",
+    paths: ["M4 2h16a1 1 0 0 1 1 1v18l-3-2-2 2-2-2-2 2-2-2-3 2V3a1 1 0 0 1 1-1z", "M8 8h8", "M8 12h8", "M8 16h5"],
+  },
+  edit: {
+    viewBox: "0 0 24 24",
+    paths: ["M12 20h9", "M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"],
+  },
 };
 
 const fallbackIcon = ICONS.menu;

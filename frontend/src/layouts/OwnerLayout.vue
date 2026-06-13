@@ -170,11 +170,15 @@
                 <transition name="ui-fade">
                   <div v-if="settingsOpen" class="owner-settings-menu" role="menu" :aria-label="t('common.profile')">
                     <!-- Reports: in the top nav on desktop; shown here on mobile only -->
-                    <div role="group" :aria-label="t('ownerLayout.groupReports')" class="md:hidden">
-                      <p class="owner-settings-section" aria-hidden="true">{{ t("ownerLayout.groupReports") }}</p>
-                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-analytics' }" @click="closeSettingsMenu">
+                    <div role="group" :aria-label="t('ownerLayout.groupReports')">
+                      <p class="owner-settings-section md:hidden" aria-hidden="true">{{ t("ownerLayout.groupReports") }}</p>
+                      <RouterLink class="owner-settings-item md:hidden" role="menuitem" :to="{ name: 'owner-analytics' }" @click="closeSettingsMenu">
                         <AppIcon name="chart" class="owner-settings-item-icon" />
                         <span>{{ t("ownerAnalytics.title") }}</span>
+                      </RouterLink>
+                      <RouterLink class="owner-settings-item" role="menuitem" :to="{ name: 'owner-z-report' }" @click="closeSettingsMenu">
+                        <AppIcon name="receipt" class="owner-settings-item-icon" />
+                        <span>{{ t("zReport.navLabel") }}</span>
                       </RouterLink>
                     </div>
 
