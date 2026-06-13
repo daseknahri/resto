@@ -173,9 +173,13 @@ class TestStaffPlanLimit(SimpleTestCase):
         # Email uniqueness check: no existing user with this email
         email_exists_qs = MagicMock()
         email_exists_qs.exists.return_value = False
-        # Staff count filter
+        # Staff count filter. exists()=False is REQUIRED: the view's username-dedup
+        # loop (`while User.objects.filter(username=...).exists()`) routes through this
+        # same non-email branch, so leaving exists() as a truthy MagicMock spins an
+        # infinite loop that grows `counter`/username unbounded → MemoryError.
         staff_filter_qs = MagicMock()
         staff_filter_qs.count.return_value = staff_count
+        staff_filter_qs.exists.return_value = False
 
         def filter_side_effect(**kwargs):
             if "email" in kwargs:
