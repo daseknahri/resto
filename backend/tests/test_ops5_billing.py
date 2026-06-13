@@ -456,7 +456,10 @@ class TestInvoiceAmountOnApprove(SimpleTestCase):
              patch("sales.services.Subscription.objects") as mock_sub_qs, \
              patch("sales.services.is_plan_upgrade", return_value=True):
 
-            mock_req_qs.select_for_update.return_value.get.return_value = upgrade_request
+            # Real chain is select_for_update().select_related(...).get() — the
+            # .select_related hop must be in the mock or .get() returns a bare mock
+            # whose .status != PENDING, tripping the "already resolved" guard.
+            mock_req_qs.select_for_update.return_value.select_related.return_value.get.return_value = upgrade_request
             mock_tenant_qs.select_related.return_value.get.return_value = tenant_obj
 
             # Subscription.objects.filter and update_or_create — no-ops
