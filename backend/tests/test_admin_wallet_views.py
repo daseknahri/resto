@@ -77,7 +77,14 @@ class AdminWalletBonusViewTests(SimpleTestCase):
     @patch("accounts.models.WalletTransaction.objects")
     @patch("accounts.models.Customer.objects")
     def test_specific_customer_ids_returns_200(self, mock_cust_objs, mock_tx_objs):
-        mock_cust_objs.filter.return_value.values_list.return_value = [1, 2]
+        # OPS-5b: values_list is called twice:
+        #   1. values_list("id", flat=True)  → flat list of ids
+        #   2. values_list("id", "wallet_balance") → list of (id, balance) tuples
+        def _vl_se(*args, **kwargs):
+            if kwargs.get("flat"):
+                return [1, 2]
+            return [(1, "10.00"), (2, "10.00")]
+        mock_cust_objs.filter.return_value.values_list.side_effect = _vl_se
         mock_cust_objs.filter.return_value.update.return_value = 2
         mock_tx_objs.bulk_create.return_value = []
 
@@ -93,7 +100,12 @@ class AdminWalletBonusViewTests(SimpleTestCase):
     @patch("accounts.models.Customer.objects")
     def test_all_customers_returns_200(self, mock_cust_objs, mock_tx_objs):
         mock_cust_objs.all.return_value = mock_cust_objs.filter.return_value
-        mock_cust_objs.filter.return_value.values_list.return_value = [1, 2, 3]
+        # OPS-5b: two values_list calls — flat ids first, then (id, balance) tuples
+        def _vl_se(*args, **kwargs):
+            if kwargs.get("flat"):
+                return [1, 2, 3]
+            return [(1, "5.00"), (2, "5.00"), (3, "5.00")]
+        mock_cust_objs.filter.return_value.values_list.side_effect = _vl_se
         mock_cust_objs.filter.return_value.update.return_value = 3
         mock_tx_objs.bulk_create.return_value = []
 

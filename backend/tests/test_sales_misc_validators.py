@@ -35,13 +35,19 @@ class GetRequestIpTests(SimpleTestCase):
         req = self._req({"HTTP_X_FORWARDED_FOR": "1.2.3.4"})
         self.assertEqual(get_request_ip(req), "1.2.3.4")
 
-    def test_forwarded_for_multiple_ips_returns_first(self):
+    def test_forwarded_for_multiple_ips_returns_rightmost_trusted(self):
+        """With TRUSTED_PROXY_COUNT=1 (default), return rightmost-trusted entry.
+
+        XFF list = [client/spoofed..., proxy-appended].  One trusted proxy means
+        we skip 1 from the right; with 3 IPs idx = 3-1 = 2, so the last entry.
+        """
         req = self._req({"HTTP_X_FORWARDED_FOR": "1.2.3.4, 5.6.7.8, 9.10.11.12"})
-        self.assertEqual(get_request_ip(req), "1.2.3.4")
+        self.assertEqual(get_request_ip(req), "9.10.11.12")
 
     def test_forwarded_for_strips_whitespace(self):
+        """Whitespace around each XFF entry is stripped; rightmost-trusted is returned."""
         req = self._req({"HTTP_X_FORWARDED_FOR": "  1.2.3.4  , 5.6.7.8"})
-        self.assertEqual(get_request_ip(req), "1.2.3.4")
+        self.assertEqual(get_request_ip(req), "5.6.7.8")
 
     def test_forwarded_for_takes_precedence_over_remote_addr(self):
         req = self._req({

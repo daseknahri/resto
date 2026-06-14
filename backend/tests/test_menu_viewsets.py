@@ -240,16 +240,24 @@ class DishViewSetPerformCreateTests(SimpleTestCase):
         from rest_framework.exceptions import ValidationError
         vs = self._make_viewset()
         ser = self._serializer()
-        with patch("django_tenants.utils.get_public_schema_name", return_value="public"):
-            with patch("django_tenants.utils.schema_context") as mock_sc:
-                mock_sc.return_value.__enter__ = lambda s: None
-                mock_sc.return_value.__exit__ = lambda s, *a: None
-                with patch("tenancy.models.Plan") as mock_plan:
-                    mock_plan.objects.filter.return_value.values_list.return_value.first.return_value = 10
-                    with patch("menu.views.Dish") as mock_dish:
-                        mock_dish.objects.count.return_value = 10  # at limit
-                        with self.assertRaises(ValidationError) as ctx:
-                            vs.perform_create(ser)
+        # OPS-5b: perform_create now uses select_for_update() + transaction.atomic().
+        # Patch atomic to act as a no-op context manager so the limit check runs
+        # without a real DB (SimpleTestCase).  Plan mock chain updated accordingly.
+        plan_obj = MagicMock()
+        plan_obj.max_dishes = 10
+        with patch("django.db.transaction.atomic") as mock_atomic:
+            mock_atomic.return_value.__enter__ = lambda s: None
+            mock_atomic.return_value.__exit__ = lambda s, *a: False
+            with patch("django_tenants.utils.get_public_schema_name", return_value="public"):
+                with patch("django_tenants.utils.schema_context") as mock_sc:
+                    mock_sc.return_value.__enter__ = lambda s: None
+                    mock_sc.return_value.__exit__ = lambda s, *a: None
+                    with patch("tenancy.models.Plan") as mock_plan:
+                        mock_plan.objects.select_for_update.return_value.filter.return_value.first.return_value = plan_obj
+                        with patch("menu.views.Dish") as mock_dish:
+                            mock_dish.objects.count.return_value = 10  # at limit
+                            with self.assertRaises(ValidationError) as ctx:
+                                vs.perform_create(ser)
         self.assertEqual(ctx.exception.detail["code"], "dish_limit_reached")
         ser.save.assert_not_called()
 

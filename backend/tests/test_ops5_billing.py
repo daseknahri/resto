@@ -86,15 +86,27 @@ class TestDishPlanLimit(SimpleTestCase):
 
             return _ctx()
 
-        with patch("django_tenants.utils.get_public_schema_name", return_value=public_schema), \
+        # OPS-5b: perform_create now uses transaction.atomic() + select_for_update().
+        # Patch atomic as a no-op so the limit check runs without a real DB.
+        # Plan mock chain updated: select_for_update().filter().first() → plan obj.
+        plan_obj = MagicMock()
+        plan_obj.max_dishes = tenant.plan.max_dishes
+
+        def _fake_atomic():
+            from contextlib import contextmanager
+            @contextmanager
+            def _ctx():
+                yield
+            return _ctx()
+
+        with patch("django.db.transaction.atomic", side_effect=_fake_atomic), \
+             patch("django_tenants.utils.get_public_schema_name", return_value=public_schema), \
              patch("django_tenants.utils.schema_context", side_effect=fake_schema_context), \
              patch("tenancy.models.Plan.objects") as mock_plan_qs, \
              patch("menu.models.Dish.objects") as mock_dish_qs:
 
-            # Plan lookup returns the tenant's max_dishes
-            mock_plan_qs.filter.return_value.values_list.return_value.first.return_value = (
-                tenant.plan.max_dishes
-            )
+            # Plan lookup: select_for_update().filter().first() returns plan object
+            mock_plan_qs.select_for_update.return_value.filter.return_value.first.return_value = plan_obj
             # Current dish count
             mock_dish_qs.count.return_value = dish_count
 
@@ -190,6 +202,25 @@ class TestStaffPlanLimit(SimpleTestCase):
         MockUser.objects.filter.side_effect = filter_side_effect
         MockUser.Roles.TENANT_STAFF = "tenant_staff"
 
+        # OPS-5b: staff limit check now uses select_for_update().filter().count()
+        # instead of filter().count().  We must set the count on the select_for_update
+        # chain; the username-dedup loop still uses filter() directly, so exists()=False
+        # on select_for_update chain is also required to be safe.
+        su_qs = MockUser.objects.select_for_update.return_value
+        su_filter_qs = MagicMock()
+        su_filter_qs.count.return_value = staff_count
+        su_filter_qs.exists.return_value = False  # safety — avoid any while-loop spin
+        su_qs.filter.return_value = su_filter_qs
+
+        # Also patch transaction.atomic so the atomic block works without a real DB.
+        import django.db.transaction as _dbt
+        from contextlib import contextmanager
+        @contextmanager
+        def _fake_atomic():
+            yield
+        _dbt_atomic_orig = _dbt.atomic
+        _dbt.atomic = _fake_atomic
+
         # If limit is not reached we need to avoid the rest of the create; patch
         # create_user to raise StopIteration so we can detect we got past the gate.
         MockUser.objects.create_user.side_effect = StopIteration("past limit check")
@@ -212,6 +243,8 @@ class TestStaffPlanLimit(SimpleTestCase):
                 _am.User = original_user
             elif hasattr(_am, "User"):
                 del _am.User
+            # Restore real transaction.atomic
+            _dbt.atomic = _dbt_atomic_orig
 
     def test_staff_rejected_at_limit(self):
         """When staff count equals max_staff_accounts (>0), 400 is returned."""

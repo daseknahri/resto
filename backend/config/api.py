@@ -168,7 +168,9 @@ def _check_media() -> dict:
             return {"ok": False, "detail": "MEDIA_ROOT does not exist"}
         if not p.is_dir():
             return {"ok": False, "detail": "MEDIA_ROOT is not a directory"}
-        return {"ok": True, "detail": str(p)}
+        # Do NOT return the absolute path — it leaks server filesystem layout
+        # to unauthenticated callers. Return a plain boolean instead.
+        return {"ok": True, "detail": True}
     except Exception as exc:
         return {"ok": False, "detail": f"error: {type(exc).__name__}"}
 

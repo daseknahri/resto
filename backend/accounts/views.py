@@ -26,6 +26,7 @@ from .messaging import send_password_reset_email
 from .models import Customer
 from .throttles import (
     ActivationThrottle,
+    AdminPIIThrottle,
     CustomerEmailOtpRequestThrottle,
     CustomerEmailOtpVerifyThrottle,
     CustomerGoogleAuthThrottle,
@@ -1012,46 +1013,79 @@ class OwnerStaffListCreateView(APIView):
             return Response({"detail": "A user with this email already exists.", "code": "email_taken"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Enforce the per-plan staff-account limit (mirrors the dish limit). 0 = unlimited.
+        # Concurrency note: when a limit is set, wrap the count AND create in
+        # transaction.atomic() + select_for_update() so concurrent creates queue on the
+        # lock and each re-counts before proceeding — preventing two simultaneous requests
+        # from both reading the same count and overshooting the cap.
+        from django.db import transaction as _tx
         max_staff = int(getattr(getattr(tenant, "plan", None), "max_staff_accounts", 0) or 0)
+        _limit_error_response = None
         if max_staff > 0:
-            current_staff = User.objects.filter(tenant=tenant, role=User.Roles.TENANT_STAFF).count()
-            if current_staff >= max_staff:
-                return Response(
-                    {
-                        "detail": f"Your plan allows a maximum of {max_staff} staff accounts. "
-                                  f"You have {current_staff}. Upgrade to add more.",
-                        "code": "staff_limit_reached",
-                        "limit": max_staff,
-                        "current": current_staff,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            with _tx.atomic():
+                # select_for_update() locks the matching rows so the next create cannot
+                # start until this transaction commits (i.e. after create_user below).
+                current_staff = User.objects.select_for_update().filter(
+                    tenant=tenant, role=User.Roles.TENANT_STAFF
+                ).count()
+                if current_staff >= max_staff:
+                    _limit_error_response = Response(
+                        {
+                            "detail": f"Your plan allows a maximum of {max_staff} staff accounts. "
+                                      f"You have {current_staff}. Upgrade to add more.",
+                            "code": "staff_limit_reached",
+                            "limit": max_staff,
+                            "current": current_staff,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if _limit_error_response is None:
+                    # Still inside the lock — create the user atomically.
+                    # Derive username inside the lock to avoid duplicate-username races too.
+                    _base_u = _re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:28] or "staff"
+                    _u = _base_u; _c = 1
+                    while User.objects.filter(username=_u).exists():
+                        _u = f"{_base_u}{_c}"; _c += 1
+                    _np = name.split(" ", 1)
+                    _fn = _np[0][:30]; _ln = (_np[1] if len(_np) > 1 else "")[:150]
+                    _pw = _secrets.token_urlsafe(12)
+                    user = User.objects.create_user(
+                        username=_u, email=email, password=_pw,
+                        first_name=_fn, last_name=_ln,
+                        role=User.Roles.TENANT_STAFF, tenant=tenant,
+                    )
+                    first_name, last_name, temp_password, username = _fn, _ln, _pw, _u
+        if _limit_error_response is not None:
+            return _limit_error_response
+        if max_staff > 0:
+            # User was created inside the atomic block above; skip to email + return.
+            pass
+        else:
+            # Unlimited plan: no lock needed.
+            # Derive username from email local-part; deduplicate
+            base_username = _re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:28] or "staff"
+            username = base_username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
 
-        # Derive username from email local-part; deduplicate
-        base_username = _re.sub(r"[^a-z0-9_]", "", email.split("@")[0].lower())[:28] or "staff"
-        username = base_username
-        counter = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}{counter}"
-            counter += 1
+            # Split name into first / last
+            name_parts = name.split(" ", 1)
+            first_name = name_parts[0][:30]
+            last_name = (name_parts[1] if len(name_parts) > 1 else "")[:150]
 
-        # Split name into first / last
-        name_parts = name.split(" ", 1)
-        first_name = name_parts[0][:30]
-        last_name = (name_parts[1] if len(name_parts) > 1 else "")[:150]
+            # Generate a temporary password (12 URL-safe chars ≈ 72 bits entropy)
+            temp_password = _secrets.token_urlsafe(12)
 
-        # Generate a temporary password (12 URL-safe chars ≈ 72 bits entropy)
-        temp_password = _secrets.token_urlsafe(12)
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=temp_password,
-            first_name=first_name,
-            last_name=last_name,
-            role=User.Roles.TENANT_STAFF,
-            tenant=tenant,
-        )
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=temp_password,
+                first_name=first_name,
+                last_name=last_name,
+                role=User.Roles.TENANT_STAFF,
+                tenant=tenant,
+            )
 
         # Email invite
         try:
@@ -1519,18 +1553,23 @@ class AdminWalletBonusView(APIView):
                 idempotency_key__startswith=f"{idempotency_key}:"
             ).exists():
                 return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
+            # OPS-5b: populate balance_after for ledger reconcilability.
+            # Bulk-update the balances first (single SQL UPDATE — fast), then read the
+            # new per-customer balances back to record in the transaction log.
+            # The idempotency key format {idempotency_key}:{cid} is preserved.
             Customer.objects.filter(pk__in=ids).update(
                 wallet_balance=F("wallet_balance") + amount
             )
-            # balance_after is intentionally left null here: this is a bulk credit
-            # over many customers via a single F() update, so per-row post-balances
-            # aren't available without N extra queries. Single-row ledger writes
-            # elsewhere always snapshot balance_after.
+            # Read new balances in a single query keyed by customer id.
+            new_balances = dict(
+                Customer.objects.filter(pk__in=ids).values_list("id", "wallet_balance")
+            )
             WalletTransaction.objects.bulk_create([
                 WalletTransaction(
                     customer_id=cid,
                     type=WalletTransaction.Type.BONUS,
                     amount=amount,
+                    balance_after=new_balances.get(cid),
                     note=note,
                     idempotency_key=(f"{idempotency_key}:{cid}" if idempotency_key else None),
                 )
@@ -1604,9 +1643,11 @@ class AdminPlatformSettingsView(APIView):
 
     Exposes the wallet charge approval threshold and ride-hailing fare config.
     Platform admin only.
+
+    OPS-5b: consolidated onto IsPlatformAdmin (drops is_staff inline check).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     # {field_name: (min_value, max_value_or_None)}
     FIELD_RULES = {
@@ -1617,11 +1658,6 @@ class AdminPlatformSettingsView(APIView):
         "ride_minimum_fare": (0, None),
         "ride_commission_pct": (0, 100),
     }
-
-    def _check(self, request):
-        from .models import User
-        u = getattr(request, "user", None)
-        return isinstance(u, User) and (u.is_platform_admin or u.is_superuser or u.is_staff)
 
     def _serialize(self, cfg):
         return {
@@ -1634,14 +1670,12 @@ class AdminPlatformSettingsView(APIView):
         }
 
     def get(self, request, *args, **kwargs):
-        if not self._check(request):
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformConfig
         return Response(self._serialize(PlatformConfig.get_solo()))
 
     def patch(self, request, *args, **kwargs):
-        if not self._check(request):
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from decimal import Decimal as _Dec, InvalidOperation
         from .models import PlatformConfig
 
@@ -1675,7 +1709,7 @@ class AdminPlatformSettingsView(APIView):
         if changed:
             cfg.save(update_fields=changed + ["updated_at"])
             log_admin_action(
-                action="platform_settings_updated",
+                action=AdminAuditLog.Actions.PLATFORM_SETTINGS_UPDATED,
                 request=request,
                 target_repr="platform_config",
                 metadata={"changed_fields": changed},
@@ -1691,15 +1725,14 @@ class AdminCustomerListView(APIView):
     the platform sits between restaurants and clients. This is the admin's view of every
     customer: identity, verification, wallet, loyalty, driver status. Paginated +
     searchable by name / phone / email, with optional driver/verified filters.
+
+    OPS-5b: IsPlatformAdmin gate (drops is_staff), per-admin throttle, PII read audit.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
-        user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
         from django.db.models import Q
 
         qs = Customer.objects.all().order_by("-created_at")
@@ -1738,6 +1771,12 @@ class AdminCustomerListView(APIView):
             }
             for c in rows
         ]
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
+            request=request,
+            target_repr="customer_list",
+            metadata={"query": search or "", "count": total, "page": page},
+        )
         return Response({"total": total, "page": page, "page_size": page_size, "results": results})
 
 
@@ -1747,17 +1786,15 @@ class AdminCustomerDetailView(APIView):
     GET returns the full profile + cross-restaurant wallet ledger (each payment shows
     which restaurant it was at), trust score, loyalty and driver status. PATCH toggles
     is_driver (admin can register/unregister a delivery driver).
+
+    OPS-5b: IsPlatformAdmin gate (drops is_staff), per-admin throttle, PII read + write audits.
     """
 
-    permission_classes = [IsAuthenticated]
-
-    def _check(self, request):
-        u = getattr(request, "user", None)
-        return bool(u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False)))
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, customer_id, *args, **kwargs):
-        if not self._check(request):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         try:
             c = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
@@ -1776,6 +1813,12 @@ class AdminCustomerDetailView(APIView):
         ratings = CustomerRating.objects.filter(customer=c).aggregate(avg=Avg("score"), count=Count("id"))
         delivery_jobs = DeliveryJob.objects.filter(driver=c).count() if c.is_driver else 0
 
+        log_admin_action(
+            action=AdminAuditLog.Actions.CUSTOMER_PII_VIEWED,
+            request=request,
+            target_repr=f"customer:{customer_id}",
+            metadata={"customer_id": customer_id},
+        )
         return Response({
             "id": c.id,
             "name": c.name or "",
@@ -1811,19 +1854,25 @@ class AdminCustomerDetailView(APIView):
         })
 
     def patch(self, request, customer_id, *args, **kwargs):
-        if not self._check(request):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         try:
             c = Customer.objects.get(pk=customer_id)
         except Customer.DoesNotExist:
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
         if "is_driver" in request.data:
-            c.is_driver = bool(request.data["is_driver"])
+            new_value = bool(request.data["is_driver"])
+            c.is_driver = new_value
             fields = ["is_driver", "updated_at"]
             if not c.is_driver and c.is_driver_online:
                 c.is_driver_online = False
                 fields.append("is_driver_online")
             c.save(update_fields=fields)
+            log_admin_action(
+                action=AdminAuditLog.Actions.CUSTOMER_DRIVER_TOGGLED,
+                request=request,
+                target_repr=f"customer:{customer_id}",
+                metadata={"customer_id": customer_id, "is_driver": new_value},
+            )
         return Response({"id": c.id, "is_driver": c.is_driver, "is_driver_online": c.is_driver_online})
 
 
@@ -1884,13 +1933,11 @@ class AdminCustomerOrdersView(APIView):
     number of tenants.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
     RESULT_LIMIT = 50
 
     def get(self, request, customer_id, *args, **kwargs):
-        u = getattr(request, "user", None)
-        if not (u and (u.is_superuser or u.is_staff or getattr(u, "is_platform_admin", False))):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         if not Customer.objects.filter(pk=customer_id).exists():
             return Response({"detail": "Customer not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1931,14 +1978,8 @@ class AdminWalletVoucherView(APIView):
 
     permission_classes = [IsPlatformAdmin]
 
-    def _check_admin(self, request):
-        user = getattr(request, "user", None)
-        return user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))
-
     def get(self, request, *args, **kwargs):
-        if not self._check_admin(request):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import WalletVoucher
         qs = WalletVoucher.objects.select_related("used_by")[:100]
         data = []
@@ -1957,9 +1998,7 @@ class AdminWalletVoucherView(APIView):
         return Response(data)
 
     def post(self, request, *args, **kwargs):
-        if not self._check_admin(request):
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from decimal import Decimal as _Dec, InvalidOperation
         from django.utils import timezone as _tz
         import datetime
@@ -3590,21 +3629,14 @@ class AdminFlashSaleListCreateView(APIView):
     """
     GET /api/admin/flash-sales/          — list all flash sales (platform admin only)
     POST /api/admin/flash-sales/         — create a new flash sale
+
+    OPS-5b: consolidated onto IsPlatformAdmin.
     """
 
-    permission_classes = [IsAuthenticated]
-
-    def _check_admin(self, request):
-        from .models import User
-        user = request.user
-        if not isinstance(user, User) or not user.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
-        return None
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
         with schema_context("public"):
@@ -3612,9 +3644,7 @@ class AdminFlashSaleListCreateView(APIView):
             return Response([_serialize_flash_sale(fs) for fs in sales])
 
     def post(self, request, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
         from decimal import Decimal
@@ -3656,16 +3686,11 @@ class AdminFlashSaleListCreateView(APIView):
 class AdminFlashSaleDetailView(APIView):
     """
     GET/PATCH/DELETE /api/admin/flash-sales/<id>/  — platform admin only
+
+    OPS-5b: consolidated onto IsPlatformAdmin.
     """
 
-    permission_classes = [IsAuthenticated]
-
-    def _check_admin(self, request):
-        from .models import User
-        user = request.user
-        if not isinstance(user, User) or not user.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
-        return None
+    permission_classes = [IsPlatformAdmin]
 
     def _get_fs(self, fs_id):
         from .models import PlatformFlashSale
@@ -3677,9 +3702,7 @@ class AdminFlashSaleDetailView(APIView):
                 return None
 
     def get(self, request, fs_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         fs = self._get_fs(fs_id)
         if fs is None:
             return Response({"detail": "Not found."}, status=404)
@@ -3692,9 +3715,7 @@ class AdminFlashSaleDetailView(APIView):
         return Response(data)
 
     def patch(self, request, fs_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
         from decimal import Decimal
@@ -3746,9 +3767,7 @@ class AdminFlashSaleDetailView(APIView):
         return Response(_serialize_flash_sale(fs))
 
     def delete(self, request, fs_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import PlatformFlashSale
         from django_tenants.utils import schema_context
         with schema_context("public"):
@@ -5099,15 +5118,15 @@ def _serialize_address(addr) -> dict:
 
 
 class AdminDriverListView(APIView):
-    """GET /api/admin/drivers/ — list all registered drivers with job stats (platform admin)."""
+    """GET /api/admin/drivers/ — list all registered drivers with job stats (platform admin).
 
-    permission_classes = [IsAuthenticated]
+    OPS-5b: consolidated onto IsPlatformAdmin.
+    """
+
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request, *args, **kwargs):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=403)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
 
         from .models import Customer, DeliveryJob
         from django.db.models import Avg, Count, Q
@@ -5463,14 +5482,10 @@ class DriverDeliveriesView(APIView):
 class AdminPlatformAnalyticsView(APIView):
     """GET /api/admin/platform-analytics/ — cross-platform aggregate stats (platform admin only)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request, *args, **kwargs):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
-
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from django.db.models import Avg, Count, Q, Sum
         from django.utils import timezone
         from .models import Customer, DeliveryJob, DeliveryZone, PlatformFlashSale, RideRequest, WalletTransaction
@@ -5621,21 +5636,14 @@ class AdminDeliveryZoneListCreateView(APIView):
     """
     GET  /api/admin/delivery-zones/   — list all zones (platform admin only)
     POST /api/admin/delivery-zones/   — create a zone
+
+    OPS-5b: consolidated onto IsPlatformAdmin (drops inline is_platform_admin check).
     """
 
-    permission_classes = [IsAuthenticated]
-
-    def _check_admin(self, request):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
-        return None
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import DeliveryZone
         from django_tenants.utils import schema_context
         with schema_context("public"):
@@ -5643,9 +5651,7 @@ class AdminDeliveryZoneListCreateView(APIView):
         return Response([_serialize_zone(z) for z in zones])
 
     def post(self, request, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import DeliveryZone
         from django_tenants.utils import schema_context
 
@@ -5692,14 +5698,7 @@ class AdminDeliveryZoneListCreateView(APIView):
 class AdminDeliveryZoneDetailView(APIView):
     """GET/PATCH/DELETE /api/admin/delivery-zones/<zone_id>/ — platform admin only."""
 
-    permission_classes = [IsAuthenticated]
-
-    def _check_admin(self, request):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=status.HTTP_403_FORBIDDEN)
-        return None
+    permission_classes = [IsPlatformAdmin]
 
     def _get_zone(self, zone_id):
         from .models import DeliveryZone
@@ -5711,18 +5710,14 @@ class AdminDeliveryZoneDetailView(APIView):
                 return None
 
     def get(self, request, zone_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         zone = self._get_zone(zone_id)
         if zone is None:
             return Response({"detail": "Not found."}, status=404)
         return Response(_serialize_zone(zone))
 
     def patch(self, request, zone_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import DeliveryZone
         from django_tenants.utils import schema_context
 
@@ -5773,9 +5768,7 @@ class AdminDeliveryZoneDetailView(APIView):
         return Response(_serialize_zone(zone))
 
     def delete(self, request, zone_id, *args, **kwargs):
-        err = self._check_admin(request)
-        if err:
-            return err
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import DeliveryZone
         from django_tenants.utils import schema_context
         with schema_context("public"):
@@ -5853,16 +5846,14 @@ class AdminDeliveryJobListView(APIView):
 
     ?status=  filter by status
     ?tenant_id= filter by tenant
+
+    OPS-5b: consolidated onto IsPlatformAdmin (drops inline is_platform_admin check).
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request, *args, **kwargs):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=403)
-
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
         from .models import DeliveryJob
         qs = DeliveryJob.objects.select_related("driver", "zone").order_by("-created_at")
         status_filter = request.query_params.get("status")
@@ -5904,15 +5895,14 @@ class AdminCreateDeliveryJobView(APIView):
       delivery_address, delivery_lat, delivery_lng, delivery_fee, driver_payout,
       zone_id (optional)
     }
+
+    OPS-5b: consolidated onto IsPlatformAdmin + audit log on create.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request, *args, **kwargs):
-        from .models import User
-        u = request.user
-        if not isinstance(u, User) or not u.is_platform_admin:
-            return Response({"detail": "Platform admin access required."}, status=403)
+        # Permission gate is IsPlatformAdmin (class-level) — no inline check needed.
 
         from .models import DeliveryJob, DeliveryZone
         from decimal import Decimal, InvalidOperation
@@ -5976,5 +5966,17 @@ class AdminCreateDeliveryJobView(APIView):
             _pnj(None)
         except Exception:
             pass
+        log_admin_action(
+            action=AdminAuditLog.Actions.DELIVERY_JOB_CREATED,
+            request=request,
+            target_repr=f"job:{job.id}:{order_number}",
+            metadata={
+                "job_id": job.id,
+                "tenant_id": tenant_id,
+                "order_number": order_number,
+                "delivery_fee": str(delivery_fee),
+                "driver_payout": str(driver_payout),
+            },
+        )
         _bt = _batch_business_types({job.tenant_id}).get(job.tenant_id, "restaurant")
         return Response(_serialize_delivery_job(job, business_type=_bt), status=status.HTTP_201_CREATED)

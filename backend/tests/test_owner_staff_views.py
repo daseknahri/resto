@@ -155,14 +155,30 @@ class OwnerStaffCreateViewTests(SimpleTestCase):
         self.assertEqual(resp.data["code"], "email_taken")
 
     def test_rejects_when_plan_staff_limit_reached(self):
-        """When the plan's max_staff_accounts is hit, creation is blocked with a clear code."""
+        """When the plan's max_staff_accounts is hit, creation is blocked with a clear code.
+
+        OPS-5b: limit check now uses transaction.atomic() + select_for_update().filter().count().
+        Patch atomic as a no-op context manager and update the mock chain accordingly.
+        """
+        from contextlib import contextmanager
         tenant = _make_tenant()
         tenant.plan = SimpleNamespace(max_staff_accounts=2)
         req = self._post({"name": "Jean Dupont", "email": "jean@demo.com"}, tenant=tenant)
+
+        @contextmanager
+        def _fake_atomic():
+            yield
+
         import accounts.models as _accts
-        with patch.object(_accts.User, "objects") as obj_mock:
-            obj_mock.filter.return_value.exists.return_value = False  # email not taken
-            obj_mock.filter.return_value.count.return_value = 2       # already at the limit
+        with patch.object(_accts.User, "objects") as obj_mock, \
+             patch("django.db.transaction.atomic", _fake_atomic):
+            # Email uniqueness check (filter(email=...).exists()) → not taken
+            obj_mock.filter.return_value.exists.return_value = False
+            # Staff limit check: select_for_update().filter(...).count() → at limit
+            obj_mock.select_for_update.return_value.filter.return_value.count.return_value = 2
+            # username dedup loop inside the lock: select_for_update().filter(...).exists()
+            # must be False to avoid infinite loop
+            obj_mock.select_for_update.return_value.filter.return_value.exists.return_value = False
             resp = self.view(req)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(resp.data["code"], "staff_limit_reached")

@@ -231,7 +231,12 @@ class RequestLoggingMiddlewareTests(SimpleTestCase):
         self.assertEqual(extra["user_role"], "tenant_owner")
 
     def test_client_ip_uses_x_forwarded_for(self):
-        """_client_ip should use first address from X-Forwarded-For."""
+        """_client_ip uses rightmost-trusted XFF entry (OPS-5b IP-trust hardening).
+
+        With TRUSTED_PROXY_COUNT=1 (default) and XFF "203.0.113.1, 10.0.0.1",
+        the middleware skips 1 proxy hop from the right and returns "10.0.0.1"
+        (the IP our Nginx actually saw), ignoring the spoofable leading entry.
+        """
         fake_resp = self._make_response(200)
         mw, _ = self._middleware(fake_resp)
         request = self.factory.get(
@@ -245,4 +250,4 @@ class RequestLoggingMiddlewareTests(SimpleTestCase):
             mw(request)
 
         extra = mock_logger.log.call_args[1]["extra"]["structured"]
-        self.assertEqual(extra["client_ip"], "203.0.113.1")
+        self.assertEqual(extra["client_ip"], "10.0.0.1")

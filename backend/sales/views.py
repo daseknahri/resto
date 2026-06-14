@@ -1432,7 +1432,7 @@ class AdminPlanFeatureFlagUpdateView(APIView):
             current_flags = list(FeatureFlag.objects.filter(plan_id=plan.id).order_by("key", "id"))
             payload = AdminPlanFeatureFlagPlanSerializer.from_plan(plan, flags=current_flags)
             log_admin_action(
-                action="plan_feature_flags_updated",
+                action=AdminAuditLog.Actions.PLAN_FEATURE_FLAGS_UPDATED,
                 request=request,
                 actor=request.user,
                 target_repr=f"plan:{plan.code}",

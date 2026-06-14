@@ -365,9 +365,12 @@ class CanEditTenantTests(SimpleTestCase):
         req = _request_ns(user=_user_mock(superuser=True))
         self.assertTrue(_can_edit_tenant(req))
 
-    def test_staff_returns_true(self):
+    def test_staff_only_returns_false(self):
+        # OPS-5b priv-esc fix: a Django /admin/ is_staff flag (no tenant
+        # affiliation, not superuser/platform-admin) must NOT grant cross-tenant
+        # edit access. is_staff was dropped from _can_edit_tenant.
         req = _request_ns(user=_user_mock(staff=True))
-        self.assertTrue(_can_edit_tenant(req))
+        self.assertFalse(_can_edit_tenant(req))
 
     def test_platform_admin_returns_true(self):
         req = _request_ns(user=_user_mock(platform_admin=True))

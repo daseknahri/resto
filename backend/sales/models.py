@@ -301,6 +301,12 @@ class AdminAuditLog(models.Model):
         DRIVER_PAYOUT_RECORDED = "driver_payout_recorded", "Driver payout recorded"
         PLATFORM_SETTINGS_UPDATED = "platform_settings_updated", "Platform settings updated"
         TENANT_LIVE_ORDERS_VIEWED = "tenant_live_orders_viewed", "Tenant live orders viewed"
+        # OPS-5b additions
+        CUSTOMER_PII_VIEWED = "customer_pii_viewed", "Customer PII viewed"
+        CUSTOMER_DRIVER_TOGGLED = "customer_driver_toggled", "Customer driver toggled"
+        DELIVERY_JOB_CREATED = "delivery_job_created", "Delivery job created"
+        TENANT_DELETION_REQUESTED = "tenant_deletion_requested", "Tenant deletion requested"
+        PLAN_FEATURE_FLAGS_UPDATED = "plan_feature_flags_updated", "Plan feature flags updated"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

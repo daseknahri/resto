@@ -14,7 +14,10 @@ def user_can_edit_tenant(user, tenant):
     """
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    # OPS-5b: is_staff is the Django /admin/ panel flag, NOT a tenant-write role.
+    # Admitting it let any Django staff user write to ANY tenant's menu/profile.
+    # Gate on is_superuser OR is_platform_admin (real platform admins have both).
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None:
         return False
@@ -32,7 +35,10 @@ def user_can_edit_menu(user, tenant):
     """
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    # OPS-5b: is_staff is the Django /admin/ panel flag, NOT a tenant-write role.
+    # Admitting it let any Django staff user write to ANY tenant's menu/profile.
+    # Gate on is_superuser OR is_platform_admin (real platform admins have both).
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None:
         return False

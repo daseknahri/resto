@@ -46,6 +46,7 @@ def _non_admin():
     u.__class__ = User
     u.is_authenticated = True
     u.is_platform_admin = False
+    u.is_superuser = False
     return u
 
 

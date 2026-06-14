@@ -61,6 +61,7 @@ REST_FRAMEWORK = {
         "ride_estimate": "120/hour",
         "ride_request": "30/hour",
         "ride_driver": "60/min",
+        "admin_pii": "120/min",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

@@ -147,6 +147,25 @@ class RideDriverThrottle(_CustomerThrottle):
     scope = "ride_driver"
 
 
+class AdminPIIThrottle(SimpleRateThrottle):
+    """OPS-5b: per-admin throttle on PII-exposing customer directory/detail endpoints.
+
+    Keyed on the authenticated user's pk so each admin gets an independent
+    bucket (mirrors OPS-3 per-user throttle pattern). Falls back to IP for
+    unauthenticated requests (should never reach these views, but keeps the
+    class safe regardless).
+    """
+    scope = "admin_pii"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"admin:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
 class TranslateThrottle(SimpleRateThrottle):
     """Rate-limit the AI translate endpoint by authenticated user to prevent
     runaway credit consumption against the OpenRouter API."""

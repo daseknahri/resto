@@ -114,13 +114,20 @@ class GetRequestIpTests(SimpleTestCase):
             meta["REMOTE_ADDR"] = remote_addr
         return SimpleNamespace(META=meta)
 
-    def test_returns_first_ip_from_x_forwarded_for(self):
+    def test_returns_rightmost_trusted_ip_from_x_forwarded_for(self):
+        """With TRUSTED_PROXY_COUNT=1 (default), return the entry at len-1.
+
+        XFF "203.0.113.1, 10.0.0.1": our proxy appended 10.0.0.1 as the IP
+        it received the connection from.  With 1 trusted proxy, idx = 2-1 = 1,
+        so we return the proxy-seen IP (10.0.0.1), not the spoofable leading one.
+        """
         req = self._req(forwarded_for="203.0.113.1, 10.0.0.1", remote_addr="10.0.0.1")
-        self.assertEqual(get_request_ip(req), "203.0.113.1")
+        self.assertEqual(get_request_ip(req), "10.0.0.1")
 
     def test_strips_whitespace_from_forwarded_ip(self):
+        """Whitespace is stripped; rightmost-trusted entry is returned."""
         req = self._req(forwarded_for="  203.0.113.5  , 10.0.0.1")
-        self.assertEqual(get_request_ip(req), "203.0.113.5")
+        self.assertEqual(get_request_ip(req), "10.0.0.1")
 
     def test_falls_back_to_remote_addr(self):
         req = self._req(remote_addr="192.168.1.42")

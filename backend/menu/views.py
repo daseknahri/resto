@@ -585,30 +585,50 @@ class DishViewSet(PublishAccessMixin, viewsets.ModelViewSet):
         return ctx
 
     def perform_create(self, serializer):
-        """Enforce per-plan dish limit before saving."""
+        """Enforce per-plan dish limit before saving.
+
+        Concurrency note: the check is performed inside transaction.atomic() with a
+        select_for_update() lock on the Plan row so that concurrent creates cannot
+        both pass the count-then-create race and overshoot the cap.  0=unlimited
+        (the falsy guard on max_dishes) is preserved.
+
+        The lock is on the Plan row in the public schema; the dish count and
+        serializer.save() run in the tenant schema (the middleware-set connection).
+        We enter the public schema only long enough to acquire the lock and read
+        max_dishes, then return to the tenant schema for the count and save —
+        all inside one transaction.atomic() so the lock spans both steps.
+        """
         tenant = getattr(self.request, "tenant", None)
         if tenant is not None:
             try:
+                from django.db import transaction
                 from django_tenants.utils import get_public_schema_name, schema_context
                 from tenancy.models import Plan
-                with schema_context(get_public_schema_name()):
-                    plan = Plan.objects.filter(
-                        tenants__id=tenant.id
-                    ).values_list("max_dishes", flat=True).first()
-                max_dishes = plan if plan is not None else 0
-                if max_dishes and max_dishes > 0:
-                    current_count = Dish.objects.count()
-                    if current_count >= max_dishes:
-                        from rest_framework.exceptions import ValidationError
-                        raise ValidationError(
-                            {
-                                "detail": f"Your plan allows a maximum of {max_dishes} dishes. "
-                                          f"You have {current_count}. Upgrade to add more.",
-                                "code": "dish_limit_reached",
-                                "limit": max_dishes,
-                                "current": current_count,
-                            }
-                        )
+                from rest_framework.exceptions import ValidationError
+
+                with transaction.atomic():
+                    # Phase 1: read max_dishes and lock the Plan row (public schema).
+                    with schema_context(get_public_schema_name()):
+                        plan_qs = Plan.objects.select_for_update().filter(tenants__id=tenant.id)
+                        plan_obj = plan_qs.first()
+                        max_dishes = int(getattr(plan_obj, "max_dishes", 0) or 0)
+
+                    # Phase 2: re-count dishes and create (tenant schema restored by
+                    # schema_context exit).  The lock from phase 1 is still held.
+                    if max_dishes > 0:
+                        current_count = Dish.objects.count()
+                        if current_count >= max_dishes:
+                            raise ValidationError(
+                                {
+                                    "detail": f"Your plan allows a maximum of {max_dishes} dishes. "
+                                              f"You have {current_count}. Upgrade to add more.",
+                                    "code": "dish_limit_reached",
+                                    "limit": max_dishes,
+                                    "current": current_count,
+                                }
+                            )
+                    serializer.save()
+                    return
             except Exception as exc:
                 if getattr(exc, "detail", None):
                     raise

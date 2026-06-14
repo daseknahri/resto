@@ -125,9 +125,24 @@ class RequestLoggingMiddleware:
 
     @staticmethod
     def _client_ip(request) -> str:
+        """Return the real client IP using the same trusted-proxy logic as sales.audit.
+
+        Reads TRUSTED_PROXY_COUNT from settings (default 1 for single Nginx proxy).
+        Uses the rightmost-minus-count entry from X-Forwarded-For so a client
+        cannot spoof it by prepending fake IPs.
+        """
+        from django.conf import settings as _cfg
         forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            trusted_count = max(0, int(getattr(_cfg, "TRUSTED_PROXY_COUNT", 1)))
+            if trusted_count == 0:
+                return request.META.get("REMOTE_ADDR", "")
+            ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
+            if ips:
+                idx = len(ips) - trusted_count
+                if idx >= 0:
+                    return ips[idx]
+                return ips[0]
         return request.META.get("REMOTE_ADDR", "")
 
     def __call__(self, request):

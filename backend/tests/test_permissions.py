@@ -56,9 +56,10 @@ class IsPlatformAdminTests(SimpleTestCase):
         req = _request(user=_user(superuser=True))
         self.assertTrue(self.perm.has_permission(req, self.view))
 
-    def test_staff_allowed(self):
+    def test_staff_only_denied(self):
+        """is_staff alone does not grant platform-admin access (OPS-5b PRIV-ESC hardening)."""
         req = _request(user=_user(staff=True))
-        self.assertTrue(self.perm.has_permission(req, self.view))
+        self.assertFalse(self.perm.has_permission(req, self.view))
 
     def test_platform_admin_allowed(self):
         req = _request(user=_user(platform_admin=True))

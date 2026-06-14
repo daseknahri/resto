@@ -71,7 +71,41 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future
 OPS batch or a security pass. file:line in the scout output; verify before acting.
 
-### OPS-5b — ADMIN SECURITY HARDENING (next batch; scout OPS-5 cluster)
+### OPS-5c — SECURITY/OPS FOLLOW-UP (scout OPS-5b cluster; next security batch)
+- [ ] **is_staff STILL bleeds elsewhere? — RESOLVED in OPS-5b** for menu/permissions
+      (user_can_edit_tenant/menu), tenancy/api _can_edit_tenant, sales IsTenantEditor (all
+      dropped is_staff). If any new gate copies the old triple-check, fix it. [scout OPS-5b → fixed]
+- [ ] **Image-upload content-type trust (SECURITY)** — _optimize_image except-fallback
+      (tenancy/api.py ~127) stores raw bytes with the client-supplied content_type; a JPEG/SVG
+      polyglot can be served verbatim. Pillow transcode is the real sanitiser — on fallback,
+      reject or force application/octet-stream. Same on driver-doc upload (ride_views.py ~908).
+      [scout OPS-5b]
+- [ ] **AdminRideListView / AdminCarApprovalView: permission_classes=[] + manual check, no
+      throttle, no audit on PII GET (SECURITY)** — ride_views.py ~1232/1301; mirror the OPS-5/5b
+      pattern (IsPlatformAdmin + AdminPIIThrottle + audit). authentication_classes=[] also drops
+      DRF CSRF. [scout OPS-5b]
+- [ ] **OSRM SSRF** — DELIVERY_OSRM_URL passed verbatim to requests.get (tenancy/routing.py
+      ~81/131); validate scheme + non-RFC1918 host (or allowlist) at settings parse. [scout OPS-5b]
+- [ ] **IsTenantEditor lifecycle scope** — RESOLVED via is_staff drop, but confirm tenant
+      LIFECYCLE endpoints (suspend/cancel) use IsPlatformAdmin not IsTenantEditor. [scout OPS-5b]
+- [ ] **DriverDocUploadView no throttle** — AllowAny 8MB uploads + admin-email on each; add a
+      per-session throttle (ride_views.py ~945). [scout OPS-5b]
+- [ ] **AnalyticsEventIngestView throttle IP-scoped** — CDN/shared-NAT collapses the 600/hr
+      bucket; key on (tenant, ip) like WaiterCallThrottle. (menu/views.py ~1047). [scout OPS-5b]
+- [ ] **PasswordResetToken / ActivationToken never pruned** — add a prune cron (delete used
+      >7d). (accounts/models.py ~514). [scout OPS-5b]
+- [ ] **TRUSTED_PROXY_COUNT not declared in settings.py** — read via getattr default 1 in 2
+      places; declare it explicitly + comment the Coolify topology (Traefik+nginx may be 2).
+      Also: get_request_ip miscount fallback returns spoofable XFF[0] — clamp safely.
+      (middleware.py ~137; sales/audit.py ~29). [scout OPS-5b + review minor]
+- [ ] **SESSION_SAVE_EVERY_REQUEST not set** — 90-day window is ABSOLUTE not sliding; read-heavy
+      staff get logged out mid-shift. One line: SESSION_SAVE_EVERY_REQUEST=True. [scout OPS-5b]
+- [ ] **AdminWalletBonus balance_after stale-read** under concurrent wallet writes (documented
+      limitation; per-customer credit_wallet or returning-UPDATE for exactness). [review OPS-5b minor]
+- [ ] **Plan-limit returns HTTP 400 not 402** — still deferred; SPA axios behavior unaudited.
+      [review OPS-5/5b minor]
+
+### OPS-5b — ADMIN SECURITY HARDENING — SHIPPED (the items below are DONE; see Done section)
 - [ ] **IsPlatformAdmin admits any Django is_staff user → money endpoints (PRIV-ESC, HIGH)**
       — sales/permissions.py:11 returns True for is_staff, so any /admin/-capable Django
       user can POST wallet bonus / fund-tenant / vouchers / ride-fare settings. Intended
@@ -248,6 +282,26 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5b "admin security hardening": IsPlatformAdmin PRIV-ESC fixed — dropped is_staff
+      (Django /admin/ flag) from the gate AND, completing it, from menu.permissions
+      user_can_edit_tenant/user_can_edit_menu + tenancy.api _can_edit_tenant + sales
+      IsTenantEditor (a Django staff user could previously write to ANY tenant's menu/profile/
+      lifecycle); ensure_platform_admin verified to set role+is_superuser so real admins still
+      pass. Admin-auth consolidated onto IsPlatformAdmin (incl. AdminPlatformAnalyticsView +
+      AdminDeliveryZoneDetailView — review majors) + URL-sweep test rejects TENANT_OWNER. PII
+      read audit+throttle (CUSTOMER_PII_VIEWED) on AdminCustomer list/detail; admin-write
+      audits (CUSTOMER_DRIVER_TOGGLED, DELIVERY_JOB_CREATED, TENANT_DELETION_REQUESTED) +
+      PLAN_FEATURE_FLAGS_UPDATED/PLATFORM_SETTINGS_UPDATED enum members (was raw strings) +
+      choices migration; audit-log IP now trusted-proxy-aware (rightmost, not spoofable XFF[0]);
+      plan-limit dish/staff create now atomic+locked (race fixed, 0=unlimited preserved);
+      AdminWalletBonus populates balance_after; ensure_platform_admin reads PLATFORM_ADMIN_PASSWORD
+      env (not CLI arg); health endpoint no longer leaks MEDIA_ROOT path. Review found 4 majors
+      (2 unconsolidated views, raw-string action, 2 weak tests) — fix agent applied; I then
+      personally COMPLETED the priv-esc (the is_staff bleed at 4 more helpers the batch missed)
+      + verified the boundary both directions + fixed the one test that asserted the old insecure
+      access (test_staff_returns_true → test_staff_only_returns_false). Backend 3459/0,
+      frontend 90/build green. Scout → OPS-5c cluster above (image-upload polyglot, ride-admin
+      PII views, OSRM SSRF, token prune, session-sliding, throttles). — ops5b commit.
 - [x] OPS-5 "platform cockpit": Sentry tenant tags (backend middleware + SPA
       setTenantContext); health checks (Celery/channel-layer/media, 503 on hard-fail);
       admin read-only support live-orders (GET /api/admin/tenants/<id>/live-orders/,

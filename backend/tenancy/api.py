@@ -56,7 +56,9 @@ def _can_edit_tenant(request) -> bool:
     tenant = getattr(request, "tenant", None)
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or user.is_platform_admin:
+    # OPS-5b: is_staff (Django /admin/ flag) dropped — it granted cross-tenant
+    # profile/settings write to any Django staff user. Real admins have is_superuser.
+    if user.is_superuser or user.is_platform_admin:
         return True
     if tenant is None or user.tenant_id != tenant.id:
         return False
@@ -484,6 +486,25 @@ class OwnerDeletionRequestView(APIView):
                 )
         except Exception:
             pass
+
+        # OPS-5b: audit the deletion request in AdminAuditLog for GDPR compliance timeline.
+        try:
+            from sales.audit import log_admin_action
+            from sales.models import AdminAuditLog
+            log_admin_action(
+                action=AdminAuditLog.Actions.TENANT_DELETION_REQUESTED,
+                request=request,
+                tenant=t,
+                target_repr=f"tenant:{t.slug}",
+                metadata={
+                    "tenant_id": t.id,
+                    "tenant_slug": t.slug,
+                    "requested_at": t.deletion_requested_at.isoformat(),
+                    "reason": reason or "",
+                },
+            )
+        except Exception:
+            pass  # Never fail the response due to audit logging
 
         return Response({"status": "requested", "deletion_requested_at": t.deletion_requested_at.isoformat()})
 
