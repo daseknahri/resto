@@ -310,6 +310,25 @@ class Profile(models.Model):
         blank=True,
         help_text="Dietary and feature tags used for marketplace filtering.",
     )
+    # ── Denormalized rating summary (B8) ─────────────────────────────────────────
+    # Ratings live per-tenant (menu.Rating), but the marketplace/directory list
+    # over the PUBLIC Profile page used to switch into every tenant schema to
+    # aggregate them — an O(N_tenants) cross-schema N+1 per request. These two
+    # fields mirror that aggregate on the public row so the listing reads them
+    # in-memory with no per-tenant schema switch. They are kept in sync by the
+    # menu.Rating post_save/post_delete signals (see menu/ratings.py) and
+    # populated for existing data by `manage.py backfill_profile_ratings`.
+    rating_avg = models.DecimalField(
+        max_digits=2,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Denormalized average rating (1dp) mirrored from this tenant's menu.Rating rows. Null = no ratings.",
+    )
+    rating_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Denormalized count of this tenant's menu.Rating rows.",
+    )
 
     # ── Business type & capabilities (Kepoli super-app generalization seam) ─────
     # The platform began restaurant-only; business_type lets the same tenant

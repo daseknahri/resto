@@ -139,6 +139,21 @@ python manage.py seed_plans
 
 ---
 
+## 5b — Backfill denormalized marketplace ratings (run ONCE, after migrating)
+The marketplace/directory listing reads each restaurant's rating from a
+denormalized copy on the public `Profile` (`rating_avg` / `rating_count`) instead
+of switching into every tenant schema per request (B8 — kills the cross-schema
+N+1). The `menu.Rating` post_save/post_delete signals keep it in sync from deploy
+onward, but **existing** ratings predate the signals, so run this **once** after
+the `tenancy` migration that adds the columns lands:
+```bash
+python manage.py backfill_profile_ratings
+```
+Idempotent — safe to re-run. Until it runs, already-rated restaurants show no
+rating in the marketplace (new ratings still populate live via the signals).
+
+---
+
 ## 6 — Verify security headers
 Test with https://securityheaders.com — paste your domain.
 Expected green ratings:

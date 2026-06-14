@@ -2607,23 +2607,15 @@ class DirectoryView(APIView):
         cities_set: set = set()
         cuisines_set: set = set()
 
+        # B8: ratings are denormalized onto the public Profile (rating_avg /
+        # rating_count), kept in sync by the menu.Rating signals. This loop is now
+        # pure in-memory — no per-tenant schema_context switch for the rating.
         for profile in profiles_page:
             tenant = profile.tenant
             is_currently_open = bool(profile.is_open) and not getattr(profile, "is_menu_temporarily_disabled", False)
 
-            rating_avg = None
-            rating_count = 0
-            try:
-                from django_tenants.utils import schema_context as _sc
-                from django.db.models import Avg, Count
-                with _sc(tenant.schema_name):
-                    from menu.models import Rating as _Rating
-                    agg = _Rating.objects.aggregate(avg=Avg("score"), cnt=Count("id"))
-                    if agg["cnt"]:
-                        rating_avg = round(float(agg["avg"]), 1)
-                        rating_count = agg["cnt"]
-            except Exception:
-                pass
+            rating_average = float(profile.rating_avg) if profile.rating_avg is not None else None
+            rating_count = profile.rating_count or 0
 
             if profile.city:
                 cities_set.add(profile.city)
@@ -2639,7 +2631,7 @@ class DirectoryView(APIView):
                 "business_type": getattr(profile, "business_type", "") or "restaurant",
                 "city": profile.city or "",
                 "is_open": is_currently_open,
-                "rating_average": rating_avg,
+                "rating_average": rating_average,
                 "rating_count": rating_count,
                 "delivery_enabled": bool(profile.delivery_enabled),
             })
@@ -2731,6 +2723,12 @@ class MarketplaceView(APIView):
             qs = qs.filter(delivery_enabled=True)
         if price_tier_filter:
             qs = qs.filter(price_tier=price_tier_filter)
+        # B8: min_rating now filters in SQL on the denormalized Profile.rating_avg
+        # instead of a per-tenant post-filter. rating_avg__gte drops NULLs (unrated
+        # tenants), matching the OLD behaviour: the in-loop filter dropped a tenant
+        # when rating_avg was None or < min_rating.
+        if min_rating is not None:
+            qs = qs.filter(rating_avg__gte=min_rating)
 
         # ── Batch flash-sale data (one query each, before the per-tenant loop) ──
         # Build a mapping: tenant_id → set of flash_sale_ids they opted into.
@@ -2786,18 +2784,17 @@ class MarketplaceView(APIView):
             if required_tags and not all(rt in profile_tags for rt in required_tags):
                 continue
 
-            rating_avg = None
-            rating_count = 0
+            # B8: ratings are read from the denormalized public Profile (kept in
+            # sync by the menu.Rating signals) — NO per-tenant schema_context /
+            # Rating aggregate. min_rating is already applied in SQL above.
+            rating_avg = float(profile.rating_avg) if profile.rating_avg is not None else None
+            rating_count = profile.rating_count or 0
+
             promo_badge = None
             try:
                 from django_tenants.utils import schema_context as _sc
-                from django.db.models import Avg, Count
                 with _sc(tenant.schema_name):
-                    from menu.models import Rating as _Rating, Promotion as _Promo
-                    agg = _Rating.objects.aggregate(avg=Avg("score"), cnt=Count("id"))
-                    if agg["cnt"]:
-                        rating_avg = round(float(agg["avg"]), 1)
-                        rating_count = agg["cnt"]
+                    from menu.models import Promotion as _Promo
                     for _p in _Promo.objects.filter(is_active=True).order_by("-discount_value")[:5]:
                         if _is_promo_active_now(_p):
                             if _p.promo_type == "percentage":
@@ -2813,9 +2810,6 @@ class MarketplaceView(APIView):
             # Check flash-sale membership using the pre-fetched maps (no per-tenant DB hit).
             tenant_opted_ids = opted_map.get(tenant.id, set())
             flash_sale_active = bool(tenant_opted_ids & live_flash_sale_ids)
-
-            if min_rating is not None and (rating_avg is None or rating_avg < min_rating):
-                continue
 
             distance_km = None
             if user_lat is not None and profile.lat and profile.lng:

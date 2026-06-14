@@ -594,6 +594,31 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
+### B8-FOLLOWUP — MARKETPLACE SCALE + DENORM COHERENCE (scout B8 cluster)
+B8 killed the RATING cross-schema N+1, but the scout found the loop isn't fully query-free + the denorm has
+coherence gaps. None biting at current scale; do before many tenants / heavy marketplace traffic.
+- [ ] **MarketplaceView STILL does a per-tenant schema_context for the promo badge (the same N+1, for
+      promotions)** — accounts/views.py:2794-2808 opens a tenant schema per profile to read its active
+      Promotion. Batch it before the loop (like the flash-sale opted_map at 2736-2747) OR denormalize an
+      active-promo flag/badge onto the public Profile (like rating_avg). The DirectoryView loop is now pure
+      in-memory; MarketplaceView is not until this lands. [scout B8] **(the remaining N+1)**
+- [ ] **90s marketplace/directory list cache never invalidated on a rating change** — recompute_tenant_rating
+      updates the public Profile but the list responses (directory:v1 / marketplace:v1, 90s TTL, key hashed
+      over all params) aren't busted, so a new rating shows only by TTL expiry. Reuse the versioned-bust
+      pattern (_bust_menu_cache, menu/views.py:90-99) — bump a list-cache version on rating change.
+      (accounts/views.py:2558-2563/2643/2857; menu/ratings.py). [scout B8]
+- [ ] **No index for the min_rating SQL filter** — B8 pushed min_rating to qs.filter(rating_avg__gte=...)
+      but migration 0041 added rating_avg/rating_count with no index. Add a composite/partial index
+      (directory_opt_in, is_menu_published, rating_avg) for scale. (tenancy/migrations/0041; models.py:470).
+      [scout B8]
+- [ ] **Denorm drift: owner-reply save fires an unnecessary recompute + out-of-ORM writes bypass the
+      signal** — the Rating post_save handler doesn't inspect update_fields, so owner-reply saves
+      (update_fields=['owner_reply',...]) trigger a full cross-schema Avg/Count + Profile UPDATE despite an
+      unchanged score; and admin bulk-edits / .update(score=) / raw SQL / DB restore bypass the signal,
+      leaving rating_avg permanently wrong. Fix: early-return in the signal unless score changed / create /
+      delete; rely on the backfill command (already built) to repair drift after out-of-band changes (run it
+      post-restore). (menu/signals.py). [scout B8]
+
 ### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb all DONE; see Done section)
 Residual (small, pre-existing, out of the shipped scope):
 - [ ] **Standalone routes have no skip-link / focusable <main>** — /signin, /forgot-password, /activate,
@@ -689,6 +714,16 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B8 "marketplace cross-schema N+1 kill (rating denorm)" (KEPOLI_NEXT.md Phase B; verified by me,
+      backend 3734/0, migrations clean, reviewer 0 critical/major): added Profile.rating_avg +
+      rating_count (tenancy/0041); menu/ratings.py recompute_tenant_rating aggregates Rating in the tenant
+      schema → writes the rounded-1dp avg + count to the PUBLIC Profile (best-effort, None/0 on last-delete,
+      skips public schema); wired menu.Rating post_save/post_delete signals + a backfill_profile_ratings
+      command (run once on deploy — LAUNCH_CHECKLIST noted). DirectoryView is now PURE in-memory (no
+      per-tenant schema_context); MarketplaceView reads the denormalized fields + pushes min_rating to a SQL
+      Profile filter. New test_b8_rating_denorm.py. Scout → B8-followup cluster above (promo-badge N+1 still
+      in the MarketplaceView loop, 90s list-cache not busted on rating change, no index for min_rating,
+      denorm drift on owner-reply/out-of-ORM writes). — b8 commit.
 - [x] OPS-6c-followup "a11y: SPA route-change focus + duplicate-main cleanup" (verified by me; frontend
       i18n/lint/94 tests/build green, backend 3719/0 sanity, reviewer 0 critical/major) — completes B12's
       skip-link work. (1) new frontend/src/router/focusGuard.js (createMainContentFocusGuard) wired via

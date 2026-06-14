@@ -8,7 +8,7 @@ order save, so it rolls back with the order if the order isn't committed.
 import logging
 
 from django.db import connection
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
@@ -60,3 +60,36 @@ def mirror_order_to_public_index(sender, instance, **kwargs):
     except Exception:
         # The order index is best-effort — never break order placement/updates over it.
         logger.exception("Failed to mirror order %s to public index", getattr(instance, "order_number", "?"))
+
+
+def _denormalize_current_tenant_rating():
+    """Recompute the denormalized rating summary for the CURRENT tenant (B8).
+
+    Ratings live per-tenant; the public marketplace/directory reads a
+    denormalized copy on the public Profile. Whenever a Rating is written or
+    deleted we refresh that copy for the tenant whose schema is currently
+    active. No-op on the public schema (Rating isn't there) or when there's no
+    real tenant on the connection. Best-effort — never break the rating
+    save/delete over the denormalization.
+    """
+    tenant = getattr(connection, "tenant", None)
+    if tenant is None or getattr(tenant, "schema_name", None) is None:
+        return  # not in a tenant context — nothing to denormalize
+    try:
+        from django_tenants.utils import get_public_schema_name
+        if tenant.schema_name == get_public_schema_name():
+            return  # public schema has no Rating table
+        from .ratings import recompute_tenant_rating
+        recompute_tenant_rating(tenant)
+    except Exception:
+        logger.exception("Failed to denormalize rating for current tenant")
+
+
+@receiver(post_save, sender="menu.Rating")
+def denormalize_rating_on_save(sender, instance, **kwargs):
+    _denormalize_current_tenant_rating()
+
+
+@receiver(post_delete, sender="menu.Rating")
+def denormalize_rating_on_delete(sender, instance, **kwargs):
+    _denormalize_current_tenant_rating()

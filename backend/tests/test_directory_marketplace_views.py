@@ -60,6 +60,10 @@ def _make_profile(**kwargs):
     p.address = "1 Rue de la Paix"
     p.phone = "+33123456789"
     p.currency = "EUR"
+    # B8: ratings are denormalized onto the public Profile (read directly by the
+    # directory/marketplace views — no per-tenant schema switch). Default unrated.
+    p.rating_avg = None
+    p.rating_count = 0
     tenant = MagicMock()
     tenant.slug = "bistro"
     tenant.name = "Bistro Paris"
