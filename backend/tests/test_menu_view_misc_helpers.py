@@ -80,8 +80,9 @@ class CanViewTests(SimpleTestCase):
     def test_superuser_returns_true(self):
         self.assertTrue(self._v()._can_view(_req(_user(is_superuser=True)), _tenant()))
 
-    def test_django_staff_returns_true(self):
-        self.assertTrue(self._v()._can_view(_req(_user(is_staff=True)), _tenant()))
+    def test_django_staff_alone_returns_false(self):
+        # OPS-5d: a Django is_staff flag is no longer an analytics-view bypass.
+        self.assertFalse(self._v()._can_view(_req(_user(is_staff=True)), _tenant()))
 
     def test_platform_admin_returns_true(self):
         u = _user(is_platform_admin=True)

@@ -362,7 +362,7 @@ class PublishAccessMixin:
         tenant = self._tenant()
         if tenant is None or not user or not user.is_authenticated:
             return False
-        if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        if user.is_superuser or getattr(user, "is_platform_admin", False):
             return True
         if getattr(user, "tenant_id", None) != tenant.id:
             return False
@@ -1237,7 +1237,7 @@ class AnalyticsSummaryView(APIView):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        if user.is_superuser or getattr(user, "is_platform_admin", False):
             return True
         if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
             return False
@@ -1495,7 +1495,7 @@ class OrderHandoffView(APIView):
         user = getattr(self.request, "user", None)
         if tenant is None or not user or not user.is_authenticated:
             return False
-        if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+        if user.is_superuser or getattr(user, "is_platform_admin", False):
             return True
         if getattr(user, "tenant_id", None) != tenant.id:
             return False
@@ -2081,7 +2081,7 @@ class PlaceOrderView(APIView):
 
         user = getattr(request, "user", None)
         can_preview = bool(user and user.is_authenticated and (
-            user.is_superuser or user.is_staff or
+            user.is_superuser or
             getattr(user, "is_platform_admin", False) or
             (getattr(user, "tenant_id", None) == tenant.id)
         ))
@@ -3337,7 +3337,7 @@ def _can_edit_tenant_order(request) -> bool:
     tenant = getattr(request, "tenant", None)
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
@@ -3389,7 +3389,7 @@ def _can_view_revenue(request) -> bool:
     tenant = getattr(request, "tenant", None)
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
@@ -3404,7 +3404,7 @@ def _can_edit_menu(request) -> bool:
     tenant = getattr(request, "tenant", None)
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
@@ -7606,7 +7606,7 @@ def _is_tenant_owner(request) -> bool:
     user = request.user
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     tenant = getattr(request, "tenant", None)
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
@@ -9962,7 +9962,7 @@ class AdminWalletListView(APIView):
 
     def get(self, request, *args, **kwargs):
         user = getattr(request, "user", None)
-        if not (user and (user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False))):
+        if not (user and (user.is_superuser or getattr(user, "is_platform_admin", False))):
             return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
         from accounts.models import Customer

@@ -2,12 +2,21 @@ from rest_framework.throttling import SimpleRateThrottle
 
 
 class _IPThrottle(SimpleRateThrottle):
-    """Throttle unauthenticated auth endpoints by client IP."""
+    """Throttle unauthenticated auth endpoints by client IP.
+
+    OPS-5d: key on the trusted-proxy-aware client IP (rightmost-minus-
+    TRUSTED_PROXY_COUNT, REMOTE_ADDR fallback) instead of DRF's get_ident, which
+    returns the spoofable LEFTMOST X-Forwarded-For entry. Without this an attacker
+    could rotate XFF every request to defeat the login / OTP / password-reset
+    brute-force buckets this base class backs.
+    """
 
     def get_cache_key(self, request, view):
+        from sales.audit import get_request_ip
+        ident = get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {
             "scope": self.scope,
-            "ident": self.get_ident(request),
+            "ident": ident,
         }
 
 
@@ -84,6 +93,14 @@ class DriverJobAcceptThrottle(_CustomerThrottle):
 class DeliveryTrackingThrottle(_CustomerThrottle):
     """Cap customer delivery-tracking polls (every ~10 s, plus tabs / SSE reconnects)."""
     scope = "delivery_tracking"
+
+
+class CustomerReservationsThrottle(_CustomerThrottle):
+    """OPS-5d: cap the customer reservations-list endpoint (AllowAny, session-keyed).
+
+    The endpoint queries the public-schema Lead table; without a throttle a session
+    holder could bulk-poll it. Keyed per session customer_id (falls back to IP)."""
+    scope = "customer_reservations"
 
 
 class ReservationAvailabilityThrottle(_IPThrottle):

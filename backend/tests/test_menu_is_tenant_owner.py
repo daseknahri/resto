@@ -75,9 +75,10 @@ class MenuIsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(superuser=True, tenant_id=99), tenant=_tenant(1))
         self.assertTrue(_is_tenant_owner(req))
 
-    def test_staff_returns_true(self):
+    def test_staff_alone_returns_false(self):
+        # OPS-5d: a Django is_staff flag is no longer a cross-tenant owner bypass.
         req = _request(user=_user(staff=True, tenant_id=99), tenant=_tenant(1))
-        self.assertTrue(_is_tenant_owner(req))
+        self.assertFalse(_is_tenant_owner(req))
 
     def test_platform_admin_returns_true(self):
         req = _request(user=_user(platform_admin=True, tenant_id=99), tenant=_tenant(1))

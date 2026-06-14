@@ -237,9 +237,10 @@ class IsTenantOwnerTests(SimpleTestCase):
         req = _request(user=_user(superuser=True))
         self.assertTrue(_is_tenant_owner(req))
 
-    def test_staff_returns_true(self):
+    def test_staff_alone_returns_false(self):
+        # OPS-5d: a Django is_staff flag is no longer a tenant-owner bypass.
         req = _request(user=_user(staff=True))
-        self.assertTrue(_is_tenant_owner(req))
+        self.assertFalse(_is_tenant_owner(req))
 
     def test_platform_admin_returns_true(self):
         req = _request(user=_user(platform_admin=True))
@@ -278,9 +279,10 @@ class CanEditTenantOrderTests(SimpleTestCase):
         req = _request(user=_user(superuser=True))
         self.assertTrue(_can_edit_tenant_order(req))
 
-    def test_staff_returns_true(self):
+    def test_staff_alone_returns_false(self):
+        # OPS-5d: a Django is_staff flag is no longer a cross-tenant order-edit bypass.
         req = _request(user=_user(staff=True))
-        self.assertTrue(_can_edit_tenant_order(req))
+        self.assertFalse(_can_edit_tenant_order(req))
 
     def test_platform_admin_returns_true(self):
         req = _request(user=_user(platform_admin=True))

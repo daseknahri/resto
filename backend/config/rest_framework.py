@@ -45,6 +45,9 @@ REST_FRAMEWORK = {
         "customer_email_otp_verify": "20/hour",
         "customer_google_auth": "20/hour",
         "customer_profile_update": "30/hour",
+        # OPS-5d: cap reservation-list reads (AllowAny, session customer_id keyed) so a
+        # session holder cannot bulk-poll the endpoint.
+        "customer_reservations": "60/hour",
         "staff_order_list": "300/min",
         "marketplace_order": "60/hour",
         "marketplace_order_status": "300/hour",

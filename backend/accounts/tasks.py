@@ -97,9 +97,44 @@ def customer_order_milestone(order_number, tenant_id, event):
     notify_customer_order_milestone_sync(order_number, tenant_id, event)
 
 
+# SECURITY: run_management_command is registered by name on the Celery broker, which
+# is unauthenticated by default — anyone who can enqueue could otherwise run shell /
+# dbshell / flush / migrate. We hardcode the ONLY commands Beat is allowed to invoke;
+# this is the exact set scheduled in config/settings.py CELERY_BEAT_SCHEDULE. Adding a
+# new scheduled command means adding its name here too.
+_MANAGEMENT_COMMAND_ALLOWLIST = frozenset({
+    "release_scheduled_orders",
+    "send_review_prompts",
+    "send_reservation_reminders",
+    "expire_charge_requests",
+    "sweep_delivery_jobs",
+    "sweep_ride_requests",
+    "enforce_subscriptions",
+    "fetch_currency_rates",
+    "send_daily_summary",
+    "auto_reset_availability",
+    "send_winback_nudges",
+    "prune_analytics_events",
+    "prune_admin_audit_logs",
+    "prune_notification_logs",
+    "prune_winback_nudges",
+    "prune_staff_messages",
+    "prune_auth_tokens",
+})
+
+
 @shared_task(name="accounts.tasks.run_management_command", acks_late=True)
 def run_management_command(name, *args, **kwargs):
-    """Run a Django management command from Beat (lets Beat own the cron jobs)."""
+    """Run a Django management command from Beat (lets Beat own the cron jobs).
+
+    Only commands in ``_MANAGEMENT_COMMAND_ALLOWLIST`` may run. A rejected name is
+    logged and dropped WITHOUT raising — raising under acks_late would re-queue the
+    poisoned message and spin the worker. The guard lives in the task body so it
+    protects both the Celery path and the inline-thread ``enqueue`` fallback.
+    """
+    if name not in _MANAGEMENT_COMMAND_ALLOWLIST:
+        logger.warning("run_management_command refused disallowed command: %r", name)
+        return
     from django.core.management import call_command
     call_command(name, *args, **kwargs)
 

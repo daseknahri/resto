@@ -80,19 +80,33 @@ class AccountsIPThrottleGetCacheKeyTests(SimpleTestCase):
         t = PasswordResetConfirmThrottle()
         self.assertEqual(t.scope, "auth_password_reset_confirm")
 
-    def test_get_ident_called_with_request(self):
+    def test_get_ident_is_only_a_fallback(self):
+        """OPS-5d: accounts _IPThrottle now keys on the trusted-proxy-aware
+        get_request_ip (REMOTE_ADDR here), not the spoofable get_ident. get_ident
+        is consulted ONLY when get_request_ip returns falsy."""
         t = self._throttle_with_scope(LoginBurstThrottle)
         req = _request("5.6.7.8")
-        t.get_cache_key(req, view=None)
+        key = t.get_cache_key(req, view=None)
+        t.get_ident.assert_not_called()
+        self.assertIn("5.6.7.8", key)
+
+    def test_get_ident_fallback_when_no_remote_addr(self):
+        """No REMOTE_ADDR and no XFF → get_request_ip None → fall back to get_ident
+        (so the bucket key is never the literal 'None')."""
+        t = LoginBurstThrottle()
+        t.get_ident = MagicMock(return_value="fallback")
+        req = SimpleNamespace(META={})
+        key = t.get_cache_key(req, view=None)
         t.get_ident.assert_called_once_with(req)
+        self.assertIn("fallback", key)
 
     def test_different_ips_produce_different_keys(self):
+        # Key now derives from get_request_ip (REMOTE_ADDR), so distinct clients
+        # must carry distinct REMOTE_ADDR (not merely distinct get_ident mocks).
         t1 = LoginBurstThrottle()
-        t1.get_ident = MagicMock(return_value="10.0.0.1")
         t2 = LoginBurstThrottle()
-        t2.get_ident = MagicMock(return_value="10.0.0.2")
-        key1 = t1.get_cache_key(_request(), view=None)
-        key2 = t2.get_cache_key(_request(), view=None)
+        key1 = t1.get_cache_key(_request("10.0.0.1"), view=None)
+        key2 = t2.get_cache_key(_request("10.0.0.2"), view=None)
         self.assertNotEqual(key1, key2)
 
     def test_different_scopes_produce_different_keys(self):
@@ -121,11 +135,16 @@ class MenuIPThrottleGetCacheKeyTests(SimpleTestCase):
         t.get_ident = MagicMock(return_value="9.9.9.9")
         return t
 
-    def test_cache_key_uses_scope_and_ident(self):
+    def test_cache_key_uses_scope_and_trusted_proxy_ip(self):
+        """OPS-5d C: _IPThrottle now keys on get_request_ip (the real client IP
+        our proxy saw), not get_ident.  With no XFF, get_request_ip falls back to
+        REMOTE_ADDR, so the key embeds REMOTE_ADDR — NOT the mocked get_ident."""
         t = self._throttle_with_scope(OrderHandoffThrottle)
-        key = t.get_cache_key(_request(), view=None)
+        key = t.get_cache_key(_request("5.5.5.5"), view=None)
         self.assertIn("order_handoff", key)
-        self.assertIn("9.9.9.9", key)
+        self.assertIn("5.5.5.5", key)
+        # get_ident must NOT be consulted when get_request_ip yields a value.
+        self.assertNotIn("9.9.9.9", key)
 
     def test_order_handoff_scope(self):
         t = OrderHandoffThrottle()
@@ -139,11 +158,25 @@ class MenuIPThrottleGetCacheKeyTests(SimpleTestCase):
         t = PlaceOrderThrottle()
         self.assertEqual(t.scope, "place_order")
 
-    def test_get_ident_called_with_request(self):
+    def test_get_ident_is_only_a_fallback(self):
+        """OPS-5d C: get_ident is consulted ONLY when get_request_ip returns
+        falsy (no REMOTE_ADDR, no usable XFF).  When REMOTE_ADDR is present,
+        get_request_ip wins and get_ident is never called."""
         t = self._throttle_with_scope(CheckoutIntentThrottle)
         req = _request("2.2.2.2")
-        t.get_cache_key(req, view=None)
+        key = t.get_cache_key(req, view=None)
+        t.get_ident.assert_not_called()
+        self.assertIn("2.2.2.2", key)
+
+    def test_get_ident_fallback_when_no_remote_addr(self):
+        """No REMOTE_ADDR and no XFF → get_request_ip returns None → fall back to
+        get_ident (so the bucket key is never the literal 'None')."""
+        t = CheckoutIntentThrottle()
+        t.get_ident = MagicMock(return_value="fallback")
+        req = SimpleNamespace(META={})
+        key = t.get_cache_key(req, view=None)
         t.get_ident.assert_called_once_with(req)
+        self.assertIn("fallback", key)
 
     def test_different_ips_different_keys(self):
         t1 = PlaceOrderThrottle()

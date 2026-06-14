@@ -152,7 +152,58 @@ Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; v
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5d — SECURITY (scout OPS-5c cluster; next security batch)
+### OPS-5e — SECURITY (scout OPS-5d cluster; next security batch)
+The OPS-5d scout surfaced these (file:line in scout output; verify first). Several are HIGH.
+- [ ] **Driver cash-out codes platform-global, no throttle, no tenant scoping (HIGH money/IDOR)** —
+      create_cashout_request (accounts/driver_service.py:122-138) mints a 6-digit code unique only
+      among PENDING globally; confirm_cashout (141-187) + OwnerDriverCashoutLookupView/ConfirmView
+      (menu/views.py:4886-4942) look it up by code across ALL tenants with NO tenant scope and credit
+      the CONFIRMING tenant's float while debiting the driver — and neither owner endpoint has a
+      throttle. Any waiter can brute-force (1e6, unmetered) another driver's cash-out into their own
+      float. Fix: bind the cash-out to the driver's intended tenant (or driver-scans-restaurant),
+      throttle the confirm endpoint per-user, and lock the request after N bad attempts (mirror the
+      delivery-code lockout DriverJobStatusUpdateView:4869-4883). [scout OPS-5d]
+- [ ] **MarketplaceOrderStatusView IDOR — full order + financial data to anyone with the order number
+      (HIGH)** — accounts/views.py:3566-3655 is AllowAny/auth=[] and only gates delivery_code/can_cancel
+      on ownership; the body (items, totals, payment_status, wallet_amount_paid, loyalty, promo,
+      scheduled_for) is returned for ANY order to ANY caller. Order numbers are ORD-+token_hex(3) = 24
+      bits, only barrier is 300/hr/IP → enumerable harvest of customer order history + financials. Same
+      shape on the direct-checkout status path. Fix: require session-customer ownership for the detailed
+      body (as cancel/pay already do) OR an unguessable per-order access token issued at placement.
+      [scout OPS-5d]
+- [ ] **OwnerWalletChargeView trusts caller-supplied idempotency_key vs a global non-tenant-scoped
+      ledger key (money)** — menu/views.py:9587/9638 reads idempotency_key from the body; debit_wallet
+      replays the FIRST WalletTransaction with that key WITHOUT re-checking amount/tenant/customer
+      (wallet_service.py:134-136). Because the key namespace is global + attacker-chosen, tenant A can
+      pre-insert a row under a guessable key so tenant B's later charge with the same key silently
+      replays A's tx (write-suppression / mis-attribution). Also AdminFundTenantView (accounts/views.py
+      :1729) + above-threshold WalletChargeRequest.get_or_create (menu/views.py:9605). Fix: server-
+      namespace idempotency keys (prefix tenant_id+endpoint) AND assert stored row amount/tenant/customer
+      match before returning the replay. [scout OPS-5d]
+- [ ] **CustomerOrderRateView no ownership check + no throttle (review fraud)** — menu/views.py:7231-7319
+      AllowAny, no throttle; "any caller who knows the order number can rate it once". With 24-bit order
+      numbers + the public status endpoint confirming COMPLETED orders, an attacker can submit fraudulent
+      ratings against competitors. Fix: require session-customer ownership of the order to rate + add a
+      per-IP/session throttle. [scout OPS-5d]
+- [ ] **CustomerPushSubscribeView endpoint-keyed upsert allows subscription hijack (IDOR)** —
+      accounts/views.py:1464-1478 update_or_create(endpoint=endpoint, defaults={customer_id:...}) — a
+      customer submitting an endpoint already owned by another customer overwrites its customer_id,
+      stealing future pushes. Fix: scope uniqueness/update to (customer_id, endpoint) or reject when an
+      existing row's customer_id differs. [scout OPS-5d]
+- [ ] **TranslateView echoes upstream provider raw error body to the client (info disclosure)** —
+      tenancy/api.py:379-384 returns the OpenRouter HTTPError body (200 chars) to the tenant editor,
+      leaking quota/account/model metadata. Fix: generic 'provider_error' to the client, log the body
+      server-side only. [scout OPS-5d minor]
+- [ ] **OGView reflects request Host (X-Forwarded-Host) into canonical/og:image/cache-key** —
+      accounts/og_views.py:103/108/116/161; ALLOWED_HOSTS constrains it but multi-alias hosts can prime
+      the Host-keyed cache + bake a non-authoritative host into og:url/og:image. Fix: derive canonical/
+      image from the resolved tenant's Domain, normalize the host in the cache key. [scout OPS-5d minor]
+- [ ] **is_staff in capability FLAGS (not gates)** — accounts/views.py:75 can_access_admin_console +
+      :79 all_access still include user.is_staff. The actual admin endpoints are is_staff-free (OPS-5b/
+      5d) so this only affects UI-visibility hints, but converge them onto is_superuser/is_platform_admin
+      for consistency so a staff-only user isn't shown an admin console that 403s. [grep OPS-5d follow-up]
+
+### OPS-5d — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5c scout (SaaS-expert lens) surfaced these while we hardened uploads/SSRF/PII.
 Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **Celery `run_management_command` = arbitrary command execution (HIGH)** — accounts/tasks.py
@@ -415,6 +466,33 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5d "security" (verified by me in code; backend 3541/0, migrations clean): (1) [HIGH]
+      Celery run_management_command arbitrary execution — added a hardcoded allowlist (the exact
+      CELERY_BEAT_SCHEDULE command names) at the top of the task; disallowed names are logged + skipped
+      (no raise → no acks_late poison loop); covers the inline-thread enqueue() fallback too. (2) [HIGH]
+      Google One-Tap account takeover — _verify_google_token now rejects unless
+      str(email_verified).lower()=="true" (tokeninfo returns the claim as a STRING), closing the
+      unverified-email auto-link for sign-in AND account-link. (3) [money] AdminWalletBonus double-credit
+      race — cache.add() mutex on the idempotency_key (mirrors campaign-cap); I moved it AFTER the
+      empty-batch check (review minor) so a no-op 400 can't falsely dedupe a corrected retry. (4) CORS
+      *.localhost:5173 regex now gated behind DEBUG (empty in prod). (5) cross-persona session layering —
+      customer-login finalize paths (OTP/email/Google) refuse to write customer_id when request.user is
+      an authenticated staff/owner. (6) CustomerReservationsView throttled (60/hr) + cancel_token removed
+      from the list. (7) Django static_serve /media only under DEBUG / SERVE_MEDIA_FROM_DJANGO. (8)
+      _IPThrottle (menu AND accounts — accounts was a review minor I completed, it backs the login/OTP
+      brute-force buckets) now keys on trusted-proxy get_request_ip, not spoofable XFF[0]. (9) deploy:
+      entrypoint --forwarded-allow-ips pinned to docker subnet, --password dropped for PLATFORM_ADMIN_PASSWORD
+      env; coolify.env.example documents CORS/SERVE_MEDIA/ADMIN_URL/PLATFORM_ADMIN_PASSWORD. **PLUS the
+      scout caught the OPS-5b is_staff priv-esc was STILL open in 10 helper sites (not the 3 it named) —
+      I dropped is_staff from EVERY authz gate: menu/views.py _can_preview_unpublished×2, AnalyticsSummary
+      _can_view, _can_edit_tenant_order, _can_view_revenue, _can_edit_menu, _is_tenant_owner, the menu-
+      disabled preview, the admin customer-search gate, + accounts/views.py _is_tenant_owner. Flipped 5
+      is_staff-grants-access tests to assert rejection + updated 2 accounts throttle tests for the
+      trusted-proxy ident. LESSON RE-CONFIRMED: grep EVERY gate sharing an authz pattern — OPS-5b fixed
+      the permission CLASSES but missed these 10 helper FUNCTIONS.** New test_ops5d_app.py (22) +
+      test_ops5d_config.py. Reviewer 2 minor (both fixed). Scout → OPS-5e cluster above (driver cash-out
+      IDOR, marketplace order IDOR, wallet idempotency cross-tenant, rating fraud, push hijack, +2). —
+      ops5d commit.
 - [x] OPS-6b "a11y/SEO/UX polish" (verified by me; backend 3506/0, frontend i18n/lint/90 tests/
       build green, no new migrations): (1) PRE-HYDRATION lang/dir — new CSP-safe external
       frontend/public/locale-boot.js (no inline script; reads the same localStorage key as

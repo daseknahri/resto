@@ -33,6 +33,7 @@ from .throttles import (
     CustomerOtpRequestThrottle,
     CustomerOtpVerifyThrottle,
     CustomerProfileUpdateThrottle,
+    CustomerReservationsThrottle,
     DeliveryTrackingThrottle,
     DriverJobAcceptThrottle,
     DriverPositionThrottle,
@@ -297,6 +298,24 @@ def _serialize_customer(customer: Customer) -> dict:
     }
 
 
+def _staff_session_conflict(request):
+    """Return a 403 Response if a staff/owner User is authenticated on this session.
+
+    Customer-login finalize paths write ``customer_id`` into the Django session. Real
+    customers are NOT User rows, so their ``request.user`` is AnonymousUser and this
+    returns None for them. But a staff/owner authenticated via SessionAuthentication
+    would otherwise layer a customer identity onto their privileged session — refuse it.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return Response(
+            {"detail": "Sign out of your staff account first to use a customer login.",
+             "code": "staff_session_conflict"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
 def _verify_google_token(credential: str, client_id: str) -> dict | None:
     """Verify a Google ID token using Google's tokeninfo endpoint.
 
@@ -313,6 +332,13 @@ def _verify_google_token(credential: str, client_id: str) -> dict | None:
         return None
     # Require a sub claim
     if not data.get("sub"):
+        return None
+    # Require a VERIFIED email. CRITICAL nuance: Google's tokeninfo HTTP endpoint
+    # returns email_verified as the STRING "true"/"false" (the library-verified path
+    # would return a real bool), so we must accept both forms. Without this an
+    # unverified-email Google account could be linked to an existing customer by
+    # email and take it over.
+    if str(data.get("email_verified")).lower() != "true":
         return None
     return data
 
@@ -445,6 +471,10 @@ class CustomerPhoneVerifyView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        conflict = _staff_session_conflict(request)
+        if conflict is not None:
+            return conflict
+
         cache_key = _OTP_CACHE_KEY.format(phone=phone)
         data = cache.get(cache_key)
         if data is None:
@@ -525,6 +555,10 @@ class CustomerGoogleAuthView(APIView):
         credential = (request.data.get("credential") or "").strip()
         if not credential:
             return Response({"detail": "Google credential is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conflict = _staff_session_conflict(request)
+        if conflict is not None:
+            return conflict
 
         client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "").strip()
         if not client_id:
@@ -719,6 +753,7 @@ class CustomerReservationsView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [CustomerReservationsThrottle]
 
     def get(self, request):
         customer_id = request.session.get("customer_id")
@@ -759,7 +794,9 @@ class CustomerReservationsView(APIView):
                     "party_size": lead.party_size,
                     "status": lead.status,
                     "notes": lead.notes or "",
-                    "cancel_token": str(lead.cancel_token) if lead.cancel_token else None,
+                    # OPS-5d: cancel_token is intentionally NOT returned — a session holder
+                    # could otherwise bulk-harvest cancel UUIDs. Customers cancel via the
+                    # emailed link, which carries the token.
                     "created_at": lead.created_at.isoformat() if lead.created_at else None,
                 }
                 for lead in qs
@@ -807,6 +844,10 @@ class CustomerEmailVerifyView(APIView):
 
         if not email or not code:
             return Response({"detail": "Email and code are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        conflict = _staff_session_conflict(request)
+        if conflict is not None:
+            return conflict
 
         cache_key = f"customer_email_otp:{email}"
         data = cache.get(cache_key)
@@ -911,7 +952,9 @@ def _is_tenant_owner(request, tenant) -> bool:
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff or getattr(user, "is_platform_admin", False):
+    # OPS-5d: is_staff (Django /admin/ flag) dropped — it is not a business-admin role
+    # and let a staff-only account act as owner on ANY tenant (cross-tenant priv-esc).
+    if user.is_superuser or getattr(user, "is_platform_admin", False):
         return True
     if tenant is None or getattr(user, "tenant_id", None) != tenant.id:
         return False
@@ -1612,6 +1655,18 @@ class AdminWalletBonusView(APIView):
             ids = list(qs.values_list("id", flat=True))
             if not ids:
                 return Response({"detail": "No matching customers found."}, status=status.HTTP_400_BAD_REQUEST)
+            # Concurrency mutex (mirrors the campaign-cap lock in menu/views.py): the
+            # exists() pre-check + balance UPDATE(F+1) are not atomic against each other,
+            # so two concurrent POSTs with the same key could both clear exists() and both
+            # inflate balances (the unique WalletTransaction.idempotency_key only blocks the
+            # 2nd ledger INSERT). cache.add() is atomic — only the first concurrent caller
+            # wins. Acquired AFTER the empty-batch check (OPS-5d review) so a no-op 400 never
+            # holds the lock and a corrected retry isn't falsely deduped; NOT released on
+            # success — it expires, and the DB unique key is the permanent durable guard.
+            if idempotency_key:
+                _lock_key = f"walletbonus:{idempotency_key}"
+                if not cache.add(_lock_key, "1", 60):
+                    return Response({"issued_to": 0, "amount": str(amount), "note": note, "duplicate": True})
             # Idempotency: a repeated submit with the same key (double-click, retry) must
             # not credit real money twice. Per-customer keys are derived from the batch key.
             if idempotency_key and WalletTransaction.objects.filter(

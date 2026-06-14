@@ -4,9 +4,20 @@ from rest_framework.throttling import SimpleRateThrottle
 
 class _IPThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
+        # OPS-5d C: uvicorn runs with --proxy-headers, so DRF's get_ident()
+        # trusts X-Forwarded-For unboundedly — an attacker can rotate XFF[0] to
+        # reset the per-IP bucket every request.  Use get_request_ip (rightmost-
+        # minus-TRUSTED_PROXY_COUNT with a REMOTE_ADDR fallback) so the key is
+        # tied to the real client IP our proxy saw.  Fall back to get_ident only
+        # if get_request_ip yields nothing (e.g. no REMOTE_ADDR in a test stub).
+        # Lazy import (matching PlaceOrderThrottle's lazy model import) to avoid
+        # pulling sales.models in at app-init / throttle-module import time.
+        from sales.audit import get_request_ip
+
+        ident = get_request_ip(request) or self.get_ident(request)
         return self.cache_format % {
             "scope": self.scope,
-            "ident": self.get_ident(request),
+            "ident": ident,
         }
 
 

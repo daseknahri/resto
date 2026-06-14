@@ -23,22 +23,32 @@ python manage.py collectstatic --noinput
 echo "[entrypoint] seed_plans"
 python manage.py seed_plans
 
+# OPS-5d D: never pass the admin password via --password — a CLI arg is visible
+# in /proc, `docker inspect` and deploy logs.  ensure_platform_admin already
+# prefers the PLATFORM_ADMIN_PASSWORD env var, so export it (mapping from the
+# existing DJANGO_SUPERADMIN_PASSWORD secret for backward compatibility) and call
+# the command WITHOUT --password.
 if [ -n "${DJANGO_SUPERADMIN_EMAIL:-}" ] && [ -n "${DJANGO_SUPERADMIN_PASSWORD:-}" ]; then
+  export PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD:-$DJANGO_SUPERADMIN_PASSWORD}"
   python manage.py ensure_platform_admin \
-    --email "${DJANGO_SUPERADMIN_EMAIL}" \
-    --password "${DJANGO_SUPERADMIN_PASSWORD}"
+    --email "${DJANGO_SUPERADMIN_EMAIL}"
 fi
 
 # Serve under ASGI (uvicorn) so WebSockets work. HTTP behaves identically under
 # both servers — only WebSockets require ASGI. Instant rollback: set USE_ASGI=0
 # in the environment to return to the previous gunicorn/WSGI server (no code change).
 if [ "${USE_ASGI:-1}" = "1" ]; then
+  # OPS-5d D: trust X-Forwarded-* only from the docker bridge subnet (where our
+  # nginx proxy lives), NOT from '*'.  With '*', uvicorn forwards any attacker-
+  # injected XFF straight through to DRF; restricting it to 172.16.0.0/12 means
+  # uvicorn strips spoofed XFF before DRF/get_request_ip ever see it — defense in
+  # depth complementing the trusted-proxy throttle ident fix (OPS-5d C).
   exec uvicorn config.asgi:application \
     --host 0.0.0.0 \
     --port 8000 \
     --workers "${GUNICORN_WORKERS:-3}" \
     --proxy-headers \
-    --forwarded-allow-ips='*'
+    --forwarded-allow-ips='172.16.0.0/12'
 else
   exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \

@@ -405,10 +405,19 @@ cors_origins = set(
 )
 cors_origins.update({"http://localhost:5173", "http://127.0.0.1:5173"})
 CORS_ALLOWED_ORIGINS = sorted(cors_origins)
+# OPS-5d A: the in-code default localhost regex must NOT stay active in
+# production.  parse_csv_env falls back to the default whenever the env var is
+# unset/blank, and Coolify passes unset vars as "" — so a blank
+# DJANGO_CORS_ALLOWED_ORIGIN_REGEXES would otherwise grant credentialed
+# cross-origin access to ANY *.localhost:5173 origin in prod.  Gate the default
+# behind DEBUG: dev (DEBUG=True) keeps the convenient *.localhost regex, while
+# prod (DEBUG=False) with a blank env var yields an EMPTY regex list.  An
+# explicit env value is always honoured in either mode.
+_cors_regex_default = r"^http://[a-z0-9-]+\.localhost:5173$" if DEBUG else ""
 cors_origin_regexes = set(
     parse_csv_env(
         "DJANGO_CORS_ALLOWED_ORIGIN_REGEXES",
-        r"^http://[a-z0-9-]+\.localhost:5173$",
+        _cors_regex_default,
     )
 )
 CORS_ALLOWED_ORIGIN_REGEXES = sorted(cors_origin_regexes)
@@ -441,6 +450,14 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# OPS-5d B: serving /media through django.views.static.serve in production is a
+# liability (no security headers, holds an fd, historically traversal-risky) and
+# is redundant — nginx (frontend/nginx.conf) already serves /media end to end.
+# In DEBUG (dev) we always serve media via Django for convenience.  In prod the
+# route is only registered if an operator explicitly opts in via this flag
+# (defaults False), so a normal prod deploy never registers it.
+SERVE_MEDIA_FROM_DJANGO = parse_bool_env("SERVE_MEDIA_FROM_DJANGO", False)
 
 # Peer-to-peer wallet gifting (one customer sends wallet credit to another, on-platform
 # only — no cash-out). OFF by default: this is regulated money transmission in most

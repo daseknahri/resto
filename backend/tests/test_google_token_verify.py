@@ -41,15 +41,21 @@ class VerifyGoogleTokenTests(SimpleTestCase):
 
     # ── successful verification ───────────────────────────────────────────────
     def test_valid_token_no_client_id_returns_payload(self):
-        """When client_id is empty, audience check is skipped."""
-        payload = {"sub": "1234567890", "email": "user@example.com", "aud": "any-audience"}
+        """When client_id is empty, audience check is skipped.
+
+        A valid token must carry a verified email — Google's tokeninfo endpoint
+        returns email_verified as the STRING "true" (OPS-5d account-takeover fix).
+        """
+        payload = {"sub": "1234567890", "email": "user@example.com",
+                   "aud": "any-audience", "email_verified": "true"}
         with patch("urllib.request.urlopen", _urlopen_returning(payload)):
             result = _verify_google_token("valid-credential", client_id="")
         self.assertEqual(result, payload)
 
     def test_valid_token_matching_client_id_returns_payload(self):
         """When client_id is set and matches aud → returns the payload."""
-        payload = {"sub": "123", "aud": "my-client-id.apps.googleusercontent.com"}
+        payload = {"sub": "123", "aud": "my-client-id.apps.googleusercontent.com",
+                   "email": "user@example.com", "email_verified": "true"}
         with patch("urllib.request.urlopen", _urlopen_returning(payload)):
             result = _verify_google_token("valid-credential", client_id="my-client-id.apps.googleusercontent.com")
         self.assertEqual(result, payload)
