@@ -84,11 +84,22 @@ def settle_ride(ride) -> None:
 
     Wallet rides:
         - Debit rider's wallet (idempotency_key f"ride:{ride.id}").
-        - On InsufficientFunds flip to cash (driver collects) and return.
+        - On InsufficientFunds make the cash fallback EXPLICIT (OPS-5g): set
+          payment_method='cash', cash_fallback=True, and a rider-visible
+          cash_fallback_note, then return — NO silent flip.
         - On success set paid_with_wallet=True and credit driver wallet
           (idempotency_key f"ridepay:{ride.id}").
     Cash rides:
         - No wallet movement.
+
+    OPS-5g escrow note: a wallet ride takes NO hold at booking (RideCreateView only
+    *checks* balance, it doesn't debit/hold — that would need a model field + migration
+    to track and refund the hold on cancel). The authoritative settlement therefore
+    happens HERE: debit_wallet locks the rider row (select_for_update) inside this
+    atomic block and re-verifies the balance under that lock, so a rider who spent the
+    money between booking and completion is caught atomically. The only behaviour change
+    on a short balance is that the cash fallback is now RECORDED (flag + note) instead of
+    a silent flip, so the rider and the cash reconciliation can see why no wallet money moved.
 
     Raises on unexpected errors so the caller's atomic() block rolls back the
     entire completion, preventing a partial-settlement where the rider is
@@ -105,7 +116,11 @@ def _do_settle(ride) -> None:
     if fare <= 0:
         return
 
-    # Debit rider
+    # Debit rider. debit_wallet locks the rider row (select_for_update) and re-checks
+    # the balance under that lock INSIDE this completion transaction — this is the
+    # authoritative, atomic re-verification of the booking-time balance check (no hold
+    # is taken at booking), so a rider who drained their wallet after booking is caught
+    # here rather than silently riding for free.
     try:
         debit_wallet(
             ride.rider_id,
@@ -115,15 +130,25 @@ def _do_settle(ride) -> None:
             note=f"Ride #{ride.id}",
         )
     except InsufficientFunds:
-        # Flip to cash — driver will collect from passenger.
-        # Mutate in memory only; the outer atomic transaction saves once.
+        # OPS-5g: EXPLICIT cash fallback — driver collects from the passenger. Record
+        # WHY no wallet money moved (a clear flag + a rider-visible note) instead of a
+        # silent payment_method flip, so the rider sees they owe cash and the cash
+        # reconciliation can account for it. Mutate in memory only; the outer atomic
+        # transaction saves once (cash_fallback/cash_fallback_note are in-memory markers
+        # surfaced via serialization — persisting them durably would need a migration).
         ride.payment_method = "cash"
+        ride.cash_fallback = True
+        ride.cash_fallback_note = (
+            "Wallet balance was insufficient at completion — pay the driver in cash."
+        )
+        ride.paid_with_wallet = False
         return
     except Exception:
         raise
 
     # Mutate in memory only; the outer atomic transaction saves once.
     ride.paid_with_wallet = True
+    ride.cash_fallback = False
 
     # Credit driver (minus commission)
     if not getattr(ride, "driver_id", None):

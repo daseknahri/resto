@@ -152,7 +152,45 @@ Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; v
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5g — SECURITY (scout OPS-5f cluster; likely the LAST money/IDOR batch)
+### OPS-5h — SECURITY (scout OPS-5g cluster; the FINAL security batch — core has converged)
+The OPS-5g scout EXPLICITLY confirmed the core money/IDOR/wallet-idempotency surface is clean after
+5c→5g (wallet_service locks + replay assertions; schema-namespaced order-pay/orderpay/voiditem;
+loyalty customer-scoped; voucher/loyalty throttled; cash-out lockout; push-sub scoped; WS ownership;
+OG cache-key; admin PII gated; SSRF allow_redirects=False; upload re-encode). These 5 are the
+ADJACENT remainder — close them and the OPS-5x security program is done; then pivot to Phase-A eng.
+- [ ] **Customer login session fixation — no cycle_key** — phone-OTP (accounts/views.py:594), Google
+      (:657), email-OTP (:933) write request.session['customer_id'] WITHOUT request.session.cycle_key();
+      staff login() rotates but customer paths don't, and SESSION_COOKIE_DOMAIN=.{TENANT_DOMAIN_SUFFIX}
+      shares the cookie across all tenant subdomains → an anonymous/planted session id survives the
+      anon→authenticated-customer jump. Fix: cycle_key() immediately before setting customer_id on all
+      three finalizers (and the staff-conflict-cleared path). [scout OPS-5g]
+- [ ] **OTP request SMS-bombing / Twilio toll fraud — IP-only throttle, no per-recipient cap/cooldown** —
+      CustomerPhoneRequestView (accounts/views.py:486-508) + CustomerEmailRequestView (:870-886) fire a
+      paid SMS/email on every call, guarded only by an IP-keyed throttle; no per-phone/email cap, no
+      resend cooldown, and a re-request resets attempts=0. Fix: per-recipient counter + short resend
+      cooldown in cache (key on phone/email), independent of the IP throttle. Direct revenue drain
+      pre-PSP. [scout OPS-5g]
+- [ ] **Auth OTP uses random.randint (non-CSPRNG)** — phone (accounts/views.py:499) + email (:878) OTPs
+      are f"{random.randint(100000,999999)}" (Mersenne Twister, state-recoverable) — these are full
+      login credentials. OPS-5g hardened the lower-value VOUCHER code to secrets but left the AUTH OTP on
+      random. Fix: secrets.randbelow(900000)+100000 (mirror menu/views.py:1911 _generate_delivery_code).
+      [scout OPS-5g]
+- [ ] **Cancel-refund idempotency on a NON-namespaced order_number (missed instance — money-loss)** —
+      _refund_wallet_for_cancelled_order (menu/views.py:5971) bypasses credit_wallet (direct balance
+      mutation) and guards replay with _already_refunded() filtering on reference=order.order_number +
+      note (5994-5999). order_number is only schema-unique → a repeat cross-tenant customer with a
+      colliding order_number has a legit tenant-B refund SILENTLY SKIPPED (matches tenant-A's row). Fix:
+      route through credit_wallet with a schema-namespaced key (e.g. f"cancelrefund:{schema}:{order.id}")
+      like the sibling refund paths now do. [scout OPS-5g] (the one idempotency site 5g missed)
+- [ ] **Cash-out code + customer phone logged in cleartext via get_full_path()** —
+      RequestLoggingMiddleware logs request.get_full_path() incl. query string on every request
+      (config/middleware.py:183); OwnerDriverCashoutLookupView takes the 6-digit cash-out CODE via ?code=
+      (menu/views.py:4919, a bearer credential) and CustomerOrdersByPhoneView takes ?phone= (:3199) →
+      live codes + PII land in app logs / Sentry breadcrumbs. Fix: scrub known-sensitive query params
+      (code/phone/token/credential/delivery_code) before logging (log path + redacted querystring); prefer
+      moving the cash-out lookup code to a POST body. [scout OPS-5g]
+
+### OPS-5g — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5f scout CONFIRMED the previously-fixed dimensions are clean (WS auth, driver/ride state
 machines re-check approval, admin money caps, core wallet service, profile allowlist, IP throttles)
 and said the remaining gaps cluster on (1) tenant-schema-derived idempotency keys and (2) the two
@@ -550,6 +588,24 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5g "idempotency namespacing + redemption hardening" (verified by me, backend 3637/0,
+      migrations clean): (1) [HIGH] the 3 customer/staff wallet idempotency keys now schema-namespaced
+      (order-pay-{schema}-{order_number}, orderpay:{schema}:{payment.id}, voiditem:{schema}:{item_id}) —
+      closes the cross-tenant collision → free-order; order-status PAID guard is the durable backstop so
+      the format change is safe. (2) loyalty-redeem replay now customer-scoped (both lookups) + throttle
+      — IDOR/info-leak closed. (3) voucher redeem throttle (VoucherRedeemThrottle) + per-actor invalid-code
+      lockout (5/15min) + CSPRNG (random.choices→secrets.choice). (4) ride wallet settle: explicit
+      recorded cash-fallback (no silent flip). (5) OGView cache key re-keyed on resolved tenant id +
+      bounded path (not the spoofable Host). Review found 1 minor (OG no-tenant BODY still used the
+      inbound host) — I FIXED it in close-out (no-tenant canonical_host now from BRAND_DOMAIN, + a
+      body-host test). New test_ops5g_idempotency.py + test_ops5g_voucher.py. **The scout EXPLICITLY
+      CONFIRMED the core money/IDOR/wallet-idempotency surface has CONVERGED after 5c→5g** (verified clean:
+      wallet_service locks+assertions, schema-namespaced keys, throttled redemptions, cash-out lockout,
+      push-sub scoping, WS ownership, OG key, admin PII gate, SSRF allow_redirects=False, upload re-encode).
+      Remaining → OPS-5h above = 5 ADJACENT items (session cycle_key, OTP toll-fraud cooldown, auth-OTP
+      CSPRNG, the one missed cancel-refund idempotency site, request-log secret scrubbing) = the FINAL
+      security batch. NOTE: the workflow gate agent under-reported 3609 (stale) — my full re-run = 3637/0.
+      — ops5g commit.
 - [x] OPS-5f "money/IDOR security" (verified by me, backend 3609/0, migrations clean, no model
       changes; reviewer found 0 issues — clean on first pass): (1) [HIGH] MarketplacePlaceOrderView
       DishOption price manipulation — options query now select_related("dish") + per-item binding check

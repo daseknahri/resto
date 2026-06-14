@@ -72,6 +72,7 @@ from accounts.throttles import (
     DriverCashoutConfirmThrottle,
     CustomerOrderRateThrottle,
     OwnerWalletChargeThrottle,
+    LoyaltyRedeemThrottle,
 )
 
 
@@ -4149,7 +4150,7 @@ class StaffVoidOrderItemView(APIView):
 
     Money rule (PAID wallet orders only):
       refund = min(item.subtotal, order.wallet_amount_paid)
-      credit_wallet(..., tx_type=REFUND, idempotency_key=f"voiditem:{item_id}")
+      credit_wallet(..., tx_type=REFUND, idempotency_key=f"voiditem:{schema}:{item_id}")
       order.wallet_amount_paid decremented by refunded amount; payment_status stays PAID.
       Cash-paid or UNPAID orders: no wallet movement.
 
@@ -4358,12 +4359,20 @@ class StaffVoidOrderItemView(APIView):
             if _refunded > Decimal("0"):
                 from accounts.wallet_service import credit_wallet
                 from accounts.models import WalletTransaction as _WTx
+                from django.db import connection as _vic
                 _void_tenant = getattr(request, "tenant", None)
+                # OPS-5g: WalletTransaction is PUBLIC-schema so idempotency_key is a GLOBAL
+                # namespace; item_id is only tenant-schema-unique, so a bare
+                # f"voiditem:{item_id}" could collide with another tenant's item of the same
+                # PK and silently no-op the refund (returning the other tenant's tx on the
+                # OPS-5f customer-match-pass path). Namespace with the tenant schema. The
+                # durable backstop against a double-refund is that a re-void of an
+                # already-voided item is rejected upstream before reaching this credit.
                 credit_wallet(
                     order.customer_id,
                     _refunded,
                     tx_type=_WTx.Type.REFUND,
-                    idempotency_key=f"voiditem:{item_id}",
+                    idempotency_key=f"voiditem:{_vic.schema_name}:{item_id}",
                     reference=order.order_number,
                     note=f"Void item: {item.dish_name}",
                     require_verified=False,
@@ -4816,11 +4825,19 @@ class StaffOrderPaymentView(APIView):
                 # ── Wallet debit (raises InsufficientFunds → rolls back row) ─
                 _wallet_save_fields: list[str] = []
                 if method == "wallet":
+                    # OPS-5g: WalletTransaction is PUBLIC-schema so idempotency_key is a
+                    # GLOBAL namespace; payment.id is only tenant-schema-unique, so a bare
+                    # f"orderpay:{payment.id}" could collide with another tenant's payment
+                    # of the same PK. Namespace with the tenant schema. The durable
+                    # backstop against re-payment is the OrderPayment unique idempotency_key
+                    # row + the order already-PAID guard above (line ~4736) + the
+                    # IntegrityError replay handler below — not this key.
+                    from django.db import connection as _opc
                     debit_wallet(
                         order.customer_id,
                         amount,
                         tx_type=_WTx.Type.PAYMENT,
-                        idempotency_key=f"orderpay:{payment.id}",
+                        idempotency_key=f"orderpay:{_opc.schema_name}:{payment.id}",
                         reference=order.order_number,
                     )
                     # Keep wallet_amount_paid consistent with dashboards
@@ -8987,6 +9004,7 @@ class CustomerLoyaltyRedeemView(APIView):
     Requires authenticated customer. Body: { points: int }"""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [LoyaltyRedeemThrottle]  # OPS-5g: per-customer money-movement cap
 
     def post(self, request, *args, **kwargs):
         from decimal import Decimal as _Dec
@@ -9025,7 +9043,13 @@ class CustomerLoyaltyRedeemView(APIView):
         # wrongly reject the replay as "below threshold".
         _idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
         if _idem:
-            _prior = _WTM.objects.filter(idempotency_key=_idem, type=_WTM.Type.LOYALTY).first()
+            # OPS-5g IDOR: idempotency_key is a GLOBAL namespace on the shared-schema
+            # WalletTransaction table and is CLIENT-supplied here. Scope the replay lookup
+            # to THIS customer — otherwise an attacker who guesses/replays another
+            # customer's key reads that customer's redemption (amount + points) back out.
+            _prior = _WTM.objects.filter(
+                idempotency_key=_idem, type=_WTM.Type.LOYALTY, customer_id=_customer.id
+            ).first()
             if _prior is not None:
                 _prior_pts = 0
                 try:
@@ -9077,8 +9101,12 @@ class CustomerLoyaltyRedeemView(APIView):
             # Concurrent duplicate with the same idempotency_key — the other request
             # won the unique constraint. Treat this as an idempotent replay.
             _customer.refresh_from_db()
+            # OPS-5g IDOR: same customer-scoping as the pre-flight replay lookup above —
+            # never hand back another customer's redemption on the concurrent-replay path.
             _prior = (
-                _WTM.objects.filter(idempotency_key=_idem, type=_WTM.Type.LOYALTY).first()
+                _WTM.objects.filter(
+                    idempotency_key=_idem, type=_WTM.Type.LOYALTY, customer_id=_customer.id
+                ).first()
                 if _idem else None
             )
             return Response({
@@ -9553,11 +9581,21 @@ class CustomerOrderPayWalletView(APIView):
         tenant = getattr(request, "tenant", None)
         from accounts.wallet_service import debit_wallet, InsufficientFunds, WalletError
         from accounts.models import Customer as _Cust
+        from django.db import connection as _ws_conn
+        # OPS-5g: WalletTransaction lives in the PUBLIC schema, so idempotency_key is a
+        # GLOBAL namespace across tenants. order_number is only tenant-schema-unique, so a
+        # bare f"order-pay-{order_number}" could collide with another tenant's order of the
+        # same number — the OPS-5f customer-match guard would PASS (same customer can hold
+        # orders in two tenants) and silently replay, marking THIS order PAID with no money
+        # moved. Namespace the key with the tenant schema. The order already-PAID guard
+        # above (and the customer's wallet ledger) is the durable backstop against double
+        # payment; the namespacing just stops the cross-tenant collision.
+        _schema = _ws_conn.schema_name
         try:
             tx = debit_wallet(
                 order.customer_id, outstanding,
                 reference=order_number, tenant_id=(tenant.id if tenant else None),
-                note="Order payment", idempotency_key=f"order-pay-{order_number}",
+                note="Order payment", idempotency_key=f"order-pay-{_schema}-{order_number}",
             )
         except InsufficientFunds:
             cust = _Cust.objects.filter(pk=order.customer_id).first()

@@ -49,6 +49,26 @@ from .throttles import (
     StaffChangePasswordThrottle,
     WalletTransferThrottle,
 )
+try:
+    # OPS-5g: the dedicated voucher-redeem throttle (scope "voucher_redeem") lives in
+    # accounts.throttles. Imported defensively so this module still loads if the
+    # throttle hasn't landed yet — the redeem view always has a working throttle either
+    # way (a redeemed voucher code maps straight to wallet credit → brute-force target).
+    from .throttles import VoucherRedeemThrottle
+except ImportError:  # pragma: no cover - fallback only until the canonical class lands
+    from rest_framework.throttling import SimpleRateThrottle
+
+    class VoucherRedeemThrottle(SimpleRateThrottle):
+        """Per-signed-in-customer throttle on voucher redemption (fallback: IP)."""
+        scope = "voucher_redeem"
+
+        def get_cache_key(self, request, view):
+            try:
+                cid = request.session.get("customer_id")
+            except Exception:
+                cid = None
+            ident = f"c{cid}" if cid else self.get_ident(request)
+            return self.cache_format % {"scope": self.scope, "ident": ident}
 from .serializers import (
     ActivationSerializer,
     LoginSerializer,
@@ -2232,6 +2252,35 @@ class AdminWalletVoucherView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+# OPS-5g: per-actor failed-attempt lockout for voucher redemption. A voucher code is a
+# bearer money-token (redeem → wallet credit), so an attacker can iterate codes against a
+# session. The dedicated throttle caps overall request rate; this lockout adds a tighter
+# brute-force cap that trips on CONSECUTIVE INVALID (nonexistent) codes — mirroring the
+# driver_cashout_confirm lockout in accounts/driver_service.py. A legit redeem never
+# increments the counter (right code first try), and a successful redeem clears it, so this
+# is transparent to honest callers.
+VOUCHER_REDEEM_MAX_FAILURES = 5      # consecutive invalid codes before the actor is locked
+VOUCHER_REDEEM_LOCK_SECONDS = 900    # lockout / counting window (15 min)
+
+
+def _voucher_redeem_fail_cache_key(request, customer) -> str:
+    """Per-actor key for failed voucher redemptions (prefer session customer id, fall
+    back to the resolved customer id, then the request IP)."""
+    cid = None
+    try:
+        cid = request.session.get("customer_id")
+    except Exception:
+        cid = None
+    if not cid:
+        cid = getattr(customer, "id", None)
+    if cid:
+        ident = f"c{cid}"
+    else:
+        from sales.audit import get_request_ip
+        ident = get_request_ip(request) or "anon"
+    return f"voucher_redeem_fail:{ident}"
+
+
 class CustomerWalletRedeemVoucherView(APIView):
     """
     POST /api/customer/wallet/redeem-voucher/
@@ -2241,8 +2290,13 @@ class CustomerWalletRedeemVoucherView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    # OPS-5g: a redeemed code maps straight to wallet credit → brute-force-to-money
+    # target. The throttle is the rate backstop; the per-actor invalid-code lockout
+    # below is the primary brute-force defense.
+    throttle_classes = [VoucherRedeemThrottle]
 
     def post(self, request, *args, **kwargs):
+        from django.core.cache import cache as _cache
         from django.utils import timezone as _tz
         from .models import WalletVoucher, WalletTransaction
 
@@ -2265,11 +2319,30 @@ class CustomerWalletRedeemVoucherView(APIView):
         if not code:
             return Response({"detail": "Voucher code is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # OPS-5g: per-actor invalid-code lockout. A scanner iterating codes racks up
+        # failures fast and is locked out; a legit redeem (right code first try) never
+        # increments the counter and clears it on success.
+        fail_key = _voucher_redeem_fail_cache_key(request, customer)
+        if (_cache.get(fail_key) or 0) >= VOUCHER_REDEEM_MAX_FAILURES:
+            return Response(
+                {"detail": "Too many invalid voucher codes — try again shortly.",
+                 "code": "voucher_locked"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        def _record_failure():
+            try:
+                _cache.set(fail_key, (_cache.get(fail_key) or 0) + 1, VOUCHER_REDEEM_LOCK_SECONDS)
+            except Exception:
+                pass
+
         from django.db import transaction as _dbtx
         with _dbtx.atomic():
             try:
                 voucher = WalletVoucher.objects.select_for_update().get(code=code)
             except WalletVoucher.DoesNotExist:
+                # An invalid (nonexistent) code is the brute-force signal — count it.
+                _record_failure()
                 return Response({"detail": "Invalid voucher code."}, status=status.HTTP_400_BAD_REQUEST)
 
             if voucher.is_used:
@@ -2310,6 +2383,12 @@ class CustomerWalletRedeemVoucherView(APIView):
                 note=voucher.note or f"Voucher {voucher.code}",
             )
             _new_balance = _tx.balance_after
+
+        # A successful redeem clears the actor's failed-attempt counter.
+        try:
+            _cache.delete(fail_key)
+        except Exception:
+            pass
 
         return Response({
             "credited": str(voucher.amount),

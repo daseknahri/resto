@@ -411,10 +411,16 @@ class WalletVoucher(models.Model):
 
     @staticmethod
     def generate_code(length: int = 10) -> str:
-        import random, string
+        # A voucher code is a bearer money-token: whoever knows it can credit a
+        # wallet. It MUST be drawn from a CSPRNG, not the stdlib Mersenne-Twister
+        # PRNG (predictable once enough draws leak). Use the secrets module like
+        # the rest of the codebase (password reset tokens, ride/cash-out codes).
+        # Same uppercase+digit alphabet and length so the UX / validation shape
+        # is unchanged.
+        import secrets, string
         chars = string.ascii_uppercase + string.digits
         while True:
-            code = "".join(random.choices(chars, k=length))
+            code = "".join(secrets.choice(chars) for _ in range(length))
             if not WalletVoucher.objects.filter(code=code).exists():
                 return code
 

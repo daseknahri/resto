@@ -344,7 +344,11 @@ class ResponseHeaderTests(SimpleTestCase):
         self.assertEqual(resp["Cache-Control"], "public, max-age=600")
 
     def test_cache_key_stored_on_miss(self):
-        """On a cache miss, the rendered HTML must be stored under the correct key."""
+        """On a cache miss, the rendered HTML must be stored under the correct key.
+
+        OPS-5g: the key is now derived from the RESOLVED tenant (here: none →
+        the platform-fallback namespace) plus the sanitised path, NOT the
+        spoofable inbound Host header."""
         with patch("accounts.og_views.cache") as mock_cache, \
              patch("accounts.og_views.Domain") as MockDomain:
             MockDomain.objects.select_related.return_value.get.side_effect = Exception("no domain")
@@ -354,7 +358,9 @@ class ResponseHeaderTests(SimpleTestCase):
             req = _make_request(path_param="/menu", host="kepoli.app")
             OGView.as_view()(req)
 
-        expected_key = "ogpage:kepoli.app:/menu"
+        # No tenant resolved → "platform" namespace; the inbound Host is absent.
+        expected_key = "ogpage:platform:/menu"
         call_args = mock_cache.set.call_args
         self.assertEqual(call_args[0][0], expected_key)
+        self.assertNotIn("kepoli.app", call_args[0][0])
         self.assertEqual(call_args[0][2], 600)

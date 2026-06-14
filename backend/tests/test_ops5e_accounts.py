@@ -313,9 +313,11 @@ class OGCanonicalHostTests(SimpleTestCase):
         # ...and the spoofed Host never appears in any baked URL.
         self.assertNotIn("evil.attacker.example", html)
 
-    def test_cache_key_host_is_normalised(self):
-        """The cache key host is lowercased + port-stripped so equivalent Hosts
-        share one row (no per-case cache poisoning)."""
+    def test_cache_key_excludes_spoofable_host(self):
+        """OPS-5g: the cache key no longer contains the inbound Host at all — it is
+        keyed on the RESOLVED tenant (here: none → the platform namespace) plus the
+        path. This is strictly stronger than the old host-normalisation defence: a
+        spoofed Host can't fan out distinct cache rows because it never reaches the key."""
         from accounts.og_views import OGView
         factory = RequestFactory()
         req = factory.get("/api/og/", {"path": "/menu"}, HTTP_HOST="Kepoli.App:8000")
@@ -327,4 +329,6 @@ class OGCanonicalHostTests(SimpleTestCase):
             mock_cache.set = MagicMock()
             OGView.as_view()(req)
 
-        self.assertEqual(mock_cache.set.call_args[0][0], "ogpage:kepoli.app:/menu")
+        set_key = mock_cache.set.call_args[0][0]
+        self.assertEqual(set_key, "ogpage:platform:/menu")
+        self.assertNotIn("kepoli.app", set_key.lower())

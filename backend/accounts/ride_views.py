@@ -98,6 +98,12 @@ def _serialize_ride(ride, *, include_driver_pii=False, include_delivery_code=Fal
         "dropoff_lng": ride.dropoff_lng,
         "payment_method": ride.payment_method,
         "paid_with_wallet": ride.paid_with_wallet,
+        # OPS-5g: explicit wallet→cash fallback markers (set in settle_ride when the
+        # rider's balance was short at completion). In-memory only on a freshly-settled
+        # ride; absent (→ False/"") on re-fetched rows, which is fine for the rider's
+        # immediate completion response.
+        "cash_fallback": bool(getattr(ride, "cash_fallback", False)),
+        "cash_fallback_note": getattr(ride, "cash_fallback_note", "") or "",
         "scheduled_for": _ts(ride.scheduled_for),
         "dispatched_at": _ts(ride.dispatched_at),
         "created_at": _ts(ride.created_at),

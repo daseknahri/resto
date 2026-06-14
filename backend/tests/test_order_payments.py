@@ -301,7 +301,9 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         call_kwargs = mock_dw.call_args
         self.assertEqual(call_kwargs[0][0], 42)  # customer_id
         self.assertEqual(call_kwargs[0][1], Decimal("20.00"))
-        self.assertEqual(call_kwargs[1]["idempotency_key"], "orderpay:99")
+        # OPS-5g: tenant-schema-namespaced (shared-schema ledger → GLOBAL key namespace).
+        from django.db import connection as _c
+        self.assertEqual(call_kwargs[1]["idempotency_key"], f"orderpay:{_c.schema_name}:99")
         # merged single save: wallet_amount_paid + mark_paid fields in one call
         order.save.assert_called_once_with(
             update_fields=["wallet_amount_paid", "payment_status", "paid_at", "updated_at"]
@@ -344,7 +346,8 @@ class StaffOrderPaymentViewTests(SimpleTestCase):
         self.assertEqual(order.wallet_amount_paid, Decimal("15.00"))  # 0 + 15
         order.save.assert_any_call(update_fields=["wallet_amount_paid", "updated_at"])
         mock_dw.assert_called_once()
-        self.assertEqual(mock_dw.call_args[1]["idempotency_key"], "orderpay:101")
+        from django.db import connection as _c2
+        self.assertEqual(mock_dw.call_args[1]["idempotency_key"], f"orderpay:{_c2.schema_name}:101")
         # not fully paid → mark_paid not called
         order.mark_paid.assert_not_called()
 

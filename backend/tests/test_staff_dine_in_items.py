@@ -546,7 +546,7 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
     ):
         """
         PAID wallet order: credit_wallet is called with the item's subtotal as the
-        refund amount and the idempotency key f"voiditem:{item_id}".
+        refund amount and the idempotency key f"voiditem:{schema}:{item_id}".
         wallet_amount_paid is decremented by that amount.
 
         The view does `from accounts.wallet_service import credit_wallet` inside
@@ -602,7 +602,9 @@ class StaffVoidOrderItemViewTests(SimpleTestCase):
         kw_args = call_kwargs[1]
         self.assertEqual(pos_args[0], 42)                   # customer_id
         self.assertEqual(pos_args[1], Decimal("20.00"))     # refund = min(line_total, wallet_paid)
-        self.assertEqual(kw_args["idempotency_key"], "voiditem:901")
+        # OPS-5g: tenant-schema-namespaced (shared-schema ledger → GLOBAL key namespace).
+        from django.db import connection as _c
+        self.assertEqual(kw_args["idempotency_key"], f"voiditem:{_c.schema_name}:901")
         # tx_type is WalletTransaction.Type.REFUND — compare the value string
         tx_type_val = kw_args["tx_type"]
         self.assertEqual(

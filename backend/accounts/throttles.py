@@ -284,3 +284,31 @@ class OwnerWalletChargeThrottle(SimpleRateThrottle):
             if pk is not None:
                 return self.cache_format % {"scope": self.scope, "ident": f"owner:{pk}"}
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class LoyaltyRedeemThrottle(SimpleRateThrottle):
+    """OPS-5g: per-customer throttle on loyalty-points → wallet-credit redemption.
+
+    The redeem endpoint accepts a CLIENT-supplied idempotency_key whose replay lookup
+    is now customer-scoped (IDOR fix), but a throttle is still needed so a session
+    holder can't bulk-fire redemptions / probe keys. Keyed on the authenticated
+    request.user pk (IsAuthenticated view); falls back to IP for the (unexpected)
+    unauthenticated case so the class is safe regardless."""
+    scope = "loyalty_redeem"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"loyalty:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class VoucherRedeemThrottle(_CustomerThrottle):
+    """OPS-5g: per-session-customer throttle on voucher redemption.
+
+    Defined here (alongside LoyaltyRedeemThrottle) so the accounts.views voucher-redeem
+    endpoint can import it. Keyed on the session customer_id (falls back to IP), mirroring
+    the other money-movement / probe-sensitive AllowAny endpoints."""
+    scope = "voucher_redeem"

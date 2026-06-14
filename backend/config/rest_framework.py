@@ -74,6 +74,10 @@ REST_FRAMEWORK = {
         "delivery_rating": "30/hour",
         # OPS-5f: owner wallet charge — money movement; per-actor rate backstop.
         "owner_wallet_charge": "30/min",
+        # OPS-5g: loyalty redemption — money movement (points → wallet credit); per-customer.
+        "loyalty_redeem": "30/hour",
+        # OPS-5g: voucher redemption — money movement; per-session-customer (accounts.views).
+        "voucher_redeem": "10/hour",
         # OPS-5c item 7: driver doc uploads — 8 MB per submit + admin email each time
         "driver_doc_upload": "10/hour",
         # OPS-5c item 7: analytics ingestion keyed per (tenant, ip) — see AnalyticsEventThrottle

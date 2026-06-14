@@ -21,7 +21,11 @@ The ?path param is normalised to start with "/" and is HTML-escaped.
 
 Caching
 -------
-Cached for 10 minutes per (host, path) key via django.core.cache.
+Cached for 10 minutes per (resolved-tenant-id, sanitised-path) key via
+django.core.cache. The inbound Host header is NOT part of the key — it is
+spoofable (X-Forwarded-Host), so keying on it would let an attacker fan out
+unbounded cache entries for one real page. The cache key is derived from the
+authoritatively-resolved tenant id and a length-bounded, sanitised path.
 """
 
 import re
@@ -37,6 +41,24 @@ from tenancy.models import Domain, Profile, Tenant  # noqa: E402
 _OG_TTL = 600  # seconds (10 min)
 _SLUG_RE = re.compile(r"^/order/([A-Za-z0-9_-]+)")
 _SAFE_URL_RE = re.compile(r"^https?://")
+# Cache-key path bound: a long ?path can't be turned into an unbounded set of
+# distinct cache rows for one (tenant) page. The full path is still used in the
+# rendered body (escaped); only the KEY component is truncated + sanitised.
+_OG_CACHE_PATH_MAX = 128
+_OG_CACHE_PATH_UNSAFE_RE = re.compile(r"[^A-Za-z0-9_./?=&%:+~-]")
+
+
+def _og_cache_key(tenant, path: str) -> str:
+    """Build the cache key from the RESOLVED tenant id (not the spoofable Host)
+    plus a length-bounded, sanitised path. `tenant` is None for the platform
+    fallback (no tenant), which gets its own stable namespace."""
+    tid = getattr(tenant, "id", None) if tenant is not None else None
+    scope = f"t{tid}" if tid is not None else "platform"
+    # Sanitise + bound the path so it can't smuggle weird bytes or balloon the
+    # key space. The authoritative content is keyed by tenant id; the path only
+    # disambiguates same-tenant variants.
+    safe_path = _OG_CACHE_PATH_UNSAFE_RE.sub("_", path)[:_OG_CACHE_PATH_MAX]
+    return f"ogpage:{scope}:{safe_path}"
 
 
 def _safe_url(url: str, fallback: str) -> str:
@@ -100,31 +122,20 @@ class OGView(View):
 
         # ── 2. Determine host ─────────────────────────────────────────────────
         # request.get_host() honours X-Forwarded-Host (spoofable upstream), so this
-        # is used ONLY to look up the tenant and to key the cache. The canonical /
-        # og:image host below is re-derived from the RESOLVED tenant's authoritative
-        # domain so a spoofed Host can't be baked into the preview URLs.
+        # is used ONLY to look up the tenant — NEVER to key the cache (a spoofed
+        # Host could otherwise fan out unbounded cache entries for one real page).
+        # The canonical / og:image host below is re-derived from the RESOLVED
+        # tenant's authoritative domain so a spoofed Host can't be baked into the
+        # preview URLs either.
         try:
             host = request.get_host()
         except Exception:
             host = request.META.get("HTTP_HOST", "localhost")
-        # Normalise: lowercase + strip port so equivalent Hosts share one cache row
-        # (and one spoofed-case variant can't poison a distinct key).
+        # Normalise: lowercase + strip port so equivalent Hosts resolve the same tenant.
         host = (host or "localhost").strip().lower().split(":")[0]
 
-        # ── 3. Cache look-up ──────────────────────────────────────────────────
-        cache_key = f"ogpage:{host}:{path}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            resp = HttpResponse(cached, content_type="text/html; charset=utf-8")
-            resp["Cache-Control"] = "public, max-age=600"
-            return resp
-
-        # ── 4. Resolve tenant ─────────────────────────────────────────────────
-        icon_url = f"https://{host}/icon-512.png"
-        title = "Kepoli"
-        description = "Order food, shop local, send packages and book rides — one app, one wallet."
-        image = icon_url
-
+        # ── 3. Resolve tenant (BEFORE the cache look-up, so the key is keyed on the
+        #       authoritative tenant id rather than the spoofable inbound Host) ────
         tenant = None
         profile = None
 
@@ -147,10 +158,35 @@ class OGView(View):
                 except Exception:
                     tenant = None
 
+        # ── 4. Cache look-up — keyed on RESOLVED tenant id + bounded path ──────
+        cache_key = _og_cache_key(tenant, path)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            resp = HttpResponse(cached, content_type="text/html; charset=utf-8")
+            resp["Cache-Control"] = "public, max-age=600"
+            return resp
+
+        # Defaults (used when no tenant / no profile resolved).
+        icon_url = f"https://{host}/icon-512.png"
+        title = "Kepoli"
+        description = "Order food, shop local, send packages and book rides — one app, one wallet."
+        image = icon_url
+
         # Canonical / og:image host — prefer the resolved tenant's authoritative
-        # primary domain over the inbound (spoofable) Host header. Falls back to
-        # the validated inbound host when no tenant/domain is available.
-        canonical_host = host
+        # primary domain, and for the no-tenant "platform" fallback use a
+        # server-authoritative brand host (NOT the spoofable inbound Host): the
+        # OPS-5g cache key collapses all hosts for a path to one "ogpage:platform"
+        # row, so a spoofed Host would otherwise be cached and served to everyone
+        # (cross-user og:image/canonical poisoning). Falls back to the inbound host
+        # only in dev where no brand domain is configured.
+        from django.conf import settings as _og_settings
+        _brand = (
+            getattr(_og_settings, "BRAND_DOMAIN", "")
+            or getattr(_og_settings, "PUBLIC_MENU_BASE_URL", "")
+            or ""
+        ).strip()
+        _brand_host = _brand.replace("https://", "").replace("http://", "").strip("/").split("/")[0].lower()
+        canonical_host = _brand_host or host
         if tenant is not None:
             try:
                 primary = tenant.domains.filter(is_primary=True).first()
