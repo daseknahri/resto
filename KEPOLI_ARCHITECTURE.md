@@ -4,6 +4,12 @@
 > PWA) shipped. Retail catalog and ride-hailing are planned, not built. This doc
 > is the contract for how the super-app generalizes — read it before extending a
 > vertical.
+>
+> **➡️ NEXT-PHASE PLAN (2026-06-14):** the OPS-1→6 (+5b/5c/5d/6b) hardening program in
+> §4d is DONE. What comes after — the prioritized path to first real revenue (PSP
+> critical path, OPS-5e security, single-location completeness, retention) — lives in
+> **[KEPOLI_NEXT.md](KEPOLI_NEXT.md)**. Read that for the current roadmap; this doc
+> remains the architectural contract.
 
 ## 1. What Kepoli is
 
