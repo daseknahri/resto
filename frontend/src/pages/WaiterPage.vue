@@ -265,6 +265,46 @@
       <div v-else class="ui-empty-state py-8 text-center">
         <p class="text-sm text-slate-400">{{ t('waiterPage.shiftHint') }}</p>
       </div>
+
+      <!-- Change password -->
+      <details class="group rounded-2xl border border-slate-700/50 bg-slate-800/30">
+        <summary class="flex cursor-pointer select-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-slate-300 hover:text-slate-100">
+          {{ t('staffPassword.title') }}
+          <svg aria-hidden="true" class="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+        </summary>
+        <form class="space-y-3 px-4 pb-4" @submit.prevent="submitPasswordChange">
+          <div class="space-y-1">
+            <label class="ui-stat-label block" for="waiter-current-password">{{ t('staffPassword.currentLabel') }}</label>
+            <input
+              id="waiter-current-password"
+              v-model="pwForm.current"
+              type="password"
+              autocomplete="current-password"
+              class="ui-input"
+              :disabled="pwForm.loading"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="ui-stat-label block" for="waiter-new-password">{{ t('staffPassword.newLabel') }}</label>
+            <input
+              id="waiter-new-password"
+              v-model="pwForm.next"
+              type="password"
+              autocomplete="new-password"
+              class="ui-input"
+              :disabled="pwForm.loading"
+            />
+          </div>
+          <p v-if="pwForm.error" class="text-xs text-red-400" role="alert">{{ pwForm.error }}</p>
+          <button
+            type="submit"
+            class="ui-btn-primary ui-touch-target w-full justify-center disabled:opacity-50"
+            :disabled="pwForm.loading || !pwForm.current || !pwForm.next"
+          >
+            {{ pwForm.loading ? t('staffPassword.submitting') : t('staffPassword.submitBtn') }}
+          </button>
+        </form>
+      </details>
     </div>
 
     <!-- Order cards (with optional table grouping) -->
@@ -1117,7 +1157,7 @@ import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 import { useNowTicker } from "../composables/useNowTicker";
 import { useWakeLock } from "../composables/useWakeLock";
 
-const { t, currentLocale } = useI18n();
+const { t, formatDateTime, currentLocale } = useI18n();
 const { canInstall, isStandalone, install } = useInstallPrompt();
 const installDismissed = ref(false);
 const waiter = useWaiterStore();
@@ -1465,14 +1505,11 @@ const shiftRevenue = computed(() => {
 
 const formatScheduledFor = (iso) => {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
   try {
-    return d.toLocaleString(undefined, {
-      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-    });
+    return formatDateTime(iso, { weekday: "short", dateStyle: undefined, timeStyle: undefined, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch {
-    return d.toLocaleString();
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
 
@@ -1506,6 +1543,32 @@ const loadShiftSummary = () => {
     }
   }
   waiter.fetchShiftSummary(sinceIso);
+};
+
+// ── Password change ────────────────────────────────────────────────────────────
+const pwForm = ref({ current: "", next: "", loading: false, error: "" });
+
+const submitPasswordChange = async () => {
+  pwForm.value.error = "";
+  if (!pwForm.value.current || !pwForm.value.next) return;
+  pwForm.value.loading = true;
+  try {
+    await api.post("/staff/change-password/", {
+      current_password: pwForm.value.current,
+      new_password: pwForm.value.next,
+    });
+    pwForm.value.current = "";
+    pwForm.value.next = "";
+    toast.show(t("staffPassword.successMsg"), "success");
+  } catch (err) {
+    const data = err?.response?.data;
+    const msg = (typeof data?.detail === "string" && data.detail)
+      || (Array.isArray(data?.detail) && data.detail[0])
+      || t("staffPassword.errorGeneric");
+    pwForm.value.error = msg;
+  } finally {
+    pwForm.value.loading = false;
+  }
 };
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────

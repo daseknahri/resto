@@ -111,7 +111,7 @@ import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 import { isFresh, readCache, writeCache } from '../lib/staleCache';
 
-const { t, currentLocale } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 
 const props = defineProps({
   period: { type: Number, default: 30 },
@@ -171,9 +171,7 @@ const barPct = (dish) => {
 
 const fmtMoney = (amount) => {
   try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency', currency: currency.value, maximumFractionDigits: 0,
-    }).format(amount);
+    return formatCurrency(Number(amount) || 0, currency.value || 'MAD', { maximumFractionDigits: 0 });
   } catch {
     return `${Number(amount).toFixed(0)}`;
   }

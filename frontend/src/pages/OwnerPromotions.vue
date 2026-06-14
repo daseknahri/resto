@@ -340,7 +340,7 @@
               :placeholder="t('winback.messagePlaceholder')"
               @change="saveWinback"
             />
-            <p class="text-[11px] text-slate-500 text-right tabular-nums">{{ winbackForm.message.length }}/200</p>
+            <p class="text-[11px] text-slate-500 text-end tabular-nums">{{ winbackForm.message.length }}/200</p>
           </div>
 
           <!-- Save error -->

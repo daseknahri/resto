@@ -110,7 +110,7 @@
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="ui-kicker">{{ t("common.demo") }}</p>
-                <p class="mt-2 text-lg font-semibold tracking-tight text-white">doro.menu.ibnbatoutaweb.com</p>
+                <p class="mt-2 text-lg font-semibold tracking-tight text-white">{{ brandDomain }}</p>
               </div>
               <span class="ui-chip-strong shrink-0">{{ t("home.heroLive") }}</span>
             </div>
@@ -318,11 +318,11 @@
           class="ui-reveal relative overflow-hidden rounded-[1.8rem] border p-6 shadow-lg shadow-black/20 transition duration-300"
           :class="plan.recommended ? 'border-[var(--color-secondary)] bg-[var(--color-secondary)]/12' : 'border-slate-700/60 bg-slate-900/55'"
           :style="{ '--ui-delay': `${planIndex * 56}ms` }"
-          :aria-label="plan.name + ' — ' + (plan.available ? t('common.available') : t('common.soon'))"
+          :aria-label="plan.name + ' — ' + (plan.available ? t('home.plans.planAvailable') : t('common.soon'))"
         >
           <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true"></div>
           <div v-if="plan.recommended" class="pointer-events-none absolute end-5 top-5 rounded-full border border-[var(--color-secondary)]/40 bg-[var(--color-secondary)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-secondary)]" aria-hidden="true">
-            {{ t("common.available") }}
+            {{ t("home.plans.planRecommended") }}
           </div>
           <span v-if="plan.recommended" class="sr-only">{{ t("home.recommended") }}</span>
           <div class="flex items-center justify-between gap-3">
@@ -334,10 +334,16 @@
               class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
               :class="plan.available ? 'bg-emerald-400/90 text-emerald-950' : 'bg-slate-700 text-slate-200'"
             >
-              {{ plan.available ? t("common.available") : t("common.soon") }}
+              {{ plan.available ? t("home.plans.planAvailable") : t("common.soon") }}
             </span>
           </div>
-          <p class="mt-3 text-sm leading-relaxed text-slate-300">{{ plan.description }}</p>
+          <!-- Pricing (config-driven from lib/pricing.js — owner sets real amounts there) -->
+          <div class="mt-3 flex flex-wrap items-baseline gap-1.5">
+            <span v-if="plan.price" class="text-2xl font-bold tabular-nums text-white">{{ plan.price }}</span>
+            <span v-else class="rounded-full border border-amber-500/40 bg-amber-500/8 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">{{ t("pricing.priceTodo") }}</span>
+            <span v-if="plan.price" class="text-xs text-slate-500">/ {{ t("pricing.period." + plan.period) }}</span>
+          </div>
+          <p class="mt-2 text-sm leading-relaxed text-slate-300">{{ plan.description }}</p>
           <ul class="mt-5 space-y-2.5 text-sm text-slate-300">
             <li v-for="(line, featureIndex) in plan.features" :key="line" class="flex items-start gap-2.5">
               <span class="mt-[0.3rem] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-secondary)]" aria-hidden="true"></span>
@@ -382,7 +388,7 @@
         <div class="ui-command-deck p-6">
           <div class="space-y-1.5">
             <p class="ui-kicker">{{ t("common.demo") }}</p>
-            <p class="text-lg font-semibold tracking-tight text-white">doro.menu.ibnbatoutaweb.com</p>
+            <p class="text-lg font-semibold tracking-tight text-white">{{ brandDomain }}</p>
             <p class="text-sm leading-relaxed text-slate-300">{{ t("home.interfaces.customerText") }}</p>
           </div>
           <div class="mt-5 flex flex-wrap gap-3">
@@ -406,6 +412,8 @@ import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { SERVICES } from "../lib/services";
+import { BRAND_DOMAIN, DEMO_MENU_URL } from "../lib/brand";
+import { PRICING_PLANS } from "../lib/pricing";
 
 // Full literal Tailwind class strings per accent — never compute by string concat
 // so that the Tailwind scanner can reliably detect these classes.
@@ -422,8 +430,13 @@ const router = useRouter();
 const session = useSessionStore();
 const { t } = useI18n();
 const leadSuccess = ref(route.query.lead === "success");
-const demoUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu";
+const brandDomain = BRAND_DOMAIN;
+const demoUrl = DEMO_MENU_URL;
 
+/**
+ * Merge i18n plan copy with pricing config from lib/pricing.js.
+ * Price/period come from PRICING_PLANS (owner-configurable); all other copy is i18n.
+ */
 const plans = computed(() => [
   {
     code: "basic",
@@ -433,6 +446,8 @@ const plans = computed(() => [
     available: true,
     recommended: true,
     cta: t("home.plans.basic.cta"),
+    price: PRICING_PLANS.find((p) => p.code === "basic")?.price ?? null,
+    period: PRICING_PLANS.find((p) => p.code === "basic")?.period ?? "monthly",
   },
   {
     code: "growth",
@@ -442,6 +457,8 @@ const plans = computed(() => [
     available: false,
     recommended: false,
     cta: t("home.plans.growth.cta"),
+    price: PRICING_PLANS.find((p) => p.code === "growth")?.price ?? null,
+    period: PRICING_PLANS.find((p) => p.code === "growth")?.period ?? "monthly",
   },
   {
     code: "pro",
@@ -451,6 +468,8 @@ const plans = computed(() => [
     available: false,
     recommended: false,
     cta: t("home.plans.pro.cta"),
+    price: PRICING_PLANS.find((p) => p.code === "pro")?.price ?? null,
+    period: PRICING_PLANS.find((p) => p.code === "pro")?.period ?? "monthly",
   },
 ]);
 

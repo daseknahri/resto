@@ -264,6 +264,10 @@
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
               {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
             </button>
+            <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs" @click.stop="printSingleTable(table)">
+              <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
+              {{ t("ownerTables.printSingle") }}
+            </button>
             <button class="ui-btn-outline owner-table-btn px-3 py-1.5 text-xs text-red-300 hover:border-red-400/60 disabled:opacity-60" :disabled="deletingId === table.id" @click.stop="removeTable(table)">
               {{ t("ownerTables.delete") }}
             </button>
@@ -287,6 +291,10 @@
           <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="downloadQrPng(table)">
             <AppIcon name="download" class="owner-table-icon" aria-hidden="true" />
             {{ t("ownerTables.downloadQr") }}
+          </button>
+          <button class="ui-btn-outline px-3 py-1.5 text-xs" @click.stop="printSingleTable(table)">
+            <AppIcon name="print" class="owner-table-icon" aria-hidden="true" />
+            {{ t("ownerTables.printSingle") }}
           </button>
           <button class="ui-btn-outline px-3 py-1.5 text-xs disabled:opacity-60" :disabled="togglingId === table.id" @click.stop="toggleTable(table)">
             {{ togglingId === table.id ? t("ownerTables.loading") : table.is_active ? t("ownerTables.disable") : t("ownerTables.enable") }}
@@ -958,6 +966,43 @@ const downloadHtmlPack = async () => {
 const printCards = () => {
   if (typeof window === "undefined") return;
   window.print();
+};
+
+const printSingleTable = async (table) => {
+  if (typeof window === "undefined" || !table) return;
+  if (!tableQrSrc(table)) await generateQrForTable(table);
+  const qrSrc = tableQrSrc(table);
+  const short = tableShortUrl(table);
+  const scriptTag = "<script>window.onload=()=>{ window.print(); window.close(); };<" + "/script>";
+  const qrTag = qrSrc ? `<img class="qr" src="${escapeHtml(qrSrc)}" alt="${escapeHtml(t("ownerTables.qrAlt", { label: table.label }))}" />` : "";
+  const html = [
+    "<!doctype html>",
+    `<html lang="${currentLocale.value}" dir="${currentLocale.value === "ar" ? "rtl" : "ltr"}">`,
+    "<head><meta charset=\"utf-8\" />",
+    `<title>${escapeHtml(tenantName.value)} — ${escapeHtml(table.label)}</title>`,
+    "<style>",
+    "@page{size:148mm 210mm;margin:8mm}",
+    "body{margin:0;font-family:\"Segoe UI\",Arial,sans-serif;text-align:center;color:#0f172a;background:#fff}",
+    ".brand{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:700;color:#475569;margin:0 0 4px}",
+    "h1{font-size:28px;margin:0 0 10px}",
+    "img.qr{width:180px;height:180px;border:1px solid #e2e8f0;border-radius:8px;display:block;margin:0 auto 10px}",
+    ".hint{font-size:12px;color:#334155;margin:0 0 6px}",
+    ".url{font-size:11px;color:#0f172a;word-break:break-all}",
+    "</style></head>",
+    "<body>",
+    `<p class="brand">${escapeHtml(tenantName.value)}</p>`,
+    `<h1>${escapeHtml(table.label)}</h1>`,
+    qrTag,
+    `<p class="hint">${escapeHtml(t("ownerTables.scanHintPlain"))}</p>`,
+    `<p class="url">${escapeHtml(short)}</p>`,
+    scriptTag,
+    "</body></html>",
+  ].join("\n");
+  const w = window.open("", "_blank", "width=400,height=600");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 };
 
 let _setupTriggerEl = null;

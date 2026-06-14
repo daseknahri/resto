@@ -510,6 +510,7 @@ const normalizeCategory = (cat = {}) => ({
   is_published: cat.is_published ?? true,
   is_temporarily_disabled: cat.is_temporarily_disabled ?? false,
   course: Number(cat.course) || 0,
+  dish_count: typeof cat.dish_count === "number" ? cat.dish_count : 0,
 });
 
 const superCategoryLabel = (group) => {
@@ -759,8 +760,12 @@ const removeByLocalId = async (localId) => {
   const index = categories.findIndex((cat) => cat.local_id === localId);
   if (index < 0) return;
   const cat = categories[index];
+  const catName = cat?.name?.trim() || t("stepCategories.cardLabel", { index: index + 1 });
+  const dishCount = cat?.dish_count ?? 0;
+  const body = dishCount > 0 ? t("stepCategories.removeConfirmDishCount", { count: dishCount }) : undefined;
   const ok = await confirm({
-    title: t("stepCategories.removeConfirm", { name: cat?.name?.trim() || t("stepCategories.cardLabel", { index: index + 1 }) }),
+    title: t("stepCategories.removeConfirm", { name: catName }),
+    body,
     confirmLabel: t("common.remove"),
     danger: true,
   });

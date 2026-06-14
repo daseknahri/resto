@@ -983,7 +983,7 @@ import CustomerAuthModal from '../components/CustomerAuthModal.vue';
 import api from '../lib/api';
 import { useToastStore } from '../stores/toast';
 
-const { t, currentLocale } = useI18n();
+const { t, formatCurrency } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const customerStore = useCustomerStore();
@@ -1495,14 +1495,9 @@ const prepayShortfall = computed(
 );
 
 const fmtPrice = (amount) => {
-  const cur = restaurant.value?.currency;
-  if (!cur) return Number(amount || 0).toFixed(2);
+  const cur = restaurant.value?.currency || 'MAD';
   try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency: cur,
-      maximumFractionDigits: 2,
-    }).format(amount || 0);
+    return formatCurrency(Number(amount || 0), cur);
   } catch {
     return `${Number(amount || 0).toFixed(2)} ${cur}`;
   }

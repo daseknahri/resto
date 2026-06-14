@@ -300,7 +300,7 @@
                   class="mt-0.5 text-[11px] italic text-slate-500 leading-snug"
                 >{{ item.note }}</p>
               </div>
-              <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ fmtPrice(item.subtotal, order.currency) }}</span>
+              <span class="shrink-0 tabular-nums font-semibold text-[var(--color-secondary)]">{{ formatCurrency(item.subtotal, order.currency) }}</span>
             </li>
           </ul>
 
@@ -308,23 +308,23 @@
           <div class="space-y-1 border-t border-slate-800/80 pt-2 text-sm">
             <div v-if="Number(order.delivery_fee) > 0" class="flex justify-between text-slate-500">
               <span>{{ t('mktOrderStatus.deliveryFee') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(order.delivery_fee, order.currency) }}</span>
+              <span class="tabular-nums">{{ formatCurrency(order.delivery_fee, order.currency) }}</span>
             </div>
             <div v-if="Number(order.promotion_discount) > 0" class="flex justify-between text-amber-300">
               <span>{{ order.applied_promotion_name || t('mktOrderStatus.promoDiscount') }}</span>
-              <span class="tabular-nums">−{{ fmtPrice(order.promotion_discount, order.currency) }}</span>
+              <span class="tabular-nums">−{{ formatCurrency(order.promotion_discount, order.currency) }}</span>
             </div>
             <div v-if="Number(order.loyalty_discount) > 0" class="flex justify-between text-amber-400/90">
               <span>{{ t('mktOrderStatus.loyaltyDiscount') }}</span>
-              <span class="tabular-nums">−{{ fmtPrice(order.loyalty_discount, order.currency) }}</span>
+              <span class="tabular-nums">−{{ formatCurrency(order.loyalty_discount, order.currency) }}</span>
             </div>
             <div v-if="Number(order.wallet_amount_paid) > 0" class="flex justify-between text-emerald-400/80">
               <span>{{ t('mktOrderStatus.walletPaid') }}</span>
-              <span class="tabular-nums">−{{ fmtPrice(order.wallet_amount_paid, order.currency) }}</span>
+              <span class="tabular-nums">−{{ formatCurrency(order.wallet_amount_paid, order.currency) }}</span>
             </div>
             <div class="flex justify-between font-bold text-white">
               <span>{{ t('mktOrderStatus.total') }}</span>
-              <span class="tabular-nums">{{ fmtPrice(order.total, order.currency) }}</span>
+              <span class="tabular-nums">{{ formatCurrency(order.total, order.currency) }}</span>
             </div>
             <!-- Points earned celebration — visible on completed orders with loyalty earn -->
             <div
@@ -368,23 +368,11 @@ import { useToastStore } from '../stores/toast';
 import api from '../lib/api';
 import DeliveryTracker from '../components/DeliveryTracker.vue';
 
-const { t, currentLocale } = useI18n();
+const { t, formatDateTime, formatCurrency } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const toast = useToastStore();
 
-const fmtPrice = (amount, currency) => {
-  if (!currency) return Number(amount || 0).toFixed(2);
-  try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    }).format(amount || 0);
-  } catch {
-    return `${Number(amount || 0).toFixed(2)} ${currency}`;
-  }
-};
 
 const slug = route.params.slug;
 const orderNumber = route.params.orderNumber;
@@ -451,14 +439,11 @@ const reorder = () => {
 
 const formatScheduledFor = (iso) => {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
   try {
-    return d.toLocaleString(undefined, {
-      weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    });
+    return formatDateTime(iso, { weekday: 'short', dateStyle: undefined, timeStyle: undefined, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   } catch {
-    return d.toLocaleString();
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
   }
 };
 

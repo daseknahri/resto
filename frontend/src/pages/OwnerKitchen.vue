@@ -459,7 +459,7 @@ import { bustCache } from "../lib/staleCache";
 // wake lock and WS handlers start on activated, stop on deactivated.
 defineOptions({ name: "OwnerKitchen" });
 
-const { t, currentLocale } = useI18n();
+const { t, formatDateTime, currentLocale } = useI18n();
 const waiter = useWaiterStore();
 const toast = useToastStore();
 const { printTicket } = usePrintTicket();
@@ -938,14 +938,11 @@ const timeAgo = (iso) => {
 
 const formatScheduledFor = (iso) => {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
   try {
-    return d.toLocaleString(undefined, {
-      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-    });
+    return formatDateTime(iso, { weekday: "short", dateStyle: undefined, timeStyle: undefined, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch {
-    return d.toLocaleString();
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
 

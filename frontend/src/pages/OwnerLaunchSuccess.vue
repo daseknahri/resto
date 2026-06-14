@@ -154,6 +154,7 @@ import { computed } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
+import { BRAND_DOMAIN } from "../lib/brand";
 
 const tenant = useTenantStore();
 const toast = useToastStore();
@@ -165,9 +166,9 @@ const activeActionsCount = computed(() => (isPublished.value ? 3 : 2));
 const menuUrl = computed(() => (typeof window === "undefined" ? "/menu" : `${window.location.origin}/menu`));
 const menuHost = computed(() => {
   try {
-    return new URL(menuUrl.value, typeof window === "undefined" ? "https://menu.ibnbatoutaweb.com" : window.location.origin).host;
+    return new URL(menuUrl.value, typeof window === "undefined" ? `https://${BRAND_DOMAIN}` : window.location.origin).host;
   } catch {
-    return "menu";
+    return BRAND_DOMAIN;
   }
 });
 const shareMessage = computed(() => {

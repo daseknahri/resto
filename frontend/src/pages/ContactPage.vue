@@ -75,9 +75,9 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "../composables/useI18n";
-
+import { SUPPORT_EMAIL } from "../lib/brand";
 const { t } = useI18n();
-const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com").trim());
+const supportEmail = computed(() => (import.meta.env.VITE_CONTACT_EMAIL || SUPPORT_EMAIL).trim());
 const supportPhone = computed(() => String(import.meta.env.VITE_CONTACT_PHONE || "").trim());
 const supportPhoneLabel = computed(() => supportPhone.value || "+212...");
 const whatsappUrl = computed(() => {

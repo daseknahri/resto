@@ -213,7 +213,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../composables/useI18n';
 import api from '../lib/api';
 
-const { t, currentLocale } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 const props = defineProps({
@@ -331,11 +331,7 @@ const setPeriod = (p) => {
 const fmtMoney = (amount) => {
   if (!amount && amount !== 0) return '—';
   try {
-    return new Intl.NumberFormat(currentLocale.value, {
-      style: 'currency',
-      currency: currency.value,
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return formatCurrency(Number(amount) || 0, currency.value || 'MAD', { maximumFractionDigits: 0 });
   } catch {
     return `${Number(amount).toFixed(0)}`;
   }

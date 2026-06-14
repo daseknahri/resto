@@ -560,6 +560,19 @@
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
       </div>
+
+      <!-- Price-0 warning (non-blocking) -->
+      <div v-if="priceZeroWarning" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+        <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <div class="min-w-0 flex-1 space-y-0.5">
+          <p class="text-xs font-semibold text-amber-200">{{ t("stepPublish.priceZeroWarningTitle") }}</p>
+          <p class="text-xs text-amber-200/80">{{ t("stepPublish.priceZeroWarningBody") }}</p>
+        </div>
+        <button class="shrink-0 text-[11px] text-amber-400 hover:text-amber-200 focus:outline-none" @click="priceZeroDismissed = true">
+          {{ t("stepPublish.priceZeroDismiss") }}
+        </button>
+      </div>
+
       <div v-if="errors.is_menu_published" class="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/8 px-3 py-2.5" role="alert">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-red-400" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-sm text-red-300">{{ errors.is_menu_published }}</p>
@@ -619,6 +632,14 @@ const publishedAt = ref(null);
 const profileSnapshot = ref({});
 const categoriesCount = ref(0);
 const dishesCount = ref(0);
+const priceZeroDismissed = ref(false);
+
+const priceZeroWarning = computed(() => {
+  if (priceZeroDismissed.value) return null;
+  const warnings = profileSnapshot.value?.publish_warnings;
+  if (!Array.isArray(warnings)) return null;
+  return warnings.find((w) => w?.code === "zero_price_dishes") || null;
+});
 
 const MENU_THEMES = [
   {

@@ -10,6 +10,10 @@
           <button class="ui-btn-outline px-4 py-2 text-sm" type="button" :disabled="saving || hasActiveUploads" @click="saveAndNext">
             {{ saving ? t("common.saving") : hasActiveUploads ? t("stepDishes.uploading") : t("common.save") }}
           </button>
+          <button type="button" class="ui-btn-outline gap-1.5 px-3 py-2 text-sm" @click="csvImportOpen = true">
+            <AppIcon name="download" class="h-3.5 w-3.5" aria-hidden="true" />
+            {{ t("stepDishes.csvImportBtn") }}
+          </button>
           <button v-if="sortedCategoryOptions.length" type="button" class="ui-btn-outline gap-1.5 px-3 py-2 text-sm" @click="openBulkPriceModal">
             <AppIcon name="tag" class="h-3.5 w-3.5" aria-hidden="true" />
             {{ t("stepDishes.bulkPriceAdjust") }}
@@ -1314,6 +1318,69 @@
                 {{ bulkPriceApplying
                     ? t("stepDishes.bulkPriceApplying")
                     : t("stepDishes.bulkPriceApplyBtn", { count: bulkPricePreview.length }) }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- CSV Import Modal -->
+    <Teleport to="body">
+      <div
+        v-if="csvImportOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="csv-import-dialog-title"
+        @click.self="csvImportOpen = false"
+        @keydown.esc="csvImportOpen = false"
+      >
+        <div class="relative z-10 w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+          <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div>
+              <h2 id="csv-import-dialog-title" class="text-base font-semibold text-white">{{ t("stepDishes.csvImportTitle") }}</h2>
+              <p class="mt-0.5 text-xs text-slate-400">{{ t("stepDishes.csvImportHint") }}</p>
+            </div>
+            <button type="button" class="ui-icon-btn" :aria-label="t('common.close')" @click="csvImportOpen = false">
+              <AppIcon name="x" class="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div class="space-y-4 px-5 py-4">
+            <p class="text-xs text-slate-400">{{ t("stepDishes.csvImportFormatHint") }}</p>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 focus:outline-none"
+              @click="downloadCsvTemplate"
+            >
+              <AppIcon name="download" class="h-3.5 w-3.5" aria-hidden="true" />
+              {{ t("stepDishes.csvImportSample") }}
+            </button>
+            <div>
+              <label class="ui-label mb-1.5 block" for="csv-import-file-input">{{ t("stepDishes.csvImportUploadLabel") }}</label>
+              <input
+                id="csv-import-file-input"
+                ref="csvFileInputRef"
+                type="file"
+                accept=".csv,text/csv"
+                class="block w-full text-sm text-slate-300 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-200 hover:file:bg-slate-700"
+                :disabled="csvImporting"
+                @change="onCsvFileChange"
+              />
+            </div>
+            <p v-if="csvImportError" class="text-xs text-red-400" role="alert">{{ csvImportError }}</p>
+            <p v-if="csvImportResult" class="text-xs text-emerald-400" role="status">{{ csvImportResult }}</p>
+            <div class="flex justify-end gap-2 pt-1">
+              <button type="button" class="ui-btn-outline px-4 py-2 text-sm" @click="csvImportOpen = false">
+                {{ t("common.close") }}
+              </button>
+              <button
+                type="button"
+                class="ui-btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                :disabled="csvImporting || !csvFile"
+                @click="submitCsvImport"
+              >
+                {{ csvImporting ? t("stepDishes.csvImporting") : t("stepDishes.csvImportSubmit") }}
               </button>
             </div>
           </div>
@@ -2735,6 +2802,61 @@ const onModalEscape = (e) => {
   else if (quickDishModalOpen.value) closeQuickDishModal();
   else if (dishEditorModalOpen.value) closeDishEditor();
 };
+// ── CSV Import ─────────────────────────────────────────────────────────────────
+const csvImportOpen = ref(false);
+const csvFile = ref(null);
+const csvFileInputRef = ref(null);
+const csvImporting = ref(false);
+const csvImportError = ref("");
+const csvImportResult = ref("");
+
+const onCsvFileChange = (e) => {
+  csvFile.value = e.target.files?.[0] || null;
+  csvImportError.value = "";
+  csvImportResult.value = "";
+};
+
+const downloadCsvTemplate = async () => {
+  try {
+    const resp = await api.get("/owner/menu/import/", { responseType: "blob" });
+    const url = URL.createObjectURL(resp.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "menu_import_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    toast.show(t("stepDishes.csvImportError"), "error");
+  }
+};
+
+const submitCsvImport = async () => {
+  if (!csvFile.value || csvImporting.value) return;
+  csvImportError.value = "";
+  csvImportResult.value = "";
+  csvImporting.value = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", csvFile.value);
+    const { data } = await api.post("/owner/menu/import/", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    const count = data?.created_dishes ?? data?.dishes_created ?? 0;
+    csvImportResult.value = t("stepDishes.csvImportSuccess", { count });
+    csvFile.value = null;
+    if (csvFileInputRef.value) csvFileInputRef.value.value = "";
+    // Reload the dishes list so the newly imported items appear
+    await load();
+  } catch (err) {
+    const msg = err?.response?.data?.detail;
+    csvImportError.value = (typeof msg === "string" && msg) || t("stepDishes.csvImportError");
+  } finally {
+    csvImporting.value = false;
+  }
+};
+
 onMounted(load);
 onMounted(() => document.addEventListener("keydown", onModalEscape));
 onUnmounted(() => document.removeEventListener("keydown", onModalEscape));

@@ -1934,7 +1934,7 @@ const assignFieldErrors = (data) => {
   }
 };
 
-const mapOrderApiError = (err, fallback) => {
+const mapOrderApiError = (err) => {
   const data = err?.response?.data || {};
   const code = data?.code || '';
   const unavailable = Array.isArray(data?.unavailable_slugs)
@@ -2005,16 +2005,7 @@ const mapOrderApiError = (err, fallback) => {
       ? t('cartPage.menuTemporarilyUnavailableWithNote', { note })
       : t('cartPage.menuTemporarilyUnavailable');
   }
-  if (data && typeof data === 'object') {
-    const firstList = Object.values(data).find(
-      (v) => Array.isArray(v) && v.length
-    );
-    if (firstList) return String(firstList[0]);
-  }
-  if (typeof data?.detail === 'string' && data.detail.trim()) {
-    return data.detail;
-  }
-  return fallback;
+  return t('cartPage.genericCheckoutError');
 };
 
 const removeUnavailable = () => {

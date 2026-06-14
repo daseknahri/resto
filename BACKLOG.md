@@ -71,6 +71,42 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future
 OPS batch or a security pass. file:line in the scout output; verify before acting.
 
+### OPS-6b — A11Y / SEO / FIRST-IMPRESSION POLISH (scout OPS-6 cluster)
+- [ ] **<html lang="en"> hardcoded; dir only set after JS hydration (a11y/SEO, WCAG 3.1.1)**
+      — AT + non-JS crawlers see English/LTR before locale.js fixes it. Set lang/dir
+      synchronously (cookie-driven inline script) or SSR. (index.html:2; locale.js:27). [scout OPS-6]
+- [ ] **JSON-LD always @type "Restaurant"** regardless of business_type — pharmacy/grocery/
+      bakery/retail/cafe mis-indexed. Add BUSINESS_TYPE_SCHEMA_MAP. (useSeoMeta.js:208). [scout OPS-6]
+- [ ] **og:site_name overwritten with tenant name** — every social share drops Kepoli platform
+      attribution. Restore BRAND_NAME for og:site_name; tenant stays in og:title. (useSeoMeta.js:178).
+      [scout OPS-6]
+- [ ] **Wizard step-nav has no forward-progression guard** — a tenant can jump to Publish with
+      an empty menu/no brand; StepPublish warns but doesn't block. Track highestCompleted +
+      disable Publish until canPublish. (Wizard.vue:44; StepPublish.vue:41). [scout OPS-6]
+- [ ] **Activate.vue: <main> nested in <section> (HTML-invalid) + decorative card shows the
+      post-activation success string as pre-activation copy** (confusing). (Activate.vue:3/17/24).
+      [scout OPS-6]
+- [ ] **a11y keyboard: Cart map dialog doesn't move focus in on open; Menu.vue review carousel
+      not keyboard-reachable (hidden scrollbar, no tabindex)**. Standard APG dialog focus +
+      tabindex/arrow handlers. (Cart.vue:883/1101; Menu.vue:277). [scout OPS-6]
+- [ ] **Pharmacy option has no "parapharmacie / no Rx" disclaimer** in the wizard — qualified
+      leads churn post-signup. One-line hint. (StepPublish.vue:107). [scout OPS-6]
+- [ ] **<noscript> is English-only** for an ar/fr SaaS — stack all three + a support link.
+      (index.html:38). [scout OPS-6]
+- [ ] **StaffChangePasswordView has no throttle** — session-gated current-password brute-force.
+      Add a per-user/IP throttle (auth-endpoint pattern). (accounts/views.py:1194). [review OPS-6 minor]
+- [ ] **Print rule .ui-command-deck button{display:none} also hides OwnerLaunchSuccess buttons**
+      — scope the @media print block to analytics panels only. (tailwind.css ~2885;
+      OwnerLaunchSuccess.vue:60). [review OPS-6 minor]
+- [ ] **Cart loyalty_/schedule_/promo_not_found branches still pass raw data.detail to customers**
+      — extend the OPS-6 generic-message mapping to these named branches. (Cart.vue:1951/1982/1987).
+      [review OPS-6 minor]
+- [ ] **priceZeroWarningBody says "the following" but lists no dish names** — backend
+      publish_warnings returns only a count; either list slugs or reword. (messages.js;
+      tenancy/serializers.py:210). [review OPS-6 minor]
+- [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
+      default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
+
 ### OPS-5c — SECURITY/OPS FOLLOW-UP (scout OPS-5b cluster; next security batch)
 - [ ] **is_staff STILL bleeds elsewhere? — RESOLVED in OPS-5b** for menu/permissions
       (user_can_edit_tenant/menu), tenancy/api _can_edit_tenant, sales IsTenantEditor (all
@@ -282,6 +318,23 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-6 "first impressions + onboarding + polish" — COMPLETES THE OPS PROGRAM
+      (OPS-1..6). Killed the hardcoded dev domain (doro.menu.ibnbatoutaweb.com) from every
+      customer-facing surface → config-driven brand domain/email in lib/brand.js
+      (VITE_BRAND_DOMAIN/VITE_SUPPORT_EMAIL + Kepoli fallbacks; only a dev CLI --help example
+      remains). Config-driven pricing SCAFFOLD with clearly-marked placeholder amounts (owner
+      sets real numbers in one place — decision-gated) + distinct badge i18n keys (was one
+      'available' for 3 concepts). Empty-state CTAs on quiet-but-published Orders. Polish sweep:
+      formatCurrency everywhere (incl. MarketplaceOrderStatus — review major), app-locale dates
+      (no toLocaleString(undefined)), RTL logical-property fixes, Cart no longer leaks raw
+      backend detail to customers (generic i18n message), analytics @media print stylesheet,
+      PWA icons split any/maskable. Onboarding: CSV import surfaced IN the dish wizard (wired to
+      existing OwnerMenuImportView), category-delete shows dish_count + warns, in-app staff
+      change-password (POST /api/staff/change-password/, current-pw verified + Django validators
+      + session kept), per-table QR print, price-0 publish warning (publish_warnings on Profile;
+      0 still allowed — free items legit). Review: 1 major (MarketplaceOrderStatus currency)
+      fixed + verified by me; dev-domain eradication grep-verified. Backend 3474/0, frontend
+      90/build green. Scout → OPS-6b a11y/SEO/UX cluster above. — ops6 commit.
 - [x] OPS-5b "admin security hardening": IsPlatformAdmin PRIV-ESC fixed — dropped is_staff
       (Django /admin/ flag) from the gate AND, completing it, from menu.permissions
       user_can_edit_tenant/user_can_edit_menu + tenancy.api _can_edit_tenant + sales

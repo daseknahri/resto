@@ -901,6 +901,8 @@ class CustomerProfileUpdateView(APIView):
 
 import re as _re
 import secrets as _secrets
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import update_session_auth_hash as _update_session_auth_hash
 
 
 def _is_tenant_owner(request, tenant) -> bool:
@@ -1187,6 +1189,67 @@ class OwnerStaffDeleteView(APIView):
 
         staff_user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StaffChangePasswordView(APIView):
+    """POST /api/staff/change-password/ — let an authenticated staff (or owner) change
+    their own password after verifying the current one.
+
+    Body: { "current_password": "...", "new_password": "..." }
+
+    Rules:
+    - Requires a valid session (IsAuthenticated).
+    - current_password must match the stored hash.
+    - new_password must pass Django's AUTH_PASSWORD_VALIDATORS.
+    - On success the session is NOT terminated so the staff member stays logged in
+      on the device they just changed their password from (UX choice: they are already
+      holding the phone / tablet).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+
+        current_password = (request.data.get("current_password") or "").strip()
+        new_password = (request.data.get("new_password") or "").strip()
+
+        if not current_password:
+            return Response(
+                {"detail": "Current password is required.", "code": "current_password_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not new_password:
+            return Response(
+                {"detail": "New password is required.", "code": "new_password_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify current password
+        if not user.check_password(current_password):
+            return Response(
+                {"detail": "Current password is incorrect.", "code": "wrong_current_password"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Run Django's AUTH_PASSWORD_VALIDATORS
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": exc.messages, "code": "password_too_weak"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        # Keep the session alive after a password change so the staff member
+        # stays logged in on this device.
+        _update_session_auth_hash(request, user)
+
+        return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 
 # ── Customer wallet ────────────────────────────────────────────────────────────

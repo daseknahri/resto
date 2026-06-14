@@ -245,7 +245,7 @@ import api from "../lib/api";
 import { bustCache, isFresh, readCache, writeCache } from "../lib/staleCache";
 import { useToastStore } from "../stores/toast";
 
-const { t, formatNumber } = useI18n();
+const { t, formatNumber, formatCurrency } = useI18n();
 const toast = useToastStore();
 
 const PERIOD_OPTIONS = [7, 14, 30, 90];
@@ -423,11 +423,10 @@ const _apply = (data) => {
 const fmtMoney = (amount) => {
   const cur = dashCurrency.value;
   const n = Number(amount) || 0;
-  if (!cur) return n.toFixed(2);
   try {
-    return formatNumber(n, { style: "currency", currency: cur, maximumFractionDigits: 2 });
+    return formatCurrency(n, cur || "MAD");
   } catch {
-    return `${n.toFixed(2)} ${cur}`;
+    return `${n.toFixed(2)}${cur ? ` ${cur}` : ""}`;
   }
 };
 

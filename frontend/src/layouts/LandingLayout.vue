@@ -186,7 +186,7 @@ import { useI18n } from "../composables/useI18n";
 import { useSessionStore } from "../stores/session";
 import { useCustomerStore } from "../stores/customer";
 import { useInstallPrompt } from "../composables/useInstallPrompt";
-import { PLATFORM_MONOGRAM } from "../lib/brand";
+import { PLATFORM_MONOGRAM, SUPPORT_EMAIL } from "../lib/brand";
 
 const router = useRouter();
 const brandMonogram = PLATFORM_MONOGRAM;
@@ -195,7 +195,7 @@ const session = useSessionStore();
 const customerStore = useCustomerStore();
 const { t } = useI18n();
 const year = new Date().getFullYear();
-const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com";
+const supportEmail = SUPPORT_EMAIL;
 
 const logoStyle = computed(() => ({
   background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",

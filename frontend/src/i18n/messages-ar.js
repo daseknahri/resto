@@ -111,6 +111,7 @@ const arabicMessages = {
     "dismiss": "إغلاق",
     "dismissAriaLabel": "إغلاق رسالة التأكيد",
     "recommended": "موصى به",
+    "liveDemoAriaLabel": "عرض حي: {domain}",
     "verticalsKicker": "تطبيق Kepoli",
     "verticalsTitle": "تطبيق واحد ليومك كله",
     "verticalsSubtitle": "اطلب طعامك، تسوّق من المحلات القريبة، واحجز توصيلة — محفظة واحدة وحساب واحد.",
@@ -161,6 +162,8 @@ const arabicMessages = {
     "submitLead": "أرسل الطلب",
     "talkSupport": "تحدث مع الدعم",
     "plans": {
+      "planAvailable": "متاح",
+      "planRecommended": "شائع",
       "basic": {
         "name": "الأساسية",
         "description": "ابدأ بسرعة بقائمة QR ومسار تحويل إلى واتساب.",
@@ -185,6 +188,14 @@ const arabicMessages = {
         "feature3": "ضوابط جاهزة للمؤسسات",
         "cta": "انضم للانتظار"
       }
+    }
+  },
+  "pricing": {
+    "priceTodo": "السعر قيد التحديد",
+    "period": {
+      "monthly": "شهر",
+      "yearly": "سنة",
+      "oneTime": "دفع واحد"
     }
   },
   "customerLayout": {
@@ -240,6 +251,21 @@ const arabicMessages = {
     "passwordRequired": "كلمة المرور مطلوبة",
     "sessionExpired": "انتهت صلاحية جلستك — يرجى تسجيل الدخول مجدداً للمتابعة",
     "alwaysOn": "24/7"
+  },
+  "staffPassword": {
+    "title": "تغيير كلمة المرور",
+    "kicker": "الأمان",
+    "hint": "استخدم كلمة مرور قوية غير مستخدمة في مكان آخر.",
+    "currentLabel": "كلمة المرور الحالية",
+    "newLabel": "كلمة المرور الجديدة",
+    "submitBtn": "تحديث كلمة المرور",
+    "submitting": "جارٍ التحديث...",
+    "successMsg": "تم تحديث كلمة المرور بنجاح.",
+    "errorCurrent": "كلمة المرور الحالية غير صحيحة.",
+    "errorWeak": "كلمة المرور ضعيفة جداً. اختر كلمة مرور أطول أو أكثر تعقيداً.",
+    "errorGeneric": "تعذر تحديث كلمة المرور. يرجى المحاولة مرة أخرى.",
+    "currentRequired": "كلمة المرور الحالية مطلوبة.",
+    "newRequired": "كلمة المرور الجديدة مطلوبة."
   },
   "forgotPassword": {
     "kicker": "استعادة الحساب",
@@ -696,7 +722,8 @@ const arabicMessages = {
     "scanHintPlain": "امسح لفتح القائمة",
     "statusFilter": "تصفية الحالة",
     "noFilterResults": "لا توجد طاولات تطابق البحث أو الفلتر الحالي.",
-    "moreActions": "المزيد من الإجراءات"
+    "moreActions": "المزيد من الإجراءات",
+    "printSingle": "طباعة هذه الطاولة"
   },
   "ownerLaunchSuccess": {
     "launch": "إطلاق القائمة",
@@ -1536,7 +1563,10 @@ const arabicMessages = {
     "codEnabled": "الدفع نقدًا عند الاستلام للعملاء الموثوقين",
     "codEnabledHint": "اسمح للعملاء المتكررين بالدفع نقدًا للموظف/السائق بدلاً من الدفع المسبق من محفظتهم للاستلام والتوصيل.",
     "codMinOrders": "عدد الطلبات قبل إتاحة الدفع نقدًا",
-    "codMinOrdersUnit": "طلبات مكتملة ومدفوعة"
+    "codMinOrdersUnit": "طلبات مكتملة ومدفوعة",
+    "priceZeroWarningTitle": "بعض الأطباق سعرها 0",
+    "priceZeroWarningBody": "الأطباق المنشورة التالية ليس لها سعر محدد. سيتمكن العملاء من إضافتها إلى سلتهم مجاناً. حدّث الأسعار قبل البدء.",
+    "priceZeroDismiss": "تجاهل"
   },
   "stepCategories": {
     "title": "التصنيفات",
@@ -1586,7 +1616,9 @@ const arabicMessages = {
     "courseLabel": "الخدمة (تسلسل الدايني)",
     "courseNone": "بدون خدمة — إرسال فوري",
     "courseN": "خدمة {n}",
-    "courseHint": "يتم تأجيل عناصر هذه الفئة حتى يقوم الموظف بإطلاق هذه الخدمة على الطاولة."
+    "courseHint": "يتم تأجيل عناصر هذه الفئة حتى يقوم الموظف بإطلاق هذه الخدمة على الطاولة.",
+    "removeConfirm": "هل تريد حذف \"{name}\"؟ سيتم حذف الأطباق في هذا التصنيف أيضاً.",
+    "removeConfirmDishCount": "سيؤدي ذلك إلى حذف {count} طبق/أطباق في هذا التصنيف."
   },
   "stepDishes": {
     "title": "الأطباق",
@@ -1753,7 +1785,17 @@ const arabicMessages = {
     "attrBarcode": "الباركود",
     "attrBrand": "الماركة",
     "attrUnit": "حجم العبوة / الوحدة",
-    "attrUnitPlaceholder": "مثال: 500 غ، 1 ل، x6"
+    "attrUnitPlaceholder": "مثال: 500 غ، 1 ل، x6",
+    "csvImportBtn": "استيراد من CSV",
+    "csvImportTitle": "استيراد الأطباق من ملف CSV",
+    "csvImportHint": "ارفع ملف CSV يحتوي على أعمدة: الاسم، السعر، التصنيف، الوصف (اختياري).",
+    "csvImportSample": "تحميل نموذج CSV",
+    "csvImportUploadLabel": "اختر ملف CSV",
+    "csvImportSubmit": "استيراد",
+    "csvImporting": "جارٍ الاستيراد...",
+    "csvImportSuccess": "تم استيراد {count} طبق/أطباق بنجاح.",
+    "csvImportError": "فشل الاستيراد. تحقق من تنسيق الملف وحاول مرة أخرى.",
+    "csvImportFormatHint": "الامتداد المقبول: .csv — بحد أقصى 500 صف. يجب أن يكون الصف الأول عنوان الأعمدة."
   },
   "combos": {
     "badge": "كومبو",
@@ -1976,7 +2018,8 @@ const arabicMessages = {
     "tipHighWarning": "هذه البقشيش تتجاوز إجمالي طلبك — تحقق من المبلغ.",
     "promoFreeDeliveryRemoved": "تمت إزالة رمز التوصيل المجاني (صالح للتوصيل فقط).",
     "reorderPriceNote": "تم تحديث الأسعار وفق قائمة اليوم.",
-    "staleOptions": "تغيّرت القائمة — يرجى مراجعة سلّتك والمحاولة مجدداً."
+    "staleOptions": "تغيّرت القائمة — يرجى مراجعة سلّتك والمحاولة مجدداً.",
+    "genericCheckoutError": "حدث خطأ ما. يرجى المحاولة مجدداً أو التواصل مع المطعم."
   },
   "onboardingApi": {
     "saveProfileFailed": "تعذر حفظ بيانات المطعم.",
@@ -2306,6 +2349,10 @@ const arabicMessages = {
     "confirmAllDone": "تم تأكيد {n} طلب/طلبات معلقة.",
     "confirmAllFailed": "تعذّر تأكيد بعض الطلبات.",
     "noOrdersYet": "لا توجد طلبات بعد — ستظهر هنا عند بدء العملاء بالطلب.",
+    "noOrdersYetShareHint": "شارك رابط قائمتك للحصول على أول طلب:",
+    "noOrdersYetShareBtn": "مشاركة رابط القائمة",
+    "noOrdersYetQrBtn": "عرض رمز QR",
+    "noOrdersYetStorefrontBtn": "عرض المتجر",
     "clearFilters": "مسح الفلاتر",
     "cancelConfirmTitle": "إلغاء هذا الطلب؟",
     "cancelConfirmBody": "لن يتم إشعار العميل تلقائياً. تأكد من إبلاغه بشكل منفصل إن لزم الأمر.",

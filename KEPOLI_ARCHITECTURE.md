@@ -249,6 +249,14 @@ Order: OPS-1 → OPS-2 → OPS-3 → OPS-4 → OPS-5 → OPS-6 (value-first; 1 a
 every-shift operator pain, 3 protects data, 4 protects year-one, 5 protects the
 platform, 6 sells it). Each batch ships independently; "continue" = next batch.
 
+**STATUS 2026-06-14: OPS-1 through OPS-6 ALL SHIPPED to main** (+ OPS-5b admin-security
+hardening). The operator-grade program is complete: kitchen-never-dark, Z-report money
+truth, flaky-wifi integrity, scale fences, platform cockpit + security, first impressions.
+Remaining follow-ups (scout-surfaced, in BACKLOG): **OPS-5c** security cluster (image-upload
+polyglot, ride-admin PII gates, OSRM SSRF, token prune, throttles) and **OPS-6b** a11y/SEO
+polish (lang/dir SSR, JSON-LD per business_type, wizard progression guard, dialog focus).
+Decision-gated (need owner): PSP wallet top-up, real plan prices, self-serve signup.
+
 ## 5. Phased roadmap
 
 ### Phase 0 — Super-app foundation ✅ (shipped 2026-06-08)

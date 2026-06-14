@@ -187,6 +187,41 @@ class LocalizedProfileContentMixin:
         return base
 
 
+def _get_publish_warnings(profile_instance) -> list:
+    """Return a list of non-blocking publish readiness warnings for the given
+    Profile instance.  Extracted so the logic is unit-testable without the full
+    DRF serializer machinery.
+
+    Currently flagged:
+    - zero_price_dishes: published dishes whose price is 0.  Free items are
+      intentional in some business models (e.g. water, bread) so this is
+      deliberately a warning, not an error.
+    """
+    warnings = []
+    if not getattr(profile_instance, "is_menu_published", False):
+        return warnings
+    try:
+        from menu.models import Dish as _Dish
+        zero_price_count = _Dish.objects.filter(
+            is_published=True,
+            category__is_published=True,
+            price=0,
+        ).count()
+        if zero_price_count > 0:
+            warnings.append({
+                "code": "zero_price_dishes",
+                "count": zero_price_count,
+                "message": (
+                    f"{zero_price_count} published dish"
+                    f"{'es have' if zero_price_count != 1 else ' has'} "
+                    "a price of 0. Free items are allowed but verify this is intentional."
+                ),
+            })
+    except Exception:
+        pass
+    return warnings
+
+
 class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerializer):
     published_at = serializers.DateTimeField(read_only=True)
     is_open_now = serializers.SerializerMethodField()
@@ -514,6 +549,7 @@ class ProfileSerializer(LocalizedProfileContentMixin, serializers.ModelSerialize
             data.get("business_hours", ""),
             data.get("business_hours_i18n"),
         )
+        data["publish_warnings"] = _get_publish_warnings(instance)
         return data
 
 

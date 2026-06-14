@@ -236,7 +236,7 @@
             </div>
             <div class="h-3 w-24 rounded bg-slate-800/50"></div>
           </div>
-          <div class="space-y-1.5 text-right">
+          <div class="space-y-1.5 text-end">
             <div class="h-5 w-16 rounded bg-slate-700/60"></div>
             <div class="h-3 w-10 rounded bg-slate-800/50"></div>
           </div>
@@ -280,11 +280,34 @@
     </div>
 
     <!-- Empty: no orders at all -->
-    <div v-else-if="!filteredOrders.length" class="ui-empty-state p-12 text-center" role="status">
+    <div v-else-if="!filteredOrders.length" class="ui-empty-state space-y-4 p-8 text-center" role="status">
       <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-700/60 bg-slate-800/50">
-        <AppIcon name="refresh" class="h-6 w-6 text-slate-500" aria-hidden="true" />
+        <AppIcon name="chart" class="h-6 w-6 text-slate-500" aria-hidden="true" />
       </div>
-      <p class="mt-4 text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrdersYet") }}</p>
+      <p class="text-sm font-semibold text-slate-200">{{ t("ownerOrders.noOrdersYet") }}</p>
+      <p class="text-xs text-slate-400">{{ t("ownerOrders.noOrdersYetShareHint") }}</p>
+      <div class="flex flex-wrap justify-center gap-2">
+        <button
+          class="ui-btn-primary ui-touch-target justify-center px-4 py-2 text-sm"
+          @click="copyMenuUrl"
+        >
+          {{ t("ownerOrders.noOrdersYetShareBtn") }}
+        </button>
+        <a
+          :href="menuUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ui-btn-outline ui-touch-target justify-center px-4 py-2 text-sm"
+        >
+          {{ t("ownerOrders.noOrdersYetStorefrontBtn") }}
+        </a>
+        <RouterLink
+          to="/owner/tables"
+          class="ui-btn-outline ui-touch-target justify-center px-4 py-2 text-sm"
+        >
+          {{ t("ownerOrders.noOrdersYetQrBtn") }}
+        </RouterLink>
+      </div>
     </div>
     </template>
 
@@ -1038,7 +1061,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import DeliveryTracker from "../components/DeliveryTracker.vue";
 import { useI18n } from "../composables/useI18n";
@@ -1054,12 +1077,25 @@ import { chipClass as _statusChipClass } from "../lib/orderStatusMeta";
 // (live orders — polls and must mount & unmount normally).
 defineOptions({ name: "OwnerOrders" });
 
-const { t, itemCountLabel, formatNumber, currentLocale } = useI18n();
+const { t, itemCountLabel, formatNumber, formatDateTime, currentLocale } = useI18n();
 const order = useOrderStore();
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { confirm } = useConfirmModal();
 const route = useRoute();
+
+// ── Menu URL (for empty-state CTA) ──────────────────────────────────────────
+const menuUrl = computed(() =>
+  typeof window !== "undefined" ? `${window.location.origin}/menu` : "/menu"
+);
+const copyMenuUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(menuUrl.value);
+    toast.show(t("ownerLaunchSuccess.menuUrlCopied"), "success");
+  } catch {
+    toast.show(t("ownerTables.copyFailed"), "error");
+  }
+};
 
 // ── Tab: "active" (hot poll) | "history" (paginated terminal orders) ──────────
 const activeTab = ref("active");
@@ -1323,14 +1359,11 @@ const statusClass = (s) => _statusChipClass(s);
 
 const formatScheduledFor = (iso) => {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
   try {
-    return d.toLocaleString(undefined, {
-      weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-    });
+    return formatDateTime(iso, { weekday: "short", dateStyle: undefined, timeStyle: undefined, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch {
-    return d.toLocaleString();
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
 

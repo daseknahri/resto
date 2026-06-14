@@ -141,6 +141,7 @@ export const messages = {
       dismiss: "Dismiss",
       dismissAriaLabel: "Dismiss confirmation message",
       recommended: "Recommended",
+      liveDemoAriaLabel: "Live demo: {domain}",
       verticalsKicker: "The Kepoli app",
       verticalsTitle: "One app for your whole day",
       verticalsSubtitle: "Order food, shop from local stores, and get a ride — one wallet, one account.",
@@ -191,6 +192,8 @@ export const messages = {
       submitLead: "Submit lead",
       talkSupport: "Talk to support",
       plans: {
+        planAvailable: "Available",
+        planRecommended: "Popular",
         basic: {
           name: "Basic",
           description: "Launch fast with QR menu and WhatsApp handoff flow.",
@@ -216,6 +219,15 @@ export const messages = {
           cta: "Join waitlist"
         }
       }
+    },
+    pricing: {
+      // Pricing scaffold — amounts come from lib/pricing.js (owner-configurable)
+      priceTodo: "Price TBD",
+      period: {
+        monthly: "month",
+        yearly: "year",
+        oneTime: "one-time",
+      },
     },
     customerLayout: {
       fallbackTenantName: "Restaurant Menu",
@@ -270,6 +282,21 @@ export const messages = {
       passwordRequired: "Password is required",
       sessionExpired: "Your session expired — please sign in again to continue.",
       alwaysOn: "24/7"
+    },
+    staffPassword: {
+      title: "Change password",
+      kicker: "Security",
+      hint: "Use a strong password you don't use elsewhere.",
+      currentLabel: "Current password",
+      newLabel: "New password",
+      submitBtn: "Update password",
+      submitting: "Updating...",
+      successMsg: "Password updated successfully.",
+      errorCurrent: "Current password is incorrect.",
+      errorWeak: "Password is too weak. Choose a longer or more complex one.",
+      errorGeneric: "Could not update password. Please try again.",
+      currentRequired: "Current password is required.",
+      newRequired: "New password is required.",
     },
     unauthorized: {
       kicker: "Access control",
@@ -958,7 +985,8 @@ export const messages = {
       noFilterResults: "No tables match the current search or filter.",
       moreActions: "More actions",
       generateConfirm: "Generate {count} table(s) with prefix \"{prefix}\"?",
-      qrGenerateFailed: "QR code generation failed."
+      qrGenerateFailed: "QR code generation failed.",
+      printSingle: "Print this table",
     },
     staffChat: {
       title: "Staff chat",
@@ -2117,7 +2145,10 @@ export const messages = {
       priceTier3: "Price tier 3 - premium",
       tagsLabel: "Dietary & feature tags",
       tagsHint: "Select all that apply to your menu.",
-      loadFailed: "Could not load profile settings — please refresh."
+      loadFailed: "Could not load profile settings — please refresh.",
+      priceZeroWarningTitle: "Some dishes have a price of 0",
+      priceZeroWarningBody: "The following published dish(es) have no price set. Customers will be able to add them to their cart for free. Update prices before going live.",
+      priceZeroDismiss: "Dismiss",
     },
     closureDates: {
       addDate: "Add a closure date",
@@ -2211,6 +2242,7 @@ export const messages = {
       savedToast: "Categories saved",
       saveFailed: "Category save failed",
       removeConfirm: "Remove \"{name}\"? Dishes in this category will also be removed.",
+      removeConfirmDishCount: "This will also delete {count} dish(es) in this category.",
       pauseToggle: "Pause",
       resumeToggle: "Resume",
       pausedBadge: "Paused",
@@ -2391,6 +2423,16 @@ export const messages = {
       attrBrand: "Brand",
       attrUnit: "Pack size / unit",
       attrUnitPlaceholder: "e.g. 500 g, 1 L, x6",
+      csvImportBtn: "Import from CSV",
+      csvImportTitle: "Import dishes from CSV",
+      csvImportHint: "Upload a CSV file with columns: name, price, category, description (optional).",
+      csvImportSample: "Download sample CSV",
+      csvImportUploadLabel: "Choose CSV file",
+      csvImportSubmit: "Import",
+      csvImporting: "Importing...",
+      csvImportSuccess: "Imported {count} dish(es) successfully.",
+      csvImportError: "Import failed. Check the file format and try again.",
+      csvImportFormatHint: "Accepted: .csv — max 500 rows. First row must be the header.",
     },
     combos: {
       badge: "Combo",
@@ -2695,6 +2737,7 @@ export const messages = {
       promoFreeDeliveryRemoved: "Free delivery promo removed (pickup only).",
       reorderPriceNote: "Prices updated to today's menu.",
       staleOptions: "The menu changed — please review your cart and try again.",
+      genericCheckoutError: "Something went wrong. Please try again or contact the restaurant.",
     },
     dishPage: {
       loadingDish: "Loading dish...",
@@ -3889,6 +3932,10 @@ export const messages = {
       confirmAllPartial: "{ok} of {total} confirmed — {failed} could not be updated.",
       confirmAllFailed: "None of the pending orders could be confirmed.",
       noOrdersYet: "No orders yet — they'll appear here when customers start ordering.",
+      noOrdersYetShareHint: "Share your menu link to get your first order:",
+      noOrdersYetShareBtn: "Share menu link",
+      noOrdersYetQrBtn: "Show QR code",
+      noOrdersYetStorefrontBtn: "View storefront",
       clearFilters: "Clear filters",
       cancelConfirmTitle: "Cancel this order?",
       cancelConfirmBody: "The customer will not be automatically notified. Make sure to inform them separately if needed.",
@@ -4919,6 +4966,7 @@ export const messages = {
       dismiss: "Fermer",
       dismissAriaLabel: "Fermer le message de confirmation",
       recommended: "Recommande",
+      liveDemoAriaLabel: "Demo en direct : {domain}",
       verticalsKicker: "L'application Kepoli",
       verticalsTitle: "Une seule app pour toute votre journée",
       verticalsSubtitle: "Commandez à manger, faites vos courses et réservez une course — un seul portefeuille, un seul compte.",
@@ -4969,6 +5017,8 @@ export const messages = {
       submitLead: "Envoyer un lead",
       talkSupport: "Contacter le support",
       plans: {
+        planAvailable: "Disponible",
+        planRecommended: "Populaire",
         basic: {
           name: "Basic",
           description: "Lancez rapidement avec menu QR et transfert WhatsApp.",
@@ -4994,6 +5044,14 @@ export const messages = {
           cta: "Rejoindre la liste"
         }
       }
+    },
+    pricing: {
+      priceTodo: "Prix a definir",
+      period: {
+        monthly: "mois",
+        yearly: "an",
+        oneTime: "paiement unique",
+      },
     },
     customerLayout: {
       fallbackTenantName: "Menu restaurant",
@@ -5048,6 +5106,21 @@ export const messages = {
       passwordRequired: "Mot de passe requis",
       sessionExpired: "Votre session a expire — veuillez vous reconnecter pour continuer.",
       alwaysOn: "24/7"
+    },
+    staffPassword: {
+      title: "Changer le mot de passe",
+      kicker: "Securite",
+      hint: "Utilisez un mot de passe fort que vous n utilisez pas ailleurs.",
+      currentLabel: "Mot de passe actuel",
+      newLabel: "Nouveau mot de passe",
+      submitBtn: "Mettre a jour",
+      submitting: "Mise a jour...",
+      successMsg: "Mot de passe mis a jour avec succes.",
+      errorCurrent: "Le mot de passe actuel est incorrect.",
+      errorWeak: "Le mot de passe est trop faible. Choisissez-en un plus long ou plus complexe.",
+      errorGeneric: "Impossible de mettre a jour le mot de passe. Veuillez reessayer.",
+      currentRequired: "Le mot de passe actuel est requis.",
+      newRequired: "Le nouveau mot de passe est requis.",
     },
     unauthorized: {
       kicker: "Controle d acces",
@@ -5736,7 +5809,8 @@ export const messages = {
       noFilterResults: "Aucune table ne correspond a la recherche ou au filtre actuel.",
       moreActions: "Plus d actions",
       generateConfirm: "Generer {count} table(s) avec le prefixe \"{prefix}\" ?",
-      qrGenerateFailed: "Echec de la generation du QR code."
+      qrGenerateFailed: "Echec de la generation du QR code.",
+      printSingle: "Imprimer cette table",
     },
     staffChat: {
       title: "Messagerie equipe",
@@ -6895,7 +6969,10 @@ export const messages = {
       priceTier3: "Niveau de prix 3 - premium",
       tagsLabel: "Tags alimentaires et caracteristiques",
       tagsHint: "Selectionnez tout ce qui s'applique a votre menu.",
-      loadFailed: "Impossible de charger les parametres du profil — veuillez actualiser."
+      loadFailed: "Impossible de charger les parametres du profil — veuillez actualiser.",
+      priceZeroWarningTitle: "Certains plats ont un prix de 0",
+      priceZeroWarningBody: "Le(s) plat(s) publie(s) suivant(s) n'ont pas de prix defini. Les clients pourront les ajouter gratuitement au panier. Mettez a jour les prix avant de mettre en ligne.",
+      priceZeroDismiss: "Ignorer",
     },
     closureDates: {
       addDate: "Ajouter une date de fermeture",
@@ -6957,6 +7034,7 @@ export const messages = {
       savedToast: "Categories enregistrees",
       saveFailed: "Echec de l'enregistrement des categories",
       removeConfirm: "Supprimer \"{name}\" ? Les plats de cette categorie seront egalement supprimes.",
+      removeConfirmDishCount: "Cela supprimera egalement {count} plat(s) dans cette categorie.",
       pauseToggle: "Mettre en pause",
       resumeToggle: "Reprendre",
       pausedBadge: "En pause",
@@ -7137,6 +7215,16 @@ export const messages = {
       attrBrand: "Marque",
       attrUnit: "Conditionnement / unité",
       attrUnitPlaceholder: "ex. 500 g, 1 L, x6",
+      csvImportBtn: "Importer depuis un CSV",
+      csvImportTitle: "Importer des plats depuis un CSV",
+      csvImportHint: "Deposez un fichier CSV avec les colonnes : nom, prix, categorie, description (facultatif).",
+      csvImportSample: "Telecharger un exemple CSV",
+      csvImportUploadLabel: "Choisir un fichier CSV",
+      csvImportSubmit: "Importer",
+      csvImporting: "Importation...",
+      csvImportSuccess: "{count} plat(s) importe(s) avec succes.",
+      csvImportError: "Echec de l'importation. Verifiez le format et reessayez.",
+      csvImportFormatHint: "Accepte : .csv — max 500 lignes. La premiere ligne doit etre l'en-tete.",
     },
     combos: {
       badge: "Combo",
@@ -7441,6 +7529,7 @@ export const messages = {
       promoFreeDeliveryRemoved: "Code livraison gratuite retiré (valable uniquement en livraison).",
       reorderPriceNote: "Prix mis a jour selon le menu du jour.",
       staleOptions: "Le menu a change — verifiez votre panier et reessayez.",
+      genericCheckoutError: "Une erreur est survenue. Reessayez ou contactez le restaurant.",
     },
     dishPage: {
       loadingDish: "Chargement du plat...",
@@ -8683,6 +8772,10 @@ export const messages = {
       confirmAllPartial: "{ok} sur {total} confirmees — {failed} n'ont pas pu etre mises a jour.",
       confirmAllFailed: "Aucune commande en attente n'a pu etre confirmee.",
       noOrdersYet: "Aucune commande pour l'instant — elles apparaitront ici quand les clients commenceront a commander.",
+      noOrdersYetShareHint: "Partagez le lien de votre menu pour obtenir votre premiere commande :",
+      noOrdersYetShareBtn: "Partager le lien du menu",
+      noOrdersYetQrBtn: "Afficher le QR code",
+      noOrdersYetStorefrontBtn: "Voir la vitrine",
       clearFilters: "Effacer les filtres",
       cancelConfirmTitle: "Annuler cette commande ?",
       cancelConfirmBody: "Le client ne sera pas notifie automatiquement. Pensez a le prevenir si necessaire.",

@@ -694,7 +694,7 @@ const cart = useCartStore();
 const customerStore = useCustomerStore();
 const orderStore = useOrderStore();
 const toast = useToastStore();
-const { t, formatPrice, currentLocale } = useI18n();
+const { t, formatPrice, formatDateTime, currentLocale } = useI18n();
 
 const showAuthModal = ref(false);
 
@@ -941,15 +941,11 @@ const statusLabel = (s) => ({
 
 const formatScheduledFor = (iso) => {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
   try {
-    return d.toLocaleString(undefined, {
-      weekday: "short", day: "numeric", month: "short",
-      hour: "2-digit", minute: "2-digit",
-    });
+    return formatDateTime(iso, { weekday: "short", dateStyle: undefined, timeStyle: undefined, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch {
-    return d.toLocaleString();
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   }
 };
 

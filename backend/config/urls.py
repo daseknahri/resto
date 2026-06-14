@@ -11,6 +11,7 @@ from accounts.views import (
     OwnerFlashSaleOptInView,
     OwnerStaffDeleteView,
     OwnerStaffListCreateView,
+    StaffChangePasswordView,
     RepairTenantLinkView,
 )
 from config.shared_api_urls import shared_api_urlpatterns
@@ -163,6 +164,7 @@ urlpatterns = [
     path("api/staff/orders/<int:order_id>/payments/<int:payment_id>/correct-method/", StaffPaymentMethodCorrectionView.as_view(), name="staff-payment-correct-method"),
     path("api/staff/tables/", StaffTableListView.as_view(), name="staff-tables"),
     path("api/staff/shift-summary/", StaffShiftSummaryView.as_view(), name="staff-shift-summary"),
+    path("api/staff/change-password/", StaffChangePasswordView.as_view(), name="staff-change-password"),
     path("api/owner/z-report/", OwnerZReportView.as_view(), name="owner-z-report"),
     path("api/owner/z-report.csv", OwnerZReportView.as_view(), name="owner-z-report-csv"),
     path("api/owner/orders/", OwnerOrderListView.as_view(), name="owner-orders"),

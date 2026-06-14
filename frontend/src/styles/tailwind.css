@@ -2855,3 +2855,52 @@ html[data-owner-theme="light"] .border-sky-900\/40 {
   opacity: 0;
 }
 
+/* ===========================================================================
+   Print: analytics / revenue panels (dark theme → readable on paper)
+   Scoped to .ui-command-deck so thermal/Z-report print styles (which have
+   their own @media print blocks) are unaffected.
+   =========================================================================== */
+@media print {
+  /* Reset page background */
+  body {
+    background: #fff !important;
+    background-image: none !important;
+    color: #111 !important;
+  }
+
+  /* Analytics panel containers */
+  .ui-command-deck,
+  .ui-panel {
+    background: #fff !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+    color: #111 !important;
+  }
+
+  /* Text colour overrides for dark slate utilities */
+  .ui-command-deck *,
+  .ui-panel * {
+    color: inherit !important;
+    border-color: #ddd !important;
+  }
+
+  /* Keep chart bars legible: map the amber/teal brand colours */
+  .ui-command-deck [style*="--color-secondary"],
+  .ui-panel [style*="--color-secondary"] {
+    background-color: #b45309 !important; /* amber-700 — visible on white */
+  }
+
+  /* Hide interactive controls that are pointless on paper */
+  .ui-command-deck .ui-segmented,
+  .ui-command-deck button,
+  .ui-panel .ui-segmented,
+  .ui-panel button {
+    display: none !important;
+  }
+
+  /* Page break hints */
+  .ui-command-deck {
+    break-inside: avoid;
+  }
+}
+

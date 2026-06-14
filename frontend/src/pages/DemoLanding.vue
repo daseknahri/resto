@@ -19,10 +19,10 @@
         </p>
         <div
           class="mx-auto flex w-fit items-center gap-2 rounded-full border border-slate-700/80 bg-slate-950/55 px-3 py-1.5 text-xs text-slate-300"
-          aria-label="Live demo: doro.menu.ibnbatoutaweb.com"
+          :aria-label="t('home.liveDemoAriaLabel', { domain: brandDomain })"
         >
           <span class="ui-live-dot bg-emerald-400" aria-hidden="true"></span>
-          <span>doro.menu.ibnbatoutaweb.com</span>
+          <span>{{ brandDomain }}</span>
         </div>
         <div class="flex flex-wrap items-center justify-center gap-2">
           <a
@@ -111,7 +111,9 @@
 <script setup>
 import AppIcon from "../components/AppIcon.vue";
 import { useI18n } from "../composables/useI18n";
+import { BRAND_DOMAIN, DEMO_MENU_URL } from "../lib/brand";
 
 const { t } = useI18n();
-const demoMenuUrl = import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu";
+const brandDomain = BRAND_DOMAIN;
+const demoMenuUrl = DEMO_MENU_URL;
 </script>

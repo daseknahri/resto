@@ -690,6 +690,10 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
     dishes = DishSerializer(many=True, read_only=True)
     super_category_slug = serializers.CharField(source="super_category.slug", read_only=True)
     super_category_name = serializers.SerializerMethodField()
+    # dish_count is derived from the already-prefetched `dishes` relation so it
+    # never issues an extra query.  The SPA uses it to show how many dishes will
+    # be cascade-deleted when a category is removed.
+    dish_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -708,6 +712,7 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
             "is_published",
             "is_temporarily_disabled",
             "course",
+            "dish_count",
             "dishes",
         ]
 
@@ -745,6 +750,19 @@ class CategorySerializer(LocalizedContentMixin, serializers.ModelSerializer):
         if super_category is None:
             return ""
         return self._localized_text(super_category.name, super_category.name_i18n)
+
+    def get_dish_count(self, instance):
+        """Return the number of dishes in this category.
+
+        Uses the prefetched `dishes` queryset when available (no extra DB hit);
+        falls back to a direct count otherwise.  The SPA displays this count in
+        the delete-confirmation dialog so the owner knows how many dishes will be
+        cascade-deleted alongside the category.
+        """
+        dishes_prefetch = getattr(instance, "_prefetched_objects_cache", {}).get("dishes")
+        if dishes_prefetch is not None:
+            return len(dishes_prefetch)
+        return instance.dishes.count()
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

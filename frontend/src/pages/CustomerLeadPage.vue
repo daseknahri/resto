@@ -352,6 +352,7 @@ import { useCustomerStore } from "../stores/customer";
 import { useToastStore } from "../stores/toast";
 import { isPublicDemoHost } from "../lib/runtimeHost";
 import { useTenantStore } from "../stores/tenant";
+import { DEMO_MENU_URL } from "../lib/brand";
 
 const tenant = useTenantStore();
 const lead = useLeadStore();
@@ -395,7 +396,7 @@ watch(showLeadModal, async (open) => {
   }
 });
 const showPlatformDemo = computed(() => isPublicDemoHost());
-const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || "https://doro.menu.ibnbatoutaweb.com/menu");
+const demoMenuUrl = computed(() => import.meta.env.VITE_PUBLIC_DEMO_URL || DEMO_MENU_URL);
 
 const form = reactive({ name: "", phone: "", email: "", note: "", hp: "" });
 const errors = reactive({ name: "", phone: "", email: "" });

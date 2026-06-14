@@ -51,8 +51,9 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "../composables/useI18n";
+import { SUPPORT_EMAIL } from "../lib/brand";
 
 const { t } = useI18n();
-const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || "contact@ibnbatoutaweb.com";
+const supportEmail = import.meta.env.VITE_CONTACT_EMAIL || SUPPORT_EMAIL;
 const sections = computed(() => [t("privacyPolicy.p1"), t("privacyPolicy.p2"), t("privacyPolicy.p3")]);
 </script>

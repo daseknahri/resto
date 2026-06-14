@@ -321,7 +321,7 @@ import PeriodBadge from "./PeriodBadge.vue";
 import { useI18n } from "../composables/useI18n";
 import { useTenantStore } from "../stores/tenant";
 
-const { t, formatNumber, currentLocale } = useI18n();
+const { t, formatCurrency, currentLocale } = useI18n();
 const tenant = useTenantStore();
 
 const props = defineProps({
@@ -339,11 +339,12 @@ const props = defineProps({
 const fmt = (amount) => {
   const n = Number(amount) || 0;
   if (n === 0) return "—";
-  const currency = props.data?.currency || tenant.meta?.profile?.currency || null;
+  const currency = props.data?.currency || tenant.meta?.profile?.currency || "MAD";
   try {
-    if (currency) return formatNumber(n, { style: "currency", currency });
-  } catch { /* unsupported */ }
-  return n.toFixed(2);
+    return formatCurrency(n, currency);
+  } catch {
+    return `${n.toFixed(2)} ${currency}`;
+  }
 };
 
 // ── Charts ────────────────────────────────────────────────────────────────────
