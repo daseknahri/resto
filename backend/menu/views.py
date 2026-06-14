@@ -5970,7 +5970,17 @@ class OwnerPromotionDetailView(APIView):
 
 def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
     """Credit the customer's wallet when a wallet-paid order is cancelled.
-    Idempotent — checks for an existing refund transaction before writing.
+
+    Routes through ``wallet_service.credit_wallet`` so the refund shares the platform's
+    single, locked, idempotent money path: credit_wallet locks the customer row, writes
+    a balance_after snapshot, and replays safely on retry. The idempotency key is
+    SCHEMA-NAMESPACED — f"cancelrefund:{schema}:{order.id}" — because WalletTransaction
+    lives in the shared public schema where idempotency_key is a GLOBAL namespace. The
+    old guard filtered on (customer_id, type=REFUND, reference=order_number, note), but
+    order_number is only schema-unique, so a cross-tenant customer with a colliding
+    order_number could have a legitimate tenant-B refund SILENTLY SKIPPED by matching a
+    tenant-A row. order.id is the tenant-schema PK; the schema prefix makes the key
+    globally unique.
 
     tenant_id: the integer PK of the tenant that owns this order.  Pass it so the
     WalletTransaction row can be filtered per-tenant in refund reports (WalletTransaction
@@ -5979,8 +5989,11 @@ def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
     local ``tenant.id`` variable — both cancel entry-points have a tenant reference.
     """
     from decimal import Decimal as _Dec
-    from django.db import transaction as _dbtx
-    from accounts.models import Customer as _CustM, WalletTransaction as _WTM
+    from django.db import connection as _conn
+    from accounts.models import WalletTransaction as _WTM
+    # Local import: wallet_service imports accounts models, so importing it at module
+    # level here risks an import cycle through menu.views — import inside the function.
+    from accounts.wallet_service import credit_wallet as _credit_wallet
 
     if not order.customer_id:
         return
@@ -5988,39 +6001,24 @@ def _refund_wallet_for_cancelled_order(order, tenant_id=None) -> None:
     if refund_amount <= _Dec("0"):
         return
 
-    def _already_refunded():
-        # Scope to the cancel-refund note so void-item REFUND rows (which share
-        # the same type + reference) don't falsely short-circuit the cancel refund.
-        return _WTM.objects.filter(
-            customer_id=order.customer_id,
-            type=_WTM.Type.REFUND,
-            reference=order.order_number,
-            note="Refund for cancelled order",
-        ).exists()
-
-    # Fast path: skip locking when a refund already exists (the common replay case).
-    if _already_refunded():
-        return
-    with _dbtx.atomic():
-        _cust = _CustM.objects.select_for_update().get(pk=order.customer_id)
-        # Authoritative re-check UNDER the customer-row lock. The status-update view
-        # does not serialize cancellations, so two concurrent cancels can both pass
-        # the fast-path check above; the lock + this re-check prevents a double refund.
-        if _already_refunded():
-            return
-        _cust.wallet_balance = _cust.wallet_balance + refund_amount
-        _cust.save(update_fields=["wallet_balance", "updated_at"])
-        _WTM.objects.create(
-            customer=_cust,
-            type=_WTM.Type.REFUND,
-            amount=refund_amount,
-            reference=order.order_number,
-            note="Refund for cancelled order",
-            balance_after=_cust.wallet_balance,
-            # tenant_id tags this REFUND row to the owning tenant so that refund
-            # aggregate queries in the Z-report and dashboard can filter per-tenant.
-            tenant_id=tenant_id,
-        )
+    # Schema-namespaced, globally-unique idempotency key. credit_wallet locks the
+    # customer row, writes balance_after, and replays safely — replacing the manual
+    # balance write + the order_number-based _already_refunded() guard.
+    _credit_wallet(
+        order.customer_id,
+        refund_amount,
+        tx_type=_WTM.Type.REFUND,
+        idempotency_key=f"cancelrefund:{_conn.schema_name}:{order.id}",
+        reference=order.order_number,
+        note="Refund for cancelled order",
+        # tenant_id tags this REFUND row to the owning tenant so that refund
+        # aggregate queries in the Z-report and dashboard can filter per-tenant.
+        tenant_id=tenant_id,
+        # A refund is system-originated (like driver earnings): the refunded customer
+        # paid with their wallet so they're already phone-verified, but skip the check
+        # so an edge case can never refuse a refund the platform owes.
+        require_verified=False,
+    )
 
 
 def _reverse_loyalty_for_cancelled_order(order) -> None:

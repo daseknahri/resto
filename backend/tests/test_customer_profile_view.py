@@ -275,16 +275,15 @@ class CustomerEmailRequestViewTests(SimpleTestCase):
         resp = self._post({"email": "a" * 250 + "@x.com"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    @patch("accounts.messaging.send_otp_email")
     @patch("accounts.views.cache")
-    @patch("accounts.views.send_otp_email" if False else "accounts.messaging.send_otp_email")
-    def test_valid_email_stores_otp_and_returns_ok(self, mock_send, mock_cache):
-        with patch("accounts.views.cache") as mock_c:
-            with patch("accounts.views.send_otp_email", create=True) as mock_s:
-                # Import and patch the actual send_otp_email used by the view
-                import accounts.messaging as _msg
-                with patch.object(_msg, "send_otp_email") as mock_send_real:
-                    with patch("accounts.views.cache") as mock_cache_real:
-                        resp = self._post({"email": "user@example.com"})
+    def test_valid_email_stores_otp_and_returns_ok(self, mock_cache, mock_send_real):
+        # Compatibility with the per-recipient OTP guard: a real Django cache
+        # returns None on a miss → (None or 0) >= cap is False and cache.add
+        # arms the cooldown. Mirror that here so the guard allows the send.
+        mock_cache.get.return_value = None       # no prior sends counted
+        mock_cache.add.return_value = True       # cooldown free → send allowed
+        resp = self._post({"email": "user@example.com"})
         # Should return 200 OK with ok=True
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data.get("ok"))

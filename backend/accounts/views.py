@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import math
-import random
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -448,6 +448,67 @@ _OTP_CACHE_KEY = "customer_otp:{phone}"
 _OTP_TTL = 300  # 5 minutes
 _OTP_MAX_ATTEMPTS = 5
 
+# OPS-5h: per-recipient SMS/email toll-fraud guards, independent of the IP throttle.
+# A re-request resets the verify attempt counter to 0, so an IP-only throttle leaves a
+# single victim phone/email open to a paid-message flood. These cap sends per *recipient*.
+_OTP_RESEND_COOLDOWN = 60      # seconds — refuse a re-send within this window
+_OTP_RECIPIENT_MAX_PER_HOUR = 5  # hard cap on sends to one recipient per hour
+_OTP_RECIPIENT_WINDOW = 3600   # seconds — the per-recipient cap window
+
+
+def _otp_recipient_guard(recipient: str):
+    """Toll-fraud guard for a single OTP recipient (normalized phone / lowercased email).
+
+    Returns a 429 ``Response`` if the recipient is within the resend cooldown or over the
+    hourly cap, in which case the caller MUST NOT send and MUST NOT touch the verify-attempt
+    counter. Returns ``None`` when a send is allowed; the caller then calls
+    :func:`_otp_recipient_mark_sent` after a successful send.
+
+    Independent of the IP-keyed DRF throttle: the throttle limits one *source*, this limits
+    one *target*. ``cache.add`` is atomic set-if-absent — it both tests the cooldown and
+    arms it in one hop, so two concurrent requests can't both pass.
+    """
+    cooldown_key = f"otp_cooldown:{recipient}"
+    count_key = f"otp_count:{recipient}"
+    if (cache.get(count_key) or 0) >= _OTP_RECIPIENT_MAX_PER_HOUR:
+        return Response(
+            {"detail": "Too many codes requested for this recipient. Please try again later.",
+             "code": "otp_rate_limited"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+    # cache.add returns False when the key already exists → still inside the cooldown.
+    if not cache.add(cooldown_key, "1", _OTP_RESEND_COOLDOWN):
+        return Response(
+            {"detail": "A code was just sent — please wait a moment before requesting another.",
+             "code": "otp_cooldown"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+    return None
+
+
+def _otp_recipient_mark_sent(recipient: str) -> None:
+    """Record a successful send for the per-recipient hourly cap. Best-effort."""
+    count_key = f"otp_count:{recipient}"
+    try:
+        cache.set(count_key, (cache.get(count_key) or 0) + 1, _OTP_RECIPIENT_WINDOW)
+    except Exception:  # noqa: BLE001 - cap accounting must never break a legit send
+        pass
+
+
+def _rotate_customer_session(request) -> None:
+    """Issue a fresh session key right before a customer login finalizes.
+
+    OPS-5h session fixation: staff ``login()`` rotates the session id for us, but the
+    customer-login finalizers write ``customer_id`` straight into the existing session.
+    With SESSION_COOKIE_DOMAIN shared across all tenant subdomains, a pre-auth / planted
+    session id would otherwise survive the privilege jump. ``cycle_key()`` preserves
+    session data but reissues the key, so an attacker-known id is invalidated. Guarded so
+    it's a no-op when there is no session object.
+    """
+    session = getattr(request, "session", None)
+    if session is not None:
+        session.cycle_key()
+
 
 # ── Customer session ──────────────────────────────────────────────────────────
 
@@ -496,10 +557,18 @@ class CustomerPhoneRequestView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        code = f"{random.randint(100000, 999999)}"
+        # OPS-5h: per-recipient toll-fraud guard (cooldown + hourly cap), independent of
+        # the IP throttle. Refuse BEFORE generating/storing a code so a cooled-down or
+        # over-cap re-request can't reset the verify attempt counter to 0.
+        guard = _otp_recipient_guard(phone)
+        if guard is not None:
+            return guard
+
+        code = f"{secrets.randbelow(900000) + 100000}"
         cache_key = _OTP_CACHE_KEY.format(phone=phone)
         cache.set(cache_key, {"code": code, "attempts": 0, "expires_at": time.time() + _OTP_TTL}, timeout=_OTP_TTL)
         _send_otp(phone, code)
+        _otp_recipient_mark_sent(phone)
 
         resp = {"ok": True, "detail": "OTP sent. Check your phone."}
         # In DEBUG, include the code in the response so developers can test without SMS
@@ -591,6 +660,8 @@ class CustomerPhoneVerifyView(APIView):
         if not created:
             customer.save(update_fields=update_fields)
 
+        # OPS-5h: rotate the session id before the privilege jump (session fixation).
+        _rotate_customer_session(request)
         request.session["customer_id"] = customer.pk
         return Response({"customer": _serialize_customer(customer)})
 
@@ -654,6 +725,8 @@ class CustomerGoogleAuthView(APIView):
                     name=name,
                 )
 
+        # OPS-5h: rotate the session id before the privilege jump (session fixation).
+        _rotate_customer_session(request)
         request.session["customer_id"] = customer.pk
         return Response({"customer": _serialize_customer(customer)})
 
@@ -875,10 +948,18 @@ class CustomerEmailRequestView(APIView):
         if len(email) > 254:
             return Response({"detail": "Email too long."}, status=status.HTTP_400_BAD_REQUEST)
 
-        code = f"{random.randint(100000, 999999)}"
+        # OPS-5h: per-recipient toll-fraud guard (cooldown + hourly cap), independent of
+        # the IP throttle. Refuse BEFORE generating/storing a code so a cooled-down or
+        # over-cap re-request can't reset the verify attempt counter to 0.
+        guard = _otp_recipient_guard(email)
+        if guard is not None:
+            return guard
+
+        code = f"{secrets.randbelow(900000) + 100000}"
         cache_key = f"customer_email_otp:{email}"
         cache.set(cache_key, {"code": code, "attempts": 0, "expires_at": time.time() + _OTP_TTL}, timeout=_OTP_TTL)
         send_otp_email(email, code)
+        _otp_recipient_mark_sent(email)
 
         resp = {"ok": True, "detail": "OTP sent. Check your email."}
         if getattr(settings, "DEBUG", False):
@@ -930,6 +1011,8 @@ class CustomerEmailVerifyView(APIView):
                 update_fields.append("name")
             customer.save(update_fields=update_fields)
 
+        # OPS-5h: rotate the session id before the privilege jump (session fixation).
+        _rotate_customer_session(request)
         request.session["customer_id"] = customer.pk
         return Response({"customer": _serialize_customer(customer)})
 

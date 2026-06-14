@@ -3,7 +3,10 @@ Unit tests for three helpers that mix pure logic with DB calls:
 
   menu/views._refund_wallet_for_cancelled_order(order)
     Credits the customer's wallet when a wallet-paid order is cancelled.
-    Idempotent — checks for an existing REFUND transaction first.
+    Routes through wallet_service.credit_wallet with a SCHEMA-NAMESPACED idempotency
+    key (f"cancelrefund:{schema}:{order.id}"); credit_wallet owns the lock + the
+    idempotent replay (OPS-5h: the old manual balance write + order_number-based
+    _already_refunded guard could silently skip a cross-tenant refund).
 
   sales/views._log_reservation_timeline_event(...)
     Creates a ReservationTimelineEvent record; resolves actor_id from the
@@ -31,11 +34,13 @@ from accounts.views import _resolve_customer_from_request
 
 def _order(
     *,
+    order_id=10,
     order_number="ORD-001",
     customer_id=42,
     wallet_amount_paid="10.00",
 ):
     return SimpleNamespace(
+        id=order_id,
         order_number=order_number,
         customer_id=customer_id,
         wallet_amount_paid=wallet_amount_paid,
@@ -43,135 +48,89 @@ def _order(
 
 
 class RefundWalletTests(SimpleTestCase):
-    """_refund_wallet_for_cancelled_order: credits wallet; idempotent."""
+    """_refund_wallet_for_cancelled_order: delegates to credit_wallet (locked + idempotent)."""
 
-    # ── early exits ──────────────────────────────────────────────────────────
+    # ── early exits (no money path touched at all) ─────────────────────────────
     def test_no_customer_id_returns_immediately(self):
-        """No DB access when customer_id is None."""
+        """No credit_wallet call when customer_id is None."""
         order = _order(customer_id=None)
-        with patch("accounts.models.WalletTransaction") as mock_wtm:
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
             _refund_wallet_for_cancelled_order(order)
-        mock_wtm.objects.filter.assert_not_called()
+        mock_cw.assert_not_called()
 
     def test_zero_customer_id_returns_immediately(self):
         """customer_id=0 is falsy → early return."""
         order = _order(customer_id=0)
-        with patch("accounts.models.WalletTransaction") as mock_wtm:
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
             _refund_wallet_for_cancelled_order(order)
-        mock_wtm.objects.filter.assert_not_called()
+        mock_cw.assert_not_called()
 
     def test_zero_wallet_amount_returns_immediately(self):
         order = _order(wallet_amount_paid="0.00")
-        with patch("accounts.models.WalletTransaction") as mock_wtm:
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
             _refund_wallet_for_cancelled_order(order)
-        mock_wtm.objects.filter.assert_not_called()
+        mock_cw.assert_not_called()
 
     def test_none_wallet_amount_returns_immediately(self):
         """None is treated as '0' via Decimal(str(None or '0')) → 0 → early return."""
         order = _order(wallet_amount_paid=None)
-        with patch("accounts.models.WalletTransaction") as mock_wtm:
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
             _refund_wallet_for_cancelled_order(order)
-        mock_wtm.objects.filter.assert_not_called()
+        mock_cw.assert_not_called()
 
     def test_negative_wallet_amount_returns_immediately(self):
         order = _order(wallet_amount_paid="-5.00")
-        with patch("accounts.models.WalletTransaction") as mock_wtm:
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
             _refund_wallet_for_cancelled_order(order)
-        mock_wtm.objects.filter.assert_not_called()
+        mock_cw.assert_not_called()
 
-    # ── idempotency guard ────────────────────────────────────────────────────
-    def test_existing_refund_skips_create(self):
-        """A prior REFUND transaction → nothing written."""
-        order = _order()
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer") as mock_cust, \
-             patch("django.db.transaction.atomic"):
-            mock_wtm.objects.filter.return_value.exists.return_value = True
-            _refund_wallet_for_cancelled_order(order)
-        mock_cust.objects.select_for_update.assert_not_called()
-        mock_wtm.objects.create.assert_not_called()
-
-    def test_concurrent_refund_caught_under_lock(self):
-        """The fast-path check misses (False) but the under-lock re-check (True) must
-        prevent a second refund — closing the double-cancel race."""
-        order = _order(customer_id=5, wallet_amount_paid="10.00")
-        mock_customer = SimpleNamespace(wallet_balance=Decimal("0.00"), updated_at=None)
-        mock_customer.save = MagicMock()
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer") as mock_cust, \
-             patch("django.db.transaction.atomic"):
-            # First .exists() (fast path) → False; second (under lock) → True.
-            mock_wtm.objects.filter.return_value.exists.side_effect = [False, True]
-            mock_cust.objects.select_for_update.return_value.get.return_value = mock_customer
-            _refund_wallet_for_cancelled_order(order)
-        # The lock was acquired (fast path missed) but nothing was written.
-        mock_cust.objects.select_for_update.return_value.get.assert_called_once_with(pk=5)
-        mock_wtm.objects.create.assert_not_called()
-        mock_customer.save.assert_not_called()
-
-    def test_idempotency_filter_uses_customer_id_type_and_reference(self):
-        """Filter kwargs: customer_id, type=REFUND, reference=order_number."""
-        order = _order(order_number="ORD-IDEM", customer_id=7)
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer"), \
-             patch("django.db.transaction.atomic"):
-            mock_wtm.objects.filter.return_value.exists.return_value = True
-            _refund_wallet_for_cancelled_order(order)
-        kw = mock_wtm.objects.filter.call_args[1]
-        self.assertEqual(kw["customer_id"], 7)
-        self.assertEqual(kw["reference"], "ORD-IDEM")
-        self.assertEqual(kw["type"], mock_wtm.Type.REFUND)
-
-    # ── successful refund ────────────────────────────────────────────────────
-    def test_new_refund_increments_customer_balance(self):
-        """Balance is updated by the refund amount."""
+    # ── delegates to the locked, idempotent money path ─────────────────────────
+    def test_routes_through_credit_wallet_not_direct_balance_write(self):
+        """The refund goes through credit_wallet; it never touches Customer directly."""
         order = _order(customer_id=5, wallet_amount_paid="15.50")
-        mock_customer = SimpleNamespace(wallet_balance=Decimal("50.00"), updated_at=None)
-        mock_customer.save = MagicMock()
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw, \
+             patch("accounts.models.Customer") as mock_cust:
+            _refund_wallet_for_cancelled_order(order, tenant_id=3)
+        mock_cw.assert_called_once()
+        # No direct balance mutation: the view never locks/loads Customer itself anymore.
+        mock_cust.objects.select_for_update.assert_not_called()
+        mock_cust.objects.get.assert_not_called()
 
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer") as mock_cust, \
-             patch("django.db.transaction.atomic"):
-            mock_wtm.objects.filter.return_value.exists.return_value = False
-            mock_cust.objects.select_for_update.return_value.get.return_value = mock_customer
-            _refund_wallet_for_cancelled_order(order)
+    def test_idempotency_key_is_schema_namespaced_on_order_id(self):
+        """Key = f"cancelrefund:{schema}:{order.id}" — order.id (tenant-schema PK) + the
+        schema prefix make it globally unique, so a cross-tenant order_number collision
+        can't silently skip a legit refund."""
+        from django.db import connection
+        order = _order(order_id=77, order_number="ORD-IDEM", customer_id=7)
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            _refund_wallet_for_cancelled_order(order, tenant_id=3)
+        key = mock_cw.call_args.kwargs["idempotency_key"]
+        self.assertEqual(key, f"cancelrefund:{connection.schema_name}:77")
+        self.assertIn(connection.schema_name, key)
 
-        self.assertEqual(mock_customer.wallet_balance, Decimal("65.50"))
-        mock_customer.save.assert_called_once()
-
-    def test_new_refund_creates_wallet_transaction(self):
-        """A REFUND WalletTransaction is created with correct fields."""
-        order = _order(order_number="ORD-XYZ", customer_id=5, wallet_amount_paid="20.00")
-        mock_customer = SimpleNamespace(wallet_balance=Decimal("0.00"), updated_at=None)
-        mock_customer.save = MagicMock()
-
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer") as mock_cust, \
-             patch("django.db.transaction.atomic"):
-            mock_wtm.objects.filter.return_value.exists.return_value = False
-            mock_cust.objects.select_for_update.return_value.get.return_value = mock_customer
-            _refund_wallet_for_cancelled_order(order)
-
-        mock_wtm.objects.create.assert_called_once()
-        kw = mock_wtm.objects.create.call_args[1]
-        self.assertEqual(kw["amount"], Decimal("20.00"))
+    def test_credit_wallet_called_with_refund_ledger_kwargs(self):
+        """type=REFUND, tenant_id, reference=order_number, note + require_verified=False are
+        all forwarded so the Z-report/refund queries and the ledger semantics survive."""
+        from accounts.models import WalletTransaction
+        order = _order(order_id=10, order_number="ORD-XYZ", customer_id=5,
+                       wallet_amount_paid="20.00")
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            _refund_wallet_for_cancelled_order(order, tenant_id=9)
+        args, kw = mock_cw.call_args
+        self.assertEqual(args[0], 5)                 # customer_id (positional)
+        self.assertEqual(args[1], Decimal("20.00"))  # amount (positional)
+        self.assertEqual(kw["tx_type"], WalletTransaction.Type.REFUND)
+        self.assertEqual(kw["tenant_id"], 9)         # tenant_id MUST be set for refund reports
         self.assertEqual(kw["reference"], "ORD-XYZ")
-        self.assertEqual(kw["type"], mock_wtm.Type.REFUND)
+        self.assertEqual(kw["note"], "Refund for cancelled order")
+        self.assertFalse(kw["require_verified"])     # system-originated refund
 
-    def test_new_refund_get_uses_customer_id(self):
-        """select_for_update().get() is called with the order's customer_id."""
+    def test_credit_wallet_uses_orders_customer_id(self):
+        """The credit targets the order's customer_id."""
         order = _order(customer_id=99)
-        mock_customer = SimpleNamespace(wallet_balance=Decimal("10.00"), updated_at=None)
-        mock_customer.save = MagicMock()
-
-        with patch("accounts.models.WalletTransaction") as mock_wtm, \
-             patch("accounts.models.Customer") as mock_cust, \
-             patch("django.db.transaction.atomic"):
-            mock_wtm.objects.filter.return_value.exists.return_value = False
-            mock_cust.objects.select_for_update.return_value.get.return_value = mock_customer
-            _refund_wallet_for_cancelled_order(order)
-
-        mock_cust.objects.select_for_update.return_value.get.assert_called_once_with(pk=99)
+        with patch("accounts.wallet_service.credit_wallet") as mock_cw:
+            _refund_wallet_for_cancelled_order(order, tenant_id=1)
+        self.assertEqual(mock_cw.call_args.args[0], 99)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

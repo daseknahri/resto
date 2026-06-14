@@ -152,7 +152,15 @@ Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; v
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5h — SECURITY (scout OPS-5g cluster; the FINAL security batch — core has converged)
+### OPS-5x SECURITY PROGRAM — COMPLETE (2026-06-14)
+OPS-5/5b/5c/5d/5e/5f/5g/5h shipped. The OPS-5h final convergence scout audited every money/auth/IDOR/
+tenant-isolation surface (incl. uncommitted changes) and found NO new exploitable issue — it verified
+the wallet idempotency-namespacing rule is applied consistently (schema-namespaced for menu/TENANT_APPS
+schema-local ids; bare-but-safe for accounts/SHARED_APPS globally-unique PKs), session rotation, OTP
+toll-fraud guard, CSPRNG, cash-out IDOR lockout, and log scrubbing. The money/IDOR fences have converged.
+Any FUTURE security finding starts a fresh batch; there is no pending security cluster.
+
+### OPS-5h — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5g scout EXPLICITLY confirmed the core money/IDOR/wallet-idempotency surface is clean after
 5c→5g (wallet_service locks + replay assertions; schema-namespaced order-pay/orderpay/voiditem;
 loyalty customer-scoped; voucher/loyalty throttled; cash-out lockout; push-sub scoped; WS ownership;
@@ -588,6 +596,23 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5h "final security batch" (verified by me, backend 3670/0, migrations clean) — CLOSES the
+      OPS-5x security program. (1) customer-login session fixation — all three finalizers
+      (_rotate_customer_session) cycle the session key before the anon→customer privilege jump (phone/
+      Google/email). (2) OTP SMS toll-fraud — _otp_recipient_guard adds a per-recipient cooldown +
+      hourly cap (cache-keyed on canonical phone/email), independent of the IP throttle, run BEFORE
+      code-gen so a cooled-down re-request can't reset the verify counter. (3) auth OTP now uses
+      secrets.randbelow (Mersenne-Twister purged from the money/auth paths). (4) the ONE missed
+      idempotency site — _refund_wallet_for_cancelled_order now routes through credit_wallet with a
+      schema-namespaced key cancelrefund:{schema}:{order.id}, type=REFUND, tenant_id set,
+      require_verified=False (replaces the direct balance write + order_number-based guard). (5)
+      RequestLoggingMiddleware._safe_path redacts sensitive query values (code/phone/token/otp/…) so the
+      cash-out ?code= bearer credential + ?phone= no longer land in logs/Sentry. Reviewer found 1 major
+      (a test-only mock-cache TypeError in the OTP guard test — sibling missed during impl; production
+      unaffected since a real cache miss returns None) — fixed. New test_ops5h_auth.py +
+      test_ops5h_refund_logging.py. **FINAL CONVERGENCE SCOUT: no new exploitable money/auth/IDOR/tenant
+      issue — the security surface has converged; OPS-5x program COMPLETE.** Workflow finalGates stale
+      (3637) — my full re-run = 3670/0. — ops5h commit.
 - [x] OPS-5g "idempotency namespacing + redemption hardening" (verified by me, backend 3637/0,
       migrations clean): (1) [HIGH] the 3 customer/staff wallet idempotency keys now schema-namespaced
       (order-pay-{schema}-{order_number}, orderpay:{schema}:{payment.id}, voiditem:{schema}:{item_id}) —

@@ -184,15 +184,20 @@ class CustomerPhoneRequestViewTests(SimpleTestCase):
     @patch("accounts.views.cache")
     @patch("accounts.views._send_otp")
     def test_sends_otp_for_valid_phone(self, send_mock, cache_mock):
+        # OPS-5h: per-recipient guard reads cache.get (count) and cache.add (cooldown).
+        cache_mock.get.return_value = None       # no prior sends counted
+        cache_mock.add.return_value = True        # cooldown free → send allowed
         resp = self._post({"phone": "+21261234567"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["ok"])
-        cache_mock.set.assert_called_once()
+        cache_mock.set.assert_called()
         send_mock.assert_called_once()
 
     @patch("accounts.views.cache")
     @patch("accounts.views._send_otp")
     def test_debug_mode_includes_code_in_response(self, send_mock, cache_mock):
+        cache_mock.get.return_value = None
+        cache_mock.add.return_value = True
         with self.settings(DEBUG=True):
             resp = self._post({"phone": "+21261234567"})
         self.assertIn("debug_code", resp.data)
@@ -201,6 +206,8 @@ class CustomerPhoneRequestViewTests(SimpleTestCase):
     @patch("accounts.views.cache")
     @patch("accounts.views._send_otp")
     def test_production_mode_omits_code(self, send_mock, cache_mock):
+        cache_mock.get.return_value = None
+        cache_mock.add.return_value = True
         with self.settings(DEBUG=False):
             resp = self._post({"phone": "+21261234567"})
         self.assertNotIn("debug_code", resp.data)
@@ -370,6 +377,9 @@ class CustomerEmailRequestViewTests(SimpleTestCase):
 
     @patch("accounts.views.cache")
     def test_sends_otp_for_valid_email(self, cache_mock):
+        # OPS-5h: per-recipient guard reads cache.get (count) and cache.add (cooldown).
+        cache_mock.get.return_value = None
+        cache_mock.add.return_value = True
         with patch("accounts.messaging.send_otp_email", MagicMock()) as send_mock:
             req = self.factory.post(
                 "/api/customer/auth/email/request/",
@@ -380,10 +390,12 @@ class CustomerEmailRequestViewTests(SimpleTestCase):
             resp = CustomerEmailRequestView.as_view()(req)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["ok"])
-        cache_mock.set.assert_called_once()
+        cache_mock.set.assert_called()
 
     @patch("accounts.views.cache")
     def test_debug_mode_includes_code(self, cache_mock):
+        cache_mock.get.return_value = None
+        cache_mock.add.return_value = True
         with self.settings(DEBUG=True):
             with patch("accounts.messaging.send_otp_email", MagicMock()):
                 req = self.factory.post(
@@ -397,6 +409,8 @@ class CustomerEmailRequestViewTests(SimpleTestCase):
 
     @patch("accounts.views.cache")
     def test_production_mode_omits_code(self, cache_mock):
+        cache_mock.get.return_value = None
+        cache_mock.add.return_value = True
         with self.settings(DEBUG=False):
             with patch("accounts.messaging.send_otp_email", MagicMock()):
                 req = self.factory.post(

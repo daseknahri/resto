@@ -113,6 +113,16 @@ class TenantAwareMainMiddleware(TenantMainMiddleware):
 class RequestLoggingMiddleware:
     """Emit structured request logs with tenant/user context and request IDs."""
 
+    # Query-param names whose VALUES are secrets/PII and must never reach app logs or
+    # Sentry breadcrumbs. The driver cash-out ?code= is a 6-digit bearer credential
+    # (menu/views.py OwnerDriverCashoutLookupView) and the order-lookup ?phone= is
+    # customer PII (menu/views.py). Matched case-insensitively.
+    SENSITIVE_QUERY_PARAMS = frozenset({
+        "code", "phone", "token", "credential", "delivery_code",
+        "password", "secret", "otp",
+    })
+    _REDACTED = "***"
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -122,6 +132,33 @@ class RequestLoggingMiddleware:
             return request.get_host()
         except Exception:
             return request.META.get("HTTP_HOST", "")
+
+    @classmethod
+    def _safe_path(cls, request) -> str:
+        """request.path plus a query string with sensitive values redacted.
+
+        Replaces get_full_path() so secrets/PII in the query string (?code=, ?phone=,
+        ?token=, …) never land in logs, while keeping benign params for debuggability.
+        Preserves key order and repeated keys; redacts the VALUE only, never the key.
+        """
+        from urllib.parse import parse_qsl, urlencode
+
+        path = request.path
+        try:
+            raw_qs = request.META.get("QUERY_STRING", "") or ""
+            if not raw_qs:
+                return path
+            pairs = parse_qsl(raw_qs, keep_blank_values=True)
+            redacted = [
+                (key, cls._REDACTED if key.lower() in cls.SENSITIVE_QUERY_PARAMS else value)
+                for key, value in pairs
+            ]
+            qs = urlencode(redacted)
+            return f"{path}?{qs}" if qs else path
+        except Exception:
+            # Never let log scrubbing break the request; fall back to the bare path
+            # (which carries no query string, so it leaks nothing).
+            return path
 
     @staticmethod
     def _client_ip(request) -> str:
@@ -180,7 +217,7 @@ class RequestLoggingMiddleware:
                         "event": "http_request",
                         "request_id": request_id,
                         "method": request.method,
-                        "path": request.get_full_path(),
+                        "path": self._safe_path(request),
                         "status": status_code,
                         "duration_ms": duration_ms,
                         "host": self._host(request),
