@@ -10,7 +10,7 @@
       class="sr-only"
     >{{ t(`mktOrderStatus.${liveStatus}`) }}</div>
 
-    <main class="mx-auto max-w-md space-y-4 px-4 py-6 pb-16 sm:py-8">
+    <div class="mx-auto max-w-md space-y-4 px-4 py-6 pb-16 sm:py-8">
       <!-- Back -->
       <router-link to="/order" class="ui-top-link inline-flex items-center gap-1 text-xs">
         <svg aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 rtl:scale-x-[-1]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -356,7 +356,7 @@
           {{ t('mktOrderStatus.orderAgain') }}
         </button>
       </template>
-    </main>
+    </div>
   </div>
 </template>
 

@@ -1,5 +1,5 @@
 <template>
-  <main class="min-h-screen pb-16">
+  <div class="min-h-screen pb-16">
     <div class="ui-page-shell max-w-4xl space-y-5">
 
       <!-- Header -->
@@ -596,7 +596,7 @@
         </li>
       </ul>
     </div>
-  </main>
+  </div>
 </template>
 
 <script setup>

@@ -237,7 +237,7 @@
       </nav>
 
       <!-- Menu -->
-      <main class="space-y-8">
+      <section class="space-y-8">
 
         <!-- ── Search results (query active) ─────────────────────────────── -->
         <template v-if="isMktSearchActive">
@@ -496,7 +496,7 @@
             </div>
           </div>
         </template>
-      </main>
+      </section>
     </template>
 
     </div><!-- /max-w-3xl shell -->

@@ -79,7 +79,7 @@
         </aside>
 
         <!-- Active step content -->
-        <main class="min-w-0 space-y-3">
+        <section class="min-w-0 space-y-3">
           <!-- Terse SR announcement on step change; the broad aria-live was
                removed so the whole step isn't re-read on every navigation. -->
           <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ stepAnnouncement }}</span>
@@ -92,7 +92,7 @@
           <p class="ui-subtle px-1 text-xs text-slate-500">
             {{ t("onboardingWizard.footerHint") }}
           </p>
-        </main>
+        </section>
       </div>
     </div>
   </div>

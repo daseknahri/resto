@@ -594,23 +594,13 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
-### OPS-6c-FOLLOWUP — A11Y (scout B12 cluster; coupled, do as one careful batch)
-B12 shipped skip-links + focusable <main> (tabindex=-1) but two coupled gaps remain that undercut it.
-- [ ] **No focus management on SPA route change (WCAG 2.4.3 — the biggest remaining a11y gap)** — every
-      layout now has <main id="main-content" tabindex="-1"> + a skip-link, but nothing focuses it on
-      client-side navigation (router has scrollBehavior + beforeEach, no afterEach focus hook). So SR users
-      get no new-page announcement and keyboard users tab from the top of the chrome each route change. Add a
-      router.afterEach that (after nextTick) focuses #main-content, guarded so it doesn't steal focus from an
-      open dialog and doesn't fire on the very first load. (frontend/src/router/index.js:292-301). [scout B12]
-- [ ] **Duplicate <main> landmark + duplicate id="main-content"** — layouts own <main id="main-content">, but
-      several PAGES also render their own <main> (Home.vue:2 even REUSES id="main-content" → the skip-link
-      fragment target is non-unique; also Marketplace.vue:2, MarketplaceMenuPage.vue:240,
-      MarketplaceOrderStatus.vue:13, NotFound.vue:2, OwnerNotifications.vue:2, Wizard.vue:82, Activate/
-      ResetPassword/Unauthorized/Directory/DriverPage). Demote the page-level <main> to <div>/<section> since
-      the layout owns the landmark — do this BEFORE/with the route-focus hook so the target is unique. [scout B12]
-- [ ] **BreadcrumbList crumb URLs mislabeled** — the 'Home' crumb points at /menu (route customer-home) and
-      'Menu' at /browse; align crumb item URLs with their semantic labels. Low impact.
-      (useSeoMeta.js:405-407). [review B12 minor]
+### OPS-6c-FOLLOWUP — A11Y — SHIPPED (route-focus + duplicate-main + breadcrumb all DONE; see Done section)
+Residual (small, pre-existing, out of the shipped scope):
+- [ ] **Standalone routes have no skip-link / focusable <main>** — /signin, /forgot-password, /activate,
+      /reset-password, /unauthorized, the 404, and /admin-* render no layout, so they have neither a
+      skip-link target nor a focusable #main-content (the route-focus guard correctly no-ops there). Extend
+      WCAG 2.4.3 to them via a minimal shared layout that carries #main-content + the skip-link, or add the
+      landmark to those templates. Pre-existing; low traffic. [scout OPS-6c-followup]
 
 ### EMAIL-PROGRAM HARDENING — REQUIRED BEFORE SENDING MARKETING EMAIL AT SCALE (scout B1 cluster)
 B1 added email to win-back + campaigns (reaches the email-having majority). Before this sends real
@@ -699,6 +689,17 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-6c-followup "a11y: SPA route-change focus + duplicate-main cleanup" (verified by me; frontend
+      i18n/lint/94 tests/build green, backend 3719/0 sanity, reviewer 0 critical/major) — completes B12's
+      skip-link work. (1) new frontend/src/router/focusGuard.js (createMainContentFocusGuard) wired via
+      router.afterEach: on each NON-initial navigation, after nextTick, focuses #main-content with
+      preventScroll; bails on the cold load, when a [role=dialog]/[aria-modal]/.modal holds focus, or when
+      #main-content is absent (so standalone routes safely no-op); SSR-safe. +4 unit tests. (2) demoted
+      duplicate page-level <main> → <div>/<section> (layout owns the single <main id=main-content>) in
+      Home/Marketplace/MarketplaceMenuPage/MarketplaceOrderStatus/OwnerNotifications/Wizard/DriverPage/
+      ReservationManage (Home's stale duplicate id was already gone; standalone routes kept their sole
+      <main>). (3) breadcrumb crumb URLs aligned to their named routes. Residual (pre-existing, triaged
+      above): standalone auth/error routes lack a skip-link/#main-content. — ops6c-followup commit.
 - [x] B12 / OPS-6c "SEO + a11y + PWA depth" (KEPOLI_NEXT.md Phase B; verified by me, backend 3719/0,
       frontend i18n/lint/test/build green, migrations clean): (1) [PRIVACY] noindex personal/transactional
       pages — useSeoMeta now uses an INDEXABLE_ROUTE_NAMES ALLOWLIST (public discovery only); cart/account/

@@ -1,5 +1,5 @@
 <template>
-  <main class="ui-page-shell max-w-4xl space-y-4">
+  <div class="ui-page-shell max-w-4xl space-y-4">
     <!-- Header -->
     <header class="ui-hero-ribbon ui-reveal space-y-3 px-4 py-4 md:px-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -138,7 +138,7 @@
         </div>
       </li>
     </ul>
-  </main>
+  </div>
 </template>
 
 <script setup>

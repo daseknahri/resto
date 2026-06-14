@@ -1,5 +1,5 @@
 <template>
-  <main class="ui-page-shell space-y-4">
+  <div class="ui-page-shell space-y-4">
     <!-- Header -->
     <header class="ui-hero-ribbon ui-reveal px-4 py-3.5">
       <p class="ui-kicker">{{ t('driver.kicker') }}</p>
@@ -932,7 +932,7 @@
         </div>
       </div>
     </template>
-  </main>
+  </div>
 
   <!-- Release-ride confirm modal -->
   <Teleport to="body">

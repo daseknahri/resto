@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { createMainContentFocusGuard } from "./focusGuard";
 import { useSessionStore } from "../stores/session";
 import { useTenantStore } from "../stores/tenant";
 import { useToastStore } from "../stores/toast";
@@ -380,5 +381,8 @@ router.beforeEach(async (to) => {
 
   return true;
 });
+
+// SPA route-change focus management (WCAG 2.4.3) — see ./focusGuard.js.
+router.afterEach(createMainContentFocusGuard());
 
 export default router;

@@ -1,5 +1,5 @@
 import { watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "./useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { useMenuStore } from "../stores/menu";
@@ -251,6 +251,7 @@ const buildPriceRange = (priceTier) => {
 
 export const useSeoMeta = () => {
   const route = useRoute();
+  const router = useRouter();
   const tenant = useTenantStore();
   const menu = useMenuStore();
   const { currentLocale, t } = useI18n();
@@ -409,9 +410,14 @@ export const useSeoMeta = () => {
 
       // ── BreadcrumbList on menu/category/dish pages ───────────────────────────
       if (BREADCRUMB_ROUTE_NAMES.has(routeName)) {
+        // Resolve crumb URLs from their semantic named routes so the path
+        // always matches the label: "Home" → the customer storefront landing
+        // (route customer-home, /menu), "Menu" → the menu hub (route menu, /browse).
+        const homePath = router.resolve({ name: "customer-home" }).href;
+        const menuPath = router.resolve({ name: "menu" }).href;
         const crumbs = [
-          { name: t("seo.breadcrumbHome"), item: `${origin}/menu` },
-          { name: t("seo.breadcrumbMenu"), item: `${origin}/browse` },
+          { name: t("seo.breadcrumbHome"), item: `${origin}${homePath}` },
+          { name: t("seo.breadcrumbMenu"), item: `${origin}${menuPath}` },
         ];
         const categorySlug = String(route.params?.slug || route.params?.category || "").trim();
         if (categorySlug && (routeName === "category" || routeName === "dish")) {

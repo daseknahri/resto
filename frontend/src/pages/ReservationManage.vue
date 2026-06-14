@@ -1,5 +1,5 @@
 <template>
-  <main class="mx-auto max-w-md px-4 py-10" aria-labelledby="rm-heading">
+  <section class="mx-auto max-w-md px-4 py-10" aria-labelledby="rm-heading">
 
     <!-- ── Loading skeleton ────────────────────────────────────────────── -->
     <div v-if="loading" class="space-y-4" aria-busy="true" :aria-label="t('reservationManage.loading')">
@@ -218,7 +218,7 @@
         </p>
       </div>
     </template>
-  </main>
+  </section>
 </template>
 
 <script setup>

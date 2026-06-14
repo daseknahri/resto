@@ -1,5 +1,5 @@
 <template>
-  <main id="main-content" class="space-y-10 px-4 py-10 md:space-y-14 md:py-14">
+  <div class="space-y-10 px-4 py-10 md:space-y-14 md:py-14">
     <Transition name="ui-fade">
       <div v-if="leadSuccess" role="status" class="ui-panel flex items-center justify-between border-emerald-500/30 bg-emerald-500/10 px-5 py-3.5 text-emerald-100">
         <span class="text-sm font-medium">{{ t("home.leadSuccess") }}</span>
@@ -402,7 +402,7 @@
         </div>
       </div>
     </section>
-  </main>
+  </div>
 </template>
 
 <script setup>
