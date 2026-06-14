@@ -106,6 +106,12 @@
             <option value="retail">{{ t("stepPublish.businessTypeRetail") }}</option>
             <option value="pharmacy">{{ t("stepPublish.businessTypePharmacy") }}</option>
           </select>
+          <p
+            v-if="form.business_type === 'pharmacy'"
+            class="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] leading-relaxed text-sky-100"
+          >
+            {{ t("stepPublish.pharmacyParapharmacieHint") }}
+          </p>
         </div>
 
         <label for="sp-is-open" class="ui-touch-target flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3">
@@ -556,7 +562,7 @@
         <h3 class="text-lg font-semibold text-white leading-tight">{{ t("stepPublish.publishSectionTitle") }}</h3>
       </div>
 
-      <div v-if="!canAttemptPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
+      <div v-if="!canPublish" role="alert" class="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
         <svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 h-4 w-4 shrink-0 text-amber-400" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
         <p class="flex-1 text-xs text-amber-200">{{ t("stepPublish.publishRequirement") }}</p>
       </div>
@@ -585,7 +591,8 @@
       <div class="grid gap-2 sm:flex sm:flex-wrap">
         <button
           class="ui-btn-primary w-full justify-center sm:w-auto disabled:opacity-60"
-          :disabled="publishing || !canAttemptPublish"
+          :disabled="publishing || !canPublish"
+          :title="!canPublish ? t('stepPublish.publishDisabledHint') : undefined"
           @click="publish"
         >
           {{ publishing ? t("stepPublish.publishing") : published ? t("stepPublish.published") : t("stepPublish.publishMenu") }}
@@ -605,7 +612,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useToastStore } from "../stores/toast";
 import { categoryApi, dishApi, profileApi } from "../lib/onboardingApi";
 import { useI18n } from "../composables/useI18n";
@@ -619,7 +626,7 @@ const props = defineProps({
     default: false,
   },
 });
-const emit = defineEmits(["publish"]);
+const emit = defineEmits(["publish", "can-publish"]);
 const toast = useToastStore();
 const tenant = useTenantStore();
 const { t, formatDateTime } = useI18n();
@@ -756,8 +763,14 @@ const checks = computed(() => {
   return items;
 });
 
-const canAttemptPublish = computed(() => categoriesCount.value > 0 && dishesCount.value > 0);
+// Single source of truth for "is the menu ready to publish". Drives the readiness
+// warning, the disabled publish button, and (via the can-publish event) the parent
+// wizard's forward-progression guard on the Publish step.
+const canPublish = computed(() => categoriesCount.value > 0 && dishesCount.value > 0);
 const standalone = computed(() => props.standalone);
+
+// Keep the parent wizard's forward-progression guard in sync with readiness.
+watch(canPublish, (value) => emit("can-publish", value), { immediate: true });
 
 const clearErrors = () => {
   Object.keys(errors).forEach((key) => delete errors[key]);

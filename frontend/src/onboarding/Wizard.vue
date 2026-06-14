@@ -35,13 +35,17 @@
                 v-for="(step, index) in steps"
                 :key="step.id"
                 type="button"
-                class="ui-journey-step ui-reveal shrink-0 flex min-w-[200px] items-start gap-3 lg:min-w-0"
+                class="ui-journey-step ui-reveal shrink-0 flex min-w-[200px] items-start gap-3 lg:min-w-0 disabled:cursor-not-allowed disabled:opacity-50"
                 :data-active="current === step.id ? 'true' : undefined"
                 :data-complete="(step.id < current || (published && step.id === steps.length)) ? 'true' : undefined"
+                :data-locked="!canNavigateTo(step.id) ? 'true' : undefined"
                 :aria-current="current === step.id ? 'step' : undefined"
+                :aria-disabled="!canNavigateTo(step.id) ? 'true' : undefined"
+                :disabled="!canNavigateTo(step.id)"
                 :aria-label="`${step.id}. ${t(step.titleKey)}`"
+                :title="!canNavigateTo(step.id) ? t('onboardingWizard.stepLockedHint') : undefined"
                 :style="{ '--ui-delay': `${Math.min(index, 9) * 28}ms` }"
-                @click="current = step.id"
+                @click="goToStep(step.id)"
               >
                 <!-- Step number badge -->
                 <span
@@ -78,7 +82,7 @@
         <main class="min-w-0 space-y-3" aria-live="polite">
           <div class="ui-panel p-4">
             <KeepAlive>
-              <component :is="currentComponent" @next="next" @back="back" @publish="publish" />
+              <component :is="currentComponent" @next="next" @back="back" @publish="publish" @can-publish="onCanPublish" />
             </KeepAlive>
           </div>
           <!-- Footer hint -->
@@ -105,6 +109,13 @@ import StepPublish from "./StepPublish.vue";
 import { useTenantStore } from "../stores/tenant";
 
 const current = ref(1);
+// Highest step the user has legitimately reached (advanced into via `next` or a
+// restored session). Forward jumps past `highestCompleted + 1` are blocked; going
+// back to any already-reached step stays free.
+const highestCompleted = ref(1);
+// Mirrors StepPublish's canPublish (menu non-empty + brand/profile essentials);
+// gates the final Publish step so an unfinished setup can't be reached via the nav.
+const canPublishStep = ref(false);
 const published = ref(false);
 const tenant = useTenantStore();
 const router = useRouter();
@@ -124,16 +135,39 @@ const stepStorageKey = computed(() => {
   return `resto:onboarding-step:v2:${slug}`;
 });
 
+// A step is reachable if it has already been completed, is the next one in line,
+// or is an earlier (backward) step. The final Publish step additionally requires
+// the menu to be publish-ready so an empty setup can't be jumped to via the nav.
+const canNavigateTo = (stepId) => {
+  if (stepId <= highestCompleted.value) return true;
+  if (stepId > highestCompleted.value + 1) return false;
+  if (stepId === steps.length && !canPublishStep.value) return false;
+  return true;
+};
+
+const goToStep = (stepId) => {
+  if (!canNavigateTo(stepId)) return;
+  current.value = stepId;
+};
+
 const next = () => {
-  if (current.value < steps.length) current.value += 1;
+  if (current.value < steps.length) {
+    current.value += 1;
+    if (current.value > highestCompleted.value) highestCompleted.value = current.value;
+  }
 };
 const back = () => {
   if (current.value > 1) current.value -= 1;
 };
 
+const onCanPublish = (value) => {
+  canPublishStep.value = value === true;
+};
+
 const publish = async () => {
   published.value = true;
   current.value = steps.length;
+  highestCompleted.value = steps.length;
   persistStep();
   await router.push({ name: "owner-launch" });
 };
@@ -145,6 +179,8 @@ const restoreStep = () => {
   if (!Number.isFinite(parsed)) return;
   if (parsed >= 1 && parsed <= steps.length) {
     current.value = parsed;
+    // A previously-reached step is legitimately reachable again on resume.
+    if (parsed > highestCompleted.value) highestCompleted.value = parsed;
   }
 };
 
@@ -156,6 +192,11 @@ const persistStep = () => {
 onMounted(async () => {
   if (!tenant.meta) await tenant.fetchMeta();
   published.value = tenant.meta?.profile?.is_menu_published === true;
+  // An already-published tenant has legitimately completed every step.
+  if (published.value) {
+    highestCompleted.value = steps.length;
+    canPublishStep.value = true;
+  }
   restoreStep();
 });
 

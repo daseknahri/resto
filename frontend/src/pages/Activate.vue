@@ -1,6 +1,6 @@
 <template>
   <div class="ui-auth-page flex items-center">
-    <div class="ui-auth-stage">
+    <main class="ui-auth-stage">
       <section class="ui-auth-spotlight relative space-y-6" aria-labelledby="activate-spotlight-heading">
         <div class="relative space-y-3">
           <span class="ui-chip-strong w-fit">{{ t("activateAccount.kicker") }}</span>
@@ -17,12 +17,12 @@
           <article class="ui-orbit-card ui-reveal" :style="{ '--ui-delay': '56ms' }">
             <p class="ui-kicker">{{ t("activateAccount.newPassword") }}</p>
             <p class="mt-2 text-lg font-semibold text-white">{{ t("activateAccount.activate") }}</p>
-            <p class="mt-1 text-sm text-slate-400">{{ t("activateAccount.activated") }}</p>
+            <p class="mt-1 text-sm text-slate-400">{{ t("activateAccount.newPasswordHint") }}</p>
           </article>
         </div>
       </section>
 
-      <main>
+      <div>
         <div class="ui-auth-card ui-reveal space-y-6" :style="{ '--ui-delay': '80ms' }">
           <div class="ui-hero-ribbon space-y-3 text-center">
             <p class="ui-kicker">{{ t("activateAccount.kicker") }}</p>
@@ -92,8 +92,8 @@
             </div>
           </form>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   </div>
 </template>
 

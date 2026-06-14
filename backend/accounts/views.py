@@ -44,6 +44,7 @@ from .throttles import (
     MarketplaceOrderThrottle,
     PasswordResetConfirmThrottle,
     PasswordResetRequestThrottle,
+    StaffChangePasswordThrottle,
     WalletTransferThrottle,
 )
 from .serializers import (
@@ -1207,6 +1208,7 @@ class StaffChangePasswordView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [StaffChangePasswordThrottle]
 
     def post(self, request, *args, **kwargs):
         user = request.user

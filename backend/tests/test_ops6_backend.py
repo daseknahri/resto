@@ -36,10 +36,22 @@ class StaffChangePasswordViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = StaffChangePasswordView.as_view()
+        # The view now declares a per-user throttle (StaffChangePasswordThrottle).
+        # Clear the throttle bucket between tests so independent cases never bleed
+        # into one another's rate-limit window.
+        from django.core.cache import cache
+        cache.clear()
+
+    def _make_uid_user(self, **kwargs):
+        """Like _make_user but with a deterministic pk so the per-user throttle
+        keys are stable/distinct within a test."""
+        u = _make_user(**kwargs)
+        u.pk = id(u)
+        return u
 
     def _post(self, data, user=None):
         req = self.factory.post("/api/staff/change-password/", data, format="json")
-        req.user = user or _make_user()
+        req.user = user or self._make_uid_user()
         return self.view(req)
 
     # ── Auth guard ────────────────────────────────────────────────────────────
@@ -122,6 +134,62 @@ class StaffChangePasswordViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # set_password must receive the stripped value
         user.set_password.assert_called_once_with("Str0ngNewPass!9")
+
+    # ── Throttle (OPS-6: brute-force backstop on the current-password check) ────
+
+    def test_view_declares_staff_change_password_throttle(self):
+        """throttle_classes must include StaffChangePasswordThrottle (scope
+        'staff_change_password') so a session-holder cannot brute-force the
+        current-password check."""
+        from accounts.throttles import StaffChangePasswordThrottle
+
+        throttles = StaffChangePasswordView.throttle_classes
+        self.assertIn(StaffChangePasswordThrottle, throttles)
+        scopes = [t.scope for t in throttles if hasattr(t, "scope")]
+        self.assertIn("staff_change_password", scopes)
+
+    def test_throttle_cache_key_keyed_on_user_pk(self):
+        """get_cache_key must bucket per authenticated user (pk in the key)."""
+        from accounts.throttles import StaffChangePasswordThrottle
+
+        throttle = StaffChangePasswordThrottle()
+        req = SimpleNamespace(
+            META={},
+            user=SimpleNamespace(is_authenticated=True, pk=42, id=42),
+        )
+        key = throttle.get_cache_key(req, None)
+        self.assertIsNotNone(key)
+        self.assertIn("42", key)
+        self.assertIn("staff_change_password", key)
+
+    def test_throttle_cache_key_falls_back_to_ip_when_unauthenticated(self):
+        """Unauthenticated requests fall back to an IP-based key (defensive — the
+        view also requires auth, but the throttle class must be safe alone)."""
+        from accounts.throttles import StaffChangePasswordThrottle
+
+        throttle = StaffChangePasswordThrottle()
+        req = SimpleNamespace(
+            META={"REMOTE_ADDR": "203.0.113.7"},
+            user=SimpleNamespace(is_authenticated=False, pk=None),
+        )
+        key = throttle.get_cache_key(req, None)
+        self.assertIsNotNone(key)
+        self.assertIn("203.0.113.7", key)
+
+    def test_distinct_users_get_distinct_buckets(self):
+        """Two different users must not share a throttle bucket."""
+        from accounts.throttles import StaffChangePasswordThrottle
+
+        throttle = StaffChangePasswordThrottle()
+        key_a = throttle.get_cache_key(
+            SimpleNamespace(META={}, user=SimpleNamespace(is_authenticated=True, pk=1, id=1)),
+            None,
+        )
+        key_b = throttle.get_cache_key(
+            SimpleNamespace(META={}, user=SimpleNamespace(is_authenticated=True, pk=2, id=2)),
+            None,
+        )
+        self.assertNotEqual(key_a, key_b)
 
 
 # ── CategorySerializer.dish_count ────────────────────────────────────────────

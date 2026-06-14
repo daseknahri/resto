@@ -72,7 +72,51 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 These are an expert-lens scout's findings (not batch reviews). Each maps to a future
 OPS batch or a security pass. file:line in the scout output; verify before acting.
 
-### OPS-6b — A11Y / SEO / FIRST-IMPRESSION POLISH (scout OPS-6 cluster)
+### OPS-6c — SEO / A11Y / PWA DEPTH (scout OPS-6b cluster; next polish batch)
+Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; verify first).
+- [ ] **meta-robots indexes personal pages — SEO + PRIVACY** — useSeoMeta shouldIndex=(customer||
+      landing) emits `index,follow` for cart/account/order-status/find-my-order (all router
+      interface:'customer'), contradicting robots.txt Disallow /cart,/account AND exposing
+      personalized order-status pages (customer name/items/address/order code) to indexing. noindex
+      personal/transactional routes; align meta-robots with robots.txt. (useSeoMeta.js:180-186;
+      router 118/122/123/124; robots.txt:29-30). [scout OPS-6b] **(privacy — prioritize)**
+- [ ] **No sitemap.xml + robots.txt has no Sitemap: directive** — SPA tenant menu/category/dish
+      routes are undiscoverable to crawlers. Generate a sitemap (per-tenant or index) + reference it
+      in robots.txt. Highest-leverage organic-discovery gap. (robots.txt:1-32). [scout OPS-6b]
+- [ ] **No hreflang alternates for en/fr/ar** — useSeoMeta sets og:locale but emits no
+      `<link rel="alternate" hreflang>`; Google can't associate language variants (Morocco market,
+      addressCountry 'MA'). Add reciprocal hreflang for en/fr/ar + x-default. (useSeoMeta.js:189-200).
+      [scout OPS-6b]
+- [ ] **No Product/MenuItem/Offer/BreadcrumbList structured data** — only the top-level business
+      node; add per-item MenuItem/Product offers + BreadcrumbList on dish/category/menu pages, and
+      enrich the business node (openingHoursSpecification, priceRange, geo, aggregateRating, hasMenu,
+      servesCuisine). Rich-result CTR. (useSeoMeta.js:220-241; DishPage/Menu/MarketplaceMenuPage).
+      [scout OPS-6b]
+- [ ] **DishCard: article role=button contains real <button> children (invalid ARIA)** — the core
+      conversion component nests qty/add buttons inside a role=button card; SR announces the whole
+      card as 'button' with tabbable buttons within. Make the wrapper non-button (clickable container
+      + visually-hidden 'open dish' control). (DishCard.vue:6/15-16/110-131/139/148-149). [scout OPS-6b]
+- [ ] **Skip-to-content doesn't move focus on Customer + Owner layouts** — #main-content lacks
+      tabindex='-1' there (Landing/Waiter have it), so the skip link scrolls but keyboard focus stays
+      in the header (WCAG 2.4.1 fail on the two busiest surfaces). Add tabindex='-1' to both mains.
+      (CustomerLayout.vue:123; OwnerLayout.vue:306). [scout OPS-6b]
+- [ ] **Wizard wraps whole step body in aria-live=polite + no focus move on step change** — SR reads
+      the entire new step verbatim each transition and loses place. Remove the broad live region;
+      move focus to the step heading + announce a terse "Step N of M" status. (Wizard.vue:82-87/153-161).
+      [scout OPS-6b]
+- [ ] **Customer PWA install button hidden on mobile** (class `hidden ... sm:inline-flex`) — the
+      captured beforeinstallprompt is unreachable on Android phones, the only place install matters;
+      Landing shows it unconditionally. Surface it at the mobile breakpoint. (CustomerLayout.vue:42-51).
+      [scout OPS-6b]
+- [ ] **theme-color meta static (#0b1c1a), never reflects tenant brand** — URL bar / PWA splash stay
+      teal regardless of restaurant brand. Sync `<meta theme-color>` with the resolved tenant brand
+      color on profile load. (index.html:20; App.vue:87; CustomerLayout.vue:247). [scout OPS-6b]
+- [ ] **Customer app-manifest icons declared 'any maskable' (logo cropped)** — same edge-to-edge icon
+      reused for maskable → home-screen icon clipped; owner manifest.json splits them correctly. Add a
+      padded safe-zone maskable icon for the customer manifest. (app-manifest.json:16/22 vs
+      manifest.json:18-35). [scout OPS-6b]
+
+### OPS-6b — A11Y / SEO / FIRST-IMPRESSION POLISH — SHIPPED (the items below are DONE; see Done section)
 - [ ] **<html lang="en"> hardcoded; dir only set after JS hydration (a11y/SEO, WCAG 3.1.1)**
       — AT + non-JS crawlers see English/LTR before locale.js fixes it. Set lang/dir
       synchronously (cookie-driven inline script) or SSR. (index.html:2; locale.js:27). [scout OPS-6]
@@ -371,6 +415,27 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-6b "a11y/SEO/UX polish" (verified by me; backend 3506/0, frontend i18n/lint/90 tests/
+      build green, no new migrations): (1) PRE-HYDRATION lang/dir — new CSP-safe external
+      frontend/public/locale-boot.js (no inline script; reads the same localStorage key as
+      stores/locale.js, normalizes en/fr/ar, sets <html lang>/<dir> before #app paints; tenantDefault-
+      only RTL is corrected at hydration — documented). (2) og:site_name now PLATFORM_NAME (was tenant
+      name — restored Kepoli social attribution; og:title stays tenant). (3) JSON-LD @type per
+      business_type via BUSINESS_TYPE_SCHEMA_MAP (Restaurant/CafeOrCoffeeShop/Bakery/GroceryStore/Store/
+      Pharmacy; stable element id, no duplicate tag). (4) <noscript> now tri-lingual (en/fr/ar + support
+      link). (5) Wizard forward-progression guard — highestCompleted gating + Publish disabled until
+      canPublish (categories>0 && dishes>0, the same rule as the warning); backward nav free. (6)
+      Pharmacy parapharmacie/no-Rx disclaimer in StepPublish. (7) Cart map dialog focus-restore on close
+      (APG); Menu reviews carousel keyboard-operable (tabindex + arrow keys + visible focus). (8) Cart
+      named-branch error mapping — promo/loyalty/schedule branches no longer leak raw backend detail
+      (incl. the applyPromoCode standalone path I closed post-review — reviewer minor). (9) Activate.vue
+      single valid <main> + correct pre-activation copy. (10) Print CSS scoped to button:not(.print-keep)
+      so OwnerLaunchSuccess buttons print. (11) priceZeroWarning reworded count-accurate. (12) BACKEND:
+      StaffChangePasswordView throttled (staff_change_password 10/hr, per-user) + 4 tests. 6 i18n keys
+      added EN+FR+AR. Review: 2 minor (locale-boot tenantDefault limitation — commented; applyPromoCode
+      leak — fixed). Scout → OPS-6c cluster above (sitemap, hreflang, noindex personal pages [privacy],
+      MenuItem/Breadcrumb LD, DishCard ARIA, skip-link focus, wizard live-region, PWA install/theme-color/
+      maskable icon). — ops6b commit.
 - [x] OPS-5c "security follow-up" (8 items, all verified by me in code): (1) image-upload
       content-type hardening — ImageUploadView rejects non-image/SVG/ICO content types up front
       and _optimize_image now RAISES on a Pillow decode failure → 400 instead of echoing the

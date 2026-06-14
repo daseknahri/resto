@@ -2890,11 +2890,13 @@ html[data-owner-theme="light"] .border-sky-900\/40 {
     background-color: #b45309 !important; /* amber-700 — visible on white */
   }
 
-  /* Hide interactive controls that are pointless on paper */
+  /* Hide interactive controls that are pointless on paper.
+     Controls opted in with .print-keep (e.g. the launch-success action buttons,
+     which double as the only on-page way to reach the menu URL) stay printable. */
   .ui-command-deck .ui-segmented,
-  .ui-command-deck button,
+  .ui-command-deck button:not(.print-keep),
   .ui-panel .ui-segmented,
-  .ui-panel button {
+  .ui-panel button:not(.print-keep) {
     display: none !important;
   }
 

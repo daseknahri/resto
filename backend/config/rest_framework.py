@@ -36,6 +36,7 @@ REST_FRAMEWORK = {
         "auth_login_burst": "8/min",
         "auth_login_sustained": "50/day",
         "auth_activation": "20/hour",
+        "staff_change_password": "10/hour",
         "auth_password_reset_request": "8/hour",
         "auth_password_reset_confirm": "20/hour",
         "customer_otp_request": "6/hour",

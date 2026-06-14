@@ -62,7 +62,7 @@
             <p class="break-all text-sm font-semibold text-white md:text-base" :title="menuUrl">{{ menuUrl }}</p>
             <div class="grid gap-2 sm:grid-cols-2">
               <button
-                class="ui-btn-primary ui-touch-target w-full justify-center px-4 py-2 text-sm"
+                class="ui-btn-primary ui-touch-target print-keep w-full justify-center px-4 py-2 text-sm"
                 @click="copyMenuUrl"
               >
                 {{ t("ownerLaunchSuccess.copyUrl") }}

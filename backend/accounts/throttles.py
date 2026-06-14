@@ -177,6 +177,26 @@ class AdminPIIThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
+class StaffChangePasswordThrottle(SimpleRateThrottle):
+    """OPS-6: per-user throttle on the staff/owner self-service password change.
+
+    StaffChangePasswordView verifies the caller's *current* password before
+    allowing a change; without a throttle a session-holder could brute-force
+    that check.  Keyed on the authenticated user's pk so each account gets an
+    independent bucket (mirrors AdminPIIThrottle); falls back to IP for the
+    (unexpected) unauthenticated case so the class is safe regardless.
+    """
+    scope = "staff_change_password"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"staff:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
 class TranslateThrottle(SimpleRateThrottle):
     """Rate-limit the AI translate endpoint by authenticated user to prevent
     runaway credit consumption against the OpenRouter API."""

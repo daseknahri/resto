@@ -1091,6 +1091,9 @@ const fieldErrors = ref({});
 const showMapModal = ref(false);
 const mapContainerRef = ref(null);
 const mapDialogRef = ref(null);
+// APG dialog pattern: remember the control that opened the map dialog so focus
+// can be restored to it when the dialog closes.
+const mapTriggerEl = ref(null);
 
 const FOCUSABLE_MAP = [
   'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -1525,6 +1528,11 @@ const initLeafletMap = async () => {
 };
 
 const openInAppMapPicker = () => {
+  // Remember the trigger so focus returns here when the dialog closes (APG).
+  mapTriggerEl.value =
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   showMapModal.value = true;
   trackEvent('contact_click', {
     source: 'cart_delivery_location',
@@ -1638,6 +1646,12 @@ watch(showMapModal, async (value) => {
       leafletMarker.value = null;
     }
     document.removeEventListener('keydown', trapMapFocus);
+    // APG: restore focus to the control that opened the dialog.
+    const trigger = mapTriggerEl.value;
+    mapTriggerEl.value = null;
+    if (trigger && typeof trigger.focus === 'function' && trigger.isConnected) {
+      nextTick(() => trigger.focus());
+    }
     return;
   }
   await nextTick();
@@ -1838,7 +1852,8 @@ const applyPromoCode = async () => {
       promoError.value = '';
     } else {
       promoApplied.value = null;
-      promoError.value = res.data?.detail || t('cartPage.promoInvalid');
+      // OPS-6b: never surface raw backend detail to customers — use the localized message.
+      promoError.value = t('cartPage.promoInvalid');
     }
   } catch {
     promoApplied.value = null;
@@ -1948,7 +1963,8 @@ const mapOrderApiError = (err) => {
 
   if (code === 'promo_not_found' || code === 'promo_invalid') {
     promoApplied.value = null;
-    return data?.detail || t('cartPage.promoInvalid');
+    // Never surface raw backend detail to the customer; use the localized message.
+    return t('cartPage.promoInvalid');
   }
   if (code === 'auth_required') {
     showAuthModal.value = true;
@@ -1979,12 +1995,15 @@ const mapOrderApiError = (err) => {
     // Points balance changed under us → refresh the customer so the UI re-syncs.
     customerStore.fetchCustomer(true);
     useLoyalty.value = false;
-    return data?.detail || t('cartPage.loyaltyRedeemFailed');
+    // Never surface raw backend detail to the customer; use the localized message.
+    return t('cartPage.loyaltyRedeemFailed');
   }
   if (typeof code === 'string' && code.startsWith('schedule_')) {
-    // Backend supplies a clear, localized-enough message; surface it as the field error too.
-    if (data?.detail) fieldErrors.value = { ...fieldErrors.value, scheduled_for: data.detail };
-    return data?.detail || t('cartPage.scheduleInvalid');
+    // Never surface raw backend detail to the customer; use the localized message,
+    // and mirror it onto the field error so the input shows a customer-safe hint.
+    const scheduleMsg = t('cartPage.scheduleInvalid');
+    fieldErrors.value = { ...fieldErrors.value, scheduled_for: scheduleMsg };
+    return scheduleMsg;
   }
   if (code === 'contact_missing') {
     return t('cartPage.restaurantContactNotConfigured');

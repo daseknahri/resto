@@ -275,7 +275,15 @@
       :style="{ '--ui-delay': '80ms' }"
     >
       <p class="ui-kicker px-3 sm:px-4">{{ t('mktMenu.reviewsTitle') }}</p>
-      <div class="flex gap-2.5 overflow-x-auto px-3 pb-1 sm:px-4 snap-x" style="scrollbar-width: none; -webkit-overflow-scrolling: touch;">
+      <div
+        ref="reviewsCarouselRef"
+        role="group"
+        tabindex="0"
+        :aria-label="t('mktMenu.reviewsCarouselLabel')"
+        class="flex gap-2.5 overflow-x-auto px-3 pb-1 sm:px-4 snap-x rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]/40"
+        style="scrollbar-width: none; -webkit-overflow-scrolling: touch;"
+        @keydown="onReviewsCarouselKeydown"
+      >
         <div
           v-for="(review, idx) in recentReviews"
           :key="idx"
@@ -566,6 +574,28 @@ const menuTheme        = computed(() => profile.value?.menu_theme || 'dark')
 const isBrowseOnly     = computed(() => tenant.isBrowseOnlyPlan === true)
 const ratingSummary    = computed(() => meta.value?.rating_summary || null)
 const recentReviews    = computed(() => meta.value?.recent_reviews  || [])
+
+// ── Reviews carousel keyboard reach ───────────────────────────────────────────
+// The carousel hides its scrollbar, so it isn't reachable by mouse-drag for
+// keyboard users. Make it focusable (tabindex on the element) and let arrow keys
+// scroll it horizontally.
+const reviewsCarouselRef = ref(null)
+const scrollReviewsCarousel = (direction) => {
+  const el = reviewsCarouselRef.value
+  if (!el) return
+  // Scroll roughly one card width per keypress.
+  const step = Math.max(160, Math.round(el.clientWidth * 0.6))
+  el.scrollBy({ left: direction * step, behavior: 'smooth' })
+}
+const onReviewsCarouselKeydown = (e) => {
+  if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    scrollReviewsCarousel(1)
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    scrollReviewsCarousel(-1)
+  }
+}
 
 // ── Loyalty programme teaser ──────────────────────────────────────────────────
 const loyaltyConfig  = ref(null)

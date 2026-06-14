@@ -3,6 +3,18 @@ import { useRoute } from "vue-router";
 import { useI18n } from "./useI18n";
 import { useTenantStore } from "../stores/tenant";
 import { isPlatformAdminHost, isPlatformApiHost } from "../lib/runtimeHost";
+import { PLATFORM_NAME } from "../lib/brand";
+
+// schema.org @type per business vertical (mirrors tenant store businessType
+// values: restaurant | cafe | bakery | grocery | retail | pharmacy).
+const BUSINESS_TYPE_SCHEMA_MAP = {
+  restaurant: "Restaurant",
+  cafe: "CafeOrCoffeeShop",
+  bakery: "Bakery",
+  grocery: "GroceryStore",
+  retail: "Store",
+  pharmacy: "Pharmacy",
+};
 
 const setDocumentTitle = (value) => {
   if (typeof document === "undefined") return;
@@ -175,7 +187,7 @@ export const useSeoMeta = () => {
       upsertLink({ rel: "canonical", href: canonical });
 
       upsertMeta({ key: "og:type", value: "website", attr: "property" });
-      upsertMeta({ key: "og:site_name", value: tenantName, attr: "property" });
+      upsertMeta({ key: "og:site_name", value: PLATFORM_NAME, attr: "property" });
       upsertMeta({ key: "og:title", value: title, attr: "property" });
       upsertMeta({ key: "og:description", value: description, attr: "property" });
       upsertMeta({ key: "og:url", value: canonical, attr: "property" });
@@ -203,9 +215,11 @@ export const useSeoMeta = () => {
       const city = String(profile.city || "").trim();
       const phone = sanitizePhone(profile.phone || profile.whatsapp);
       const restaurantUrl = `${origin}/menu`;
+      const businessType = String(profile.business_type || "").trim().toLowerCase();
+      const schemaType = BUSINESS_TYPE_SCHEMA_MAP[businessType] || "Restaurant";
       const ld = {
         "@context": "https://schema.org",
-        "@type": "Restaurant",
+        "@type": schemaType,
         name: tenantName,
         description,
         url: restaurantUrl,

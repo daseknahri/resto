@@ -306,6 +306,7 @@ const arabicMessages = {
     "description": "استخدم الرابط الموجود في رسالة الانطلاق لتفعيل وصول المالك.",
     "token": "الرمز",
     "newPassword": "كلمة المرور الجديدة",
+    "newPasswordHint": "اختر كلمة مرور قوية لإكمال تفعيل حسابك.",
     "activating": "جارٍ التفعيل...",
     "activate": "تفعيل الحساب",
     "activated": "تم التفعيل. يمكنك المتابعة الآن.",
@@ -1440,6 +1441,7 @@ const arabicMessages = {
     "savingStatus": "جارٍ حفظ الحالة...",
     "saveStatus": "حفظ الحالة",
     "publishRequirement": "أضف تصنيفاً واحداً وطبقاً واحداً على الأقل قبل النشر.",
+    "publishDisabledHint": "أضف فئة واحدة وطبقًا واحدًا على الأقل قبل أن تتمكن من النشر.",
     "publishing": "جارٍ النشر...",
     "published": "تم النشر",
     "publishMenu": "نشر القائمة",
@@ -1509,6 +1511,7 @@ const arabicMessages = {
     "businessTypeGrocery": "بقالة",
     "businessTypeRetail": "متجر / تجزئة",
     "businessTypePharmacy": "صيدلية / باراصيدلية",
+    "pharmacyParapharmacieHint": "صيدلية كيبولي = شبه صيدلية فقط: منتجات تُباع دون وصفة ومنتجات العناية. لا تشمل الأدوية بوصفة طبية.",
     "directoryControls": "ضوابط الدليل",
     "directoryTitle": "الدليل العام للمنصة",
     "directoryOptIn": "اعرض في الدليل",
@@ -1565,7 +1568,7 @@ const arabicMessages = {
     "codMinOrders": "عدد الطلبات قبل إتاحة الدفع نقدًا",
     "codMinOrdersUnit": "طلبات مكتملة ومدفوعة",
     "priceZeroWarningTitle": "بعض الأطباق سعرها 0",
-    "priceZeroWarningBody": "الأطباق المنشورة التالية ليس لها سعر محدد. سيتمكن العملاء من إضافتها إلى سلتهم مجاناً. حدّث الأسعار قبل البدء.",
+    "priceZeroWarningBody": "بعض العناصر المنشورة ليس لها سعر محدد، لذا قد يضيفها العملاء إلى سلتهم مجاناً. راجع أسعارك قبل النشر.",
     "priceZeroDismiss": "تجاهل"
   },
   "stepCategories": {
@@ -1821,6 +1824,7 @@ const arabicMessages = {
     "startFromStepOne": "ابدأ من الخطوة الأولى",
     "footerHint": "استخدم إجراءات كل خطوة للمتابعة. يتم التحقق من البيانات قبل الانتقال للخطوة التالية.",
     "leaveConfirm": "لديك تغييرات غير محفوظة في معالج الإعداد. هل تريد المغادرة على أي حال؟",
+    "stepLockedHint": "أكمل الخطوات السابقة أولاً لفتح هذه الخطوة.",
     "steps": {
       "brandContact": {
         "title": "الهوية والتواصل",
@@ -2815,6 +2819,7 @@ Object.assign(arabicMessages, {
     loyaltyTeaserEarn: "\u0627\u062c\u0645\u0639 \u0646\u0642\u0627\u0637\u0627\u064b \u0645\u0639 \u0643\u0644 \u0637\u0644\u0628",
     loyaltyTeaserRedeem: "\u0627\u0633\u062a\u0631\u062f\u064e\u0651\u0647\u0627 \u0639\u0646\u062f \u0627\u0644\u062f\u0641\u0639",
     reviewsTitle: "\u0622\u0631\u0627\u0621 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
+    reviewsCarouselLabel: "\u0622\u0631\u0627\u0621 \u0627\u0644\u0639\u0645\u0644\u0627\u0621\u060c \u0627\u0633\u062a\u062e\u062f\u0645 \u0645\u0641\u062a\u0627\u062d\u064a \u0627\u0644\u0633\u0647\u0645 \u0627\u0644\u0623\u064a\u0633\u0631 \u0648\u0627\u0644\u0623\u064a\u0645\u0646 \u0644\u0644\u062a\u0645\u0631\u064a\u0631",
   },
   reservationManage: {
     kicker: "\u062d\u062c\u0632",
