@@ -307,6 +307,9 @@ class AdminAuditLog(models.Model):
         DELIVERY_JOB_CREATED = "delivery_job_created", "Delivery job created"
         TENANT_DELETION_REQUESTED = "tenant_deletion_requested", "Tenant deletion requested"
         PLAN_FEATURE_FLAGS_UPDATED = "plan_feature_flags_updated", "Plan feature flags updated"
+        # OPS-5c item 2: ride admin PII audit
+        RIDE_PII_VIEWED = "ride_pii_viewed", "Ride PII viewed"
+        CAR_DOCS_VIEWED = "car_docs_viewed", "Car docs viewed"
 
     action = models.CharField(max_length=64, choices=Actions.choices)
     actor = models.ForeignKey(

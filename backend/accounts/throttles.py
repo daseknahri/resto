@@ -147,6 +147,17 @@ class RideDriverThrottle(_CustomerThrottle):
     scope = "ride_driver"
 
 
+class DriverDocUploadThrottle(_CustomerThrottle):
+    """OPS-5c item 7: per-driver throttle on document uploads.
+
+    DriverDocUploadView is AllowAny (session customer_id gated) and each
+    submission stores an 8 MB file + sends an admin email.  Key on session
+    customer_id so each driver gets an independent bucket; falls back to IP
+    for sessionless requests (which will be rejected by the view anyway).
+    """
+    scope = "driver_doc_upload"
+
+
 class AdminPIIThrottle(SimpleRateThrottle):
     """OPS-5b: per-admin throttle on PII-exposing customer directory/detail endpoints.
 

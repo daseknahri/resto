@@ -351,6 +351,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 86400.0,  # daily — delete StaffMessage rows older than 90 days
         "args": ("prune_staff_messages",),
     },
+    # OPS-5c item 4: prune consumed/expired auth tokens (PasswordResetToken + ActivationToken)
+    "prune-auth-tokens": {
+        "task": "accounts.tasks.run_management_command",
+        "schedule": 86400.0,  # daily — delete rows older than 30 days
+        "args": ("prune_auth_tokens",),
+    },
 }
 
 # ── Session store ──────────────────────────────────────────────────────────────
@@ -366,6 +372,24 @@ if _REDIS_URL:
 
 # Keep customers logged in for 90 days unless they explicitly sign out.
 # Use `or` so an empty/unset env var falls back to the default safely.
+# OPS-5c item 5: Declare TRUSTED_PROXY_COUNT explicitly so it appears in
+# Django's settings rather than being silently defaulted in two separate places
+# (config/middleware.py and sales/audit.py both read it via getattr default 1).
+#
+# Coolify topology: Traefik (edge load-balancer) → nginx (app proxy) → Django.
+# That is 2 proxy hops, BUT Traefik rewrites X-Forwarded-For itself and
+# presents only the real client IP to nginx, so nginx sees 1 hop.  Set this
+# to 1 for the single nginx proxy in front of Django; bump to 2 if/when you add
+# a second trusted proxy tier (e.g. a CDN that keeps the original XFF chain).
+TRUSTED_PROXY_COUNT = parse_int_env("TRUSTED_PROXY_COUNT", 1)
+
+# OPS-5c item 6: Sliding session window — reset the 90-day cookie on every
+# request so active staff/customers are never logged out mid-shift.  The cost
+# is one Redis SETEX per authenticated request (negligible at current volume).
+# Works because SESSION_ENGINE = "django.contrib.sessions.backends.cache" uses
+# Redis — a per-request DB write would be heavy but Redis is fast.
+SESSION_SAVE_EVERY_REQUEST = True
+
 SESSION_COOKIE_AGE = parse_int_env("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 24 * 90)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 

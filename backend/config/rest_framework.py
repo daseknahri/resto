@@ -31,7 +31,6 @@ REST_FRAMEWORK = {
         "user_leads": "1000/hour",
         "order_handoff": "120/hour",
         "checkout_intent": "60/hour",
-        "analytics_events": "600/hour",
         "place_order": "60/hour",
         "order_status": "300/hour",
         "auth_login_burst": "8/min",
@@ -62,6 +61,10 @@ REST_FRAMEWORK = {
         "ride_request": "30/hour",
         "ride_driver": "60/min",
         "admin_pii": "120/min",
+        # OPS-5c item 7: driver doc uploads — 8 MB per submit + admin email each time
+        "driver_doc_upload": "10/hour",
+        # OPS-5c item 7: analytics ingestion keyed per (tenant, ip) — see AnalyticsEventThrottle
+        "analytics_events_tenant": "600/hour",
     },
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
 }

@@ -43,12 +43,15 @@ from tenancy.delivery_pricing import haversine_km, valid_coord
 from .models import Customer, RideRequest
 from .push import push_new_ride_to_drivers, push_ride_event_to_rider
 from .throttles import (
+    AdminPIIThrottle,
+    DriverDocUploadThrottle,
     RideEstimateThrottle,
     RideRequestThrottle,
     RideDriverThrottle,
     DriverJobAcceptThrottle,
     DriverStatusUpdateThrottle,
 )
+from sales.permissions import IsPlatformAdmin
 
 
 # ── Serialiser helper ─────────────────────────────────────────────────────────────
@@ -911,14 +914,16 @@ def _save_driver_doc_image(upload, request) -> str:
     if ct in _BLOCKED_CT:
         raise ValueError("SVG and icon uploads are not permitted.")
 
-    # Best-effort optimise via tenancy helper; fall back to raw bytes on error.
+    # OPS-5c item 1: transcode via Pillow; if it cannot decode the bytes the
+    # image is untrustworthy (possible polyglot/corrupt upload) — reject with a
+    # ValueError so the caller returns 400.  Do NOT fall back to raw bytes: that
+    # would store and serve the file with the client-supplied content_type,
+    # bypassing the only real sanitiser we have.
     try:
         from tenancy.api import _optimize_image
         data, ext, content_type, _ = _optimize_image(upload, variant="")
     except Exception:
-        data = upload.read()
-        ext = "jpg"
-        content_type = ct
+        raise ValueError("Could not decode image. Upload a valid JPEG, PNG, WEBP, or GIF.")
 
     now = datetime.utcnow()
     rel_path = f"uploads/driver-docs/{now:%Y/%m}/{uuid.uuid4().hex}.{ext}"
@@ -940,11 +945,15 @@ class DriverDocUploadView(APIView):
     Stores the URL on the matching Customer field.  When BOTH urls are set after
     this upload, platform admins are notified (mirrors DriverRegisterView pattern).
     Submitting again replaces the doc and resets driver_car_approved=False.
+
+    OPS-5c item 7: DriverDocUploadThrottle limits submissions per driver session
+    (10/hour) — each upload is 8 MB and triggers an admin notification email.
     """
 
     permission_classes = [AllowAny]
     authentication_classes = []
     parser_classes = [MultiPartParser, FormParser]
+    throttle_classes = [DriverDocUploadThrottle]
 
     def post(self, request, *args, **kwargs):
         customer_id = request.session.get("customer_id")
@@ -1227,20 +1236,24 @@ class AdminRideListView(APIView):
                      completed_at,
                      rider {id, name, phone},
                      driver {id, name, phone} (or null).
+
+    OPS-5c item 2: restored to OPS-5/5b standard — IsPlatformAdmin permission
+    class (DRF session auth + CSRF), AdminPIIThrottle, audit on GET.
     """
 
-    permission_classes = []  # enforced manually via IsPlatformAdmin check below
-    authentication_classes = []
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def get(self, request, *args, **kwargs):
-        from sales.permissions import IsPlatformAdmin
+        from sales.audit import log_admin_action
+        from sales.models import AdminAuditLog
 
-        perm = IsPlatformAdmin()
-        if not perm.has_permission(request, self):
-            return Response(
-                {"detail": "Platform admin access required."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        log_admin_action(
+            action=AdminAuditLog.Actions.RIDE_PII_VIEWED,
+            request=request,
+            target_repr="admin:ride_list",
+            metadata={"filter": request.query_params.get("status", "")},
+        )
 
         qs = RideRequest.objects.select_related("rider", "driver").order_by("-created_at")
         status_filter = request.query_params.get("status", "").strip()
@@ -1296,23 +1309,17 @@ class AdminCarApprovalView(APIView):
        POST /api/admin/drivers/<id>/car-reject/   — reject car docs (clears flag).
 
     Mirrors AdminDriverApprovalView style including audit logging.
+
+    OPS-5c item 2: restored to OPS-5/5b standard — IsPlatformAdmin permission
+    class (DRF session auth + CSRF), AdminPIIThrottle.
     """
 
-    permission_classes = []  # enforced manually via IsPlatformAdmin check below
-    authentication_classes = []
+    permission_classes = [IsPlatformAdmin]
+    throttle_classes = [AdminPIIThrottle]
 
     def post(self, request, driver_id, *args, **kwargs):
-        from sales.permissions import IsPlatformAdmin
         from sales.audit import log_admin_action
         from sales.models import AdminAuditLog
-
-        # IsPlatformAdmin.has_permission checks request.user
-        perm = IsPlatformAdmin()
-        if not perm.has_permission(request, self):
-            return Response(
-                {"detail": "Platform admin access required."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
 
         approve = request.path.rstrip("/").endswith("car-approve")
         try:

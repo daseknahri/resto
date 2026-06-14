@@ -38,9 +38,10 @@ def get_request_ip(request) -> str | None:
             idx = len(ips) - trusted_count
             if idx >= 0:
                 return ips[idx]
-            # More proxy-count than IPs (mis-config or bare internal call);
-            # use the first available entry as a best-effort fallback.
-            return ips[0]
+            # OPS-5c item 5: TRUSTED_PROXY_COUNT exceeds the XFF list length —
+            # misconfiguration or a bare internal call.  Fall back to REMOTE_ADDR
+            # rather than XFF[0] which is the leftmost (client-spoofable) entry.
+            return request.META.get("REMOTE_ADDR")
     return request.META.get("REMOTE_ADDR")
 
 

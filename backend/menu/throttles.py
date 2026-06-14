@@ -18,8 +18,33 @@ class CheckoutIntentThrottle(_IPThrottle):
     scope = "checkout_intent"
 
 
-class AnalyticsEventThrottle(_IPThrottle):
-    scope = "analytics_events"
+class AnalyticsEventThrottle(SimpleRateThrottle):
+    """OPS-5c item 7: analytics ingestion throttle keyed on (tenant_schema, ip).
+
+    AnalyticsEventIngestView is AllowAny and called from every menu page view.
+    A pure IP key collapses all tenants behind a shared-office NAT or CDN into
+    one bucket, so a busy restaurant can 429 another restaurant's analytics.
+
+    Mirrors WaiterCallThrottle: key on (schema, ip) so each restaurant gets its
+    own independent 600/hour bucket.  Falls back to IP-only if the schema is not
+    available (public-host requests are rejected by the view anyway).
+    """
+
+    scope = "analytics_events_tenant"
+
+    def get_cache_key(self, request, view):
+        schema = ""
+        try:
+            schema = getattr(getattr(connection, "tenant", None), "schema_name", "") or ""
+        except Exception:
+            pass
+
+        ip = self.get_ident(request)
+        if schema:
+            ident = f"{schema}:{ip}"
+        else:
+            ident = ip
+        return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
 class PlaceOrderThrottle(SimpleRateThrottle):

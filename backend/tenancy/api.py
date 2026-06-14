@@ -127,12 +127,12 @@ def _optimize_image(uploaded_file, variant: str = ""):
         image.save(out, format="WEBP", quality=84, method=6)
         return out.getvalue(), "webp", "image/webp", normalized_variant
     except (UnidentifiedImageError, OSError, ValueError):
-        return (
-            raw,
-            _safe_extension(uploaded_file.name),
-            uploaded_file.content_type or "application/octet-stream",
-            normalized_variant,
-        )
+        # OPS-5c item 1: Pillow could not decode the bytes — the file is not a
+        # valid image (could be a JPEG/SVG polyglot or corrupt upload).  Do NOT
+        # echo the client-supplied content_type; instead raise so the caller can
+        # reject the upload.  Trusting the client type on a transcode failure
+        # would let a polyglot be stored and served with a trusted MIME type.
+        raise
 
 
 def _tenant_upload_prefix(tenant_slug: str) -> str:
@@ -272,7 +272,12 @@ class ImageUploadView(APIView):
         if variant and variant not in VARIANT_SPECS:
             return Response({"variant": ["Unsupported image variant."]}, status=400)
 
-        data, ext, content_type, normalized_variant = _optimize_image(upload, variant=variant)
+        try:
+            data, ext, content_type, normalized_variant = _optimize_image(upload, variant=variant)
+        except (UnidentifiedImageError, OSError, ValueError):
+            # OPS-5c item 1: Pillow could not decode the image — reject instead of
+            # echoing the client-supplied content_type (polyglot-upload guard).
+            return Response({"image": ["Could not decode image. Upload a valid JPEG, PNG, WEBP, or GIF."]}, status=400)
         tenant = getattr(request, "tenant", None)
         tenant_slug = getattr(tenant, "slug", "public")
         now = datetime.utcnow()

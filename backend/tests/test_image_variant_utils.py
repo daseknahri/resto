@@ -34,11 +34,11 @@ class ImageVariantUtilsTests(SimpleTestCase):
         ratio = optimized.size[0] / optimized.size[1]
         self.assertAlmostEqual(ratio, 16 / 9, delta=0.05)
 
-    def test_optimize_image_fallback_for_invalid_bytes(self):
+    def test_optimize_image_raises_for_invalid_bytes(self):
+        """OPS-5c item 1: _optimize_image now re-raises on corrupt/undecodable
+        images instead of returning raw bytes with the client-supplied MIME type.
+        The caller (ImageUploadView / _save_driver_doc_image) catches and rejects
+        the upload — never echoing the client content_type."""
         upload = SimpleUploadedFile("broken.png", b"not-an-image", content_type="image/png")
-        data, ext, content_type, variant = _optimize_image(upload, variant="dish")
-
-        self.assertEqual(data, b"not-an-image")
-        self.assertEqual(ext, "png")
-        self.assertEqual(content_type, "image/png")
-        self.assertEqual(variant, "dish")
+        with self.assertRaises(Exception):
+            _optimize_image(upload, variant="dish")

@@ -142,7 +142,9 @@ class RequestLoggingMiddleware:
                 idx = len(ips) - trusted_count
                 if idx >= 0:
                     return ips[idx]
-                return ips[0]
+                # OPS-5c item 5: count exceeds XFF length — fall back to
+                # REMOTE_ADDR, not XFF[0] (which is client-spoofable).
+                return request.META.get("REMOTE_ADDR", "")
         return request.META.get("REMOTE_ADDR", "")
 
     def __call__(self, request):

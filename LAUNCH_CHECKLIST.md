@@ -69,6 +69,7 @@ or advance/scheduled orders never reach the kitchen.
 | `python manage.py prune_notification_logs` | daily | Delete NotificationLog rows older than 180 days — bounds shared-schema table growth (OPS-4). |
 | `python manage.py prune_winback_nudges` | daily | Delete WinbackNudge rows older than 120 days — beyond the 90-day dedupe window + margin (OPS-4). |
 | `python manage.py prune_staff_messages` | daily | Delete StaffMessage rows older than 90 days per tenant — bounds per-tenant table growth (OPS-4). |
+| `python manage.py prune_auth_tokens` | daily | Delete consumed/expired PasswordResetToken + ActivationToken rows older than 30 days — bounds shared-schema table growth (OPS-5c). |
 | `python manage.py send_winback_nudges` | hourly | Win-back push to lapsed customers at ~11:00 local time for opted-in tenants (at most 1 nudge/customer/90 days). |
 
 > `sweep_unverified_wallets` is a **manual one-off**, not a recurring cron — new unverified

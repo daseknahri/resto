@@ -1512,7 +1512,8 @@ class AdminRideListViewTests(SimpleTestCase):
 
     @patch("accounts.ride_views.RideRequest.objects")
     @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)
-    def test_admin_gets_ride_list_with_nested_rider_and_driver(self, mock_perm, mock_ride_objs):
+    @patch("sales.audit.log_admin_action")
+    def test_admin_gets_ride_list_with_nested_rider_and_driver(self, mock_audit, mock_perm, mock_ride_objs):
         rider = _make_customer(pk=10, name="Alice", phone="0600000001")
         driver = _make_customer(pk=5, name="Bob", phone="0600000002",
                                 is_driver=True, driver_approved=True)
@@ -1546,6 +1547,12 @@ class AdminRideListViewTests(SimpleTestCase):
         self.assertEqual(ride_data["driver"]["id"], 5)
         self.assertEqual(ride_data["driver"]["name"], "Bob")
         self.assertIn("phone", ride_data["driver"])
+
+        # OPS-5c finding 3: audit call must fire on every successful GET.
+        from sales.models import AdminAuditLog
+        mock_audit.assert_called_once()
+        call_kwargs = mock_audit.call_args[1]
+        self.assertEqual(call_kwargs.get("action"), AdminAuditLog.Actions.RIDE_PII_VIEWED)
 
     @patch("accounts.ride_views.RideRequest.objects")
     @patch("sales.permissions.IsPlatformAdmin.has_permission", return_value=True)

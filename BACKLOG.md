@@ -46,8 +46,9 @@ Done items get moved to the bottom section with the commit hash, not deleted.
 - [ ] **ride_per_minute default 0** — enable/tune once live trip data exists.
 - [ ] **Car-doc expiry** — licence/insurance have no expiry date / re-verification
       cycle; admin approval is one-shot.
-- [ ] **Admin PII-read audit logging** — AdminRideListView returns rider/driver phones
-      with no audit log entry (delivery equivalents too). Compliance, review minor.
+- [~] **Admin PII-read audit logging** — RESOLVED for rides in OPS-5c (AdminRideListView now
+      logs RIDE_PII_VIEWED + IsPlatformAdmin + AdminPIIThrottle). Delivery-equivalent admin PII
+      GETs (if any remain) still to confirm. [scout OPS-5b → fixed OPS-5c]
 - [ ] **code_locked_until unindexed** — only matters if a future sweep/admin query
       filters on it. Review minor, explicitly "not a current issue".
 
@@ -107,7 +108,59 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5c — SECURITY/OPS FOLLOW-UP (scout OPS-5b cluster; next security batch)
+### OPS-5d — SECURITY (scout OPS-5c cluster; next security batch)
+The OPS-5c scout (SaaS-expert lens) surfaced these while we hardened uploads/SSRF/PII.
+Several are HIGH. file:line in scout output; verify before acting.
+- [ ] **Celery `run_management_command` = arbitrary command execution (HIGH)** — accounts/tasks.py
+      :100-104 passes any `name` straight to `call_command`; the task is registered by name and the
+      default broker (redis://redis:6379/0) has NO auth, so anyone who can LPUSH to Redis can run
+      `shell`/`dbshell`/`flush`/`migrate` with full DB creds (the inline-thread fallback runs in the
+      web process too). Fix: (1) set Redis `requirepass`/ACL + validate the URL at startup; (2) replace
+      the generic task with per-command tasks OR an allowlist of permitted command names. [scout OPS-5c]
+- [ ] **Google One-Tap auto-links without `email_verified` (account takeover, HIGH)** —
+      _verify_google_token (accounts/views.py:299-316) checks aud+sub but NOT the email_verified
+      claim, and CustomerGoogleAuthView (548-558) silently links the Google identity to an existing
+      phone-registered Customer by email → an unverified-email Google account can take over a Kepoli
+      customer. Fix: `if not data.get('email_verified'): return None`. One line. [scout OPS-5c]
+- [ ] **AdminWalletBonusView bulk-credit double-credit race (money)** — accounts/views.py:1609-1640:
+      idempotency `exists()` pre-check and the balance `UPDATE(F+1)` are not atomic; two concurrent
+      POSTs with the same idempotency_key both clear the guard and both run the UPDATE (the unique
+      idempotency_key only blocks the 2nd ledger insert — balances still inflate). Fix: SELECT FOR
+      UPDATE on a sentinel / `cache.add` mutex (campaign-cap pattern), or bulk_create-first then
+      UPDATE only on success. [scout OPS-5c]
+- [ ] **CORS_ALLOWED_ORIGIN_REGEXES default allows `*.localhost:5173` in prod** — settings.py:408-414
+      default regex stays active if DJANGO_CORS_ALLOWED_ORIGIN_REGEXES is blank → any localhost:5173
+      origin gets credentialed cross-origin access to the prod API. Fix: change in-code default to ''
+      and add the var (empty) to coolify.env.example with a comment. [scout OPS-5c]
+- [ ] **uvicorn `--forwarded-allow-ips='*'` lets DRF throttles read spoofable XFF** —
+      docker/entrypoint.sh:41; DRF's SimpleRateThrottle.get_ident() trusts XFF unboundedly, so
+      _IPThrottle subclasses (OrderHandoff/CheckoutIntent, menu/throttles.py) can be reset per-request
+      by sending `X-Forwarded-For: <random>`. Fix: pin --forwarded-allow-ips to the docker bridge
+      subnet OR make _IPThrottle use the trusted-proxy-aware _client_ip helper. [scout OPS-5c]
+- [ ] **Customer session can be layered onto a staff session (cross-persona fixation)** —
+      OTP/email/Google auth write customer_id into the SAME Django session without checking
+      request.user.is_authenticated (accounts/views.py:411-418/548/837); a staff/owner can mint a
+      customer identity on their privileged session. Fix: refuse the customer_id write when
+      request.user is an authenticated staff user; consider a separate customer cookie name. [scout OPS-5c]
+- [ ] **CustomerReservationsView no throttle + returns cancel_token** — accounts/views.py:711-766 is
+      AllowAny, unthrottled, and returns each reservation's cancel_token UUID; a session holder can
+      bulk-harvest tokens and learn which restaurants a customer booked. Fix: add a throttle (~60/hr)
+      and stop returning cancel_token in the list (cancel via the emailed link). [scout OPS-5c]
+- [ ] **public_urls.py serves /media/ via Django static_serve in prod** — config/public_urls.py:14-18
+      adds django.views.static.serve unconditionally on the non-DEBUG public host: no Cache-Control/
+      security headers, holds an fd open, historically traversal-friendly. Nginx already owns /media/
+      end-to-end. Fix: remove the route (or guard behind SERVE_MEDIA_FROM_DJANGO). [scout OPS-5c]
+- [ ] **DJANGO_SUPERADMIN_PASSWORD still passed as `--password` CLI arg** — docker/entrypoint.sh:26-29
+      funnels the secret through argv (visible in /proc/<pid>/cmdline, docker inspect, deploy logs)
+      even though ensure_platform_admin already prefers PLATFORM_ADMIN_PASSWORD env. Fix: set
+      PLATFORM_ADMIN_PASSWORD in entrypoint and drop --password; rename in coolify.env.example.
+      [scout OPS-5c] (deploy-config; complements the OPS-5b in-code env path)
+- [ ] **DJANGO_ADMIN_URL default 'admin/' + hardcoded nginx /admin/ block** — settings.py:675 +
+      frontend/nginx.conf:126-138: admin path is discoverable and a two-step env+rebuild to change.
+      Fix: add DJANGO_ADMIN_URL to coolify.env.example + envsubst the nginx location so it tracks the
+      Django setting. [scout OPS-5c]
+
+### OPS-5c — SECURITY/OPS FOLLOW-UP — SHIPPED (the items below are DONE; see Done section)
 - [ ] **is_staff STILL bleeds elsewhere? — RESOLVED in OPS-5b** for menu/permissions
       (user_can_edit_tenant/menu), tenancy/api _can_edit_tenant, sales IsTenantEditor (all
       dropped is_staff). If any new gate copies the old triple-check, fix it. [scout OPS-5b → fixed]
@@ -318,6 +371,30 @@ OPS batch or a security pass. file:line in the scout output; verify before actin
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5c "security follow-up" (8 items, all verified by me in code): (1) image-upload
+      content-type hardening — ImageUploadView rejects non-image/SVG/ICO content types up front
+      and _optimize_image now RAISES on a Pillow decode failure → 400 instead of echoing the
+      client content_type (polyglot guard); stored type is always the server-derived WEBP.
+      (2) Ride-admin PII views restored to OPS-5/5b standard — AdminRideListView + AdminCarApprovalView
+      now IsPlatformAdmin (DRF session auth + CSRF) + AdminPIIThrottle, and AdminRideListView logs
+      RIDE_PII_VIEWED on the GET (new Actions member, sales/0021). (3) OSRM SSRF guard
+      (tenancy/routing.py) — _validate_osrm_url blocks non-http(s) schemes + 169.254.169.254 metadata
+      (incl. IPv6 aliases) + loopback while INTENTIONALLY allowing RFC-1918 (docker-internal OSRM is
+      the primary topology); falls back to the haversine estimate on a blocked/invalid URL; reviewer
+      caught the redirect gap → both requests.get now pass allow_redirects=False so a compromised OSRM
+      can't 302 to the metadata IP. (4) prune_auth_tokens cron (PasswordResetToken + ActivationToken,
+      used-or-expired & >30d) + daily beat schedule; I switched it to a single Q-filter so the reported
+      counts are accurate (no UNION double-count). (5) TRUSTED_PROXY_COUNT declared explicitly in
+      settings; get_request_ip (audit) + _client_ip (middleware) fall back to REMOTE_ADDR (not
+      spoofable XFF[0]) when the count exceeds the XFF length. (6) SESSION_SAVE_EVERY_REQUEST=True
+      (sliding 90-day window so staff aren't logged out mid-shift). (7) DriverDocUpload (per-session,
+      10/hr) + AnalyticsEvent (per tenant+ip) throttle scoping; I removed the now-orphaned
+      analytics_events scope. New test_ops5c_security.py (28 tests: SSRF block/validate/redirect,
+      prune, proxy-miscount, analytics keying) + ride/image tests. Reviewer found 3 major (redirect
+      guard, missing test file, unasserted ride audit) — all fixed + verified by me. CAR_DOCS_VIEWED
+      enum left as forward-looking (no car-docs GET endpoint yet; migration already paid). Backend
+      3502/0, migrations clean, no frontend touched. Scout → OPS-5d cluster above (Celery RCE, Google
+      email_verified takeover, wallet-bonus race, CORS localhost regex, +6). — ops5c commit.
 - [x] OPS-6 "first impressions + onboarding + polish" — COMPLETES THE OPS PROGRAM
       (OPS-1..6). Killed the hardcoded dev domain (doro.menu.ibnbatoutaweb.com) from every
       customer-facing surface → config-driven brand domain/email in lib/brand.js

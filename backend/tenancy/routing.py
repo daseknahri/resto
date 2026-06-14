@@ -30,8 +30,10 @@ import cost and is trivially unit-testable.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
+from urllib.parse import urlparse
 
 from .delivery_pricing import haversine_km
 
@@ -78,9 +80,91 @@ def road_factor() -> float:
     return f if f >= 1.0 else DEFAULT_ROAD_FACTOR
 
 
+# ── SSRF guard for DELIVERY_OSRM_URL ─────────────────────────────────────────
+# Threat model (OPS-5c item 3):
+#
+# BLOCKED — scheme abuse and cloud-metadata addresses:
+#   • Non-http/https schemes (file://, dict://, gopher://, etc.) can exploit
+#     libcurl protocol handlers.
+#   • 169.254.169.254 (AWS/GCP/Azure/DO instance-metadata), its IPv6 aliases
+#     ::ffff:169.254.169.254 and fd00:ec2::254, and the loopback 127.0.0.0/8 /
+#     ::1 are blocked because they let an operator-controlled URL exfiltrate
+#     cloud credentials or probe internal services via the Django process.
+#
+# ALLOWED — RFC-1918 private ranges:
+#   • 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 are intentionally allowed.
+#     The primary OSRM deployment is a docker-internal container
+#     (DELIVERY_OSRM_URL=http://osrm:5000) or a private VPS.  Blanket-blocking
+#     RFC-1918 would break the most common self-hosted topology without any
+#     real security gain — the operator controls which URL is configured, and
+#     docker-internal containers are already isolated from the metadata endpoint.
+#
+# On an invalid / blocked URL the module falls back to the haversine road-factor
+# estimate (same as the "no OSRM configured" path) rather than crashing checkout.
+
+_METADATA_ADDRS = frozenset({
+    ipaddress.ip_address("169.254.169.254"),
+    ipaddress.ip_address("::ffff:169.254.169.254"),
+    ipaddress.ip_address("fd00:ec2::254"),
+})
+
+
+def _is_ssrf_blocked(host: str) -> bool:
+    """Return True if the host resolves to a metadata/loopback address that
+    MUST NOT be contacted from this service.  RFC-1918 private addresses are
+    intentionally allowed (docker-internal OSRM).
+
+    Only blocks on literal IP addresses; we do not perform DNS resolution here
+    (that would introduce a TOCTOU race and a dependency on network availability
+    at startup).  A deployment using a hostname that resolves to the metadata IP
+    is an operator misconfiguration, not a realistic attack vector given that the
+    operator controls the env var.
+    """
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # hostname (not a literal IP) — allow
+    if addr in _METADATA_ADDRS:
+        return True
+    # Block loopback (127.0.0.0/8 for IPv4, ::1 for IPv6)
+    if addr.is_loopback:
+        return True
+    return False
+
+
+def _validate_osrm_url(raw: str) -> str:
+    """Return the trimmed base URL if it passes SSRF validation, else ""."""
+    url = raw.strip().rstrip("/")
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        logger.warning("DELIVERY_OSRM_URL is not a valid URL (%r); OSRM disabled", raw)
+        return ""
+    if parsed.scheme not in {"http", "https"}:
+        logger.warning(
+            "DELIVERY_OSRM_URL scheme %r is not http/https; OSRM disabled (SSRF guard)",
+            parsed.scheme,
+        )
+        return ""
+    host = parsed.hostname or ""
+    if not host:
+        logger.warning("DELIVERY_OSRM_URL has no host; OSRM disabled")
+        return ""
+    if _is_ssrf_blocked(host):
+        logger.warning(
+            "DELIVERY_OSRM_URL host %r is a blocked metadata/loopback address; OSRM disabled (SSRF guard)",
+            host,
+        )
+        return ""
+    return url
+
+
 def _osrm_base_url() -> str:
-    """Configured OSRM base URL (``DELIVERY_OSRM_URL``), trimmed, or ""."""
-    return (os.environ.get("DELIVERY_OSRM_URL", "") or "").strip().rstrip("/")
+    """Configured OSRM base URL (``DELIVERY_OSRM_URL``), SSRF-validated, or ""."""
+    raw = (os.environ.get("DELIVERY_OSRM_URL", "") or "")
+    return _validate_osrm_url(raw)
 
 
 def _factor_distance(lat1, lng1, lat2, lng2) -> float:
@@ -128,7 +212,7 @@ def _osrm_distance_km(base_url, lat1, lng1, lat2, lng2):
     # OSRM expects {lng},{lat};{lng},{lat} (longitude first).
     url = "{}/route/v1/driving/{},{};{},{}".format(base_url, lng1, lat1, lng2, lat2)
     try:
-        resp = requests.get(url, params={"overview": "false"}, timeout=_OSRM_TIMEOUT)
+        resp = requests.get(url, params={"overview": "false"}, timeout=_OSRM_TIMEOUT, allow_redirects=False)
         if not resp.ok:
             return None
         data = resp.json()
@@ -200,7 +284,8 @@ def _osrm_route(base_url, lat1, lng1, lat2, lng2):
     url = "{}/route/v1/driving/{},{};{},{}".format(base_url, lng1, lat1, lng2, lat2)
     try:
         resp = requests.get(
-            url, params={"overview": "full", "geometries": "geojson"}, timeout=_OSRM_TIMEOUT
+            url, params={"overview": "full", "geometries": "geojson"}, timeout=_OSRM_TIMEOUT,
+            allow_redirects=False,
         )
         if not resp.ok:
             return None
