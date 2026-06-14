@@ -152,7 +152,51 @@ Deeper SEO/a11y/PWA gaps the OPS-6b scout surfaced (file:line in scout output; v
 - [ ] **email_delivery_drill --help still references menu.ibnbatoutaweb.com** (dev-ops CLI help
       default, not user-facing) — cosmetic. (email_delivery_drill.py:37). [grep OPS-6]
 
-### OPS-5e — SECURITY (scout OPS-5d cluster; next security batch)
+### OPS-5f — SECURITY (scout OPS-5e cluster; next security batch)
+The OPS-5e scout surfaced these (file:line in scout output; verify first). Several are HIGH.
+- [ ] **MarketplacePlaceOrderView DishOption price manipulation (HIGH money/IDOR)** —
+      accounts/views.py:3065 builds options_map = DishOption.objects.filter(id__in=all_option_ids) with
+      NO option→dish binding check, no published gate, no sign check, then unconditionally does
+      unit_price += opt.price_delta (3090-3094). price_delta has no MinValueValidator (negative deltas are
+      legit "remove X" modifiers), so a customer can attach a foreign/negative-delta option id to a cheap
+      dish to drive the wallet-PREPAID unit_price/total DOWN, even below zero. EVERY other order path
+      validates opt_dish_slug==dish.slug (menu/views.py:1649-1655/1810-1818/2186-2191) — this path is the
+      regression. Fix: enforce option↔dish membership + reject mismatches like the other builders. [scout OPS-5e]
+- [ ] **DeliveryRatingView customer branch — no order-ownership check + no throttle (IDOR)** —
+      accounts/views.py:5104 (AllowAny), the role=='customer' branch (5157-5163) only checks a session
+      customer_id EXISTS, never that it owns the order, then writes customer_driver_rating/note. Driver
+      (5164-5168) + restaurant (5172-5178) branches ARE gated — the customer branch is the oversight
+      (sibling to the OPS-5e CustomerOrderRate fix). Reputation manipulation / stored-text, overwritable.
+      Fix: require session-customer ownership + throttle (mirror CustomerOrderRateThrottle). [scout OPS-5e]
+- [ ] **Driver money/state endpoints gate on is_driver only, NOT driver_approved** —
+      DriverPositionUpdateView (accounts/views.py:4478), DriverJobListView (4518), DriverJobDeclineView
+      (4697), DriverJobStatusUpdateView (4885), ride DriverRideStatusView (ride_views.py:798). A driver
+      APPROVED → accepted a job → then REJECTED can still advance it to DELIVERED via the status endpoint,
+      triggering _credit_driver_earnings (require_verified=False) → banks EARNINGs after de-approval. Fix:
+      re-check driver_approved at the money-emitting state transition, not only at accept. [scout OPS-5e]
+- [ ] **transfer_between_customers (P2P) replay branch missing the ownership assertion** —
+      wallet_service.py:315-322 returns the existing tx on an idempotency hit with no sender/recipient
+      check (OPS-5e added the assertion to credit_wallet/debit_wallet/credit_tenant_float/transfer_to_customer
+      but not this one). Gated behind WALLET_P2P_ENABLED (off) so latent. Fix: mirror the customer-match
+      assertion. [scout OPS-5e]
+- [ ] **OwnerWalletChargeView below-threshold instant charge — no amount cap, no throttle** —
+      menu/views.py:9558 (IsAuthenticated + _can_edit_tenant_order, no throttle_classes); sub-threshold
+      charges debit instantly with only the 5-min QR pay-token as consent (9663-9667). A compromised/abusive
+      waiter session can fire many sub-threshold debits against a present customer within the token window.
+      Fix: per-actor/customer throttle + an absolute amount/velocity cap on the instant-charge path. [scout OPS-5e]
+- [ ] **CustomerWalletRedeemVoucherView bypasses the wallet ledger service + no customer row lock** —
+      accounts/views.py:2243 locks the voucher row but read-modify-writes customer.wallet_balance + a manual
+      WalletTransaction directly (2269-2279) instead of credit_wallet, WITHOUT select_for_update on the
+      Customer → lost-update race vs any concurrent wallet_service op. Fix: funnel through credit_wallet (or
+      lock the customer row). Violates the single-funnel invariant in wallet_service.py:1-15. [scout OPS-5e]
+- [ ] **Password-reset host-header poisoning + reset doesn't invalidate sessions** —
+      build_frontend_base_url falls back to request.get_host() (X-Forwarded-Host-honouring, USE_X_FORWARDED_HOST
+      on) for tenant-less users (accounts/views.py:124-126); the reset link token is built from it (256-258).
+      Also PasswordResetConfirmSerializer.save() (serializers.py:118-125) doesn't rotate/invalidate existing
+      sessions → a stolen session survives a reset. Fix: build the link from a server-authoritative host
+      (like og_views now does); terminate other sessions on reset. [scout OPS-5e]
+
+### OPS-5e — SECURITY — SHIPPED (the items below are DONE; see Done section)
 The OPS-5d scout surfaced these (file:line in scout output; verify first). Several are HIGH.
 - [ ] **Driver cash-out codes platform-global, no throttle, no tenant scoping (HIGH money/IDOR)** —
       create_cashout_request (accounts/driver_service.py:122-138) mints a 6-digit code unique only
@@ -466,6 +510,28 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] OPS-5e "money/IDOR security" (Phase A P0; verified by me in code, backend 3578/0, migrations
+      clean, no model changes): (1) [HIGH] driver cash-out brute-force — per-actor failed-attempt
+      cache lockout (CASHOUT_CONFIRM_MAX_FAILURES=5/15min, user→tenant key) shared by BOTH the confirm
+      AND the lookup oracle (reviewer caught the lookup bypass), + DriverCashoutConfirmThrottle (10/min)
+      on both endpoints; server-side cashout:{req.id} idempotency untouched. (2) [HIGH]
+      MarketplaceOrderStatusView IDOR — financial body (items/totals/payment/wallet/loyalty/schedule)
+      now gated on session-customer ownership; non-owner gets a minimal status only (items materialized
+      only for the owner, inside schema_context). (3) [money] wallet idempotency — externally-supplied
+      keys server-namespaced at ALL body sites (ownercharge:{schema}: / adminfund:{tenant}: /
+      ownertopup:{schema}: — reviewer caught the topup site) + defense-in-depth replay assertions
+      (customer_id in credit/debit_wallet, tenant_id in credit_tenant_float + transfer_to_customer);
+      asserts identity ONLY not amount (allow_partial-safe), internal key formats unchanged. (4)
+      CustomerOrderRate ownership gate + throttle (30/hr). (5) push-sub hijack → update_or_create scoped
+      to (customer_id, endpoint). (6) TranslateView no longer echoes the provider error body. (7) OGView
+      canonical/og:image derived from the tenant's authoritative domain not the spoofable Host. (8)
+      is_staff dropped from can_access_admin_console + all_access capability flags. New test_ops5e_money.py
+      + test_ops5e_accounts.py; updated marketplace/ratings/wallet tests for the new contracts. Reviewer
+      3 major (cash-out lookup oracle, un-namespaced topup key, frozen marketplace test) — all fixed.
+      NOTE: workflow finalGates misreported 2700 (partial run) — my full re-run = 3578/0. Scout → OPS-5f
+      cluster above (DishOption price manip [HIGH], DeliveryRating customer IDOR, driver-approval-bypass
+      earnings, P2P replay assertion, sub-threshold charge cap, voucher race, reset host poisoning). —
+      ops5e commit.
 - [x] OPS-5d "security" (verified by me in code; backend 3541/0, migrations clean): (1) [HIGH]
       Celery run_management_command arbitrary execution — added a hardcoded allowlist (the exact
       CELERY_BEAT_SCHEDULE command names) at the top of the task; disallowed names are logged + skipped

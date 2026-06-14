@@ -65,6 +65,11 @@ REST_FRAMEWORK = {
         "ride_request": "30/hour",
         "ride_driver": "60/min",
         "admin_pii": "120/min",
+        # OPS-5e: owner driver-cash-out confirm/lookup — brute-force-sensitive (6-digit
+        # code resolved globally); rate backstop on top of the per-actor lockout.
+        "driver_cashout_confirm": "10/min",
+        # OPS-5e: customer order rating — ownership-gated; throttle stops bulk probing.
+        "customer_order_rate": "30/hour",
         # OPS-5c item 7: driver doc uploads — 8 MB per submit + admin email each time
         "driver_doc_upload": "10/hour",
         # OPS-5c item 7: analytics ingestion keyed per (tenant, ip) — see AnalyticsEventThrottle

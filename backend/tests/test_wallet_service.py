@@ -175,6 +175,30 @@ class TenantFloatTransferTests(TransactionTestCase):
         self.assertEqual(self._float(), Decimal("80.00"))   # distributed once
         self.assertEqual(self._wallet(), Decimal("20.00"))
 
+    def test_transfer_idempotency_key_collision_across_tenants_refused(self):
+        """OPS-5e: idempotency_key is a GLOBAL namespace on the shared-schema ledger.
+        A key that resolves to ANOTHER tenant's float tx is a collision/attack, not a
+        retry — refuse it (no silent no-op, no cross-tenant balance leak)."""
+        from tenancy.models import Plan, Tenant
+        # Tenant A funds + distributes under key "shared".
+        credit_tenant_float(self.tenant.id, "100")
+        transfer_to_customer(self.tenant.id, self.customer.id, "20", idempotency_key="shared")
+
+        # A second, distinct tenant reuses the same caller-chosen key.
+        tenant_b = Tenant(schema_name="test_float_b", name="Float Resto B",
+                          slug="float-resto-b", plan=self.plan, float_balance=Decimal("0"))
+        tenant_b.auto_create_schema = False
+        tenant_b.save()
+        credit_tenant_float(tenant_b.id, "100")
+
+        with self.assertRaises(WalletError):
+            transfer_to_customer(tenant_b.id, self.customer.id, "20", idempotency_key="shared")
+        # Tenant B's float untouched; the customer was NOT double-credited.
+        self.assertEqual(
+            Tenant.objects.get(pk=tenant_b.pk).float_balance, Decimal("100.00")
+        )
+        self.assertEqual(self._wallet(), Decimal("20.00"))
+
 
 class P2PTransferTests(TransactionTestCase):
     """Customer-to-customer gifting (needs a DB)."""

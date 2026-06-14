@@ -94,6 +94,12 @@ def credit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.TOPUP,
 
     existing = _find_idempotent(idempotency_key)
     if existing is not None:
+        # Defense-in-depth: a legit retry always targets the same customer. A key that
+        # resolves to a DIFFERENT customer's tx is a collision/attack on a caller-supplied
+        # key, not a retry — refuse rather than return someone else's transaction.
+        # (Assert customer only: a partial debit legitimately stores a different amount.)
+        if existing.customer_id != int(customer_id):
+            raise WalletError("idempotency key collision: belongs to another customer")
         return existing
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
@@ -133,6 +139,13 @@ def debit_wallet(customer_id, amount, *, tx_type=WalletTransaction.Type.PAYMENT,
 
     existing = _find_idempotent(idempotency_key)
     if existing is not None:
+        # Defense-in-depth: a legit retry always targets the same customer. A key that
+        # resolves to a DIFFERENT customer's tx is a collision/attack on a caller-supplied
+        # key, not a retry — refuse rather than return someone else's transaction.
+        # (Assert customer only: allow_partial legitimately stores a PARTIAL amount that
+        # differs from the requested one, so an amount assertion would false-positive.)
+        if existing.customer_id != int(customer_id):
+            raise WalletError("idempotency key collision: belongs to another customer")
         return existing
 
     cust = Customer.objects.select_for_update().get(pk=customer_id)
@@ -183,6 +196,11 @@ def credit_tenant_float(tenant_id, amount, *, actor_user_id=None, idempotency_ke
 
     existing = _find_idempotent_float(idempotency_key)
     if existing is not None:
+        # Defense-in-depth: a legit retry always targets the same tenant. A key that
+        # resolves to a DIFFERENT tenant's float tx is a collision/attack on a
+        # caller-supplied key, not a retry — refuse rather than reuse it.
+        if existing.tenant_id != int(tenant_id):
+            raise WalletError("idempotency key collision: belongs to another tenant")
         return existing
 
     tenant = Tenant.objects.select_for_update().get(pk=tenant_id)
@@ -221,6 +239,14 @@ def transfer_to_customer(tenant_id, customer_id, amount, *, actor_user_id=None,
 
     existing = _find_idempotent_float(idempotency_key)
     if existing is not None:
+        # Defense-in-depth (OPS-5e): idempotency_key is a GLOBAL namespace on the
+        # shared-schema ledger. A legit retry always targets the same tenant; a key
+        # that resolves to a DIFFERENT tenant's float tx is a collision/attack on a
+        # caller-supplied key, not a retry — refuse rather than silently no-op and
+        # leak the other tenant's balance. (Mirrors credit_tenant_float; do NOT
+        # assert amount on replay.)
+        if existing.tenant_id != int(tenant_id):
+            raise WalletError("idempotency key collision: belongs to another tenant")
         wallet_tx = None
         if idempotency_key:
             wallet_tx = WalletTransaction.objects.filter(

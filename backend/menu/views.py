@@ -66,7 +66,12 @@ from .serializers import (
     TableLinkSerializer,
 )
 from .throttles import AnalyticsEventThrottle, CheckoutIntentThrottle, OrderHandoffThrottle, PlaceOrderThrottle, StaffOrderListThrottle
-from accounts.throttles import ReservationAvailabilityThrottle, WaitlistJoinThrottle
+from accounts.throttles import (
+    ReservationAvailabilityThrottle,
+    WaitlistJoinThrottle,
+    DriverCashoutConfirmThrottle,
+    CustomerOrderRateThrottle,
+)
 
 
 # ── Menu cache helpers ────────────────────────────────────────────────────────
@@ -4887,13 +4892,37 @@ class OwnerDriverCashoutLookupView(APIView):
     """GET /api/owner/driver-cashout/?code=XXXXXX — preview a driver's pending cash-out
     request by code (owner/manager only) before handing over cash."""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [DriverCashoutConfirmThrottle]  # OPS-5e: brute-force backstop
 
     def get(self, request, *args, **kwargs):
         if not _can_edit_tenant_order(request):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = getattr(request, "tenant", None)
         code = (request.query_params.get("code") or "").strip()
         if not code:
             return Response({"detail": "code is required.", "code": "missing_code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # OPS-5e: the lookup endpoint is a code-validity oracle (200 leaks
+        # amount/driver for a valid code, 404 otherwise), so it must share the
+        # SAME per-actor brute-force lockout as confirm_cashout — otherwise a
+        # scanner walks the ~1e6 6-digit space through GET with zero penalty and
+        # then confirms on the first try. Check the lockout before querying and
+        # increment it on a miss, keyed on the actor like the confirm path.
+        from django.core.cache import cache as _cache
+        from accounts.driver_service import (
+            _cashout_fail_cache_key,
+            CASHOUT_CONFIRM_MAX_FAILURES,
+            CASHOUT_CONFIRM_LOCK_SECONDS,
+        )
+        _actor_id = getattr(request.user, "id", None)
+        _tenant_id = getattr(tenant, "id", None)
+        _fail_key = _cashout_fail_cache_key(actor_user_id=_actor_id, tenant_id=_tenant_id)
+        if (_cache.get(_fail_key) or 0) >= CASHOUT_CONFIRM_MAX_FAILURES:
+            return Response(
+                {"detail": "Too many incorrect cash-out codes — try again shortly.", "code": "locked"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         from accounts.models import DriverCashoutRequest, Customer as _Cust
         req = (
             DriverCashoutRequest.objects
@@ -4901,6 +4930,10 @@ class OwnerDriverCashoutLookupView(APIView):
             .order_by("-created_at").first()
         )
         if req is None:
+            try:
+                _cache.set(_fail_key, (_cache.get(_fail_key) or 0) + 1, CASHOUT_CONFIRM_LOCK_SECONDS)
+            except Exception:
+                pass
             return Response({"detail": "No pending cash-out for that code.", "code": "not_found"},
                             status=status.HTTP_404_NOT_FOUND)
         driver = _Cust.objects.filter(pk=req.driver_id).only("name", "phone").first()
@@ -4916,6 +4949,7 @@ class OwnerDriverCashoutConfirmView(APIView):
     """POST /api/owner/driver-cashout/confirm/  body {code} — restaurant confirms it handed
     the driver cash. Atomically debits the driver's wallet + credits this restaurant's float."""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [DriverCashoutConfirmThrottle]  # OPS-5e: brute-force backstop
 
     def post(self, request, *args, **kwargs):
         if not _can_edit_tenant_order(request):
@@ -7242,10 +7276,12 @@ class CustomerOrderRateView(APIView):
     Responses:
         201 Created — rating stored; body: {score, comment, created_at}
         400 Bad Request — invalid score / already rated / order not complete
+        403 Forbidden — the session customer doesn't own this order
         404 Not Found — unknown order_number
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [CustomerOrderRateThrottle]  # OPS-5e: stop bulk order-number probing
 
     def post(self, request, order_number, *args, **kwargs):
         # Normalise the order number (strip whitespace, upper-case for lookup)
@@ -7256,6 +7292,16 @@ class CustomerOrderRateView(APIView):
             return Response(
                 {"detail": "Order not found.", "code": "order_not_found"},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # OPS-5e: ownership gate. Without this, any caller who guesses an order number
+        # could rate it (review fraud). Require the session customer to own the order —
+        # the customer record exists once they've ordered, so order.customer_id is set.
+        _session_cid = request.session.get("customer_id")
+        if not _session_cid or order.customer_id is None or int(_session_cid) != int(order.customer_id):
+            return Response(
+                {"detail": "You can only rate your own order.", "code": "not_order_owner"},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if order.status != Order.Status.COMPLETED:
@@ -9584,7 +9630,16 @@ class OwnerWalletChargeView(APIView):
 
         order_number = str(request.data.get("order_number") or "").strip()[:100]
         note = str(request.data.get("note") or "").strip()[:200]
-        idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        # Server-namespace the externally-supplied key with the TENANT schema so one
+        # tenant's body-supplied key can never collide with another tenant's (or with
+        # server-generated keys like cashout:/orderpay:). Without this, a caller could
+        # supply a key that aliases an existing transaction and trigger an idempotent
+        # replay of money that wasn't theirs.
+        idem = (
+            f"ownercharge:{getattr(tenant, 'schema_name', '')}:{_raw_idem}"
+            if _raw_idem else None
+        )
 
         # Above the instant-charge threshold → the customer must approve before any money
         # moves. The QR scan identified them; this asks explicit consent for the amount.
@@ -9796,7 +9851,17 @@ class OwnerWalletTopupView(APIView):
             return Response({"detail": "Amount must be positive."}, status=status.HTTP_400_BAD_REQUEST)
 
         note = str(request.data.get("note") or "Owner credit").strip()[:200]
-        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        # OPS-5e: WalletTransaction/TenantFloatTransaction live in the PUBLIC schema
+        # (accounts is a SHARED_APP), so idempotency_key is a GLOBAL namespace across
+        # tenants. Server-namespace the body-supplied key with this tenant's schema —
+        # like OwnerWalletCharge (ownercharge:) and AdminFundTenant (adminfund:) — so a
+        # chosen value can't collide with another tenant's transfer (silent no-op +
+        # cross-tenant balance leak on the idempotent-replay path).
+        _raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120]
+        idempotency_key = (
+            f"ownertopup:{getattr(tenant, 'schema_name', '')}:{_raw_idem}"
+            if _raw_idem else None
+        )
 
         try:
             float_tx, wallet_tx = transfer_to_customer(

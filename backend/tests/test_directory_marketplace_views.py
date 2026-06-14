@@ -565,12 +565,16 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = MarketplaceOrderStatusView.as_view()
 
-    def _get(self, order_number="ORD-001", params=None):
+    def _get(self, order_number="ORD-001", params=None, session_cid=None):
         req = self.factory.get(
             f"/api/marketplace/order/{order_number}/",
             params or {},
         )
         req.user = _anon()
+        # OPS-5e: the financial body is gated on the session customer OWNING the
+        # order. Default to no session (anonymous → minimal body); pass session_cid
+        # to simulate the owner.
+        req.session = {"customer_id": session_cid} if session_cid is not None else {}
         return self.view(req, order_number=order_number)
 
     def test_missing_restaurant_param_returns_400(self):
@@ -598,7 +602,8 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data["code"], "not_found")
 
-    def test_valid_order_returns_200(self):
+    def test_valid_order_owner_returns_full_body(self):
+        """OPS-5e: the session customer who OWNS the order gets the full financial body."""
         tenant = MagicMock()
         tenant.slug = "bistro"
         tenant.name = "Bistro"
@@ -607,11 +612,13 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
         order.order_number = "ORD-001"
         order.status = "confirmed"
         order.fulfillment_type = "pickup"
+        order.customer_id = 7
         order.total = "25.00"
         order.delivery_fee = "0.00"
         order.wallet_amount_paid = "0.00"
         order.currency = "EUR"
         order.estimated_ready_minutes = 20
+        order.scheduled_for = None
         order.items.all.return_value = []
 
         with patch("tenancy.models.Tenant") as mock_tenant:
@@ -619,12 +626,47 @@ class MarketplaceOrderStatusViewTests(SimpleTestCase):
             with patch("django_tenants.utils.schema_context", _sc_mock()):
                 with patch("menu.models.Order") as mock_order:
                     mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    # Session customer matches order.customer_id → owner.
+                    resp = self._get(params={"restaurant": "bistro"}, session_cid=7)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["order_number"], "ORD-001")
+        self.assertEqual(resp.data["status"], "confirmed")
+        # Owner sees the financial detail.
+        self.assertIn("items", resp.data)
+        self.assertIn("total", resp.data)
+        self.assertIn("payment_status", resp.data)
+
+    def test_valid_order_non_owner_returns_minimal_body(self):
+        """OPS-5e IDOR gate: an anonymous / non-owner caller gets ONLY the minimal,
+        non-sensitive status — no items / totals / financial fields."""
+        tenant = MagicMock()
+        tenant.slug = "bistro"
+        tenant.name = "Bistro"
+        tenant.schema_name = "bistro"
+        order = MagicMock()
+        order.order_number = "ORD-001"
+        order.status = "confirmed"
+        order.fulfillment_type = "pickup"
+        order.customer_id = 7
+
+        with patch("tenancy.models.Tenant") as mock_tenant:
+            mock_tenant.objects.get.return_value = tenant
+            with patch("django_tenants.utils.schema_context", _sc_mock()):
+                with patch("menu.models.Order") as mock_order:
+                    mock_order.objects.filter.return_value.prefetch_related.return_value.first.return_value = order
+                    # No session (anonymous) → non-owner.
                     resp = self._get(params={"restaurant": "bistro"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["order_number"], "ORD-001")
         self.assertEqual(resp.data["status"], "confirmed")
-        self.assertIn("items", resp.data)
+        self.assertEqual(resp.data["restaurant_slug"], "bistro")
+        self.assertEqual(resp.data["restaurant_name"], "Bistro")
+        # Financial / sensitive fields MUST be absent for a non-owner.
+        for _leak in ("items", "total", "payment_status", "wallet_amount_paid",
+                      "loyalty_discount", "delivery_code"):
+            self.assertNotIn(_leak, resp.data)
 
     def test_schema_context_error_returns_500(self):
         tenant = MagicMock()

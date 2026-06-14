@@ -144,6 +144,42 @@ class OwnerWalletTopupViewTests(SimpleTestCase):
 
     @patch("accounts.wallet_service.transfer_to_customer")
     @patch("menu.views.Order.objects")
+    def test_caller_idempotency_key_is_tenant_namespaced(self, mock_order_objs, mock_transfer):
+        """OPS-5e: a body-supplied idempotency_key is server-namespaced with this
+        tenant's schema (ownertopup:<schema>:<raw>) so a chosen value can't collide
+        with another tenant's transfer on the shared-schema ledger."""
+        mock_order_objs.filter.return_value.exists.return_value = True
+        float_tx = MagicMock(); float_tx.balance_after = Decimal("490.00")
+        wallet_tx = MagicMock(); wallet_tx.balance_after = Decimal("30.00")
+        mock_transfer.return_value = (float_tx, wallet_tx)
+
+        tnt = MagicMock(); tnt.id = 1; tnt.schema_name = "bistro"
+        resp = self._post(
+            {"customer_id": 42, "amount": "10.00", "idempotency_key": "abc"}, tenant=tnt
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        _, kwargs = mock_transfer.call_args
+        self.assertEqual(kwargs["idempotency_key"], "ownertopup:bistro:abc")
+
+    @patch("accounts.wallet_service.transfer_to_customer")
+    @patch("menu.views.Order.objects")
+    def test_no_idempotency_key_stays_none(self, mock_order_objs, mock_transfer):
+        """No idempotency_key supplied → None passed through (no spurious prefix)."""
+        mock_order_objs.filter.return_value.exists.return_value = True
+        float_tx = MagicMock(); float_tx.balance_after = Decimal("490.00")
+        wallet_tx = MagicMock(); wallet_tx.balance_after = Decimal("30.00")
+        mock_transfer.return_value = (float_tx, wallet_tx)
+
+        tnt = MagicMock(); tnt.id = 1; tnt.schema_name = "bistro"
+        resp = self._post({"customer_id": 42, "amount": "10.00"}, tenant=tnt)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        _, kwargs = mock_transfer.call_args
+        self.assertIsNone(kwargs["idempotency_key"])
+
+    @patch("accounts.wallet_service.transfer_to_customer")
+    @patch("menu.views.Order.objects")
     def test_insufficient_float_returns_402(self, mock_order_objs, mock_transfer):
         """When the restaurant float can't cover the top-up, nothing moves and we get 402."""
         from accounts.wallet_service import InsufficientFunds

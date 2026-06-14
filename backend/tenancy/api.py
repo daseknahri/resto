@@ -1,5 +1,6 @@
 ﻿import io
 import json
+import logging
 import os
 import posixpath
 import urllib.error
@@ -31,6 +32,8 @@ except Exception:  # pragma: no cover - optional dependency
     Image = None
     ImageOps = None
     UnidentifiedImageError = Exception
+
+logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_SIZE = (1800, 1800)
@@ -377,9 +380,13 @@ class TranslateView(APIView):
         try:
             translated = self._call_openrouter(text, target_lang, source_lang)
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:200]
+            # Log the upstream body server-side only; never echo a third-party provider's
+            # raw error body to the client (it can leak provider internals / keys / quota
+            # detail). Return a generic message instead.
+            body = exc.read().decode("utf-8", errors="replace")[:500]
+            logger.warning("Translation provider HTTPError %s: %s", exc.code, body)
             return Response(
-                {"detail": f"Translation provider error ({exc.code}).", "code": "provider_error", "body": body},
+                {"detail": "Translation provider error.", "code": "provider_error"},
                 status=502,
             )
         except (urllib.error.URLError, TimeoutError, OSError):

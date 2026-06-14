@@ -72,11 +72,17 @@ def _parse_coord(value, lo: float, hi: float) -> float | None:
 
 def serialize_user_session(user):
     tenant = getattr(user, "tenant", None)
-    can_access_admin_console = bool(user.is_staff or user.is_superuser or user.is_platform_admin)
-    # Effective permissions: owners and platform-level staff have everything; tenant
+    # The admin endpoints (OPS-5b/5d) are is_staff-free — they gate on
+    # is_superuser / is_platform_admin. Converge this flag onto the same predicate
+    # so a staff-only user isn't shown an admin console that would 403 on use.
+    can_access_admin_console = bool(user.is_superuser or user.is_platform_admin)
+    # Effective permissions: owners and platform-level admins have everything; tenant
     # staff respect their per-account flags. The frontend reads `permissions` to gate
     # waiter-app features, and uses role/`can_edit_tenant_menu` for route access.
-    all_access = bool(user.is_tenant_owner or user.is_superuser or user.is_staff or user.is_platform_admin)
+    # NOTE: this dict is a UI hint only — server-side enforcement lives in the
+    # effective_perm_* methods + DRF permission classes, so dropping is_staff here
+    # does not relax any real authorization. (is_staff dropped for consistency.)
+    all_access = bool(user.is_tenant_owner or user.is_superuser or user.is_platform_admin)
     perm_manage_orders = bool(all_access or user.perm_manage_orders)
     perm_view_revenue = bool(all_access or user.perm_view_revenue)
     perm_edit_menu = bool(all_access or user.perm_edit_menu)
@@ -1473,7 +1479,14 @@ class CustomerPushSubscribeView(APIView):
         if not (endpoint and p256dh and auth):
             return Response({"detail": "Incomplete subscription."}, status=status.HTTP_400_BAD_REQUEST)
         from .models import CustomerPushSubscription
+        # Scope the upsert lookup on (customer_id, endpoint). With endpoint=...
+        # ALONE, update_or_create would silently REASSIGN a row owned by another
+        # customer to this session — a push hijack (this customer would then
+        # receive the other customer's notifications). Including customer_id in
+        # the lookup means a foreign-owned endpoint row is never matched/stolen;
+        # the only row this session can update is its own.
         CustomerPushSubscription.objects.update_or_create(
+            customer_id=customer_id,
             endpoint=endpoint,
             defaults={"customer_id": customer_id, "p256dh": p256dh, "auth": auth},
         )
@@ -1728,7 +1741,11 @@ class AdminFundTenantView(APIView):
 
         note = str(request.data.get("note") or "Platform funding").strip()[:200]
         reference = str(request.data.get("reference") or "").strip()[:120]
-        idempotency_key = str(request.data.get("idempotency_key") or "").strip()[:120] or None
+        raw_idem = str(request.data.get("idempotency_key") or "").strip()[:120]
+        # Server-namespace the caller-supplied key so a chosen value can't collide
+        # with another tenant's funding (idempotency is global on the key). Prefix
+        # with a server-controlled string scoped to this tenant.
+        idempotency_key = f"adminfund:{tenant_id}:{raw_idem}" if raw_idem else None
 
         try:
             tx = credit_tenant_float(
@@ -3599,34 +3616,57 @@ class MarketplaceOrderStatusView(APIView):
                 if order is None:
                     return Response({"detail": "Order not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
-                items = [
-                    {
-                        "dish_slug": item.dish_slug,
-                        "dish_name": item.dish_name,
-                        "qty": item.qty,
-                        "unit_price": str(item.unit_price),
-                        "subtotal": str(item.subtotal),
-                        "options": item.options,
-                        "note": item.note,
-                        "is_voided": item.is_voided,
-                        "combo_components": item.combo_components,
-                    }
-                    for item in order.items.all()
-                ]
+                # Ownership gate — this endpoint is AllowAny and order numbers are
+                # ORD-+token_hex(3) (24 bits → enumerable), so the financial body
+                # (items, totals, payment_status, wallet/loyalty/promo, schedule)
+                # MUST be confined to the session customer who owns the order.
+                # A non-owner gets only a minimal, non-sensitive status. The items
+                # query is built INSIDE the schema_context, so compute ownership
+                # here before deciding whether to materialise it.
+                _scid = getattr(request, "session", None) and request.session.get("customer_id")
+                try:
+                    _owns = bool(_scid and order.customer_id and int(_scid) == int(order.customer_id))
+                except (TypeError, ValueError):
+                    _owns = False
+
+                items = []
+                if _owns:
+                    items = [
+                        {
+                            "dish_slug": item.dish_slug,
+                            "dish_name": item.dish_name,
+                            "qty": item.qty,
+                            "unit_price": str(item.unit_price),
+                            "subtotal": str(item.subtotal),
+                            "options": item.options,
+                            "note": item.note,
+                            "is_voided": item.is_voided,
+                            "combo_components": item.combo_components,
+                        }
+                        for item in order.items.all()
+                    ]
         except Exception as exc:
             logger.exception("MarketplaceOrderStatusView error for order=%s tenant=%s: %s", order_number, slug, exc)
             return Response({"detail": "Could not load order.", "code": "server_error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Self-cancel affordance for the signed-in owner of an early pickup/delivery order.
+        # Non-owner (or anonymous): minimal status only — no financial detail.
+        if not _owns:
+            return Response({
+                "order_number": order.order_number,
+                "status": order.status,
+                "fulfillment_type": order.fulfillment_type,
+                "restaurant_slug": slug,
+                "restaurant_name": tenant.name,
+            })
+
+        # Owner-only from here down — full financial body + ownership affordances.
         can_cancel = False
         delivery_code = None
         try:
-            _scid = getattr(request, "session", None) and request.session.get("customer_id")
             from menu.views import _customer_can_cancel as _ccc
-            _owns = bool(_scid and order.customer_id and int(_scid) == int(order.customer_id))
-            can_cancel = bool(_ccc(order) and _owns)
-            # Proof-of-delivery code — owner-only, active delivery orders.
-            if (_owns and getattr(order, "delivery_code", "")
+            can_cancel = bool(_ccc(order))
+            # Proof-of-delivery code — active delivery orders.
+            if (getattr(order, "delivery_code", "")
                     and order.fulfillment_type == "delivery"
                     and order.status not in ("completed", "cancelled")):
                 delivery_code = order.delivery_code

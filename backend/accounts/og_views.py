@@ -99,10 +99,17 @@ class OGView(View):
         path = raw_path  # validated
 
         # ── 2. Determine host ─────────────────────────────────────────────────
+        # request.get_host() honours X-Forwarded-Host (spoofable upstream), so this
+        # is used ONLY to look up the tenant and to key the cache. The canonical /
+        # og:image host below is re-derived from the RESOLVED tenant's authoritative
+        # domain so a spoofed Host can't be baked into the preview URLs.
         try:
-            host = request.get_host()  # honours X-Forwarded-Host when trusted
+            host = request.get_host()
         except Exception:
             host = request.META.get("HTTP_HOST", "localhost")
+        # Normalise: lowercase + strip port so equivalent Hosts share one cache row
+        # (and one spoofed-case variant can't poison a distinct key).
+        host = (host or "localhost").strip().lower().split(":")[0]
 
         # ── 3. Cache look-up ──────────────────────────────────────────────────
         cache_key = f"ogpage:{host}:{path}"
@@ -140,6 +147,25 @@ class OGView(View):
                 except Exception:
                     tenant = None
 
+        # Canonical / og:image host — prefer the resolved tenant's authoritative
+        # primary domain over the inbound (spoofable) Host header. Falls back to
+        # the validated inbound host when no tenant/domain is available.
+        canonical_host = host
+        if tenant is not None:
+            try:
+                primary = tenant.domains.filter(is_primary=True).first()
+                authoritative = getattr(primary, "domain", "") if primary is not None else ""
+                if isinstance(authoritative, str) and authoritative.strip():
+                    canonical_host = authoritative.strip().lower()
+            except Exception:
+                canonical_host = host
+
+        # Re-derive the icon fallback from the authoritative host (not the inbound
+        # Host header) so the og:image fallback URL can't be pointed off-domain.
+        icon_url = f"https://{canonical_host}/icon-512.png"
+        if image == f"https://{host}/icon-512.png":
+            image = icon_url
+
         # Build metadata from tenant / profile
         if tenant is not None:
             title = tenant.name  # will be escaped in _render_og
@@ -158,7 +184,8 @@ class OGView(View):
                 description = "Order online — menu, delivery and more."
 
         # ── 5. Render ─────────────────────────────────────────────────────────
-        canonical_url = f"https://{host}{path}"
+        # Canonical URL uses the authoritative tenant host, not the inbound Host.
+        canonical_url = f"https://{canonical_host}{path}"
         html = _render_og(
             title=title,
             description=description,

@@ -214,6 +214,36 @@ class StaffChangePasswordThrottle(SimpleRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
 
 
+class DriverCashoutConfirmThrottle(SimpleRateThrottle):
+    """OPS-5e: per-actor throttle on the owner driver-cash-out lookup/confirm endpoints.
+
+    These endpoints resolve a 6-digit cash-out code GLOBALLY (debiting a driver +
+    crediting the confirming tenant's float), so they're a brute-force target. The
+    per-actor failed-attempt lockout in confirm_cashout is the primary defense; this
+    throttle is the rate backstop. Keyed on the authenticated user's pk so each
+    owner/staff member gets an independent bucket (mirrors AdminPIIThrottle); falls
+    back to IP for the (unexpected) unauthenticated case so the class is safe regardless.
+    """
+    scope = "driver_cashout_confirm"
+
+    def get_cache_key(self, request, view):
+        user = getattr(request, "user", None)
+        if user is not None and getattr(user, "is_authenticated", False):
+            pk = getattr(user, "pk", None) or getattr(user, "id", None)
+            if pk is not None:
+                return self.cache_format % {"scope": self.scope, "ident": f"cashout:{pk}"}
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}
+
+
+class CustomerOrderRateThrottle(_CustomerThrottle):
+    """OPS-5e: cap order-rating submissions (AllowAny, session customer_id keyed).
+
+    CustomerOrderRateView now requires the session customer to OWN the order, but a
+    throttle is still needed so a session holder can't bulk-probe order numbers.
+    Keyed per session customer_id (falls back to IP)."""
+    scope = "customer_order_rate"
+
+
 class TranslateThrottle(SimpleRateThrottle):
     """Rate-limit the AI translate endpoint by authenticated user to prevent
     runaway credit consumption against the OpenRouter API."""

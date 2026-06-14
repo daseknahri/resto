@@ -82,6 +82,21 @@ def record_driver_payout(driver_id, amount, *, method="cash", reference="", note
 CASHOUT_MIN = Decimal("100")          # driver must hold at least this to cash out
 CASHOUT_TTL_SECONDS = 900             # a request code is valid for 15 min
 
+# Brute-force lockout for confirm_cashout: the 6-digit code lives in a ~1e6 space, so
+# without a per-actor failed-attempt cap a scanner could iterate it. A legitimate
+# confirm has the right code on the first try (0 failures); a scanner racks up failures
+# and is locked fast, which is what makes the space infeasible to brute-force. The
+# counter is keyed per confirming actor (user, falling back to tenant) in the cache and
+# reset on a successful confirm.
+CASHOUT_CONFIRM_MAX_FAILURES = 5      # failed confirms before the actor is locked out
+CASHOUT_CONFIRM_LOCK_SECONDS = 900    # lockout / counting window (15 min)
+
+
+def _cashout_fail_cache_key(*, actor_user_id, tenant_id) -> str:
+    """Per-actor key for failed confirm attempts (prefer user, fall back to tenant)."""
+    ident = f"u{actor_user_id}" if actor_user_id else f"t{tenant_id}"
+    return f"cashout_confirm_fail:{ident}"
+
 
 class CashoutError(WalletError):
     """Cash-out specific failure; carries a stable machine `code`."""
@@ -143,12 +158,29 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
     wallet (CASHOUT) and credits the restaurant's float (FUND). Idempotent on the request
     id. Returns the resolved DriverCashoutRequest. Raises CashoutError / InsufficientFunds.
     """
+    from django.core.cache import cache
     from django.utils import timezone
     from .models import DriverCashoutRequest, WalletTransaction
     from .wallet_service import debit_wallet, credit_tenant_float
 
     code = (code or "").strip()
     now = timezone.now()
+
+    # Per-actor brute-force lockout: a scanner iterating the 6-digit code racks up
+    # failures fast and is locked out; a legit confirm (right code first try) never
+    # increments the counter, so this is transparent to honest callers.
+    fail_key = _cashout_fail_cache_key(actor_user_id=actor_user_id, tenant_id=tenant_id)
+    if (cache.get(fail_key) or 0) >= CASHOUT_CONFIRM_MAX_FAILURES:
+        raise CashoutError(
+            "Too many incorrect cash-out codes — try again shortly.", code="locked"
+        )
+
+    def _record_failure():
+        try:
+            cache.set(fail_key, (cache.get(fail_key) or 0) + 1, CASHOUT_CONFIRM_LOCK_SECONDS)
+        except Exception:
+            pass
+
     with transaction.atomic():
         req = (
             DriverCashoutRequest.objects.select_for_update()
@@ -156,8 +188,10 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
             .first()
         )
         if req is None:
+            _record_failure()
             raise CashoutError("No pending cash-out for that code", code="not_found")
         if req.expires_at <= now:
+            _record_failure()
             req.status = DriverCashoutRequest.Status.EXPIRED
             req.resolved_at = now
             req.save(update_fields=["status", "resolved_at"])
@@ -184,4 +218,9 @@ def confirm_cashout(code, *, tenant_id, actor_user_id=None):
         req.wallet_tx_id = getattr(wtx, "id", None)
         req.resolved_at = now
         req.save(update_fields=["status", "tenant_id", "actor_user_id", "wallet_tx_id", "resolved_at"])
+    # A successful confirm clears the actor's failed-attempt counter.
+    try:
+        cache.delete(fail_key)
+    except Exception:
+        pass
     return req

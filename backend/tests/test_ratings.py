@@ -38,13 +38,14 @@ def _tenant(tid=1, slug="demo"):
     return SimpleNamespace(id=tid, slug=slug, is_active=True)
 
 
-def _completed_order(order_number="ORD-001", has_rating=False):
-    """Return a mock Order in 'completed' status."""
+def _completed_order(order_number="ORD-001", has_rating=False, customer_id=1):
+    """Return a mock Order in 'completed' status owned by `customer_id`."""
     from menu.models import Order
     order = MagicMock()
     order.order_number = order_number
     order.status = Order.Status.COMPLETED
     order.customer_name = "Alice"
+    order.customer_id = customer_id
     if has_rating:
         # hasattr(order, 'rating') → True means already rated
         order.rating = MagicMock()
@@ -54,11 +55,12 @@ def _completed_order(order_number="ORD-001", has_rating=False):
     return order
 
 
-def _pending_order(order_number="ORD-002"):
+def _pending_order(order_number="ORD-002", customer_id=1):
     from menu.models import Order
     order = MagicMock()
     order.order_number = order_number
     order.status = Order.Status.PENDING
+    order.customer_id = customer_id
     del order.rating
     return order
 
@@ -70,7 +72,7 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         self.factory = APIRequestFactory()
         self.view = CustomerOrderRateView.as_view()
 
-    def _post(self, order_number, body, tenant=None):
+    def _post(self, order_number, body, tenant=None, session_cid=1):
         req = self.factory.post(
             f"/api/orders/{order_number}/rate/",
             body,
@@ -78,7 +80,9 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         )
         req.user = MagicMock(is_authenticated=False)
         req.tenant = tenant or _tenant()
-        req.session = {}
+        # OPS-5e: rating requires the session customer to OWN the order; the mock
+        # orders are owned by customer_id=1, so default the session to match.
+        req.session = {"customer_id": session_cid} if session_cid is not None else {}
         return self.view(req, order_number=order_number)
 
     # ── 404 ───────────────────────────────────────────────────────────────────
@@ -131,10 +135,13 @@ class CustomerOrderRateViewTests(SimpleTestCase):
 
     # ── 201 happy path ────────────────────────────────────────────────────────
 
+    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_valid_rating_returns_201(self, mock_orders, mock_ratings):
+    def test_valid_rating_returns_201(self, mock_orders, mock_ratings, mock_cust):
         mock_orders.get.return_value = _completed_order()
+        linked = MagicMock(pk=1)
+        mock_cust.get.return_value = linked
         rating = MagicMock()
         rating.score = 4
         rating.comment = "Very good!"
@@ -151,13 +158,15 @@ class CustomerOrderRateViewTests(SimpleTestCase):
             order=mock_orders.get.return_value,
             score=4,
             comment="Very good!",
-            customer=None,
+            customer=linked,  # OPS-5e: the owning session customer is linked
         )
 
+    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_comment_is_optional(self, mock_orders, mock_ratings):
+    def test_comment_is_optional(self, mock_orders, mock_ratings, mock_cust):
         mock_orders.get.return_value = _completed_order()
+        mock_cust.get.return_value = MagicMock(pk=1)
         rating = MagicMock()
         rating.score = 5
         rating.comment = ""
@@ -172,11 +181,13 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         _, create_kwargs = mock_ratings.create.call_args
         self.assertEqual(create_kwargs["comment"], "")
 
+    @patch("accounts.models.Customer.objects")
     @patch("menu.views.Rating.objects")
     @patch("menu.views.Order.objects")
-    def test_successful_rating_busts_meta_cache(self, mock_orders, mock_ratings):
+    def test_successful_rating_busts_meta_cache(self, mock_orders, mock_ratings, mock_cust):
         """Creating a rating must evict the TenantMeta cache."""
         mock_orders.get.return_value = _completed_order()
+        mock_cust.get.return_value = MagicMock(pk=1)
         rating = MagicMock()
         rating.score = 3
         rating.comment = ""
@@ -186,6 +197,14 @@ class CustomerOrderRateViewTests(SimpleTestCase):
         with patch("tenancy.api._bust_tenant_meta_cache") as mock_bust:
             self._post("ORD-001", {"score": 3}, tenant=_tenant(slug="myrestaurant"))
         mock_bust.assert_called_once_with("myrestaurant")
+
+    @patch("menu.views.Order.objects")
+    def test_non_owner_session_returns_403(self, mock_orders):
+        """OPS-5e: a session customer who doesn't own the order cannot rate it."""
+        mock_orders.get.return_value = _completed_order(customer_id=1)
+        resp = self._post("ORD-001", {"score": 5}, session_cid=2)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data["code"], "not_order_owner")
 
 
 # ── OwnerRatingListView tests ─────────────────────────────────────────────────
