@@ -7877,7 +7877,8 @@ class OwnerCommissionStatementView(APIView):
     Returns JSON by default; add ?format=pdf for a downloadable PDF statement.
 
     The statement shows every marketplace order in the requested month with its
-    food subtotal, commission charged (10 %), and net payout, plus summary totals.
+    food subtotal, commission charged (at the per-order snapshotted rate), and net
+    payout, plus summary totals.
     """
 
     permission_classes = [IsAuthenticated]
@@ -7888,12 +7889,21 @@ class OwnerCommissionStatementView(APIView):
 
         from django.db.models import Sum, Count, Avg
         from calendar import month_name
+        from datetime import datetime as _dt
 
-        # Parse year/month, defaulting to current month
-        now = timezone.now()
+        # Resolve the tenant profile so we can bucket the month in the tenant's
+        # LOCAL timezone (see below); fall back to None → UTC behaviour.
         try:
-            year = int(request.query_params.get("year", now.year))
-            month = int(request.query_params.get("month", now.month))
+            _profile = request.tenant.profile
+        except Exception:
+            _profile = None
+
+        # Parse year/month, defaulting to the current TENANT-LOCAL month (so the
+        # default month matches what the owner sees on their wall clock).
+        local_now = _profile_now(_profile) if _profile is not None else timezone.now()
+        try:
+            year = int(request.query_params.get("year", local_now.year))
+            month = int(request.query_params.get("month", local_now.month))
             if not (1 <= month <= 12) or year < 2000:
                 raise ValueError
         except (TypeError, ValueError):
@@ -7901,17 +7911,45 @@ class OwnerCommissionStatementView(APIView):
 
         fmt = request.query_params.get("format", "json").lower()
 
-        # Query marketplace orders for this month
+        # A5: bucket by the TENANT-LOCAL month, not UTC. The old
+        # created_at__year/__month filter ran in UTC and mis-bucketed a late-night
+        # month-boundary order for a non-UTC tenant (e.g. an order placed 23:30 on
+        # the 31st local — already next month in UTC — leaked into the wrong
+        # statement). Build the local month's [start, next-month-start) range in the
+        # tenant tz (same tenant-tz approach as the OPS-2 Z-report / service_day_window)
+        # and filter created_at__gte/__lt on it. created_at is stored tz-aware (UTC),
+        # so Django converts these aware bounds correctly for the comparison.
+        try:
+            from zoneinfo import ZoneInfo
+            tz_name = (getattr(_profile, "timezone", "") or "").strip() or getattr(settings, "TIME_ZONE", "") or "UTC"
+            _tz = ZoneInfo(tz_name)
+        except Exception:
+            from datetime import timezone as _stdlib_tz
+            _tz = _stdlib_tz.utc
+        month_start = _dt(year, month, 1, 0, 0, 0, tzinfo=_tz)
+        _ny, _nm = (year + 1, 1) if month == 12 else (year, month + 1)
+        next_month_start = _dt(_ny, _nm, 1, 0, 0, 0, tzinfo=_tz)
+
+        # Query marketplace orders for this local month
         qs = (
             Order.objects
             .filter(
                 source=Order.Source.MARKETPLACE,
-                created_at__year=year,
-                created_at__month=month,
+                created_at__gte=month_start,
+                created_at__lt=next_month_start,
             )
             .order_by("created_at")
         )
 
+        # ── Commission BASIS note (A5, step 5) ────────────────────────────────
+        # commission_amount is charged on the PRE-discount food_subtotal (see
+        # accounts/views.py marketplace checkout), whereas total_revenue below is
+        # Sum(Order.total) which is POST-discount AND tip-inclusive. So when a
+        # discount or tip applies, net_payout = total_revenue - total_commission
+        # MIXES bases (commission on pre-discount food vs revenue on post-discount
+        # + tip). This is documented, not silently changed: whether to switch
+        # commission to the post-discount food total is an OWNER business decision
+        # (decision-gated → A5-followup).
         agg = qs.aggregate(
             order_count=Count("id"),
             total_revenue=Sum("total"),
@@ -7929,6 +7967,8 @@ class OwnerCommissionStatementView(APIView):
                 "customer_name": o.customer_name or "",
                 "total": float(o.total),
                 "commission_amount": float(o.commission_amount),
+                # A5: surface the snapshotted rate so each row's commission is auditable.
+                "commission_rate_applied": float(o.commission_rate_applied),
                 "net_payout": round(float(o.total) - float(o.commission_amount), 2),
                 "currency": o.currency,
                 "status": o.status,
@@ -7952,6 +7992,21 @@ class OwnerCommissionStatementView(APIView):
 
         # ── PDF ───────────────────────────────────────────────────────────────
         currency = orders_data[0]["currency"] if orders_data else ""
+
+        # Derive the commission label from the per-order snapshotted rates rather
+        # than a hardcoded "10%": the platform can set a non-default rate per
+        # tenant (Profile.marketplace_commission_pct), so a literal would misstate
+        # the rate on an official money document. Show the exact rate only when
+        # every order in the month carries the same snapshotted rate; otherwise
+        # drop the percentage (mixed rates can't be summarised by one number).
+        _distinct_rates = {o["commission_rate_applied"] for o in orders_data}
+        if len(_distinct_rates) == 1:
+            _pct = next(iter(_distinct_rates)) * 100
+            # Trim trailing zeros so 10.00 → "10%" and 12.50 → "12.5%".
+            _pct_str = f"{_pct:.2f}".rstrip("0").rstrip(".")
+            commission_label = f"Platform commission ({_pct_str}%):"
+        else:
+            commission_label = "Platform commission:"
 
         buffer = BytesIO()
         doc = canvas.Canvas(buffer, pagesize=A4)
@@ -7978,7 +8033,7 @@ class OwnerCommissionStatementView(APIView):
         summary_items = [
             ("Orders placed via marketplace:", str(order_count)),
             ("Total revenue:", f"{currency} {total_revenue:,.2f}"),
-            ("Platform commission (10%):", f"{currency} {total_commission:,.2f}"),
+            (commission_label, f"{currency} {total_commission:,.2f}"),
             ("Net payout to restaurant:", f"{currency} {net_payout:,.2f}"),
         ]
         sy = y - 8 * mm

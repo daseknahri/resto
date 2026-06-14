@@ -3115,7 +3115,7 @@ class MarketplacePlaceOrderView(APIView):
     throttle_classes = [MarketplaceOrderThrottle]
 
     def post(self, request, *args, **kwargs):
-        from decimal import Decimal
+        from decimal import Decimal, InvalidOperation
         from tenancy.models import Tenant
         from django_tenants.utils import schema_context as _sc
         import secrets as _sec
@@ -3469,7 +3469,20 @@ class MarketplacePlaceOrderView(APIView):
                                          "code": _loy_err}, status=status.HTTP_400_BAD_REQUEST)
                     total = max(Decimal("0"), total - _loyalty_discount)
 
-                commission_amount = (food_subtotal * Decimal("0.10")).quantize(Decimal("0.01"))
+                # A5: the platform's take rate is per-tenant (Profile.marketplace_commission_pct,
+                # a fraction — 0.10 = 10%), defaulting to 0.10 so behaviour is unchanged unless
+                # the platform overrides it for this tenant. Fall back to 0.10 if the field is
+                # null/missing/unparseable (a malformed rate must never 500 a checkout). The
+                # BASIS is unchanged — still food_subtotal, the PRE-discount food total (switching
+                # to post-discount food is an owner decision; see A5-followup).
+                _mkt_rate_raw = getattr(profile, "marketplace_commission_pct", None)
+                try:
+                    commission_rate = (
+                        Decimal(str(_mkt_rate_raw)) if _mkt_rate_raw is not None else Decimal("0.10")
+                    )
+                except (InvalidOperation, ValueError, TypeError):
+                    commission_rate = Decimal("0.10")
+                commission_amount = (food_subtotal * commission_rate).quantize(Decimal("0.01"))
 
                 # Marketplace pickup & delivery are pay-now: the bill must be settled in
                 # full from the customer's wallet at checkout (mirrors the restaurant
@@ -3659,6 +3672,7 @@ class MarketplacePlaceOrderView(APIView):
                             currency=currency,
                             source=_Order.Source.MARKETPLACE,
                             commission_amount=commission_amount,
+                            commission_rate_applied=commission_rate,
                             promotion_discount=_promo_discount,
                             applied_promotion_name=_applied_promo_name,
                             loyalty_discount=_loyalty_discount,

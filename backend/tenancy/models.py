@@ -1,4 +1,6 @@
-﻿from django.db import models
+﻿from decimal import Decimal
+
+from django.db import models
 from django_tenants.models import DomainMixin, TenantMixin
 
 
@@ -376,6 +378,24 @@ class Profile(models.Model):
             "Platform commission on each delivery fee, as a percentage (0–100). "
             "Admin-controlled (owners can't edit it); the driver is paid the fee "
             "minus this cut. Default 0 → the driver keeps 100% of the delivery fee."
+        ),
+    )
+    # The PLATFORM's take rate on each marketplace order, as a fraction (NOT a
+    # percentage): 0.10 = 10%. Mirrors delivery_commission_pct as an admin-only
+    # revenue knob — owners CANNOT edit it (it's absent from the owner
+    # ProfileSerializer and set only via the platform-admin endpoint). Default
+    # 0.10 preserves the historical hard-coded 10% rate so behaviour is unchanged
+    # unless the platform overrides it per tenant. Applied to the PRE-discount
+    # food_subtotal at marketplace checkout; the rate used is snapshotted onto the
+    # order (Order.commission_rate_applied) so each order can be re-audited even
+    # after this rate later changes.
+    marketplace_commission_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.10"),
+        help_text=(
+            "Platform take rate on each marketplace order, as a fraction (0.10 = "
+            "10%). Admin-controlled (owners can't edit it). Default 0.10."
         ),
     )
 

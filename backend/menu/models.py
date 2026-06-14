@@ -1,4 +1,6 @@
-﻿from django.conf import settings
+﻿from decimal import Decimal
+
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -453,7 +455,18 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Platform commission for marketplace orders (10% of food subtotal).",
+        help_text="Platform commission for marketplace orders (rate × food subtotal).",
+    )
+    # Snapshot of the marketplace commission RATE (a fraction, 0.10 = 10%) that
+    # was applied when this order was placed — copied from the tenant's
+    # Profile.marketplace_commission_pct at creation. Persisting the rate means a
+    # historical order can be re-audited even after the tenant's rate later
+    # changes. Default 0 (non-marketplace orders carry no commission).
+    commission_rate_applied = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Snapshot of the commission rate applied (fraction, 0.10 = 10%).",
     )
     promotion_discount = models.DecimalField(
         max_digits=10,

@@ -594,8 +594,49 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
+### A5-FOLLOWUP — BILLING CORRECTNESS (scout A5 cluster; next monetization batch)
+A5 added the per-tenant commission rate + snapshot + tz-correct statement, but the scout found the
+billing surface needs more before real money flows. #1/#2 are real money-overstatement bugs.
+- [ ] **Commission not reversed on cancellation (money — platform bills commission on fully-refunded
+      orders)** — CustomerOrderCancelView refunds wallet/loyalty/stock but never touches
+      commission_amount, and OwnerCommissionStatementView filters source+date only (no status exclusion),
+      so cancelled orders still sum into total_commission. Fix: zero/exclude commission on cancel (exclude
+      CANCELLED from the statement, or zero commission_amount on cancellation). (accounts/views.py:3143-3148;
+      menu/views.py:7933-7956). [scout A5] **(do first)**
+- [ ] **Item-void partial refund doesn't reduce commission** — VoidOrderItemView refunds the voided line
+      but leaves commission_amount at the original full-order value → platform over-collects. Recompute
+      commission on the new effective food subtotal at void. (menu/views.py:4313-4383). [scout A5]
+- [ ] **Statement sums MIXED currencies into one total** — OwnerCommissionStatementView aggregates
+      Sum(total)/Sum(commission) with no GROUP BY currency, and the PDF labels everything with
+      orders_data[0].currency. Bucket per ISO currency. (menu/views.py:7952-7960/7993; order currency
+      accounts/views.py:3307). [scout A5]
+- [ ] **Commission basis pre- vs post-discount (DECISION-GATED — owner)** — commission = pre-discount
+      food_subtotal × rate, but net_payout = Sum(total) (post-discount+tip); when a promo/loyalty applies
+      the restaurant is charged on revenue it didn't collect. Decide: charge on post-discount food, or keep
+      gross-pre-discount with the merchant absorbing promos (document in the merchant agreement). OWNER
+      decision. (accounts/views.py:3478-3485; menu/views.py:7943-7951). [scout A5]
+- [ ] **Take-rate units inconsistent across paths + ride is global-only** — marketplace_commission_pct is a
+      FRACTION (0–1), delivery_commission_pct is PERCENT (0–100), ride_commission_pct is a single GLOBAL
+      PlatformConfig value (no per-tenant override). Converge units + add per-tenant ride override. (tenancy
+      delivery_pricing.py:203; accounts/ride_service.py:157-159). [scout A5]
+- [ ] **Delivery has no rate snapshot + sub-percent precision capped** — DeliveryJob stores
+      platform_commission amount but not the rate (can't re-audit after a rate change), and the
+      DecimalField(decimal_places=2) on the fraction can't represent 12.5%/7.5% (rounds to whole percent).
+      Add delivery_commission_rate_applied + widen decimal_places if sub-percent rates are wanted.
+      (accounts/models.py:733-737; menu/models.py:465-467; sales/views.py:1244). [scout A5]
+
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] A5 "marketplace commission correctness" (KEPOLI_NEXT.md Phase A; verified by me, backend 3689/0,
+      migrations clean): per-tenant Profile.marketplace_commission_pct (default 0.10 → behaviour unchanged;
+      admin-only via sales/views.py tenant endpoint, NOT owner-editable — a restaurant can't zero its own
+      commission, asserted) + Order.commission_rate_applied snapshot (tenancy/0040, menu/0059); the
+      marketplace commission write uses the tenant rate (fallback 0.10 on null/malformed); the statement
+      buckets by TENANT-LOCAL month (was UTC created_at__year/month) + surfaces the rate per row; PDF label
+      derived from the snapshot (reviewer caught a hardcoded "10%"). Basis (pre-discount food) documented,
+      not changed (owner decision). New test_a5_commission.py. Scout → A5-followup billing cluster above
+      (commission reversal on cancel/void [money], multi-currency statement, basis decision, unit
+      reconciliation, delivery snapshot/precision). — a5 commit.
 - [x] Profile import bug (user-reported) — MarketplaceMenuView + MarketplacePlaceOrderView imported
       `Profile` from menu.models (none there → it's in tenancy.models); the ImportError was swallowed by
       the views' broad try/except into HTTP 500 server_error on EVERY marketplace menu fetch + order

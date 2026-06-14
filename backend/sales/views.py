@@ -1165,6 +1165,10 @@ class AdminTenantDeliveryView(APIView):
             "delivery_radius_km": profile.delivery_radius_km,
             "delivery_zone_description": profile.delivery_zone_description or "",
             "delivery_commission_pct": _s(getattr(profile, "delivery_commission_pct", 0)),
+            # A5: the platform's marketplace take rate (fraction, 0.10 = 10%). Like
+            # delivery_commission_pct this is a PLATFORM revenue knob — admin-only,
+            # never exposed on the owner ProfileSerializer.
+            "marketplace_commission_pct": _s(getattr(profile, "marketplace_commission_pct", None)),
         }
 
     def _resolve_tenant(self, tenant_id):
@@ -1231,6 +1235,19 @@ class AdminTenantDeliveryView(APIView):
                     return Response({"detail": "Invalid delivery_commission_pct (0–100).", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
                 profile.delivery_commission_pct = pct
                 update_fields.append("delivery_commission_pct")
+
+            if "marketplace_commission_pct" in body:
+                # A5: the platform's marketplace take rate, a FRACTION in [0, 1]
+                # (0.10 = 10%). Admin-only — owners cannot set their own platform
+                # commission.
+                try:
+                    mpct = _Dec(str(body["marketplace_commission_pct"])).quantize(_Dec("0.01"))
+                    if mpct < 0 or mpct > 1:
+                        raise InvalidOperation
+                except (InvalidOperation, ValueError, TypeError):
+                    return Response({"detail": "Invalid marketplace_commission_pct (0–1).", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+                profile.marketplace_commission_pct = mpct
+                update_fields.append("marketplace_commission_pct")
 
             if "platform_delivery_enabled" in body:
                 profile.platform_delivery_enabled = bool(body["platform_delivery_enabled"])
