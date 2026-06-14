@@ -10377,7 +10377,7 @@ def _campaign_day_window(tenant):
 class OwnerCampaignView(APIView):
     """
     GET  /api/owner/campaigns/  — audience estimate, today's remaining cap, last 20 campaigns.
-    POST /api/owner/campaigns/  — broadcast a push campaign to opted-in past customers.
+    POST /api/owner/campaigns/  — broadcast a campaign to opted-in past customers (push + email).
 
     Owner-only (same _is_tenant_owner gate as closure-date / commission-statement views).
 
@@ -10386,24 +10386,25 @@ class OwnerCampaignView(APIView):
     POST 201 response: campaign row fields.
     POST 409 codes:
       "campaign_cap"  — 2 campaigns already sent today.
-      "no_audience"   — zero opted-in subscribed past customers.
+      "no_audience"   — zero opted-in past customers reachable by EITHER push or email.
     POST 400: title/message length validation.
 
-    Audience definition (strictly tenant-isolated):
+    Audience definition (strictly tenant-isolated) — B1 dual-channel:
       Distinct customer_ids with >= 1 Order in this tenant schema
       AND notify_promotions=True on the public Customer row
-      AND >= 1 CustomerPushSubscription row in the public schema.
+      AND reachable by push (>= 1 CustomerPushSubscription) OR email (non-empty Customer.email).
 
-    Dispatch: one accounts.tasks.campaign_push enqueued per audience customer.
-    sent_count equals audience_count at enqueue time (fire-and-forget; delivery
-    is not guaranteed — web push may fail per-device silently).
-    ONE record_notification row written per campaign dispatch.
+    Dispatch (B1): per audience customer, a push (accounts.tasks.campaign_push, if subscribed)
+    AND/OR an email (if an email is on file). audience_count = the union reachable count.
+    sent_count equals audience_count at enqueue time (fire-and-forget; delivery is not
+    guaranteed — web push / SMTP may fail per-recipient silently).
+    record_notification rows written per dispatch (channel push / email).
     """
 
     permission_classes = [IsAuthenticated]
 
     def _audience_ids(self):
-        """Return a list of distinct customer_ids eligible for campaigns.
+        """Return a list of distinct customer_ids eligible for a PUSH campaign.
 
         Three set-intersection queries — no per-customer loop.
         Isolation: orderer_ids come ONLY from this tenant's Order rows.
@@ -10440,6 +10441,34 @@ class OwnerCampaignView(APIView):
 
         return list(subscribed_ids)
 
+    def _email_audience(self):
+        """Return ``{customer_id: email}`` for opted-in past customers with an
+        email on file (B1 — the email delivery channel for campaigns).
+
+        Same tenant-scoped, opted-in audience as ``_audience_ids`` but keyed by
+        email reachability instead of a push subscription. Customers with BOTH a
+        push subscription and an email appear in both audiences (dual-send).
+        """
+        from accounts.models import Customer
+
+        all_orderer_ids = set(
+            Order.objects.values_list("customer_id", flat=True)
+            .distinct()
+            .exclude(customer_id__isnull=True)
+        )
+        if not all_orderer_ids:
+            return {}
+
+        with schema_context("public"):
+            return {
+                cid: email
+                for cid, email in Customer.objects.filter(
+                    id__in=all_orderer_ids,
+                    notify_promotions=True,
+                ).exclude(email="").values_list("id", "email")
+                if email
+            }
+
     def get(self, request, *args, **kwargs):
         if not _is_tenant_owner(request):
             return Response({"detail": "Owner access required."}, status=status.HTTP_403_FORBIDDEN)
@@ -10451,8 +10480,11 @@ class OwnerCampaignView(APIView):
         ).count()
         today_remaining = max(0, _CAMPAIGN_DAILY_CAP - today_count)
 
+        # B1: the preview must match what POST actually sends — the UNION of push-
+        # reachable + email-reachable opted-in customers (POST stores audience_count =
+        # len(reachable_ids)). A push-only estimate undercounts email-only customers.
         audience_ids = self._audience_ids()
-        audience_estimate = len(audience_ids)
+        audience_estimate = len(set(audience_ids) | set(self._email_audience().keys()))
 
         campaigns = list(Campaign.objects.order_by("-created_at")[:20])
         campaigns_data = [
@@ -10518,34 +10550,45 @@ class OwnerCampaignView(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
 
-            # ── Audience ──────────────────────────────────────────────────────
-            audience_ids = self._audience_ids()
-            if not audience_ids:
+            # ── Audience (B1 — push OR email reachable) ───────────────────────
+            audience_ids = self._audience_ids()           # push-subscribed
+            email_audience = self._email_audience()        # {cid: email}
+            reachable_ids = set(audience_ids) | set(email_audience.keys())
+            if not reachable_ids:
                 return Response(
                     {"detail": "No opted-in subscribers found among your past customers.", "code": "no_audience"},
                     status=status.HTTP_409_CONFLICT,
                 )
 
             # ── Create campaign row ───────────────────────────────────────────
+            # Count reflects total reach across both channels (a customer with
+            # BOTH push and email is counted once).
             campaign = Campaign.objects.create(
                 title=title,
                 message=message,
                 created_by_user_id=request.user.pk,
-                audience_count=len(audience_ids),
-                sent_count=len(audience_ids),  # fire-and-forget: equals audience_count at enqueue
+                audience_count=len(reachable_ids),
+                sent_count=len(reachable_ids),  # fire-and-forget: equals audience_count at enqueue
             )
         finally:
             cache.delete(_lock_key)
 
-        # ── Dispatch one push per audience customer ───────────────────────────
+        # ── Dispatch per audience customer (push + email; B1) ─────────────────
+        # Both channels go through the same async enqueue path the campaign push
+        # already used, so the request never blocks on SMTP. Push re-checks the
+        # subscription/opt-out at send time; email re-checks the opt-out + reads
+        # the address from the public Customer row at send time.
         tenant_name = getattr(tenant, "name", "") or getattr(tenant, "slug", "")
         tenant_slug = getattr(tenant, "slug", "")
+        tenant_id = getattr(tenant, "id", None)
         push_url = f"/order/{tenant_slug}"
-        from accounts.push import push_campaign_to_customer
+        from accounts.push import push_campaign_to_customer, email_campaign_to_customer
         for cid in audience_ids:
             push_campaign_to_customer(cid, tenant_name, title, message, push_url)
+        for cid in email_audience:
+            email_campaign_to_customer(cid, tenant_name, title, message, tenant_id)
 
-        # ── Audit trail (one row per campaign, not per customer) ──────────────
+        # ── Audit trail (one row per channel per campaign, not per customer) ──
         try:
             from accounts.notifications import record_notification
             record_notification(
@@ -10554,7 +10597,15 @@ class OwnerCampaignView(APIView):
                 status="sent",
                 recipient=f"{len(audience_ids)} customers",
                 detail=title,
-                tenant_id=getattr(tenant, "id", None),
+                tenant_id=tenant_id,
+            )
+            record_notification(
+                channel="email",
+                event="campaign",
+                status="sent",
+                recipient=f"{len(email_audience)} customers",
+                detail=title,
+                tenant_id=tenant_id,
             )
         except Exception:
             pass

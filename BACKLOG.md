@@ -594,6 +594,32 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
+### EMAIL-PROGRAM HARDENING — REQUIRED BEFORE SENDING MARKETING EMAIL AT SCALE (scout B1 cluster)
+B1 added email to win-back + campaigns (reaches the email-having majority). Before this sends real
+marketing mail to real customers, the deliverability/compliance basics must be in place — the app is not
+live yet so none of this is actively harming, but it gates turning the email program on for real.
+- [ ] **No real unsubscribe (List-Unsubscribe header + one-click) — CAN-SPAM + Gmail/Yahoo bulk-sender
+      requirement** — send_marketing_email is plain send_mail with only a text "manage in your account" line
+      (login-gated, useless to a lapsed customer). Since Feb 2024 Gmail/Yahoo bulk-junk senders lacking a
+      working List-Unsubscribe / List-Unsubscribe-Post (RFC 8058) one-click header. Add a tokenized
+      unsubscribe URL in the body + the headers (switch send_mail → EmailMessage/extra_headers).
+      (accounts/messaging.py send_marketing_email). [scout B1] **(compliance gate)**
+- [ ] **Sending to UNVERIFIED emails (email_verified exists but is never checked)** — both audiences select
+      .exclude(email='') and ignore Customer.email_verified, so mistyped/stale addresses get blasted → hard
+      bounces → shared-domain blocklisting that also kills transactional mail (OTP/reset/order-status). Gate
+      the email audiences on email_verified=True (or a syntactic+MX precheck); verify email at capture.
+      NOTE: verified-only TRADES reach for deliverability — decide alongside this cluster. (email_verified
+      accounts/models.py:16; send_winback_nudges.py audience; menu/views.py:10461-10469). [scout B1]
+- [ ] **No bounce / spam-complaint feedback loop / suppression list** — record_notification logs only SMTP
+      handoff; nothing ingests async bounces/FBL complaints or suppresses a dead/complaining address, so the
+      same address is retried every campaign + every 90-day winback cycle. Add a CustomerEmailSuppression
+      model fed by an ESP webhook + check it in every audience query. (needs the owner's ESP/webhook).
+      [scout B1]
+- [ ] **notify_promotions is a single GLOBAL cross-tenant opt-out** — one BooleanField on the shared
+      Customer gates promos from ALL tenants; unsubscribing from one restaurant silently kills (or re-floods)
+      every restaurant's promos. Consider per-(customer,tenant) opt-out for marketplace customers.
+      (accounts/models.py notify_promotions; both audiences). [scout B1]
+
 ### COMMISSION LEDGER / REVENUE-RECOGNITION REDESIGN (scout A5-followup cluster)
 The A5/A5-followup scouts keep surfacing deeper statement issues → the commission statement should become a
 proper IMMUTABLE INVOICE LEDGER computed on a COLLECTED basis, with food+delivery commission unified. NOT
@@ -655,6 +681,20 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] B1 "email retention channel" (KEPOLI_NEXT.md Phase B; verified by me, backend 3714/0, migrations
+      clean, reviewer found 0 critical/major): win-back nudges + owner campaigns were PUSH-ONLY (reached only
+      push-granted users — tiny on iOS). Now dual-channel: send_winback_nudges audience broadened from
+      push-subscribers to push-OR-email (opted-in lapsed customers with a push sub OR a non-empty
+      Customer.email), and the send loop delivers push (if subscribed) + email (if email on file) — the nudge
+      counts as delivered if EITHER channel succeeds, the 90-day WinbackNudge dedup slot is reclaimed only if
+      BOTH fail; OwnerCampaignView dispatch likewise emails its opted-in audience alongside push. New
+      send_marketing_email helper (reuses the existing send_mail path; notify_promotions opt-out enforced
+      both channels; record_notification per channel). 50/run cap + daily marker + per-day campaign cap +
+      tenant isolation preserved. New test_b1_email_retention.py. Reviewer 2 minor (push-only audience
+      preview estimate; stale docstrings) — both FIXED by me (audience_estimate now the push∪email union;
+      campaign + winback docstrings updated; +the test_get_shape mock). Scout → "email-program hardening"
+      cluster above (List-Unsubscribe/one-click, verified-only sending, bounce suppression, per-tenant
+      opt-out) — REQUIRED before sending real marketing mail (deferred; app not live). — b1 commit.
 - [x] A5-followup "billing correctness" (verified by me, backend 3698/0, migrations clean, reviewer found
       0 issues): (1) the commission statement now EXCLUDES CANCELLED orders (once on the base queryset so
       the aggregate Sum and per-order rows agree) — the platform no longer bills commission on fully-refunded

@@ -45,3 +45,32 @@ def send_otp_email(email: str, code: str):
     if sent < 1:
         logger.warning("OTP email not sent", extra={"target_email": email})
     return sent
+
+
+def send_marketing_email(email: str, subject: str, body: str, tenant_name: str = ""):
+    """Send a plain-text promotional/retention email (win-back nudge or owner campaign).
+
+    Mirrors send_otp_email's send_mail style: no explicit from (None →
+    DEFAULT_FROM_EMAIL), EMAIL_FAIL_SILENTLY honoured, logs on a 0 send count,
+    returns the number of messages delivered (0 or 1).
+
+    A short opt-out line is appended so promotional mail always tells the
+    recipient why they got it and how to stop it (notify_promotions is the
+    single opt-out for both push and email).
+    """
+    who = tenant_name or "this restaurant"
+    full_body = (
+        f"{body}\n\n"
+        f"You're receiving this because you opted into promotions from {who}; "
+        "manage notifications in your Kepoli account.\n"
+    )
+    sent = send_mail(
+        subject,
+        full_body,
+        None,
+        [email],
+        fail_silently=getattr(settings, "EMAIL_FAIL_SILENTLY", True),
+    )
+    if sent < 1:
+        logger.warning("Marketing email not sent", extra={"target_email": email})
+    return sent

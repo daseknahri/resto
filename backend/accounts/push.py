@@ -573,3 +573,52 @@ def push_campaign_to_customer(customer_id, tenant_name, title, message, url) -> 
     """Enqueue a campaign push to one customer. Never raises/blocks."""
     from accounts.tasks import enqueue, campaign_push
     enqueue(campaign_push, customer_id, tenant_name, title, message, url)
+
+
+def send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id=None) -> int:
+    """Send a promotional campaign email to ONE customer. SYNCHRONOUS (B1).
+
+    Respects ``notify_promotions`` and reads the address from the public
+    Customer row (so an opt-out between enqueue and send still suppresses).
+    Returns the number of emails delivered (0 or 1). Never raises — failures
+    are recorded as a NotificationLog row and 0 is returned.
+    """
+    from django_tenants.utils import schema_context
+    from accounts.messaging import send_marketing_email
+    from accounts.notifications import record_notification
+    from .models import Customer
+
+    with schema_context("public"):
+        cust = Customer.objects.filter(pk=customer_id).first()
+        if cust is None:
+            return 0
+        if not getattr(cust, "notify_promotions", True):
+            return 0
+        email = (getattr(cust, "email", "") or "").strip()
+    if not email:
+        return 0
+
+    try:
+        sent = send_marketing_email(email, title, message, tenant_name)
+    except Exception:
+        record_notification(
+            channel="email", event="campaign", status="failed",
+            recipient=email, detail=tenant_name, tenant_id=tenant_id,
+        )
+        return 0
+
+    record_notification(
+        channel="email",
+        event="campaign",
+        status="sent" if sent else "failed",
+        recipient=email,
+        detail=tenant_name,
+        tenant_id=tenant_id,
+    )
+    return sent
+
+
+def email_campaign_to_customer(customer_id, tenant_name, title, message, tenant_id=None) -> None:
+    """Enqueue a campaign email to one customer. Never raises/blocks."""
+    from accounts.tasks import enqueue, campaign_email
+    enqueue(campaign_email, customer_id, tenant_name, title, message, tenant_id)

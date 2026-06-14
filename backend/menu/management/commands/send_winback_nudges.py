@@ -14,8 +14,16 @@ Audience:
   - Has at least one Order in this tenant.
   - Most recent order is older than profile.winback_inactive_weeks weeks.
   - Customer.notify_promotions is True (re-checked at send time).
-  - Has at least one CustomerPushSubscription.
+  - Is reachable on at least one channel: has a CustomerPushSubscription OR a
+    non-empty Customer.email (B1 — email is a second delivery channel so the
+    reminder reaches customers without push, e.g. iOS Safari users).
   - No WinbackNudge row for this (tenant, customer) within the last 90 days.
+
+Delivery (B1): for each eligible customer BOTH available channels are tried —
+push via send_campaign_push_sync (if subscribed) and email via the marketing
+helper (if an email is on file). The nudge counts as delivered (the WinbackNudge
+dedup row is kept) if EITHER channel succeeds; the row is only reclaimed when
+BOTH channels fail/suppress.
 
 Cap: max 50 nudges per tenant per run; remainder will be picked up on subsequent
 eligible days (nudge clock starts fresh after 90 days).
@@ -83,14 +91,22 @@ def _record_nudge(tenant_id: int, customer_id: int) -> None:
     WinbackNudge.objects.create(tenant_id=tenant_id, customer_id=customer_id)
 
 
-def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> list[int]:
+def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> tuple[list[int], dict[int, str], set[int]]:
     """
-    Return up to ``cap`` customer_ids who:
+    Return ``(eligible_ids, email_by_id, subscribed_ids)`` where each eligible
+    customer:
       - ordered at least once in this tenant
       - most recent order older than inactive_weeks weeks
       - notify_promotions = True
-      - have an active CustomerPushSubscription
-      - not already nudged within 90 days
+      - is reachable on at least one channel — has a CustomerPushSubscription
+        OR a non-empty Customer.email (B1)
+      - was not already nudged within 90 days
+
+    ``eligible_ids`` is capped at ``cap`` (deterministic, sorted slice).
+    ``email_by_id`` maps customer_id → email for the email-reachable subset of
+    the eligible ids (used by the send loop to fire the email channel).
+    ``subscribed_ids`` is the set of eligible ids that have a push subscription
+    (used by the send loop to fire the push channel).
 
     MUST be called from INSIDE schema_context(tenant.schema_name) for the
     Order query; the public-schema queries switch context internally.
@@ -109,7 +125,7 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> list[int]:
     )
     inactive_ids = set(row["customer_id"] for row in qs)
     if not inactive_ids:
-        return []
+        return [], {}, set()
 
     with schema_context("public"):
         from accounts.models import Customer, CustomerPushSubscription
@@ -122,16 +138,29 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> list[int]:
             ).values_list("id", flat=True)
         )
         if not opted_in:
-            return []
+            return [], {}, set()
 
-        # Step 3: has at least one push subscription.
+        # Step 3a: subscribed customers (push channel).
         subscribed = set(
             CustomerPushSubscription.objects.filter(
                 customer_id__in=opted_in,
             ).values_list("customer_id", flat=True).distinct()
         )
-        if not subscribed:
-            return []
+
+        # Step 3b: customers with a non-empty email (email channel). B1 — this
+        # is what broadens the audience beyond push-subscribed customers.
+        email_by_id = {
+            cid: email
+            for cid, email in Customer.objects.filter(
+                id__in=opted_in,
+            ).exclude(email="").values_list("id", "email")
+            if email
+        }
+
+        # Reachable on at least one channel — push OR email.
+        reachable = subscribed | set(email_by_id.keys())
+        if not reachable:
+            return [], {}, set()
 
     # Step 4: not nudged within 90 days — ONE batched query instead of one
     # EXISTS per customer.  _already_nudged is kept for external callers.
@@ -141,16 +170,21 @@ def _build_audience(tenant_id: int, inactive_weeks: int, cap: int) -> list[int]:
         recently_nudged = set(
             WinbackNudge.objects.filter(
                 tenant_id=tenant_id,
-                customer_id__in=subscribed,
+                customer_id__in=reachable,
                 sent_at__gte=cutoff,
             ).values_list("customer_id", flat=True)
         )
 
     # Sort the set for deterministic iteration order so the capped slice is
     # stable across calls (avoids misleading remaining-count logs).
-    eligible = [cid for cid in sorted(subscribed) if cid not in recently_nudged][:cap]
+    eligible = [cid for cid in sorted(reachable) if cid not in recently_nudged][:cap]
 
-    return eligible
+    # Trim the channel maps to the capped eligible set.
+    eligible_set = set(eligible)
+    email_by_id = {cid: email_by_id[cid] for cid in eligible if cid in email_by_id}
+    subscribed = subscribed & eligible_set
+
+    return eligible, email_by_id, subscribed
 
 
 def _send_nudge(customer_id: int, tenant_name: str, slug: str, push_url: str, title: str, body: str) -> int:
@@ -167,9 +201,23 @@ def _send_nudge(customer_id: int, tenant_name: str, slug: str, push_url: str, ti
         return 0
 
 
+def _send_nudge_email(email: str, tenant_name: str, slug: str, title: str, body: str) -> int:
+    """Send one winback email synchronously (B1). Mirrors the marketing helper.
+
+    Returns the number of emails delivered (0 means not sent). Never raises —
+    exceptions are logged and 0 is returned.
+    """
+    from accounts.messaging import send_marketing_email
+    try:
+        return send_marketing_email(email, title, body, tenant_name)
+    except Exception:
+        logger.exception("send_winback_nudges: email failed for %s at %s", email, slug)
+        return 0
+
+
 class Command(BaseCommand):
     help = (
-        "Hourly sweep: send a win-back push reminder to lapsed customers "
+        "Hourly sweep: send a win-back reminder (push AND/OR email) to lapsed customers "
         "for tenants that have Profile.winback_enabled=True. "
         "Sends at tenant-local hour 11 (pre-lunch), at most once per customer per 90 days."
     )
@@ -226,9 +274,12 @@ class Command(BaseCommand):
                     inactive_weeks = 4
                 tenant_name = getattr(tenant, "name", "") or tenant.slug
 
-                # Build audience inside the tenant schema.
+                # Build audience inside the tenant schema. Returns the eligible
+                # ids plus the per-channel maps (email-reachable + push-subscribed).
                 with schema_context(tenant.schema_name):
-                    audience = _build_audience(tenant.id, inactive_weeks, _CAP_PER_RUN)
+                    audience, email_by_id, subscribed_ids = _build_audience(
+                        tenant.id, inactive_weeks, _CAP_PER_RUN
+                    )
 
                 if not audience:
                     self.stdout.write(f"  {tenant.slug} ({day_str}): no eligible customers")
@@ -276,27 +327,36 @@ class Command(BaseCommand):
                     total_skipped_marker += 1
                     continue
 
-                # Send loop.
+                # Send loop (B1 — dual channel).
                 # Ordering guarantee (spam safety):
                 #   1. Write the WinbackNudge row FIRST — so if the process dies
-                #      between the DB write and the push delivery, the customer is
+                #      between the DB write and delivery, the customer is
                 #      protected from a re-send on the next run (a missed nudge is
                 #      preferable to a duplicate nudge).
-                #   2. Call _send_nudge.  If the push is suppressed at send time
-                #      (e.g. customer opted out between audience build and now),
-                #      _send_nudge returns 0 and we delete the pre-written nudge
-                #      row so the 90-day dedupe slot is not burned for an
-                #      undelivered message.
+                #   2. Try BOTH available channels for the customer: push via
+                #      _send_nudge (if subscribed) and email via _send_nudge_email
+                #      (if an email is on file).  The nudge counts as delivered if
+                #      EITHER channel succeeds.  Only if BOTH fail/suppress do we
+                #      reclaim the pre-written nudge row so the 90-day dedupe slot
+                #      is not burned for an undelivered message.
                 delivered = 0
                 for cid in audience:
                     with schema_context("public"):
                         _record_nudge(tenant.id, cid)
 
-                    sent_count = _send_nudge(cid, tenant_name, tenant.slug, push_url, title, body)
+                    push_sent = 0
+                    if cid in subscribed_ids:
+                        push_sent = _send_nudge(cid, tenant_name, tenant.slug, push_url, title, body)
 
-                    if sent_count == 0:
-                        # Push was suppressed (opt-out re-check) or all endpoints
-                        # are gone.  Reclaim the dedupe slot.
+                    email_sent = 0
+                    cust_email = email_by_id.get(cid)
+                    if cust_email:
+                        email_sent = _send_nudge_email(cust_email, tenant_name, tenant.slug, title, body)
+
+                    if push_sent == 0 and email_sent == 0:
+                        # Both channels suppressed/failed (e.g. opt-out re-check
+                        # inside send_campaign_push_sync, dead endpoints, SMTP
+                        # failure).  Reclaim the dedupe slot.
                         # NOTE: sliced querysets cannot .delete() in Django —
                         # fetch the row then delete it.
                         try:
@@ -315,17 +375,29 @@ class Command(BaseCommand):
                             )
                     else:
                         delivered += 1
-                        # Instrument with record_notification (one row per delivered nudge).
+                        # Instrument with record_notification — one row PER
+                        # channel that actually delivered, so push and email are
+                        # distinguishable in the audit trail.
                         try:
                             from accounts.notifications import record_notification
-                            record_notification(
-                                channel="push",
-                                event="winback",
-                                status="sent",
-                                recipient=str(cid),
-                                detail=tenant_name,
-                                tenant_id=tenant.id,
-                            )
+                            if push_sent:
+                                record_notification(
+                                    channel="push",
+                                    event="winback",
+                                    status="sent",
+                                    recipient=str(cid),
+                                    detail=tenant_name,
+                                    tenant_id=tenant.id,
+                                )
+                            if email_sent:
+                                record_notification(
+                                    channel="email",
+                                    event="winback",
+                                    status="sent",
+                                    recipient=cust_email,
+                                    detail=tenant_name,
+                                    tenant_id=tenant.id,
+                                )
                         except Exception:
                             pass  # best-effort
 

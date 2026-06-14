@@ -73,7 +73,8 @@ class OwnerCampaignGetTests(SimpleTestCase):
     @patch("menu.views._campaign_day_window")
     @patch("menu.views.OwnerCampaignView._audience_ids", return_value=[1, 2, 3])
     @patch("menu.views.Campaign")
-    def test_get_shape(self, mock_campaign, _aud, mock_day, _gate):
+    @patch("menu.views.OwnerCampaignView._email_audience", return_value={})
+    def test_get_shape(self, _email_aud, mock_campaign, _aud, mock_day, _gate):
         mock_day.return_value = (MagicMock(), MagicMock())
         mock_campaign.objects.filter.return_value.count.return_value = 0
 
@@ -122,7 +123,8 @@ class OwnerCampaignCapTests(SimpleTestCase):
         ):
             mock_campaign.objects.filter.return_value.count.return_value = today_count
             if audience_override is not None:
-                with patch.object(OwnerCampaignView, "_audience_ids", return_value=audience_override):
+                with patch.object(OwnerCampaignView, "_audience_ids", return_value=audience_override), \
+                     patch.object(OwnerCampaignView, "_email_audience", return_value={}):
                     req = _make_campaign_view_request(
                         "post", {"title": "Flash sale!", "message": "20% off everything today."}
                     )
@@ -275,7 +277,8 @@ class OwnerCampaignLengthValidationTests(SimpleTestCase):
     def test_max_length_title_and_message_pass_validation(self):
         """Exact-boundary values (80 / 200 chars) must pass validation.
         We expect no_audience (no real DB) not a 400."""
-        with patch.object(OwnerCampaignView, "_audience_ids", return_value=[]):
+        with patch.object(OwnerCampaignView, "_audience_ids", return_value=[]), \
+             patch.object(OwnerCampaignView, "_email_audience", return_value={}):
             resp = self._post_raw("x" * 80, "y" * 200)
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data.get("code"), "no_audience")

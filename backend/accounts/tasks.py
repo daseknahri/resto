@@ -160,3 +160,15 @@ def campaign_push(customer_id, tenant_name, title, message, url):
     """Send a promotional campaign push to one customer."""
     from accounts.push import send_campaign_push_sync
     send_campaign_push_sync(customer_id, tenant_name, title, message, url)
+
+
+@shared_task(name="accounts.tasks.campaign_email", **_RETRY)
+def campaign_email(customer_id, tenant_name, title, message, tenant_id=None):
+    """Send a promotional campaign email to one customer (B1).
+
+    Off the request path (mirrors campaign_push). Re-checks notify_promotions
+    and reads the email from the public Customer row, so an opt-out between
+    enqueue and delivery still suppresses the message.
+    """
+    from accounts.push import send_campaign_email_sync
+    send_campaign_email_sync(customer_id, tenant_name, title, message, tenant_id)

@@ -91,9 +91,10 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
         mock_order_qs = MagicMock()
         mock_order_qs.values.return_value.annotate.return_value.filter.return_value = [row]
 
-        # Mock Customer (opted-in)
+        # Mock Customer: opted-in lookup → [99]; email lookup → none (push-only test).
         mock_customer_qs = MagicMock()
         mock_customer_qs.filter.return_value.values_list.return_value = [99]
+        mock_customer_qs.filter.return_value.exclude.return_value.values_list.return_value = []
 
         # Mock CustomerPushSubscription (has a sub)
         mock_sub_qs = MagicMock()
@@ -113,7 +114,7 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
         with patches[0] as mock_ctx, patches[1], patches[2], patches[3], patches[4]:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=inactive_weeks, cap=cap)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=inactive_weeks, cap=cap)
         return result
 
     def test_customer_last_order_exactly_4_weeks_ago_is_included(self):
@@ -139,7 +140,7 @@ class WinbackInactivityBoundaryTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
         self.assertEqual(result, [])
 
 
@@ -168,7 +169,7 @@ class WinbackOptOutTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
 
         self.assertEqual(result, [])
 
@@ -178,8 +179,12 @@ class WinbackOptOutTests(SimpleTestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class WinbackNoPushSubTests(SimpleTestCase):
-    def test_customer_without_push_sub_excluded(self):
-        """Customer with no push subscription is excluded (no sub → not in subscribed set)."""
+    def test_customer_without_push_sub_or_email_excluded(self):
+        """Customer with NEITHER a push subscription NOR an email is excluded.
+
+        B1: a missing push subscription alone no longer excludes — the customer
+        must also have no email to be unreachable.
+        """
         from menu.management.commands.send_winback_nudges import _build_audience
 
         cutoff = datetime.now(_tz.utc) - timedelta(weeks=4)
@@ -189,8 +194,10 @@ class WinbackNoPushSubTests(SimpleTestCase):
         mock_order_qs = MagicMock()
         mock_order_qs.values.return_value.annotate.return_value.filter.return_value = [row]
 
+        # Opted-in but NO email on file.
         mock_customer_qs = MagicMock()
         mock_customer_qs.filter.return_value.values_list.return_value = [99]
+        mock_customer_qs.filter.return_value.exclude.return_value.values_list.return_value = []
 
         # No push subscriptions
         mock_sub_qs = MagicMock()
@@ -202,7 +209,7 @@ class WinbackNoPushSubTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
 
         self.assertEqual(result, [])
 
@@ -229,6 +236,7 @@ class WinbackDedupeTests(SimpleTestCase):
 
         mock_customer_qs = MagicMock()
         mock_customer_qs.filter.return_value.values_list.return_value = [customer_id]
+        mock_customer_qs.filter.return_value.exclude.return_value.values_list.return_value = []
 
         mock_sub_qs = MagicMock()
         mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = [customer_id]
@@ -250,7 +258,7 @@ class WinbackDedupeTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
 
         self.assertEqual(result, [])
 
@@ -269,7 +277,7 @@ class WinbackDedupeTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
 
         self.assertIn(99, result)
 
@@ -294,6 +302,7 @@ class WinbackCapTests(SimpleTestCase):
 
         mock_customer_qs = MagicMock()
         mock_customer_qs.filter.return_value.values_list.return_value = all_ids
+        mock_customer_qs.filter.return_value.exclude.return_value.values_list.return_value = []
 
         mock_sub_qs = MagicMock()
         mock_sub_qs.filter.return_value.values_list.return_value.distinct.return_value = all_ids
@@ -308,7 +317,7 @@ class WinbackCapTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            result = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
+            result, _emails, _subs = _build_audience(tenant_id=1, inactive_weeks=4, cap=50)
 
         self.assertLessEqual(len(result), 50)
 
@@ -371,7 +380,7 @@ class WinbackWrongHourTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[]) as mock_audience:
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([], {}, set())) as mock_audience:
             mock_cache.add.return_value = True
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -402,7 +411,7 @@ class WinbackCacheMarkerTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]) as mock_audience, \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})) as mock_audience, \
              patch("menu.management.commands.send_winback_nudges._record_nudge") as mock_record, \
              patch("menu.management.commands.send_winback_nudges._send_nudge") as mock_send:
             # cache.add returns False → already ran today
@@ -430,7 +439,7 @@ class WinbackCacheMarkerTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[]) as mock_audience:
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([], {}, set())) as mock_audience:
             mock_cache.add.return_value = True
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -467,7 +476,7 @@ class WinbackDefaultMessageTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", side_effect=capture_send), \
              patch("menu.management.commands.send_winback_nudges._record_nudge"):
             mock_cache.add.return_value = True
@@ -498,7 +507,7 @@ class WinbackDefaultMessageTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", side_effect=capture_send), \
              patch("menu.management.commands.send_winback_nudges._record_nudge"):
             mock_cache.add.return_value = True
@@ -617,7 +626,7 @@ class WinbackSendOrderingTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[7, 8, 9]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([7, 8, 9], {}, {7, 8, 9})), \
              patch("menu.management.commands.send_winback_nudges._record_nudge", side_effect=record_side_effect), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", side_effect=send_side_effect):
             mock_cache.add.return_value = True
@@ -667,7 +676,7 @@ class WinbackSendOrderingTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})), \
              patch("menu.management.commands.send_winback_nudges._record_nudge", side_effect=record_side_effect), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", side_effect=send_side_effect), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs):
@@ -719,7 +728,7 @@ class WinbackSuppressedSendReclamationTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})), \
              patch("menu.management.commands.send_winback_nudges._record_nudge"), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", return_value=0), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs):
@@ -750,7 +759,7 @@ class WinbackSuppressedSendReclamationTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[42]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([42], {}, {42})), \
              patch("menu.management.commands.send_winback_nudges._record_nudge"), \
              patch("menu.management.commands.send_winback_nudges._send_nudge", return_value=1), \
              patch("accounts.models.WinbackNudge.objects", mock_winback_qs):
@@ -784,7 +793,7 @@ class WinbackInactiveWeeksCoercionTests(SimpleTestCase):
 
         def capture_build(tenant_id, inactive_weeks, cap):
             captured["inactive_weeks"] = inactive_weeks
-            return []
+            return [], {}, set()
 
         cmd = _make_command()
         with patch("menu.management.commands.send_winback_nudges.Tenant.objects", mock_tenant_qs), \
@@ -819,7 +828,7 @@ class WinbackInactiveWeeksCoercionTests(SimpleTestCase):
              patch("menu.management.commands.send_winback_nudges._tenant_local_hour", return_value=(11, "2024-01-01")), \
              patch("menu.management.commands.send_winback_nudges.cache") as mock_cache, \
              patch("menu.management.commands.send_winback_nudges.schema_context") as mock_ctx, \
-             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=[]), \
+             patch("menu.management.commands.send_winback_nudges._build_audience", return_value=([], {}, set())), \
              self.assertLogs("menu.management.commands.send_winback_nudges", level=logging.WARNING):
             mock_cache.add.return_value = True
             mock_ctx.return_value.__enter__ = MagicMock(return_value=None)
