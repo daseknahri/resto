@@ -23,6 +23,21 @@ python manage.py collectstatic --noinput
 echo "[entrypoint] seed_plans"
 python manage.py seed_plans
 
+# A7: fail a misconfigured prod deploy loudly. The deploy check (config/checks.py)
+# ERRORs when REDIS_URL is unset in production -- without it the cache + channel
+# layer fall back to in-process backends, so cross-worker broadcasts (live order/
+# paid updates) are lost and the shared cache (idempotency mutexes/throttles) is
+# not shared. --fail-level ERROR halts startup (set -e), so Coolify keeps the old
+# healthy container instead of serving a broken one. A missing CELERY_BROKER_URL is
+# only a Warning (inline-thread mode), so it does NOT block. Bypass in an emergency
+# single-process deploy with SKIP_DEPLOY_CHECK=1.
+if [ "${SKIP_DEPLOY_CHECK:-0}" = "1" ]; then
+  echo "[entrypoint] SKIP_DEPLOY_CHECK=1 -> skipping deploy config check"
+else
+  echo "[entrypoint] check --deploy"
+  python manage.py check --deploy --fail-level ERROR
+fi
+
 # OPS-5d D: never pass the admin password via --password — a CLI arg is visible
 # in /proc, `docker inspect` and deploy logs.  ensure_platform_admin already
 # prefers the PLATFORM_ADMIN_PASSWORD env var, so export it (mapping from the

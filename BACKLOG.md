@@ -596,6 +596,18 @@ Several are HIGH. file:line in scout output; verify before acting.
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] A7 "durable Redis/Celery boot assertion" (KEPOLI_NEXT.md Phase A; verified by me, backend
+      3670/0). Prod silently degraded when REDIS_URL/CELERY_BROKER_URL were unset (cache→LocMemCache,
+      channel layer→InMemoryChannelLayer, tasks→inline daemon thread) → cross-worker broadcasts (live
+      order/paid) + in-flight notifications lost on multi-worker prod. Fix: a Django deploy system check
+      (config/checks.py, register(deploy=True)) — kepoli.E001 ERROR when DEBUG=False + REDIS_URL unset,
+      kepoli.W001 WARNING when CELERY_BROKER_URL unset (inline mode is a supported opt-in fallback, so
+      not a hard-fail). Registered via AccountsConfig.ready(); entrypoint.sh runs `manage.py check
+      --deploy --fail-level ERROR` before starting uvicorn so a misconfigured deploy HARD-FAILS (Coolify
+      keeps the old container); SKIP_DEPLOY_CHECK=1 emergency bypass. Verified: DEBUG=True silent (dev/
+      tests unaffected), DEBUG=False+no-Redis → E001 + exit 1. coolify.env.example (REDIS required note +
+      CELERY_BROKER_URL line) + LAUNCH_CHECKLIST §2 updated. NO settings-import raise (would break manage
+      commands/tests). — a7 commit. Next Phase-A eng: A4 marketplace COD-on-handover.
 - [x] OPS-5h "final security batch" (verified by me, backend 3670/0, migrations clean) — CLOSES the
       OPS-5x security program. (1) customer-login session fixation — all three finalizers
       (_rotate_customer_session) cycle the session key before the anon→customer privilege jump (phone/

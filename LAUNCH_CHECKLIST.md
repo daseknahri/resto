@@ -40,6 +40,13 @@ Go to **Coolify → your service → Environment Variables** and add/update:
 > worker A never reaches clients connected to worker B, making real-time kitchen/waiter updates
 > unreliable in a multi-worker deployment.  Verify: `REDIS_URL=redis://... python manage.py shell
 > -c "from channels.layers import get_channel_layer; cl=get_channel_layer(); print(type(cl).__name__)"` should print `RedisChannelLayer`.
+>
+> **A7 — this is now ENFORCED at deploy.** The entrypoint runs `python manage.py check --deploy
+> --fail-level ERROR`; the `kepoli.E001` deploy check (config/checks.py) HARD-FAILS startup when
+> `DEBUG=False` and `REDIS_URL` is unset, so a misconfigured deploy keeps the old healthy container
+> instead of coming up with a broken in-memory cache/channel layer. A missing `CELERY_BROKER_URL`
+> is a Warning (`kepoli.W001`), not a hard-fail (inline-thread mode is a supported fallback — see §2b).
+> Emergency single-process bypass: set `SKIP_DEPLOY_CHECK=1` on the container.
 
 > **Note on CSRF:** leave `DJANGO_CSRF_COOKIE_HTTPONLY` unset/`False`. The SPA reads the
 > `csrftoken` cookie in JS and echoes it in the `X-CSRFToken` header (Django double-submit) —
