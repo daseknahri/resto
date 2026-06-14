@@ -188,20 +188,41 @@ class OwnerCommissionStatementViewTests(SimpleTestCase):
         self.assertIn("month", resp.data)
 
     def test_net_payout_is_revenue_minus_commission(self):
+        """net_payout = total_revenue - total_commission. A5-followup: totals are now
+        derived from the actual (non-cancelled) order rows, not a DB aggregate, so we
+        feed real rows whose revenue/commission sum to 1000/100 → net_payout 900."""
+        from datetime import datetime, timezone as _utc
+        from decimal import Decimal as _D
+        from types import SimpleNamespace
+
+        rows = [
+            SimpleNamespace(
+                order_number=f"ORD-{i}",
+                created_at=datetime(2026, 6, 10, 12, 0, tzinfo=_utc.utc),
+                customer_name="Diner",
+                total=_D("100.00"),
+                commission_amount=_D("10.00"),
+                commission_rate_applied=_D("0.10"),
+                currency="MAD",
+                status="completed",
+            )
+            for i in range(10)
+        ]
         with patch("menu.views.Order") as mock_order:
             qs = MagicMock()
-            mock_order.objects.filter.return_value.order_by.return_value = qs
-            qs.aggregate.return_value = {
-                "order_count": 10,
-                "total_revenue": "1000.00",
-                "total_commission": "100.00",
-            }
-            qs.__iter__ = lambda s: iter([])
+            qs.exclude.return_value = qs
+            qs.order_by.return_value = qs
+            mock_order.objects.filter.return_value = qs
+            qs.__iter__ = lambda s: iter(rows)
             mock_order.Source = MagicMock()
             mock_order.Source.MARKETPLACE = "marketplace"
+            mock_order.Status = MagicMock()
+            mock_order.Status.CANCELLED = "cancelled"
             resp = self._get(params={"year": "2026", "month": "6"})
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertAlmostEqual(resp.data["summary"]["total_revenue"], 1000.0)
+        self.assertAlmostEqual(resp.data["summary"]["total_commission"], 100.0)
         self.assertAlmostEqual(resp.data["summary"]["net_payout"], 900.0)
 
 

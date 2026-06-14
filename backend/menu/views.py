@@ -4270,6 +4270,40 @@ class StaffVoidOrderItemView(APIView):
             _voided_item_subtotal = Decimal(str(item.subtotal or "0"))
             _recompute_order_totals(order)
 
+            # ── A5-followup FIX 2: reduce platform commission on the void ──────────
+            # A marketplace order is billed commission on its PRE-discount food
+            # subtotal (sum of item.subtotal — see accounts/views.py checkout, which
+            # snapshots commission_rate_applied). Voiding an item removes food
+            # revenue, so the commission the platform charges must shrink with it —
+            # otherwise the restaurant keeps paying commission on a line it refunded.
+            # We RECOMPUTE (not prorate) from the new effective food subtotal using
+            # the order's SNAPSHOTTED rate, which is exactly the basis A5 used at
+            # placement, so the result is consistent and self-correcting across any
+            # sequence of voids (each void recomputes from the current non-voided
+            # lines). Direct orders carry no rate (commission_rate_applied == 0) and
+            # are left untouched. Clamped at >= 0 (a fully-voided order → 0).
+            # Gate on source FIRST: a direct order never carries commission, so we
+            # skip the recompute (and the rate conversion) entirely for it. Only a
+            # marketplace order with a positive snapshotted rate is recomputed.
+            _recompute_commission = False
+            if order.source == Order.Source.MARKETPLACE:
+                _commission_rate = Decimal(str(order.commission_rate_applied or "0"))
+                if _commission_rate > Decimal("0"):
+                    _recompute_commission = True
+                    # New PRE-discount food subtotal = sum of the remaining
+                    # (non-voided) line subtotals — the SAME basis
+                    # _recompute_order_totals uses for the food component of
+                    # order.total, and the same basis A5 commission is charged on
+                    # (food only; excludes delivery_fee / tip / discount).
+                    _new_food_subtotal = sum(
+                        (Decimal(str(i.subtotal)) for i in order.items.all() if not i.is_voided),
+                        Decimal("0"),
+                    )
+                    _new_commission = (_new_food_subtotal * _commission_rate).quantize(Decimal("0.01"))
+                    if _new_commission < Decimal("0"):
+                        _new_commission = Decimal("0")
+                    order.commission_amount = _new_commission
+
             # ── Loyalty clawback ──────────────────────────────────────────────
             # Proportionally claw back earned loyalty points for the voided item
             # using the ratio (voided_subtotal / pre_void_total_subtotal) applied
@@ -4354,7 +4388,12 @@ class StaffVoidOrderItemView(APIView):
             # Persist total update and (conditionally) wallet_amount_paid before
             # issuing any wallet credit so the DB is consistent if credit_wallet fails.
             _wallet_fields = ["wallet_amount_paid"] if _refunded > Decimal("0") else []
-            order.save(update_fields=["total", "updated_at"] + _wallet_fields + _extra_save_fields)
+            # A5-followup FIX 2: persist the reduced commission alongside the total.
+            _commission_fields = ["commission_amount"] if _recompute_commission else []
+            order.save(
+                update_fields=["total", "updated_at"]
+                + _wallet_fields + _extra_save_fields + _commission_fields
+            )
 
             if _refunded > Decimal("0"):
                 from accounts.wallet_service import credit_wallet
@@ -7887,7 +7926,6 @@ class OwnerCommissionStatementView(APIView):
         if not _is_tenant_owner(request):
             return Response({"detail": "Owner access required."}, status=403)
 
-        from django.db.models import Sum, Count, Avg
         from calendar import month_name
         from datetime import datetime as _dt
 
@@ -7930,7 +7968,19 @@ class OwnerCommissionStatementView(APIView):
         _ny, _nm = (year + 1, 1) if month == 12 else (year, month + 1)
         next_month_start = _dt(_ny, _nm, 1, 0, 0, 0, tzinfo=_tz)
 
-        # Query marketplace orders for this local month
+        # Query marketplace orders for this local month.
+        #
+        # A5-followup FIX 1: EXCLUDE cancelled orders. A cancelled marketplace order
+        # has had its food revenue fully refunded (MarketplaceOrderCancelView /
+        # _refund_wallet_for_cancelled_order), so the platform must NOT bill
+        # commission on it — billing commission on a refunded order would charge the
+        # restaurant for revenue it never kept. CANCELLED is the only "no revenue
+        # collected" terminal status in Order.Status (there is no separate
+        # declined/refunded terminal state; a fully item-voided order keeps its
+        # status but its commission is reduced to 0 at void time — FIX 2). COMPLETED
+        # and all in-progress states (PENDING/SCHEDULED/CONFIRMED/PREPARING/READY/
+        # OUT_FOR_DELIVERY) stay INCLUDED. The exclusion is applied ONCE on the base
+        # queryset so the aggregate Sum and the per-order rows below agree.
         qs = (
             Order.objects
             .filter(
@@ -7938,28 +7988,18 @@ class OwnerCommissionStatementView(APIView):
                 created_at__gte=month_start,
                 created_at__lt=next_month_start,
             )
+            .exclude(status=Order.Status.CANCELLED)
             .order_by("created_at")
         )
 
         # ── Commission BASIS note (A5, step 5) ────────────────────────────────
         # commission_amount is charged on the PRE-discount food_subtotal (see
         # accounts/views.py marketplace checkout), whereas total_revenue below is
-        # Sum(Order.total) which is POST-discount AND tip-inclusive. So when a
+        # the sum of Order.total which is POST-discount AND tip-inclusive. So when a
         # discount or tip applies, net_payout = total_revenue - total_commission
         # MIXES bases (commission on pre-discount food vs revenue on post-discount
         # + tip). This is documented, not silently changed: whether to switch
-        # commission to the post-discount food total is an OWNER business decision
-        # (decision-gated → A5-followup).
-        agg = qs.aggregate(
-            order_count=Count("id"),
-            total_revenue=Sum("total"),
-            total_commission=Sum("commission_amount"),
-        )
-        order_count = agg["order_count"] or 0
-        total_revenue = float(agg["total_revenue"] or 0)
-        total_commission = float(agg["total_commission"] or 0)
-        net_payout = round(total_revenue - total_commission, 2)
-
+        # commission to the post-discount food total is an OWNER business decision.
         orders_data = [
             {
                 "order_number": o.order_number,
@@ -7976,22 +8016,84 @@ class OwnerCommissionStatementView(APIView):
             for o in qs
         ]
 
+        # ── A5-followup FIX 3: per-CURRENCY totals ────────────────────────────────
+        # A single marketplace tenant can take orders in more than one ISO currency
+        # (a multi-locale storefront, a tenant that re-priced mid-month, etc.).
+        # Summing Order.total / Order.commission_amount ACROSS currencies produces a
+        # meaningless number (10 MAD + 10 USD ≠ 20 of anything) and the old PDF then
+        # stamped EVERY row with orders_data[0]['currency'], mislabelling foreign-
+        # currency rows. We therefore bucket totals by currency. We aggregate in
+        # Python from the already-materialised rows (one pass, no extra query) using
+        # Decimal so the money math is exact, then expose floats in the JSON to match
+        # the existing row shape. `per_currency` preserves order of first appearance.
+        from collections import OrderedDict
+        _by_cur: "OrderedDict[str, dict]" = OrderedDict()
+        for o in orders_data:
+            cur = o["currency"] or ""
+            bucket = _by_cur.get(cur)
+            if bucket is None:
+                bucket = _by_cur[cur] = {
+                    "currency": cur,
+                    "order_count": 0,
+                    "_revenue": Decimal("0"),
+                    "_commission": Decimal("0"),
+                }
+            bucket["order_count"] += 1
+            bucket["_revenue"] += Decimal(str(o["total"]))
+            bucket["_commission"] += Decimal(str(o["commission_amount"]))
+
+        per_currency = []
+        for bucket in _by_cur.values():
+            rev = bucket["_revenue"]
+            com = bucket["_commission"]
+            per_currency.append({
+                "currency": bucket["currency"],
+                "order_count": bucket["order_count"],
+                "total_revenue": float(rev),
+                "total_commission": float(com),
+                "net_payout": float((rev - com).quantize(Decimal("0.01"))),
+            })
+
+        order_count = len(orders_data)
+
+        # Single-currency case (the common case): keep the historical top-level
+        # `summary` shape so existing JSON consumers are unchanged. Mixed-currency
+        # months get a summary with currency="" and zeroed cross-currency money to
+        # signal that the meaningful breakdown lives in `per_currency` (we refuse to
+        # publish a cross-currency sum). `per_currency` is ALWAYS present.
+        if len(per_currency) == 1:
+            _single = per_currency[0]
+            summary = {
+                "order_count": order_count,
+                "total_revenue": _single["total_revenue"],
+                "total_commission": _single["total_commission"],
+                "net_payout": _single["net_payout"],
+                "currency": _single["currency"],
+            }
+        else:
+            summary = {
+                "order_count": order_count,
+                "total_revenue": 0.0,
+                "total_commission": 0.0,
+                "net_payout": 0.0,
+                "currency": "",
+                "mixed_currency": True,
+            }
+
         if fmt != "pdf":
             return Response({
                 "year": year,
                 "month": month,
                 "month_name": month_name[month],
-                "summary": {
-                    "order_count": order_count,
-                    "total_revenue": total_revenue,
-                    "total_commission": total_commission,
-                    "net_payout": net_payout,
-                },
+                "summary": summary,
+                "per_currency": per_currency,
                 "orders": orders_data,
             })
 
         # ── PDF ───────────────────────────────────────────────────────────────
-        currency = orders_data[0]["currency"] if orders_data else ""
+        # A5-followup FIX 3: render the summary + totals PER CURRENCY, each labelled
+        # with ITS OWN currency code — never orders_data[0]['currency'] for every
+        # line (which mislabelled foreign-currency money on a mixed-currency month).
 
         # Derive the commission label from the per-order snapshotted rates rather
         # than a hardcoded "10%": the platform can set a non-default rate per
@@ -8025,26 +8127,38 @@ class OwnerCommissionStatementView(APIView):
 
         y = page_h - 50 * mm
 
-        # Summary box
+        # Summary box — one sub-block per currency (each labelled with its own code).
+        # Height scales with the number of currencies: a header line (order count)
+        # plus 3 money lines per currency, with a blank separator between currencies.
+        _n_cur = max(1, len(per_currency))
+        _box_h = (3 + _n_cur * 4) * 5 * mm  # rough: count line + 3 money lines × N + spacing
         doc.setFillColorRGB(0.94, 0.95, 0.98)
-        doc.rect(margin, y - 28 * mm, page_w - 2 * margin, 28 * mm, fill=1, stroke=0)
+        doc.rect(margin, y - _box_h, page_w - 2 * margin, _box_h, fill=1, stroke=0)
         doc.setFillColorRGB(0, 0, 0)
 
-        summary_items = [
-            ("Orders placed via marketplace:", str(order_count)),
-            ("Total revenue:", f"{currency} {total_revenue:,.2f}"),
-            (commission_label, f"{currency} {total_commission:,.2f}"),
-            ("Net payout to restaurant:", f"{currency} {net_payout:,.2f}"),
-        ]
         sy = y - 8 * mm
-        for label, value in summary_items:
-            doc.setFont("Helvetica", 9)
-            doc.drawString(margin + 4 * mm, sy, label)
-            doc.setFont("Helvetica-Bold", 9)
-            doc.drawRightString(page_w - margin - 4 * mm, sy, value)
-            sy -= 5 * mm
+        doc.setFont("Helvetica", 9)
+        doc.drawString(margin + 4 * mm, sy, "Orders placed via marketplace:")
+        doc.setFont("Helvetica-Bold", 9)
+        doc.drawRightString(page_w - margin - 4 * mm, sy, str(order_count))
+        sy -= 7 * mm
 
-        y -= 35 * mm
+        for _pc in per_currency:
+            _cur = _pc["currency"]
+            summary_items = [
+                ("Total revenue:", f"{_cur} {_pc['total_revenue']:,.2f}"),
+                (commission_label, f"{_cur} {_pc['total_commission']:,.2f}"),
+                ("Net payout to restaurant:", f"{_cur} {_pc['net_payout']:,.2f}"),
+            ]
+            for label, value in summary_items:
+                doc.setFont("Helvetica", 9)
+                doc.drawString(margin + 4 * mm, sy, label)
+                doc.setFont("Helvetica-Bold", 9)
+                doc.drawRightString(page_w - margin - 4 * mm, sy, value)
+                sy -= 5 * mm
+            sy -= 2 * mm  # gap between currency blocks
+
+        y -= _box_h + 7 * mm
 
         # Table header
         col_widths = [45 * mm, 32 * mm, 35 * mm, 30 * mm, 30 * mm]
@@ -8088,15 +8202,23 @@ class OwnerCommissionStatementView(APIView):
                     doc.drawRightString(col_x[i] + col_widths[i] - 2 * mm, y - 4.5 * mm, val)
             y -= row_h
 
-        # Totals row
+        # Totals row(s) — one per currency, each labelled with its own code so a
+        # mixed-currency month never sums dissimilar currencies into one figure.
         y -= 2 * mm
         doc.line(margin, y, page_w - margin, y)
         y -= 5 * mm
-        doc.setFont("Helvetica-Bold", 9)
-        doc.drawString(margin + 2 * mm, y, "TOTALS")
-        doc.drawRightString(col_x[2] + col_widths[2] - 2 * mm, y, f"{currency} {total_revenue:,.2f}")
-        doc.drawRightString(col_x[3] + col_widths[3] - 2 * mm, y, f"{currency} {total_commission:,.2f}")
-        doc.drawRightString(col_x[4] + col_widths[4] - 2 * mm, y, f"{currency} {net_payout:,.2f}")
+        for _pc in per_currency:
+            if y < 20 * mm:  # spill the totals onto a new page if we ran out of room
+                doc.showPage()
+                y = page_h - 20 * mm
+            _cur = _pc["currency"]
+            _label = "TOTALS" if len(per_currency) == 1 else f"TOTALS ({_cur})"
+            doc.setFont("Helvetica-Bold", 9)
+            doc.drawString(margin + 2 * mm, y, _label)
+            doc.drawRightString(col_x[2] + col_widths[2] - 2 * mm, y, f"{_cur} {_pc['total_revenue']:,.2f}")
+            doc.drawRightString(col_x[3] + col_widths[3] - 2 * mm, y, f"{_cur} {_pc['total_commission']:,.2f}")
+            doc.drawRightString(col_x[4] + col_widths[4] - 2 * mm, y, f"{_cur} {_pc['net_payout']:,.2f}")
+            y -= 5 * mm
 
         # Footer
         doc.setFont("Helvetica", 7)

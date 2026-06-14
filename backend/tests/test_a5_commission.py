@@ -246,6 +246,9 @@ class CommissionStatementBucketTests(SimpleTestCase):
         tenant.profile = profile
 
         qs = MagicMock()
+        # A5-followup: the statement query is now filter(...).exclude(...).order_by(...)
+        # — the .exclude() drops cancelled orders. Chain it back to the same qs.
+        qs.exclude.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {"order_count": 0, "total_revenue": None, "total_commission": None}
         qs.__iter__ = lambda s: iter([])
@@ -257,6 +260,7 @@ class CommissionStatementBucketTests(SimpleTestCase):
         with patch("menu.views._is_tenant_owner", return_value=True), \
                 patch("menu.views.Order") as mock_order:
             mock_order.Source.MARKETPLACE = "marketplace"
+            mock_order.Status.CANCELLED = "cancelled"
             mock_order.objects.filter.side_effect = _filter
             req = self.factory.get(f"/api/owner/commission-statement/?year={year}&month={month}")
             req.user = MagicMock(is_authenticated=True)
@@ -323,6 +327,7 @@ class CommissionStatementBucketTests(SimpleTestCase):
             status="completed",
         )
         qs = MagicMock()
+        qs.exclude.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {
             "order_count": 1,
@@ -334,6 +339,7 @@ class CommissionStatementBucketTests(SimpleTestCase):
         with patch("menu.views._is_tenant_owner", return_value=True), \
                 patch("menu.views.Order") as mock_order:
             mock_order.Source.MARKETPLACE = "marketplace"
+            mock_order.Status.CANCELLED = "cancelled"
             mock_order.objects.filter.return_value = qs
             req = self.factory.get("/api/owner/commission-statement/?year=2026&month=6")
             req.user = MagicMock(is_authenticated=True)
@@ -379,6 +385,7 @@ class CommissionStatementPdfLabelTests(SimpleTestCase):
         total_rev = sum((o.total for o in orders), Decimal("0"))
         total_com = sum((o.commission_amount for o in orders), Decimal("0"))
         qs = MagicMock()
+        qs.exclude.return_value = qs
         qs.order_by.return_value = qs
         qs.aggregate.return_value = {
             "order_count": len(orders),
@@ -390,6 +397,7 @@ class CommissionStatementPdfLabelTests(SimpleTestCase):
         with patch("menu.views._is_tenant_owner", return_value=True), \
                 patch("menu.views.Order") as mock_order:
             mock_order.Source.MARKETPLACE = "marketplace"
+            mock_order.Status.CANCELLED = "cancelled"
             mock_order.objects.filter.return_value = qs
             req = self.factory.get(
                 "/api/owner/commission-statement/?year=2026&month=6&format=pdf"

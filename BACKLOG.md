@@ -594,7 +594,35 @@ Several are HIGH. file:line in scout output; verify before acting.
 - [ ] **OwnerOrderExport 5000-row hard cap, silent truncation** — no `truncated`/count signal;
       add a header or chunked cursor export. (menu/views.py:6516/6547). → reporting. [scout OPS-4]
 
-### A5-FOLLOWUP — BILLING CORRECTNESS (scout A5 cluster; next monetization batch)
+### COMMISSION LEDGER / REVENUE-RECOGNITION REDESIGN (scout A5-followup cluster)
+The A5/A5-followup scouts keep surfacing deeper statement issues → the commission statement should become a
+proper IMMUTABLE INVOICE LEDGER computed on a COLLECTED basis, with food+delivery commission unified. NOT
+live-critical yet (marketplace is PSP-blocked, statement bills no real money), and #4 carries an OWNER policy
+decision — do this as one design pass BEFORE marketplace billing goes live, not more incremental patches.
+- [ ] **Statement not point-in-time immutable** — it recomputes from live mutable order state every fetch
+      (filters by current status; void mutates commission_amount in place with no history). A later cancel/
+      void of a prior-month order silently rewrites that month's already-"invoiced" total. Add an immutable
+      monthly invoice snapshot (billed_at + frozen line/total rows) once issued. (menu/views.py:7984-7993;
+      4305). [scout A5-followup] **(the core redesign)**
+- [ ] **COD / unpaid orders billed commission before cash is collected** — statement has no payment_status
+      filter, so an UNPAID COD order (A4) in a live status is billed commission at placement; a COD no-show
+      that never reaches a terminal status is billed indefinitely. Move to a COLLECTED/PAID basis (accrue
+      commission against collected revenue). NOTE: collected-vs-placement basis is an OWNER policy decision.
+      (menu/views.py:7984-7993; accounts/views.py:3496-3515). [scout A5-followup]
+- [ ] **Delivery commission not reversed on cancel/void (asymmetry)** — A5-followup reversed FOOD commission
+      but DeliveryJob.platform_commission (snapshotted at placement) is never reversed on cancel/refund, so a
+      refunded delivery order keeps a stale platform_commission. Mirror the food reversal for delivery.
+      (accounts/views.py:3833-3835; accounts/models.py:735-737; menu/views.py:5078-5085). [scout A5-followup]
+- [ ] **net_payout counts the delivery_fee as restaurant revenue** — net_payout = Order.total − commission,
+      but Order.total includes delivery_fee which the restaurant does NOT keep (split between driver_payout +
+      platform_commission). Overstates the restaurant's payout on platform-delivery orders. Subtract the
+      delivery component. (menu/views.py:8012/8054; accounts/views.py:3443). [scout A5-followup]
+- [ ] **Per-row net_payout float vs per-currency Decimal → off-by-a-cent** — rows compute net via
+      round(float(...)) while per_currency re-aggregates with Decimal; sum(round(xi)) != round(sum(xi)) so the
+      rows can fail to reconcile to the totals on the same PDF. Make the per-row path Decimal too.
+      (menu/views.py:8008-8012 vs 8042-8054). [scout A5-followup]
+
+### A5-FOLLOWUP — BILLING CORRECTNESS — SHIPPED (the items below are DONE; see Done section)
 A5 added the per-tenant commission rate + snapshot + tz-correct statement, but the scout found the
 billing surface needs more before real money flows. #1/#2 are real money-overstatement bugs.
 - [ ] **Commission not reversed on cancellation (money — platform bills commission on fully-refunded
@@ -627,6 +655,17 @@ billing surface needs more before real money flows. #1/#2 are real money-oversta
 
 ## Done (moved from above)
 <!-- - [x] item — commit hash -->
+- [x] A5-followup "billing correctness" (verified by me, backend 3698/0, migrations clean, reviewer found
+      0 issues): (1) the commission statement now EXCLUDES CANCELLED orders (once on the base queryset so
+      the aggregate Sum and per-order rows agree) — the platform no longer bills commission on fully-refunded
+      cancelled orders. (2) item-void recomputes Order.commission_amount = commission_rate_applied × the new
+      non-voided pre-discount food subtotal (marketplace-only, clamped >= 0) — partial refunds no longer
+      over-collect. (3) the statement reports per-ISO-currency totals (+ PDF labels each currency correctly)
+      instead of summing mixed currencies / stamping the first row's currency on everything. New
+      test_a5followup_billing.py. Scout → "commission ledger / revenue-recognition redesign" cluster above
+      (immutable invoices, collected-basis accrual, delivery-commission reversal symmetry, delivery-fee in
+      net_payout, float/Decimal rounding) — deferred as a pre-marketplace-launch design pass (PSP-blocked;
+      not live-critical; basis is an owner decision). — a5followup commit.
 - [x] A5 "marketplace commission correctness" (KEPOLI_NEXT.md Phase A; verified by me, backend 3689/0,
       migrations clean): per-tenant Profile.marketplace_commission_pct (default 0.10 → behaviour unchanged;
       admin-only via sales/views.py tenant endpoint, NOT owner-editable — a restaurant can't zero its own
